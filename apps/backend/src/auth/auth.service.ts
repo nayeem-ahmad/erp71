@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { JwtService } from '@nestjs/jwt';
+import { EmailService } from '../email/email.service';
 import { bootstrapDefaultAccountingForTenant } from '@retail-saas/database';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
@@ -13,9 +14,12 @@ export class AuthService {
     private static readonly MAX_FAILED_ATTEMPTS = 5;
     private static readonly LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 
+    private static readonly RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+
     constructor(
         private db: DatabaseService,
         private jwtService: JwtService,
+        private email: EmailService,
     ) { }
 
     async signup(dto: SignupDto) {
@@ -49,6 +53,9 @@ export class AuthService {
 
             return createdUser;
         });
+
+        // Fire-and-forget — don't block signup on email delivery
+        this.email.sendWelcome(user.email, user.name ?? user.email).catch(() => null);
 
         return this.generateAuthResponse(user.id);
     }
@@ -94,11 +101,55 @@ export class AuthService {
         const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
         await this.db.refreshToken.deleteMany({ where: { token_hash: tokenHash } });
         return { success: true };
-        await this.db.user.update({
-            where: { id: user.id },
-            data: { failed_login_attempts: 0, locked_until: null },
+    }
+
+    async forgotPassword(email: string) {
+        const user = await this.db.user.findUnique({ where: { email } });
+        // Always return success to avoid email enumeration
+        if (!user) return { success: true };
+
+        // Invalidate any previous reset tokens for this user
+        await this.db.passwordResetToken.deleteMany({ where: { user_id: user.id } });
+
+        const rawToken = crypto.randomBytes(32).toString('hex');
+        const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+        await this.db.passwordResetToken.create({
+            data: {
+                user_id: user.id,
+                token_hash: tokenHash,
+                expires_at: new Date(Date.now() + AuthService.RESET_TOKEN_TTL_MS),
+            },
         });
-        return this.generateAuthResponse(user.id);
+
+        const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
+        const resetUrl = `${frontendUrl}/reset-password?token=${rawToken}`;
+        await this.email.sendPasswordReset(user.email, resetUrl);
+
+        return { success: true };
+    }
+
+    async resetPassword(rawToken: string, newPassword: string) {
+        const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+        const stored = await this.db.passwordResetToken.findUnique({ where: { token_hash: tokenHash } });
+
+        if (!stored || stored.expires_at < new Date()) {
+            if (stored) await this.db.passwordResetToken.delete({ where: { id: stored.id } });
+            throw new BadRequestException('Invalid or expired reset token');
+        }
+
+        const passwordHash = await bcrypt.hash(newPassword, 10);
+
+        await this.db.$transaction([
+            this.db.user.update({
+                where: { id: stored.user_id },
+                data: { passwordHash },
+            }),
+            // Invalidate all refresh tokens on password change
+            this.db.refreshToken.deleteMany({ where: { user_id: stored.user_id } }),
+            this.db.passwordResetToken.delete({ where: { id: stored.id } }),
+        ]);
+
+        return { success: true };
     }
 
     async getPlans() {

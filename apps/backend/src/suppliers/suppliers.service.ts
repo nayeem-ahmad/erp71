@@ -28,14 +28,14 @@ export class SuppliersService {
 
     async findAll(tenantId: string) {
         return this.db.supplier.findMany({
-            where: { tenant_id: tenantId },
+            where: { tenant_id: tenantId, deleted_at: null },
             orderBy: { name: 'asc' },
         });
     }
 
     async findOne(tenantId: string, id: string) {
         const supplier = await this.db.supplier.findFirst({
-            where: { id, tenant_id: tenantId },
+            where: { id, tenant_id: tenantId, deleted_at: null },
         });
 
         if (!supplier) {

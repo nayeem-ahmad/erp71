@@ -2,7 +2,7 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { RequestIdMiddleware } from './common/request-id.middleware';
-import { Module } from '@nestjs/common';
+import { CsrfMiddleware } from './common/csrf.middleware';
 import { LoggerModule } from 'nestjs-pino';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
@@ -33,6 +33,7 @@ import { BillingModule } from './billing/billing.module';
 import { AdminTenantsModule } from './admin-tenants/admin-tenants.module';
 import { WarrantyClaimsModule } from './warranty-claims/warranty-claims.module';
 import { HealthModule } from './health/health.module';
+import { EmailModule } from './email/email.module';
 
 @Module({
     imports: [
@@ -50,6 +51,7 @@ import { HealthModule } from './health/health.module';
                     ? { target: 'pino-pretty', options: { singleLine: true } }
                     : undefined,
                 redact: ['req.headers.authorization'],
+            },
         }),
         DatabaseModule,
         AuthModule,
@@ -79,6 +81,7 @@ import { HealthModule } from './health/health.module';
         AdminTenantsModule,
         WarrantyClaimsModule,
         HealthModule,
+        EmailModule,
         ScheduleModule.forRoot()
     ],
     controllers: [],
@@ -91,6 +94,6 @@ import { HealthModule } from './health/health.module';
 })
 export class AppModule implements NestModule {
     configure(consumer: MiddlewareConsumer) {
-        consumer.apply(RequestIdMiddleware).forRoutes('*path');
+        consumer.apply(RequestIdMiddleware, CsrfMiddleware).forRoutes('*path');
     }
 }

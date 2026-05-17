@@ -51,7 +51,7 @@ export class CustomersService {
 
     async findAll(tenantId: string) {
         return this.db.customer.findMany({
-            where: { tenant_id: tenantId },
+            where: { tenant_id: tenantId, deleted_at: null },
             include: {
                 customerGroup: true,
                 territory: true,
@@ -62,7 +62,7 @@ export class CustomersService {
 
     async findOne(tenantId: string, id: string) {
         const customer = await this.db.customer.findFirst({
-            where: { id, tenant_id: tenantId },
+            where: { id, tenant_id: tenantId, deleted_at: null },
             include: {
                 customerGroup: true,
                 territory: true,
@@ -79,7 +79,7 @@ export class CustomersService {
 
     async getPurchaseHistory(tenantId: string, id: string) {
         const customer = await this.db.customer.findFirst({
-            where: { id, tenant_id: tenantId },
+            where: { id, tenant_id: tenantId, deleted_at: null },
             select: {
                 id: true,
                 name: true,
@@ -169,7 +169,7 @@ export class CustomersService {
 
     async getSegmentStats(tenantId: string) {
         const customers = await this.db.customer.findMany({
-            where: { tenant_id: tenantId },
+            where: { tenant_id: tenantId, deleted_at: null },
             select: { segment_category: true },
         });
 
@@ -192,7 +192,7 @@ export class CustomersService {
 
     async getHistory(tenantId: string, id: string) {
         const customer = await this.db.customer.findFirst({
-            where: { id, tenant_id: tenantId },
+            where: { id, tenant_id: tenantId, deleted_at: null },
             select: {
                 id: true,
                 name: true,
@@ -247,7 +247,7 @@ export class CustomersService {
 
     async update(tenantId: string, id: string, dto: UpdateCustomerDto) {
         const customer = await this.db.customer.findFirst({
-            where: { id, tenant_id: tenantId },
+            where: { id, tenant_id: tenantId, deleted_at: null },
         });
 
         if (!customer) throw new NotFoundException('Customer not found');

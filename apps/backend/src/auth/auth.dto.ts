@@ -23,3 +23,12 @@ export class CreateStoreDto {
 export class RefreshTokenDto {
     refresh_token: string;
 }
+
+export class ForgotPasswordDto {
+    email: string;
+}
+
+export class ResetPasswordDto {
+    token: string;
+    password: string;
+}

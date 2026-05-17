@@ -18,8 +18,8 @@
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.10",
     "@nestjs/schedule": "^6.1.1",
-    "@nestjs/throttler": "^6.5.0",
     "@nestjs/swagger": "^11.4.2",
+    "@nestjs/throttler": "^6.5.0",
     "@retail-saas/database": "*",
     "@retail-saas/shared-types": "*",
     "@supabase/supabase-js": "^2.98.0",
@@ -35,6 +35,7 @@
     "pg": "^8.19.0",
     "pino-http": "^11.0.0",
     "reflect-metadata": "^0.2.2",
+    "resend": "^6.12.3",
     "rxjs": "^7.8.1"
   },
   "devDependencies": {

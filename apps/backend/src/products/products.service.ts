@@ -62,6 +62,7 @@ export class ProductsService {
         return this.db.product.findMany({
             where: {
                 tenant_id: tenantId,
+                deleted_at: null,
                 ...(filters?.uncategorized
                     ? { group_id: null, subgroup_id: null }
                     : {
@@ -76,7 +77,7 @@ export class ProductsService {
 
     async findOne(tenantId: string, id: string) {
         const product = await this.db.product.findFirst({
-            where: { id, tenant_id: tenantId },
+            where: { id, tenant_id: tenantId, deleted_at: null },
             include: this.productInclude(),
         });
 
@@ -115,8 +116,10 @@ export class ProductsService {
     }
 
     async remove(tenantId: string, id: string) {
-        return this.db.product.deleteMany({
-            where: { id, tenant_id: tenantId },
+        await this.findOne(tenantId, id);
+        return this.db.product.updateMany({
+            where: { id, tenant_id: tenantId, deleted_at: null },
+            data: { deleted_at: new Date() },
         });
     }
 
@@ -128,6 +131,7 @@ export class ProductsService {
                 FROM "Product" p
                 LEFT JOIN "ProductStock" ps ON ps.product_id = p.id
                 WHERE p.tenant_id = ${tenantId}
+                  AND p.deleted_at IS NULL
                   AND p.reorder_level IS NOT NULL
                 GROUP BY p.id, p.reorder_level
                 HAVING COALESCE(SUM(ps.quantity), 0) <= p.reorder_level

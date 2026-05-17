@@ -113,9 +113,22 @@ model User {
   fundTransfersInitiated FundTransfer[]  @relation("FundTransferInitiator")
   fundTransfersReceived  FundTransfer[]  @relation("FundTransferReceiver")
   refreshTokens          RefreshToken[]
+  passwordResetTokens    PasswordResetToken[]
 }
 
 model RefreshToken {
+  id         String   @id @default(uuid())
+  user_id    String
+  token_hash String   @unique
+  expires_at DateTime
+  created_at DateTime @default(now())
+
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+}
+
+model PasswordResetToken {
   id         String   @id @default(uuid())
   user_id    String
   token_hash String   @unique
@@ -280,21 +293,22 @@ model ProductSubgroup {
 }
 
 model Product {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   tenant_id   String
   group_id    String?
   subgroup_id String?
   name        String
   sku         String?
-  price       Decimal  @default(0) @db.Decimal(12, 2)
+  price       Decimal   @default(0) @db.Decimal(12, 2)
   warranty_enabled Boolean @default(false)
   warranty_duration_days Int?
   reorder_level Int?
   safety_stock Int?
   lead_time_days Int?
   image_url   String?
-  unit_type   String   @default("none")
-  created_at  DateTime @default(now())
+  unit_type   String    @default("none")
+  created_at  DateTime  @default(now())
+  deleted_at  DateTime?
 
   // Relations
   tenant      Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -552,14 +566,15 @@ model StockTakeCountLine {
 }
 
 model Supplier {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   tenant_id   String
   name        String
   phone       String?
   email       String?
   address     String?
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  deleted_at  DateTime?
 
   tenant      Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   purchases   Purchase[]
@@ -682,6 +697,7 @@ model Customer {
   total_spent          Decimal       @default(0) @db.Decimal(12, 2)
   segment_category     String        @default("Regular")
   created_at           DateTime      @default(now())
+  deleted_at           DateTime?
 
   // Relations
   tenant           Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)

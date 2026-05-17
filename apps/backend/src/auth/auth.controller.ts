@@ -1,7 +1,7 @@
 import { Controller, Post, Body, UseGuards, Request, Get } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { SignupDto, LoginDto, CreateStoreDto, RefreshTokenDto } from './auth.dto';
+import { SignupDto, LoginDto, CreateStoreDto, RefreshTokenDto, ForgotPasswordDto, ResetPasswordDto } from './auth.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
@@ -53,6 +53,18 @@ export class AuthController {
     @Post('logout')
     async logout(@Body() dto: RefreshTokenDto) {
         return this.authService.logout(dto.refresh_token);
+    }
+
+    @Throttle({ default: { ttl: 60_000, limit: 5 } })
+    @Post('forgot-password')
+    async forgotPassword(@Body() dto: ForgotPasswordDto) {
+        return this.authService.forgotPassword(dto.email);
+    }
+
+    @Throttle({ default: { ttl: 60_000, limit: 5 } })
+    @Post('reset-password')
+    async resetPassword(@Body() dto: ResetPasswordDto) {
+        return this.authService.resetPassword(dto.token, dto.password);
     }
 
     @UseGuards(JwtAuthGuard)

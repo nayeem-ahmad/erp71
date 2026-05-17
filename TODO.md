@@ -9,21 +9,18 @@ Track all work here. Check off items as they're completed. Add new items as they
 ### Security
 - [ ] Remove `.env` from git history and rotate all exposed secrets (SUPABASE_SERVICE_ROLE_KEY, payment credentials)
 - [x] Ensure `.env` is in `.gitignore` and never committed again
-- [x] Add `helmet` middleware to NestJS app (CSP, HSTS, X-Frame-Options, etc.)
 - [x] Add `helmet` middleware to NestJS app (CSP, HSTS, X-Frame-Options, etc.) — done 2026-05-12
-- [ ] Implement CSRF protection (`@nestjs/csrf` or double-submit cookie pattern)
+- [x] Implement CSRF protection — Origin-header validation middleware; rejects state-changing requests from untrusted origins — done 2026-05-15
 - [x] Deploy rate limiting — Upstash Redis is wired in `.env.example` but not used in code — done 2026-05-12
-- [ ] Add input sanitization (beyond class-validator) to prevent XSS at API boundary
-- [ ] Deploy rate limiting — Upstash Redis is wired in `.env.example` but not used in code
 - [x] Add input sanitization (beyond class-validator) to prevent XSS at API boundary — done 2026-05-12
 - [x] Audit all endpoints for missing auth guards — done 2026-05-12
 - [ ] Implement audit logging table (who changed what, when — needed for billing disputes)
 
 ### Email & Notifications (nothing exists)
-- [ ] Integrate email service (AWS SES, SendGrid, or Resend)
+- [x] Integrate email service (Resend) — done 2026-05-15
 - [ ] Transactional emails: billing invoices, payment confirmations, payment failures
-- [ ] Onboarding welcome email
-- [ ] Password reset flow (no email = no self-service account recovery)
+- [x] Onboarding welcome email — sent on signup — done 2026-05-15
+- [x] Password reset flow (no email = no self-service account recovery) — POST /auth/forgot-password + POST /auth/reset-password — done 2026-05-15
 - [ ] User invitation emails (tenant owner inviting staff)
 - [ ] Low-stock / reorder point alert emails
 - [ ] Subscription expiry warnings (7 days and 1 day before)
@@ -57,7 +54,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 ## HIGH PRIORITY — Ship within first 2 weeks of launch
 
 ### Auth & Account Management
-- [ ] Password reset flow (email-based expiring token)
+- [x] Password reset flow (email-based expiring token) — done 2026-05-15
 - [ ] Email verification on signup
 - [x] Account lockout after N failed login attempts
 - [ ] Session invalidation on password change
@@ -69,11 +66,10 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [ ] Standardize response envelope (`{ data, meta, error }`) across all endpoints
 - [ ] Enforce pagination on all list endpoints (unbounded queries will kill DB under load)
 - [x] Add Swagger/OpenAPI docs via `@nestjs/swagger` — done 2026-05-12
-- [x] Add request ID header for distributed tracing
 - [x] Add request ID header for distributed tracing — done 2026-05-12
 
 ### Data & Compliance
-- [ ] Implement soft deletes — current hard deletes break accounting record integrity
+- [x] Implement soft deletes — deleted_at on Product, Customer, Supplier; services updated; migration 20260515000000 — done 2026-05-15
 - [ ] Define and document data retention policy
 - [ ] Encrypt sensitive fields at rest (NID, banking details if stored)
 - [ ] GDPR/PDPA basics: privacy policy page, data deletion request flow, data export
@@ -109,12 +105,9 @@ Track all work here. Check off items as they're completed. Add new items as they
 ### Product Completeness
 - [ ] Customer-facing invoice/receipt email after a sale
 - [ ] Bulk product import via CSV/Excel
-- [ ] Barcode scanning support in POS (hardware scanner input via keyboard wedge)
+- [x] Barcode scanning support in POS (hardware scanner input via keyboard wedge)
 - [x] Stockout guard — prevent selling items with zero stock — already enforced via applyInventoryMovement() in database/inventory.utils.ts:179
 - [x] Dashboard KPI widgets (revenue today, low stock count, pending orders) — low stock count widget added; revenue covered by Financial Snapshot; active orders shown — done 2026-05-12
-- [x] Barcode scanning support in POS (hardware scanner input via keyboard wedge)
-- [ ] Stockout guard — prevent selling items with zero stock
-- [ ] Dashboard KPI widgets (revenue today, low stock count, pending orders)
 - [x] Proper 404 and error pages in frontend
 
 ### Performance
@@ -122,8 +115,6 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [ ] Switch large list endpoints to cursor-based pagination
 - [ ] Run `EXPLAIN ANALYZE` on the 10 most frequent queries
 - [x] Add DB query timeout to prevent runaway queries
-- [ ] Enable Next.js Image optimization for product images
-- [ ] Add DB query timeout to prevent runaway queries
 - [x] Enable Next.js Image optimization for product images
 
 ---
@@ -184,3 +175,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Add structured logging (Pino) — nestjs-pino wired globally; pino-http request logs; SegmentsService migrated to PinoLogger — done 2026-05-12
 - [x] Barcode scanning support in POS — keyboard-wedge listener (<50ms/char + Enter) matches by SKU, shows scan confirmation badge — done 2026-05-12
 - [x] Enable Next.js Image optimization — ProductImage component with fill+error fallback; remotePatterns allow all HTTPS; avif/webp formats; POS, Inventory, Sales, Customer pages updated — done 2026-05-12
+- [x] Merge all open PRs — fixed ESLint config (no-explicit-any → warning, test-file overrides), fixed eslint-config-next version mismatch (16→15), resolved conflicts in PRs #21 and #22; all 6 PRs merged — done 2026-05-14
+- [x] Email service (Resend) — EmailModule + EmailService with welcome/password-reset/invoice/low-stock/expiry/invitation methods; graceful no-op when RESEND_API_KEY not set — done 2026-05-15
+- [x] Password reset flow — PasswordResetToken model, POST /auth/forgot-password + POST /auth/reset-password; invalidates all refresh tokens on reset; 1-hour token TTL — done 2026-05-15
+- [x] CSRF protection — CsrfMiddleware validates Origin/Referer on state-changing requests against FRONTEND_URL/BACKEND_PUBLIC_URL; applied globally — done 2026-05-15
+- [x] Soft deletes — deleted_at on Product, Customer, Supplier; all findMany/findFirst queries filter deleted_at: null; remove() now sets deleted_at instead of hard-deleting; migration 20260515000000 — done 2026-05-15
