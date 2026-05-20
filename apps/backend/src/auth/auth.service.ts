@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { JwtService } from '@nestjs/jwt';
+import { EmailService } from '../email/email.service';
 import { bootstrapDefaultAccountingForTenant } from '@retail-saas/database';
 import * as bcrypt from 'bcrypt';
 import { SignupDto, LoginDto } from './auth.dto';
@@ -12,6 +13,7 @@ export class AuthService {
     constructor(
         private db: DatabaseService,
         private jwtService: JwtService,
+        private email: EmailService,
     ) { }
 
     async signup(dto: SignupDto) {
@@ -46,6 +48,7 @@ export class AuthService {
             return createdUser;
         });
 
+        this.email.sendWelcome(user.email, user.name ?? user.email).catch(() => {});
         return this.generateAuthResponse(user.id);
     }
 

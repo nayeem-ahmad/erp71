@@ -1,6 +1,13 @@
 import { Module } from '@nestjs/common';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { DatabaseModule } from './database/database.module';
+import { EmailModule } from './email/email.module';
+import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
+import { PasswordResetModule } from './password-reset/password-reset.module';
+import { InvitationsModule } from './invitations/invitations.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { ProductsModule } from './products/products.module';
 import { AssetsModule } from './assets/assets.module';
 import { SalesModule } from './sales/sales.module';
@@ -15,7 +22,6 @@ import { SuppliersModule } from './suppliers/suppliers.module';
 import { PurchasesModule } from './purchases/purchases.module';
 import { PurchaseReturnsModule } from './purchase-returns/purchase-returns.module';
 import { AccountingModule } from './accounting/accounting.module';
-import { ScheduleModule } from '@nestjs/schedule';
 import { ProductGroupsModule } from './product-groups/product-groups.module';
 import { ProductSubgroupsModule } from './product-subgroups/product-subgroups.module';
 import { InventoryModule } from './inventory/inventory.module';
@@ -30,8 +36,15 @@ import { WarrantyClaimsModule } from './warranty-claims/warranty-claims.module';
 
 @Module({
     imports: [
+        ThrottlerModule.forRoot([{ ttl: 60_000, limit: 20 }]),
+        ScheduleModule.forRoot(),
         DatabaseModule,
+        EmailModule,
+        AuditModule,
         AuthModule,
+        PasswordResetModule,
+        InvitationsModule,
+        NotificationsModule,
         ProductsModule,
         AssetsModule,
         SalesModule,
@@ -57,9 +70,9 @@ import { WarrantyClaimsModule } from './warranty-claims/warranty-claims.module';
         BillingModule,
         AdminTenantsModule,
         WarrantyClaimsModule,
-        ScheduleModule.forRoot()
     ],
     controllers: [],
     providers: [],
 })
-export class AppModule { }
+export class AppModule {}
+

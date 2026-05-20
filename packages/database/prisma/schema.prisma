@@ -101,15 +101,69 @@ model User {
   name          String?
   created_at    DateTime     @default(now())
   updated_at    DateTime     @updatedAt
-   
+
   // Relations
-  tenantsOwned      Tenant[]            @relation("TenantOwner")
-  tenantMembers     TenantUser[]
-  cashierSessions   CashierSession[]
-  storeAccess       UserStoreAccess[]
-  storePermissions  UserStorePermission[]
-  fundTransfersInitiated FundTransfer[]  @relation("FundTransferInitiator")
-  fundTransfersReceived  FundTransfer[]  @relation("FundTransferReceiver")
+  tenantsOwned           Tenant[]              @relation("TenantOwner")
+  tenantMembers          TenantUser[]
+  cashierSessions        CashierSession[]
+  storeAccess            UserStoreAccess[]
+  storePermissions       UserStorePermission[]
+  fundTransfersInitiated FundTransfer[]        @relation("FundTransferInitiator")
+  fundTransfersReceived  FundTransfer[]        @relation("FundTransferReceiver")
+  auditLogs              AuditLog[]
+  passwordResetTokens    PasswordResetToken[]
+  sentInvitations        UserInvitation[]      @relation("InvitationSender")
+}
+
+model PasswordResetToken {
+  id         String   @id @default(uuid())
+  user_id    String
+  token_hash String   @unique
+  expires_at DateTime
+  used_at    DateTime?
+  created_at DateTime @default(now())
+
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([token_hash])
+  @@index([user_id])
+}
+
+model UserInvitation {
+  id          String    @id @default(uuid())
+  tenant_id   String
+  email       String
+  role        UserRole  @default(CASHIER)
+  token_hash  String    @unique
+  invited_by  String
+  expires_at  DateTime
+  accepted_at DateTime?
+  created_at  DateTime  @default(now())
+
+  tenant      Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  invitedBy   User      @relation("InvitationSender", fields: [invited_by], references: [id])
+
+  @@index([token_hash])
+  @@index([tenant_id, email])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  tenant_id   String?
+  user_id     String?
+  action      String
+  entity      String
+  entity_id   String?
+  payload     Json?
+  ip_address  String?
+  user_agent  String?
+  created_at  DateTime @default(now())
+
+  user        User?    @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, entity, created_at])
+  @@index([user_id, created_at])
+  @@index([entity, entity_id])
 }
 
 model Tenant {
@@ -160,6 +214,7 @@ model Tenant {
   postingRules      PostingRule[]
   postingEvents     PostingEvent[]
   warrantyClaims    WarrantyClaim[]
+  invitations       UserInvitation[]
 }
 
 model TenantUser {
@@ -334,34 +389,10 @@ model ProductSerial {
   created_at       DateTime @default(now())
   updated_at       DateTime @updatedAt
 
-  claims           WarrantyClaim[]
-
   @@unique([tenant_id, product_id, serial_number])
   @@index([tenant_id, serial_number])
   @@index([tenant_id, status])
   @@index([tenant_id, product_id, status])
-}
-
-model WarrantyClaim {
-  id               String    @id @default(uuid())
-  tenant_id        String
-  claim_number     String
-  serial_id        String
-  customer_name    String
-  customer_phone   String?
-  issue_description String
-  status           String    @default("OPEN")
-  resolution_notes String?
-  created_at       DateTime  @default(now())
-  updated_at       DateTime  @updatedAt
-
-  tenant           Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  serial           ProductSerial @relation(fields: [serial_id], references: [id], onDelete: Restrict)
-
-  @@unique([tenant_id, claim_number])
-  @@index([tenant_id, status])
-  @@index([tenant_id, serial_id])
-  @@index([tenant_id, created_at])
 }
 
 model InventoryMovement {
