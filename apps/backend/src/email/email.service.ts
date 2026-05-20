@@ -28,6 +28,18 @@ export class EmailService {
         });
     }
 
+    async sendEmailVerification(to: string, token: string): Promise<void> {
+        const link = `${this.frontendUrl}/verify-email?token=${token}`;
+        await this.send({
+            to,
+            subject: 'Verify your email address',
+            html: `<h2>Verify Your Email</h2>
+<p>Click the link below to verify your email address. This link expires in 24 hours.</p>
+<p><a href="${link}">Verify Email</a></p>
+<p>If you did not create an account, you can ignore this email.</p>`,
+        });
+    }
+
     async sendPasswordReset(to: string, token: string): Promise<void> {
         const link = `${this.frontendUrl}/reset-password?token=${token}`;
         await this.send({

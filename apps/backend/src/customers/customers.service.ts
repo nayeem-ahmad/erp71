@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateCustomerDto, UpdateCustomerDto } from './customer.dto';
+import { paginate, PaginatedResult } from '../common/pagination.dto';
 
 @Injectable()
 export class CustomersService {
@@ -49,20 +50,37 @@ export class CustomersService {
         });
     }
 
-    async findAll(tenantId: string) {
-        return this.db.customer.findMany({
-            where: { tenant_id: tenantId },
-            include: {
-                customerGroup: true,
-                territory: true,
-            },
-            orderBy: { created_at: 'desc' }
-        });
+    async findAll(tenantId: string, opts?: { page?: number; limit?: number; search?: string }): Promise<PaginatedResult<any>> {
+        const page = opts?.page ?? 1;
+        const limit = Math.min(opts?.limit ?? 20, 100);
+        const skip = (page - 1) * limit;
+
+        const where: any = { tenant_id: tenantId, deleted_at: null };
+        if (opts?.search) {
+            where.OR = [
+                { name: { contains: opts.search, mode: 'insensitive' } },
+                { phone: { contains: opts.search } },
+                { customer_code: { contains: opts.search, mode: 'insensitive' } },
+            ];
+        }
+
+        const [items, total] = await Promise.all([
+            this.db.customer.findMany({
+                where,
+                include: { customerGroup: true, territory: true },
+                orderBy: { created_at: 'desc' },
+                skip,
+                take: limit,
+            }),
+            this.db.customer.count({ where }),
+        ]);
+
+        return paginate(items, total, page, limit);
     }
 
     async findOne(tenantId: string, id: string) {
         const customer = await this.db.customer.findFirst({
-            where: { id, tenant_id: tenantId },
+            where: { id, tenant_id: tenantId, deleted_at: null },
             include: {
                 customerGroup: true,
                 territory: true,

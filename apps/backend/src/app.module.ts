@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { TransformInterceptor } from './common/transform.interceptor';
+import { CommonModule } from './common/common.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SentryModule } from '@sentry/nestjs/setup';
@@ -36,12 +38,14 @@ import { SalesReportsModule } from './sales-reports/sales-reports.module';
 import { BillingModule } from './billing/billing.module';
 import { AdminTenantsModule } from './admin-tenants/admin-tenants.module';
 import { WarrantyClaimsModule } from './warranty-claims/warranty-claims.module';
+import { AccountModule } from './account/account.module';
 
 @Module({
     imports: [
         SentryModule.forRoot(),
         ThrottlerModule.forRoot([{ ttl: 60_000, limit: 20 }]),
         ScheduleModule.forRoot(),
+        CommonModule,
         DatabaseModule,
         EmailModule,
         AuditModule,
@@ -75,9 +79,13 @@ import { WarrantyClaimsModule } from './warranty-claims/warranty-claims.module';
         BillingModule,
         AdminTenantsModule,
         WarrantyClaimsModule,
+        AccountModule,
     ],
     controllers: [],
-    providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+    providers: [
+        { provide: APP_GUARD, useClass: ThrottlerGuard },
+        { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
+    ],
 })
 export class AppModule {}
 

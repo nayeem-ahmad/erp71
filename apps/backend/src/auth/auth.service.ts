@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { EmailService } from '../email/email.service';
 import { bootstrapDefaultAccountingForTenant } from '@retail-saas/database';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { SignupDto, LoginDto } from './auth.dto';
 import { isPlatformAdminEmail } from './platform-admin.util';
 import { ROLE_DEFAULT_PERMISSIONS, UserRole } from '@retail-saas/shared-types';
@@ -51,6 +52,10 @@ export class AuthService {
         this.email.sendWelcome(user.email, user.name ?? user.email).catch((err) => {
             console.warn(`[AuthService] Welcome email failed for ${user.email}:`, err?.message);
         });
+        // Fire-and-forget: send email verification
+        this.sendVerificationEmail(user.id).catch((err) => {
+            console.warn(`[AuthService] Verification email failed for ${user.email}:`, err?.message);
+        });
         return this.generateAuthResponse(user.id);
     }
 
@@ -70,6 +75,51 @@ export class AuthService {
         }
 
         return this.generateAuthResponse(user.id);
+    }
+
+    async logout(userId: string): Promise<void> {
+        // Increment token_version to invalidate all existing JWTs for this user
+        await this.db.user.update({
+            where: { id: userId },
+            data: { token_version: { increment: 1 } },
+        });
+    }
+
+    async sendVerificationEmail(userId: string): Promise<void> {
+        const user = await this.db.user.findUnique({ where: { id: userId } });
+        if (!user) throw new UnauthorizedException('User not found');
+        if (user.email_verified_at) throw new BadRequestException('Email already verified');
+
+        await this.db.emailVerificationToken.deleteMany({ where: { user_id: userId } });
+
+        const rawToken = crypto.randomBytes(32).toString('hex');
+        const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        await this.db.emailVerificationToken.create({
+            data: { user_id: userId, token_hash: tokenHash, expires_at: expiresAt },
+        });
+
+        this.email.sendEmailVerification(user.email, rawToken).catch((err) => {
+            console.warn(`[AuthService] Verification email failed for ${user.email}:`, err?.message);
+        });
+    }
+
+    async verifyEmail(rawToken: string): Promise<void> {
+        const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+        const record = await this.db.emailVerificationToken.findUnique({ where: { token_hash: tokenHash } });
+
+        if (!record || record.expires_at < new Date()) {
+            throw new BadRequestException('Invalid or expired verification token');
+        }
+
+        await this.db.$transaction([
+            this.db.user.update({
+                where: { id: record.user_id },
+                data: { email_verified_at: new Date() },
+            }),
+            this.db.emailVerificationToken.deleteMany({ where: { user_id: record.user_id } }),
+        ]);
     }
 
     async getPlans() {
@@ -113,7 +163,7 @@ export class AuthService {
             throw new UnauthorizedException('User not found');
         }
 
-        const payload = { sub: user.id, email: user.email };
+        const payload = { sub: user.id, email: user.email, tv: user.token_version };
         const isPlatformAdmin = isPlatformAdminEmail(user.email);
         return {
             access_token: this.jwtService.sign(payload),
@@ -123,6 +173,7 @@ export class AuthService {
                 email: user.email,
                 name: user.name,
                 is_platform_admin: isPlatformAdmin,
+                email_verified: !!user.email_verified_at,
             },
             tenants: user.tenantMembers.map((membership) =>
                 this.mapTenantMembership(membership, user.storeAccess),
@@ -160,6 +211,7 @@ export class AuthService {
             email: user.email,
             name: user.name,
             is_platform_admin: isPlatformAdminEmail(user.email),
+            email_verified: !!user.email_verified_at,
             tenants: user.tenantMembers.map((membership) =>
                 this.mapTenantMembership(membership, user.storeAccess),
             ),
