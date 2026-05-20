@@ -1,9 +1,10 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import supertest from 'supertest';
 import { CallHandler, ExecutionContext } from '@nestjs/common';
 import { BillingController } from './billing.controller';
 import { BillingService } from './billing.service';
+import { DatabaseService } from '../database/database.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 
@@ -40,7 +41,12 @@ describe('BillingController — webhook integration', () => {
 
         const module: TestingModule = await Test.createTestingModule({
             controllers: [BillingController],
-            providers: [{ provide: BillingService, useValue: billingService }],
+            providers: [
+                { provide: BillingService, useValue: billingService },
+                // Provide a minimal DatabaseService mock so TenantInterceptor can be resolved
+                // before the overrideInterceptor takes effect in the DI container
+                { provide: DatabaseService, useValue: { tenantUser: { findUnique: jest.fn() } } },
+            ],
         })
             .overrideGuard(JwtAuthGuard).useClass(MockJwtAuthGuard)
             .overrideInterceptor(TenantInterceptor).useClass(MockTenantInterceptor)
@@ -78,7 +84,6 @@ describe('BillingController — webhook integration', () => {
         });
 
         it('returns 401 when the billing service rejects an invalid secret', async () => {
-            const { UnauthorizedException } = await import('@nestjs/common');
             billingService.handleManualWebhook.mockRejectedValue(new UnauthorizedException('Invalid billing webhook secret'));
 
             await supertest(app.getHttpServer())

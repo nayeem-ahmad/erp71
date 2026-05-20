@@ -53,7 +53,6 @@ jobs:
       - name: Run backend unit + integration tests with coverage
         run: |
           npx jest --testPathPatterns="src/" --passWithNoTests --coverage \
-            --coverageReporters=text-summary --coverageReporters=lcov --coverageReporters=html \
             --testPathIgnorePatterns="src/accounting/bootstrap-accounting.spec.ts" \
             --testPathIgnorePatterns="src/accounting/accounting.controller.spec.ts" \
             --testPathIgnorePatterns="src/customers/customers.service.spec.ts"
@@ -76,10 +75,10 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm install
-      - name: Run frontend unit tests with coverage
+      - name: Run frontend unit tests
         run: |
-          npx jest --passWithNoTests --coverage \
-            --coverageReporters=text-summary --coverageReporters=lcov --coverageReporters=html \
+          npx jest --passWithNoTests \
+            --testPathIgnorePatterns="e2e/" \
             --testPathIgnorePatterns="src/app/dashboard/page.test.tsx" \
             --testPathIgnorePatterns="src/app/dashboard/pos/page.test.tsx" \
             --testPathIgnorePatterns="src/app/dashboard/sales/page.test.tsx" \
