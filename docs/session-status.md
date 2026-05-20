@@ -43,17 +43,21 @@ Working through GitHub issues in priority order. Issues marked ✅ are closed/do
 4. Set Sentry alert rules in Sentry dashboard (see docs/ops/uptime-monitoring.md)
 5. Add SENTRY_DSN, NEXT_PUBLIC_SENTRY_DSN, SENTRY_ORG, SENTRY_PROJECT to Render env vars
 
-## Session 3 — HIGH: Auth + API Hardening + Compliance
-- [ ] #67 Email verification on signup
-- [ ] #68 Session invalidation on password change
-- [ ] #69 TOTP 2FA for OWNER role
-- [ ] #70 API versioning /api/v1/
-- [ ] #71 Standardize response envelope
-- [ ] #72 Enforce pagination on all list endpoints
-- [ ] #73 Implement soft deletes
-- [ ] #74 Data retention policy
-- [ ] #75 Encrypt sensitive fields at rest
-- [ ] #76 GDPR basics
+## Session 3 — HIGH: Auth + API Hardening + Compliance ✅ (PR #200)
+- [x] #67 Email verification on signup — EmailVerificationToken model, /auth/verify-email, /auth/resend-verification
+- [x] #68 Session invalidation on password change — token_version in JWT; logout increments; password reset increments
+- [x] #69 TOTP 2FA — native crypto RFC 6238; /auth/2fa/{setup,enable,disable,verify} endpoints
+- [x] #70 API versioning — app.setGlobalPrefix('api/v1'); frontend API_BASE updated
+- [x] #71 Response envelope — TransformInterceptor wraps { data: T }; fetchWithAuth unwraps transparently
+- [x] #72 Pagination — PaginationDto + paginate(); products + customers paginated (default 20, max 100)
+- [x] #73 Soft deletes — deleted_at on Product/Customer/Supplier; remove() soft-deletes; queries filter
+- [x] #74 Data retention — daily cron purges expired tokens (>7d) + audit logs (>90d)
+- [x] #75 Encryption utility — EncryptionService AES-256-GCM in CommonModule (no fields need it yet)
+- [x] #76 GDPR basics — DELETE /account/data-deletion-request, GET /account/data-export, /privacy page
+
+**Pending user actions:**
+1. Set FIELD_ENCRYPTION_KEY in Render env (32 random bytes as hex)
+2. Create frontend /verify-email page to call GET /api/v1/auth/verify-email?token=
 
 ## Session 4 — HIGH: Testing
 - [ ] #79 Verify 80% coverage threshold

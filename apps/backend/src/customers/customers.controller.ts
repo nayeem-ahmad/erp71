@@ -31,8 +31,17 @@ export class CustomersController {
     }
 
     @Get()
-    async findAll(@Tenant() tenant: TenantContext) {
-        return this.customersService.findAll(tenant.tenantId);
+    async findAll(
+        @Tenant() tenant: TenantContext,
+        @Query('page') page?: string,
+        @Query('limit') limit?: string,
+        @Query('search') search?: string,
+    ) {
+        return this.customersService.findAll(tenant.tenantId, {
+            page: page ? parseInt(page, 10) : undefined,
+            limit: limit ? parseInt(limit, 10) : undefined,
+            search,
+        });
     }
 
     @Post('segments/evaluate')

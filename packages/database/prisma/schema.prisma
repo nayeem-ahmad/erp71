@@ -96,32 +96,48 @@ enum PostingEventStatus {
 }
 
 model User {
-  id            String       @id @default(uuid())
-  email         String       @unique
-  passwordHash  String
-  name          String?
-  created_at    DateTime     @default(now())
-  updated_at    DateTime     @updatedAt
+  id                String    @id @default(uuid())
+  email             String    @unique
+  passwordHash      String
+  name              String?
+  token_version     Int       @default(0)
+  email_verified_at DateTime?
+  totp_secret       String?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
 
   // Relations
-  tenantsOwned           Tenant[]              @relation("TenantOwner")
-  tenantMembers          TenantUser[]
-  cashierSessions        CashierSession[]
-  storeAccess            UserStoreAccess[]
-  storePermissions       UserStorePermission[]
-  fundTransfersInitiated FundTransfer[]        @relation("FundTransferInitiator")
-  fundTransfersReceived  FundTransfer[]        @relation("FundTransferReceiver")
-  auditLogs              AuditLog[]
-  passwordResetTokens    PasswordResetToken[]
-  sentInvitations        UserInvitation[]      @relation("InvitationSender")
+  tenantsOwned              Tenant[]                @relation("TenantOwner")
+  tenantMembers             TenantUser[]
+  cashierSessions           CashierSession[]
+  storeAccess               UserStoreAccess[]
+  storePermissions          UserStorePermission[]
+  fundTransfersInitiated    FundTransfer[]          @relation("FundTransferInitiator")
+  fundTransfersReceived     FundTransfer[]          @relation("FundTransferReceiver")
+  auditLogs                 AuditLog[]
+  passwordResetTokens       PasswordResetToken[]
+  emailVerificationTokens   EmailVerificationToken[]
+  sentInvitations           UserInvitation[]        @relation("InvitationSender")
 }
 
 model PasswordResetToken {
+  id         String    @id @default(uuid())
+  user_id    String
+  token_hash String    @unique
+  expires_at DateTime
+  used_at    DateTime?
+  created_at DateTime  @default(now())
+
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+}
+
+model EmailVerificationToken {
   id         String   @id @default(uuid())
   user_id    String
   token_hash String   @unique
   expires_at DateTime
-  used_at    DateTime?
   created_at DateTime @default(now())
 
   user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
@@ -332,8 +348,9 @@ model Product {
   safety_stock Int?
   lead_time_days Int?
   image_url   String?
-  unit_type   String   @default("none")
-  created_at  DateTime @default(now())
+  unit_type   String    @default("none")
+  created_at  DateTime  @default(now())
+  deleted_at  DateTime?
 
   // Relations
   tenant      Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -597,8 +614,9 @@ model Supplier {
   phone       String?
   email       String?
   address     String?
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  deleted_at  DateTime?
 
   tenant      Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   purchases   Purchase[]
@@ -721,6 +739,7 @@ model Customer {
   total_spent          Decimal       @default(0) @db.Decimal(12, 2)
   segment_category     String        @default("Regular")
   created_at           DateTime      @default(now())
+  deleted_at           DateTime?
 
   // Relations
   tenant           Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)

@@ -54,6 +54,8 @@ export default function CustomersPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [segmentStats, setSegmentStats] = useState<SegmentStats | null>(null);
     const [runningSegmentation, setRunningSegmentation] = useState(false);
+    const [evaluating, setEvaluating] = useState(false);
+    const [evalMessage, setEvalMessage] = useState('');
 
     useEffect(() => {
         loadCustomers();
@@ -63,7 +65,8 @@ export default function CustomersPage() {
     const loadCustomers = async () => {
         try {
             const data = await api.getCustomers();
-            setCustomers(data);
+            // API now returns paginated result; support both array and { items } shapes
+            setCustomers(Array.isArray(data) ? data : (data?.items ?? data));
         } catch (error) {
             console.error('Failed to load customers', error);
         } finally {

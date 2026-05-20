@@ -18,6 +18,7 @@ describe('AuthService', () => {
         user: {
             findUnique: jest.fn(),
             create: jest.fn(),
+            update: jest.fn(),
         },
         accountGroup: { upsert: jest.fn() },
         accountSubgroup: { upsert: jest.fn() },
@@ -32,6 +33,7 @@ describe('AuthService', () => {
         tenantSubscription: { create: jest.fn() },
         userStoreAccess: { create: jest.fn() },
         userStorePermission: { createMany: jest.fn() },
+        emailVerificationToken: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }), create: jest.fn().mockResolvedValue({}) },
         $transaction: jest.fn(),
     };
 
@@ -41,12 +43,15 @@ describe('AuthService', () => {
 
     const emailService = {
         sendWelcome: jest.fn().mockResolvedValue(undefined),
+        sendEmailVerification: jest.fn().mockResolvedValue(undefined),
     };
 
     const makeUserWithAccess = (storeId: string, tenantId: string) => ({
         id: 'user-1',
         email: 'owner@example.com',
         name: 'Owner',
+        token_version: 0,
+        email_verified_at: null,
         storeAccess: [{ tenant_id: tenantId, store: { id: storeId } }],
         tenantMembers: [{
             role: 'OWNER',
@@ -68,12 +73,15 @@ describe('AuthService', () => {
     beforeEach(async () => {
         jest.resetAllMocks();
         emailService.sendWelcome.mockResolvedValue(undefined);
+        emailService.sendEmailVerification.mockResolvedValue(undefined);
         db.$transaction.mockImplementation(async (callback: any) => callback(db));
         db.accountGroup.upsert.mockResolvedValue({ id: 'group-1', name: 'Current Assets' });
         db.accountSubgroup.upsert.mockResolvedValue({ id: 'subgroup-1', name: 'Cash and Bank' });
         db.account.upsert.mockResolvedValue({ id: 'account-1', name: 'Cash in Hand' });
         db.userStoreAccess.create.mockResolvedValue({});
         db.userStorePermission.createMany.mockResolvedValue({ count: 22 });
+        db.emailVerificationToken.deleteMany.mockResolvedValue({ count: 0 });
+        db.emailVerificationToken.create.mockResolvedValue({});
         jwtService.sign.mockReturnValue('jwt-token');
 
         const module: TestingModule = await Test.createTestingModule({
@@ -86,6 +94,8 @@ describe('AuthService', () => {
         }).compile();
 
         service = module.get(AuthService);
+        // Stub sendVerificationEmail to avoid it competing for db.user.findUnique mock calls
+        jest.spyOn(service, 'sendVerificationEmail').mockResolvedValue(undefined);
     });
 
     it('signs up a new tenant-backed user', async () => {
@@ -151,6 +161,8 @@ describe('AuthService', () => {
             id: 'user-1',
             email: 'manager@example.com',
             name: 'Manager',
+            token_version: 0,
+            email_verified_at: null,
             storeAccess: [
                 { tenant_id: 'tenant-1', store: { id: 'store-1', name: 'Gulshan' } },
                 // store-2 belongs to different tenant, should NOT appear in tenant-1 stores
@@ -195,6 +207,8 @@ describe('AuthService', () => {
             id: 'user-1',
             email: 'nayeem.ahmad@gmail.com',
             name: 'Nayeem Ahmad',
+            token_version: 0,
+            email_verified_at: null,
             storeAccess: [],
             tenantMembers: [],
         });

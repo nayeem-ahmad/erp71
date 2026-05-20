@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { DatabaseService } from '../database/database.service';
 import { CreateProductDto, UpdateProductDto } from './product.dto';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant, ensureDefaultWarehouse } from '../database/inventory.utils';
+import { paginate, PaginatedResult } from '../common/pagination.dto';
 
 @Injectable()
 export class ProductsService {
@@ -57,26 +58,34 @@ export class ProductsService {
 
     async findAll(
         tenantId: string,
-        filters?: { groupId?: string; subgroupId?: string; uncategorized?: boolean },
-    ) {
-        return this.db.product.findMany({
-            where: {
-                tenant_id: tenantId,
-                ...(filters?.uncategorized
-                    ? { group_id: null, subgroup_id: null }
-                    : {
-                          ...(filters?.groupId ? { group_id: filters.groupId } : {}),
-                          ...(filters?.subgroupId ? { subgroup_id: filters.subgroupId } : {}),
-                      }),
-            },
-            include: this.productInclude(),
-            orderBy: { name: 'asc' },
-        });
+        filters?: { groupId?: string; subgroupId?: string; uncategorized?: boolean; page?: number; limit?: number },
+    ): Promise<PaginatedResult<any>> {
+        const page = filters?.page ?? 1;
+        const limit = Math.min(filters?.limit ?? 20, 100);
+        const skip = (page - 1) * limit;
+
+        const where = {
+            tenant_id: tenantId,
+            deleted_at: null,
+            ...(filters?.uncategorized
+                ? { group_id: null, subgroup_id: null }
+                : {
+                      ...(filters?.groupId ? { group_id: filters.groupId } : {}),
+                      ...(filters?.subgroupId ? { subgroup_id: filters.subgroupId } : {}),
+                  }),
+        };
+
+        const [items, total] = await Promise.all([
+            this.db.product.findMany({ where, include: this.productInclude(), orderBy: { name: 'asc' }, skip, take: limit }),
+            this.db.product.count({ where }),
+        ]);
+
+        return paginate(items, total, page, limit);
     }
 
     async findOne(tenantId: string, id: string) {
         const product = await this.db.product.findFirst({
-            where: { id, tenant_id: tenantId },
+            where: { id, tenant_id: tenantId, deleted_at: null },
             include: this.productInclude(),
         });
 
@@ -115,8 +124,11 @@ export class ProductsService {
     }
 
     async remove(tenantId: string, id: string) {
-        return this.db.product.deleteMany({
-            where: { id, tenant_id: tenantId },
+        const product = await this.db.product.findFirst({ where: { id, tenant_id: tenantId, deleted_at: null } });
+        if (!product) throw new NotFoundException('Product not found');
+        return this.db.product.update({
+            where: { id },
+            data: { deleted_at: new Date() },
         });
     }
 
