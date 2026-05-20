@@ -75,9 +75,6 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm install
-      - name: List discovered frontend tests
-        run: npx jest --listTests --testPathIgnorePatterns="e2e/"
-        working-directory: apps/frontend
       - name: Run frontend unit tests
         run: |
           npx jest --passWithNoTests --forceExit \
