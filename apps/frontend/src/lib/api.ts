@@ -1,6 +1,6 @@
-const DEFAULT_PROD_API_URL = 'https://retail-saas-backend.onrender.com';
-const API_URL = process.env.NEXT_PUBLIC_API_URL
-    || (process.env.NODE_ENV === 'production' ? DEFAULT_PROD_API_URL : 'http://localhost:4000');
+const DEFAULT_PROD_API_BASE = 'https://retail-saas-backend.onrender.com';
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE
+    || (process.env.NODE_ENV === 'production' ? DEFAULT_PROD_API_BASE : 'http://localhost:4000')) + '/api/v1';
 
 export async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
@@ -18,7 +18,7 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit = {})
         headers.set('x-store-id', storeId);
     }
 
-    const response = await fetch(`${API_URL}${endpoint}`, {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
         ...options,
         headers,
     });
@@ -42,16 +42,21 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit = {})
         throw new Error(message);
     }
 
-    return response.json();
+    const json = await response.json();
+    // Backend wraps all responses in { data: T } — unwrap transparently
+    return 'data' in json ? json.data : json;
 }
 
 export const api = {
-    getProducts: (params?: { groupId?: string; subgroupId?: string; uncategorized?: boolean }) => {
+    getProducts: (params?: { groupId?: string; subgroupId?: string; uncategorized?: boolean; page?: number; limit?: number }) => {
         const query = new URLSearchParams();
         if (params?.groupId) query.set('groupId', params.groupId);
         if (params?.subgroupId) query.set('subgroupId', params.subgroupId);
         if (params?.uncategorized) query.set('uncategorized', 'true');
-        return fetchWithAuth(`/products${query.toString() ? `?${query.toString()}` : ''}`);
+        // Default to a large limit so callers expecting a flat array still work
+        query.set('limit', String(params?.limit ?? 100));
+        if (params?.page) query.set('page', String(params.page));
+        return fetchWithAuth(`/products?${query.toString()}`).then((r: any) => r?.items ?? r);
     },
     createProduct: (data: any) => fetchWithAuth('/products', {
         method: 'POST',
@@ -248,7 +253,13 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     getSales: () => fetchWithAuth('/sales'),
-    getCustomers: () => fetchWithAuth('/customers'),
+    getCustomers: (params?: { page?: number; limit?: number; search?: string }) => {
+        const query = new URLSearchParams();
+        query.set('limit', String(params?.limit ?? 100));
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.search) query.set('search', params.search);
+        return fetchWithAuth(`/customers?${query.toString()}`).then((r: any) => r?.items ?? r);
+    },
     getCustomer: (id: string) => fetchWithAuth(`/customers/${id}`),
     getCustomerPurchaseHistory: (id: string, params?: { page?: number; limit?: number; from?: string; to?: string }) => {
         const query = new URLSearchParams();
@@ -520,7 +531,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     getCashTransactions: (sessionId: string) => fetchWithAuth(`/cashier-sessions/${sessionId}/cash-transactions`),
-    login: (data: any) => fetch(`${API_URL}/auth/login`, {
+    login: (data: any) => fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
@@ -528,7 +539,7 @@ export const api = {
         if (!res.ok) throw new Error('Login failed');
         return res.json();
     }),
-    signup: (data: any) => fetch(`${API_URL}/auth/signup`, {
+    signup: (data: any) => fetch(`${API_BASE}/auth/signup`, {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
@@ -537,7 +548,7 @@ export const api = {
         if (!res.ok) throw new Error(body?.message || 'Signup failed');
         return body;
     }),
-    getSubscriptionPlans: () => fetch(`${API_URL}/auth/plans`).then(async res => {
+    getSubscriptionPlans: () => fetch(`${API_BASE}/auth/plans`).then(async res => {
         const body = await res.json().catch(() => null);
         if (!res.ok) throw new Error(body?.message || 'Failed to load plans');
         return body;

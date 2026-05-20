@@ -28,7 +28,7 @@ export class AuditService {
                 tenant_id: ctx.tenantId ?? null,
                 ip_address: ctx.ipAddress ?? null,
                 user_agent: ctx.userAgent ?? null,
-                payload: payload ?? undefined,
+                payload: payload as any ?? undefined,
             },
         });
     }

@@ -41,8 +41,12 @@ export class PasswordResetService {
 
         const passwordHash = await bcrypt.hash(newPassword, 10);
 
+        // Increment token_version to invalidate all active sessions (#68)
         await this.db.$transaction([
-            this.db.user.update({ where: { id: record.user_id }, data: { passwordHash } }),
+            this.db.user.update({
+                where: { id: record.user_id },
+                data: { passwordHash, token_version: { increment: 1 } },
+            }),
             this.db.passwordResetToken.update({ where: { id: record.id }, data: { used_at: new Date() } }),
         ]);
     }

@@ -110,4 +110,31 @@ export class NotificationsService {
             }
         }
     }
+
+    // #74 Data retention — runs daily at 03:00
+    @Cron('0 3 * * *')
+    async purgeExpiredData(): Promise<void> {
+        const now = new Date();
+
+        // Purge used or expired password reset tokens older than 7 days
+        const tokenCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const { count: pwTokens } = await this.db.passwordResetToken.deleteMany({
+            where: { OR: [{ used_at: { not: null } }, { expires_at: { lt: tokenCutoff } }] },
+        });
+
+        // Purge expired email verification tokens older than 7 days
+        const { count: evTokens } = await this.db.emailVerificationToken.deleteMany({
+            where: { expires_at: { lt: tokenCutoff } },
+        });
+
+        // Purge audit logs older than 90 days (retain 90-day window)
+        const auditCutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        const { count: auditRows } = await this.db.auditLog.deleteMany({
+            where: { created_at: { lt: auditCutoff } },
+        });
+
+        this.logger.log(
+            `[DataRetention] Purged: ${pwTokens} pw-reset tokens, ${evTokens} verification tokens, ${auditRows} audit logs`,
+        );
+    }
 }
