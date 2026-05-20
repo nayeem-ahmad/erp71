@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 
 export interface AuditContext {
@@ -18,7 +17,7 @@ export class AuditService {
         entity: string,
         ctx: AuditContext,
         entityId?: string,
-        payload?: Prisma.InputJsonValue,
+        payload?: Record<string, unknown>,
     ): Promise<void> {
         await this.db.auditLog.create({
             data: {
@@ -29,7 +28,7 @@ export class AuditService {
                 tenant_id: ctx.tenantId ?? null,
                 ip_address: ctx.ipAddress ?? null,
                 user_agent: ctx.userAgent ?? null,
-                payload: payload ?? Prisma.JsonNull,
+                payload: payload ?? undefined,
             },
         });
     }

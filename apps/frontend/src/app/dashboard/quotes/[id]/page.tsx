@@ -476,7 +476,7 @@ export default function QuoteDetailsPage() {
                         
                         {!isEditMode && quote.notes && (
                             <div className="bg-yellow-50 text-yellow-800 p-6 rounded-2xl text-sm font-medium italic">
-                                "{quote.notes}"
+                                &quot;{quote.notes}&quot;
                             </div>
                         )}
                     </div>

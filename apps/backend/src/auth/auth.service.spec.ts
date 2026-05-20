@@ -4,6 +4,7 @@ import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import { DatabaseService } from '../database/database.service';
+import { EmailService } from '../email/email.service';
 
 jest.mock('bcrypt', () => ({
     hash: jest.fn().mockResolvedValue('hashed-password'),
@@ -38,6 +39,10 @@ describe('AuthService', () => {
         sign: jest.fn().mockReturnValue('jwt-token'),
     };
 
+    const emailService = {
+        sendWelcome: jest.fn().mockResolvedValue(undefined),
+    };
+
     const makeUserWithAccess = (storeId: string, tenantId: string) => ({
         id: 'user-1',
         email: 'owner@example.com',
@@ -62,6 +67,7 @@ describe('AuthService', () => {
 
     beforeEach(async () => {
         jest.resetAllMocks();
+        emailService.sendWelcome.mockResolvedValue(undefined);
         db.$transaction.mockImplementation(async (callback: any) => callback(db));
         db.accountGroup.upsert.mockResolvedValue({ id: 'group-1', name: 'Current Assets' });
         db.accountSubgroup.upsert.mockResolvedValue({ id: 'subgroup-1', name: 'Cash and Bank' });
@@ -75,6 +81,7 @@ describe('AuthService', () => {
                 AuthService,
                 { provide: DatabaseService, useValue: db },
                 { provide: JwtService, useValue: jwtService },
+                { provide: EmailService, useValue: emailService },
             ],
         }).compile();
 

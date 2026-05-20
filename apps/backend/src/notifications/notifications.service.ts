@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
 
@@ -16,41 +16,42 @@ export class NotificationsService {
     @Cron('0 8 * * *')
     async sendSubscriptionExpiryWarnings(): Promise<void> {
         const now = new Date();
-        const day1 = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
-        const day7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-        // Find subscriptions expiring in ~1 day or ~7 days (within a 2-hour window to avoid duplicate sends)
-        const window = 2 * 60 * 60 * 1000;
+        // Warning tiers: subscriptions expiring within [0,2) days (1-day) or [6,8) days (7-day)
+        // Using day-based floor/ceil so any expiry time during that day is caught regardless of hour
+        const startOf = (daysFromNow: number) => {
+            const d = new Date(now);
+            d.setDate(d.getDate() + daysFromNow);
+            d.setHours(0, 0, 0, 0);
+            return d;
+        };
+        const endOf = (daysFromNow: number) => {
+            const d = new Date(now);
+            d.setDate(d.getDate() + daysFromNow);
+            d.setHours(23, 59, 59, 999);
+            return d;
+        };
+
         const targets = await this.db.tenantSubscription.findMany({
             where: {
                 status: { in: ['ACTIVE', 'TRIALING'] },
                 OR: [
-                    { current_period_end: { gte: new Date(day1.getTime() - window), lte: new Date(day1.getTime() + window) } },
-                    { current_period_end: { gte: new Date(day7.getTime() - window), lte: new Date(day7.getTime() + window) } },
+                    { current_period_end: { gte: startOf(1), lte: endOf(1) } },   // 1-day warning
+                    { current_period_end: { gte: startOf(7), lte: endOf(7) } },   // 7-day warning
                 ],
             },
-            include: {
-                tenant: {
-                    include: { owner: true },
-                },
-            },
+            include: { tenant: { include: { owner: true } } },
         });
 
         for (const sub of targets) {
             const daysLeft = Math.ceil((sub.current_period_end.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
             const ownerEmail = sub.tenant.owner?.email;
             if (!ownerEmail) continue;
-
             try {
-                await this.email.sendSubscriptionExpiryWarning(
-                    ownerEmail,
-                    sub.tenant.name,
-                    daysLeft,
-                    sub.current_period_end,
-                );
-                this.logger.log(`Expiry warning sent for tenant ${sub.tenant.id} (${daysLeft}d left)`);
+                await this.email.sendSubscriptionExpiryWarning(ownerEmail, sub.tenant.name, daysLeft, sub.current_period_end);
+                this.logger.log(`Expiry warning sent for tenant ${sub.tenant_id} (${daysLeft}d left)`);
             } catch (err) {
-                this.logger.error(`Failed expiry warning for tenant ${sub.tenant.id}: ${err}`);
+                this.logger.error(`Failed expiry warning for tenant ${sub.tenant_id}: ${err}`);
             }
         }
     }
@@ -58,50 +59,54 @@ export class NotificationsService {
     // Run daily at 07:00
     @Cron('0 7 * * *')
     async sendLowStockAlerts(): Promise<void> {
-        const tenants = await this.db.tenant.findMany({
-            include: {
-                owner: true,
-                inventorySettings: true,
-            },
-        });
+        // Single query: aggregate stock per product across all tenants, join tenant owners
+        const rows = await this.db.$queryRaw<Array<{
+            tenant_id: string;
+            tenant_name: string;
+            owner_email: string;
+            product_name: string;
+            sku: string;
+            total_qty: bigint;
+            reorder_level: number;
+        }>>`
+            SELECT
+                t.id           AS tenant_id,
+                t.name         AS tenant_name,
+                u.email        AS owner_email,
+                p.name         AS product_name,
+                p.sku,
+                COALESCE(SUM(ps.quantity), 0)                           AS total_qty,
+                COALESCE(p.reorder_level, COALESCE(inv.default_reorder_level, 10)) AS reorder_level
+            FROM "Tenant" t
+            JOIN "User" u ON u.id = t.owner_id
+            JOIN "Product" p ON p.tenant_id = t.id
+            LEFT JOIN "ProductStock" ps ON ps.product_id = p.id
+            LEFT JOIN "InventorySettings" inv ON inv.tenant_id = t.id
+            GROUP BY t.id, t.name, u.email, p.id, p.name, p.sku, p.reorder_level, inv.default_reorder_level
+            HAVING COALESCE(SUM(ps.quantity), 0) <= COALESCE(p.reorder_level, COALESCE(inv.default_reorder_level, 10))
+            ORDER BY t.id, total_qty ASC
+        `;
 
-        for (const tenant of tenants) {
-            const defaultReorder = tenant.inventorySettings?.default_reorder_level ?? 10;
-            const ownerEmail = tenant.owner?.email;
-            if (!ownerEmail) continue;
+        // Group by tenant and send one email per tenant
+        const byTenant = new Map<string, { name: string; email: string; items: Array<{ name: string; sku: string; quantity: number; reorderPoint: number }> }>();
+        for (const row of rows) {
+            if (!byTenant.has(row.tenant_id)) {
+                byTenant.set(row.tenant_id, { name: row.tenant_name, email: row.owner_email, items: [] });
+            }
+            byTenant.get(row.tenant_id)!.items.push({
+                name: row.product_name,
+                sku: row.sku ?? '',
+                quantity: Number(row.total_qty),
+                reorderPoint: Number(row.reorder_level),
+            });
+        }
 
+        for (const [tenantId, { name, email, items }] of byTenant) {
             try {
-                // Find products at or below reorder level across all warehouses
-                const lowStockItems = await this.db.$queryRaw<
-                    Array<{ name: string; sku: string; total_qty: number; reorder_level: number }>
-                >`
-                    SELECT p.name, p.sku,
-                           COALESCE(SUM(ps.quantity), 0) AS total_qty,
-                           COALESCE(p.reorder_level, ${defaultReorder}) AS reorder_level
-                    FROM "Product" p
-                    LEFT JOIN "ProductStock" ps ON ps.product_id = p.id
-                    WHERE p.tenant_id = ${tenant.id}
-                    GROUP BY p.id, p.name, p.sku, p.reorder_level
-                    HAVING COALESCE(SUM(ps.quantity), 0) <= COALESCE(p.reorder_level, ${defaultReorder})
-                    ORDER BY total_qty ASC
-                    LIMIT 50
-                `;
-
-                if (lowStockItems.length === 0) continue;
-
-                await this.email.sendLowStockAlert(
-                    ownerEmail,
-                    tenant.name,
-                    lowStockItems.map((i) => ({
-                        name: i.name,
-                        sku: i.sku,
-                        quantity: Number(i.total_qty),
-                        reorderPoint: Number(i.reorder_level),
-                    })),
-                );
-                this.logger.log(`Low stock alert sent for tenant ${tenant.id} (${lowStockItems.length} items)`);
+                await this.email.sendLowStockAlert(email, name, items.slice(0, 50));
+                this.logger.log(`Low stock alert sent for tenant ${tenantId} (${items.length} items)`);
             } catch (err) {
-                this.logger.error(`Failed low stock alert for tenant ${tenant.id}: ${err}`);
+                this.logger.error(`Failed low stock alert for tenant ${tenantId}: ${err}`);
             }
         }
     }

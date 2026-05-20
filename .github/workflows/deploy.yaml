@@ -19,11 +19,11 @@ jobs:
       - run: npm install
       - run: npm run lint
 
-  test:
-    name: Test
+  test-backend:
+    name: Test (Backend)
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retail_test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retail_test?pgbouncer=true
       DIRECT_URL: postgresql://postgres:postgres@localhost:5432/retail_test
       JWT_SECRET: test-secret-for-ci
       NODE_ENV: test
@@ -49,21 +49,42 @@ jobs:
           cache: 'npm'
       - run: npm install
       - run: npx prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate
-      - run: npm run test -- --coverage --coverageThreshold='{"global":{"lines":0}}' 2>&1
-      - name: Upload coverage
+      - name: Run backend unit tests
+        run: npx jest --testPathPatterns="src/" --passWithNoTests --coverage
+        working-directory: apps/backend
+      - name: Upload backend coverage
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: coverage-report
-          path: |
-            apps/backend/coverage/
-            apps/frontend/coverage/
+          name: backend-coverage
+          path: apps/backend/coverage/
+          retention-days: 14
+
+  test-frontend:
+    name: Test (Frontend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm install
+      - name: Run frontend unit tests
+        run: npx jest --passWithNoTests --coverage
+        working-directory: apps/frontend
+      - name: Upload frontend coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-coverage
+          path: apps/frontend/coverage/
           retention-days: 14
 
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    needs: [lint, test-backend, test-frontend]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

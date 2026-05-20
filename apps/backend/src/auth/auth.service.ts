@@ -48,7 +48,9 @@ export class AuthService {
             return createdUser;
         });
 
-        this.email.sendWelcome(user.email, user.name ?? user.email).catch(() => {});
+        this.email.sendWelcome(user.email, user.name ?? user.email).catch((err) => {
+            console.warn(`[AuthService] Welcome email failed for ${user.email}:`, err?.message);
+        });
         return this.generateAuthResponse(user.id);
     }
 

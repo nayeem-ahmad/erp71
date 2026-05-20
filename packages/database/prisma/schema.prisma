@@ -126,7 +126,6 @@ model PasswordResetToken {
 
   user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  @@index([token_hash])
   @@index([user_id])
 }
 
@@ -144,7 +143,6 @@ model UserInvitation {
   tenant      Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   invitedBy   User      @relation("InvitationSender", fields: [invited_by], references: [id])
 
-  @@index([token_hash])
   @@index([tenant_id, email])
 }
 

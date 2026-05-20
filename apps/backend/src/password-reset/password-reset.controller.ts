@@ -1,4 +1,5 @@
 import { Controller, Post, Body } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { PasswordResetService } from './password-reset.service';
 import { IsEmail, IsString, MinLength } from 'class-validator';
 
@@ -20,6 +21,7 @@ class ResetPasswordDto {
 export class PasswordResetController {
     constructor(private service: PasswordResetService) {}
 
+    @Throttle({ default: { ttl: 60_000, limit: 5 } })
     @Post('forgot-password')
     async forgotPassword(@Body() dto: RequestResetDto) {
         await this.service.requestReset(dto.email);
