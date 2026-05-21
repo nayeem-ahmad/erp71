@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Users, Plus, Eye, RefreshCw, Crown, AlertTriangle, UserCheck } from 'lucide-react';
 import { api } from '../../../lib/api';
-import { formatBDT } from '../../../lib/format';
+import { formatBDT, formatDate } from '../../../lib/format';
 import AddCustomerModal from './AddCustomerModal';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
@@ -196,7 +196,7 @@ export default function CustomersPage() {
                 header: 'Registered',
                 cell: (info) => (
                     <span className="text-sm text-gray-600">
-                        {new Date(info.getValue()).toLocaleDateString()}
+                        {formatDate(info.getValue())}
                     </span>
                 ),
                 sortingFn: 'datetime',

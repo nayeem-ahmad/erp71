@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
-import { formatBDT } from '../../lib/format';
+import { formatBDT, formatDate } from '../../lib/format';
 
 type FinancialKpis = {
     cash_inflow: number;
@@ -143,7 +143,7 @@ export default function DashboardPage() {
         gross_margin_reason: 'Sale-time cost basis is not tracked in the current data model.',
     };
     const financialDateRange = financialSnapshot?.filters
-        ? `${new Date(financialSnapshot.filters.from).toLocaleDateString()} - ${new Date(financialSnapshot.filters.to).toLocaleDateString()}`
+        ? `${formatDate(financialSnapshot.filters.from)} - ${formatDate(financialSnapshot.filters.to)}`
         : 'Current month';
     const financialTiles = [
         {

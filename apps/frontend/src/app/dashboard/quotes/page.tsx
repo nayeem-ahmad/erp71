@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { FileText, Plus, Eye, Edit2, Printer, Trash2 } from 'lucide-react';
 import { api } from '../../../lib/api';
-import { formatBDT } from '../../../lib/format';
+import { formatBDT, formatDate } from '../../../lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
@@ -123,7 +123,7 @@ export default function QuotesPage() {
                     const date = new Date(info.getValue());
                     return (
                         <div>
-                            <span className="text-sm text-gray-600">{date.toLocaleDateString()}</span>
+                            <span className="text-sm text-gray-600">{formatDate(info.getValue())}</span>
                             <span className="text-xs text-gray-400 block">{date.toLocaleTimeString()}</span>
                         </div>
                     );
@@ -154,7 +154,7 @@ export default function QuotesPage() {
                 header: 'Valid Until',
                 cell: (info) => (
                     <span className="text-sm font-medium text-gray-600">
-                        {info.getValue() ? new Date(info.getValue() as string).toLocaleDateString() : 'Open'}
+                        {info.getValue() ? formatDate(info.getValue() as string) : 'Open'}
                     </span>
                 ),
                 size: 130,

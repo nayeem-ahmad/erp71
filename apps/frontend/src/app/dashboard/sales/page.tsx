@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Receipt, Eye, Edit2, Plus } from 'lucide-react';
 import { api } from '../../../lib/api';
-import { formatBDT } from '../../../lib/format';
+import { formatBDT, formatDate } from '../../../lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
@@ -66,7 +66,7 @@ export default function SalesPage() {
                     const d = new Date(info.getValue());
                     return (
                         <div>
-                            <span className="text-sm text-gray-600">{d.toLocaleDateString()}</span>
+                            <span className="text-sm text-gray-600">{formatDate(info.getValue())}</span>
                             <span className="text-xs text-gray-400 block">{d.toLocaleTimeString()}</span>
                         </div>
                     );

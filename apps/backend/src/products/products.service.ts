@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateProductDto, UpdateProductDto } from './product.dto';
+import { CsvProductRow } from './import-products.dto';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant, ensureDefaultWarehouse } from '../database/inventory.utils';
 import { paginate, PaginatedResult, cursorPaginate, CursorPaginatedResult } from '../common/pagination.dto';
 import { RedisService } from '../cache/redis.service';
@@ -167,6 +168,86 @@ export class ProductsService {
         });
         await this.redis.invalidatePattern(`products:${tenantId}:`);
         return result;
+    }
+
+    async importFromCsv(
+        tenantId: string,
+        rows: CsvProductRow[],
+    ): Promise<{ created: number; skipped: number; errors: string[] }> {
+        let created = 0;
+        let skipped = 0;
+        const errors: string[] = [];
+
+        // Fetch inventory settings once for the whole import
+        const settings = await this.db.inventorySettings.findUnique({
+            where: { tenant_id: tenantId },
+        });
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const rowLabel = `Row ${i + 2}`; // +2 because row 1 is the header
+
+            try {
+                if (!row.name || String(row.name).trim() === '') {
+                    errors.push(`${rowLabel}: missing required field "name"`);
+                    continue;
+                }
+
+                const name = String(row.name).trim();
+                const sku = row.sku ? String(row.sku).trim() || null : null;
+
+                // If SKU is provided, attempt upsert (skip if product already exists)
+                if (sku) {
+                    const existing = await this.db.product.findFirst({
+                        where: { tenant_id: tenantId, sku, deleted_at: null },
+                    });
+                    if (existing) {
+                        skipped++;
+                        continue;
+                    }
+                }
+
+                const price = Number(row.selling_price) || 0;
+                const initialStock = Number(row.stock_quantity) || 0;
+
+                await this.db.$transaction(async (tx) => {
+                    const product = await tx.product.create({
+                        data: {
+                            tenant_id: tenantId,
+                            name,
+                            sku,
+                            price,
+                            reorder_level: row.reorder_point != null ? Number(row.reorder_point) : null,
+                            unit_type: row.unit ? String(row.unit).trim() : 'none',
+                        },
+                    });
+
+                    if (initialStock > 0) {
+                        const warehouse = settings?.default_product_warehouse_id
+                            ? await assertWarehouseBelongsToTenant(tx, tenantId, settings.default_product_warehouse_id)
+                            : await ensureDefaultWarehouse(tx, tenantId);
+
+                        await applyInventoryMovement(tx, {
+                            tenantId,
+                            productId: product.id,
+                            warehouseId: warehouse.id,
+                            quantityDelta: initialStock,
+                            movementType: 'INITIAL_STOCK',
+                            referenceType: 'PRODUCT',
+                            referenceId: product.id,
+                            unitCost: row.cost_price != null ? Number(row.cost_price) : price,
+                        });
+                    }
+                });
+
+                created++;
+            } catch (err: any) {
+                errors.push(`${rowLabel}: ${err?.message ?? 'unknown error'}`);
+            }
+        }
+
+        await this.redis.invalidatePattern(`products:${tenantId}:`);
+        return { created, skipped, errors };
     }
 
     private buildWhere(tenantId: string, filters?: { groupId?: string; subgroupId?: string; uncategorized?: boolean }) {

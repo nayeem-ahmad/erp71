@@ -5,7 +5,7 @@ import { ClipboardList, Plus } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
 import { api } from '../../../lib/api';
-import { formatBDT } from '../../../lib/format';
+import { formatBDT, formatDate } from '../../../lib/format';
 import CreatePurchaseModal from './CreatePurchaseModal';
 import { PostingBadge } from '@/components/PostingBadge';
 
@@ -105,7 +105,7 @@ export default function PurchasesPage() {
                     const date = new Date(info.getValue());
                     return (
                         <div>
-                            <span className="text-sm text-gray-600">{date.toLocaleDateString()}</span>
+                            <span className="text-sm text-gray-600">{formatDate(info.getValue())}</span>
                             <span className="text-xs text-gray-400 block">{date.toLocaleTimeString()}</span>
                         </div>
                     );

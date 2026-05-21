@@ -8,7 +8,7 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
 import IssueReturnModal from './IssueReturnModal';
 import { PostingBadge } from '@/components/PostingBadge';
-import { formatBDT } from '../../../lib/format';
+import { formatBDT, formatDate } from '../../../lib/format';
 
 interface SalesReturn {
     id: string;
@@ -140,7 +140,7 @@ export default function ReturnsPage() {
                     const d = new Date(info.getValue());
                     return (
                         <div>
-                            <span className="text-sm text-gray-600">{d.toLocaleDateString()}</span>
+                            <span className="text-sm text-gray-600">{formatDate(info.getValue())}</span>
                             <span className="text-xs text-gray-400 block">{d.toLocaleTimeString()}</span>
                         </div>
                     );

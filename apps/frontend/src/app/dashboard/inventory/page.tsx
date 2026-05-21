@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, BookOpen, ClipboardCheck, Package, Pencil, Plus, Settings2, ShoppingBasket, Tag, Trash2, Truck, TrendingUp } from 'lucide-react';
-import { api } from '../../../lib/api';
+import { AlertTriangle, BookOpen, ClipboardCheck, Package, Pencil, Plus, Settings2, ShoppingBasket, Tag, Trash2, Truck, TrendingUp, Upload } from 'lucide-react';
+import { api, fetchWithAuth } from '../../../lib/api';
 import { formatBDT } from '../../../lib/format';
 import AddProductModal from './AddProductModal';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
@@ -32,6 +32,9 @@ export default function InventoryPage() {
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [importStatus, setImportStatus] = useState<string | null>(null);
+    const [isImporting, setIsImporting] = useState(false);
+    const csvInputRef = useRef<HTMLInputElement>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -125,6 +128,35 @@ export default function InventoryPage() {
     const openEditProduct = (product: Product) => {
         setEditingProduct(product);
         setIsEditModalOpen(true);
+    };
+
+    const handleCsvFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Reset the input so the same file can be re-selected if needed
+        e.target.value = '';
+
+        setIsImporting(true);
+        setImportStatus(null);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const result = await fetchWithAuth('/products/import', {
+                method: 'POST',
+                body: formData,
+            });
+
+            const summary = `Imported ${result.created} product${result.created !== 1 ? 's' : ''}, skipped ${result.skipped}${result.errors?.length ? ` (${result.errors.length} error${result.errors.length !== 1 ? 's' : ''})` : ''}.`;
+            setImportStatus(summary);
+            await loadProducts();
+        } catch (error: any) {
+            setImportStatus(`Import failed: ${error?.message ?? 'unknown error'}`);
+        } finally {
+            setIsImporting(false);
+        }
     };
 
     const columns: ColumnDef<Product, any>[] = useMemo(
@@ -372,6 +404,22 @@ export default function InventoryPage() {
                                 Upgrade for Advanced Reports
                             </Link>
                         )}
+                        {/* Hidden CSV file input */}
+                        <input
+                            ref={csvInputRef}
+                            type="file"
+                            accept=".csv"
+                            className="hidden"
+                            onChange={handleCsvFileChange}
+                        />
+                        <button
+                            onClick={() => csvInputRef.current?.click()}
+                            disabled={isImporting}
+                            className="bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center transition-all hover:border-emerald-300 hover:text-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                            <Upload className="w-4 h-4 mr-2" />
+                            {isImporting ? 'Importing…' : 'Import CSV'}
+                        </button>
                         <button
                             onClick={() => setIsModalOpen(true)}
                             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
@@ -381,6 +429,25 @@ export default function InventoryPage() {
                         </button>
                     </div>
                 </div>
+
+                {importStatus && (
+                    <div
+                        className={`px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-between ${
+                            importStatus.startsWith('Import failed')
+                                ? 'bg-red-50 border border-red-200 text-red-700'
+                                : 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                        }`}
+                    >
+                        <span>{importStatus}</span>
+                        <button
+                            onClick={() => setImportStatus(null)}
+                            className="ml-4 text-current opacity-60 hover:opacity-100 font-black text-base leading-none"
+                            aria-label="Dismiss"
+                        >
+                            ×
+                        </button>
+                    </div>
+                )}
 
                 <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap gap-3 items-end">
                     <div className="min-w-[220px] flex-1">

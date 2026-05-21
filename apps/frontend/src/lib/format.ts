@@ -9,3 +9,22 @@ export function formatBDT(amount: number | null | undefined): string {
         maximumFractionDigits: 2,
     });
 }
+
+// formatDate: formats a date string/Date using BD convention by default (DD/MM/YYYY)
+// Pass locale='en' for English, 'bn' for Bangla
+export function formatDate(date: string | Date | null | undefined, locale: 'en' | 'bn' = 'en'): string {
+    if (!date) return '—';
+    const d = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(d.getTime())) return '—';
+    // BD convention: DD/MM/YYYY
+    return d.toLocaleDateString(locale === 'bn' ? 'bn-BD' : 'en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+    });
+}
+
+// formatNumber: formats a number with locale-appropriate digit grouping
+export function formatNumber(n: number, locale: 'en' | 'bn' = 'en'): string {
+    return new Intl.NumberFormat(locale === 'bn' ? 'bn-BD' : 'en-US').format(n);
+}

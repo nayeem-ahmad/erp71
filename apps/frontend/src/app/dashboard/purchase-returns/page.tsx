@@ -8,7 +8,7 @@ import { DataTable } from '@/components/data-table';
 import { api } from '../../../lib/api';
 import CreatePurchaseReturnModal from './CreatePurchaseReturnModal';
 import { PostingBadge } from '@/components/PostingBadge';
-import { formatBDT } from '../../../lib/format';
+import { formatBDT, formatDate } from '../../../lib/format';
 
 interface PurchaseReturnRecord {
     id: string;
@@ -115,7 +115,7 @@ export default function PurchaseReturnsPage() {
                     const date = new Date(info.getValue());
                     return (
                         <div>
-                            <span className="text-sm text-gray-600">{date.toLocaleDateString()}</span>
+                            <span className="text-sm text-gray-600">{formatDate(info.getValue())}</span>
                             <span className="text-xs text-gray-400 block">{date.toLocaleTimeString()}</span>
                         </div>
                     );

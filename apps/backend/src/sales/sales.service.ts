@@ -1,16 +1,19 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateSaleDto, UpdateSaleDto } from './sale.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
 import { cursorPaginate, CursorPaginatedResult } from '../common/pagination.dto';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class SalesService {
-    constructor(private db: DatabaseService) { }
+    private readonly logger = new Logger(SalesService.name);
+
+    constructor(private db: DatabaseService, private emailService: EmailService) { }
 
     async create(tenantId: string, dto: CreateSaleDto) {
-        return this.db.$transaction(async (tx) => {
+        const result = await this.db.$transaction(async (tx) => {
             const warehouseId = await resolveWarehouseId(tx, tenantId, dto.storeId, dto.warehouseId, 'sale');
             const saleProducts = await tx.product.findMany({
                 where: {
@@ -154,6 +157,30 @@ export class SalesService {
                 voucher_type: posting.voucherType ?? null,
             };
         });
+
+        // Fire-and-forget receipt email (after transaction commits)
+        if (dto.customerId) {
+            this.sendReceiptEmail(tenantId, dto.customerId, Number(result.total_amount));
+        }
+
+        return result;
+    }
+
+    private sendReceiptEmail(tenantId: string, customerId: string, totalAmount: number): void {
+        Promise.all([
+            this.db.customer.findUnique({ where: { id: customerId }, select: { email: true } }),
+            this.db.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
+        ])
+            .then(([customer, tenant]) => {
+                if (!customer?.email || !tenant) return;
+                return this.emailService.sendBillingInvoice(
+                    customer.email,
+                    tenant.name,
+                    totalAmount,
+                    'BDT',
+                );
+            })
+            .catch((e) => this.logger.warn(`Failed to send receipt email for customer ${customerId}: ${e}`));
     }
 
     async findAll(
