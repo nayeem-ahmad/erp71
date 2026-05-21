@@ -165,4 +165,5 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm install
+      - run: npx prisma generate --schema=packages/database/prisma/schema.prisma
       - run: npm run build
