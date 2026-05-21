@@ -6,6 +6,7 @@
     "dev": "nest start --watch",
     "build": "nest build",
     "start": "nest start",
+    "seed:demo": "ts-node -r tsconfig-paths/register scripts/seed-demo.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",

@@ -73,14 +73,20 @@ Working through GitHub issues in priority order. Issues marked ✅ are closed/do
 - [x] #95 Redis caching — @upstash/redis + RedisService + global CacheModule; products/sales findAll cached 60 s TTL; invalidated on create/update/remove; graceful no-op fallback
 - [x] #96 Cursor-based pagination — CursorPaginationDto + cursorPaginate(); GET /products?cursor= and GET /sales?cursor= (both cursor + offset modes preserved); backend tests updated
 
-## Session 6 — IMPORTANT: Product completeness + Localization (in progress)
-- [ ] #93 Customer-facing invoice/receipt email after a sale — trigger EmailService.sendBillingInvoice from SalesService on sale completion
-- [ ] #94 Bulk product import via CSV/Excel — POST /products/import endpoint; frontend upload UI
-- [ ] #91 Date format localization (BD convention) — formatDate() utility + BD locale option; replace raw date strings across UI
-- [ ] #92 Bangla number formatting option — formatNumber() in i18n context; toggle in settings
+## Session 6 — IMPORTANT: Product completeness + Localization ✅ (PR #205, merged)
+- [x] #93 Customer receipt email — SalesService fires sendBillingInvoice() after tx commit; fire-and-forget; skips walk-ins/no-email customers
+- [x] #94 Bulk CSV import — POST /api/v1/products/import (multer + RFC-4180 parser); upsert by SKU; inventory movement for stock_quantity; "Import CSV" button on inventory page
+- [x] #91 Date format localization — formatDate(date, locale?) in format.ts (en-GB DD/MM/YYYY default, bn-BD for Bangla); replaced raw toLocaleDateString() in 20 pages
+- [x] #92 Bangla number formatting — formatNumber(n, locale?) in format.ts using Intl.NumberFormat bn-BD
 - [ ] #84 Pricing page — /pricing route with 4-tier comparison table (FREE/BASIC/STANDARD/PREMIUM) linked from landing page
 - [ ] #86 In-app contextual help / tooltips — tooltip component for COA, posting rules, stock takes
 - [ ] #87 Demo/sandbox account — seed script + demo login on landing page
+
+## Session 7 — IMPORTANT: Marketing polish + UX (in progress)
+- [ ] #84 Pricing page — dedicated /pricing with full 4-tier feature comparison table
+- [ ] #86 Contextual help / tooltips — reusable HelpTooltip component; wire into COA, posting rules, stock takes, POS
+- [ ] #87 Demo sandbox — admin seed script + "Try Demo" button on landing/login pages
+- [ ] #186 Dependency vulnerability scanning — add npm audit --audit-level=high to CI workflow
 
 **Note:** Email system (#45–51), monitoring (#57–59), auth hardening (#67–69), API hardening (#70–72), compliance (#73–76), testing (#79–82) all completed in Sessions 1–4.
 

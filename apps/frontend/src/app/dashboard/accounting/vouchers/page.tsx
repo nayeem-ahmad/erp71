@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, CircleCheck, FileText, Plus, Scale, Trash2 } from 'lucide-react';
+import { HelpTooltip } from '@/components/HelpTooltip';
 import { AccountCategory, VoucherType } from '@retail-saas/shared-types';
 import { api } from '../../../../lib/api';
 import { formatBDT } from '../../../../lib/format';
@@ -297,7 +298,7 @@ function AccountingVouchersPageContent() {
                         </div>
                         <div className="space-y-2">
                             <p className="text-xs font-black uppercase tracking-[0.24em] text-gray-400">Story 30.5</p>
-                            <h1 className="text-2xl font-black tracking-tight">Voucher Entry Workbench</h1>
+                            <h1 className="text-2xl font-black tracking-tight inline-flex items-center gap-2">Voucher Entry Workbench <HelpTooltip text="Journal vouchers record financial transactions as debit/credit pairs. Every transaction must balance — total debits must equal total credits." /></h1>
                             <p className="text-sm text-gray-500 max-w-2xl">
                                 Build balanced multi-line vouchers with live debit and credit totals, account-aware row controls, and server-issued numbering.
                             </p>

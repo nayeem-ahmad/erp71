@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { ShoppingCart, Search, Package, Trash2, Plus, Minus, CreditCard, ChevronRight, Store, X, Banknote, CheckCircle, AlertCircle, XCircle, Printer } from 'lucide-react';
+import { HelpTooltip } from '@/components/HelpTooltip';
 import { api } from '../../../lib/api';
 import { printPOSReceipt } from '../../../lib/pos-receipt-printer';
 import { formatBDT } from '../../../lib/format';
@@ -241,7 +242,7 @@ export default function POSPage() {
             <div className="flex-1 flex flex-col p-6 space-y-6 overflow-hidden">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-black tracking-tight">POS Terminal</h1>
+                        <h1 className="text-2xl font-black tracking-tight inline-flex items-center gap-2">POS Terminal <HelpTooltip text="Select items, choose a payment method, then press Checkout. For split payments, add multiple payment rows. Change due is calculated automatically." /></h1>
                         <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">Quick selection & billing</p>
                     </div>
                     <div className="relative w-72">

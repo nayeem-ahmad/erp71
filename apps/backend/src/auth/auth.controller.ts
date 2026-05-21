@@ -31,6 +31,12 @@ export class AuthController {
         await this.authService.logout(req.user.userId);
     }
 
+    @Throttle({ default: { ttl: 60_000, limit: 10 } })
+    @Post('demo')
+    async demoLogin() {
+        return this.authService.demoLogin();
+    }
+
     @Get('plans')
     async getPlans() {
         return this.authService.getPlans();

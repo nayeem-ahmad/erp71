@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import {
     ArrowRight, BarChart3, ShoppingCart, Package, Users,
-    CreditCard, Globe, Shield, Zap, CheckCircle2, Star,
+    CreditCard, Globe, Shield, Zap, CheckCircle2, Star, PlayCircle,
 } from 'lucide-react';
 
 const FEATURES = [
@@ -98,7 +98,7 @@ export default function HomePage() {
                     <span className="text-xl font-black tracking-tight text-blue-600">RetailSaaS</span>
                     <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
                         <a href="#features" className="hover:text-gray-900 transition-colors">Features</a>
-                        <a href="#pricing" className="hover:text-gray-900 transition-colors">Pricing</a>
+                        <Link href="/pricing" className="hover:text-gray-900 transition-colors">Pricing</Link>
                         <a href="#testimonials" className="hover:text-gray-900 transition-colors">Reviews</a>
                     </nav>
                     <div className="flex items-center gap-3">
@@ -141,10 +141,11 @@ export default function HomePage() {
                             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                         </Link>
                         <Link
-                            href="/login"
-                            className="bg-white hover:bg-gray-50 text-gray-700 font-bold py-4 px-10 rounded-2xl border border-gray-200 transition-colors w-full sm:w-auto text-center"
+                            href="/login?demo=1"
+                            className="bg-white hover:bg-gray-50 text-gray-700 font-bold py-4 px-10 rounded-2xl border border-gray-200 transition-colors w-full sm:w-auto text-center flex items-center justify-center gap-2"
                         >
-                            Sign in to dashboard
+                            <PlayCircle className="w-5 h-5 text-blue-500" />
+                            Try Demo →
                         </Link>
                     </div>
                     <p className="text-sm text-gray-400">No credit card required &bull; 14-day free trial &bull; Cancel anytime</p>
@@ -257,6 +258,14 @@ export default function HomePage() {
                                 </Link>
                             </div>
                         ))}
+                    </div>
+                    <div className="text-center mt-8">
+                        <Link
+                            href="/pricing"
+                            className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-semibold text-sm transition-colors"
+                        >
+                            See full pricing &amp; feature comparison <ArrowRight className="w-4 h-4" />
+                        </Link>
                     </div>
                 </div>
             </section>

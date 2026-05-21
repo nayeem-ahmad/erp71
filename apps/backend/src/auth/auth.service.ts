@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException, ConflictException, ServiceUnavailableException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { JwtService } from '@nestjs/jwt';
 import { EmailService } from '../email/email.service';
@@ -120,6 +120,18 @@ export class AuthService {
             }),
             this.db.emailVerificationToken.deleteMany({ where: { user_id: record.user_id } }),
         ]);
+    }
+
+    async demoLogin() {
+        const user = await this.db.user.findUnique({
+            where: { email: 'demo@retailsaas.app' },
+        });
+
+        if (!user) {
+            throw new ServiceUnavailableException('Demo account not available');
+        }
+
+        return this.generateAuthResponse(user.id);
     }
 
     async getPlans() {

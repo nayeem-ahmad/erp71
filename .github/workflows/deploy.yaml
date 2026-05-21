@@ -19,6 +19,21 @@ jobs:
       - run: npm install
       - run: npm run lint
 
+  audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm install
+      - name: Audit backend dependencies
+        run: npm audit --audit-level=high --prefix apps/backend || true
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=high --prefix apps/frontend || true
+
   test-backend:
     name: Test (Backend)
     runs-on: ubuntu-latest

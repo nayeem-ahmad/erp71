@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { ClipboardCheck, Plus } from 'lucide-react';
+import { HelpTooltip } from '@/components/HelpTooltip';
 import { DataTable } from '@/components/data-table';
 import { api } from '../../../../lib/api';
 
@@ -88,7 +89,7 @@ export default function StockTakesPage() {
         <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
             <div className="max-w-[1400px] mx-auto space-y-6">
                 <div>
-                    <h1 className="text-2xl font-black tracking-tight">Stock Takes</h1>
+                    <h1 className="text-2xl font-black tracking-tight inline-flex items-center gap-2">Stock Takes <HelpTooltip text="A stock take reconciles your recorded inventory against a physical count. Discrepancies create adjustment entries. Freeze stock movements before starting." /></h1>
                     <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
                         Open warehouse counting sessions, capture discrepancies, and post reconciliations
                     </p>

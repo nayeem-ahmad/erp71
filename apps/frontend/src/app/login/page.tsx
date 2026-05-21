@@ -1,17 +1,45 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Lock, Mail, ArrowRight, Loader2 } from 'lucide-react';
+import { Lock, Mail, ArrowRight, Loader2, PlayCircle } from 'lucide-react';
 import { api } from '@/lib/api';
+
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE
+    || (process.env.NODE_ENV === 'production' ? 'https://retail-saas-backend.onrender.com' : 'http://localhost:4000')) + '/api/v1';
+
+async function storeAuthResponse(res: any) {
+    localStorage.setItem('access_token', res.access_token);
+    const meRes = res.tenants ? res : await api.getMe();
+    if (meRes.tenants && meRes.tenants.length > 0) {
+        const primaryTenant = meRes.tenants[0];
+        localStorage.setItem('tenant_id', primaryTenant.id);
+        if (primaryTenant.stores && primaryTenant.stores.length > 0) {
+            localStorage.setItem('store_id', primaryTenant.stores[0].id);
+        }
+        if (primaryTenant.subscription?.plan?.code) {
+            localStorage.setItem('subscription_plan_code', primaryTenant.subscription.plan.code);
+        }
+    }
+}
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [isDemoLoading, setIsDemoLoading] = useState(false);
     const router = useRouter();
+    const searchParams = useSearchParams();
+
+    // Auto-trigger demo login when ?demo=1 is present in the URL
+    useEffect(() => {
+        if (searchParams.get('demo') === '1') {
+            handleDemoLogin();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -20,25 +48,32 @@ export default function LoginPage() {
 
         try {
             const loginRes = await api.login({ email, password });
-            localStorage.setItem('access_token', loginRes.access_token);
-
-            const meRes = loginRes.tenants ? loginRes : await api.getMe();
-            if (meRes.tenants && meRes.tenants.length > 0) {
-                const primaryTenant = meRes.tenants[0];
-                localStorage.setItem('tenant_id', primaryTenant.id);
-                if (primaryTenant.stores && primaryTenant.stores.length > 0) {
-                    localStorage.setItem('store_id', primaryTenant.stores[0].id);
-                }
-                if (primaryTenant.subscription?.plan?.code) {
-                    localStorage.setItem('subscription_plan_code', primaryTenant.subscription.plan.code);
-                }
-            }
-
+            await storeAuthResponse(loginRes);
             router.push('/dashboard');
         } catch (err: any) {
             setError(err.message || 'Login failed. Please check your credentials.');
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleDemoLogin = async () => {
+        setIsDemoLoading(true);
+        setError(null);
+
+        try {
+            const res = await fetch(`${API_BASE}/auth/demo`, { method: 'POST' });
+            if (!res.ok) {
+                const body = await res.json().catch(() => null);
+                throw new Error(body?.message || 'Demo account not available. Please try again later.');
+            }
+            const data = await res.json();
+            await storeAuthResponse(data);
+            router.push('/dashboard');
+        } catch (err: any) {
+            setError(err.message || 'Demo login failed. Please try again.');
+        } finally {
+            setIsDemoLoading(false);
         }
     };
 
@@ -101,7 +136,7 @@ export default function LoginPage() {
 
                         <button
                             type="submit"
-                            disabled={isLoading}
+                            disabled={isLoading || isDemoLoading}
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed group"
                         >
                             {isLoading ? (
@@ -115,7 +150,34 @@ export default function LoginPage() {
                         </button>
                     </form>
 
-                    <div className="mt-8 text-center text-sm text-gray-500">
+                    {/* Divider */}
+                    <div className="my-6 flex items-center gap-3">
+                        <div className="flex-1 h-px bg-gray-200" />
+                        <span className="text-xs text-gray-400 font-medium uppercase tracking-wider">or</span>
+                        <div className="flex-1 h-px bg-gray-200" />
+                    </div>
+
+                    {/* Try Demo button */}
+                    <button
+                        type="button"
+                        onClick={handleDemoLogin}
+                        disabled={isLoading || isDemoLoading}
+                        className="w-full bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 rounded-xl border border-gray-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                    >
+                        {isDemoLoading ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                            <>
+                                <PlayCircle className="w-5 h-5 text-blue-500" />
+                                <span>Try Demo</span>
+                            </>
+                        )}
+                    </button>
+                    <p className="mt-2 text-center text-xs text-gray-400">
+                        Explore with sample Bangladeshi retail data — no signup needed
+                    </p>
+
+                    <div className="mt-6 text-center text-sm text-gray-500">
                         Don&apos;t have an account? <Link href="/signup" className="font-medium text-blue-600 hover:text-blue-700 transition-colors">Sign up for free</Link>
                     </div>
                 </div>

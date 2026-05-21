@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ArrowRight, BookOpen, Calculator, ClipboardList, FileText, Settings, AlertTriangle } from 'lucide-react';
+import { HelpTooltip } from '@/components/HelpTooltip';
 
 const ACCOUNTING_LINKS = [
     {
@@ -54,7 +55,7 @@ export default function AccountingPage() {
                     <p className="text-xs font-black uppercase tracking-[0.24em] text-gray-400">Accounting Module</p>
                     <div className="flex items-end justify-between gap-6 flex-wrap">
                         <div>
-                            <h1 className="text-3xl font-black tracking-tight text-gray-950">Financial Ledgers & Core Accounting</h1>
+                            <h1 className="text-3xl font-black tracking-tight text-gray-950 inline-flex items-center gap-2">Financial Ledgers & Core Accounting <HelpTooltip text="The Chart of Accounts (COA) organises all your financial accounts. Assets, liabilities, income, and expenses each have their own account codes used in journal entries." /></h1>
                             <p className="text-sm text-gray-500 max-w-3xl mt-2">
                                 The accounting foundation is live. Use these entry points to configure the Chart of Accounts,
                                 prepare vouchers, review the journal flow, and drill into ledger reporting as the next stories land.
