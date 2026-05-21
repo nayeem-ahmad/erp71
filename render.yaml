@@ -7,7 +7,7 @@ services:
     runtime: docker
     dockerContext: .
     dockerfilePath: ./apps/backend/Dockerfile
-    plan: standard          # TODO: upgrade from free before launch (#52)
+    plan: standard
     autoDeploy: true
     healthCheckPath: /health
     envVars:
@@ -72,7 +72,7 @@ services:
     runtime: docker
     dockerContext: .
     dockerfilePath: ./apps/frontend/Dockerfile
-    plan: standard          # TODO: upgrade from free before launch (#52)
+    plan: standard
     autoDeploy: true
     envVars:
       - key: NODE_ENV

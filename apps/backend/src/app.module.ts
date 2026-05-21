@@ -1,5 +1,6 @@
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { CorrelationMiddleware } from './common/correlation.middleware';
 import { TransformInterceptor } from './common/transform.interceptor';
 import { CommonModule } from './common/common.module';
 import { CacheModule } from './cache/cache.module';
@@ -41,6 +42,7 @@ import { AdminTenantsModule } from './admin-tenants/admin-tenants.module';
 import { WarrantyClaimsModule } from './warranty-claims/warranty-claims.module';
 import { AccountModule } from './account/account.module';
 import { FeedbackModule } from './feedback/feedback.module';
+import { ContactModule } from './contact/contact.module';
 
 @Module({
     imports: [
@@ -84,6 +86,7 @@ import { FeedbackModule } from './feedback/feedback.module';
         WarrantyClaimsModule,
         AccountModule,
         FeedbackModule,
+        ContactModule,
     ],
     controllers: [],
     providers: [
@@ -91,5 +94,9 @@ import { FeedbackModule } from './feedback/feedback.module';
         { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
     ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+    configure(consumer: MiddlewareConsumer): void {
+        consumer.apply(CorrelationMiddleware).forRoutes('*');
+    }
+}
 

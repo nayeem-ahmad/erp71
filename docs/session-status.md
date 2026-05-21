@@ -1,6 +1,6 @@
 # Session Status
 
-## Last updated: Session 8 (2026-05-21)
+## Last updated: Session 9 (2026-05-21)
 
 ## Completed
 - feat(80-2,80-3): Customer segment evaluation & paginated purchase history
@@ -88,11 +88,18 @@ Working through GitHub issues in priority order. Issues marked ✅ are closed/do
 - [x] #87 Demo sandbox — seed-demo.ts + POST /auth/demo + Try Demo button on login + landing page hero CTA
 - [x] #186 Dependency vulnerability scanning — npm audit --audit-level=high CI job (non-blocking)
 
-## Session 8 — UX gaps + legal pages (in progress)
-- [ ] #67 Email verification frontend page — /verify-email?token= page calling GET /api/v1/auth/verify-email
-- [ ] #77/#78 Terms of Service + Privacy Policy pages — /terms and /privacy with full content; linked from footer/signup
-- [ ] Account settings page — /dashboard/settings: change password, TOTP 2FA setup/disable UI, profile name update
-- [ ] #103 In-app feedback widget — floating feedback button → modal → POST to backend (stored in DB or emailed)
+## Session 8 — UX gaps + legal pages ✅ (PR #208, merged)
+- [x] #67 Email verification frontend page — /verify-email?token= with loading/success/error states
+- [x] #77/#78 ToS + Privacy Policy — /terms (11 sections, BD law/NBR) + /privacy (9 sections, data retention details); footer + signup consent
+- [x] Account settings — /dashboard/settings: Profile tab (PATCH /auth/me), Password tab (change-password with bcrypt), 2FA tab (QR setup, enable/disable); sidebar link added
+- [x] #103 In-app feedback widget — FeedbackWidget: floating pill, slide-up card, Bug/Feature/General, POST /feedback; wired into dashboard layout
+
+## Session 9 — Ops hardening + PWA + support (in progress)
+- [ ] #105 Structured logging — Winston logger with request correlation IDs (x-request-id) across all backend logs
+- [ ] #52 Render plan upgrade — render.yaml: free → standard for backend/frontend/worker services
+- [ ] Public /status page — real-time health tile (API up/down, DB latency, last checked); linked from footer
+- [ ] PWA manifest — manifest.json + meta tags; makes app installable on Android/iOS
+- [ ] Support contact form — /contact page on marketing site; POST emails to support@retailsaas.app via EmailService
 
 **Note:** Email system (#45–51), monitoring (#57–59), auth hardening (#67–69), API hardening (#70–72), compliance (#73–76), testing (#79–82) all completed in Sessions 1–4.
 

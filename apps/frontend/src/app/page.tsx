@@ -294,6 +294,8 @@ export default function HomePage() {
                     <div className="flex items-center gap-6">
                         <Link href="/terms" className="hover:text-gray-700 transition-colors">Terms of Service</Link>
                         <Link href="/privacy" className="hover:text-gray-700 transition-colors">Privacy Policy</Link>
+                        <Link href="/contact" className="hover:text-gray-700 transition-colors">Contact</Link>
+                        <Link href="/status" className="hover:text-gray-700 transition-colors">Status</Link>
                         <Link href="/login" className="hover:text-gray-700 transition-colors">Sign in</Link>
                         <Link href="/signup" className="hover:text-gray-700 transition-colors">Sign up</Link>
                     </div>

@@ -111,6 +111,20 @@ ${invoiceUrl ? `<p><a href="${invoiceUrl}">View Invoice</a></p>` : ''}`,
         });
     }
 
+    async sendContactForm(from: string, name: string, subject: string, message: string): Promise<void> {
+        const supportEmail = process.env.SUPPORT_EMAIL ?? 'support@retailsaas.app';
+        this.send({
+            to: supportEmail,
+            subject: `[Contact] ${subject}`,
+            html: `<h2>New Contact Form Submission</h2>
+<p><strong>Name:</strong> ${name}</p>
+<p><strong>Email:</strong> ${from}</p>
+<p><strong>Subject:</strong> ${subject}</p>
+<p><strong>Message:</strong></p>
+<blockquote>${message.replace(/\n/g, '<br>')}</blockquote>`,
+        }).catch((err) => this.logger.error(`Failed to send contact form email: ${err}`));
+    }
+
     async sendFeedbackNotification(to: string, id: string, type: string, message: string, page?: string): Promise<void> {
         const typeLabel = type === 'bug' ? '🐛 Bug' : type === 'feature' ? '✨ Feature Request' : '💬 General';
         await this.send({
