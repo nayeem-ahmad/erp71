@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ArrowLeft, CircleCheck, FileText, Plus, Scale, Trash2 } from 'lucide-react';
 import { AccountCategory, VoucherType } from '@retail-saas/shared-types';
 import { api } from '../../../../lib/api';
+import { formatBDT } from '../../../../lib/format';
 
 type VoucherAccount = {
     id: string;
@@ -502,7 +503,7 @@ function AccountingVouchersPageContent() {
                                 <div className={`rounded-2xl border px-4 py-4 ${isBalanced ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-red-200 bg-red-50 text-red-900'}`}>
                                     <p className="text-xs font-black uppercase tracking-[0.24em]">Balance</p>
                                     <p className="mt-2 text-2xl font-black tracking-tight">
-                                        {Math.abs(debitTotal - creditTotal).toFixed(2)}
+                                        {formatBDT(Math.abs(debitTotal - creditTotal))}
                                     </p>
                                     <p className="mt-2 text-sm font-medium">
                                         {isBalanced ? 'Voucher is balanced and ready for submission.' : 'Voucher must balance before it can be saved.'}
@@ -617,7 +618,7 @@ function BalanceStat({ label, value, tone }: { label: string; value: number; ton
     return (
         <div className={`rounded-2xl border px-4 py-4 ${classes}`}>
             <p className="text-xs font-black uppercase tracking-[0.24em]">{label}</p>
-            <p className="mt-2 text-2xl font-black tracking-tight">{value.toFixed(2)}</p>
+            <p className="mt-2 text-2xl font-black tracking-tight">{formatBDT(value)}</p>
         </div>
     );
 }

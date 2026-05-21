@@ -8,6 +8,7 @@ import { DataTable } from '@/components/data-table';
 import { api } from '../../../lib/api';
 import CreatePurchaseReturnModal from './CreatePurchaseReturnModal';
 import { PostingBadge } from '@/components/PostingBadge';
+import { formatBDT } from '../../../lib/format';
 
 interface PurchaseReturnRecord {
     id: string;
@@ -102,7 +103,7 @@ export default function PurchaseReturnsPage() {
                 header: 'Total',
                 cell: (info) => (
                     <span className="text-sm font-black text-emerald-600">
-                        {Number(info.getValue() || 0).toFixed(2)}
+                        {formatBDT(Number(info.getValue() || 0))}
                     </span>
                 ),
                 sortingFn: (a, b) => Number(a.getValue('total_amount') || 0) - Number(b.getValue('total_amount') || 0),
