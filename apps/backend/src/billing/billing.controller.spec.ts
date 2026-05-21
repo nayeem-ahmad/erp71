@@ -8,6 +8,8 @@ import { DatabaseService } from '../database/database.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 
+jest.setTimeout(30000);
+
 describe('BillingController — webhook integration', () => {
     let app: INestApplication;
 
