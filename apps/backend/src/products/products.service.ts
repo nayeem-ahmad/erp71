@@ -2,14 +2,20 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { DatabaseService } from '../database/database.service';
 import { CreateProductDto, UpdateProductDto } from './product.dto';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant, ensureDefaultWarehouse } from '../database/inventory.utils';
-import { paginate, PaginatedResult } from '../common/pagination.dto';
+import { paginate, PaginatedResult, cursorPaginate, CursorPaginatedResult } from '../common/pagination.dto';
+import { RedisService } from '../cache/redis.service';
+
+const CACHE_TTL = 60; // seconds
 
 @Injectable()
 export class ProductsService {
-    constructor(private db: DatabaseService) { }
+    constructor(
+        private db: DatabaseService,
+        private redis: RedisService,
+    ) { }
 
     async create(tenantId: string, dto: CreateProductDto) {
-        return this.db.$transaction(async (tx) => {
+        const result = await this.db.$transaction(async (tx) => {
             const categoryIds = await this.validateCategorySelection(tx, tenantId, dto.groupId, dto.subgroupId);
             const product = await tx.product.create({
                 data: {
@@ -54,6 +60,9 @@ export class ProductsService {
                 include: this.productInclude(),
             });
         });
+
+        await this.redis.invalidatePattern(`products:${tenantId}:`);
+        return result;
     }
 
     async findAll(
@@ -64,23 +73,46 @@ export class ProductsService {
         const limit = Math.min(filters?.limit ?? 20, 100);
         const skip = (page - 1) * limit;
 
-        const where = {
-            tenant_id: tenantId,
-            deleted_at: null,
-            ...(filters?.uncategorized
-                ? { group_id: null, subgroup_id: null }
-                : {
-                      ...(filters?.groupId ? { group_id: filters.groupId } : {}),
-                      ...(filters?.subgroupId ? { subgroup_id: filters.subgroupId } : {}),
-                  }),
-        };
+        const cacheKey = `products:${tenantId}:offset:${JSON.stringify({ page, limit, ...filters })}`;
+        const cached = await this.redis.get<PaginatedResult<any>>(cacheKey);
+        if (cached) return cached;
+
+        const where = this.buildWhere(tenantId, filters);
 
         const [items, total] = await Promise.all([
             this.db.product.findMany({ where, include: this.productInclude(), orderBy: { name: 'asc' }, skip, take: limit }),
             this.db.product.count({ where }),
         ]);
 
-        return paginate(items, total, page, limit);
+        const result = paginate(items, total, page, limit);
+        await this.redis.set(cacheKey, result, CACHE_TTL);
+        return result;
+    }
+
+    async findAllCursor(
+        tenantId: string,
+        filters?: { groupId?: string; subgroupId?: string; uncategorized?: boolean; cursor?: string; limit?: number },
+    ): Promise<CursorPaginatedResult<any>> {
+        const limit = Math.min(filters?.limit ?? 20, 100);
+
+        const cacheKey = `products:${tenantId}:cursor:${JSON.stringify({ limit, cursor: filters?.cursor, ...filters })}`;
+        const cached = await this.redis.get<CursorPaginatedResult<any>>(cacheKey);
+        if (cached) return cached;
+
+        const where = this.buildWhere(tenantId, filters);
+
+        // Fetch limit+1 to detect whether a next page exists
+        const items = await this.db.product.findMany({
+            where,
+            include: this.productInclude(),
+            orderBy: { name: 'asc' },
+            take: limit + 1,
+            ...(filters?.cursor ? { cursor: { id: filters.cursor }, skip: 1 } : {}),
+        });
+
+        const result = cursorPaginate(items, limit);
+        await this.redis.set(cacheKey, result, CACHE_TTL);
+        return result;
     }
 
     async findOne(tenantId: string, id: string) {
@@ -101,7 +133,7 @@ export class ProductsService {
 
         const categoryIds = await this.validateCategorySelection(txLike(this.db), tenantId, dto.groupId, dto.subgroupId);
 
-        return this.db.product.update({
+        const result = await this.db.product.update({
             where: { id },
             data: {
                 ...(dto.name !== undefined ? { name: dto.name } : {}),
@@ -121,15 +153,33 @@ export class ProductsService {
             },
             include: this.productInclude(),
         });
+
+        await this.redis.invalidatePattern(`products:${tenantId}:`);
+        return result;
     }
 
     async remove(tenantId: string, id: string) {
         const product = await this.db.product.findFirst({ where: { id, tenant_id: tenantId, deleted_at: null } });
         if (!product) throw new NotFoundException('Product not found');
-        return this.db.product.update({
+        const result = await this.db.product.update({
             where: { id },
             data: { deleted_at: new Date() },
         });
+        await this.redis.invalidatePattern(`products:${tenantId}:`);
+        return result;
+    }
+
+    private buildWhere(tenantId: string, filters?: { groupId?: string; subgroupId?: string; uncategorized?: boolean }) {
+        return {
+            tenant_id: tenantId,
+            deleted_at: null,
+            ...(filters?.uncategorized
+                ? { group_id: null, subgroup_id: null }
+                : {
+                      ...(filters?.groupId ? { group_id: filters.groupId } : {}),
+                      ...(filters?.subgroupId ? { subgroup_id: filters.subgroupId } : {}),
+                  }),
+        };
     }
 
     private async validateCategorySelection(db: any, tenantId: string, groupId?: string, subgroupId?: string) {

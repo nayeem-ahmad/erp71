@@ -7,6 +7,7 @@ import { ArrowLeft, Calculator, Filter, ReceiptText, Wallet } from 'lucide-react
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../../../../components/data-table';
 import { api } from '../../../../lib/api';
+import { formatBDT } from '../../../../lib/format';
 
 type LedgerAccount = {
     id: string;
@@ -211,19 +212,19 @@ function AccountingLedgerPageContent() {
             }),
             columnHelper.accessor('debit_amount', {
                 header: 'Debit',
-                cell: (info) => <span className="text-sm font-black text-amber-700">{formatCurrency(info.getValue())}</span>,
+                cell: (info) => <span className="text-sm font-black text-amber-700">{formatBDT(info.getValue())}</span>,
                 size: 120,
             }),
             columnHelper.accessor('credit_amount', {
                 header: 'Credit',
-                cell: (info) => <span className="text-sm font-black text-sky-700">{formatCurrency(info.getValue())}</span>,
+                cell: (info) => <span className="text-sm font-black text-sky-700">{formatBDT(info.getValue())}</span>,
                 size: 120,
             }),
             columnHelper.accessor('running_balance', {
                 header: 'Running balance',
                 cell: (info) => (
                     <div className="flex flex-col">
-                        <span className="text-sm font-black text-gray-900">{formatCurrency(info.getValue())}</span>
+                        <span className="text-sm font-black text-gray-900">{formatBDT(info.getValue())}</span>
                         <span className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400">{info.row.original.running_balance_side}</span>
                     </div>
                 ),
@@ -362,7 +363,7 @@ function AccountingLedgerPageContent() {
                                 </h2>
                                 <p className="mt-1 text-sm text-gray-500">
                                     {ledger
-                                        ? `Debit movement ${formatCurrency(ledger.totals.debit)} • Credit movement ${formatCurrency(ledger.totals.credit)}`
+                                        ? `Debit movement ${formatBDT(ledger.totals.debit)} • Credit movement ${formatBDT(ledger.totals.credit)}`
                                         : 'Waiting for report data.'}
                                 </p>
                             </div>
@@ -408,16 +409,12 @@ function InfoPanel({ tone, message }: { tone: 'neutral' | 'error'; message: stri
     return <div className={`rounded-3xl border p-6 shadow-sm text-sm font-bold ${classes}`}>{message}</div>;
 }
 
-function formatCurrency(value: number) {
-    return `${Number(value || 0).toFixed(2)}`;
-}
-
 function formatBalance(amount: number, side: 'debit' | 'credit' | 'neutral') {
     if (side === 'neutral') {
-        return `${formatCurrency(0)} neutral`;
+        return `${formatBDT(0)} neutral`;
     }
 
-    return `${formatCurrency(amount)} ${side}`;
+    return `${formatBDT(amount)} ${side}`;
 }
 
 function getPeriodMovement(

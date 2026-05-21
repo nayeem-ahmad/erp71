@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Search, AlertCircle } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { formatBDT } from '../../../lib/format';
 
 interface IssueReturnModalProps {
     isOpen: boolean;
@@ -152,7 +153,7 @@ export default function IssueReturnModal({ isOpen, onClose, onSuccess }: IssueRe
                                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Receipt Found</p>
                                 <p className="font-black text-lg">{sale.serial_number}</p>
                                 <p className="text-sm font-bold text-blue-600 mt-1">
-                                    {Number(sale.total_amount).toFixed(2)} Total
+                                    {formatBDT(Number(sale.total_amount))} Total
                                 </p>
                             </div>
 
@@ -177,7 +178,7 @@ export default function IssueReturnModal({ isOpen, onClose, onSuccess }: IssueRe
                                                         {item.product?.name || 'Item'}
                                                     </p>
                                                     <p className="text-xs font-black text-gray-400 uppercase tracking-widest">
-                                                        {Number(item.price_at_sale).toFixed(2)} / ea
+                                                        {formatBDT(Number(item.price_at_sale))} / ea
                                                     </p>
                                                 </div>
                                                 <div className="flex items-center space-x-4">

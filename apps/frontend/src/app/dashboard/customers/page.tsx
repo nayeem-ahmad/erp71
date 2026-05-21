@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Users, Plus, Eye, RefreshCw, Crown, AlertTriangle, UserCheck } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { formatBDT } from '../../../lib/format';
 import AddCustomerModal from './AddCustomerModal';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
@@ -173,7 +174,7 @@ export default function CustomersPage() {
                 header: 'Total Spent',
                 cell: (info) => (
                     <span className="text-sm font-black text-blue-600">
-                        ৳{Number(info.getValue() || 0).toFixed(2)}
+                        {formatBDT(Number(info.getValue() || 0))}
                     </span>
                 ),
                 sortingFn: (a, b) => Number(a.getValue('total_spent') || 0) - Number(b.getValue('total_spent') || 0),

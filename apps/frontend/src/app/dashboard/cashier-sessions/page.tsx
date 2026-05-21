@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Clock, DollarSign, ArrowDownCircle, ArrowUpCircle, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { formatBDT } from '../../../lib/format';
 
 export default function CashierSessionsPage() {
     const [session, setSession] = useState<any>(null);
@@ -139,15 +140,15 @@ export default function CashierSessionsPage() {
                             <div className="grid grid-cols-3 gap-4">
                                 <div className="bg-gray-50 p-4 rounded-2xl">
                                     <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Opening Cash</span>
-                                    <span className="text-xl font-black text-gray-900">{parseFloat(session.opening_cash).toFixed(2)}</span>
+                                    <span className="text-xl font-black text-gray-900">{formatBDT(parseFloat(session.opening_cash))}</span>
                                 </div>
                                 <div className="bg-green-50 p-4 rounded-2xl">
                                     <span className="text-[10px] font-black uppercase tracking-widest text-green-500 block mb-1">Cash In</span>
-                                    <span className="text-xl font-black text-green-600">{totalCashIn.toFixed(2)}</span>
+                                    <span className="text-xl font-black text-green-600">{formatBDT(totalCashIn)}</span>
                                 </div>
                                 <div className="bg-rose-50 p-4 rounded-2xl">
                                     <span className="text-[10px] font-black uppercase tracking-widest text-rose-400 block mb-1">Cash Out</span>
-                                    <span className="text-xl font-black text-rose-600">{totalCashOut.toFixed(2)}</span>
+                                    <span className="text-xl font-black text-rose-600">{formatBDT(totalCashOut)}</span>
                                 </div>
                             </div>
                         </div>
@@ -194,7 +195,7 @@ export default function CashierSessionsPage() {
                                             </div>
                                             <div className="text-right">
                                                 <span className={`text-sm font-black ${parseFloat(tx.amount) > 0 ? 'text-green-600' : 'text-rose-600'}`}>
-                                                    {parseFloat(tx.amount) > 0 ? '+' : ''}{parseFloat(tx.amount).toFixed(2)}
+                                                    {parseFloat(tx.amount) > 0 ? '+' : ''}{formatBDT(parseFloat(tx.amount))}
                                                 </span>
                                                 <span className="text-[10px] text-gray-400 block">{new Date(tx.created_at).toLocaleTimeString()}</span>
                                             </div>
@@ -262,7 +263,7 @@ export default function CashierSessionsPage() {
                             <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
                                 <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 block mb-1">Expected Cash</span>
                                 <span className="text-2xl font-black text-blue-600">
-                                    ${(parseFloat(session?.opening_cash || 0) + totalCashIn - totalCashOut).toFixed(2)}
+                                    {formatBDT(parseFloat(session?.opening_cash || 0) + totalCashIn - totalCashOut)}
                                 </span>
                             </div>
                             <div className="space-y-2">
@@ -280,7 +281,7 @@ export default function CashierSessionsPage() {
                                 <div className={`p-3 rounded-2xl ${Math.abs(closingCash - (parseFloat(session?.opening_cash || 0) + totalCashIn - totalCashOut)) < 0.01 ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'}`}>
                                     <span className="text-[10px] font-black uppercase tracking-widest block mb-1">Difference</span>
                                     <span className="text-lg font-black">
-                                        ${(closingCash - (parseFloat(session?.opening_cash || 0) + totalCashIn - totalCashOut)).toFixed(2)}
+                                        {formatBDT(closingCash - (parseFloat(session?.opening_cash || 0) + totalCashIn - totalCashOut))}
                                     </span>
                                 </div>
                             )}

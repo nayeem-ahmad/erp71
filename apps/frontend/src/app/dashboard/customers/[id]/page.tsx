@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '../../../../lib/api';
+import { formatBDT } from '../../../../lib/format';
 import { ArrowLeft, Phone, Mail, ShoppingBag, CreditCard, MapPin, Building2, FolderTree, Map, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface PurchaseHistoryResult {
@@ -99,7 +100,7 @@ export default function CustomerProfile() {
                 </div>
                 <div className="text-right shrink-0">
                     <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Lifetime Value</p>
-                    <p className="text-4xl font-black text-blue-600">৳{Number(customer.total_spent).toFixed(2)}</p>
+                    <p className="text-4xl font-black text-blue-600">{formatBDT(Number(customer.total_spent))}</p>
                     {history && (
                         <p className="text-xs text-gray-400 font-bold mt-1">{history.total} transaction{history.total !== 1 ? 's' : ''}</p>
                     )}
@@ -170,7 +171,7 @@ export default function CustomerProfile() {
                                             )}
                                         </div>
                                         <div className="text-right">
-                                            <p className="font-black">৳{Number(sale.amount_paid).toFixed(2)}</p>
+                                            <p className="font-black">{formatBDT(Number(sale.amount_paid))}</p>
                                             <p className={`text-[10px] font-black uppercase tracking-widest ${sale.status === 'COMPLETED' ? 'text-emerald-500' : 'text-gray-400'}`}>{sale.status}</p>
                                         </div>
                                     </div>
@@ -178,7 +179,7 @@ export default function CustomerProfile() {
                                         {sale.items?.map((item: any) => (
                                             <div key={item.id} className="flex justify-between text-sm">
                                                 <span className="font-medium text-gray-700">{item.quantity}x {item.product?.name || 'Unknown Item'}</span>
-                                                <span className="font-bold text-gray-900">৳{(Number(item.price_at_sale) * item.quantity).toFixed(2)}</span>
+                                                <span className="font-bold text-gray-900">{formatBDT(Number(item.price_at_sale) * item.quantity)}</span>
                                             </div>
                                         ))}
                                     </div>

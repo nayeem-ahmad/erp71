@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Package, DollarSign, Printer, Save, Pencil, X, Trash2, Search, PackageCheck } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { api } from '../../../../lib/api';
+import { formatBDT } from '../../../../lib/format';
 
 interface EditItem {
     productId: string;
@@ -329,7 +330,7 @@ export default function OrderDetailsPage() {
                     </div>
                     <div className="bg-white p-4 rounded-2xl shadow-sm">
                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Total Amount</span>
-                        <span className="text-xl font-black text-blue-600">{totalAmount.toFixed(2)}</span>
+                        <span className="text-xl font-black text-blue-600">{formatBDT(totalAmount)}</span>
                     </div>
                     <div className="bg-white p-4 rounded-2xl shadow-sm">
                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Payment</span>
@@ -340,7 +341,7 @@ export default function OrderDetailsPage() {
                     <div className="bg-white p-4 rounded-2xl shadow-sm">
                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Amount Due</span>
                         <span className={`text-xl font-black ${amountDue > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                            ${amountDue > 0 ? amountDue.toFixed(2) : '0.00'}
+                            {amountDue > 0 ? formatBDT(amountDue) : formatBDT(0)}
                         </span>
                     </div>
                 </div>
@@ -366,19 +367,19 @@ export default function OrderDetailsPage() {
                                 <tr key={item.id}>
                                     <td>{item.product?.name || 'Item'}</td>
                                     <td>{item.quantity}</td>
-                                    <td>{Number(item.price_at_order).toFixed(2)}</td>
-                                    <td>{(Number(item.price_at_order) * item.quantity).toFixed(2)}</td>
+                                    <td>{formatBDT(Number(item.price_at_order))}</td>
+                                    <td>{formatBDT(Number(item.price_at_order) * item.quantity)}</td>
                                 </tr>
                             ))}
                             <tr className="total-row">
                                 <td colSpan={3}>Total</td>
-                                <td>{totalAmount.toFixed(2)}</td>
+                                <td>{formatBDT(totalAmount)}</td>
                             </tr>
                         </tbody>
                     </table>
                     {amountPaid > 0 && (
                         <div className="section">
-                            <strong>Amount Paid:</strong> {amountPaid.toFixed(2)} | <strong>Amount Due:</strong> {amountDue > 0 ? amountDue.toFixed(2) : '0.00'}
+                            <strong>Amount Paid:</strong> {formatBDT(amountPaid)} | <strong>Amount Due:</strong> {amountDue > 0 ? formatBDT(amountDue) : formatBDT(0)}
                         </div>
                     )}
                     {order.delivery_date && (
@@ -458,7 +459,7 @@ export default function OrderDetailsPage() {
                                                     <span className="text-sm font-bold">{p.name}</span>
                                                     <span className="text-xs text-gray-400 ml-2">{p.sku}</span>
                                                 </div>
-                                                <span className="text-sm font-bold text-blue-600">{parseFloat(p.price).toFixed(2)}</span>
+                                                <span className="text-sm font-bold text-blue-600">{formatBDT(parseFloat(p.price))}</span>
                                             </button>
                                         ))}
                                     </div>
@@ -508,7 +509,7 @@ export default function OrderDetailsPage() {
                                                     />
                                                 </td>
                                                 <td className="py-3 text-right text-sm font-black text-blue-600">
-                                                    ${(item.quantity * item.priceAtOrder).toFixed(2)}
+                                                    {formatBDT(item.quantity * item.priceAtOrder)}
                                                 </td>
                                                 <td className="py-3 text-center">
                                                     <button onClick={() => removeItem(idx)} className="p-1 text-gray-300 hover:text-red-500 transition-colors">
@@ -521,7 +522,7 @@ export default function OrderDetailsPage() {
                                     <tfoot>
                                         <tr className="border-t-2 border-gray-200">
                                             <td colSpan={3} className="pt-3 text-right text-sm font-black uppercase tracking-widest">Total</td>
-                                            <td className="pt-3 text-right text-xl font-black text-blue-600">{editTotal.toFixed(2)}</td>
+                                            <td className="pt-3 text-right text-xl font-black text-blue-600">{formatBDT(editTotal)}</td>
                                             <td></td>
                                         </tr>
                                     </tfoot>
@@ -550,15 +551,15 @@ export default function OrderDetailsPage() {
                                             </div>
                                         </td>
                                         <td className="p-4 text-center text-sm font-black">{item.quantity}</td>
-                                        <td className="p-4 text-right text-sm font-bold text-gray-500">{Number(item.price_at_order).toFixed(2)}</td>
-                                        <td className="p-4 text-right text-sm font-black text-blue-600">{(Number(item.price_at_order) * item.quantity).toFixed(2)}</td>
+                                        <td className="p-4 text-right text-sm font-bold text-gray-500">{formatBDT(Number(item.price_at_order))}</td>
+                                        <td className="p-4 text-right text-sm font-black text-blue-600">{formatBDT(Number(item.price_at_order) * item.quantity)}</td>
                                     </tr>
                                 ))}
                             </tbody>
                             <tfoot>
                                 <tr className="border-t-2 border-gray-200">
                                     <td colSpan={3} className="p-4 text-right text-sm font-black uppercase tracking-widest">Total</td>
-                                    <td className="p-4 text-right text-xl font-black text-blue-600">{totalAmount.toFixed(2)}</td>
+                                    <td className="p-4 text-right text-xl font-black text-blue-600">{formatBDT(totalAmount)}</td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -599,15 +600,15 @@ export default function OrderDetailsPage() {
                             <div className="p-6 space-y-4">
                                 <div className="flex justify-between items-center">
                                     <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Total Amount</span>
-                                    <span className="font-black">{totalAmount.toFixed(2)}</span>
+                                    <span className="font-black">{formatBDT(totalAmount)}</span>
                                 </div>
                                 <div className="flex justify-between items-center text-emerald-600">
                                     <span className="text-xs font-bold uppercase tracking-widest">Amount Paid</span>
-                                    <span className="font-black">{amountPaid.toFixed(2)}</span>
+                                    <span className="font-black">{formatBDT(amountPaid)}</span>
                                 </div>
                                 <div className="pt-4 border-t border-gray-100 flex justify-between items-center text-rose-600">
                                     <span className="text-xs font-bold uppercase tracking-widest">Amount Due</span>
-                                    <span className="font-black text-xl">{amountDue > 0 ? amountDue.toFixed(2) : '0.00'}</span>
+                                    <span className="font-black text-xl">{amountDue > 0 ? formatBDT(amountDue) : formatBDT(0)}</span>
                                 </div>
                                 {amountDue > 0 && order.status !== 'CANCELLED' && (
                                     <button onClick={() => setDepositModalOpen(true)} className="w-full mt-4 bg-gray-100 hover:bg-gray-200 text-gray-900 font-bold text-sm py-3 rounded-xl transition-colors">
@@ -628,7 +629,7 @@ export default function OrderDetailsPage() {
                                                 <p className="text-xs font-black uppercase text-emerald-700">{dep.payment_method}</p>
                                                 <p className="text-[10px] font-bold text-emerald-600/60 mt-0.5">{new Date(dep.created_at).toLocaleDateString()}</p>
                                             </div>
-                                            <span className="font-black text-emerald-700">{Number(dep.amount).toFixed(2)}</span>
+                                            <span className="font-black text-emerald-700">{formatBDT(Number(dep.amount))}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -663,7 +664,7 @@ export default function OrderDetailsPage() {
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white w-full max-w-sm rounded-3xl p-6 relative">
                         <h3 className="font-black text-lg mb-1">Add Deposit</h3>
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">Due: {amountDue.toFixed(2)}</p>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">Due: {formatBDT(amountDue)}</p>
                         <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-2">Amount to Pay (Cash/Card)</label>
                         <div className="relative mb-6">
                             <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />

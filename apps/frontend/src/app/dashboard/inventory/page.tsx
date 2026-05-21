@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, BookOpen, ClipboardCheck, Package, Pencil, Plus, Settings2, ShoppingBasket, Tag, Trash2, Truck, TrendingUp } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { formatBDT } from '../../../lib/format';
 import AddProductModal from './AddProductModal';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
@@ -158,7 +159,7 @@ export default function InventoryPage() {
                 header: 'Price',
                 cell: (info) => (
                     <span className="text-sm font-black text-blue-600">
-                        ${Number(info.getValue() || 0).toFixed(2)}
+                        {formatBDT(Number(info.getValue() || 0))}
                     </span>
                 ),
                 sortingFn: (a, b) => Number(a.getValue('price') || 0) - Number(b.getValue('price') || 0),
@@ -186,7 +187,7 @@ export default function InventoryPage() {
                     header: 'Stock Value',
                     cell: (info) => (
                         <span className="text-sm font-bold text-gray-700">
-                            ${Number(info.getValue() || 0).toFixed(2)}
+                            {formatBDT(Number(info.getValue() || 0))}
                         </span>
                     ),
                     sortingFn: (a, b) => Number(a.getValue('stock_value')) - Number(b.getValue('stock_value')),

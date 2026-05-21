@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { ArrowLeft, Bell } from 'lucide-react';
+import { ArrowLeft, Bell, Zap, X } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { api } from '@/lib/api';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -11,10 +12,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const router = useRouter();
     const [user, setUser] = useState<any>(null);
     const [activeStoreId, setActiveStoreId] = useState<string>('');
+    const [showOnboardingBanner, setShowOnboardingBanner] = useState(false);
 
     useEffect(() => {
         api.getMe().then(setUser).catch(() => null);
     }, []);
+
+    useEffect(() => {
+        const done = localStorage.getItem('onboarding_complete');
+        if (!done && pathname === '/dashboard') setShowOnboardingBanner(true);
+    }, [pathname]);
 
     const isDashboardHome = pathname === '/dashboard';
     const activeTenantId = typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null;
@@ -108,6 +115,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </div>
 
                     <div className="flex items-center space-x-4">
+                        <LanguageSwitcher />
                         {tenantStores.length > 0 ? (
                             <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-2 py-1">
                                 <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Branch</span>
@@ -143,6 +151,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         </div>
                     </div>
                 </header>
+
+                {/* Onboarding banner */}
+                {showOnboardingBanner && (
+                    <div className="bg-blue-600 text-white px-6 py-2.5 flex items-center justify-between gap-4 flex-shrink-0">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                            <Zap className="w-4 h-4 flex-shrink-0" />
+                            <span>Welcome! Get started by adding products and making your first sale.</span>
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                            <button
+                                onClick={() => router.push('/dashboard/onboarding')}
+                                className="text-xs font-bold bg-white text-blue-600 px-3 py-1 rounded-lg hover:bg-blue-50 transition-colors"
+                            >
+                                Start setup
+                            </button>
+                            <button
+                                onClick={() => { localStorage.setItem('onboarding_complete', '1'); setShowOnboardingBanner(false); }}
+                                className="text-blue-200 hover:text-white transition-colors"
+                                aria-label="Dismiss"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* Page content */}
                 <main className="flex-1 overflow-hidden">

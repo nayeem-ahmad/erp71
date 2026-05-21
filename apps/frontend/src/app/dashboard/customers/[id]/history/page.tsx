@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '../../../../../lib/api';
+import { formatBDT } from '../../../../../lib/format';
 import {
     ArrowLeft, ShoppingBag, TrendingUp, Calendar, Clock, Package, BarChart3, Search,
 } from 'lucide-react';
@@ -197,7 +198,7 @@ export default function PurchaseHistoryPage() {
                                 </div>
                                 <div className="flex items-center space-x-4">
                                     <span className="text-xs text-gray-500 font-medium">{item.quantity} units</span>
-                                    <span className="font-black text-sm">৳{item.totalValue.toFixed(2)}</span>
+                                    <span className="font-black text-sm">{formatBDT(item.totalValue)}</span>
                                 </div>
                             </div>
                         ))}
@@ -239,7 +240,7 @@ export default function PurchaseHistoryPage() {
                                         </p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="font-black">৳{Number(sale.amount_paid).toFixed(2)}</p>
+                                        <p className="font-black">{formatBDT(Number(sale.amount_paid))}</p>
                                         <span className={`text-[10px] font-black uppercase tracking-widest ${
                                             sale.status === 'COMPLETED' ? 'text-emerald-500' :
                                             sale.status === 'REFUNDED' ? 'text-rose-500' : 'text-gray-400'
@@ -255,7 +256,7 @@ export default function PurchaseHistoryPage() {
                                                 {item.quantity}× {item.product?.name ?? 'Unknown Item'}
                                             </span>
                                             <span className="font-bold text-gray-900">
-                                                ৳{(Number(item.price_at_sale) * item.quantity).toFixed(2)}
+                                                {formatBDT(Number(item.price_at_sale) * item.quantity)}
                                             </span>
                                         </div>
                                     ))}

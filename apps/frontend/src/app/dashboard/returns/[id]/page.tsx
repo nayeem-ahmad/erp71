@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Printer, Save, Package, FileText, Pencil, X, Trash2 } from 'lucide-react';
 import { api } from '../../../../lib/api';
+import { formatBDT } from '../../../../lib/format';
 
 interface EditItem {
     saleItemId: string;
@@ -242,10 +243,10 @@ export default function ReturnDetailPage() {
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
                             <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">New Total Refund</span>
-                            <span className="text-xl font-black text-rose-600">{editTotal.toFixed(2)}</span>
+                            <span className="text-xl font-black text-rose-600">{formatBDT(editTotal)}</span>
                             {editTotal !== parseFloat(ret.total_refund) && (
                                 <span className="block text-xs font-bold mt-1 text-gray-400">
-                                    Was: {parseFloat(ret.total_refund).toFixed(2)}
+                                    Was: {formatBDT(parseFloat(ret.total_refund))}
                                 </span>
                             )}
                         </div>
@@ -262,7 +263,7 @@ export default function ReturnDetailPage() {
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
                             <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Total Refund</span>
-                            <span className="text-xl font-black text-rose-600">{parseFloat(ret.total_refund).toFixed(2)}</span>
+                            <span className="text-xl font-black text-rose-600">{formatBDT(parseFloat(ret.total_refund))}</span>
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
                             <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Items Returned</span>
@@ -294,12 +295,12 @@ export default function ReturnDetailPage() {
                                 <tr key={item.id}>
                                     <td>{item.product?.name || 'Unknown'}</td>
                                     <td>{item.quantity}</td>
-                                    <td>{parseFloat(item.refund_amount).toFixed(2)}</td>
+                                    <td>{formatBDT(parseFloat(item.refund_amount))}</td>
                                 </tr>
                             ))}
                             <tr className="total-row">
                                 <td colSpan={2}>Total Refund</td>
-                                <td>{parseFloat(ret.total_refund).toFixed(2)}</td>
+                                <td>{formatBDT(parseFloat(ret.total_refund))}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -358,10 +359,10 @@ export default function ReturnDetailPage() {
                                                     {item.maxQuantity}
                                                 </td>
                                                 <td className="py-3 text-right text-sm font-bold text-gray-500">
-                                                    ${item.priceAtSale.toFixed(2)}
+                                                    {formatBDT(item.priceAtSale)}
                                                 </td>
                                                 <td className="py-3 text-right text-sm font-black text-rose-600">
-                                                    ${(item.quantity * item.priceAtSale).toFixed(2)}
+                                                    {formatBDT(item.quantity * item.priceAtSale)}
                                                 </td>
                                                 <td className="py-3 text-center">
                                                     <button
@@ -377,7 +378,7 @@ export default function ReturnDetailPage() {
                                     <tfoot>
                                         <tr className="border-t-2 border-gray-200">
                                             <td colSpan={4} className="pt-3 text-right text-sm font-black uppercase tracking-widest">Total Refund</td>
-                                            <td className="pt-3 text-right text-xl font-black text-rose-600">{editTotal.toFixed(2)}</td>
+                                            <td className="pt-3 text-right text-xl font-black text-rose-600">{formatBDT(editTotal)}</td>
                                             <td></td>
                                         </tr>
                                     </tfoot>
@@ -405,14 +406,14 @@ export default function ReturnDetailPage() {
                                             </div>
                                         </td>
                                         <td className="p-4 text-center text-sm font-black">{item.quantity}</td>
-                                        <td className="p-4 text-right text-sm font-black text-rose-600">{parseFloat(item.refund_amount).toFixed(2)}</td>
+                                        <td className="p-4 text-right text-sm font-black text-rose-600">{formatBDT(parseFloat(item.refund_amount))}</td>
                                     </tr>
                                 ))}
                             </tbody>
                             <tfoot>
                                 <tr className="border-t-2 border-gray-200">
                                     <td colSpan={2} className="p-4 text-right text-sm font-black uppercase tracking-widest">Total Refund</td>
-                                    <td className="p-4 text-right text-xl font-black text-rose-600">{parseFloat(ret.total_refund).toFixed(2)}</td>
+                                    <td className="p-4 text-right text-xl font-black text-rose-600">{formatBDT(parseFloat(ret.total_refund))}</td>
                                 </tr>
                             </tfoot>
                         </table>

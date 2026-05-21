@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search, Trash2, X } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { formatBDT } from '../../../lib/format';
 import { isCompoundUnit, CompoundUnitType, formatCompoundQty } from '../../../lib/compound-units';
 import CompoundUnitInput from '../../../components/CompoundUnitInput';
 
@@ -281,7 +282,7 @@ export default function CreatePurchaseModal({
                                                             <span className="text-xs text-gray-400 ml-2">{product.sku}</span>
                                                         </div>
                                                         <span className="text-sm font-bold text-emerald-600">
-                                                            ${Number(product.price || 0).toFixed(2)}
+                                                            {formatBDT(Number(product.price || 0))}
                                                         </span>
                                                     </button>
                                                 ))}
@@ -352,7 +353,7 @@ export default function CreatePurchaseModal({
                                                     />
                                                 </td>
                                                 <td className="py-3 text-right text-sm font-black text-emerald-600">
-                                                    ${(item.quantity * item.unitCost).toFixed(2)}
+                                                    {formatBDT(item.quantity * item.unitCost)}
                                                 </td>
                                                 <td className="py-3 text-center">
                                                     <button
@@ -497,25 +498,25 @@ export default function CreatePurchaseModal({
                             <div className="rounded-2xl bg-emerald-950 text-white p-5 space-y-3">
                                 <div className="flex items-center justify-between text-sm font-bold text-emerald-100">
                                     <span>Subtotal</span>
-                                    <span>{subtotal.toFixed(2)}</span>
+                                    <span>{formatBDT(subtotal)}</span>
                                 </div>
                                 <div className="flex items-center justify-between text-sm font-bold text-emerald-100">
                                     <span>Tax</span>
-                                    <span>{tax.toFixed(2)}</span>
+                                    <span>{formatBDT(tax)}</span>
                                 </div>
                                 <div className="flex items-center justify-between text-sm font-bold text-emerald-100">
                                     <span>Freight</span>
-                                    <span>{freight.toFixed(2)}</span>
+                                    <span>{formatBDT(freight)}</span>
                                 </div>
                                 <div className="flex items-center justify-between text-sm font-bold text-emerald-100">
                                     <span>Discount</span>
-                                    <span>-{discount.toFixed(2)}</span>
+                                    <span>-{formatBDT(discount)}</span>
                                 </div>
                                 <div className="border-t border-emerald-800 pt-3 flex items-center justify-between">
                                     <span className="text-xs font-black uppercase tracking-widest text-emerald-200">
                                         Purchase Total
                                     </span>
-                                    <span className="text-2xl font-black">{total.toFixed(2)}</span>
+                                    <span className="text-2xl font-black">{formatBDT(total)}</span>
                                 </div>
                             </div>
                         </div>

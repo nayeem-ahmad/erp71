@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, BookText } from 'lucide-react';
 import { api } from '../../../../../lib/api';
+import { formatBDT } from '../../../../../lib/format';
 
 type VoucherDetail = {
     id: string;
@@ -128,8 +129,8 @@ export default function VoucherDetailPage() {
                                             <tr key={row.id}>
                                                 <td className="px-4 py-3 text-sm font-black text-gray-900">{row.account.name}</td>
                                                 <td className="px-4 py-3 text-sm text-gray-500">{row.account.group?.name || 'Ungrouped'}</td>
-                                                <td className="px-4 py-3 text-right text-sm font-black text-amber-700">{Number(row.debit_amount || 0).toFixed(2)}</td>
-                                                <td className="px-4 py-3 text-right text-sm font-black text-sky-700">{Number(row.credit_amount || 0).toFixed(2)}</td>
+                                                <td className="px-4 py-3 text-right text-sm font-black text-amber-700">{formatBDT(Number(row.debit_amount || 0))}</td>
+                                                <td className="px-4 py-3 text-right text-sm font-black text-sky-700">{formatBDT(Number(row.credit_amount || 0))}</td>
                                                 <td className="px-4 py-3 text-sm text-gray-500">{row.comment || '-'}</td>
                                             </tr>
                                         ))}
@@ -137,8 +138,8 @@ export default function VoucherDetailPage() {
                                     <tfoot className="bg-gray-50">
                                         <tr>
                                             <td colSpan={2} className="px-4 py-3 text-sm font-black uppercase tracking-[0.24em] text-gray-500">Totals</td>
-                                            <td className="px-4 py-3 text-right text-sm font-black text-amber-700">{debitTotal.toFixed(2)}</td>
-                                            <td className="px-4 py-3 text-right text-sm font-black text-sky-700">{creditTotal.toFixed(2)}</td>
+                                            <td className="px-4 py-3 text-right text-sm font-black text-amber-700">{formatBDT(debitTotal)}</td>
+                                            <td className="px-4 py-3 text-right text-sm font-black text-sky-700">{formatBDT(creditTotal)}</td>
                                             <td className="px-4 py-3 text-right text-sm font-black text-gray-700">Balanced</td>
                                         </tr>
                                     </tfoot>

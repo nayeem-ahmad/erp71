@@ -3,6 +3,7 @@ import { DatabaseService } from '../database/database.service';
 import { CreateSaleDto, UpdateSaleDto } from './sale.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
+import { cursorPaginate, CursorPaginatedResult } from '../common/pagination.dto';
 
 @Injectable()
 export class SalesService {
@@ -155,7 +156,12 @@ export class SalesService {
         });
     }
 
-    async findAll(tenantId: string) {
+    async findAll(
+        tenantId: string,
+        opts?: { cursor?: string; limit?: number },
+    ): Promise<CursorPaginatedResult<any>> {
+        const limit = Math.min(opts?.limit ?? 20, 100);
+
         const sales = await this.db.sale.findMany({
             where: { tenant_id: tenantId },
             include: {
@@ -164,6 +170,8 @@ export class SalesService {
                 customer: true,
             },
             orderBy: { created_at: 'desc' },
+            take: limit + 1,
+            ...(opts?.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
         });
 
         const saleIds = sales.map((sale) => sale.id);
@@ -186,7 +194,7 @@ export class SalesService {
 
         const voucherBySaleId = new Map(vouchers.map((voucher) => [voucher.source_id, voucher]));
 
-        return sales.map((sale) => {
+        const enriched = sales.map((sale) => {
             const voucher = voucherBySaleId.get(sale.id);
             return {
                 ...sale,
@@ -196,6 +204,8 @@ export class SalesService {
                 voucher_type: voucher?.voucher_type ?? null,
             };
         });
+
+        return cursorPaginate(enriched, limit);
     }
 
     async findOne(tenantId: string, id: string) {

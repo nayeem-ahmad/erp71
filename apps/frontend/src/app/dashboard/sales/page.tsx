@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Receipt, Eye, Edit2, Plus } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { formatBDT } from '../../../lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
@@ -95,7 +96,7 @@ export default function SalesPage() {
                 header: 'Total',
                 cell: (info) => (
                     <span className="text-sm font-black text-blue-600">
-                        ${parseFloat(info.getValue()).toFixed(2)}
+                        {formatBDT(parseFloat(info.getValue()))}
                     </span>
                 ),
                 sortingFn: (a, b) =>
@@ -106,7 +107,7 @@ export default function SalesPage() {
                 header: 'Paid',
                 cell: (info) => (
                     <span className="text-sm font-bold text-gray-700">
-                        ${parseFloat(info.getValue()).toFixed(2)}
+                        {formatBDT(parseFloat(info.getValue()))}
                     </span>
                 ),
                 sortingFn: (a, b) =>

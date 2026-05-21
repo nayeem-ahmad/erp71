@@ -282,15 +282,18 @@ describe('SalesService', () => {
   });
 
   describe('findAll()', () => {
-    it('should return all sales for a tenant', async () => {
+    it('should return cursor-paginated sales for a tenant', async () => {
       db.sale.findMany.mockResolvedValue([{ id: 's1' }, { id: 's2' }]);
+      db.voucher.findMany.mockResolvedValue([]);
 
       const result = await service.findAll('tenant-1');
 
       expect(db.sale.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { tenant_id: 'tenant-1' } }),
       );
-      expect(result).toHaveLength(2);
+      expect(result.items).toHaveLength(2);
+      expect(result).toHaveProperty('nextCursor');
+      expect(result).toHaveProperty('hasMore');
     });
   });
 

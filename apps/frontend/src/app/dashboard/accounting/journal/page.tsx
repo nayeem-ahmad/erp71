@@ -7,6 +7,7 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { VoucherType } from '@retail-saas/shared-types';
 import { DataTable } from '../../../../components/data-table';
 import { api } from '../../../../lib/api';
+import { formatBDT } from '../../../../lib/format';
 
 type VoucherRow = {
     id: string;
@@ -104,7 +105,7 @@ export default function AccountingJournalPage() {
             }),
             columnHelper.accessor('total_amount', {
                 header: 'Amount',
-                cell: (info) => <span className="text-sm font-black text-emerald-600">{Number(info.getValue() || 0).toFixed(2)}</span>,
+                cell: (info) => <span className="text-sm font-black text-emerald-600">{formatBDT(Number(info.getValue() || 0))}</span>,
                 size: 120,
             }),
             columnHelper.display({

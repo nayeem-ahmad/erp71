@@ -33,15 +33,26 @@ export class ProductsController {
         @Query('groupId') groupId?: string,
         @Query('subgroupId') subgroupId?: string,
         @Query('uncategorized') uncategorized?: string,
+        @Query('cursor') cursor?: string,
         @Query('page') page?: string,
         @Query('limit') limit?: string,
     ) {
+        const parsedLimit = limit ? parseInt(limit, 10) : undefined;
+        if (cursor !== undefined) {
+            return this.productsService.findAllCursor(tenant.tenantId, {
+                groupId,
+                subgroupId,
+                uncategorized: uncategorized === 'true',
+                cursor: cursor || undefined,
+                limit: parsedLimit,
+            });
+        }
         return this.productsService.findAll(tenant.tenantId, {
             groupId,
             subgroupId,
             uncategorized: uncategorized === 'true',
             page: page ? parseInt(page, 10) : undefined,
-            limit: limit ? parseInt(limit, 10) : undefined,
+            limit: parsedLimit,
         });
     }
 

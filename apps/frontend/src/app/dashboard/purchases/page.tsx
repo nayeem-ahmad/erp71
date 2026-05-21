@@ -5,6 +5,7 @@ import { ClipboardList, Plus } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
 import { api } from '../../../lib/api';
+import { formatBDT } from '../../../lib/format';
 import CreatePurchaseModal from './CreatePurchaseModal';
 import { PostingBadge } from '@/components/PostingBadge';
 
@@ -91,7 +92,7 @@ export default function PurchasesPage() {
                 header: 'Total',
                 cell: (info) => (
                     <span className="text-sm font-black text-emerald-600">
-                        ${Number(info.getValue() || 0).toFixed(2)}
+                        {formatBDT(Number(info.getValue() || 0))}
                     </span>
                 ),
                 sortingFn: (a, b) =>

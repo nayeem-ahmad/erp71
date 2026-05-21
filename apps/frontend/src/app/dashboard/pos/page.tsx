@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { ShoppingCart, Search, Package, Trash2, Plus, Minus, CreditCard, ChevronRight, Store, X, Banknote, CheckCircle, AlertCircle, XCircle, Printer } from 'lucide-react';
 import { api } from '../../../lib/api';
 import { printPOSReceipt } from '../../../lib/pos-receipt-printer';
+import { formatBDT } from '../../../lib/format';
 
 type Notification = { id: string; type: 'success' | 'error' | 'info'; message: string };
 
@@ -364,15 +365,15 @@ export default function POSPage() {
                     <div className="space-y-3">
                         <div className="flex justify-between text-xs font-bold text-gray-400 uppercase tracking-widest">
                             <span>Subtotal</span>
-                            <span className="text-gray-900">{subtotal.toFixed(2)}</span>
+                            <span className="text-gray-900">{formatBDT(subtotal)}</span>
                         </div>
                         <div className="flex justify-between text-xs font-bold text-gray-400 uppercase tracking-widest">
                             <span>Tax (10%)</span>
-                            <span className="text-gray-900">{tax.toFixed(2)}</span>
+                            <span className="text-gray-900">{formatBDT(tax)}</span>
                         </div>
                         <div className="pt-3 border-t border-dashed border-gray-200 flex justify-between">
                             <span className="text-sm font-black uppercase tracking-widest">Total Pay</span>
-                            <span className="text-2xl font-black text-blue-600">{total.toFixed(2)}</span>
+                            <span className="text-2xl font-black text-blue-600">{formatBDT(total)}</span>
                         </div>
                     </div>
 
@@ -405,15 +406,15 @@ export default function POSPage() {
                             <div className="bg-gray-50 rounded-2xl p-4 space-y-2">
                                 <div className="flex justify-between text-xs font-bold text-gray-500 uppercase tracking-widest">
                                     <span>Total</span>
-                                    <span className="text-gray-900">{lastSale.total.toFixed(2)}</span>
+                                    <span className="text-gray-900">{formatBDT(lastSale.total)}</span>
                                 </div>
                                 <div className="flex justify-between text-xs font-bold text-gray-500 uppercase tracking-widest">
                                     <span>Paid</span>
-                                    <span className="text-gray-900">{lastSale.totalPaid.toFixed(2)}</span>
+                                    <span className="text-gray-900">{formatBDT(lastSale.totalPaid)}</span>
                                 </div>
                                 <div className="flex justify-between text-xs font-bold text-green-600 uppercase tracking-widest pt-1 border-t border-gray-200">
                                     <span>Change Due</span>
-                                    <span>{lastSale.changeDue.toFixed(2)}</span>
+                                    <span>{formatBDT(lastSale.changeDue)}</span>
                                 </div>
                             </div>
                             <button
@@ -457,7 +458,7 @@ export default function POSPage() {
                         <div className="p-6 space-y-6">
                             <div className="bg-blue-50 p-4 rounded-2xl flex items-center justify-between border border-blue-100">
                                 <span className="font-black uppercase tracking-widest text-blue-900 text-sm">Total Due</span>
-                                <span className="text-3xl font-black text-blue-600">{total.toFixed(2)}</span>
+                                <span className="text-3xl font-black text-blue-600">{formatBDT(total)}</span>
                             </div>
 
                             <div className="space-y-4">
@@ -478,13 +479,13 @@ export default function POSPage() {
                             <div className="grid grid-cols-2 gap-4 pt-4 border-t border-dashed border-gray-200">
                                 <div className="bg-gray-50 p-3 rounded-2xl flex flex-col justify-center">
                                     <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Total Paid</span>
-                                    <span className="text-lg font-black text-gray-900">{totalPaid.toFixed(2)}</span>
+                                    <span className="text-lg font-black text-gray-900">{formatBDT(totalPaid)}</span>
                                 </div>
                                 <div className={`p-3 rounded-2xl flex flex-col justify-center ${totalPaid < total ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
                                     <span className={`text-[10px] font-black uppercase tracking-widest mb-1 ${totalPaid < total ? 'text-red-400' : 'text-green-500'}`}>
                                         {totalPaid < total ? 'Remaining' : 'Change Due'}
                                     </span>
-                                    <span className="text-lg font-black">{Math.abs(totalPaid - total).toFixed(2)}</span>
+                                    <span className="text-lg font-black">{formatBDT(Math.abs(totalPaid - total))}</span>
                                 </div>
                             </div>
                         </div>

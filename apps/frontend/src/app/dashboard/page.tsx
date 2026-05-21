@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
+import { formatBDT } from '../../lib/format';
 
 type FinancialKpis = {
     cash_inflow: number;
@@ -326,7 +327,7 @@ export default function DashboardPage() {
                                 <ActivityItem
                                     key={sale.id}
                                     title={`Sale ${sale.serial_number}`}
-                                    description={`Amount: ${Number(sale.total_amount).toFixed(2)}`}
+                                    description={`Amount: ${formatBDT(Number(sale.total_amount))}`}
                                     time={new Date(sale.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 />
                             ))
@@ -347,7 +348,7 @@ export default function DashboardPage() {
                                 <ProductRow
                                     key={product.id}
                                     name={product.name}
-                                    price={`${Number(product.price).toFixed(2)}`}
+                                    price={formatBDT(Number(product.price))}
                                     sales={product.stocks?.[0]?.quantity?.toString() || '0'}
                                     salesLabel="Stock"
                                 />

@@ -5,6 +5,7 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { Calculator } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { api } from '../../../../../lib/api';
+import { formatBDT } from '../../../../../lib/format';
 
 interface ValuationRow {
     product: { id: string; name: string; group?: { name: string } | null; subgroup?: { name: string } | null };
@@ -78,12 +79,12 @@ export default function InventoryValuationPage() {
             columnHelper.accessor('quantity', { header: 'Quantity', size: 100 }),
             columnHelper.accessor('unitValue', {
                 header: 'Unit Value',
-                cell: (info) => `${Number(info.getValue() || 0).toFixed(2)}`,
+                cell: (info) => formatBDT(Number(info.getValue() || 0)),
                 size: 110,
             }),
             columnHelper.accessor('stockValue', {
                 header: 'Stock Value',
-                cell: (info) => <span className="text-sm font-black text-blue-600">{Number(info.getValue() || 0).toFixed(2)}</span>,
+                cell: (info) => <span className="text-sm font-black text-blue-600">{formatBDT(Number(info.getValue() || 0))}</span>,
                 size: 130,
             }),
         ],
@@ -103,7 +104,7 @@ export default function InventoryValuationPage() {
                 <div className="grid md:grid-cols-4 gap-4">
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Stock Value</div>
-                        <div className="text-2xl font-black text-blue-700 mt-2">{Number(summary?.totalStockValue || 0).toFixed(2)}</div>
+                        <div className="text-2xl font-black text-blue-700 mt-2">{formatBDT(Number(summary?.totalStockValue || 0))}</div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Quantity</div>
@@ -115,7 +116,7 @@ export default function InventoryValuationPage() {
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">Average Unit Value</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">{Number(summary?.averageUnitValue || 0).toFixed(2)}</div>
+                        <div className="text-2xl font-black text-gray-900 mt-2">{formatBDT(Number(summary?.averageUnitValue || 0))}</div>
                     </div>
                 </div>
 

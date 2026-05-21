@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ClipboardList, Plus, Eye, Edit2, Printer, Trash2 } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { formatBDT } from '../../../lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
@@ -93,11 +94,11 @@ export default function OrdersPage() {
                 <table>
                     <thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Subtotal</th></tr></thead>
                     <tbody>
-                        ${order.items.map((item: any) => `<tr><td>${item.product?.name || 'Item'}</td><td>${item.quantity}</td><td>${Number(item.price_at_order).toFixed(2)}</td><td>${(item.quantity * Number(item.price_at_order)).toFixed(2)}</td></tr>`).join('')}
-                        <tr class="total-row"><td colspan="3">Total</td><td>${Number(order.total_amount).toFixed(2)}</td></tr>
+                        ${order.items.map((item: any) => `<tr><td>${item.product?.name || 'Item'}</td><td>${item.quantity}</td><td>${formatBDT(Number(item.price_at_order))}</td><td>${formatBDT(item.quantity * Number(item.price_at_order))}</td></tr>`).join('')}
+                        <tr class="total-row"><td colspan="3">Total</td><td>${formatBDT(Number(order.total_amount))}</td></tr>
                     </tbody>
                 </table>
-                <p><strong>Paid:</strong> ${Number(order.amount_paid).toFixed(2)} | <strong>Due:</strong> ${(Number(order.total_amount) - Number(order.amount_paid)).toFixed(2)}</p>
+                <p><strong>Paid:</strong> ${formatBDT(Number(order.amount_paid))} | <strong>Due:</strong> ${formatBDT(Number(order.total_amount) - Number(order.amount_paid))}</p>
                 <div class="footer">Sales Order</div>
             </body>
             </html>
@@ -143,7 +144,7 @@ export default function OrdersPage() {
                 header: 'Total',
                 cell: (info) => (
                     <span className="text-sm font-black text-blue-600">
-                        ${parseFloat(info.getValue()).toFixed(2)}
+                        {formatBDT(parseFloat(info.getValue()))}
                     </span>
                 ),
                 sortingFn: (a, b) =>

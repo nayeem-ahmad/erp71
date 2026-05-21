@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Building2, Loader2, Lock, Mail, Store } from 'lucide-react';
 import { api } from '@/lib/api';
+import { formatBDT } from '@/lib/format';
 
 type Plan = {
     code: 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM';
@@ -144,7 +145,7 @@ export default function SignupPage() {
                                                 <span className="text-xs font-bold uppercase tracking-widest text-gray-500">{plan.code}</span>
                                             </div>
                                             <p className="mt-2 text-sm text-gray-500">{plan.description}</p>
-                                            <p className="mt-3 text-lg font-black text-gray-900">BDT {plan.monthly_price}<span className="text-xs font-bold text-gray-400 ml-1">/ month</span></p>
+                                            <p className="mt-3 text-lg font-black text-gray-900">{formatBDT(plan.monthly_price)}<span className="text-xs font-bold text-gray-400 ml-1">/ month</span></p>
                                         </button>
                                     );
                                 })}

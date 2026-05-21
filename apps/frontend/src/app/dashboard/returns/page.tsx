@@ -8,6 +8,7 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
 import IssueReturnModal from './IssueReturnModal';
 import { PostingBadge } from '@/components/PostingBadge';
+import { formatBDT } from '../../../lib/format';
 
 interface SalesReturn {
     id: string;
@@ -84,8 +85,8 @@ export default function ReturnsPage() {
                 <table>
                     <thead><tr><th>Product</th><th>Qty</th><th>Refund</th></tr></thead>
                     <tbody>
-                        ${ret.items.map((item: any) => `<tr><td>${item.product?.name || 'Item'}</td><td>${item.quantity}</td><td>${Number(item.refund_amount || item.price_at_sale * item.quantity).toFixed(2)}</td></tr>`).join('')}
-                        <tr class="total-row"><td colspan="2">Total Refund</td><td>${Number(ret.total_refund).toFixed(2)}</td></tr>
+                        ${ret.items.map((item: any) => `<tr><td>${item.product?.name || 'Item'}</td><td>${item.quantity}</td><td>${formatBDT(Number(item.refund_amount || item.price_at_sale * item.quantity))}</td></tr>`).join('')}
+                        <tr class="total-row"><td colspan="2">Total Refund</td><td>${formatBDT(Number(ret.total_refund))}</td></tr>
                     </tbody>
                 </table>
                 ${ret.reason ? `<p><strong>Reason:</strong> ${ret.reason}</p>` : ''}
@@ -118,7 +119,7 @@ export default function ReturnsPage() {
                 header: 'Refund Amount',
                 cell: (info) => (
                     <span className="text-sm font-black text-rose-600">
-                        ${parseFloat(info.getValue()).toFixed(2)}
+                        {formatBDT(parseFloat(info.getValue()))}
                     </span>
                 ),
                 sortingFn: (a, b) =>

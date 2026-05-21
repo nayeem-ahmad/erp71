@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { TransformInterceptor } from './common/transform.interceptor';
 import { CommonModule } from './common/common.module';
+import { CacheModule } from './cache/cache.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SentryModule } from '@sentry/nestjs/setup';
@@ -46,6 +47,7 @@ import { AccountModule } from './account/account.module';
         ThrottlerModule.forRoot([{ ttl: 60_000, limit: 20 }]),
         ScheduleModule.forRoot(),
         CommonModule,
+        CacheModule,
         DatabaseModule,
         EmailModule,
         AuditModule,

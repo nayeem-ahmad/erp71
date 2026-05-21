@@ -5,6 +5,7 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { TrendingUp } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { api } from '../../../../../lib/api';
+import { formatBDT } from '../../../../../lib/format';
 
 interface SummaryRow {
     date: string;
@@ -67,20 +68,20 @@ export default function SalesSummaryPage() {
             columnHelper.accessor('transactions', { header: 'Transactions', size: 120 }),
             columnHelper.accessor('grossRevenue', {
                 header: 'Gross Revenue',
-                cell: (info) => Number(info.getValue()).toFixed(2),
+                cell: (info) => formatBDT(Number(info.getValue())),
                 size: 140,
             }),
             columnHelper.accessor('returns', {
                 header: 'Returns',
                 cell: (info) => (
-                    <span className="text-rose-600">{Number(info.getValue()).toFixed(2)}</span>
+                    <span className="text-rose-600">{formatBDT(Number(info.getValue()))}</span>
                 ),
                 size: 120,
             }),
             columnHelper.accessor('netRevenue', {
                 header: 'Net Revenue',
                 cell: (info) => (
-                    <span className="font-black text-blue-700">{Number(info.getValue()).toFixed(2)}</span>
+                    <span className="font-black text-blue-700">{formatBDT(Number(info.getValue()))}</span>
                 ),
                 size: 140,
             }),
@@ -102,19 +103,19 @@ export default function SalesSummaryPage() {
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">Gross Revenue</div>
                         <div className="text-2xl font-black text-gray-900 mt-2">
-                            {Number(summary?.totalRevenue ?? 0).toFixed(2)}
+                            {formatBDT(Number(summary?.totalRevenue ?? 0))}
                         </div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">Returns</div>
                         <div className="text-2xl font-black text-rose-600 mt-2">
-                            {Number(summary?.totalReturns ?? 0).toFixed(2)}
+                            {formatBDT(Number(summary?.totalReturns ?? 0))}
                         </div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">Net Revenue</div>
                         <div className="text-2xl font-black text-blue-700 mt-2">
-                            {Number(summary?.netRevenue ?? 0).toFixed(2)}
+                            {formatBDT(Number(summary?.netRevenue ?? 0))}
                         </div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
@@ -126,7 +127,7 @@ export default function SalesSummaryPage() {
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">Avg Order Value</div>
                         <div className="text-2xl font-black text-gray-900 mt-2">
-                            {Number(summary?.avgOrderValue ?? 0).toFixed(2)}
+                            {formatBDT(Number(summary?.avgOrderValue ?? 0))}
                         </div>
                     </div>
                 </div>
