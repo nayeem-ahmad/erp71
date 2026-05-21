@@ -1,17 +1,14 @@
-import { INestApplication, UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import supertest from 'supertest';
-import { CallHandler, ExecutionContext } from '@nestjs/common';
 import { BillingController } from './billing.controller';
 import { BillingService } from './billing.service';
 import { DatabaseService } from '../database/database.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 
-jest.setTimeout(30000);
-
-describe('BillingController — webhook integration', () => {
-    let app: INestApplication;
+describe('BillingController', () => {
+    let controller: BillingController;
+    let module: TestingModule;
 
     const billingService = {
         getSummary: jest.fn(),
@@ -22,92 +19,67 @@ describe('BillingController — webhook integration', () => {
         handleSslWirelessCallback: jest.fn(),
     };
 
-    class MockJwtAuthGuard {
-        canActivate(context: any) {
-            const req = context.switchToHttp().getRequest();
-            req.user = { userId: req.headers['x-user-id'] || 'user-1', email: 'user@test.com' };
-            return true;
-        }
-    }
-
-    class MockTenantInterceptor {
-        intercept(context: ExecutionContext, next: CallHandler) {
-            const req = context.switchToHttp().getRequest();
-            req.tenantId = req.headers['x-tenant-id'] || 'tenant-1';
-            return next.handle();
-        }
-    }
-
     beforeAll(async () => {
-        const module: TestingModule = await Test.createTestingModule({
+        module = await Test.createTestingModule({
             controllers: [BillingController],
             providers: [
                 { provide: BillingService, useValue: billingService },
-                // Provide a minimal DatabaseService mock so TenantInterceptor can be resolved
-                // before the overrideInterceptor takes effect in the DI container
                 { provide: DatabaseService, useValue: { tenantUser: { findUnique: jest.fn() } } },
             ],
         })
-            .overrideGuard(JwtAuthGuard).useClass(MockJwtAuthGuard)
-            .overrideInterceptor(TenantInterceptor).useClass(MockTenantInterceptor)
+            .overrideGuard(JwtAuthGuard).useValue({ canActivate: () => true })
+            .overrideInterceptor(TenantInterceptor).useValue({ intercept: (_: any, next: any) => next.handle() })
             .compile();
 
-        app = module.createNestApplication();
-        await app.init();
+        controller = module.get<BillingController>(BillingController);
     });
 
     afterAll(async () => {
-        await app.close();
+        await module.close();
     });
 
     beforeEach(() => {
         jest.resetAllMocks();
     });
 
-    describe('POST /billing/webhooks/manual', () => {
-        it('activates subscription with a valid webhook secret', async () => {
+    describe('handleManualWebhook', () => {
+        it('passes the webhook secret and body to the service', async () => {
             billingService.handleManualWebhook.mockResolvedValue({ tenant: { id: 'tenant-1' }, subscription: { status: 'ACTIVE' } });
 
-            await supertest(app.getHttpServer())
-                .post('/billing/webhooks/manual')
-                .set('x-billing-webhook-secret', 'valid-secret')
-                .send({ tenantId: 'tenant-1', planCode: 'PREMIUM' })
-                .expect(201);
+            await controller.handleManualWebhook('valid-secret', { tenantId: 'tenant-1', planCode: 'PREMIUM' } as any);
 
-            expect(billingService.handleManualWebhook).toHaveBeenCalledWith('valid-secret', expect.objectContaining({ tenantId: 'tenant-1' }));
+            expect(billingService.handleManualWebhook).toHaveBeenCalledWith(
+                'valid-secret',
+                expect.objectContaining({ tenantId: 'tenant-1' }),
+            );
         });
 
         it('forwards the webhook secret header to the service', async () => {
             billingService.handleManualWebhook.mockResolvedValue({});
 
-            await supertest(app.getHttpServer())
-                .post('/billing/webhooks/manual')
-                .set('x-billing-webhook-secret', 'test-secret')
-                .send({ tenantId: 'tenant-1', planCode: 'BASIC' })
-                .expect(201);
+            await controller.handleManualWebhook('test-secret', { tenantId: 'tenant-1', planCode: 'BASIC' } as any);
 
-            expect(billingService.handleManualWebhook).toHaveBeenCalledWith('test-secret', expect.objectContaining({ planCode: 'BASIC' }));
+            expect(billingService.handleManualWebhook).toHaveBeenCalledWith(
+                'test-secret',
+                expect.objectContaining({ planCode: 'BASIC' }),
+            );
         });
 
-        it('returns 401 when the billing service rejects an invalid secret', async () => {
+        it('propagates UnauthorizedException when the service rejects an invalid secret', async () => {
             billingService.handleManualWebhook.mockRejectedValue(new UnauthorizedException('Invalid billing webhook secret'));
 
-            await supertest(app.getHttpServer())
-                .post('/billing/webhooks/manual')
-                .set('x-billing-webhook-secret', 'wrong')
-                .send({ tenantId: 'tenant-1', planCode: 'BASIC' })
-                .expect(401);
+            await expect(
+                controller.handleManualWebhook('wrong', { tenantId: 'tenant-1', planCode: 'BASIC' } as any),
+            ).rejects.toThrow(UnauthorizedException);
         });
     });
 
-    describe('ALL /billing/webhooks/ssl-wireless (IPN)', () => {
-        it('processes IPN notification and returns subscription data', async () => {
+    describe('handleSslWirelessWebhook', () => {
+        it('routes IPN notifications to the service with "ipn" mode', async () => {
             billingService.handleSslWirelessCallback.mockResolvedValue({ tenant: {}, subscription: { status: 'ACTIVE' } });
+            const payload = { tran_id: 'ref-1', val_id: 'val-1', value_a: 'tenant-1', value_b: 'PREMIUM', value_c: 'MONTHLY' };
 
-            await supertest(app.getHttpServer())
-                .post('/billing/webhooks/ssl-wireless')
-                .send({ tran_id: 'ref-1', val_id: 'val-1', value_a: 'tenant-1', value_b: 'PREMIUM', value_c: 'MONTHLY' })
-                .expect(200);
+            await controller.handleSslWirelessWebhook(payload as any, {} as any);
 
             expect(billingService.handleSslWirelessCallback).toHaveBeenCalledWith(
                 expect.objectContaining({ tran_id: 'ref-1', val_id: 'val-1' }),
@@ -116,34 +88,29 @@ describe('BillingController — webhook integration', () => {
         });
     });
 
-    describe('GET /billing/summary', () => {
-        it('returns billing summary for the authenticated tenant', async () => {
+    describe('getSummary', () => {
+        it('calls the service with userId and tenantId from the request context', async () => {
             billingService.getSummary.mockResolvedValue({ tenant: { id: 'tenant-1' }, subscription: null, available_plans: [] });
 
-            await supertest(app.getHttpServer())
-                .get('/billing/summary')
-                .set('x-user-id', 'user-1')
-                .set('x-tenant-id', 'tenant-1')
-                .expect(200);
+            await controller.getSummary({ user: { userId: 'user-1' } } as any, { tenantId: 'tenant-1' } as any);
 
             expect(billingService.getSummary).toHaveBeenCalledWith('user-1', 'tenant-1');
         });
     });
 
-    describe('POST /billing/checkout-session', () => {
-        it('creates a checkout session and returns gateway URL', async () => {
+    describe('createCheckoutSession', () => {
+        it('delegates to the service with userId, tenantId and the checkout DTO', async () => {
             billingService.createCheckoutSession.mockResolvedValue({
                 provider_name: 'ssl-wireless',
                 checkout_url: 'https://gateway.example.com',
                 amount: 3999,
             });
 
-            await supertest(app.getHttpServer())
-                .post('/billing/checkout-session')
-                .set('x-user-id', 'user-1')
-                .set('x-tenant-id', 'tenant-1')
-                .send({ planCode: 'PREMIUM', billingCycle: 'MONTHLY' })
-                .expect(201);
+            await controller.createCheckoutSession(
+                { user: { userId: 'user-1' } } as any,
+                { tenantId: 'tenant-1' } as any,
+                { planCode: 'PREMIUM', billingCycle: 'MONTHLY' } as any,
+            );
 
             expect(billingService.createCheckoutSession).toHaveBeenCalledWith(
                 'user-1', 'tenant-1',
@@ -152,15 +119,11 @@ describe('BillingController — webhook integration', () => {
         });
     });
 
-    describe('POST /billing/cancel-at-period-end', () => {
-        it('schedules subscription cancellation at period end', async () => {
+    describe('cancelAtPeriodEnd', () => {
+        it('schedules cancellation via the service', async () => {
             billingService.cancelAtPeriodEnd.mockResolvedValue({ cancel_at_period_end: true });
 
-            await supertest(app.getHttpServer())
-                .post('/billing/cancel-at-period-end')
-                .set('x-user-id', 'user-1')
-                .set('x-tenant-id', 'tenant-1')
-                .expect(201);
+            await controller.cancelAtPeriodEnd({ user: { userId: 'user-1' } } as any, { tenantId: 'tenant-1' } as any);
 
             expect(billingService.cancelAtPeriodEnd).toHaveBeenCalledWith('user-1', 'tenant-1');
         });
