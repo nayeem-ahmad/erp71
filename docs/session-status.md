@@ -1,6 +1,6 @@
 # Session Status
 
-## Last updated: Session 1 (2026-05-20)
+## Last updated: Session 6 (2026-05-21)
 
 ## Completed
 - feat(80-2,80-3): Customer segment evaluation & paginated purchase history
@@ -65,13 +65,35 @@ Working through GitHub issues in priority order. Issues marked ✅ are closed/do
 - [x] #81 Payment webhook integration tests — billing.service.spec.ts expanded (IPN, cancel, yearly cycle, role guard, confirm checkout, getSummary, cancelAtPeriodEnd, reference mismatch); billing.controller.spec.ts added (supertest)
 - [x] #82 POS load tests — load-tests/pos-sale.js (k6): ramp 1→50 VUs, p95<2s threshold, multi-tenant scenario
 
-## Session 5 — IMPORTANT: Marketing + Localization + Performance
-- [ ] #83 Real marketing/landing page
-- [ ] #85 Onboarding wizard
-- [ ] #89 Bangla language support
-- [ ] #90 BDT currency consistency
-- [ ] #95 Redis caching
-- [ ] #96 Cursor-based pagination
+## Session 5 — IMPORTANT: Marketing + Localization + Performance ✅ (PR #203, merged)
+- [x] #83 Real marketing/landing page — full marketing page (hero, features, stats, testimonials, pricing, CTA, footer) targeting Bangladeshi retailers
+- [x] #85 Onboarding wizard — 3-step wizard at /dashboard/onboarding (add product → open POS → done); persistent banner on dashboard home
+- [x] #89 Bangla language support — I18nProvider context + useI18n() hook; translation files en/bn; LanguageSwitcher in dashboard header; persisted to localStorage
+- [x] #90 BDT currency consistency — formatBDT() via Intl.NumberFormat (৳ symbol); mass-replaced all toFixed(2) across 40+ dashboard pages, modals, POS receipt printer
+- [x] #95 Redis caching — @upstash/redis + RedisService + global CacheModule; products/sales findAll cached 60 s TTL; invalidated on create/update/remove; graceful no-op fallback
+- [x] #96 Cursor-based pagination — CursorPaginationDto + cursorPaginate(); GET /products?cursor= and GET /sales?cursor= (both cursor + offset modes preserved); backend tests updated
+
+## Session 6 — IMPORTANT: Product completeness + Localization (in progress)
+- [ ] #93 Customer-facing invoice/receipt email after a sale — trigger EmailService.sendBillingInvoice from SalesService on sale completion
+- [ ] #94 Bulk product import via CSV/Excel — POST /products/import endpoint; frontend upload UI
+- [ ] #91 Date format localization (BD convention) — formatDate() utility + BD locale option; replace raw date strings across UI
+- [ ] #92 Bangla number formatting option — formatNumber() in i18n context; toggle in settings
+- [ ] #84 Pricing page — /pricing route with 4-tier comparison table (FREE/BASIC/STANDARD/PREMIUM) linked from landing page
+- [ ] #86 In-app contextual help / tooltips — tooltip component for COA, posting rules, stock takes
+- [ ] #87 Demo/sandbox account — seed script + demo login on landing page
+
+**Note:** Email system (#45–51), monitoring (#57–59), auth hardening (#67–69), API hardening (#70–72), compliance (#73–76), testing (#79–82) all completed in Sessions 1–4.
+
+## Pending user actions (accumulated)
+1. Add `RESEND_API_KEY` and `EMAIL_FROM` to production env vars (Resend dashboard → API keys)
+2. Upgrade Render plan from `free` to `standard` in render.yaml → redeploy (#52)
+3. Enable Supabase Point-in-Time Recovery: Dashboard → Database → Backups → Enable PITR (#54)
+4. Set up BetterStack uptime monitor → /health endpoint (see docs/ops/uptime-monitoring.md) (#58)
+5. Set Sentry alert rules in Sentry dashboard (see docs/ops/uptime-monitoring.md) (#59)
+6. Add `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT` to Render env vars (#57)
+7. Set `FIELD_ENCRYPTION_KEY` in Render env (32 random bytes as hex) (#75)
+8. Add `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` to Render env vars (#95)
+9. Create frontend /verify-email page to call GET /api/v1/auth/verify-email?token= (#67)
 
 ## Resume Instructions
 Start by reading this file. Continue from the first unchecked item in the current session.
