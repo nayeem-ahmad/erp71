@@ -24,6 +24,7 @@ describe('BillingService', () => {
         process.env.SSL_WIRELESS_VALIDATION_URL = 'https://sandbox.example.com/validate';
         process.env.FRONTEND_URL = 'http://localhost:3000';
         process.env.BACKEND_PUBLIC_URL = 'http://localhost:4000';
+        delete process.env.BILLING_WEBHOOK_SECRET;
 
         db.tenantUser.findUnique.mockResolvedValue({
             role: 'OWNER',

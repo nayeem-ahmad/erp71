@@ -130,7 +130,11 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm install
+      - run: npx prisma generate --schema=packages/database/prisma/schema.prisma
       - run: npx prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate
+      - name: Build frontend for E2E
+        run: npm run build
+        working-directory: apps/frontend
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
         working-directory: apps/frontend

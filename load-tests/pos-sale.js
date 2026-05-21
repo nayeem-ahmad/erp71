@@ -21,8 +21,22 @@ import { Rate, Trend } from 'k6/metrics';
 const errorRate = new Rate('errors');
 const saleLatency = new Trend('sale_latency_ms');
 
+const SCENARIO = __ENV.SCENARIO || 'peak_load';
+
 export const options = {
-    scenarios: {
+    scenarios: SCENARIO === 'multi_tenant' ? {
+        multi_tenant: {
+            executor: 'ramping-vus',
+            exec: 'multiTenantSetup',
+            startVUs: 1,
+            stages: [
+                { duration: '1m', target: 50 },
+                { duration: '3m', target: 50 },
+                { duration: '30s', target: 0 },
+            ],
+            gracefulRampDown: '30s',
+        },
+    } : {
         // Ramp up to 50 concurrent cashiers over 1 minute, hold for 3 minutes, ramp down
         peak_load: {
             executor: 'ramping-vus',
