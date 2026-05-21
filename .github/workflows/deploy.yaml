@@ -49,6 +49,7 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm install
+      - run: npx prisma generate --schema=packages/database/prisma/schema.prisma
       - run: npx prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate
       - name: Run backend unit + integration tests with coverage
         run: |
