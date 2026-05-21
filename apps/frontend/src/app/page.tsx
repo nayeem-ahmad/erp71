@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import {
     ArrowRight, BarChart3, ShoppingCart, Package, Users,
-    CreditCard, Globe, Shield, Zap, CheckCircle2, Star,
+    CreditCard, Globe, Shield, Zap, CheckCircle2, Star, PlayCircle,
 } from 'lucide-react';
 
 const FEATURES = [
@@ -141,10 +141,11 @@ export default function HomePage() {
                             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                         </Link>
                         <Link
-                            href="/login"
-                            className="bg-white hover:bg-gray-50 text-gray-700 font-bold py-4 px-10 rounded-2xl border border-gray-200 transition-colors w-full sm:w-auto text-center"
+                            href="/login?demo=1"
+                            className="bg-white hover:bg-gray-50 text-gray-700 font-bold py-4 px-10 rounded-2xl border border-gray-200 transition-colors w-full sm:w-auto text-center flex items-center justify-center gap-2"
                         >
-                            Sign in to dashboard
+                            <PlayCircle className="w-5 h-5 text-blue-500" />
+                            Try Demo →
                         </Link>
                     </div>
                     <p className="text-sm text-gray-400">No credit card required &bull; 14-day free trial &bull; Cancel anytime</p>
