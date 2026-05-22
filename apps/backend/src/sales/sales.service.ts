@@ -425,6 +425,36 @@ export class SalesService {
         });
     }
 
+    async getInvoiceData(tenantId: string, id: string) {
+        const [sale, tenant] = await Promise.all([
+            this.db.sale.findFirst({
+                where: { id, tenant_id: tenantId },
+                include: {
+                    items: { include: { product: true } },
+                    payments: true,
+                    customer: true,
+                    store: { select: { name: true } },
+                },
+            }),
+            this.db.tenant.findUnique({
+                where: { id: tenantId },
+                select: {
+                    name: true,
+                    default_vat_rate: true,
+                    vat_registration_no: true,
+                    business_tin: true,
+                    brand_primary_color: true,
+                    brand_logo_url: true,
+                    brand_business_name: true,
+                },
+            }),
+        ]);
+
+        if (!sale) throw new NotFoundException('Sale not found');
+
+        return { sale, tenant };
+    }
+
     private validateWarrantySerials(
         items: CreateSaleDto['items'],
         productById: Map<string, { id: string; name: string; warranty_enabled: boolean }>,

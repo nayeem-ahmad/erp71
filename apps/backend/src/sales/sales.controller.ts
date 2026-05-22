@@ -33,6 +33,11 @@ export class SalesController {
         return this.salesService.findOne(tenant.tenantId, id);
     }
 
+    @Get(':id/invoice')
+    async getInvoice(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.salesService.getInvoiceData(tenant.tenantId, id);
+    }
+
     @Patch(':id')
     async update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateSaleDto) {
         return this.salesService.update(tenant.tenantId, id, dto);

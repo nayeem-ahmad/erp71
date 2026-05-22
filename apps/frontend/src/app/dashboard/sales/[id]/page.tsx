@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Printer, Save, Package, CreditCard, FileText, Pencil, Plus, Trash2, X, Search, User } from 'lucide-react';
+import { ArrowLeft, Printer, Save, Package, CreditCard, FileText, Pencil, Plus, Trash2, X, Search, User, Download } from 'lucide-react';
 import { api } from '../../../../lib/api';
 import { formatBDT } from '../../../../lib/format';
 import { printPOSReceipt } from '../../../../lib/pos-receipt-printer';
+import Link from 'next/link';
 
 interface EditItem {
     productId: string;
@@ -327,6 +328,13 @@ export default function SaleDetailPage() {
                                     <Printer className="w-4 h-4" />
                                     <span>Print Preview</span>
                                 </button>
+                                <Link
+                                    href={`/dashboard/sales/${sale.id}/invoice`}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-md flex items-center space-x-2 transition-all hover:-translate-y-0.5"
+                                >
+                                    <Download className="w-4 h-4" />
+                                    <span>Invoice PDF</span>
+                                </Link>
                             </>
                         )}
                     </div>

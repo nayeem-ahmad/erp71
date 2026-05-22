@@ -565,6 +565,7 @@ export const api = {
     }),
     // Sales detail
     getSale: (id: string) => fetchWithAuth(`/sales/${id}`),
+    getSaleInvoice: (id: string) => fetchWithAuth(`/sales/${id}/invoice`),
     updateSale: (id: string, data: any) => fetchWithAuth(`/sales/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
