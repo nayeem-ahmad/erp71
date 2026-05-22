@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { ArrowLeft, Package, FileText, ClipboardList, PlusCircle, Printer, Pencil, Save, X, Search, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -15,7 +15,7 @@ interface EditQuoteItem {
     unitPrice: number;
 }
 
-export default function QuoteDetailsPage() {
+function QuoteDetailsPageContent() {
     const { id } = useParams();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -498,5 +498,13 @@ export default function QuoteDetailsPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function QuoteDetailsPage() {
+    return (
+        <Suspense>
+            <QuoteDetailsPageContent />
+        </Suspense>
     );
 }

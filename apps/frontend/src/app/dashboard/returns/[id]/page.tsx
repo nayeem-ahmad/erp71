@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Printer, Save, Package, FileText, Pencil, X, Trash2 } from 'lucide-react';
 import { api } from '../../../../lib/api';
@@ -15,7 +15,7 @@ interface EditItem {
     maxQuantity: number;
 }
 
-export default function ReturnDetailPage() {
+function ReturnDetailPageContent() {
     const params = useParams();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -466,5 +466,13 @@ export default function ReturnDetailPage() {
                 )}
             </div>
         </div>
+    );
+}
+
+export default function ReturnDetailPage() {
+    return (
+        <Suspense>
+            <ReturnDetailPageContent />
+        </Suspense>
     );
 }

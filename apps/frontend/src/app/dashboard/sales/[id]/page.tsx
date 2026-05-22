@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Printer, Save, Package, CreditCard, FileText, Pencil, Plus, Trash2, X, Search, User, Download } from 'lucide-react';
 import { api } from '../../../../lib/api';
@@ -24,7 +24,7 @@ interface EditPayment {
 const PAYMENT_METHODS = ['CASH', 'CARD', 'BANK_TRANSFER', 'MOBILE_PAYMENT', 'OTHER'];
 const SALE_STATUSES = ['COMPLETED', 'REFUNDED', 'PARTIAL_REFUND'];
 
-export default function SaleDetailPage() {
+function SaleDetailPageContent() {
     const params = useParams();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -736,5 +736,13 @@ export default function SaleDetailPage() {
                 )}
             </div>
         </div>
+    );
+}
+
+export default function SaleDetailPage() {
+    return (
+        <Suspense>
+            <SaleDetailPageContent />
+        </Suspense>
     );
 }

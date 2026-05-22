@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { ArrowLeft, Package, DollarSign, Printer, Save, Pencil, X, Trash2, Search, PackageCheck } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { api } from '../../../../lib/api';
@@ -32,7 +32,7 @@ function formatDateForInput(value?: string | Date | null) {
     return parsed.toISOString().split('T')[0];
 }
 
-export default function OrderDetailsPage() {
+function OrderDetailsPageContent() {
     const { id } = useParams();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -685,5 +685,13 @@ export default function OrderDetailsPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function OrderDetailsPage() {
+    return (
+        <Suspense>
+            <OrderDetailsPageContent />
+        </Suspense>
     );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Pencil, Printer, Receipt, Save, Trash2, Undo2, X } from 'lucide-react';
 import { api } from '../../../../lib/api';
@@ -15,7 +15,7 @@ interface EditItem {
     maxQuantity: number;
 }
 
-export default function PurchaseReturnDetailPage() {
+function PurchaseReturnDetailPageContent() {
     const params = useParams();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -519,5 +519,13 @@ export default function PurchaseReturnDetailPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function PurchaseReturnDetailPage() {
+    return (
+        <Suspense>
+            <PurchaseReturnDetailPageContent />
+        </Suspense>
     );
 }

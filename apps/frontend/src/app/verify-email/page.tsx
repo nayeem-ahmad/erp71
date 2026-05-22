@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { CheckCircle2, XCircle, Loader2, ArrowRight } from 'lucide-react';
@@ -11,6 +11,14 @@ const API_BASE = (process.env.NEXT_PUBLIC_API_BASE
 type Status = 'loading' | 'success' | 'error';
 
 export default function VerifyEmailPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>}>
+            <VerifyEmailContent />
+        </Suspense>
+    );
+}
+
+function VerifyEmailContent() {
     const searchParams = useSearchParams();
     const token = searchParams.get('token');
     const [status, setStatus] = useState<Status>('loading');
