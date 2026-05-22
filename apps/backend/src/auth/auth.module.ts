@@ -4,6 +4,10 @@ import { PassportModule } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
+import { JwtAuthGuard } from './jwt-auth.guard';
+import { ApiKeyStrategy } from './api-key.strategy';
+import { ApiKeyGuard } from './api-key.guard';
+import { CombinedAuthGuard } from './combined-auth.guard';
 import { PlatformAdminGuard } from './platform-admin.guard';
 import { SubscriptionAccessGuard } from './subscription-access.guard';
 import { TotpService } from './totp.service';
@@ -16,8 +20,26 @@ import { TotpService } from './totp.service';
             signOptions: { expiresIn: '1d' },
         }),
     ],
-    providers: [AuthService, JwtStrategy, PlatformAdminGuard, SubscriptionAccessGuard, TotpService],
+    providers: [
+        AuthService,
+        JwtStrategy,
+        JwtAuthGuard,
+        ApiKeyStrategy,
+        ApiKeyGuard,
+        CombinedAuthGuard,
+        PlatformAdminGuard,
+        SubscriptionAccessGuard,
+        TotpService,
+    ],
     controllers: [AuthController],
-    exports: [AuthService, PlatformAdminGuard, SubscriptionAccessGuard, TotpService],
+    exports: [
+        AuthService,
+        JwtAuthGuard,
+        ApiKeyGuard,
+        CombinedAuthGuard,
+        PlatformAdminGuard,
+        SubscriptionAccessGuard,
+        TotpService,
+    ],
 })
 export class AuthModule { }
