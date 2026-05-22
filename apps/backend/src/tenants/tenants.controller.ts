@@ -63,4 +63,17 @@ export class TenantsController {
     ) {
         return this.tenantsService.updateSmsSettings(tenant.tenantId, dto);
     }
+
+    @Get('report-settings')
+    async getReportSettings(@Tenant() tenant: TenantContext) {
+        return this.tenantsService.getReportSettings(tenant.tenantId);
+    }
+
+    @Patch('report-settings')
+    async updateReportSettings(
+        @Tenant() tenant: TenantContext,
+        @Body() dto: { report_weekly_enabled?: boolean; report_monthly_enabled?: boolean; report_email?: string | null },
+    ) {
+        return this.tenantsService.updateReportSettings(tenant.tenantId, dto);
+    }
 }

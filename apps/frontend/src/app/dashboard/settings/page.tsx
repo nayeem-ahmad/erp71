@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle, XCircle, Loader2, ShieldCheck, ShieldOff, Eye, EyeOff, Palette, Receipt, Gift, MessageSquare } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, ShieldCheck, ShieldOff, Eye, EyeOff, Palette, Receipt, Gift, MessageSquare, BarChart3 } from 'lucide-react';
 import { api, fetchWithAuth } from '@/lib/api';
 
 /* ------------------------------------------------------------------ */
@@ -580,6 +580,12 @@ export default function AccountSettingsPage() {
             icon: MessageSquare,
             label: 'SMS Notifications',
             description: 'Send sale receipts and low stock alerts via SMS',
+        },
+        {
+            href: '/dashboard/settings/reports',
+            icon: BarChart3,
+            label: 'Automated Reports',
+            description: 'Schedule weekly and monthly sales report emails',
         },
     ];
 
