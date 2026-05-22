@@ -43,8 +43,19 @@ jest.mock('lucide-react', () => {
         CreditCard: icon,
         Crown: icon,
         BarChart3: icon,
+        Globe: icon,
+        Palette: icon,
     };
 });
+
+jest.mock('@/lib/branding', () => ({
+    useBranding: () => ({
+        logoUrl: null,
+        faviconUrl: null,
+        businessName: null,
+        primaryColor: '#2563eb',
+    }),
+}));
 
 describe('Sidebar — Story 30.1', () => {
     beforeEach(() => {

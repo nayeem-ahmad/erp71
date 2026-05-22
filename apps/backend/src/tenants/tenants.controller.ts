@@ -1,6 +1,7 @@
 import { Controller, Get, Patch, Body, UseGuards, UseInterceptors } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
 import { StorefrontSettingsDto } from '../storefront/storefront.dto';
+import { UpdateBrandingDto } from './update-branding.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
@@ -22,5 +23,18 @@ export class TenantsController {
         @Body() dto: StorefrontSettingsDto,
     ) {
         return this.tenantsService.updateStorefrontSettings(tenant.tenantId, dto);
+    }
+
+    @Get('branding')
+    async getBranding(@Tenant() tenant: TenantContext) {
+        return this.tenantsService.getBranding(tenant.tenantId);
+    }
+
+    @Patch('branding')
+    async updateBranding(
+        @Tenant() tenant: TenantContext,
+        @Body() dto: UpdateBrandingDto,
+    ) {
+        return this.tenantsService.updateBranding(tenant.tenantId, dto);
     }
 }

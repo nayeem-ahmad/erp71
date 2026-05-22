@@ -190,6 +190,10 @@ model Tenant {
   storefront_slug      String?  @unique
   storefront_enabled   Boolean  @default(false)
   storefront_banner    String?
+  brand_primary_color  String?
+  brand_logo_url       String?
+  brand_favicon_url    String?
+  brand_business_name  String?
 
   // Relations
   owner      User     @relation("TenantOwner", fields: [owner_id], references: [id])

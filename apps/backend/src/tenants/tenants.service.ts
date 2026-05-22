@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { StorefrontSettingsDto } from '../storefront/storefront.dto';
+import { UpdateBrandingDto } from './update-branding.dto';
 
 @Injectable()
 export class TenantsService {
@@ -43,6 +44,44 @@ export class TenantsService {
                 storefront_slug: true,
                 storefront_enabled: true,
                 storefront_banner: true,
+            },
+        });
+    }
+
+    async getBranding(tenantId: string) {
+        return this.db.tenant.findUnique({
+            where: { id: tenantId },
+            select: {
+                brand_primary_color: true,
+                brand_logo_url: true,
+                brand_favicon_url: true,
+                brand_business_name: true,
+            },
+        });
+    }
+
+    async updateBranding(tenantId: string, dto: UpdateBrandingDto) {
+        return this.db.tenant.update({
+            where: { id: tenantId },
+            data: {
+                ...(dto.brand_primary_color !== undefined
+                    ? { brand_primary_color: dto.brand_primary_color || null }
+                    : {}),
+                ...(dto.brand_logo_url !== undefined
+                    ? { brand_logo_url: dto.brand_logo_url || null }
+                    : {}),
+                ...(dto.brand_favicon_url !== undefined
+                    ? { brand_favicon_url: dto.brand_favicon_url || null }
+                    : {}),
+                ...(dto.brand_business_name !== undefined
+                    ? { brand_business_name: dto.brand_business_name || null }
+                    : {}),
+            },
+            select: {
+                brand_primary_color: true,
+                brand_logo_url: true,
+                brand_favicon_url: true,
+                brand_business_name: true,
             },
         });
     }
