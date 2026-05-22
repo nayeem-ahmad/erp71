@@ -85,13 +85,12 @@ export default function DashboardPage() {
 
     useEffect(() => {
         const fetchData = async () => {
-            const [meRes, productsRes, salesRes, financialRes, trendRes, statsRes] = await Promise.allSettled([
+            const [meRes, productsRes, salesRes, financialRes, trendRes] = await Promise.allSettled([
                 api.getMe(),
                 api.getProducts(),
                 api.getSales(),
                 api.getFinancialKpis(),
                 api.getFinancialTrends(),
-                api.getProductStats(),
             ]);
 
             if (meRes.status === 'fulfilled') {
@@ -99,7 +98,11 @@ export default function DashboardPage() {
             }
 
             if (productsRes.status === 'fulfilled') {
-                setProducts(productsRes.value);
+                const fetchedProducts = productsRes.value;
+                setProducts(fetchedProducts);
+                const lowStock = (Array.isArray(fetchedProducts) ? fetchedProducts : fetchedProducts?.data ?? [])
+                    .filter((p: any) => p.reorder_level != null && p.stock_quantity <= p.reorder_level).length;
+                setLowStockCount(lowStock);
             }
 
             if (salesRes.status === 'fulfilled') {
@@ -116,10 +119,6 @@ export default function DashboardPage() {
                 setFinancialTrendSnapshot(trendRes.value);
             } else {
                 setFinancialTrendError(trendRes.reason instanceof Error ? trendRes.reason.message : 'Financial trends are unavailable right now.');
-            }
-
-            if (statsRes.status === 'fulfilled') {
-                setLowStockCount(statsRes.value.lowStockCount);
             }
 
             if (meRes.status === 'rejected' || productsRes.status === 'rejected' || salesRes.status === 'rejected') {
