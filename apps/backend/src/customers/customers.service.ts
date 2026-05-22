@@ -1,11 +1,29 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { EncryptionService } from '../common/encryption.service';
 import { CreateCustomerDto, UpdateCustomerDto } from './customer.dto';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 
 @Injectable()
 export class CustomersService {
-    constructor(private db: DatabaseService) {}
+    constructor(
+        private db: DatabaseService,
+        private encryption: EncryptionService,
+    ) {}
+
+    private encryptNid(value: string | undefined | null): string | undefined {
+        if (value == null) return undefined;
+        return this.encryption.encrypt(value);
+    }
+
+    private decryptNid(value: string | undefined | null): string | undefined {
+        if (value == null) return undefined;
+        return this.encryption.decrypt(value);
+    }
+
+    private decryptCustomer<T extends { nid?: string | null }>(customer: T): T {
+        return { ...customer, nid: this.decryptNid(customer.nid) };
+    }
 
     private async generateCustomerCode(tenantId: string): Promise<string> {
         const last = await this.db.customer.findFirst({
@@ -37,17 +55,20 @@ export class CustomersService {
 
         const customer_code = await this.generateCustomerCode(tenantId);
 
-        return this.db.customer.create({
+        const { nid, ...rest } = dto;
+        const record = await this.db.customer.create({
             data: {
                 tenant_id: tenantId,
                 customer_code,
-                ...dto
+                ...rest,
+                ...(nid != null ? { nid: this.encryptNid(nid) } : {}),
             },
             include: {
                 customerGroup: true,
                 territory: true,
             }
         });
+        return this.decryptCustomer(record);
     }
 
     async findAll(tenantId: string, opts?: { page?: number; limit?: number; search?: string }): Promise<PaginatedResult<any>> {
@@ -75,7 +96,7 @@ export class CustomersService {
             this.db.customer.count({ where }),
         ]);
 
-        return paginate(items, total, page, limit);
+        return paginate(items.map(c => this.decryptCustomer(c)), total, page, limit);
     }
 
     async findOne(tenantId: string, id: string) {
@@ -92,7 +113,7 @@ export class CustomersService {
         });
 
         if (!customer) throw new NotFoundException('Customer not found');
-        return customer;
+        return this.decryptCustomer(customer);
     }
 
     async getPurchaseHistory(
@@ -186,13 +207,18 @@ export class CustomersService {
             }
         }
 
-        return this.db.customer.update({
+        const { nid, ...rest } = dto;
+        const record = await this.db.customer.update({
             where: { id },
-            data: dto,
+            data: {
+                ...rest,
+                ...(nid != null ? { nid: this.encryptNid(nid) } : {}),
+            },
             include: {
                 customerGroup: true,
                 territory: true,
             }
         });
+        return this.decryptCustomer(record);
     }
 }
