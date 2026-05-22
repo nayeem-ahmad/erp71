@@ -204,6 +204,7 @@ const MODULES: NavModule[] = [
             { href: '/dashboard/settings/loyalty', icon: Gift, label: 'Loyalty Program' },
             { href: '/dashboard/settings/sms', icon: MessageSquare, label: 'SMS Notifications' },
             { href: '/dashboard/settings/reports', icon: BarChart3, label: 'Report Emails' },
+            { href: '/dashboard/settings/discount-codes', icon: Tag, label: 'Discount Codes' },
         ],
     },
     {

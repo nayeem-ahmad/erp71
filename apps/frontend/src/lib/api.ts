@@ -566,6 +566,20 @@ export const api = {
     // Sales detail
     getSale: (id: string) => fetchWithAuth(`/sales/${id}`),
     getSaleInvoice: (id: string) => fetchWithAuth(`/sales/${id}/invoice`),
+    getDiscountCodes: () => fetchWithAuth('/discount-codes'),
+    createDiscountCode: (data: any) => fetchWithAuth('/discount-codes', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    toggleDiscountCode: (id: string) => fetchWithAuth(`/discount-codes/${id}/toggle`, { method: 'PATCH' }),
+    deleteDiscountCode: (id: string) => fetchWithAuth(`/discount-codes/${id}`, { method: 'DELETE' }),
+    validateDiscountCode: (code: string, cartTotal: number) => fetchWithAuth('/discount-codes/validate', {
+        method: 'POST',
+        body: JSON.stringify({ code, cart_total: cartTotal }),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    useDiscountCode: (code: string) => fetchWithAuth(`/discount-codes/${encodeURIComponent(code)}/use`, { method: 'POST' }),
     updateSale: (id: string, data: any) => fetchWithAuth(`/sales/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),

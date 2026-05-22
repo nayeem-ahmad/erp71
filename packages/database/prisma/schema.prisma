@@ -260,6 +260,7 @@ model Tenant {
   bomRecipes      BomRecipe[]
   productionJobs  ProductionJob[]
   loyaltyTransactions LoyaltyTransaction[]
+  discountCodes   DiscountCode[]
 }
 
 model TenantUser {
@@ -1518,4 +1519,27 @@ model LoyaltyTransaction {
   @@index([tenantId, customerId])
   @@index([customerId])
   @@map("loyalty_transactions")
+}
+
+model DiscountCode {
+  id           String    @id @default(cuid())
+  tenantId     String
+  code         String
+  name         String
+  type         String    // PERCENTAGE | FIXED
+  value        Decimal   @db.Decimal(10, 2)  // percent (0-100) or fixed BDT amount
+  min_purchase Decimal?  @db.Decimal(12, 2)  // minimum cart total to apply
+  max_discount Decimal?  @db.Decimal(12, 2)  // cap for PERCENTAGE type
+  usage_limit  Int?                           // null = unlimited
+  used_count   Int       @default(0)
+  valid_from   DateTime?
+  valid_until  DateTime?
+  is_active    Boolean   @default(true)
+  created_at   DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@index([tenantId, is_active])
+  @@map("discount_codes")
 }
