@@ -7,6 +7,7 @@ import Sidebar from '@/components/Sidebar';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import FeedbackWidget from '@/components/FeedbackWidget';
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
+import { BrandingProvider } from '@/lib/branding';
 import { api } from '@/lib/api';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -88,6 +89,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     };
 
     return (
+        <BrandingProvider>
         <div className="flex h-screen bg-[#f9fafb] font-sans text-[#111827]">
             <Sidebar
                 canAccessAccounting={canAccessAccounting}
@@ -188,5 +190,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <FeedbackWidget />
             <ServiceWorkerRegistrar />
         </div>
+        </BrandingProvider>
     );
 }

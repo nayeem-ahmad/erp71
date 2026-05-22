@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CheckCircle, XCircle, Loader2, ShieldCheck, ShieldOff, Eye, EyeOff } from 'lucide-react';
+import Link from 'next/link';
+import { CheckCircle, XCircle, Loader2, ShieldCheck, ShieldOff, Eye, EyeOff, Palette } from 'lucide-react';
 import { api, fetchWithAuth } from '@/lib/api';
 
 /* ------------------------------------------------------------------ */
@@ -555,6 +556,15 @@ export default function AccountSettingsPage() {
         { key: '2fa', label: 'Two-Factor Auth' },
     ];
 
+    const quickLinks = [
+        {
+            href: '/dashboard/settings/branding',
+            icon: Palette,
+            label: 'Branding',
+            description: 'Customize logo, colors, and business name',
+        },
+    ];
+
     return (
         <div className="h-full overflow-y-auto">
             <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
@@ -562,6 +572,25 @@ export default function AccountSettingsPage() {
                 <div>
                     <h1 className="text-2xl font-black text-gray-900 tracking-tight">Account Settings</h1>
                     <p className="mt-1 text-sm text-gray-500">Manage your profile, password, and security preferences.</p>
+                </div>
+
+                {/* Quick links to sub-settings */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {quickLinks.map(({ href, icon: Icon, label, description }) => (
+                        <Link
+                            key={href}
+                            href={href}
+                            className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white px-5 py-4 hover:border-blue-300 hover:shadow-sm transition-all group"
+                        >
+                            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-100 transition-colors">
+                                <Icon className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold text-gray-800">{label}</p>
+                                <p className="text-xs text-gray-500 mt-0.5">{description}</p>
+                            </div>
+                        </Link>
+                    ))}
                 </div>
 
                 {/* Card */}

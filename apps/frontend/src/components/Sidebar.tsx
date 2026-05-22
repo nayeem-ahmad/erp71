@@ -33,8 +33,10 @@ import {
     Crown,
     BarChart3,
     Globe,
+    Palette,
     type LucideIcon,
 } from 'lucide-react';
+import { useBranding } from '@/lib/branding';
 
 /* ------------------------------------------------------------------ */
 /*  Navigation structure                                               */
@@ -173,6 +175,8 @@ const MODULES: NavModule[] = [
             { href: '#accounting-setup', icon: Calculator, label: 'Accounting Setup', section: true },
             { href: '/dashboard/accounting/coa', icon: FolderTree, label: 'Chart of Accounts' },
             { href: '/dashboard/accounting/posting-rules', icon: Settings, label: 'Posting Rules' },
+            { href: '#branding-setup', icon: Palette, label: 'Branding', section: true },
+            { href: '/dashboard/settings/branding', icon: Palette, label: 'Branding' },
         ],
     },
 ];
@@ -195,6 +199,7 @@ export default function Sidebar({
     activePlanCode?: string | null;
 }) {
     const pathname = usePathname();
+    const { logoUrl, businessName, primaryColor } = useBranding();
     const [collapsed, setCollapsed] = useState(false);
     const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
     const modules = MODULES
@@ -287,12 +292,19 @@ export default function Sidebar({
         >
             {/* Logo */}
             <div className={`flex items-center h-14 border-b border-gray-100 flex-shrink-0 ${collapsed ? 'justify-center px-0' : 'px-5 space-x-3'}`}>
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Package className="text-white w-5 h-5" />
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ backgroundColor: primaryColor }}>
+                    {logoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                    ) : (
+                        <Package className="text-white w-5 h-5" />
+                    )}
                 </div>
                 {!collapsed && (
                     <div className="min-w-0">
-                        <span className="text-lg font-bold tracking-tight whitespace-nowrap block">RetailSaaS</span>
+                        <span className="text-lg font-bold tracking-tight whitespace-nowrap block">
+                            {businessName || 'RetailSaaS'}
+                        </span>
                         <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Workspace</span>
                             {activePlanCode && (
