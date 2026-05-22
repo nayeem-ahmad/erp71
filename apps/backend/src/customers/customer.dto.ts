@@ -47,6 +47,10 @@ export class CreateCustomerDto {
     @Min(0)
     @Max(100)
     default_discount_pct?: number;
+
+    @IsOptional()
+    @IsString()
+    nid?: string;
 }
 
 export class UpdateCustomerDto {
@@ -93,4 +97,8 @@ export class UpdateCustomerDto {
     @Min(0)
     @Max(100)
     default_discount_pct?: number;
+
+    @IsOptional()
+    @IsString()
+    nid?: string;
 }
