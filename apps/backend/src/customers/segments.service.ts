@@ -90,7 +90,7 @@ export class SegmentsService {
             }
         }
 
-        this.logger.debug({ updated, total: customers.length }, 'Segmentation complete');
+        this.logger.debug(`Segmentation complete: updated=${updated}, total=${customers.length}`);
         return { updated, total: customers.length };
     }
 
@@ -98,6 +98,6 @@ export class SegmentsService {
     async handleCron() {
         this.logger.debug('Running Customer Segmentation evaluation (all tenants)');
         const result = await this.runForTenant(null);
-        this.logger.info(result, 'Segmentation evaluation complete');
+        this.logger.log(`Segmentation evaluation complete: updated=${result.updated}, total=${result.total}`);
     }
 }
