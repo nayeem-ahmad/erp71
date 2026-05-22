@@ -6,6 +6,7 @@ import { ArrowLeft, Bell, Zap, X } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import FeedbackWidget from '@/components/FeedbackWidget';
+import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
 import { api } from '@/lib/api';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -185,6 +186,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
 
             <FeedbackWidget />
+            <ServiceWorkerRegistrar />
         </div>
     );
 }
