@@ -46,6 +46,7 @@ import { ContactModule } from './contact/contact.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { StorefrontModule } from './storefront/storefront.module';
 import { TenantsModule } from './tenants/tenants.module';
+import { DeliveryModule } from './delivery/delivery.module';
 
 @Module({
     imports: [
@@ -93,6 +94,7 @@ import { TenantsModule } from './tenants/tenants.module';
         ApiKeysModule,
         StorefrontModule,
         TenantsModule,
+        DeliveryModule,
     ],
     controllers: [],
     providers: [

@@ -203,7 +203,8 @@ model Tenant {
   subscription TenantSubscription?
   billingEvents BillingEvent[]
 
-  apiKeys    ApiKey[]
+  apiKeys         ApiKey[]
+  deliveryOrders  DeliveryOrder[]
   products   Product[]
   productGroups ProductGroup[]
   productSubgroups ProductSubgroup[]
@@ -734,6 +735,7 @@ model Sale {
   payments       PaymentRecord[]
   returns        SalesReturn[]
   warrantyClaims WarrantyClaim[]
+  deliveryOrders DeliveryOrder[]
 
   @@unique([tenant_id, serial_number])
   @@index([tenant_id, created_at])
@@ -1398,4 +1400,28 @@ model StorefrontOrderItem {
   product Product         @relation(fields: [productId], references: [id])
 
   @@map("storefront_order_items")
+}
+
+model DeliveryOrder {
+  id              String    @id @default(cuid())
+  tenantId        String
+  saleId          String?
+  customerName    String
+  customerPhone   String?
+  deliveryAddress String
+  driverName      String?
+  driverPhone     String?
+  status          String    @default("PENDING")
+  notes           String?
+  scheduledAt     DateTime?
+  deliveredAt     DateTime?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sale   Sale?  @relation(fields: [saleId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("delivery_orders")
 }
