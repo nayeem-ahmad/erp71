@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import * as passport from 'passport';
 import * as crypto from 'crypto';
 import { DatabaseService } from '../database/database.service';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const passport = require('passport') as typeof import('passport');
 
 /**
  * Custom Passport strategy that authenticates via the x-api-key header.
