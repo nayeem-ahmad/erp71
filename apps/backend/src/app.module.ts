@@ -50,6 +50,7 @@ import { DeliveryModule } from './delivery/delivery.module';
 import { ManufacturingModule } from './manufacturing/manufacturing.module';
 import { LoyaltyModule } from './loyalty/loyalty.module';
 import { SmsModule } from './sms/sms.module';
+import { DiscountCodesModule } from './discount-codes/discount-codes.module';
 
 @Module({
     imports: [
@@ -101,6 +102,7 @@ import { SmsModule } from './sms/sms.module';
         DeliveryModule,
         ManufacturingModule,
         LoyaltyModule,
+        DiscountCodesModule,
     ],
     controllers: [],
     providers: [

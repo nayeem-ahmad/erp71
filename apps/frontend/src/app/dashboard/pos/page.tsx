@@ -36,6 +36,11 @@ export default function POSPage() {
     const [cardAmount, setCardAmount] = useState<number>(0);
     const [lastSale, setLastSale] = useState<any>(null);
 
+    const [discountCodeInput, setDiscountCodeInput] = useState('');
+    const [appliedDiscount, setAppliedDiscount] = useState<{ code: string; name: string; amount: number } | null>(null);
+    const [discountError, setDiscountError] = useState('');
+    const [discountApplying, setDiscountApplying] = useState(false);
+
     const { isOnline, pendingCount, isSyncing, syncNow, refreshPendingCount } = useOfflineSync();
 
     const addNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -180,10 +185,36 @@ export default function POSPage() {
 
     const subtotal = cart.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0);
     const tax = subtotal * 0.1; // 10% tax mock
-    const total = subtotal + tax;
+    const totalBeforeDiscount = subtotal + tax;
+    const discountAmount = appliedDiscount?.amount ?? 0;
+    const total = Math.max(0, totalBeforeDiscount - discountAmount);
 
     const totalPaid = (cashAmount || 0) + (bkashAmount || 0) + (cardAmount || 0);
     const changeDue = Math.max(0, totalPaid - total);
+
+    const handleApplyDiscountCode = async () => {
+        if (!discountCodeInput.trim()) return;
+        setDiscountApplying(true);
+        setDiscountError('');
+        try {
+            const result = await api.validateDiscountCode(discountCodeInput.trim(), totalBeforeDiscount);
+            const data = result?.data ?? result;
+            setAppliedDiscount({ code: data.code, name: data.name, amount: data.discount_amount });
+            setCashAmount(Math.max(0, totalBeforeDiscount - data.discount_amount));
+        } catch (err: any) {
+            setDiscountError(err?.message ?? 'Invalid discount code');
+            setAppliedDiscount(null);
+        } finally {
+            setDiscountApplying(false);
+        }
+    };
+
+    const handleRemoveDiscount = () => {
+        setAppliedDiscount(null);
+        setDiscountCodeInput('');
+        setDiscountError('');
+        setCashAmount(total);
+    };
 
     const handleCheckoutClick = () => {
         if (cart.length === 0) return;
@@ -193,7 +224,10 @@ export default function POSPage() {
             return;
         }
 
-        setCashAmount(total);
+        setAppliedDiscount(null);
+        setDiscountCodeInput('');
+        setDiscountError('');
+        setCashAmount(totalBeforeDiscount);
         setBkashAmount(0);
         setCardAmount(0);
         setShowCheckout(true);
@@ -250,8 +284,13 @@ export default function POSPage() {
         try {
             const sale = await api.createSale(saleData);
             setLastSale({ sale, cart: [...cart], payments, subtotal, tax, total, totalPaid, changeDue });
+            if (appliedDiscount) {
+                api.useDiscountCode(appliedDiscount.code).catch(() => {});
+            }
             addNotification('Sale completed successfully!', 'success');
             setCart([]);
+            setAppliedDiscount(null);
+            setDiscountCodeInput('');
             setShowCheckout(false);
             loadProducts(); // Update stock levels
         } catch (error: any) {
@@ -569,8 +608,52 @@ export default function POSPage() {
                         </div>
                         <div className="p-6 space-y-6">
                             <div className="bg-blue-50 p-4 rounded-2xl flex items-center justify-between border border-blue-100">
-                                <span className="font-black uppercase tracking-widest text-blue-900 text-sm">Total Due</span>
+                                <div>
+                                    <span className="font-black uppercase tracking-widest text-blue-900 text-sm">Total Due</span>
+                                    {appliedDiscount && (
+                                        <div className="text-xs text-green-600 font-semibold mt-0.5">
+                                            -{formatBDT(appliedDiscount.amount)} ({appliedDiscount.name})
+                                        </div>
+                                    )}
+                                </div>
                                 <span className="text-3xl font-black text-blue-600">{formatBDT(total)}</span>
+                            </div>
+
+                            {/* Discount Code */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">Discount Code</label>
+                                {appliedDiscount ? (
+                                    <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                                        <div>
+                                            <span className="font-mono font-bold text-green-800">{appliedDiscount.code}</span>
+                                            <span className="text-xs text-green-600 ml-2">-{formatBDT(appliedDiscount.amount)}</span>
+                                        </div>
+                                        <button onClick={handleRemoveDiscount} className="text-green-500 hover:text-red-500 transition-colors">
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={discountCodeInput}
+                                            onChange={e => { setDiscountCodeInput(e.target.value.toUpperCase()); setDiscountError(''); }}
+                                            onKeyDown={e => e.key === 'Enter' && handleApplyDiscountCode()}
+                                            placeholder="Enter code (optional)"
+                                            className="flex-1 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-mono text-sm text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all shadow-sm uppercase"
+                                        />
+                                        <button
+                                            onClick={handleApplyDiscountCode}
+                                            disabled={discountApplying || !discountCodeInput.trim()}
+                                            className="px-4 py-3 bg-gray-900 text-white rounded-xl text-xs font-black uppercase tracking-widest disabled:opacity-40 hover:bg-gray-700 transition-colors"
+                                        >
+                                            {discountApplying ? '…' : 'Apply'}
+                                        </button>
+                                    </div>
+                                )}
+                                {discountError && (
+                                    <p className="text-xs text-red-500 font-medium">{discountError}</p>
+                                )}
                             </div>
 
                             <div className="space-y-4">
