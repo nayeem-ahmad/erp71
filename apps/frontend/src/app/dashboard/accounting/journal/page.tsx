@@ -7,6 +7,7 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { VoucherType } from '@retail-saas/shared-types';
 import { DataTable } from '../../../../components/data-table';
 import { api } from '../../../../lib/api';
+import { formatBDT, formatDate } from '../../../../lib/format';
 
 type VoucherRow = {
     id: string;
@@ -87,8 +88,7 @@ export default function AccountingJournalPage() {
             columnHelper.accessor('date', {
                 header: 'Date',
                 cell: (info) => {
-                    const date = new Date(info.getValue());
-                    return <span className="text-sm font-bold text-gray-700">{date.toLocaleDateString()}</span>;
+                    return <span className="text-sm font-bold text-gray-700">{formatDate(info.getValue())}</span>;
                 },
                 size: 120,
             }),
@@ -104,7 +104,7 @@ export default function AccountingJournalPage() {
             }),
             columnHelper.accessor('total_amount', {
                 header: 'Amount',
-                cell: (info) => <span className="text-sm font-black text-emerald-600">{Number(info.getValue() || 0).toFixed(2)}</span>,
+                cell: (info) => <span className="text-sm font-black text-emerald-600">{formatBDT(Number(info.getValue() || 0))}</span>,
                 size: 120,
             }),
             columnHelper.display({

@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Body, Param, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Param, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { CustomersService } from './customers.service';
 import { SegmentsService } from './segments.service';
 import { CreateCustomerDto, UpdateCustomerDto } from './customer.dto';
@@ -34,8 +34,22 @@ export class CustomersController {
     }
 
     @Get()
-    async findAll(@Tenant() tenant: TenantContext) {
-        return this.customersService.findAll(tenant.tenantId);
+    async findAll(
+        @Tenant() tenant: TenantContext,
+        @Query('page') page?: string,
+        @Query('limit') limit?: string,
+        @Query('search') search?: string,
+    ) {
+        return this.customersService.findAll(tenant.tenantId, {
+            page: page ? parseInt(page, 10) : undefined,
+            limit: limit ? parseInt(limit, 10) : undefined,
+            search,
+        });
+    }
+
+    @Post('segments/evaluate')
+    async evaluateSegments(@Tenant() tenant: TenantContext) {
+        return this.segmentsService.evaluateForTenant(tenant.tenantId);
     }
 
     @Get(':id')
@@ -44,8 +58,20 @@ export class CustomersController {
     }
 
     @Get(':id/history')
-    async getHistory(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.customersService.getPurchaseHistory(tenant.tenantId, id);
+    async getHistory(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Query('page') page?: string,
+        @Query('limit') limit?: string,
+        @Query('from') from?: string,
+        @Query('to') to?: string,
+    ) {
+        return this.customersService.getPurchaseHistory(tenant.tenantId, id, {
+            page: page ? parseInt(page, 10) : undefined,
+            limit: limit ? parseInt(limit, 10) : undefined,
+            from,
+            to,
+        });
     }
 
     @Patch(':id')

@@ -32,10 +32,18 @@ import {
     CreditCard,
     Crown,
     BarChart3,
-    Settings2,
-    GitMerge,
+    Globe,
+    Palette,
+    Factory,
+    Cog,
+    Receipt,
+    HelpCircle,
+    Gift,
+    Tag,
+    MessageSquare,
     type LucideIcon,
 } from 'lucide-react';
+import { useBranding } from '@/lib/branding';
 
 /* ------------------------------------------------------------------ */
 /*  Navigation structure                                               */
@@ -78,8 +86,23 @@ const MODULES: NavModule[] = [
             { href: '/dashboard/returns',           icon: ArrowLeftRight,  label: 'Sales Returns' },
             { href: '/dashboard/orders',            icon: ClipboardList,   label: 'Sales Orders' },
             { href: '/dashboard/quotes',            icon: FileText,        label: 'Sales Quotations' },
-            { href: '/dashboard/cashier-sessions',  icon: Clock,           label: 'Cashier Sessions' },
             { href: '/dashboard/warranty-claims',   icon: ShieldCheck,     label: 'Warranty Claims' },
+            { href: '/dashboard/cashier-sessions',  icon: Clock,           label: 'Cashier Sessions' },
+            { href: '/dashboard/loyalty',           icon: Gift,            label: 'Loyalty Points' },
+        ],
+    },
+    {
+        key: 'delivery',
+        icon: MapPin,
+        label: 'Delivery',
+        href: '/dashboard/delivery',
+    },
+    {
+        key: 'manufacturing',
+        icon: Factory,
+        label: 'Manufacturing',
+        children: [
+            { href: '/dashboard/manufacturing', icon: Cog, label: 'Jobs & BOM' },
         ],
     },
     {
@@ -100,7 +123,7 @@ const MODULES: NavModule[] = [
             { href: '/dashboard/accounting/vouchers', icon: FileText, label: 'Voucher Entry' },
             { href: '/dashboard/accounting/journal', icon: ClipboardList, label: 'Journal' },
             { href: '/dashboard/accounting/ledger', icon: ClipboardList, label: 'Ledger' },
-            { href: '/dashboard/accounting/reconciliation', icon: GitMerge, label: 'Posting Exceptions' },
+            { href: '/dashboard/accounting/reconciliation', icon: AlertTriangle, label: 'Posting Exceptions' },
         ],
     },
     {
@@ -113,6 +136,7 @@ const MODULES: NavModule[] = [
             { href: '/dashboard/inventory/shrinkage', icon: AlertTriangle, label: 'Shrinkage' },
             { href: '/dashboard/inventory/stock-takes', icon: ClipboardCheck, label: 'Stock Takes' },
             { href: '/dashboard/inventory/ledger', icon: BookOpen, label: 'Stock Ledger' },
+            { href: '/dashboard/inventory/labels', icon: Tag, label: 'Print Labels' },
         ],
     },
     {
@@ -123,6 +147,7 @@ const MODULES: NavModule[] = [
             { href: '#sales-reports', icon: ShoppingBag, label: 'Sales', section: true, advancedOnly: true },
             { href: '/dashboard/sales/reports/summary', icon: TrendingUp, label: 'Sales Summary', advancedOnly: true },
             { href: '/dashboard/sales/reports/products', icon: Package, label: 'Sales by Product', advancedOnly: true },
+            { href: '/dashboard/reports/consolidated', icon: BarChart3, label: 'Consolidated', advancedOnly: true },
             { href: '#inventory-reports', icon: Package, label: 'Inventory', section: true, advancedOnly: true },
             { href: '/dashboard/inventory/reports/reorder', icon: TrendingUp, label: 'Reorder Report', advancedOnly: true },
             { href: '/dashboard/inventory/reports/shrinkage', icon: AlertTriangle, label: 'Shrinkage Report', advancedOnly: true },
@@ -130,10 +155,25 @@ const MODULES: NavModule[] = [
         ],
     },
     {
+        key: 'storefront',
+        icon: Globe,
+        label: 'Storefront',
+        children: [
+            { href: '/dashboard/storefront', icon: ShoppingBag, label: 'Orders' },
+            { href: '/dashboard/storefront/settings', icon: Settings, label: 'Settings' },
+        ],
+    },
+    {
         key: 'billing',
         icon: CreditCard,
         label: 'Billing',
         href: '/dashboard/billing',
+    },
+    {
+        key: 'account-settings',
+        icon: Settings,
+        label: 'Account Settings',
+        href: '/dashboard/settings',
     },
     {
         key: 'admin',
@@ -157,8 +197,21 @@ const MODULES: NavModule[] = [
             { href: '/dashboard/inventory/settings', icon: Settings, label: 'Inventory Settings' },
             { href: '#accounting-setup', icon: Calculator, label: 'Accounting Setup', section: true },
             { href: '/dashboard/accounting/coa', icon: FolderTree, label: 'Chart of Accounts' },
-            { href: '/dashboard/accounting/posting-rules', icon: Settings2, label: 'Posting Rules' },
+            { href: '/dashboard/accounting/posting-rules', icon: Settings, label: 'Posting Rules' },
+            { href: '#branding-setup', icon: Palette, label: 'Branding', section: true },
+            { href: '/dashboard/settings/branding', icon: Palette, label: 'Branding' },
+            { href: '/dashboard/settings/tax', icon: Receipt, label: 'Tax / VAT' },
+            { href: '/dashboard/settings/loyalty', icon: Gift, label: 'Loyalty Program' },
+            { href: '/dashboard/settings/sms', icon: MessageSquare, label: 'SMS Notifications' },
+            { href: '/dashboard/settings/reports', icon: BarChart3, label: 'Report Emails' },
+            { href: '/dashboard/settings/discount-codes', icon: Tag, label: 'Discount Codes' },
         ],
+    },
+    {
+        key: 'help',
+        icon: HelpCircle,
+        label: 'Help',
+        href: '/dashboard/help',
     },
 ];
 
@@ -180,6 +233,7 @@ export default function Sidebar({
     activePlanCode?: string | null;
 }) {
     const pathname = usePathname();
+    const { logoUrl, businessName, primaryColor } = useBranding();
     const [collapsed, setCollapsed] = useState(false);
     const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
     const modules = MODULES
@@ -272,12 +326,19 @@ export default function Sidebar({
         >
             {/* Logo */}
             <div className={`flex items-center h-14 border-b border-gray-100 flex-shrink-0 ${collapsed ? 'justify-center px-0' : 'px-5 space-x-3'}`}>
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Package className="text-white w-5 h-5" />
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ backgroundColor: primaryColor }}>
+                    {logoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                    ) : (
+                        <Package className="text-white w-5 h-5" />
+                    )}
                 </div>
                 {!collapsed && (
                     <div className="min-w-0">
-                        <span className="text-lg font-bold tracking-tight whitespace-nowrap block">RetailSaaS</span>
+                        <span className="text-lg font-bold tracking-tight whitespace-nowrap block">
+                            {businessName || 'RetailSaaS'}
+                        </span>
                         <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Workspace</span>
                             {activePlanCode && (

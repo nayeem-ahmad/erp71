@@ -1,7 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Settings2, Check, X, Pencil, ChevronDown, ChevronUp } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, CheckCircle, Edit2, Settings, XCircle } from 'lucide-react';
+import Link from 'next/link';
+import { createColumnHelper } from '@tanstack/react-table';
+import { DataTable } from '@/components/data-table';
 import { api } from '../../../../lib/api';
 
 const EVENT_TYPE_LABELS: Record<string, string> = {
@@ -14,69 +17,80 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
 };
 
 const CONDITION_KEY_LABELS: Record<string, string> = {
-    none: 'Default (no condition)',
     payment_mode: 'Payment Mode',
     reason_type: 'Reason Type',
     transfer_scope: 'Transfer Scope',
+    none: 'None (default)',
 };
 
-type PostingRule = {
+const EVENT_TYPE_BADGE: Record<string, string> = {
+    sale: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    sale_return: 'bg-amber-50 text-amber-700 border-amber-200',
+    purchase: 'bg-sky-50 text-sky-700 border-sky-200',
+    purchase_return: 'bg-orange-50 text-orange-700 border-orange-200',
+    inventory_adjustment: 'bg-violet-50 text-violet-700 border-violet-200',
+    fund_movement: 'bg-gray-50 text-gray-700 border-gray-200',
+};
+
+interface Account {
+    id: string;
+    name: string;
+    code?: string | null;
+}
+
+interface PostingRule {
     id: string;
     eventType: string;
     conditionKey: string;
     conditionValue: string | null;
-    debitAccount: { id: string; name: string; code: string | null };
-    creditAccount: { id: string; name: string; code: string | null };
+    debitAccount: Account;
+    creditAccount: Account;
     priority: number;
     isActive: boolean;
     updatedAt: string;
-};
+}
 
-type Account = {
-    id: string;
-    name: string;
-    code: string | null;
-    type: string;
-};
-
-type EditState = {
-    ruleId: string;
+interface EditForm {
     debitAccountId: string;
     creditAccountId: string;
-    isActive: boolean;
+    conditionKey: string;
+    conditionValue: string;
     priority: number;
-};
+    isActive: boolean;
+}
 
-const CONDITION_KEYS = ['none', 'payment_mode', 'reason_type', 'transfer_scope'] as const;
+const columnHelper = createColumnHelper<PostingRule>();
 
 export default function PostingRulesPage() {
     const [rules, setRules] = useState<PostingRule[]>([]);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [loading, setLoading] = useState(true);
-    const [editState, setEditState] = useState<EditState | null>(null);
+    const [editingRule, setEditingRule] = useState<PostingRule | null>(null);
+    const [form, setForm] = useState<EditForm>({
+        debitAccountId: '',
+        creditAccountId: '',
+        conditionKey: 'none',
+        conditionValue: '',
+        priority: 100,
+        isActive: true,
+    });
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState('');
-    const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+    const [filterActive, setFilterActive] = useState<string>('');
+    const [filterEventType, setFilterEventType] = useState('');
 
     useEffect(() => {
-        void load();
+        void loadData();
     }, []);
 
-    const load = async () => {
-        setLoading(true);
+    const loadData = async () => {
         try {
             const [rulesData, accountsData] = await Promise.all([
                 api.getPostingRules(),
                 api.getAccounts(),
             ]);
             setRules(rulesData.data ?? []);
-            setAccounts(accountsData ?? []);
-            // Default expand all groups
-            const groups: Record<string, boolean> = {};
-            for (const rule of (rulesData.data ?? [])) {
-                groups[rule.eventType] = true;
-            }
-            setExpandedGroups(groups);
+            setAccounts(accountsData);
         } catch (err) {
             console.error('Failed to load posting rules', err);
         } finally {
@@ -84,258 +98,317 @@ export default function PostingRulesPage() {
         }
     };
 
-    const startEdit = (rule: PostingRule) => {
-        setEditState({
-            ruleId: rule.id,
+    const openEdit = (rule: PostingRule) => {
+        setEditingRule(rule);
+        setForm({
             debitAccountId: rule.debitAccount.id,
             creditAccountId: rule.creditAccount.id,
-            isActive: rule.isActive,
+            conditionKey: rule.conditionKey,
+            conditionValue: rule.conditionValue ?? '',
             priority: rule.priority,
+            isActive: rule.isActive,
         });
         setSaveError('');
     };
 
-    const cancelEdit = () => {
-        setEditState(null);
-        setSaveError('');
-    };
-
-    const saveEdit = async () => {
-        if (!editState) return;
-        if (editState.debitAccountId === editState.creditAccountId) {
-            setSaveError('Debit and credit accounts must be different.');
-            return;
-        }
+    const handleSave = async () => {
+        if (!editingRule) return;
         setSaving(true);
         setSaveError('');
         try {
-            const rule = rules.find((r) => r.id === editState.ruleId);
-            await api.updatePostingRule(editState.ruleId, {
-                debitAccountId: editState.debitAccountId,
-                creditAccountId: editState.creditAccountId,
-                conditionKey: rule?.conditionKey ?? 'none',
-                conditionValue: rule?.conditionValue ?? undefined,
-                priority: editState.priority,
-                isActive: editState.isActive,
+            await api.updatePostingRule(editingRule.id, {
+                debitAccountId: form.debitAccountId,
+                creditAccountId: form.creditAccountId,
+                conditionKey: form.conditionKey,
+                conditionValue: form.conditionKey === 'none' ? null : form.conditionValue || null,
+                priority: form.priority,
+                isActive: form.isActive,
             });
-            await load();
-            setEditState(null);
+            await loadData();
+            setEditingRule(null);
         } catch (err: any) {
-            setSaveError(err.message ?? 'Failed to save posting rule.');
+            setSaveError(err.message ?? 'Failed to save rule');
         } finally {
             setSaving(false);
         }
     };
 
-    const toggleGroup = (eventType: string) => {
-        setExpandedGroups((prev) => ({ ...prev, [eventType]: !prev[eventType] }));
-    };
+    const filteredRules = useMemo(() => {
+        return rules.filter((r) => {
+            if (filterActive === 'active' && !r.isActive) return false;
+            if (filterActive === 'inactive' && r.isActive) return false;
+            if (filterEventType && r.eventType !== filterEventType) return false;
+            return true;
+        });
+    }, [rules, filterActive, filterEventType]);
 
-    // Group rules by event type
-    const grouped = rules.reduce<Record<string, PostingRule[]>>((acc, rule) => {
-        const key = rule.eventType;
-        if (!acc[key]) acc[key] = [];
-        acc[key].push(rule);
-        return acc;
-    }, {});
-
-    const accountLabel = (acc: Account) =>
-        acc.code ? `${acc.code} — ${acc.name}` : acc.name;
+    const columns = useMemo(
+        () => [
+            columnHelper.accessor('eventType', {
+                header: 'Event',
+                cell: (info) => {
+                    const v = info.getValue();
+                    return (
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${EVENT_TYPE_BADGE[v] ?? 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                            {EVENT_TYPE_LABELS[v] ?? v}
+                        </span>
+                    );
+                },
+            }),
+            columnHelper.accessor('conditionKey', {
+                header: 'Condition',
+                cell: (info) => {
+                    const key = info.getValue();
+                    const value = info.row.original.conditionValue;
+                    if (key === 'none') {
+                        return <span className="text-sm text-gray-400 italic">Default (no condition)</span>;
+                    }
+                    return (
+                        <span className="text-sm text-gray-700">
+                            {CONDITION_KEY_LABELS[key] ?? key}
+                            {value && (
+                                <span className="ml-1 font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">{value}</span>
+                            )}
+                        </span>
+                    );
+                },
+            }),
+            columnHelper.display({
+                id: 'debitAccount',
+                header: 'Debit Account',
+                cell: ({ row }) => (
+                    <div>
+                        <span className="block text-sm font-medium text-gray-900">{row.original.debitAccount.name}</span>
+                        {row.original.debitAccount.code && (
+                            <span className="block text-xs font-mono text-gray-400">{row.original.debitAccount.code}</span>
+                        )}
+                    </div>
+                ),
+            }),
+            columnHelper.display({
+                id: 'creditAccount',
+                header: 'Credit Account',
+                cell: ({ row }) => (
+                    <div>
+                        <span className="block text-sm font-medium text-gray-900">{row.original.creditAccount.name}</span>
+                        {row.original.creditAccount.code && (
+                            <span className="block text-xs font-mono text-gray-400">{row.original.creditAccount.code}</span>
+                        )}
+                    </div>
+                ),
+            }),
+            columnHelper.accessor('priority', {
+                header: 'Priority',
+                cell: (info) => (
+                    <span className="text-sm text-gray-500 font-mono">{info.getValue()}</span>
+                ),
+            }),
+            columnHelper.accessor('isActive', {
+                header: 'Status',
+                cell: (info) => {
+                    const active = info.getValue();
+                    return (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
+                            {active ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                            {active ? 'Active' : 'Inactive'}
+                        </span>
+                    );
+                },
+            }),
+            columnHelper.display({
+                id: 'actions',
+                header: '',
+                cell: ({ row }) => (
+                    <button
+                        onClick={() => openEdit(row.original)}
+                        className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                    >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        Edit
+                    </button>
+                ),
+            }),
+        ],
+        [],
+    );
 
     return (
         <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="max-w-[1100px] mx-auto space-y-6">
-                <div className="space-y-1">
-                    <p className="text-xs font-black uppercase tracking-[0.24em] text-gray-400">
-                        Accounting · Settings
-                    </p>
-                    <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="max-w-[1200px] mx-auto space-y-6">
+                {/* Header */}
+                <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm text-gray-400">
+                        <Link href="/dashboard/accounting" className="hover:text-gray-600 transition-colors">
+                            <ArrowLeft className="w-4 h-4 inline mr-1" />
+                            Accounting
+                        </Link>
+                        <span>/</span>
+                        <span className="text-gray-600 font-medium">Posting Rules</span>
+                    </div>
+                    <div className="flex items-end justify-between gap-6 flex-wrap">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center flex-shrink-0">
-                                <Settings2 className="w-5 h-5 text-indigo-700" />
+                            <div className="inline-flex rounded-2xl border border-indigo-100 bg-indigo-50 px-3 py-3 text-indigo-700">
+                                <Settings className="h-5 w-5" />
                             </div>
                             <div>
-                                <h1 className="text-2xl font-black tracking-tight text-gray-950">
-                                    Posting Rules
-                                </h1>
-                                <p className="text-sm text-gray-500">
-                                    Configure which accounts are debited and credited for each operational event.
+                                <h1 className="text-2xl font-black tracking-tight text-gray-950">Posting Rules</h1>
+                                <p className="text-sm text-gray-500 mt-0.5">
+                                    Configure how operational events automatically create accounting vouchers.
                                 </p>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {loading ? (
-                    <div className="text-center py-16 text-gray-400 text-sm">Loading posting rules…</div>
-                ) : Object.keys(grouped).length === 0 ? (
-                    <div className="text-center py-16 text-gray-400 text-sm">
-                        No posting rules configured. Bootstrap the default Chart of Accounts to seed defaults.
-                    </div>
-                ) : (
-                    <div className="space-y-4">
-                        {Object.entries(grouped).map(([eventType, groupRules]) => (
-                            <div key={eventType} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                                {/* Group header */}
-                                <button
-                                    onClick={() => toggleGroup(eventType)}
-                                    className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 transition-colors"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-sm font-black uppercase tracking-wide text-gray-700">
-                                            {EVENT_TYPE_LABELS[eventType] ?? eventType}
-                                        </span>
-                                        <span className="text-xs text-gray-400 font-medium">
-                                            {groupRules.length} rule{groupRules.length !== 1 ? 's' : ''}
-                                        </span>
-                                    </div>
-                                    {expandedGroups[eventType]
-                                        ? <ChevronUp className="w-4 h-4 text-gray-400" />
-                                        : <ChevronDown className="w-4 h-4 text-gray-400" />}
-                                </button>
-
-                                {/* Rules */}
-                                {expandedGroups[eventType] && (
-                                    <div className="divide-y divide-gray-100">
-                                        {groupRules.map((rule) => {
-                                            const isEditing = editState?.ruleId === rule.id;
-                                            return (
-                                                <div key={rule.id} className="px-5 py-4">
-                                                    {/* Condition label */}
-                                                    <div className="flex items-center gap-2 mb-3">
-                                                        <span className="text-xs font-bold uppercase tracking-widest text-gray-400">
-                                                            {CONDITION_KEY_LABELS[rule.conditionKey] ?? rule.conditionKey}
-                                                        </span>
-                                                        {rule.conditionValue && (
-                                                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">
-                                                                {rule.conditionValue}
-                                                            </span>
-                                                        )}
-                                                        <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-semibold border ${rule.isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
-                                                            {rule.isActive ? 'Active' : 'Inactive'}
-                                                        </span>
-                                                    </div>
-
-                                                    {isEditing ? (
-                                                        <div className="space-y-3">
-                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                                <div>
-                                                                    <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">
-                                                                        Debit Account
-                                                                    </label>
-                                                                    <select
-                                                                        value={editState.debitAccountId}
-                                                                        onChange={(e) => setEditState({ ...editState, debitAccountId: e.target.value })}
-                                                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                                    >
-                                                                        {accounts.map((acc) => (
-                                                                            <option key={acc.id} value={acc.id}>
-                                                                                {accountLabel(acc)}
-                                                                            </option>
-                                                                        ))}
-                                                                    </select>
-                                                                </div>
-                                                                <div>
-                                                                    <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">
-                                                                        Credit Account
-                                                                    </label>
-                                                                    <select
-                                                                        value={editState.creditAccountId}
-                                                                        onChange={(e) => setEditState({ ...editState, creditAccountId: e.target.value })}
-                                                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                                    >
-                                                                        {accounts.map((acc) => (
-                                                                            <option key={acc.id} value={acc.id}>
-                                                                                {accountLabel(acc)}
-                                                                            </option>
-                                                                        ))}
-                                                                    </select>
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-center gap-4">
-                                                                <label className="flex items-center gap-2 cursor-pointer">
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={editState.isActive}
-                                                                        onChange={(e) => setEditState({ ...editState, isActive: e.target.checked })}
-                                                                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                                                    />
-                                                                    <span className="text-sm text-gray-700">Active</span>
-                                                                </label>
-                                                                <div className="flex items-center gap-2">
-                                                                    <label className="text-sm text-gray-600">Priority</label>
-                                                                    <input
-                                                                        type="number"
-                                                                        min={1}
-                                                                        max={1000}
-                                                                        value={editState.priority}
-                                                                        onChange={(e) => setEditState({ ...editState, priority: Number(e.target.value) })}
-                                                                        className="w-20 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                            {saveError && (
-                                                                <p className="text-red-600 text-xs">{saveError}</p>
-                                                            )}
-                                                            <div className="flex gap-2">
-                                                                <button
-                                                                    onClick={saveEdit}
-                                                                    disabled={saving}
-                                                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-                                                                >
-                                                                    <Check className="w-3.5 h-3.5" />
-                                                                    {saving ? 'Saving…' : 'Save'}
-                                                                </button>
-                                                                <button
-                                                                    onClick={cancelEdit}
-                                                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
-                                                                >
-                                                                    <X className="w-3.5 h-3.5" />
-                                                                    Cancel
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="flex items-center gap-4 flex-wrap">
-                                                            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                                <div>
-                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Debit</p>
-                                                                    <p className="text-sm font-semibold text-gray-900">
-                                                                        {rule.debitAccount.code ? (
-                                                                            <span className="font-mono text-xs text-gray-500 mr-1">{rule.debitAccount.code}</span>
-                                                                        ) : null}
-                                                                        {rule.debitAccount.name}
-                                                                    </p>
-                                                                </div>
-                                                                <div>
-                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Credit</p>
-                                                                    <p className="text-sm font-semibold text-gray-900">
-                                                                        {rule.creditAccount.code ? (
-                                                                            <span className="font-mono text-xs text-gray-500 mr-1">{rule.creditAccount.code}</span>
-                                                                        ) : null}
-                                                                        {rule.creditAccount.name}
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                            <button
-                                                                onClick={() => startEdit(rule)}
-                                                                className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 font-medium px-3 py-1.5 rounded-lg hover:bg-indigo-50 transition-colors flex-shrink-0"
-                                                            >
-                                                                <Pencil className="w-3.5 h-3.5" />
-                                                                Edit
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
+                {/* Filters */}
+                <div className="flex flex-wrap gap-3">
+                    <select
+                        value={filterEventType}
+                        onChange={(e) => setFilterEventType(e.target.value)}
+                        className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                        <option value="">All events</option>
+                        {Object.entries(EVENT_TYPE_LABELS).map(([k, v]) => (
+                            <option key={k} value={k}>{v}</option>
                         ))}
+                    </select>
+                    <select
+                        value={filterActive}
+                        onChange={(e) => setFilterActive(e.target.value)}
+                        className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                        <option value="">All statuses</option>
+                        <option value="active">Active only</option>
+                        <option value="inactive">Inactive only</option>
+                    </select>
+                </div>
+
+                {/* Table */}
+                {loading ? (
+                    <div className="text-center py-16 text-gray-400">Loading posting rules...</div>
+                ) : (
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                        <DataTable
+                            tableId="posting-rules"
+                            title="Posting Rules"
+                            columns={columns}
+                            data={filteredRules}
+                        />
                     </div>
                 )}
             </div>
+
+            {/* Edit Modal */}
+            {editingRule && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+                        <div className="flex items-center justify-between p-5 border-b">
+                            <div>
+                                <h2 className="text-lg font-bold text-gray-900">Edit Posting Rule</h2>
+                                <p className="text-sm text-gray-500 mt-0.5">
+                                    {EVENT_TYPE_LABELS[editingRule.eventType] ?? editingRule.eventType}
+                                    {editingRule.conditionValue && (
+                                        <span className="ml-1 font-mono text-xs bg-gray-100 px-1 rounded">{editingRule.conditionValue}</span>
+                                    )}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setEditingRule(null)}
+                                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        <div className="p-5 space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Debit Account <span className="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                        value={form.debitAccountId}
+                                        onChange={(e) => setForm((f) => ({ ...f, debitAccountId: e.target.value }))}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    >
+                                        <option value="">Select account</option>
+                                        {accounts.map((a) => (
+                                            <option key={a.id} value={a.id}>
+                                                {a.code ? `[${a.code}] ` : ''}{a.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Credit Account <span className="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                        value={form.creditAccountId}
+                                        onChange={(e) => setForm((f) => ({ ...f, creditAccountId: e.target.value }))}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    >
+                                        <option value="">Select account</option>
+                                        {accounts.map((a) => (
+                                            <option key={a.id} value={a.id}>
+                                                {a.code ? `[${a.code}] ` : ''}{a.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        value={form.priority}
+                                        onChange={(e) => setForm((f) => ({ ...f, priority: Number(e.target.value) }))}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                    <p className="text-xs text-gray-400 mt-1">Lower number = higher priority</p>
+                                </div>
+                                <div className="flex flex-col justify-center">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={form.isActive}
+                                            onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
+                                            className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                        />
+                                        <span className="text-sm font-medium text-gray-700">Active</span>
+                                    </label>
+                                    <p className="text-xs text-gray-400 mt-1 ml-6">Inactive rules are skipped</p>
+                                </div>
+                            </div>
+
+                            {saveError && (
+                                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                                    {saveError}
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="flex justify-end gap-3 p-5 border-t">
+                            <button
+                                onClick={() => setEditingRule(null)}
+                                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSave}
+                                disabled={saving || !form.debitAccountId || !form.creditAccountId}
+                                className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                            >
+                                {saving ? 'Saving...' : 'Save Rule'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

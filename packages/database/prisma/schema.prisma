@@ -1,6 +1,7 @@
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -95,40 +96,45 @@ enum PostingEventStatus {
 }
 
 model User {
-  id                   String    @id @default(uuid())
-  email                String    @unique
-  passwordHash         String
-  name                 String?
-  failed_login_attempts Int      @default(0)
-  locked_until         DateTime?
-  created_at           DateTime  @default(now())
-  updated_at           DateTime  @updatedAt
+  id                String    @id @default(uuid())
+  email             String    @unique
+  passwordHash      String
+  name              String?
+  token_version     Int       @default(0)
+  email_verified_at DateTime?
+  totp_secret       String?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
 
   // Relations
-  tenantsOwned      Tenant[]            @relation("TenantOwner")
-  tenantMembers     TenantUser[]
-  cashierSessions   CashierSession[]
-  storeAccess       UserStoreAccess[]
-  storePermissions  UserStorePermission[]
-  fundTransfersInitiated FundTransfer[]  @relation("FundTransferInitiator")
-  fundTransfersReceived  FundTransfer[]  @relation("FundTransferReceiver")
-  refreshTokens          RefreshToken[]
-  passwordResetTokens    PasswordResetToken[]
-}
-
-model RefreshToken {
-  id         String   @id @default(uuid())
-  user_id    String
-  token_hash String   @unique
-  expires_at DateTime
-  created_at DateTime @default(now())
-
-  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
-  @@index([user_id])
+  tenantsOwned              Tenant[]                @relation("TenantOwner")
+  tenantMembers             TenantUser[]
+  cashierSessions           CashierSession[]
+  storeAccess               UserStoreAccess[]
+  storePermissions          UserStorePermission[]
+  fundTransfersInitiated    FundTransfer[]          @relation("FundTransferInitiator")
+  fundTransfersReceived     FundTransfer[]          @relation("FundTransferReceiver")
+  auditLogs                 AuditLog[]
+  passwordResetTokens       PasswordResetToken[]
+  emailVerificationTokens   EmailVerificationToken[]
+  sentInvitations           UserInvitation[]        @relation("InvitationSender")
+  feedbacks                 Feedback[]
 }
 
 model PasswordResetToken {
+  id         String    @id @default(uuid())
+  user_id    String
+  token_hash String    @unique
+  expires_at DateTime
+  used_at    DateTime?
+  created_at DateTime  @default(now())
+
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+}
+
+model EmailVerificationToken {
   id         String   @id @default(uuid())
   user_id    String
   token_hash String   @unique
@@ -140,11 +146,69 @@ model PasswordResetToken {
   @@index([user_id])
 }
 
+model UserInvitation {
+  id          String    @id @default(uuid())
+  tenant_id   String
+  email       String
+  role        UserRole  @default(CASHIER)
+  token_hash  String    @unique
+  invited_by  String
+  expires_at  DateTime
+  accepted_at DateTime?
+  created_at  DateTime  @default(now())
+
+  tenant      Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  invitedBy   User      @relation("InvitationSender", fields: [invited_by], references: [id])
+
+  @@index([tenant_id, email])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  tenant_id   String?
+  user_id     String?
+  action      String
+  entity      String
+  entity_id   String?
+  payload     Json?
+  ip_address  String?
+  user_agent  String?
+  created_at  DateTime @default(now())
+
+  user        User?    @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, entity, created_at])
+  @@index([user_id, created_at])
+  @@index([entity, entity_id])
+}
+
 model Tenant {
-  id         String   @id @default(uuid())
-  name       String
-  owner_id   String
-  created_at DateTime @default(now())
+  id                   String   @id @default(uuid())
+  name                 String
+  owner_id             String
+  created_at           DateTime @default(now())
+  storefront_slug      String?  @unique
+  storefront_enabled   Boolean  @default(false)
+  storefront_banner    String?
+  brand_primary_color  String?
+  brand_logo_url       String?
+  brand_favicon_url    String?
+  brand_business_name  String?
+  default_vat_rate     Decimal? @db.Decimal(5, 2)  // e.g. 15.00 for 15% BD VAT
+  vat_registration_no  String?                      // NBR VAT registration number
+  business_tin         String?                      // Tax Identification Number
+  loyalty_points_enabled Boolean  @default(false)
+  loyalty_earn_rate      Decimal? @db.Decimal(8, 4)  // points per BDT (e.g. 1.0 = 1 point per ৳1)
+  loyalty_redeem_rate    Decimal? @db.Decimal(8, 4)  // BDT value per point (e.g. 0.01 = 1 point = ৳0.01)
+  loyalty_min_redeem     Int?                          // minimum points required to redeem
+
+  sms_enabled          Boolean  @default(false)
+  sms_on_sale          Boolean  @default(false)  // send SMS receipt after each sale
+  sms_on_low_stock     Boolean  @default(false)  // send SMS for low stock alerts
+
+  report_weekly_enabled  Boolean  @default(false)
+  report_monthly_enabled Boolean  @default(false)
+  report_email           String?  // override email for reports (defaults to owner email)
 
   // Relations
   owner      User     @relation("TenantOwner", fields: [owner_id], references: [id])
@@ -154,6 +218,8 @@ model Tenant {
   subscription TenantSubscription?
   billingEvents BillingEvent[]
 
+  apiKeys         ApiKey[]
+  deliveryOrders  DeliveryOrder[]
   products   Product[]
   productGroups ProductGroup[]
   productSubgroups ProductSubgroup[]
@@ -188,6 +254,13 @@ model Tenant {
   postingRules      PostingRule[]
   postingEvents     PostingEvent[]
   warrantyClaims    WarrantyClaim[]
+  invitations       UserInvitation[]
+  feedbacks         Feedback[]
+  storefrontOrders  StorefrontOrder[]
+  bomRecipes      BomRecipe[]
+  productionJobs  ProductionJob[]
+  loyaltyTransactions LoyaltyTransaction[]
+  discountCodes   DiscountCode[]
 }
 
 model TenantUser {
@@ -293,13 +366,14 @@ model ProductSubgroup {
 }
 
 model Product {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   tenant_id   String
   group_id    String?
   subgroup_id String?
   name        String
   sku         String?
-  price       Decimal   @default(0) @db.Decimal(12, 2)
+  price       Decimal  @default(0) @db.Decimal(12, 2)
+  vat_rate    Decimal? @db.Decimal(5, 2)  // product-specific VAT rate; null = use tenant default
   warranty_enabled Boolean @default(false)
   warranty_duration_days Int?
   reorder_level Int?
@@ -327,10 +401,15 @@ model Product {
   purchaseItems PurchaseItem[]
   prices      ProductPrice[]
   warrantyClaims WarrantyClaim[]
+  storefrontOrderItems StorefrontOrderItem[]
+  bomRecipe    BomRecipe?
+  bomComponents BomComponent[] @relation("BomComponent")
 
   @@unique([tenant_id, sku])
   @@index([tenant_id, group_id])
   @@index([tenant_id, subgroup_id])
+  @@index([tenant_id, deleted_at])
+  @@index([tenant_id, reorder_level])
 }
 
 model ProductStock {
@@ -566,7 +645,7 @@ model StockTakeCountLine {
 }
 
 model Supplier {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   tenant_id   String
   name        String
   phone       String?
@@ -604,6 +683,8 @@ model Purchase {
   returns         PurchaseReturn[]
 
   @@unique([tenant_id, purchase_number])
+  @@index([tenant_id, created_at])
+  @@index([tenant_id, store_id])
 }
 
 model PurchaseItem {
@@ -676,8 +757,12 @@ model Sale {
   payments       PaymentRecord[]
   returns        SalesReturn[]
   warrantyClaims WarrantyClaim[]
+  deliveryOrders DeliveryOrder[]
 
   @@unique([tenant_id, serial_number])
+  @@index([tenant_id, created_at])
+  @@index([tenant_id, store_id])
+  @@index([tenant_id, customer_id])
 }
 
 model Customer {
@@ -695,7 +780,9 @@ model Customer {
   credit_limit         Decimal?      @db.Decimal(12, 2)
   default_discount_pct Decimal?      @db.Decimal(5, 2)
   total_spent          Decimal       @default(0) @db.Decimal(12, 2)
+  nid                  String?
   segment_category     String        @default("Regular")
+  loyalty_points       Int           @default(0)
   created_at           DateTime      @default(now())
   deleted_at           DateTime?
 
@@ -707,9 +794,12 @@ model Customer {
   salesOrders      SalesOrder[]
   quotations       Quotation[]
   warrantyClaims   WarrantyClaim[]
+  loyaltyTransactions LoyaltyTransaction[]
 
   @@unique([tenant_id, phone])
   @@unique([tenant_id, customer_code])
+  @@index([tenant_id, deleted_at])
+  @@index([tenant_id, email])
 }
 
 model CustomerGroup {
@@ -943,6 +1033,8 @@ model SaleItem {
   sale          Sale     @relation(fields: [sale_id], references: [id], onDelete: Cascade)
   product       Product  @relation(fields: [product_id], references: [id])
   returns       SalesReturnItem[]
+
+  @@index([sale_id])
 }
 
 model SalesReturn {
@@ -1000,6 +1092,8 @@ model SalesOrder {
   deposits       OrderDeposit[]
 
   @@unique([tenant_id, order_number])
+  @@index([tenant_id, status])
+  @@index([tenant_id, created_at])
 }
 
 model SalesOrderItem {
@@ -1266,4 +1360,186 @@ model WarrantyClaim {
   @@index([tenant_id, serial_number])
   @@index([tenant_id, product_id])
   @@index([tenant_id, customer_id])
+}
+
+model Feedback {
+  id         String   @id @default(cuid())
+  tenantId   String
+  userId     String
+  type       String   // 'bug' | 'feature' | 'general'
+  message    String
+  page       String?
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@map("feedbacks")
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  tenantId   String
+  name       String
+  key_hash   String    @unique  // SHA-256 hash of the actual key
+  key_prefix String             // first 8 chars for display (e.g. "rsk_live")
+  last_used  DateTime?
+  created_at DateTime  @default(now())
+  revoked_at DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("api_keys")
+}
+
+model StorefrontOrder {
+  id            String   @id @default(cuid())
+  tenantId      String
+  customerName  String
+  customerEmail String
+  customerPhone String?
+  items         StorefrontOrderItem[]
+  totalAmount   Decimal  @db.Decimal(12, 2)
+  status        String   @default("PENDING")
+  notes         String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("storefront_orders")
+}
+
+model StorefrontOrderItem {
+  id           String  @id @default(cuid())
+  orderId      String
+  productId    String
+  quantity     Int
+  priceAtOrder Decimal @db.Decimal(12, 2)
+
+  order   StorefrontOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id])
+
+  @@map("storefront_order_items")
+}
+
+model DeliveryOrder {
+  id              String    @id @default(cuid())
+  tenantId        String
+  saleId          String?
+  customerName    String
+  customerPhone   String?
+  deliveryAddress String
+  driverName      String?
+  driverPhone     String?
+  status          String    @default("PENDING")
+  notes           String?
+  scheduledAt     DateTime?
+  deliveredAt     DateTime?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sale   Sale?  @relation(fields: [saleId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("delivery_orders")
+}
+
+// Bill of Materials: defines what components go into making 1 unit of a product
+model BomRecipe {
+  id           String   @id @default(cuid())
+  tenantId     String
+  productId    String   @unique  // the manufactured/output product
+  outputQty    Int      @default(1)
+  notes        String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product   Product      @relation(fields: [productId], references: [id])
+  components BomComponent[]
+  productionJobs ProductionJob[]
+
+  @@index([tenantId])
+  @@map("bom_recipes")
+}
+
+model BomComponent {
+  id        String   @id @default(cuid())
+  recipeId  String
+  productId String   // the raw material / component product
+  quantity  Decimal  @db.Decimal(12, 4)
+
+  recipe    BomRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  product   Product   @relation("BomComponent", fields: [productId], references: [id])
+
+  @@map("bom_components")
+}
+
+// A production run: manufacture N units of a product
+model ProductionJob {
+  id           String   @id @default(cuid())
+  tenantId     String
+  recipeId     String
+  productId    String   // output product (denormalised for easy querying)
+  quantity     Int
+  status       String   @default("DRAFT")  // DRAFT | IN_PROGRESS | COMPLETED | CANCELLED
+  notes        String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  tenant  Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recipe  BomRecipe @relation(fields: [recipeId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("production_jobs")
+}
+
+model LoyaltyTransaction {
+  id          String   @id @default(cuid())
+  tenantId    String
+  customerId  String
+  saleId      String?
+  type        String   // EARN | REDEEM | ADJUST
+  points      Int      // positive = earn, negative = redeem/adjust
+  description String?
+  created_at  DateTime @default(now())
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, customerId])
+  @@index([customerId])
+  @@map("loyalty_transactions")
+}
+
+model DiscountCode {
+  id           String    @id @default(cuid())
+  tenantId     String
+  code         String
+  name         String
+  type         String    // PERCENTAGE | FIXED
+  value        Decimal   @db.Decimal(10, 2)  // percent (0-100) or fixed BDT amount
+  min_purchase Decimal?  @db.Decimal(12, 2)  // minimum cart total to apply
+  max_discount Decimal?  @db.Decimal(12, 2)  // cap for PERCENTAGE type
+  usage_limit  Int?                           // null = unlimited
+  used_count   Int       @default(0)
+  valid_from   DateTime?
+  valid_until  DateTime?
+  is_active    Boolean   @default(true)
+  created_at   DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@index([tenantId, is_active])
+  @@map("discount_codes")
 }

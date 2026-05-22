@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Building2, Loader2, Lock, Mail, Store } from 'lucide-react';
 import { api } from '@/lib/api';
+import { formatBDT } from '@/lib/format';
 
 type Plan = {
     code: 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM';
@@ -144,12 +145,19 @@ export default function SignupPage() {
                                                 <span className="text-xs font-bold uppercase tracking-widest text-gray-500">{plan.code}</span>
                                             </div>
                                             <p className="mt-2 text-sm text-gray-500">{plan.description}</p>
-                                            <p className="mt-3 text-lg font-black text-gray-900">BDT {plan.monthly_price}<span className="text-xs font-bold text-gray-400 ml-1">/ month</span></p>
+                                            <p className="mt-3 text-lg font-black text-gray-900">{formatBDT(plan.monthly_price)}<span className="text-xs font-bold text-gray-400 ml-1">/ month</span></p>
                                         </button>
                                     );
                                 })}
                             </div>
                         </div>
+
+                        <p className="md:col-span-2 text-xs text-gray-400 text-center leading-relaxed">
+                            By creating a workspace you agree to our{' '}
+                            <Link href="/terms" className="text-blue-600 hover:underline font-medium">Terms of Service</Link>
+                            {' '}and{' '}
+                            <Link href="/privacy" className="text-blue-600 hover:underline font-medium">Privacy Policy</Link>.
+                        </p>
 
                         <div className="md:col-span-2">
                             <button type="submit" disabled={isLoading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed group">

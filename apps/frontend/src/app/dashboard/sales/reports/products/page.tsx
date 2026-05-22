@@ -5,6 +5,7 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { Package } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { api } from '../../../../../lib/api';
+import { formatBDT } from '../../../../../lib/format';
 
 interface ProductRow {
     product: {
@@ -115,7 +116,7 @@ export default function SalesByProductPage() {
             }),
             columnHelper.accessor('revenue', {
                 header: 'Revenue',
-                cell: (info) => Number(info.getValue()).toFixed(2),
+                cell: (info) => formatBDT(Number(info.getValue())),
                 size: 130,
             }),
             columnHelper.accessor('revenueShare', {
@@ -153,7 +154,7 @@ export default function SalesByProductPage() {
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Revenue</div>
                         <div className="text-2xl font-black text-blue-700 mt-2">
-                            {Number(summary?.totalRevenue ?? 0).toFixed(2)}
+                            {formatBDT(Number(summary?.totalRevenue ?? 0))}
                         </div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">

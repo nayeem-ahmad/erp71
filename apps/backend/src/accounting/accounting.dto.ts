@@ -282,3 +282,19 @@ export class ListPostingExceptionsQueryDto {
     @Min(1)
     limit?: number;
 }
+
+const EXPORT_FORMATS = ['tally', 'quickbooks'] as const;
+
+export class ExportLedgerQueryDto {
+    @IsString()
+    @IsIn(EXPORT_FORMATS)
+    format: typeof EXPORT_FORMATS[number];
+
+    @IsOptional()
+    @IsDateString()
+    from?: string;
+
+    @IsOptional()
+    @IsDateString()
+    to?: string;
+}

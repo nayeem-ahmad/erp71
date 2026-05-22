@@ -4,8 +4,10 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, CircleCheck, FileText, Plus, Scale, Trash2 } from 'lucide-react';
+import { HelpTooltip } from '@/components/HelpTooltip';
 import { AccountCategory, VoucherType } from '@retail-saas/shared-types';
 import { api } from '../../../../lib/api';
+import { formatBDT } from '../../../../lib/format';
 
 type VoucherAccount = {
     id: string;
@@ -296,7 +298,7 @@ function AccountingVouchersPageContent() {
                         </div>
                         <div className="space-y-2">
                             <p className="text-xs font-black uppercase tracking-[0.24em] text-gray-400">Story 30.5</p>
-                            <h1 className="text-2xl font-black tracking-tight">Voucher Entry Workbench</h1>
+                            <h1 className="text-2xl font-black tracking-tight inline-flex items-center gap-2">Voucher Entry Workbench <HelpTooltip text="Journal vouchers record financial transactions as debit/credit pairs. Every transaction must balance — total debits must equal total credits." /></h1>
                             <p className="text-sm text-gray-500 max-w-2xl">
                                 Build balanced multi-line vouchers with live debit and credit totals, account-aware row controls, and server-issued numbering.
                             </p>
@@ -502,7 +504,7 @@ function AccountingVouchersPageContent() {
                                 <div className={`rounded-2xl border px-4 py-4 ${isBalanced ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-red-200 bg-red-50 text-red-900'}`}>
                                     <p className="text-xs font-black uppercase tracking-[0.24em]">Balance</p>
                                     <p className="mt-2 text-2xl font-black tracking-tight">
-                                        {Math.abs(debitTotal - creditTotal).toFixed(2)}
+                                        {formatBDT(Math.abs(debitTotal - creditTotal))}
                                     </p>
                                     <p className="mt-2 text-sm font-medium">
                                         {isBalanced ? 'Voucher is balanced and ready for submission.' : 'Voucher must balance before it can be saved.'}
@@ -617,7 +619,7 @@ function BalanceStat({ label, value, tone }: { label: string; value: number; ton
     return (
         <div className={`rounded-2xl border px-4 py-4 ${classes}`}>
             <p className="text-xs font-black uppercase tracking-[0.24em]">{label}</p>
-            <p className="mt-2 text-2xl font-black tracking-tight">{value.toFixed(2)}</p>
+            <p className="mt-2 text-2xl font-black tracking-tight">{formatBDT(value)}</p>
         </div>
     );
 }

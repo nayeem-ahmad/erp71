@@ -1,6 +1,51 @@
-const DEFAULT_PROD_API_URL = 'https://retail-saas-backend.onrender.com';
-const API_URL = process.env.NEXT_PUBLIC_API_URL
-    || (process.env.NODE_ENV === 'production' ? DEFAULT_PROD_API_URL : 'http://localhost:4000');
+const DEFAULT_PROD_API_BASE = 'https://retail-saas-backend.onrender.com';
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE
+    || (process.env.NODE_ENV === 'production' ? DEFAULT_PROD_API_BASE : 'http://localhost:4000')) + '/api/v1';
+
+export async function fetchBlobWithAuth(endpoint: string, options: RequestInit = {}): Promise<{ blob: Blob; filename: string }> {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const tenantId = typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null;
+    const storeId = typeof window !== 'undefined' ? localStorage.getItem('store_id') : null;
+
+    const headers = new Headers(options.headers);
+    if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+    }
+    if (tenantId) {
+        headers.set('x-tenant-id', tenantId);
+    }
+    if (storeId) {
+        headers.set('x-store-id', storeId);
+    }
+
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+        ...options,
+        headers,
+    });
+
+    if (!response.ok) {
+        let message = `API error: ${response.statusText}`;
+        try {
+            const errorBody = await response.json();
+            const apiMessage = Array.isArray(errorBody?.message)
+                ? errorBody.message.join(', ')
+                : errorBody?.message || errorBody?.error;
+            if (apiMessage) {
+                message = apiMessage;
+            }
+        } catch {
+            // Fall back to the response status text when no JSON error payload is available.
+        }
+        throw new Error(message);
+    }
+
+    const disposition = response.headers.get('Content-Disposition') ?? '';
+    const filenameMatch = disposition.match(/filename="([^"]+)"/);
+    const filename = filenameMatch ? filenameMatch[1] : 'export';
+
+    const blob = await response.blob();
+    return { blob, filename };
+}
 
 export async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
@@ -18,7 +63,7 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit = {})
         headers.set('x-store-id', storeId);
     }
 
-    const response = await fetch(`${API_URL}${endpoint}`, {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
         ...options,
         headers,
     });
@@ -42,18 +87,22 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit = {})
         throw new Error(message);
     }
 
-    return response.json();
+    const json = await response.json();
+    // Backend wraps all responses in { data: T } — unwrap transparently
+    return 'data' in json ? json.data : json;
 }
 
 export const api = {
-    getProducts: (params?: { groupId?: string; subgroupId?: string; uncategorized?: boolean }) => {
+    getProducts: (params?: { groupId?: string; subgroupId?: string; uncategorized?: boolean; page?: number; limit?: number }) => {
         const query = new URLSearchParams();
         if (params?.groupId) query.set('groupId', params.groupId);
         if (params?.subgroupId) query.set('subgroupId', params.subgroupId);
         if (params?.uncategorized) query.set('uncategorized', 'true');
-        return fetchWithAuth(`/products${query.toString() ? `?${query.toString()}` : ''}`);
+        // Default to a large limit so callers expecting a flat array still work
+        query.set('limit', String(params?.limit ?? 100));
+        if (params?.page) query.set('page', String(params.page));
+        return fetchWithAuth(`/products?${query.toString()}`).then((r: any) => r?.items ?? r);
     },
-    getProductStats: (): Promise<{ lowStockCount: number }> => fetchWithAuth('/products/stats'),
     createProduct: (data: any) => fetchWithAuth('/products', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -224,6 +273,12 @@ export const api = {
         if (params?.to) query.set('to', params.to);
         return fetchWithAuth(`/sales-reports/by-product${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    getConsolidatedReport: (params?: { from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        return fetchWithAuth(`/sales-reports/consolidated${query.toString() ? `?${query.toString()}` : ''}`);
+    },
     getShrinkageSummary: (params?: { warehouseId?: string; reasonId?: string; productId?: string; groupId?: string; subgroupId?: string; from?: string; to?: string }) => {
         const query = new URLSearchParams();
         if (params?.warehouseId) query.set('warehouseId', params.warehouseId);
@@ -249,11 +304,26 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     getSales: () => fetchWithAuth('/sales'),
-    getCustomers: () => fetchWithAuth('/customers'),
+    getCustomers: (params?: { page?: number; limit?: number; search?: string }) => {
+        const query = new URLSearchParams();
+        query.set('limit', String(params?.limit ?? 100));
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.search) query.set('search', params.search);
+        return fetchWithAuth(`/customers?${query.toString()}`).then((r: any) => r?.items ?? r);
+    },
     getCustomer: (id: string) => fetchWithAuth(`/customers/${id}`),
+    getCustomerPurchaseHistory: (id: string, params?: { page?: number; limit?: number; from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.limit) query.set('limit', String(params.limit));
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        return fetchWithAuth(`/customers/${id}/history${query.toString() ? `?${query.toString()}` : ''}`);
+    },
     getCustomerHistory: (id: string) => fetchWithAuth(`/customers/${id}/history`),
     getCustomerSegmentStats: () => fetchWithAuth('/customers/segment-stats'),
     runCustomerSegmentation: () => fetchWithAuth('/customers/run-segmentation', { method: 'POST' }),
+    evaluateCustomerSegments: () => fetchWithAuth('/customers/segments/evaluate', { method: 'POST' }),
     createCustomer: (data: any) => fetchWithAuth('/customers', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -367,7 +437,14 @@ export const api = {
         if (params?.isActive !== undefined) query.set('isActive', String(params.isActive));
         return fetchWithAuth(`/accounting/settings/posting-rules${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    updatePostingRule: (id: string, data: any) => fetchWithAuth(`/accounting/settings/posting-rules/${id}`, {
+    updatePostingRule: (id: string, data: {
+        debitAccountId: string;
+        creditAccountId: string;
+        conditionKey: string;
+        conditionValue?: string | null;
+        priority: number;
+        isActive: boolean;
+    }) => fetchWithAuth(`/accounting/settings/posting-rules/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
@@ -385,6 +462,13 @@ export const api = {
     retryPostingException: (id: string) => fetchWithAuth(`/accounting/reconciliation/posting-exceptions/${id}/retry`, {
         method: 'POST',
     }),
+    exportAccountingLedger: (params: { format: 'tally' | 'quickbooks'; from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        query.set('format', params.format);
+        if (params.from) query.set('from', params.from);
+        if (params.to) query.set('to', params.to);
+        return fetchBlobWithAuth(`/accounting/export?${query.toString()}`);
+    },
     getReturns: () => fetchWithAuth('/sales-returns'),
     getReturn: (id: string) => fetchWithAuth(`/sales-returns/${id}`),
     createReturn: (data: any) => fetchWithAuth('/sales-returns', {
@@ -481,6 +565,21 @@ export const api = {
     }),
     // Sales detail
     getSale: (id: string) => fetchWithAuth(`/sales/${id}`),
+    getSaleInvoice: (id: string) => fetchWithAuth(`/sales/${id}/invoice`),
+    getDiscountCodes: () => fetchWithAuth('/discount-codes'),
+    createDiscountCode: (data: any) => fetchWithAuth('/discount-codes', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    toggleDiscountCode: (id: string) => fetchWithAuth(`/discount-codes/${id}/toggle`, { method: 'PATCH' }),
+    deleteDiscountCode: (id: string) => fetchWithAuth(`/discount-codes/${id}`, { method: 'DELETE' }),
+    validateDiscountCode: (code: string, cartTotal: number) => fetchWithAuth('/discount-codes/validate', {
+        method: 'POST',
+        body: JSON.stringify({ code, cart_total: cartTotal }),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    useDiscountCode: (code: string) => fetchWithAuth(`/discount-codes/${encodeURIComponent(code)}/use`, { method: 'POST' }),
     updateSale: (id: string, data: any) => fetchWithAuth(`/sales/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
@@ -505,7 +604,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     getCashTransactions: (sessionId: string) => fetchWithAuth(`/cashier-sessions/${sessionId}/cash-transactions`),
-    login: (data: any) => fetch(`${API_URL}/auth/login`, {
+    login: (data: any) => fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
@@ -513,7 +612,7 @@ export const api = {
         if (!res.ok) throw new Error('Login failed');
         return res.json();
     }),
-    signup: (data: any) => fetch(`${API_URL}/auth/signup`, {
+    signup: (data: any) => fetch(`${API_BASE}/auth/signup`, {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
@@ -522,7 +621,7 @@ export const api = {
         if (!res.ok) throw new Error(body?.message || 'Signup failed');
         return body;
     }),
-    getSubscriptionPlans: () => fetch(`${API_URL}/auth/plans`).then(async res => {
+    getSubscriptionPlans: () => fetch(`${API_BASE}/auth/plans`).then(async res => {
         const body = await res.json().catch(() => null);
         if (!res.ok) throw new Error(body?.message || 'Failed to load plans');
         return body;
@@ -555,6 +654,27 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     getMe: () => fetchWithAuth('/auth/me'),
+    updateProfile: (data: { name: string }) => fetchWithAuth('/auth/me', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    changePassword: (data: { currentPassword: string; newPassword: string }) => fetchWithAuth('/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    setup2FA: () => fetchWithAuth('/auth/2fa/setup', { method: 'POST' }),
+    enable2FA: (code: string) => fetchWithAuth('/auth/2fa/enable', {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    disable2FA: (code: string) => fetchWithAuth('/auth/2fa/disable', {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     // Warranty Claims
     lookupWarrantySerial: (serialNumber: string) =>
         fetchWithAuth(`/warranty-claims/lookup?serialNumber=${encodeURIComponent(serialNumber)}`),

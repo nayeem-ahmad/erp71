@@ -1,6 +1,16 @@
 import { render, screen } from '@testing-library/react';
 import AccountingPage from './page';
 
+jest.mock('../../../lib/api', () => ({
+    api: {
+        exportAccountingLedger: jest.fn(),
+    },
+}));
+
+jest.mock('../../../components/HelpTooltip', () => ({
+    HelpTooltip: () => null,
+}));
+
 jest.mock('next/link', () => {
     return ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>;
 });
@@ -9,8 +19,12 @@ jest.mock('lucide-react', () => ({
     ArrowRight: () => <span data-testid="icon-arrow-right" />,
     BookOpen: () => <span data-testid="icon-book-open" />,
     Calculator: () => <span data-testid="icon-calculator" />,
+    ChevronDown: () => <span data-testid="icon-chevron-down" />,
     ClipboardList: () => <span data-testid="icon-clipboard-list" />,
+    Download: () => <span data-testid="icon-download" />,
     FileText: () => <span data-testid="icon-file-text" />,
+    Settings: () => <span data-testid="icon-settings" />,
+    AlertTriangle: () => <span data-testid="icon-alert-triangle" />,
 }));
 
 describe('AccountingPage — Story 30.1', () => {

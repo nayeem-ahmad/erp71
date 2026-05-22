@@ -1,16 +1,18 @@
-import { Controller, Post, Body, UseGuards, Request, Get } from '@nestjs/common';
+import { Controller, Post, Patch, Body, UseGuards, Request, Get, Query, HttpCode, HttpStatus } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { SignupDto, LoginDto, CreateStoreDto, RefreshTokenDto, ForgotPasswordDto, ResetPasswordDto } from './auth.dto';
+import { SignupDto, LoginDto, CreateStoreDto, UpdateProfileDto, ChangePasswordDto } from './auth.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { TotpService } from './totp.service';
 
-@ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-    constructor(private authService: AuthService) { }
+    constructor(
+        private authService: AuthService,
+        private totpService: TotpService,
+    ) { }
 
-    @Throttle({ default: { ttl: 60_000, limit: 10 } })
+    @Throttle({ default: { ttl: 60_000, limit: 5 } })
     @Post('signup')
     async signup(@Body() dto: SignupDto) {
         return this.authService.signup(dto);
@@ -20,6 +22,19 @@ export class AuthController {
     @Post('login')
     async login(@Body() dto: LoginDto) {
         return this.authService.login(dto);
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @HttpCode(HttpStatus.NO_CONTENT)
+    @Post('logout')
+    async logout(@Request() req) {
+        await this.authService.logout(req.user.userId);
+    }
+
+    @Throttle({ default: { ttl: 60_000, limit: 10 } })
+    @Post('demo')
+    async demoLogin() {
+        return this.authService.demoLogin();
     }
 
     @Get('plans')
@@ -44,32 +59,66 @@ export class AuthController {
         });
     }
 
-    @Post('refresh')
-    async refresh(@Body() dto: RefreshTokenDto) {
-        return this.authService.refreshTokens(dto.refresh_token);
-    }
-
-    @UseGuards(JwtAuthGuard)
-    @Post('logout')
-    async logout(@Body() dto: RefreshTokenDto) {
-        return this.authService.logout(dto.refresh_token);
-    }
-
-    @Throttle({ default: { ttl: 60_000, limit: 5 } })
-    @Post('forgot-password')
-    async forgotPassword(@Body() dto: ForgotPasswordDto) {
-        return this.authService.forgotPassword(dto.email);
-    }
-
-    @Throttle({ default: { ttl: 60_000, limit: 5 } })
-    @Post('reset-password')
-    async resetPassword(@Body() dto: ResetPasswordDto) {
-        return this.authService.resetPassword(dto.token, dto.password);
-    }
-
     @UseGuards(JwtAuthGuard)
     @Get('me')
     async getMe(@Request() req) {
         return this.authService.getMe(req.user.userId);
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Patch('me')
+    async updateProfile(@Request() req, @Body() dto: UpdateProfileDto) {
+        return this.authService.updateProfile(req.user.userId, dto);
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Throttle({ default: { ttl: 60_000, limit: 5 } })
+    @Post('change-password')
+    async changePassword(@Request() req, @Body() dto: ChangePasswordDto) {
+        await this.authService.changePassword(req.user.userId, dto);
+        return { message: 'Password changed successfully' };
+    }
+
+    // #67 Email verification
+    @Throttle({ default: { ttl: 60_000, limit: 10 } })
+    @Get('verify-email')
+    async verifyEmail(@Query('token') token: string) {
+        await this.authService.verifyEmail(token);
+        return { message: 'Email verified successfully' };
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Throttle({ default: { ttl: 60_000, limit: 3 } })
+    @Post('resend-verification')
+    async resendVerification(@Request() req) {
+        await this.authService.sendVerificationEmail(req.user.userId);
+        return { message: 'Verification email sent' };
+    }
+
+    // #69 TOTP 2FA
+    @UseGuards(JwtAuthGuard)
+    @Post('2fa/setup')
+    async totpSetup(@Request() req) {
+        return this.totpService.setupTotp(req.user.userId, req.user.email);
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Post('2fa/enable')
+    async totpEnable(@Request() req, @Body() body: { code: string }) {
+        await this.totpService.enableTotp(req.user.userId, body.code);
+        return { message: '2FA enabled successfully' };
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Post('2fa/disable')
+    async totpDisable(@Request() req, @Body() body: { code: string }) {
+        await this.totpService.disableTotp(req.user.userId, body.code);
+        return { message: '2FA disabled successfully' };
+    }
+
+    @Throttle({ default: { ttl: 60_000, limit: 10 } })
+    @Post('2fa/verify')
+    async totpVerify(@Body() body: { userId: string; code: string }) {
+        return this.totpService.verifyTotpForLogin(body.userId, body.code);
     }
 }

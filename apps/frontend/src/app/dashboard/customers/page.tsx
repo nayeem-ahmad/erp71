@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Users, Plus, Eye, RefreshCw, Crown, AlertTriangle, UserCheck } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { formatBDT, formatDate } from '../../../lib/format';
 import AddCustomerModal from './AddCustomerModal';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
@@ -16,6 +17,7 @@ interface Customer {
     customer_type?: string | null;
     total_spent?: string | number | null;
     segment_category?: string | null;
+    loyalty_points?: number | null;
     created_at: string;
     customerGroup?: { name: string } | null;
     territory?: { name: string } | null;
@@ -54,6 +56,8 @@ export default function CustomersPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [segmentStats, setSegmentStats] = useState<SegmentStats | null>(null);
     const [runningSegmentation, setRunningSegmentation] = useState(false);
+    const [evaluating, setEvaluating] = useState(false);
+    const [evalMessage, setEvalMessage] = useState('');
 
     useEffect(() => {
         loadCustomers();
@@ -63,7 +67,8 @@ export default function CustomersPage() {
     const loadCustomers = async () => {
         try {
             const data = await api.getCustomers();
-            setCustomers(data);
+            // API now returns paginated result; support both array and { items } shapes
+            setCustomers(Array.isArray(data) ? data : (data?.items ?? data));
         } catch (error) {
             console.error('Failed to load customers', error);
         } finally {
@@ -95,6 +100,20 @@ export default function CustomersPage() {
     const handleAddCustomer = async (data: any) => {
         await api.createCustomer(data);
         loadCustomers();
+    };
+
+    const handleEvaluateSegments = async () => {
+        setEvaluating(true);
+        setEvalMessage('');
+        try {
+            const result = await api.evaluateCustomerSegments();
+            setEvalMessage(`Segmentation complete — ${result.updated} customer(s) updated.`);
+            await loadCustomers();
+        } catch (error: any) {
+            setEvalMessage(error.message || 'Failed to evaluate segments.');
+        } finally {
+            setEvaluating(false);
+        }
     };
 
     const columns: ColumnDef<Customer, any>[] = useMemo(
@@ -156,11 +175,25 @@ export default function CustomersPage() {
                 header: 'Total Spent',
                 cell: (info) => (
                     <span className="text-sm font-black text-blue-600">
-                        ৳{Number(info.getValue() || 0).toFixed(2)}
+                        {formatBDT(Number(info.getValue() || 0))}
                     </span>
                 ),
                 sortingFn: (a, b) => Number(a.getValue('total_spent') || 0) - Number(b.getValue('total_spent') || 0),
                 size: 120,
+            }),
+            columnHelper.accessor('loyalty_points', {
+                header: 'Points',
+                cell: (info) => {
+                    const pts = info.getValue();
+                    if (pts == null) return <span className="text-sm text-gray-400">—</span>;
+                    return (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 border border-purple-200 px-2.5 py-0.5 text-xs font-bold text-purple-700">
+                            {Number(pts).toLocaleString()} pts
+                        </span>
+                    );
+                },
+                sortingFn: (a, b) => Number(a.getValue('loyalty_points') || 0) - Number(b.getValue('loyalty_points') || 0),
+                size: 110,
             }),
             columnHelper.accessor('segment_category', {
                 header: 'Segment',
@@ -178,7 +211,7 @@ export default function CustomersPage() {
                 header: 'Registered',
                 cell: (info) => (
                     <span className="text-sm text-gray-600">
-                        {new Date(info.getValue()).toLocaleDateString()}
+                        {formatDate(info.getValue())}
                     </span>
                 ),
                 sortingFn: 'datetime',
@@ -273,6 +306,9 @@ export default function CustomersPage() {
                 )}
 
                 <AddCustomerModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onAdd={handleAddCustomer} />
+                {evalMessage && (
+                    <div className="bg-white border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-700">{evalMessage}</div>
+                )}
 
                 <DataTable<Customer>
                     tableId="customers"

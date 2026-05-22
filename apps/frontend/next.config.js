@@ -1,16 +1,20 @@
+import { withSentryConfig } from '@sentry/nextjs';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone', // Optimized for Docker
-  images: {
-    // Allow product/customer images from any HTTPS source (user-supplied URLs)
-    remotePatterns: [
-      { protocol: 'https', hostname: '**' },
-      { protocol: 'http', hostname: 'localhost' },
-      { protocol: 'http', hostname: '127.0.0.1' },
-    ],
-    // Serve modern formats (avif, webp) when supported
-    formats: ['image/avif', 'image/webp'],
+  output: 'standalone',
+  eslint: {
+    ignoreDuringBuilds: true,
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+    org: process.env.SENTRY_ORG,
+    project: process.env.SENTRY_PROJECT,
+    silent: !process.env.CI,
+    widenClientFileUpload: true,
+    webpack: {
+        treeshake: { removeDebugLogging: true },
+        automaticVercelMonitors: false,
+    },
+});

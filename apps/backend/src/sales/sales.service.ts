@@ -1,15 +1,24 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateSaleDto, UpdateSaleDto } from './sale.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
+import { cursorPaginate, CursorPaginatedResult } from '../common/pagination.dto';
+import { EmailService } from '../email/email.service';
+import { SmsService } from '../sms/sms.service';
 
 @Injectable()
 export class SalesService {
-    constructor(private db: DatabaseService) { }
+    private readonly logger = new Logger(SalesService.name);
+
+    constructor(
+        private db: DatabaseService,
+        private emailService: EmailService,
+        private smsService: SmsService,
+    ) { }
 
     async create(tenantId: string, dto: CreateSaleDto) {
-        return this.db.$transaction(async (tx) => {
+        const result = await this.db.$transaction(async (tx) => {
             const warehouseId = await resolveWarehouseId(tx, tenantId, dto.storeId, dto.warehouseId, 'sale');
             const saleProducts = await tx.product.findMany({
                 where: {
@@ -153,9 +162,64 @@ export class SalesService {
                 voucher_type: posting.voucherType ?? null,
             };
         });
+
+        // Fire-and-forget receipt email (after transaction commits)
+        if (dto.customerId) {
+            this.sendReceiptEmail(tenantId, dto.customerId, Number(result.total_amount), result.serial_number);
+        }
+
+        return result;
     }
 
-    async findAll(tenantId: string) {
+    private sendReceiptEmail(tenantId: string, customerId: string, totalAmount: number, serialNumber: string): void {
+        Promise.all([
+            this.db.customer.findUnique({
+                where: { id: customerId },
+                select: { email: true, name: true, phone: true },
+            }),
+            this.db.tenant.findUnique({
+                where: { id: tenantId },
+                select: { name: true, sms_on_sale: true },
+            }),
+        ])
+            .then(([customer, tenant]) => {
+                if (!tenant) return;
+
+                const tasks: Promise<void>[] = [];
+
+                if (customer?.email) {
+                    tasks.push(
+                        this.emailService.sendBillingInvoice(
+                            customer.email,
+                            tenant.name,
+                            totalAmount,
+                            'BDT',
+                        ),
+                    );
+                }
+
+                if (tenant.sms_on_sale && customer?.phone) {
+                    tasks.push(
+                        this.smsService.sendSaleReceipt(
+                            customer.phone,
+                            customer.name ?? 'Customer',
+                            totalAmount,
+                            serialNumber,
+                        ),
+                    );
+                }
+
+                return Promise.all(tasks);
+            })
+            .catch((e) => this.logger.warn(`Failed to send receipt notifications for customer ${customerId}: ${e}`));
+    }
+
+    async findAll(
+        tenantId: string,
+        opts?: { cursor?: string; limit?: number },
+    ): Promise<CursorPaginatedResult<any>> {
+        const limit = Math.min(opts?.limit ?? 20, 100);
+
         const sales = await this.db.sale.findMany({
             where: { tenant_id: tenantId },
             include: {
@@ -164,6 +228,8 @@ export class SalesService {
                 customer: true,
             },
             orderBy: { created_at: 'desc' },
+            take: limit + 1,
+            ...(opts?.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
         });
 
         const saleIds = sales.map((sale) => sale.id);
@@ -186,7 +252,7 @@ export class SalesService {
 
         const voucherBySaleId = new Map(vouchers.map((voucher) => [voucher.source_id, voucher]));
 
-        return sales.map((sale) => {
+        const enriched = sales.map((sale) => {
             const voucher = voucherBySaleId.get(sale.id);
             return {
                 ...sale,
@@ -196,6 +262,8 @@ export class SalesService {
                 voucher_type: voucher?.voucher_type ?? null,
             };
         });
+
+        return cursorPaginate(enriched, limit);
     }
 
     async findOne(tenantId: string, id: string) {
@@ -355,6 +423,36 @@ export class SalesService {
                 },
             });
         });
+    }
+
+    async getInvoiceData(tenantId: string, id: string) {
+        const [sale, tenant] = await Promise.all([
+            this.db.sale.findFirst({
+                where: { id, tenant_id: tenantId },
+                include: {
+                    items: { include: { product: true } },
+                    payments: true,
+                    customer: true,
+                    store: { select: { name: true } },
+                },
+            }),
+            this.db.tenant.findUnique({
+                where: { id: tenantId },
+                select: {
+                    name: true,
+                    default_vat_rate: true,
+                    vat_registration_no: true,
+                    business_tin: true,
+                    brand_primary_color: true,
+                    brand_logo_url: true,
+                    brand_business_name: true,
+                },
+            }),
+        ]);
+
+        if (!sale) throw new NotFoundException('Sale not found');
+
+        return { sale, tenant };
     }
 
     private validateWarrantySerials(

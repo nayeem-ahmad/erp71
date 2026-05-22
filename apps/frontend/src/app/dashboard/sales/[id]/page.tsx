@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Printer, Save, Package, CreditCard, FileText, Pencil, Plus, Trash2, X, Search, User } from 'lucide-react';
-import ProductImage from '../../../../components/ProductImage';
+import { ArrowLeft, Printer, Save, Package, CreditCard, FileText, Pencil, Plus, Trash2, X, Search, User, Download } from 'lucide-react';
 import { api } from '../../../../lib/api';
+import { formatBDT } from '../../../../lib/format';
 import { printPOSReceipt } from '../../../../lib/pos-receipt-printer';
+import Link from 'next/link';
 
 interface EditItem {
     productId: string;
@@ -327,6 +328,13 @@ export default function SaleDetailPage() {
                                     <Printer className="w-4 h-4" />
                                     <span>Print Preview</span>
                                 </button>
+                                <Link
+                                    href={`/dashboard/sales/${sale.id}/invoice`}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-md flex items-center space-x-2 transition-all hover:-translate-y-0.5"
+                                >
+                                    <Download className="w-4 h-4" />
+                                    <span>Invoice PDF</span>
+                                </Link>
                             </>
                         )}
                     </div>
@@ -362,10 +370,10 @@ export default function SaleDetailPage() {
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
                             <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">New Total</span>
-                            <span className="text-xl font-black text-blue-600">{editTotal.toFixed(2)}</span>
+                            <span className="text-xl font-black text-blue-600">{formatBDT(editTotal)}</span>
                             {Math.abs(editPaid - editTotal) > 0.01 && (
                                 <span className={`block text-xs font-bold mt-1 ${editPaid >= editTotal ? 'text-green-600' : 'text-red-500'}`}>
-                                    Paid: {editPaid.toFixed(2)} ({editPaid >= editTotal ? 'OK' : `Short ${(editTotal - editPaid).toFixed(2)}`})
+                                    Paid: {formatBDT(editPaid)} ({editPaid >= editTotal ? 'OK' : `Short ${formatBDT(editTotal - editPaid)}`})
                                 </span>
                             )}
                         </div>
@@ -382,11 +390,11 @@ export default function SaleDetailPage() {
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
                             <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Total</span>
-                            <span className="text-xl font-black text-blue-600">{parseFloat(sale.total_amount).toFixed(2)}</span>
+                            <span className="text-xl font-black text-blue-600">{formatBDT(parseFloat(sale.total_amount))}</span>
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
                             <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Paid</span>
-                            <span className="text-xl font-black text-gray-900">{parseFloat(sale.amount_paid).toFixed(2)}</span>
+                            <span className="text-xl font-black text-gray-900">{formatBDT(parseFloat(sale.amount_paid))}</span>
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
                             <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Items</span>
@@ -413,13 +421,13 @@ export default function SaleDetailPage() {
                                 <tr key={item.id}>
                                     <td>{item.product?.name || 'Unknown'}</td>
                                     <td>{item.quantity}</td>
-                                    <td>{parseFloat(item.price_at_sale).toFixed(2)}</td>
-                                    <td>{(item.quantity * parseFloat(item.price_at_sale)).toFixed(2)}</td>
+                                    <td>{formatBDT(parseFloat(item.price_at_sale))}</td>
+                                    <td>{formatBDT(item.quantity * parseFloat(item.price_at_sale))}</td>
                                 </tr>
                             ))}
                             <tr className="total-row">
                                 <td colSpan={3}>Total</td>
-                                <td>{parseFloat(sale.total_amount).toFixed(2)}</td>
+                                <td>{formatBDT(parseFloat(sale.total_amount))}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -427,7 +435,7 @@ export default function SaleDetailPage() {
                         <strong>Payments:</strong>
                         <ul>
                             {sale.payments?.map((p: any, i: number) => (
-                                <li key={i}>{p.payment_method}: {parseFloat(p.amount).toFixed(2)}</li>
+                                <li key={i}>{p.payment_method}: {formatBDT(parseFloat(p.amount))}</li>
                             ))}
                         </ul>
                     </div>
@@ -476,7 +484,7 @@ export default function SaleDetailPage() {
                                                     <span className="text-sm font-bold">{p.name}</span>
                                                     <span className="text-xs text-gray-400 ml-2">{p.sku}</span>
                                                 </div>
-                                                <span className="text-sm font-bold text-blue-600">{parseFloat(p.price).toFixed(2)}</span>
+                                                <span className="text-sm font-bold text-blue-600">{formatBDT(parseFloat(p.price))}</span>
                                             </button>
                                         ))}
                                     </div>
@@ -527,7 +535,7 @@ export default function SaleDetailPage() {
                                                     />
                                                 </td>
                                                 <td className="py-3 text-right text-sm font-black text-blue-600">
-                                                    ${(item.quantity * item.priceAtSale).toFixed(2)}
+                                                    {formatBDT(item.quantity * item.priceAtSale)}
                                                 </td>
                                                 <td className="py-3 text-center">
                                                     <button
@@ -543,7 +551,7 @@ export default function SaleDetailPage() {
                                     <tfoot>
                                         <tr className="border-t-2 border-gray-200">
                                             <td colSpan={3} className="pt-3 text-right text-sm font-black uppercase tracking-widest">Total</td>
-                                            <td className="pt-3 text-right text-xl font-black text-blue-600">{editTotal.toFixed(2)}</td>
+                                            <td className="pt-3 text-right text-xl font-black text-blue-600">{formatBDT(editTotal)}</td>
                                             <td></td>
                                         </tr>
                                     </tfoot>
@@ -567,23 +575,27 @@ export default function SaleDetailPage() {
                                         <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
                                             <td className="p-4">
                                                 <div className="flex items-center space-x-3">
-                                                    <div className="w-10 h-10 bg-gray-50 rounded-xl relative overflow-hidden flex items-center justify-center">
-                                                        <ProductImage src={item.product?.image_url} alt={item.product?.name ?? ''} fallbackClassName="w-full h-full flex items-center justify-center" />
+                                                    <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center">
+                                                        {item.product?.image_url ? (
+                                                            <img src={item.product.image_url} alt={item.product.name} className="w-full h-full object-cover rounded-xl" />
+                                                        ) : (
+                                                            <Package className="w-4 h-4 text-gray-200" />
+                                                        )}
                                                     </div>
                                                     <span className="text-sm font-black text-gray-900">{item.product?.name || 'Unknown'}</span>
                                                 </div>
                                             </td>
                                             <td className="p-4 text-xs font-bold text-gray-400 uppercase">{item.product?.sku || 'N/A'}</td>
                                             <td className="p-4 text-center text-sm font-black">{item.quantity}</td>
-                                            <td className="p-4 text-right text-sm font-bold text-gray-700">{parseFloat(item.price_at_sale).toFixed(2)}</td>
-                                            <td className="p-4 text-right text-sm font-black text-blue-600">{(item.quantity * parseFloat(item.price_at_sale)).toFixed(2)}</td>
+                                            <td className="p-4 text-right text-sm font-bold text-gray-700">{formatBDT(parseFloat(item.price_at_sale))}</td>
+                                            <td className="p-4 text-right text-sm font-black text-blue-600">{formatBDT(item.quantity * parseFloat(item.price_at_sale))}</td>
                                         </tr>
                                     ))}
                                 </tbody>
                                 <tfoot>
                                     <tr className="border-t-2 border-gray-200">
                                         <td colSpan={4} className="p-4 text-right text-sm font-black uppercase tracking-widest">Total</td>
-                                        <td className="p-4 text-right text-xl font-black text-blue-600">{parseFloat(sale.total_amount).toFixed(2)}</td>
+                                        <td className="p-4 text-right text-xl font-black text-blue-600">{formatBDT(parseFloat(sale.total_amount))}</td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -652,7 +664,7 @@ export default function SaleDetailPage() {
                             )}
                             {editPayments.length > 0 && (
                                 <div className="flex justify-end pt-2 border-t border-gray-100">
-                                    <span className="text-sm font-black">Total Paid: <span className={editPaid >= editTotal ? 'text-green-600' : 'text-red-500'}>{editPaid.toFixed(2)}</span></span>
+                                    <span className="text-sm font-black">Total Paid: <span className={editPaid >= editTotal ? 'text-green-600' : 'text-red-500'}>{formatBDT(editPaid)}</span></span>
                                 </div>
                             )}
                         </div>
@@ -666,7 +678,7 @@ export default function SaleDetailPage() {
                                         </span>
                                         <span className="text-xs text-gray-400">{new Date(payment.created_at).toLocaleString()}</span>
                                     </div>
-                                    <span className="text-sm font-black text-gray-900">{parseFloat(payment.amount).toFixed(2)}</span>
+                                    <span className="text-sm font-black text-gray-900">{formatBDT(parseFloat(payment.amount))}</span>
                                 </div>
                             ))}
                             {(!sale.payments || sale.payments.length === 0) && (

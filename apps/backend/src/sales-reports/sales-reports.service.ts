@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { GetSalesByProductDto, GetSalesSummaryDto } from './sales-reports.dto';
+import { GetConsolidatedReportDto, GetSalesByProductDto, GetSalesSummaryDto } from './sales-reports.dto';
 
 @Injectable()
 export class SalesReportsService {
@@ -148,6 +148,115 @@ export class SalesReportsService {
                 ...r,
                 revenueShare: totalRevenue > 0 ? (r.revenue / totalRevenue) * 100 : 0,
             })),
+        };
+    }
+
+    async getConsolidatedReport(tenantId: string, query: GetConsolidatedReportDto) {
+        const dateFilter = buildDateWindow(query.from, query.to);
+
+        // Fetch all completed sales in the period with store and items
+        const sales = await this.db.sale.findMany({
+            where: {
+                tenant_id: tenantId,
+                status: 'COMPLETED',
+                ...dateFilter,
+            },
+            select: {
+                id: true,
+                store_id: true,
+                total_amount: true,
+                store: { select: { id: true, name: true } },
+                items: {
+                    select: {
+                        product_id: true,
+                        quantity: true,
+                        price_at_sale: true,
+                        product: { select: { name: true } },
+                    },
+                },
+            },
+        });
+
+        if (sales.length === 0) {
+            return {
+                period: { from: query.from ?? null, to: query.to ?? null },
+                overall: {
+                    revenue: 0,
+                    transactions: 0,
+                    avg_order: 0,
+                    top_product: null,
+                },
+                by_store: [],
+            };
+        }
+
+        // Aggregate by store
+        const storeMap = new Map<
+            string,
+            { store_name: string; revenue: number; transactions: number }
+        >();
+
+        for (const sale of sales) {
+            const entry = storeMap.get(sale.store_id) ?? {
+                store_name: sale.store.name,
+                revenue: 0,
+                transactions: 0,
+            };
+            entry.revenue += Number(sale.total_amount);
+            entry.transactions += 1;
+            storeMap.set(sale.store_id, entry);
+        }
+
+        // Find top product by total revenue across all sales
+        const productRevMap = new Map<string, { name: string; revenue: number }>();
+        for (const sale of sales) {
+            for (const item of sale.items) {
+                const itemRevenue = item.quantity * Number(item.price_at_sale);
+                const entry = productRevMap.get(item.product_id) ?? {
+                    name: item.product.name,
+                    revenue: 0,
+                };
+                entry.revenue += itemRevenue;
+                productRevMap.set(item.product_id, entry);
+            }
+        }
+
+        let topProduct: string | null = null;
+        let topProductRevenue = 0;
+        for (const [, prod] of productRevMap) {
+            if (prod.revenue > topProductRevenue) {
+                topProductRevenue = prod.revenue;
+                topProduct = prod.name;
+            }
+        }
+
+        const totalRevenue = Array.from(storeMap.values()).reduce((sum, s) => sum + s.revenue, 0);
+        const totalTransactions = Array.from(storeMap.values()).reduce(
+            (sum, s) => sum + s.transactions,
+            0,
+        );
+        const avgOrder = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
+
+        const byStore = Array.from(storeMap.entries())
+            .map(([store_id, data]) => ({
+                store_id,
+                store_name: data.store_name,
+                revenue: data.revenue,
+                transactions: data.transactions,
+                avg_order: data.transactions > 0 ? data.revenue / data.transactions : 0,
+                revenue_share: totalRevenue > 0 ? (data.revenue / totalRevenue) * 100 : 0,
+            }))
+            .sort((a, b) => b.revenue - a.revenue);
+
+        return {
+            period: { from: query.from ?? null, to: query.to ?? null },
+            overall: {
+                revenue: totalRevenue,
+                transactions: totalTransactions,
+                avg_order: avgOrder,
+                top_product: topProduct,
+            },
+            by_store: byStore,
         };
     }
 }

@@ -1,21 +1,35 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '../../../../lib/api';
-import Link from 'next/link';
-import { ArrowLeft, User, Phone, Mail, ShoppingBag, CreditCard, MapPin, Building2, FolderTree, Map, BarChart3 } from 'lucide-react';
-import Image from 'next/image';
+import { formatBDT } from '../../../../lib/format';
+import { ArrowLeft, Phone, Mail, ShoppingBag, CreditCard, MapPin, Building2, FolderTree, Map, ChevronLeft, ChevronRight } from 'lucide-react';
+
+interface PurchaseHistoryResult {
+    data: any[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+}
 
 export default function CustomerProfile() {
     const { id } = useParams();
     const router = useRouter();
     const [customer, setCustomer] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [history, setHistory] = useState<PurchaseHistoryResult | null>(null);
+    const [historyPage, setHistoryPage] = useState(1);
+    const [historyLoading, setHistoryLoading] = useState(false);
 
     useEffect(() => {
-        if (id) loadCustomer();
+        if (id) void loadCustomer();
     }, [id]);
+
+    useEffect(() => {
+        if (id) void loadHistory(historyPage);
+    }, [id, historyPage]);
 
     const loadCustomer = async () => {
         try {
@@ -28,6 +42,18 @@ export default function CustomerProfile() {
         }
     };
 
+    const loadHistory = useCallback(async (page: number) => {
+        setHistoryLoading(true);
+        try {
+            const data = await api.getCustomerPurchaseHistory(id as string, { page, limit: 10 });
+            setHistory(data);
+        } catch (error) {
+            console.error('Failed to load purchase history', error);
+        } finally {
+            setHistoryLoading(false);
+        }
+    }, [id]);
+
     if (loading) return <div className="p-8 font-black uppercase tracking-widest text-gray-400">Loading profile...</div>;
     if (!customer) return <div className="p-8 font-black text-rose-500 uppercase">Customer not found.</div>;
 
@@ -35,18 +61,10 @@ export default function CustomerProfile() {
         ? ((Number(customer.total_spent) / Number(customer.credit_limit)) * 100).toFixed(1)
         : null;
 
-    // Compute top purchased items from sales data
-    const itemMap: Record<string, { name: string; totalQty: number; totalValue: number }> = {};
-    customer.sales?.forEach((sale: any) => {
-        sale.items?.forEach((item: any) => {
-            const name = item.product?.name || 'Unknown';
-            const existing = itemMap[name] || { name, totalQty: 0, totalValue: 0 };
-            existing.totalQty += item.quantity;
-            existing.totalValue += Number(item.price_at_sale) * item.quantity;
-            itemMap[name] = existing;
-        });
-    });
-    const topItems = Object.values(itemMap).sort((a, b) => b.totalQty - a.totalQty).slice(0, 5);
+    const segmentClass =
+        customer.segment_category === 'VIP' ? 'bg-emerald-50 text-emerald-600' :
+        customer.segment_category === 'At-Risk' ? 'bg-rose-50 text-rose-600' :
+        'bg-gray-100 text-gray-600';
 
     return (
         <div className="overflow-y-auto h-full p-8 bg-[#f9fafb] space-y-8">
@@ -56,27 +74,23 @@ export default function CustomerProfile() {
 
             {/* Profile Header */}
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex items-start space-x-6">
-                <div className="w-20 h-20 bg-blue-600 rounded-2xl shadow-xl shadow-blue-500/20 flex items-center justify-center text-white font-black text-3xl uppercase relative overflow-hidden">
+                <div className="w-20 h-20 bg-blue-600 rounded-2xl shadow-xl shadow-blue-500/20 flex items-center justify-center text-white font-black text-3xl uppercase overflow-hidden">
                     {customer.profile_pic_url
-                        ? <Image src={customer.profile_pic_url} alt={customer.name} fill className="object-cover" sizes="80px" />
-                        : customer.name.substring(0,2)}
+                        ? <img src={customer.profile_pic_url} alt={customer.name} className="w-full h-full object-cover" />
+                        : customer.name.substring(0, 2)}
                 </div>
                 <div className="flex-1">
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center flex-wrap gap-2">
                         <h1 className="text-3xl font-black tracking-tight">{customer.name}</h1>
                         <span className="font-mono text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded">{customer.customer_code}</span>
-                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-tighter ${
-                            customer.customer_type === 'ORGANIZATION' ? 'bg-purple-50 text-purple-600' : 'bg-gray-100 text-gray-600'
-                        }`}>
+                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-tighter ${customer.customer_type === 'ORGANIZATION' ? 'bg-purple-50 text-purple-600' : 'bg-gray-100 text-gray-600'}`}>
                             {customer.customer_type || 'Individual'}
                         </span>
-                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-tighter ${
-                            customer.segment_category === 'VIP' ? 'bg-emerald-50 text-emerald-600' :
-                            customer.segment_category === 'At-Risk' ? 'bg-rose-50 text-rose-600' :
-                            'bg-gray-100 text-gray-600'
-                        }`}>
-                            {customer.segment_category}
-                        </span>
+                        {customer.segment_category && (
+                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-tighter ${segmentClass}`}>
+                                {customer.segment_category}
+                            </span>
+                        )}
                     </div>
                     <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4">
                         <div className="flex items-center text-sm text-gray-600 font-medium"><Phone className="w-4 h-4 mr-2 text-gray-400" /> {customer.phone}</div>
@@ -84,9 +98,12 @@ export default function CustomerProfile() {
                         {customer.address && <div className="flex items-center text-sm text-gray-600 font-medium"><MapPin className="w-4 h-4 mr-2 text-gray-400" /> {customer.address}</div>}
                     </div>
                 </div>
-                <div className="text-right">
+                <div className="text-right shrink-0">
                     <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Lifetime Value</p>
-                    <p className="text-4xl font-black text-blue-600">৳{Number(customer.total_spent).toFixed(2)}</p>
+                    <p className="text-4xl font-black text-blue-600">{formatBDT(Number(customer.total_spent))}</p>
+                    {history && (
+                        <p className="text-xs text-gray-400 font-bold mt-1">{history.total} transaction{history.total !== 1 ? 's' : ''}</p>
+                    )}
                 </div>
             </div>
 
@@ -104,8 +121,10 @@ export default function CustomerProfile() {
                     <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-3">Credit Utilization</p>
                     <div className="flex items-center space-x-4">
                         <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
-                            <div className={`h-full rounded-full transition-all ${Number(creditUtilization) > 80 ? 'bg-rose-500' : Number(creditUtilization) > 50 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                                style={{ width: `${Math.min(Number(creditUtilization), 100)}%` }} />
+                            <div
+                                className={`h-full rounded-full transition-all ${Number(creditUtilization) > 80 ? 'bg-rose-500' : Number(creditUtilization) > 50 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                style={{ width: `${Math.min(Number(creditUtilization), 100)}%` }}
+                            />
                         </div>
                         <span className="font-black text-sm">{creditUtilization}%</span>
                     </div>
@@ -115,66 +134,81 @@ export default function CustomerProfile() {
                 </div>
             )}
 
-            {/* Top Purchased Items */}
-            {topItems.length > 0 && (
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4">Top Purchased Items</p>
-                    <div className="space-y-3">
-                        {topItems.map((item, i) => (
-                            <div key={item.name} className="flex items-center justify-between">
-                                <div className="flex items-center space-x-3">
-                                    <span className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 text-xs font-black flex items-center justify-center">{i + 1}</span>
-                                    <span className="font-bold text-sm">{item.name}</span>
-                                </div>
-                                <div className="flex items-center space-x-4">
-                                    <span className="text-xs text-gray-500 font-medium">{item.totalQty} units</span>
-                                    <span className="font-black text-sm">৳{item.totalValue.toFixed(2)}</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* Receipt History */}
+            {/* Purchase History */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
                 <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                    <h2 className="text-lg font-black flex items-center"><ShoppingBag className="w-5 h-5 mr-2 text-blue-600" /> Purchase History</h2>
-                    <Link
-                        href={`/dashboard/customers/${id}/history`}
-                        className="flex items-center text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors"
-                    >
-                        <BarChart3 className="w-4 h-4 mr-1" /> View Full Analytics
-                    </Link>
-                </div>
-                <div className="divide-y divide-gray-50">
-                    {customer.sales?.length === 0 ? (
-                        <div className="p-8 text-center text-gray-400 font-bold uppercase tracking-widest text-xs">No transactions found.</div>
-                    ) : (
-                        customer.sales?.map((sale: any) => (
-                            <div key={sale.id} className="p-6 hover:bg-gray-50/50 transition-colors">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div>
-                                        <h3 className="font-black text-sm">{sale.serial_number}</h3>
-                                        <p className="text-xs text-gray-500 font-medium">{new Date(sale.created_at).toLocaleString()}</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="font-black">৳{Number(sale.amount_paid).toFixed(2)}</p>
-                                        <p className={`text-[10px] font-black uppercase tracking-widest ${sale.status === 'COMPLETED' ? 'text-emerald-500' : 'text-gray-400'}`}>{sale.status}</p>
-                                    </div>
-                                </div>
-                                <div className="bg-gray-50 rounded-xl p-4 space-y-2">
-                                    {sale.items.map((item: any) => (
-                                        <div key={item.id} className="flex justify-between text-sm">
-                                            <span className="font-medium text-gray-700">{item.quantity}x {item.product?.name || 'Unknown Item'}</span>
-                                            <span className="font-bold text-gray-900">৳{(Number(item.price_at_sale) * item.quantity).toFixed(2)}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        ))
+                    <h2 className="text-lg font-black flex items-center">
+                        <ShoppingBag className="w-5 h-5 mr-2 text-blue-600" /> Purchase History
+                    </h2>
+                    {history && history.totalPages > 1 && (
+                        <span className="text-xs text-gray-400 font-bold">
+                            Page {history.page} of {history.totalPages}
+                        </span>
                     )}
                 </div>
+
+                {historyLoading ? (
+                    <div className="p-8 text-center text-gray-400 font-bold uppercase tracking-widest text-xs">Loading...</div>
+                ) : !history || history.data.length === 0 ? (
+                    <div className="p-8 text-center text-gray-400 font-bold uppercase tracking-widest text-xs">No transactions found.</div>
+                ) : (
+                    <>
+                        <div className="divide-y divide-gray-50">
+                            {history.data.map((sale: any) => (
+                                <div key={sale.id} className="p-6 hover:bg-gray-50/50 transition-colors">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div>
+                                            <h3 className="font-black text-sm">{sale.serial_number}</h3>
+                                            <p className="text-xs text-gray-500 font-medium">{new Date(sale.created_at).toLocaleString()}</p>
+                                            {sale.payments && sale.payments.length > 0 && (
+                                                <div className="flex gap-1 mt-1">
+                                                    {sale.payments.map((p: any, i: number) => (
+                                                        <span key={i} className="text-[9px] font-bold uppercase tracking-wider bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">
+                                                            {p.payment_method}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-black">{formatBDT(Number(sale.amount_paid))}</p>
+                                            <p className={`text-[10px] font-black uppercase tracking-widest ${sale.status === 'COMPLETED' ? 'text-emerald-500' : 'text-gray-400'}`}>{sale.status}</p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-gray-50 rounded-xl p-4 space-y-2">
+                                        {sale.items?.map((item: any) => (
+                                            <div key={item.id} className="flex justify-between text-sm">
+                                                <span className="font-medium text-gray-700">{item.quantity}x {item.product?.name || 'Unknown Item'}</span>
+                                                <span className="font-bold text-gray-900">{formatBDT(Number(item.price_at_sale) * item.quantity)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Pagination */}
+                        {history.totalPages > 1 && (
+                            <div className="p-4 border-t border-gray-100 flex items-center justify-between">
+                                <button
+                                    onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                                    disabled={history.page === 1}
+                                    className="flex items-center gap-1 text-sm font-bold text-gray-600 hover:text-gray-900 disabled:opacity-40"
+                                >
+                                    <ChevronLeft className="w-4 h-4" /> Previous
+                                </button>
+                                <span className="text-xs text-gray-400 font-bold">{history.total} total transactions</span>
+                                <button
+                                    onClick={() => setHistoryPage((p) => Math.min(history.totalPages, p + 1))}
+                                    disabled={history.page === history.totalPages}
+                                    className="flex items-center gap-1 text-sm font-bold text-gray-600 hover:text-gray-900 disabled:opacity-40"
+                                >
+                                    Next <ChevronRight className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
+                    </>
+                )}
             </div>
         </div>
     );

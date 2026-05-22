@@ -1,14 +1,22 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateProductDto, UpdateProductDto } from './product.dto';
+import { CsvProductRow } from './import-products.dto';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant, ensureDefaultWarehouse } from '../database/inventory.utils';
+import { paginate, PaginatedResult, cursorPaginate, CursorPaginatedResult } from '../common/pagination.dto';
+import { RedisService } from '../cache/redis.service';
+
+const CACHE_TTL = 60; // seconds
 
 @Injectable()
 export class ProductsService {
-    constructor(private db: DatabaseService) { }
+    constructor(
+        private db: DatabaseService,
+        private redis: RedisService,
+    ) { }
 
     async create(tenantId: string, dto: CreateProductDto) {
-        return this.db.$transaction(async (tx) => {
+        const result = await this.db.$transaction(async (tx) => {
             const categoryIds = await this.validateCategorySelection(tx, tenantId, dto.groupId, dto.subgroupId);
             const product = await tx.product.create({
                 data: {
@@ -53,26 +61,59 @@ export class ProductsService {
                 include: this.productInclude(),
             });
         });
+
+        await this.redis.invalidatePattern(`products:${tenantId}:`);
+        return result;
     }
 
     async findAll(
         tenantId: string,
-        filters?: { groupId?: string; subgroupId?: string; uncategorized?: boolean },
-    ) {
-        return this.db.product.findMany({
-            where: {
-                tenant_id: tenantId,
-                deleted_at: null,
-                ...(filters?.uncategorized
-                    ? { group_id: null, subgroup_id: null }
-                    : {
-                          ...(filters?.groupId ? { group_id: filters.groupId } : {}),
-                          ...(filters?.subgroupId ? { subgroup_id: filters.subgroupId } : {}),
-                      }),
-            },
+        filters?: { groupId?: string; subgroupId?: string; uncategorized?: boolean; page?: number; limit?: number },
+    ): Promise<PaginatedResult<any>> {
+        const page = filters?.page ?? 1;
+        const limit = Math.min(filters?.limit ?? 20, 100);
+        const skip = (page - 1) * limit;
+
+        const cacheKey = `products:${tenantId}:offset:${JSON.stringify({ page, limit, ...filters })}`;
+        const cached = await this.redis.get<PaginatedResult<any>>(cacheKey);
+        if (cached) return cached;
+
+        const where = this.buildWhere(tenantId, filters);
+
+        const [items, total] = await Promise.all([
+            this.db.product.findMany({ where, include: this.productInclude(), orderBy: { name: 'asc' }, skip, take: limit }),
+            this.db.product.count({ where }),
+        ]);
+
+        const result = paginate(items, total, page, limit);
+        await this.redis.set(cacheKey, result, CACHE_TTL);
+        return result;
+    }
+
+    async findAllCursor(
+        tenantId: string,
+        filters?: { groupId?: string; subgroupId?: string; uncategorized?: boolean; cursor?: string; limit?: number },
+    ): Promise<CursorPaginatedResult<any>> {
+        const limit = Math.min(filters?.limit ?? 20, 100);
+
+        const cacheKey = `products:${tenantId}:cursor:${JSON.stringify({ limit, cursor: filters?.cursor, ...filters })}`;
+        const cached = await this.redis.get<CursorPaginatedResult<any>>(cacheKey);
+        if (cached) return cached;
+
+        const where = this.buildWhere(tenantId, filters);
+
+        // Fetch limit+1 to detect whether a next page exists
+        const items = await this.db.product.findMany({
+            where,
             include: this.productInclude(),
             orderBy: { name: 'asc' },
+            take: limit + 1,
+            ...(filters?.cursor ? { cursor: { id: filters.cursor }, skip: 1 } : {}),
         });
+
+        const result = cursorPaginate(items, limit);
+        await this.redis.set(cacheKey, result, CACHE_TTL);
+        return result;
     }
 
     async findOne(tenantId: string, id: string) {
@@ -93,7 +134,7 @@ export class ProductsService {
 
         const categoryIds = await this.validateCategorySelection(txLike(this.db), tenantId, dto.groupId, dto.subgroupId);
 
-        return this.db.product.update({
+        const result = await this.db.product.update({
             where: { id },
             data: {
                 ...(dto.name !== undefined ? { name: dto.name } : {}),
@@ -113,31 +154,113 @@ export class ProductsService {
             },
             include: this.productInclude(),
         });
+
+        await this.redis.invalidatePattern(`products:${tenantId}:`);
+        return result;
     }
 
     async remove(tenantId: string, id: string) {
-        await this.findOne(tenantId, id);
-        return this.db.product.updateMany({
-            where: { id, tenant_id: tenantId, deleted_at: null },
+        const product = await this.db.product.findFirst({ where: { id, tenant_id: tenantId, deleted_at: null } });
+        if (!product) throw new NotFoundException('Product not found');
+        const result = await this.db.product.update({
+            where: { id },
             data: { deleted_at: new Date() },
         });
+        await this.redis.invalidatePattern(`products:${tenantId}:`);
+        return result;
     }
 
-    async getStats(tenantId: string) {
-        const result = await this.db.$queryRaw<[{ low_stock_count: bigint }]>`
-            SELECT COUNT(*) AS low_stock_count
-            FROM (
-                SELECT p.id
-                FROM "Product" p
-                LEFT JOIN "ProductStock" ps ON ps.product_id = p.id
-                WHERE p.tenant_id = ${tenantId}
-                  AND p.deleted_at IS NULL
-                  AND p.reorder_level IS NOT NULL
-                GROUP BY p.id, p.reorder_level
-                HAVING COALESCE(SUM(ps.quantity), 0) <= p.reorder_level
-            ) sub
-        `;
-        return { lowStockCount: Number(result[0].low_stock_count) };
+    async importFromCsv(
+        tenantId: string,
+        rows: CsvProductRow[],
+    ): Promise<{ created: number; skipped: number; errors: string[] }> {
+        let created = 0;
+        let skipped = 0;
+        const errors: string[] = [];
+
+        // Fetch inventory settings once for the whole import
+        const settings = await this.db.inventorySettings.findUnique({
+            where: { tenant_id: tenantId },
+        });
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const rowLabel = `Row ${i + 2}`; // +2 because row 1 is the header
+
+            try {
+                if (!row.name || String(row.name).trim() === '') {
+                    errors.push(`${rowLabel}: missing required field "name"`);
+                    continue;
+                }
+
+                const name = String(row.name).trim();
+                const sku = row.sku ? String(row.sku).trim() || null : null;
+
+                // If SKU is provided, attempt upsert (skip if product already exists)
+                if (sku) {
+                    const existing = await this.db.product.findFirst({
+                        where: { tenant_id: tenantId, sku, deleted_at: null },
+                    });
+                    if (existing) {
+                        skipped++;
+                        continue;
+                    }
+                }
+
+                const price = Number(row.selling_price) || 0;
+                const initialStock = Number(row.stock_quantity) || 0;
+
+                await this.db.$transaction(async (tx) => {
+                    const product = await tx.product.create({
+                        data: {
+                            tenant_id: tenantId,
+                            name,
+                            sku,
+                            price,
+                            reorder_level: row.reorder_point != null ? Number(row.reorder_point) : null,
+                            unit_type: row.unit ? String(row.unit).trim() : 'none',
+                        },
+                    });
+
+                    if (initialStock > 0) {
+                        const warehouse = settings?.default_product_warehouse_id
+                            ? await assertWarehouseBelongsToTenant(tx, tenantId, settings.default_product_warehouse_id)
+                            : await ensureDefaultWarehouse(tx, tenantId);
+
+                        await applyInventoryMovement(tx, {
+                            tenantId,
+                            productId: product.id,
+                            warehouseId: warehouse.id,
+                            quantityDelta: initialStock,
+                            movementType: 'INITIAL_STOCK',
+                            referenceType: 'PRODUCT',
+                            referenceId: product.id,
+                            unitCost: row.cost_price != null ? Number(row.cost_price) : price,
+                        });
+                    }
+                });
+
+                created++;
+            } catch (err: any) {
+                errors.push(`${rowLabel}: ${err?.message ?? 'unknown error'}`);
+            }
+        }
+
+        await this.redis.invalidatePattern(`products:${tenantId}:`);
+        return { created, skipped, errors };
+    }
+
+    private buildWhere(tenantId: string, filters?: { groupId?: string; subgroupId?: string; uncategorized?: boolean }) {
+        return {
+            tenant_id: tenantId,
+            deleted_at: null,
+            ...(filters?.uncategorized
+                ? { group_id: null, subgroup_id: null }
+                : {
+                      ...(filters?.groupId ? { group_id: filters.groupId } : {}),
+                      ...(filters?.subgroupId ? { subgroup_id: filters.subgroupId } : {}),
+                  }),
+        };
     }
 
     private async validateCategorySelection(db: any, tenantId: string, groupId?: string, subgroupId?: string) {

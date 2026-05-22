@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Patch, Post, Query, Res, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Response } from 'express';
 import { AccountingService } from './accounting.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RequiresFeature } from '../auth/subscription-access.decorator';
@@ -12,6 +13,7 @@ import {
     CreateAccountDto,
     CreateAccountGroupDto,
     CreateAccountSubgroupDto,
+    ExportLedgerQueryDto,
     FinancialKpiQueryDto,
     FinancialTrendQueryDto,
     ListAccountsQueryDto,
@@ -38,6 +40,39 @@ export class AccountingController {
     @Get()
     getOverview(@Tenant() tenant: TenantContext) {
         return this.accountingService.getModuleOverview(tenant.tenantId);
+    }
+
+    @Get('export')
+    async exportLedger(
+        @Tenant() tenant: TenantContext,
+        @Query() query: ExportLedgerQueryDto,
+        @Res() res: Response,
+    ) {
+        const content = await this.accountingService.exportLedger(
+            tenant.tenantId,
+            query.format,
+            query.from,
+            query.to,
+        );
+
+        const fromLabel = query.from ?? 'all';
+        const toLabel = query.to ?? 'all';
+
+        if (query.format === 'tally') {
+            res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+            res.setHeader(
+                'Content-Disposition',
+                `attachment; filename="tally-export-${fromLabel}-${toLabel}.xml"`,
+            );
+        } else {
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            res.setHeader(
+                'Content-Disposition',
+                `attachment; filename="quickbooks-export-${fromLabel}-${toLabel}.iif"`,
+            );
+        }
+
+        res.send(content);
     }
 
     @Get('account-groups')

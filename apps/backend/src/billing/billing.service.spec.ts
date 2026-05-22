@@ -1,4 +1,4 @@
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { BillingService } from './billing.service';
 
 describe('BillingService', () => {
@@ -24,6 +24,7 @@ describe('BillingService', () => {
         process.env.SSL_WIRELESS_VALIDATION_URL = 'https://sandbox.example.com/validate';
         process.env.FRONTEND_URL = 'http://localhost:3000';
         process.env.BACKEND_PUBLIC_URL = 'http://localhost:4000';
+        delete process.env.BILLING_WEBHOOK_SECRET;
 
         db.tenantUser.findUnique.mockResolvedValue({
             role: 'OWNER',
@@ -177,5 +178,219 @@ describe('BillingService', () => {
             value_b: 'PREMIUM',
             value_c: 'MONTHLY',
         }, 'success')).rejects.toThrow(BadRequestException);
+    });
+
+    it('processes SSL Wireless IPN webhook and updates subscription', async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            text: jest.fn().mockResolvedValue(JSON.stringify({
+                status: 'VALID',
+                tran_id: 'sslw_ipn_ref',
+                val_id: 'val-ipn',
+                bank_tran_id: 'bank-ipn-1',
+                amount: '3999.00',
+                currency: 'BDT',
+                value_a: 'tenant-1',
+            })),
+        });
+
+        const result = await service.handleSslWirelessCallback({
+            tran_id: 'sslw_ipn_ref',
+            val_id: 'val-ipn',
+            value_a: 'tenant-1',
+            value_b: 'PREMIUM',
+            value_c: 'MONTHLY',
+        }, 'ipn');
+
+        expect(db.tenantSubscription.upsert).toHaveBeenCalledWith(expect.objectContaining({
+            update: expect.objectContaining({ status: 'ACTIVE' }),
+        }));
+        expect(result).toHaveProperty('subscription');
+    });
+
+    it('records cancel callback and marks subscription as CANCELLED', async () => {
+        const redirectUrl = await service.handleSslWirelessCallback({
+            tran_id: 'sslw_tenant_cancel',
+            value_a: 'tenant-1',
+            value_b: 'PREMIUM',
+            value_c: 'MONTHLY',
+        }, 'cancel');
+
+        expect(db.tenantSubscription.upsert).toHaveBeenCalledWith(expect.objectContaining({
+            update: expect.objectContaining({ status: 'CANCELLED' }),
+            create: expect.objectContaining({ status: 'CANCELLED' }),
+        }));
+        expect(redirectUrl).toContain('paymentStatus=cancel');
+    });
+
+    it('applies subscription change with valid manual webhook secret', async () => {
+        process.env.BILLING_WEBHOOK_SECRET = 'my-secret';
+
+        const result = await service.handleManualWebhook('my-secret', {
+            tenantId: 'tenant-1',
+            planCode: 'PREMIUM',
+            status: 'ACTIVE',
+            billingCycle: 'YEARLY',
+        });
+
+        expect(db.tenantSubscription.upsert).toHaveBeenCalledWith(expect.objectContaining({
+            update: expect.objectContaining({ status: 'ACTIVE' }),
+        }));
+        expect(result).toHaveProperty('subscription');
+    });
+
+    it('returns billing summary with subscription and available plans', async () => {
+        db.subscriptionPlan.findMany.mockResolvedValueOnce([
+            { id: 'plan-basic', code: 'BASIC', name: 'Basic', description: 'Entry', monthly_price: 999, yearly_price: 9990, features_json: {} },
+        ]);
+        db.tenantSubscription.findUnique.mockResolvedValueOnce({
+            status: 'ACTIVE',
+            current_period_start: new Date('2026-03-21T00:00:00Z'),
+            current_period_end: new Date('2026-04-20T00:00:00Z'),
+            cancel_at_period_end: false,
+            provider_name: 'manual',
+            provider_customer_ref: 'tenant-1',
+            provider_subscription_ref: 'manual-ref',
+            plan: { code: 'BASIC', name: 'Basic', description: 'Entry', monthly_price: 999, yearly_price: 9990, features_json: {} },
+        });
+
+        const result = await service.getSummary('user-1', 'tenant-1');
+
+        expect(result.can_manage_billing).toBe(true);
+        expect(result.subscription).not.toBeNull();
+        expect(result.available_plans).toHaveLength(1);
+        expect(result.billing_history).toEqual([]);
+    });
+
+    it('cancels subscription at period end', async () => {
+        db.tenantSubscription.findUnique.mockResolvedValueOnce({
+            status: 'ACTIVE',
+            plan: { code: 'PREMIUM', name: 'Premium', description: 'Advanced', monthly_price: 3999, yearly_price: 39990, features_json: {} },
+        });
+        db.tenantSubscription.update.mockResolvedValueOnce({
+            status: 'ACTIVE',
+            current_period_start: new Date('2026-03-21T00:00:00Z'),
+            current_period_end: new Date('2026-04-20T00:00:00Z'),
+            cancel_at_period_end: true,
+            provider_name: 'ssl-wireless',
+            provider_customer_ref: 'tenant-1',
+            provider_subscription_ref: 'bank-ref-1',
+            plan: { code: 'PREMIUM', name: 'Premium', description: 'Advanced', monthly_price: 3999, yearly_price: 39990, features_json: {} },
+        });
+
+        const result = await service.cancelAtPeriodEnd('user-1', 'tenant-1');
+
+        expect(db.tenantSubscription.update).toHaveBeenCalledWith(expect.objectContaining({
+            data: { cancel_at_period_end: true },
+        }));
+        expect(result?.cancel_at_period_end).toBe(true);
+    });
+
+    it('throws NotFoundException when cancelling with no subscription', async () => {
+        db.tenantSubscription.findUnique.mockResolvedValueOnce(null);
+
+        await expect(service.cancelAtPeriodEnd('user-1', 'tenant-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException when applying subscription for unknown tenant', async () => {
+        db.tenant.findUnique.mockResolvedValueOnce(null);
+
+        await expect(service.applySubscriptionChange({
+            tenantId: 'ghost-tenant',
+            planCode: 'BASIC',
+        })).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws BadRequestException when SSL Wireless credentials are missing for checkout', async () => {
+        delete process.env.SSL_WIRELESS_STORE_ID;
+        delete process.env.SSL_WIRELESS_STORE_PASSWORD;
+
+        await expect(service.createCheckoutSession('user-1', 'tenant-1', {
+            planCode: 'PREMIUM',
+            billingCycle: 'MONTHLY',
+        })).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws when SSL Wireless gateway returns an error response', async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: false,
+            text: jest.fn().mockResolvedValue(JSON.stringify({
+                status: 'FAILED',
+                failedreason: 'Invalid credentials',
+            })),
+        });
+
+        await expect(service.createCheckoutSession('user-1', 'tenant-1', {
+            planCode: 'PREMIUM',
+            billingCycle: 'MONTHLY',
+        })).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('throws when SSL Wireless transaction reference mismatches during validation', async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            text: jest.fn().mockResolvedValue(JSON.stringify({
+                status: 'VALID',
+                tran_id: 'different-ref',
+                val_id: 'val-mismatch',
+                amount: '3999.00',
+                currency: 'BDT',
+            })),
+        });
+
+        await expect(service.handleSslWirelessCallback({
+            tran_id: 'sslw_original_ref',
+            val_id: 'val-mismatch',
+            value_a: 'tenant-1',
+            value_b: 'PREMIUM',
+            value_c: 'MONTHLY',
+        }, 'success')).rejects.toThrow(BadRequestException);
+    });
+
+    it('creates yearly billing cycle checkout correctly', async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            text: jest.fn().mockResolvedValue(JSON.stringify({
+                status: 'SUCCESS',
+                GatewayPageURL: 'https://sandbox.sslcommerz.com/gateway',
+                sessionkey: 'session-yearly',
+            })),
+        });
+
+        const result = await service.createCheckoutSession('user-1', 'tenant-1', {
+            planCode: 'PREMIUM',
+            billingCycle: 'YEARLY',
+        });
+
+        expect(result.billing_cycle).toBe('YEARLY');
+        expect(result.amount).toBe(39990);
+    });
+
+    it('rejects checkout when tenant user is not a billing manager', async () => {
+        db.tenantUser.findUnique.mockResolvedValueOnce({
+            role: 'CASHIER',
+            tenant: { id: 'tenant-1', name: 'Tenant One' },
+            user: { id: 'user-cashier', email: 'cashier@example.com', name: 'Cashier' },
+        });
+
+        await expect(service.createCheckoutSession('user-cashier', 'tenant-1', {
+            planCode: 'PREMIUM',
+        })).rejects.toThrow(ForbiddenException);
+    });
+
+    it('confirms manual checkout and activates subscription', async () => {
+        const result = await service.confirmCheckout('user-1', 'tenant-1', {
+            planCode: 'PREMIUM',
+            billingCycle: 'MONTHLY',
+            reference: 'manual_ref_123',
+        });
+
+        expect(db.tenantSubscription.upsert).toHaveBeenCalledWith(expect.objectContaining({
+            update: expect.objectContaining({
+                provider_name: 'manual',
+                provider_subscription_ref: 'manual_ref_123',
+            }),
+        }));
+        expect(result).toHaveProperty('subscription');
     });
 });

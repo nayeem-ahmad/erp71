@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Receipt, Search, Undo2, X } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { formatBDT, formatDate } from '../../../lib/format';
 
 interface PurchaseReturnItem {
     id: string;
@@ -260,11 +261,11 @@ export default function CreatePurchaseReturnModal({
                                                             </p>
                                                         </div>
                                                         <span className="text-sm font-black text-emerald-600">
-                                                            {Number(purchase.total_amount || 0).toFixed(2)}
+                                                            {formatBDT(Number(purchase.total_amount || 0))}
                                                         </span>
                                                     </div>
                                                     <p className="text-xs text-gray-500 mt-2">
-                                                        {new Date(purchase.created_at).toLocaleDateString()} · {purchase.items.length} items
+                                                        {formatDate(purchase.created_at)} · {purchase.items.length} items
                                                     </p>
                                                 </button>
                                             );
@@ -297,13 +298,13 @@ export default function CreatePurchaseReturnModal({
                                         <div>
                                             <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Purchase Date</span>
                                             <span className="text-sm font-bold text-gray-700">
-                                                {new Date(selectedPurchase.created_at).toLocaleDateString()}
+                                                {formatDate(selectedPurchase.created_at)}
                                             </span>
                                         </div>
                                         <div>
                                             <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Original Total</span>
                                             <span className="text-sm font-black text-emerald-600">
-                                                {Number(selectedPurchase.total_amount || 0).toFixed(2)}
+                                                {formatBDT(Number(selectedPurchase.total_amount || 0))}
                                             </span>
                                         </div>
                                     </div>
@@ -366,7 +367,7 @@ export default function CreatePurchaseReturnModal({
                                                                     </span>
                                                                 </td>
                                                                 <td className="p-3 text-right text-sm font-bold text-gray-700">
-                                                                    ${Number(item.unit_cost || 0).toFixed(2)}
+                                                                    {formatBDT(Number(item.unit_cost || 0))}
                                                                 </td>
                                                                 <td className="p-3">
                                                                     <input
@@ -380,7 +381,7 @@ export default function CreatePurchaseReturnModal({
                                                                     />
                                                                 </td>
                                                                 <td className="p-3 text-right text-sm font-black text-emerald-600">
-                                                                    ${(quantity * Number(item.unit_cost || 0)).toFixed(2)}
+                                                                    {formatBDT(quantity * Number(item.unit_cost || 0))}
                                                                 </td>
                                                             </tr>
                                                         );
@@ -395,7 +396,7 @@ export default function CreatePurchaseReturnModal({
                                             <p className="text-xs font-black uppercase tracking-widest text-emerald-200">Return Total</p>
                                             <p className="text-sm text-emerald-100 mt-1">Calculated from client-side quantity caps and purchase unit costs</p>
                                         </div>
-                                        <span className="text-2xl font-black">{totalAmount.toFixed(2)}</span>
+                                        <span className="text-2xl font-black">{formatBDT(totalAmount)}</span>
                                     </div>
                                 </>
                             )}

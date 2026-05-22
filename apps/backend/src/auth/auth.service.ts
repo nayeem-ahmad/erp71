@@ -1,21 +1,16 @@
-import { BadRequestException, Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException, ConflictException, ServiceUnavailableException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { JwtService } from '@nestjs/jwt';
 import { EmailService } from '../email/email.service';
 import { bootstrapDefaultAccountingForTenant } from '@retail-saas/database';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-import { SignupDto, LoginDto } from './auth.dto';
+import { SignupDto, LoginDto, UpdateProfileDto, ChangePasswordDto } from './auth.dto';
 import { isPlatformAdminEmail } from './platform-admin.util';
 import { ROLE_DEFAULT_PERMISSIONS, UserRole } from '@retail-saas/shared-types';
 
 @Injectable()
 export class AuthService {
-    private static readonly MAX_FAILED_ATTEMPTS = 5;
-    private static readonly LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
-
-    private static readonly RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
-
     constructor(
         private db: DatabaseService,
         private jwtService: JwtService,
@@ -54,9 +49,13 @@ export class AuthService {
             return createdUser;
         });
 
-        // Fire-and-forget — don't block signup on email delivery
-        this.email.sendWelcome(user.email, user.name ?? user.email).catch(() => null);
-
+        this.email.sendWelcome(user.email, user.name ?? user.email).catch((err) => {
+            console.warn(`[AuthService] Welcome email failed for ${user.email}:`, err?.message);
+        });
+        // Fire-and-forget: send email verification
+        this.sendVerificationEmail(user.id).catch((err) => {
+            console.warn(`[AuthService] Verification email failed for ${user.email}:`, err?.message);
+        });
         return this.generateAuthResponse(user.id);
     }
 
@@ -69,87 +68,70 @@ export class AuthService {
             throw new UnauthorizedException('Invalid credentials');
         }
 
-        if (user.locked_until && user.locked_until > new Date()) {
-            const retryAfterSec = Math.ceil((user.locked_until.getTime() - Date.now()) / 1000);
-            throw new UnauthorizedException(
-                `Account locked due to too many failed attempts. Try again in ${retryAfterSec} seconds.`,
-            );
-        }
-
         const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
 
         if (!isPasswordValid) {
-            const attempts = user.failed_login_attempts + 1;
-            const locked = attempts >= AuthService.MAX_FAILED_ATTEMPTS;
-            await this.db.user.update({
-                where: { id: user.id },
-                data: {
-                    failed_login_attempts: attempts,
-                    locked_until: locked
-                        ? new Date(Date.now() + AuthService.LOCKOUT_DURATION_MS)
-                        : undefined,
-                },
-            });
             throw new UnauthorizedException('Invalid credentials');
         }
 
-        return this.generateAuthResponse(user.id, true);
+        return this.generateAuthResponse(user.id);
     }
 
-    async logout(rawToken: string) {
-        if (!rawToken) return { success: true };
-        const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-        await this.db.refreshToken.deleteMany({ where: { token_hash: tokenHash } });
-        return { success: true };
+    async logout(userId: string): Promise<void> {
+        // Increment token_version to invalidate all existing JWTs for this user
+        await this.db.user.update({
+            where: { id: userId },
+            data: { token_version: { increment: 1 } },
+        });
     }
 
-    async forgotPassword(email: string) {
-        const user = await this.db.user.findUnique({ where: { email } });
-        // Always return success to avoid email enumeration
-        if (!user) return { success: true };
+    async sendVerificationEmail(userId: string): Promise<void> {
+        const user = await this.db.user.findUnique({ where: { id: userId } });
+        if (!user) throw new UnauthorizedException('User not found');
+        if (user.email_verified_at) throw new BadRequestException('Email already verified');
 
-        // Invalidate any previous reset tokens for this user
-        await this.db.passwordResetToken.deleteMany({ where: { user_id: user.id } });
+        await this.db.emailVerificationToken.deleteMany({ where: { user_id: userId } });
 
         const rawToken = crypto.randomBytes(32).toString('hex');
         const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-        await this.db.passwordResetToken.create({
-            data: {
-                user_id: user.id,
-                token_hash: tokenHash,
-                expires_at: new Date(Date.now() + AuthService.RESET_TOKEN_TTL_MS),
-            },
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        await this.db.emailVerificationToken.create({
+            data: { user_id: userId, token_hash: tokenHash, expires_at: expiresAt },
         });
 
-        const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
-        const resetUrl = `${frontendUrl}/reset-password?token=${rawToken}`;
-        await this.email.sendPasswordReset(user.email, resetUrl);
-
-        return { success: true };
+        this.email.sendEmailVerification(user.email, rawToken).catch((err) => {
+            console.warn(`[AuthService] Verification email failed for ${user.email}:`, err?.message);
+        });
     }
 
-    async resetPassword(rawToken: string, newPassword: string) {
+    async verifyEmail(rawToken: string): Promise<void> {
         const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-        const stored = await this.db.passwordResetToken.findUnique({ where: { token_hash: tokenHash } });
+        const record = await this.db.emailVerificationToken.findUnique({ where: { token_hash: tokenHash } });
 
-        if (!stored || stored.expires_at < new Date()) {
-            if (stored) await this.db.passwordResetToken.delete({ where: { id: stored.id } });
-            throw new BadRequestException('Invalid or expired reset token');
+        if (!record || record.expires_at < new Date()) {
+            throw new BadRequestException('Invalid or expired verification token');
         }
-
-        const passwordHash = await bcrypt.hash(newPassword, 10);
 
         await this.db.$transaction([
             this.db.user.update({
-                where: { id: stored.user_id },
-                data: { passwordHash },
+                where: { id: record.user_id },
+                data: { email_verified_at: new Date() },
             }),
-            // Invalidate all refresh tokens on password change
-            this.db.refreshToken.deleteMany({ where: { user_id: stored.user_id } }),
-            this.db.passwordResetToken.delete({ where: { id: stored.id } }),
+            this.db.emailVerificationToken.deleteMany({ where: { user_id: record.user_id } }),
         ]);
+    }
 
-        return { success: true };
+    async demoLogin() {
+        const user = await this.db.user.findUnique({
+            where: { email: 'demo@retailsaas.app' },
+        });
+
+        if (!user) {
+            throw new ServiceUnavailableException('Demo account not available');
+        }
+
+        return this.generateAuthResponse(user.id);
     }
 
     async getPlans() {
@@ -168,37 +150,7 @@ export class AuthService {
         }));
     }
 
-    private static readonly REFRESH_TOKEN_TTL_DAYS = 7;
-
-    private async issueRefreshToken(userId: string): Promise<string> {
-        const rawToken = crypto.randomBytes(32).toString('hex');
-        const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-        const expiresAt = new Date(
-            Date.now() + AuthService.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000,
-        );
-        await this.db.refreshToken.create({
-            data: { user_id: userId, token_hash: tokenHash, expires_at: expiresAt },
-        });
-        return rawToken;
-    }
-
-    async refreshTokens(rawToken: string) {
-        const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-        const stored = await this.db.refreshToken.findUnique({ where: { token_hash: tokenHash } });
-
-        if (!stored || stored.expires_at < new Date()) {
-            if (stored) {
-                await this.db.refreshToken.delete({ where: { id: stored.id } });
-            }
-            throw new UnauthorizedException('Invalid or expired refresh token');
-        }
-
-        // Rotate: delete the consumed token before issuing a new pair
-        await this.db.refreshToken.delete({ where: { id: stored.id } });
-        return this.generateAuthResponse(stored.user_id, true);
-    }
-
-    private async generateAuthResponse(userId: string, withRefreshToken = false) {
+    private async generateAuthResponse(userId: string) {
         const user = await this.db.user.findUnique({
             where: { id: userId },
             include: {
@@ -223,18 +175,17 @@ export class AuthService {
             throw new UnauthorizedException('User not found');
         }
 
-        const payload = { sub: user.id, email: user.email };
+        const payload = { sub: user.id, email: user.email, tv: user.token_version };
         const isPlatformAdmin = isPlatformAdminEmail(user.email);
-        const refreshToken = withRefreshToken ? await this.issueRefreshToken(userId) : undefined;
         return {
-            access_token: this.jwtService.sign(payload, { expiresIn: '15m' }),
-            ...(refreshToken && { refresh_token: refreshToken }),
+            access_token: this.jwtService.sign(payload),
             is_platform_admin: isPlatformAdmin,
             user: {
                 id: user.id,
                 email: user.email,
                 name: user.name,
                 is_platform_admin: isPlatformAdmin,
+                email_verified: !!user.email_verified_at,
             },
             tenants: user.tenantMembers.map((membership) =>
                 this.mapTenantMembership(membership, user.storeAccess),
@@ -267,15 +218,59 @@ export class AuthService {
             throw new UnauthorizedException('User not found');
         }
 
+        const totpSecret = (user as any).totp_secret as string | null | undefined;
+        const twoFactorEnabled = !!totpSecret && !totpSecret.startsWith('pending:');
+
         return {
             id: user.id,
             email: user.email,
             name: user.name,
             is_platform_admin: isPlatformAdminEmail(user.email),
+            email_verified: !!user.email_verified_at,
+            two_factor_enabled: twoFactorEnabled,
             tenants: user.tenantMembers.map((membership) =>
                 this.mapTenantMembership(membership, user.storeAccess),
             ),
         };
+    }
+
+    async updateProfile(userId: string, dto: UpdateProfileDto) {
+        const data: { name?: string } = {};
+        if (dto.name !== undefined) data.name = dto.name.trim();
+
+        const user = await this.db.user.update({
+            where: { id: userId },
+            data,
+            select: { id: true, email: true, name: true },
+        });
+
+        return { id: user.id, email: user.email, name: user.name };
+    }
+
+    async changePassword(userId: string, dto: ChangePasswordDto) {
+        const user = await this.db.user.findUnique({
+            where: { id: userId },
+            select: { passwordHash: true },
+        });
+
+        if (!user) throw new UnauthorizedException('User not found');
+
+        const valid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+        if (!valid) throw new BadRequestException('Current password is incorrect');
+
+        if (dto.currentPassword === dto.newPassword) {
+            throw new BadRequestException('New password must differ from your current password');
+        }
+
+        if (dto.newPassword.length < 8) {
+            throw new BadRequestException('New password must be at least 8 characters');
+        }
+
+        const newHash = await bcrypt.hash(dto.newPassword, 10);
+        await this.db.user.update({
+            where: { id: userId },
+            data: { passwordHash: newHash },
+        });
     }
 
     async setupStore(userId: string, dto: { name: string; address?: string; planCode?: 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM' }) {

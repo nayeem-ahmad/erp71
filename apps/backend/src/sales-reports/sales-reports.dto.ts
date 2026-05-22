@@ -35,3 +35,13 @@ export class GetSalesByProductDto {
     @IsString()
     to?: string;
 }
+
+export class GetConsolidatedReportDto {
+    @IsOptional()
+    @IsString()
+    from?: string;
+
+    @IsOptional()
+    @IsString()
+    to?: string;
+}

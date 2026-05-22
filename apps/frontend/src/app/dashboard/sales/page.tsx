@@ -3,9 +3,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Receipt, Eye, Edit2, Plus } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { formatBDT, formatDate } from '../../../lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
+import { PostingBadge } from '@/components/PostingBadge';
 
 interface Sale {
     id: string;
@@ -18,6 +20,8 @@ interface Sale {
     payments: { payment_method: string; amount: string }[];
     customer?: { name: string };
     note?: string;
+    posting_status?: string | null;
+    voucher_number?: string | null;
 }
 
 const statusColors: Record<string, string> = {
@@ -62,7 +66,7 @@ export default function SalesPage() {
                     const d = new Date(info.getValue());
                     return (
                         <div>
-                            <span className="text-sm text-gray-600">{d.toLocaleDateString()}</span>
+                            <span className="text-sm text-gray-600">{formatDate(info.getValue())}</span>
                             <span className="text-xs text-gray-400 block">{d.toLocaleTimeString()}</span>
                         </div>
                     );
@@ -92,7 +96,7 @@ export default function SalesPage() {
                 header: 'Total',
                 cell: (info) => (
                     <span className="text-sm font-black text-blue-600">
-                        ${parseFloat(info.getValue()).toFixed(2)}
+                        {formatBDT(parseFloat(info.getValue()))}
                     </span>
                 ),
                 sortingFn: (a, b) =>
@@ -103,7 +107,7 @@ export default function SalesPage() {
                 header: 'Paid',
                 cell: (info) => (
                     <span className="text-sm font-bold text-gray-700">
-                        ${parseFloat(info.getValue()).toFixed(2)}
+                        {formatBDT(parseFloat(info.getValue()))}
                     </span>
                 ),
                 sortingFn: (a, b) =>
@@ -149,6 +153,17 @@ export default function SalesPage() {
                     size: 150,
                 },
             ),
+            columnHelper.display({
+                id: 'posting',
+                header: 'Voucher',
+                cell: ({ row }) => (
+                    <PostingBadge
+                        status={row.original.posting_status}
+                        voucherNumber={row.original.voucher_number}
+                    />
+                ),
+                size: 120,
+            }),
             columnHelper.display({
                 id: 'actions',
                 header: 'Actions',

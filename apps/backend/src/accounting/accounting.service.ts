@@ -912,6 +912,150 @@ export class AccountingService {
         };
     }
 
+    async exportLedger(tenantId: string, format: 'tally' | 'quickbooks', from?: string, to?: string): Promise<string> {
+        this.validateDateRange(from, to);
+
+        const vouchers = await this.db.voucher.findMany({
+            where: {
+                tenant_id: tenantId,
+                ...this.buildVoucherDateRangeFilter(from, to),
+            },
+            include: {
+                details: {
+                    include: {
+                        account: true,
+                    },
+                    orderBy: { created_at: 'asc' },
+                },
+            },
+            orderBy: [{ date: 'asc' }, { created_at: 'asc' }],
+        });
+
+        if (format === 'tally') {
+            return this.buildTallyXml(vouchers);
+        }
+
+        return this.buildQuickBooksIif(vouchers);
+    }
+
+    private buildTallyXml(vouchers: Array<{
+        id: string;
+        date: Date;
+        description: string | null;
+        voucher_number: string;
+        details: Array<{
+            account: { name: string };
+            debit_amount: any;
+            credit_amount: any;
+        }>;
+    }>): string {
+        const escapeXml = (str: string) =>
+            str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&apos;');
+
+        const voucherMessages = vouchers.map((voucher) => {
+            const date = voucher.date
+                .toISOString()
+                .slice(0, 10)
+                .replace(/-/g, '');
+
+            const narration = escapeXml(voucher.description ?? voucher.voucher_number);
+
+            const ledgerLines = voucher.details.map((detail) => {
+                const debit = Number(detail.debit_amount ?? 0);
+                const credit = Number(detail.credit_amount ?? 0);
+                const isDebit = debit > 0;
+                // In Tally: debit entries are negative amounts with ISDEEMEDPOSITIVE=Yes
+                // credit entries are positive amounts with ISDEEMEDPOSITIVE=No
+                const amount = isDebit ? -debit : credit;
+                const isDeemedPositive = isDebit ? 'Yes' : 'No';
+
+                return `        <ALLLEDGERENTRIES.LIST>
+          <LEDGERNAME>${escapeXml(detail.account.name)}</LEDGERNAME>
+          <ISDEEMEDPOSITIVE>${isDeemedPositive}</ISDEEMEDPOSITIVE>
+          <AMOUNT>${amount.toFixed(2)}</AMOUNT>
+        </ALLLEDGERENTRIES.LIST>`;
+            }).join('\n');
+
+            return `      <TALLYMESSAGE xmlns:UDF="TallyUDF">
+        <VOUCHER VCHTYPE="Journal" ACTION="Create">
+          <DATE>${date}</DATE>
+          <NARRATION>${narration}</NARRATION>
+${ledgerLines}
+        </VOUCHER>
+      </TALLYMESSAGE>`;
+        }).join('\n');
+
+        return `<?xml version="1.0" encoding="UTF-8"?>
+<ENVELOPE>
+  <HEADER>
+    <TALLYREQUEST>Import Data</TALLYREQUEST>
+  </HEADER>
+  <BODY>
+    <IMPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>Vouchers</REPORTNAME>
+      </REQUESTDESC>
+      <REQUESTDATA>
+${voucherMessages}
+      </REQUESTDATA>
+    </IMPORTDATA>
+  </BODY>
+</ENVELOPE>`;
+    }
+
+    private buildQuickBooksIif(vouchers: Array<{
+        id: string;
+        date: Date;
+        description: string | null;
+        voucher_number: string;
+        details: Array<{
+            account: { name: string };
+            debit_amount: any;
+            credit_amount: any;
+        }>;
+    }>): string {
+        const formatDate = (date: Date) => {
+            const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+            const dd = String(date.getUTCDate()).padStart(2, '0');
+            const yyyy = date.getUTCFullYear();
+            return `${mm}/${dd}/${yyyy}`;
+        };
+
+        const lines: string[] = [
+            '!TRNS\tTRNSID\tTRNSTYPE\tDATE\tACCNT\tAMOUNT\tMEMO',
+            '!SPL\tSPLID\tTRNSTYPE\tDATE\tACCNT\tAMOUNT\tMEMO',
+            '!ENDTRNS',
+        ];
+
+        vouchers.forEach((voucher, voucherIndex) => {
+            const trnsId = voucherIndex + 1;
+            const dateStr = formatDate(voucher.date);
+            const memo = voucher.description ?? voucher.voucher_number;
+            const trnsType = 'GENERAL JOURNAL';
+
+            voucher.details.forEach((detail, detailIndex) => {
+                const debit = Number(detail.debit_amount ?? 0);
+                const credit = Number(detail.credit_amount ?? 0);
+                // In QuickBooks IIF: TRNS line holds the debit side (positive),
+                // SPL lines hold the credit side (negative)
+                const amount = debit > 0 ? debit : -credit;
+                const tag = detailIndex === 0 ? 'TRNS' : 'SPL';
+                const splId = detailIndex === 0 ? trnsId : detailIndex;
+
+                lines.push(`${tag}\t${splId}\t${trnsType}\t${dateStr}\t${detail.account.name}\t${amount.toFixed(2)}\t${memo}`);
+            });
+
+            lines.push('ENDTRNS');
+        });
+
+        return lines.join('\r\n');
+    }
+
     private formatVoucherNumber(voucherType: VoucherType, sequenceNumber: number) {
         return `${VOUCHER_NUMBER_PREFIXES[voucherType]}-${String(sequenceNumber).padStart(VOUCHER_NUMBER_PADDING, '0')}`;
     }

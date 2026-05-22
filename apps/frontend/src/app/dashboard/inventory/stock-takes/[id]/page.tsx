@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { CheckCircle2, Save } from 'lucide-react';
 import { api } from '../../../../../lib/api';
+import { formatBDT } from '../../../../../lib/format';
 
 export default function StockTakeDetailPage() {
     const params = useParams();
@@ -146,7 +147,7 @@ export default function StockTakeDetailPage() {
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-4">
                         <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">Estimated Value Impact</div>
-                        <div className={`mt-2 text-2xl font-black ${(session.summary?.netValueImpact ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{Number(session.summary?.netValueImpact ?? 0).toFixed(2)}</div>
+                        <div className={`mt-2 text-2xl font-black ${(session.summary?.netValueImpact ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatBDT(Number(session.summary?.netValueImpact ?? 0))}</div>
                     </div>
                 </div>
 

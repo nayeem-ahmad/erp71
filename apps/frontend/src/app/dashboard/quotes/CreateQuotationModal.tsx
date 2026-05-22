@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { X, Search, Trash2 } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { formatBDT } from '../../../lib/format';
 import { isCompoundUnit, CompoundUnitType } from '../../../lib/compound-units';
 import CompoundUnitInput from '../../../components/CompoundUnitInput';
 
@@ -217,7 +218,7 @@ export default function CreateQuotationModal({ isOpen, onClose, onSuccess }: Cre
                                                 <span className="text-sm font-bold">{product.name}</span>
                                                 <span className="text-xs text-gray-400 ml-2">{product.sku}</span>
                                             </div>
-                                            <span className="text-sm font-bold text-blue-600">{parseFloat(product.price).toFixed(2)}</span>
+                                            <span className="text-sm font-bold text-blue-600">{formatBDT(parseFloat(product.price))}</span>
                                         </button>
                                     ))}
                                 </div>
@@ -272,7 +273,7 @@ export default function CreateQuotationModal({ isOpen, onClose, onSuccess }: Cre
                                             />
                                         </td>
                                         <td className="py-3 text-right text-sm font-black text-blue-600">
-                                            ${(item.quantity * item.unitPrice).toFixed(2)}
+                                            {formatBDT(item.quantity * item.unitPrice)}
                                         </td>
                                         <td className="py-3 text-center">
                                             <button onClick={() => removeItem(index)} className="p-1 text-gray-300 hover:text-red-500 transition-colors">
@@ -285,7 +286,7 @@ export default function CreateQuotationModal({ isOpen, onClose, onSuccess }: Cre
                             <tfoot>
                                 <tr className="border-t-2 border-gray-200">
                                     <td colSpan={3} className="pt-3 text-right text-sm font-black uppercase tracking-widest">Total</td>
-                                    <td className="pt-3 text-right text-xl font-black text-blue-600">{total.toFixed(2)}</td>
+                                    <td className="pt-3 text-right text-xl font-black text-blue-600">{formatBDT(total)}</td>
                                     <td></td>
                                 </tr>
                             </tfoot>

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProductsService } from './products.service';
 import { DatabaseService } from '../database/database.service';
+import { RedisService } from '../cache/redis.service';
 import { NotFoundException } from '@nestjs/common';
 
 describe('ProductsService', () => {
@@ -47,16 +48,20 @@ describe('ProductsService', () => {
       product: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
         update: jest.fn(),
         updateMany: jest.fn(),
         deleteMany: jest.fn(),
       },
     };
 
+    const redis = { get: jest.fn().mockResolvedValue(null), set: jest.fn(), invalidatePattern: jest.fn() };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProductsService,
         { provide: DatabaseService, useValue: db },
+        { provide: RedisService, useValue: redis },
       ],
     }).compile();
 
@@ -117,24 +122,26 @@ describe('ProductsService', () => {
   });
 
   describe('findAll()', () => {
-    it('should return all products for the tenant', async () => {
-      db.product.findMany.mockResolvedValue([
+    it('should return paginated products for the tenant', async () => {
+      const items = [
         { id: 'p1', name: 'A', stocks: [] },
         { id: 'p2', name: 'B', stocks: [] },
-      ]);
+      ];
+      db.product.findMany.mockResolvedValue(items);
+      db.product.count.mockResolvedValue(2);
 
       const result = await service.findAll('tenant-1');
 
-      expect(db.product.findMany).toHaveBeenCalledWith({
-        where: { tenant_id: 'tenant-1' },
-        include: expect.objectContaining({
-          group: true,
-          subgroup: expect.any(Object),
-          stocks: expect.any(Object),
+      expect(db.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ tenant_id: 'tenant-1', deleted_at: null }),
+          orderBy: { name: 'asc' },
+          skip: 0,
+          take: 20,
         }),
-        orderBy: { name: 'asc' },
-      });
-      expect(result).toHaveLength(2);
+      );
+      expect(result.items).toHaveLength(2);
+      expect(result.total).toBe(2);
     });
   });
 
@@ -197,15 +204,18 @@ describe('ProductsService', () => {
   });
 
   describe('remove()', () => {
-    it('should delete a product by tenant and id', async () => {
-      db.product.deleteMany.mockResolvedValue({ count: 1 });
+    it('should soft-delete a product by setting deleted_at', async () => {
+      db.product.findFirst.mockResolvedValue({ id: 'p1', tenant_id: 'tenant-1', deleted_at: null });
+      db.product.update.mockResolvedValue({ id: 'p1', tenant_id: 'tenant-1', deleted_at: new Date() });
 
-      const result = await service.remove('tenant-1', 'p1');
+      await service.remove('tenant-1', 'p1');
 
-      expect(db.product.deleteMany).toHaveBeenCalledWith({
-        where: { id: 'p1', tenant_id: 'tenant-1' },
-      });
-      expect(result.count).toBe(1);
+      expect(db.product.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'p1' },
+          data: expect.objectContaining({ deleted_at: expect.any(Date) }),
+        }),
+      );
     });
   });
 });

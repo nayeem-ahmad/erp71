@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Building2, Loader2, Search, ShieldCheck, Users } from 'lucide-react';
 import { api } from '../../../../lib/api';
+import { formatDate } from '../../../../lib/format';
 
 type PlanCode = 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM';
 
@@ -217,7 +218,7 @@ export default function AdminTenantsPage() {
                                     <div>
                                         <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Selected Tenant</p>
                                         <h2 className="mt-2 text-3xl font-black tracking-tight">{selectedTenant.name}</h2>
-                                        <p className="mt-2 text-sm text-gray-500">Created {new Date(selectedTenant.created_at).toLocaleDateString()}</p>
+                                        <p className="mt-2 text-sm text-gray-500">Created {formatDate(selectedTenant.created_at)}</p>
                                     </div>
                                     <div className="rounded-2xl bg-gray-50 px-4 py-3 text-right">
                                         <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Owner</p>

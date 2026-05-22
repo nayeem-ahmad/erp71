@@ -5,6 +5,7 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { AlertTriangle, Plus } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { api } from '../../../../lib/api';
+import { PostingBadge } from '@/components/PostingBadge';
 
 interface ShrinkageRecord {
     id: string;
@@ -13,6 +14,8 @@ interface ShrinkageRecord {
     warehouse?: { name: string } | null;
     reason?: { label: string } | null;
     items: Array<{ id: string; quantity: number }>;
+    posting_status?: string | null;
+    voucher_number?: string | null;
 }
 
 const columnHelper = createColumnHelper<ShrinkageRecord>();
@@ -89,6 +92,17 @@ export default function InventoryShrinkagePage() {
                 header: 'Created',
                 cell: (info) => new Date(info.getValue()).toLocaleString(),
                 size: 170,
+            }),
+            columnHelper.display({
+                id: 'posting',
+                header: 'Voucher',
+                cell: ({ row }) => (
+                    <PostingBadge
+                        status={row.original.posting_status}
+                        voucherNumber={row.original.voucher_number}
+                    />
+                ),
+                size: 120,
             }),
         ],
         [],

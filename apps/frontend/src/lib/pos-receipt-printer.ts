@@ -1,4 +1,5 @@
 import * as QRCode from 'qrcode';
+import { formatBDT } from './format';
 
 export interface ReceiptItem {
     name: string;
@@ -39,15 +40,15 @@ export async function printPOSReceipt(data: ReceiptData): Promise<void> {
         <tr>
             <td class="item-name">${escHtml(item.name)}${item.sku ? `<br><span class="sku">${escHtml(item.sku)}</span>` : ''}</td>
             <td class="item-qty">${item.quantity}</td>
-            <td class="item-price">${item.unitPrice.toFixed(2)}</td>
-            <td class="item-total">${(item.quantity * item.unitPrice).toFixed(2)}</td>
+            <td class="item-price">${formatBDT(item.unitPrice)}</td>
+            <td class="item-total">${formatBDT(item.quantity * item.unitPrice)}</td>
         </tr>
     `).join('');
 
     const paymentRows = data.payments.map(p => `
         <tr>
             <td class="pay-method">${escHtml(formatPaymentMethod(p.method))}</td>
-            <td class="pay-amount">${p.amount.toFixed(2)}</td>
+            <td class="pay-amount">${formatBDT(p.amount)}</td>
         </tr>
     `).join('');
 
@@ -241,9 +242,9 @@ export async function printPOSReceipt(data: ReceiptData): Promise<void> {
     <hr class="divider">
 
     <table class="totals-table">
-        <tr><td>Subtotal</td><td>${data.subtotal.toFixed(2)}</td></tr>
-        <tr><td>Tax</td><td>${data.tax.toFixed(2)}</td></tr>
-        <tr class="grand-total"><td>TOTAL</td><td>${data.total.toFixed(2)}</td></tr>
+        <tr><td>Subtotal</td><td>${formatBDT(data.subtotal)}</td></tr>
+        <tr><td>Tax</td><td>${formatBDT(data.tax)}</td></tr>
+        <tr class="grand-total"><td>TOTAL</td><td>${formatBDT(data.total)}</td></tr>
     </table>
 
     <hr class="divider">
@@ -252,7 +253,7 @@ export async function printPOSReceipt(data: ReceiptData): Promise<void> {
         ${paymentRows}
         <tr class="change-row">
             <td>${data.amountPaid >= data.total ? 'Change' : 'Balance Due'}</td>
-            <td class="pay-amount">${Math.abs(data.amountPaid - data.total).toFixed(2)}</td>
+            <td class="pay-amount">${formatBDT(Math.abs(data.amountPaid - data.total))}</td>
         </tr>
     </table>
 

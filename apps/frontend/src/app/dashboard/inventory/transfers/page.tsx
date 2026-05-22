@@ -6,6 +6,7 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { ArrowRightLeft, Plus, Truck } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { api } from '../../../../lib/api';
+import { PostingBadge } from '@/components/PostingBadge';
 
 interface WarehouseTransfer {
     id: string;
@@ -17,6 +18,8 @@ interface WarehouseTransfer {
     sourceWarehouse?: { id: string; name: string } | null;
     destinationWarehouse?: { id: string; name: string } | null;
     items: Array<{ id: string; product_id: string; quantity_sent: number; quantity_received: number; product?: { name: string } | null }>;
+    posting_status?: string | null;
+    voucher_number?: string | null;
 }
 
 const columnHelper = createColumnHelper<WarehouseTransfer>();
@@ -151,6 +154,17 @@ export default function InventoryTransfersPage() {
                 header: 'Created',
                 cell: (info) => new Date(info.getValue()).toLocaleString(),
                 size: 170,
+            }),
+            columnHelper.display({
+                id: 'posting',
+                header: 'Voucher',
+                cell: ({ row }) => (
+                    <PostingBadge
+                        status={row.original.posting_status}
+                        voucherNumber={row.original.voucher_number}
+                    />
+                ),
+                size: 120,
             }),
             columnHelper.display({
                 id: 'actions',

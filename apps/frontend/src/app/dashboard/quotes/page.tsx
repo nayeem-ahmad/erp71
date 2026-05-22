@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { FileText, Plus, Eye, Edit2, Printer, Trash2 } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { formatBDT, formatDate } from '../../../lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
@@ -84,13 +85,13 @@ export default function QuotesPage() {
             </head>
             <body>
                 <h1>${quote.quote_number} (v${quote.version})</h1>
-                <div class="subtitle">Created: ${new Date(quote.created_at).toLocaleString()} | Status: ${quote.status} | Valid Until: ${quote.valid_until ? new Date(quote.valid_until).toLocaleDateString() : 'Open'}</div>
+                <div class="subtitle">Created: ${new Date(quote.created_at).toLocaleString()} | Status: ${quote.status} | Valid Until: ${quote.valid_until ? formatDate(quote.valid_until) : 'Open'}</div>
                 <p><strong>Customer:</strong> ${quote.customer?.name || 'Walk-in'}</p>
                 <table>
                     <thead><tr><th>Product</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr></thead>
                     <tbody>
-                        ${quote.items.map((item: any) => `<tr><td>${item.product?.name || 'Item'}</td><td>${item.quantity}</td><td>${Number(item.unit_price).toFixed(2)}</td><td>${(item.quantity * Number(item.unit_price)).toFixed(2)}</td></tr>`).join('')}
-                        <tr class="total-row"><td colspan="3">Total</td><td>${Number(quote.total_amount).toFixed(2)}</td></tr>
+                        ${quote.items.map((item: any) => `<tr><td>${item.product?.name || 'Item'}</td><td>${item.quantity}</td><td>${formatBDT(Number(item.unit_price))}</td><td>${formatBDT(item.quantity * Number(item.unit_price))}</td></tr>`).join('')}
+                        <tr class="total-row"><td colspan="3">Total</td><td>${formatBDT(Number(quote.total_amount))}</td></tr>
                     </tbody>
                 </table>
                 ${quote.notes ? `<p><strong>Notes:</strong> ${quote.notes}</p>` : ''}
@@ -122,7 +123,7 @@ export default function QuotesPage() {
                     const date = new Date(info.getValue());
                     return (
                         <div>
-                            <span className="text-sm text-gray-600">{date.toLocaleDateString()}</span>
+                            <span className="text-sm text-gray-600">{formatDate(info.getValue())}</span>
                             <span className="text-xs text-gray-400 block">{date.toLocaleTimeString()}</span>
                         </div>
                     );
@@ -153,7 +154,7 @@ export default function QuotesPage() {
                 header: 'Valid Until',
                 cell: (info) => (
                     <span className="text-sm font-medium text-gray-600">
-                        {info.getValue() ? new Date(info.getValue() as string).toLocaleDateString() : 'Open'}
+                        {info.getValue() ? formatDate(info.getValue() as string) : 'Open'}
                     </span>
                 ),
                 size: 130,
@@ -161,7 +162,7 @@ export default function QuotesPage() {
             columnHelper.accessor('total_amount', {
                 header: 'Total',
                 cell: (info) => (
-                    <span className="text-sm font-black text-blue-600">${parseFloat(info.getValue()).toFixed(2)}</span>
+                    <span className="text-sm font-black text-blue-600">{formatBDT(parseFloat(info.getValue()))}</span>
                 ),
                 sortingFn: (a, b) => parseFloat(a.getValue('total_amount')) - parseFloat(b.getValue('total_amount')),
                 size: 110,

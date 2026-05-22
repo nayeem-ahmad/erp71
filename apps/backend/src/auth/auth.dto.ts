@@ -20,15 +20,11 @@ export class CreateStoreDto {
     planCode?: 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM';
 }
 
-export class RefreshTokenDto {
-    refresh_token: string;
+export class UpdateProfileDto {
+    name?: string;
 }
 
-export class ForgotPasswordDto {
-    email: string;
-}
-
-export class ResetPasswordDto {
-    token: string;
-    password: string;
+export class ChangePasswordDto {
+    currentPassword: string;
+    newPassword: string;
 }

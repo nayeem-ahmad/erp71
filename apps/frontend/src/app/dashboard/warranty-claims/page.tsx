@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ShieldCheck, Plus, X, Search, CheckCircle, XCircle, Clock, Wrench, RefreshCw } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { formatDate } from '../../../lib/format';
 import { createColumnHelper } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
 import type { WarrantyClaim } from '@retail-saas/shared-types';
@@ -223,7 +224,7 @@ export default function WarrantyClaimsPage() {
                 header: 'Date',
                 cell: (info) => (
                     <span className="text-sm text-gray-500">
-                        {new Date(info.getValue()).toLocaleDateString()}
+                        {formatDate(info.getValue())}
                     </span>
                 ),
             }),
@@ -270,7 +271,7 @@ export default function WarrantyClaimsPage() {
             {loading ? (
                 <div className="text-center py-16 text-gray-400">Loading claims...</div>
             ) : (
-                <DataTable columns={columns} data={claims} />
+                <DataTable tableId="warranty-claims" title="Warranty Claims" columns={columns} data={claims} />
             )}
 
             {/* New Claim Modal */}
@@ -336,13 +337,13 @@ export default function WarrantyClaimsPage() {
                                     )}
                                     {lookupResult.soldAt && (
                                         <p className="text-gray-600">
-                                            Sold: {new Date(lookupResult.soldAt).toLocaleDateString()} &nbsp;·&nbsp;
+                                            Sold: {formatDate(lookupResult.soldAt)} &nbsp;·&nbsp;
                                             Warranty: {lookupResult.warrantyDays} days
                                         </p>
                                     )}
                                     {lookupResult.expiresAt && (
                                         <p className="text-gray-600">
-                                            Expires: {new Date(lookupResult.expiresAt).toLocaleDateString()}
+                                            Expires: {formatDate(lookupResult.expiresAt)}
                                         </p>
                                     )}
                                     {lookupResult.isClaimed && (

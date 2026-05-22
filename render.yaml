@@ -1,12 +1,15 @@
 services:
+  # ─── PRODUCTION ────────────────────────────────────────────────────────────
+
   - type: web
     name: retail-saas-backend
     rootDir: .
     runtime: docker
     dockerContext: .
     dockerfilePath: ./apps/backend/Dockerfile
-    plan: free
+    plan: standard
     autoDeploy: true
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
@@ -29,6 +32,12 @@ services:
       - key: BILLING_PROVIDER
         sync: false
       - key: PLATFORM_ADMIN_EMAILS
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: SENTRY_DSN
         sync: false
       - key: SSL_WIRELESS_STORE_ID
         sync: false
@@ -63,7 +72,7 @@ services:
     runtime: docker
     dockerContext: .
     dockerfilePath: ./apps/frontend/Dockerfile
-    plan: free
+    plan: standard
     autoDeploy: true
     envVars:
       - key: NODE_ENV
@@ -71,4 +80,80 @@ services:
       - key: PORT
         value: 3000
       - key: NEXT_PUBLIC_API_URL
+        sync: false
+      - key: NEXT_PUBLIC_SENTRY_DSN
+        sync: false
+      - key: SENTRY_ORG
+        sync: false
+      - key: SENTRY_PROJECT
+        sync: false
+
+  # ─── STAGING ────────────────────────────────────────────────────────────────
+  # Deploy from the `staging` branch. Uses sandbox payment credentials.
+
+  - type: web
+    name: retail-saas-backend-staging
+    rootDir: .
+    runtime: docker
+    dockerContext: .
+    dockerfilePath: ./apps/backend/Dockerfile
+    plan: starter
+    autoDeploy: true
+    branch: staging
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: staging
+      - key: PORT
+        value: 4000
+      - key: DATABASE_URL
+        sync: false           # point to a separate Supabase staging project
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        sync: false
+      - key: BACKEND_PUBLIC_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: BILLING_PROVIDER
+        value: SSL_WIRELESS
+      - key: PLATFORM_ADMIN_EMAILS
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: SSL_WIRELESS_STORE_ID
+        sync: false           # use sandbox credentials
+      - key: SSL_WIRELESS_STORE_PASSWORD
+        sync: false
+      - key: SSL_WIRELESS_API_URL
+        value: https://sandbox.sslcommerz.com/gwprocess/v4/api.php
+      - key: SSL_WIRELESS_VALIDATION_URL
+        value: https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php
+
+  - type: web
+    name: retail-saas-frontend-staging
+    rootDir: .
+    runtime: docker
+    dockerContext: .
+    dockerfilePath: ./apps/frontend/Dockerfile
+    plan: starter
+    autoDeploy: true
+    branch: staging
+    envVars:
+      - key: NODE_ENV
+        value: staging
+      - key: PORT
+        value: 3000
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
+      - key: NEXT_PUBLIC_SENTRY_DSN
         sync: false
