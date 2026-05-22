@@ -39,6 +39,7 @@ import {
     Receipt,
     HelpCircle,
     Gift,
+    Tag,
     type LucideIcon,
 } from 'lucide-react';
 import { useBranding } from '@/lib/branding';
@@ -134,6 +135,7 @@ const MODULES: NavModule[] = [
             { href: '/dashboard/inventory/shrinkage', icon: AlertTriangle, label: 'Shrinkage' },
             { href: '/dashboard/inventory/stock-takes', icon: ClipboardCheck, label: 'Stock Takes' },
             { href: '/dashboard/inventory/ledger', icon: BookOpen, label: 'Stock Ledger' },
+            { href: '/dashboard/inventory/labels', icon: Tag, label: 'Print Labels' },
         ],
     },
     {
