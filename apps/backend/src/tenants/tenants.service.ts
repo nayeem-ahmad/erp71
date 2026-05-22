@@ -142,4 +142,34 @@ export class TenantsService {
             },
         });
     }
+
+    async getReportSettings(tenantId: string) {
+        return this.db.tenant.findUnique({
+            where: { id: tenantId },
+            select: {
+                report_weekly_enabled: true,
+                report_monthly_enabled: true,
+                report_email: true,
+            },
+        });
+    }
+
+    async updateReportSettings(
+        tenantId: string,
+        dto: { report_weekly_enabled?: boolean; report_monthly_enabled?: boolean; report_email?: string | null },
+    ) {
+        return this.db.tenant.update({
+            where: { id: tenantId },
+            data: {
+                ...(dto.report_weekly_enabled !== undefined ? { report_weekly_enabled: dto.report_weekly_enabled } : {}),
+                ...(dto.report_monthly_enabled !== undefined ? { report_monthly_enabled: dto.report_monthly_enabled } : {}),
+                ...(dto.report_email !== undefined ? { report_email: dto.report_email || null } : {}),
+            },
+            select: {
+                report_weekly_enabled: true,
+                report_monthly_enabled: true,
+                report_email: true,
+            },
+        });
+    }
 }
