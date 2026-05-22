@@ -183,10 +183,13 @@ model AuditLog {
 }
 
 model Tenant {
-  id         String   @id @default(uuid())
-  name       String
-  owner_id   String
-  created_at DateTime @default(now())
+  id                   String   @id @default(uuid())
+  name                 String
+  owner_id             String
+  created_at           DateTime @default(now())
+  storefront_slug      String?  @unique
+  storefront_enabled   Boolean  @default(false)
+  storefront_banner    String?
 
   // Relations
   owner      User     @relation("TenantOwner", fields: [owner_id], references: [id])
@@ -233,6 +236,7 @@ model Tenant {
   warrantyClaims    WarrantyClaim[]
   invitations       UserInvitation[]
   feedbacks         Feedback[]
+  storefrontOrders  StorefrontOrder[]
 }
 
 model TenantUser {
@@ -372,6 +376,7 @@ model Product {
   purchaseItems PurchaseItem[]
   prices      ProductPrice[]
   warrantyClaims WarrantyClaim[]
+  storefrontOrderItems StorefrontOrderItem[]
 
   @@unique([tenant_id, sku])
   @@index([tenant_id, group_id])
@@ -1356,4 +1361,37 @@ model ApiKey {
 
   @@index([tenantId])
   @@map("api_keys")
+}
+
+model StorefrontOrder {
+  id            String   @id @default(cuid())
+  tenantId      String
+  customerName  String
+  customerEmail String
+  customerPhone String?
+  items         StorefrontOrderItem[]
+  totalAmount   Decimal  @db.Decimal(12, 2)
+  status        String   @default("PENDING")
+  notes         String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("storefront_orders")
+}
+
+model StorefrontOrderItem {
+  id           String  @id @default(cuid())
+  orderId      String
+  productId    String
+  quantity     Int
+  priceAtOrder Decimal @db.Decimal(12, 2)
+
+  order   StorefrontOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id])
+
+  @@map("storefront_order_items")
 }

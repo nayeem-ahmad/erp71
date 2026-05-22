@@ -44,6 +44,8 @@ import { AccountModule } from './account/account.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { ContactModule } from './contact/contact.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
+import { StorefrontModule } from './storefront/storefront.module';
+import { TenantsModule } from './tenants/tenants.module';
 
 @Module({
     imports: [
@@ -89,6 +91,8 @@ import { ApiKeysModule } from './api-keys/api-keys.module';
         FeedbackModule,
         ContactModule,
         ApiKeysModule,
+        StorefrontModule,
+        TenantsModule,
     ],
     controllers: [],
     providers: [

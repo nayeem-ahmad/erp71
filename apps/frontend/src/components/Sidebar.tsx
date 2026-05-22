@@ -32,6 +32,7 @@ import {
     CreditCard,
     Crown,
     BarChart3,
+    Globe,
     type LucideIcon,
 } from 'lucide-react';
 
@@ -126,6 +127,15 @@ const MODULES: NavModule[] = [
             { href: '/dashboard/inventory/reports/reorder', icon: TrendingUp, label: 'Reorder Report', advancedOnly: true },
             { href: '/dashboard/inventory/reports/shrinkage', icon: AlertTriangle, label: 'Shrinkage Report', advancedOnly: true },
             { href: '/dashboard/inventory/reports/valuation', icon: Calculator, label: 'Valuation', advancedOnly: true },
+        ],
+    },
+    {
+        key: 'storefront',
+        icon: Globe,
+        label: 'Storefront',
+        children: [
+            { href: '/dashboard/storefront', icon: ShoppingBag, label: 'Orders' },
+            { href: '/dashboard/storefront/settings', icon: Settings, label: 'Settings' },
         ],
     },
     {
