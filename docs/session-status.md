@@ -1,6 +1,6 @@
 # Session Status
 
-## Last updated: Session 9 (2026-05-21)
+## Last updated: Session 15 (2026-05-22)
 
 ## Completed
 - feat(80-2,80-3): Customer segment evaluation & paginated purchase history
@@ -94,12 +94,44 @@ Working through GitHub issues in priority order. Issues marked ✅ are closed/do
 - [x] Account settings — /dashboard/settings: Profile tab (PATCH /auth/me), Password tab (change-password with bcrypt), 2FA tab (QR setup, enable/disable); sidebar link added
 - [x] #103 In-app feedback widget — FeedbackWidget: floating pill, slide-up card, Bug/Feature/General, POST /feedback; wired into dashboard layout
 
-## Session 9 — Ops hardening + PWA + support (in progress)
-- [ ] #105 Structured logging — Winston logger with request correlation IDs (x-request-id) across all backend logs
-- [ ] #52 Render plan upgrade — render.yaml: free → standard for backend/frontend/worker services
-- [ ] Public /status page — real-time health tile (API up/down, DB latency, last checked); linked from footer
-- [ ] PWA manifest — manifest.json + meta tags; makes app installable on Android/iOS
-- [ ] Support contact form — /contact page on marketing site; POST emails to support@retailsaas.app via EmailService
+## Session 9 — Ops hardening + PWA + support ✅ (PR #209, merged)
+- [x] #105 Structured logging — Winston + AsyncLocalStorage; CorrelationMiddleware injects x-request-id; AppLogger extends ConsoleLogger
+- [x] #52 Render plan upgrade — render.yaml updated free → standard for all services
+- [x] Public /status page — /status with real-time health tiles (API up/down, DB latency, 30s auto-refresh); linked from footer
+- [x] PWA manifest — app/manifest.ts (Next.js App Router route); meta tags in layout
+- [x] Support contact form — /contact page + POST /api/v1/contact (rate-limited 3/min); emails via EmailService
+
+## Session 10 — Legal + DB + compliance ✅ (PR #210, merged)
+- [x] /refund page — 7-section refund/cancellation policy (#98)
+- [x] /sla page — SLA: 99.9% uptime, P1-P4 table, credit tiers (#99)
+- [x] DB indexes — compound indexes on Sale/Product/Customer/AuditLog
+- [x] NID encryption — EncryptionService AES-256-GCM; Customer.nid encrypted at rest (#75)
+
+## Session 11 — Reporting + exports ✅ (PR #211, merged)
+- [x] Tally/QuickBooks exports — GET /accounting/export?format=tally|quickbooks (#118)
+- [x] Consolidated sales report — GET /sales-reports/consolidated; /dashboard/reports/consolidated page (#117)
+
+## Session 12 — Public API + API key management ✅ (PR #212, merged)
+- [x] ApiKey model + SHA-256 hash lookup; ApiKeyStrategy/Guard/CombinedAuthGuard (#119)
+- [x] GET/POST/DELETE /api-keys; per-plan daily rate limits via Redis
+
+## Session 13 — E-commerce storefront ✅ (PR #213, merged)
+- [x] StorefrontOrder + StorefrontOrderItem models; storefront_slug/enabled/banner on Tenant (#113)
+- [x] Public GET /storefront/:slug + POST /storefront/:slug/orders; protected order management
+- [x] /store/[slug] public page; /dashboard/storefront orders + settings pages
+
+## Session 14 — Offline POS ✅ (PR #214, merged)
+- [x] Service worker (public/sw.js): network-first API, Background Sync 'pos-sync' (#116)
+- [x] pos-db.ts IndexedDB wrapper; useOfflineSync hook; ServiceWorkerRegistrar component
+- [x] POS page: offline banner, pending badge, product cache fallback, offline sale queuing
+
+## Session 15 — White-label branding ✅ (PR #215, merged)
+- [x] brand_primary_color/logo_url/favicon_url/business_name on Tenant (#120)
+- [x] GET+PATCH /tenants/branding; BrandingProvider with CSS custom properties
+- [x] /dashboard/settings/branding; sidebar shows tenant logo/name
+
+## Session 16 — Delivery / fulfillment management (in progress)
+- [ ] #115 Delivery / fulfillment module — delivery orders, driver assignment, status tracking
 
 **Note:** Email system (#45–51), monitoring (#57–59), auth hardening (#67–69), API hardening (#70–72), compliance (#73–76), testing (#79–82) all completed in Sessions 1–4.
 

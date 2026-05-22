@@ -84,6 +84,12 @@ const MODULES: NavModule[] = [
         ],
     },
     {
+        key: 'delivery',
+        icon: MapPin,
+        label: 'Delivery',
+        href: '/dashboard/delivery',
+    },
+    {
         key: 'purchase',
         icon: Truck,
         label: 'Purchase',
