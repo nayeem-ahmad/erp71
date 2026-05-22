@@ -47,4 +47,30 @@ export class RedisService {
             this.logger.warn(`Cache invalidate failed for prefix "${prefix}": ${err}`);
         }
     }
+
+    /**
+     * Atomically increment a counter and return the new value.
+     * Returns null if Redis is unavailable.
+     */
+    async increment(key: string): Promise<number | null> {
+        if (!this.client) return null;
+        try {
+            return await this.client.incr(key);
+        } catch (err) {
+            this.logger.warn(`Cache incr failed for key "${key}": ${err}`);
+            return null;
+        }
+    }
+
+    /**
+     * Set a TTL (seconds) on a key. No-op if Redis is unavailable.
+     */
+    async expire(key: string, ttlSeconds: number): Promise<void> {
+        if (!this.client) return;
+        try {
+            await this.client.expire(key, ttlSeconds);
+        } catch (err) {
+            this.logger.warn(`Cache expire failed for key "${key}": ${err}`);
+        }
+    }
 }

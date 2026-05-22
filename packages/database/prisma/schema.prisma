@@ -196,6 +196,7 @@ model Tenant {
   subscription TenantSubscription?
   billingEvents BillingEvent[]
 
+  apiKeys    ApiKey[]
   products   Product[]
   productGroups ProductGroup[]
   productSubgroups ProductSubgroup[]
@@ -1339,4 +1340,20 @@ model Feedback {
   user   User   @relation(fields: [userId], references: [id])
 
   @@map("feedbacks")
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  tenantId   String
+  name       String
+  key_hash   String    @unique  // SHA-256 hash of the actual key
+  key_prefix String             // first 8 chars for display (e.g. "rsk_live")
+  last_used  DateTime?
+  created_at DateTime  @default(now())
+  revoked_at DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("api_keys")
 }

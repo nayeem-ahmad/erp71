@@ -43,6 +43,7 @@ import { WarrantyClaimsModule } from './warranty-claims/warranty-claims.module';
 import { AccountModule } from './account/account.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { ContactModule } from './contact/contact.module';
+import { ApiKeysModule } from './api-keys/api-keys.module';
 
 @Module({
     imports: [
@@ -87,6 +88,7 @@ import { ContactModule } from './contact/contact.module';
         AccountModule,
         FeedbackModule,
         ContactModule,
+        ApiKeysModule,
     ],
     controllers: [],
     providers: [
