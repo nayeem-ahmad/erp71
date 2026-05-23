@@ -10,6 +10,7 @@ services:
     plan: standard
     autoDeploy: true
     healthCheckPath: /health
+    preDeployCommand: npx prisma db push --skip-generate --schema=packages/database/prisma/schema.prisma
     envVars:
       - key: NODE_ENV
         value: production
