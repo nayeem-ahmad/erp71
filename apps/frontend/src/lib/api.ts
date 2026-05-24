@@ -303,7 +303,7 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    getSales: () => fetchWithAuth('/sales'),
+    getSales: () => fetchWithAuth('/sales').then((r: any) => r?.items ?? r),
     getCustomers: (params?: { page?: number; limit?: number; search?: string }) => {
         const query = new URLSearchParams();
         query.set('limit', String(params?.limit ?? 100));
