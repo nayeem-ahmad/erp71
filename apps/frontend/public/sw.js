@@ -33,6 +33,11 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
+  // Next.js internal assets — never intercept, let browser handle directly
+  if (url.pathname.startsWith('/_next/')) {
+    return;
+  }
+
   // API calls: network-first, no SW caching (handled by IndexedDB on client)
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
