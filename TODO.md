@@ -164,6 +164,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Fix live products API 500 caused by Prisma schema drift (missing Product.compare_at_price, Product.is_featured, ProductGroup.is_featured, ProductGroup.image_url, and tenant storefront columns) via Render CLI SQL patch; /api/v1/products now returns 200 with items — done 2026-05-27
 - [x] Harden auth login response against malformed password hashes and orphaned tenant membership rows — login now returns invalid credentials instead of 500 and ignores broken membership records — done 2026-05-27
 - [x] Storefront UI Redesign (Story 50.1) — done 2026-05-26
 - [x] Storefront Shop moved to separate route `/store/[slug]/shop`; homepage now links to dedicated Shop page — done 2026-05-26
