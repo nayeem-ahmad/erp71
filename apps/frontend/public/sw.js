@@ -1,9 +1,11 @@
 // Service Worker for Retail POS Offline Support
-const CACHE_NAME = 'retail-pos-v1';
+const CACHE_NAME = 'retail-pos-v2';
 const STATIC_ASSETS = ['/', '/dashboard/pos'];
 
 // ── Install ─────────────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
+  // Take over immediately — don't wait for old SW to release clients
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(STATIC_ASSETS).catch((err) => {
