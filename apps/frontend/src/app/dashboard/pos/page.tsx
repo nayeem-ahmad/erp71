@@ -25,6 +25,7 @@ function generateId(): string {
 
 export default function POSPage() {
     const [products, setProducts] = useState<any[]>([]);
+    const [salesWarehouseId, setSalesWarehouseId] = useState<string | null>(null);
     const [cart, setCart] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -79,10 +80,40 @@ export default function POSPage() {
         loadProducts();
     }, []);
 
+    const resolveSalesWarehouseId = (settings: any): string | null => {
+        if (!settings) return null;
+        return (
+            settings.default_sales_warehouse_id ||
+            settings.defaultSalesWarehouseId ||
+            settings.defaultSalesWarehouse?.id ||
+            null
+        );
+    };
+
+    const getStockForSalesWarehouse = (product: any): number => {
+        const stocks = Array.isArray(product?.stocks) ? product.stocks : [];
+        if (stocks.length === 0) return 0;
+
+        if (salesWarehouseId) {
+            const matchedStock = stocks.find(
+                (stock: any) => stock?.warehouse_id === salesWarehouseId || stock?.warehouse?.id === salesWarehouseId,
+            );
+            if (matchedStock) {
+                return Number(matchedStock.quantity) || 0;
+            }
+        }
+
+        return Number(stocks[0]?.quantity) || 0;
+    };
+
     const loadProducts = async () => {
         try {
-            const data = await api.getProducts();
+            const [data, settings] = await Promise.all([
+                api.getProducts(),
+                api.getInventorySettings().catch(() => null),
+            ]);
             setProducts(data);
+            setSalesWarehouseId(resolveSalesWarehouseId(settings));
             // Cache products in IndexedDB for offline use
             try {
                 await cacheProducts(data);
@@ -246,6 +277,7 @@ export default function POSPage() {
 
         const saleData = {
             storeId: localStorage.getItem('store_id') || '',
+            ...(salesWarehouseId ? { warehouseId: salesWarehouseId } : {}),
             totalAmount: total,
             amountPaid: totalPaid,
             items: cart.map(item => ({
@@ -420,7 +452,7 @@ export default function POSPage() {
                                             <div className="flex items-center justify-between mt-2">
                                                 <span className="text-lg font-black text-blue-600">${product.price}</span>
                                                 <span className="bg-gray-100 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest text-gray-500">
-                                                    {product.stocks?.[0]?.quantity || 0} left
+                                                    {getStockForSalesWarehouse(product)} left
                                                 </span>
                                             </div>
                                         </div>

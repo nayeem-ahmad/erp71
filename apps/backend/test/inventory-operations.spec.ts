@@ -1,15 +1,29 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import * as request from 'supertest';
-import { AppModule } from '../src/app.module';
+import { CallHandler, ExecutionContext, INestApplication, NestInterceptor, ValidationPipe } from '@nestjs/common';
+import request from 'supertest';
 import { DatabaseService } from '../src/database/database.service';
+import { TransformInterceptor } from '../src/common/transform.interceptor';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { readFileSync } from 'fs';
+import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 jest.setTimeout(30000);
+
+class PassthroughInterceptor implements NestInterceptor {
+    intercept(_context: ExecutionContext, next: CallHandler): Observable<any> {
+        return next.handle();
+    }
+}
+
+class UnwrapDataInterceptor implements NestInterceptor {
+    intercept(_context: ExecutionContext, next: CallHandler): Observable<any> {
+        return next.handle().pipe(map((value: any) => value?.data ?? value));
+    }
+}
 
 describe('Inventory Operations (e2e)', () => {
     let app: INestApplication;
@@ -20,6 +34,12 @@ describe('Inventory Operations (e2e)', () => {
     let productId: string;
     let sourceWarehouseId: string;
     let destWarehouseId: string;
+    let loginPayload: any;
+    let signupPayload: any;
+    let userId: string;
+    let shrinkageReasonId: string;
+
+    const bodyOf = (response: any) => response.body?.data ?? response.body;
 
     const applyMigration = async (relativePath: string) => {
         const migrationPath = path.resolve(__dirname, relativePath);
@@ -34,12 +54,19 @@ describe('Inventory Operations (e2e)', () => {
     };
 
     beforeAll(async () => {
+        process.env.JWT_SECRET = 'fallback-secret-for-dev-only';
+        const { AppModule } = await import('../src/app.module');
+
         const moduleFixture: TestingModule = await Test.createTestingModule({
             imports: [AppModule],
-        }).compile();
+        })
+            .overrideInterceptor(TransformInterceptor)
+            .useValue(new PassthroughInterceptor())
+            .compile();
 
         app = moduleFixture.createNestApplication();
         app.useGlobalPipes(new ValidationPipe());
+        app.useGlobalInterceptors(new UnwrapDataInterceptor());
         await app.init();
 
         db = moduleFixture.get<DatabaseService>(DatabaseService);
@@ -52,6 +79,7 @@ describe('Inventory Operations (e2e)', () => {
         await db.$executeRawUnsafe(
             'TRUNCATE TABLE posting_events, posting_rules, voucher_details, vouchers, voucher_sequences, accounts, account_subgroups, account_groups, "ProductStock", "Product", "Warehouse", "Store", "User", "Tenant" CASCADE',
         );
+
     });
 
     afterAll(async () => {
@@ -61,32 +89,94 @@ describe('Inventory Operations (e2e)', () => {
 
     describe('Setup', () => {
         it('should register user and setup store', async () => {
-            await request(app.getHttpServer())
+            const signupRes = await request(app.getHttpServer())
                 .post('/auth/signup')
-                .send({ email: 'inv-test@example.com', password: 'password123', name: 'Inventory Tester' })
+                .send({
+                    email: 'inv-test@example.com',
+                    password: 'password123',
+                    name: 'Inventory Tester',
+                    tenantName: 'Inventory Tenant',
+                    storeName: 'Inventory Store',
+                })
                 .expect(201);
+
+            signupPayload = bodyOf(signupRes);
+            userId = signupPayload.user.id;
 
             const loginRes = await request(app.getHttpServer())
                 .post('/auth/login')
                 .send({ email: 'inv-test@example.com', password: 'password123' })
                 .expect(201);
 
-            authToken = loginRes.body.access_token;
+            loginPayload = bodyOf(loginRes);
 
-            const storeRes = await request(app.getHttpServer())
-                .post('/auth/setup-store')
+            authToken = loginPayload?.access_token ?? signupPayload?.access_token;
+
+            const membership = await db.tenantUser.findFirst({
+                where: { user_id: userId },
+                orderBy: { id: 'asc' },
+            });
+            expect(membership).toBeTruthy();
+            tenantId = membership!.tenant_id;
+
+            const access = await db.userStoreAccess.findFirst({
+                where: { user_id: userId, tenant_id: tenantId },
+                orderBy: { store_id: 'asc' },
+            });
+            expect(access).toBeTruthy();
+            storeId = access!.store_id;
+
+            const settings = await db.inventorySettings.upsert({
+                where: { tenant_id: tenantId },
+                update: {},
+                create: { tenant_id: tenantId },
+            });
+            expect(settings).toBeTruthy();
+
+            const createdShrinkageReason = await db.inventoryReason.create({
+                data: {
+                    tenant_id: tenantId,
+                    type: 'SHRINKAGE',
+                    code: 'DAMAGED',
+                    label: 'Damaged',
+                    is_active: true,
+                },
+            });
+            shrinkageReasonId = createdShrinkageReason.id;
+
+            await db.inventoryReason.create({
+                data: {
+                    tenant_id: tenantId,
+                    type: 'DISCREPANCY',
+                    code: 'COUNT',
+                    label: 'Count Variance',
+                    is_active: true,
+                },
+            });
+
+            expect(authToken).toBeTruthy();
+            expect(tenantId).toBeTruthy();
+            expect(storeId).toBeTruthy();
+
+            await request(app.getHttpServer())
+                .get('/auth/me')
                 .set('Authorization', `Bearer ${authToken}`)
-                .send({ name: 'Inventory Store', location: 'Warehouse City', planCode: 'PREMIUM' })
-                .expect(201);
-
-            tenantId = storeRes.body.tenant.id;
-            storeId = storeRes.body.store.id;
+                .expect(200);
         });
 
         it('should resolve default warehouse for the store', async () => {
-            const warehouse = await db.warehouse.findFirst({ where: { store_id: storeId } });
-            expect(warehouse).toBeTruthy();
-            sourceWarehouseId = warehouse!.id;
+            let warehouse = await db.warehouse.findFirst({ where: { store_id: storeId } });
+            if (!warehouse) {
+                warehouse = await db.warehouse.create({
+                    data: {
+                        tenant_id: tenantId,
+                        store_id: storeId,
+                        name: 'Main Warehouse',
+                        code: 'WH-MAIN',
+                    },
+                });
+            }
+            sourceWarehouseId = warehouse.id;
 
             // Create a second warehouse to use as transfer destination
             const dest = await db.warehouse.create({
@@ -109,7 +199,7 @@ describe('Inventory Operations (e2e)', () => {
                 .send({ name: 'Inventory Item', sku: 'INV-001', price: 10.00, initialStock: 100 })
                 .expect(201);
 
-            productId = res.body.id;
+            productId = bodyOf(res).id;
         });
     });
 
@@ -126,6 +216,7 @@ describe('Inventory Operations (e2e)', () => {
                 .post('/warehouse-transfers')
                 .set('Authorization', `Bearer ${authToken}`)
                 .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId)
                 .send({
                     sourceWarehouseId,
                     destinationWarehouseId: destWarehouseId,
@@ -133,11 +224,13 @@ describe('Inventory Operations (e2e)', () => {
                     items: [{ productId, quantity: 10 }],
                 });
 
+            const transfer = bodyOf(res);
+
             expect(res.status).toBe(201);
-            expect(res.body).toHaveProperty('id');
-            expect(res.body).toHaveProperty('transfer_number');
-            expect(res.body.status).toBe('SENT');
-            transferId = res.body.id;
+            expect(transfer).toHaveProperty('id');
+            expect(transfer).toHaveProperty('transfer_number');
+            expect(transfer.status).toBe('SENT');
+            transferId = transfer.id;
 
             const stockAfter = await db.productStock.findFirst({
                 where: { product_id: productId, warehouse_id: sourceWarehouseId },
@@ -150,6 +243,7 @@ describe('Inventory Operations (e2e)', () => {
                 .post('/warehouse-transfers')
                 .set('Authorization', `Bearer ${authToken}`)
                 .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId)
                 .send({
                     sourceWarehouseId,
                     destinationWarehouseId: sourceWarehouseId,
@@ -170,12 +264,15 @@ describe('Inventory Operations (e2e)', () => {
                 .post(`/warehouse-transfers/${transferId}/receive`)
                 .set('Authorization', `Bearer ${authToken}`)
                 .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId)
                 .send({
                     items: [{ productId, quantityReceived: 6 }],
                 });
 
-            expect(res.status).toBe(200);
-            expect(res.body.status).toMatch(/PARTIALLY_RECEIVED|RECEIVED/);
+            const received = bodyOf(res);
+
+            expect(res.status).toBe(201);
+            expect(received.status).toMatch(/PARTIALLY_RECEIVED|RECEIVED/);
 
             const destStockAfter = await db.productStock.findFirst({
                 where: { product_id: productId, warehouse_id: destWarehouseId },
@@ -187,23 +284,29 @@ describe('Inventory Operations (e2e)', () => {
             const res = await request(app.getHttpServer())
                 .get('/warehouse-transfers')
                 .set('Authorization', `Bearer ${authToken}`)
-                .set('x-tenant-id', tenantId);
+                .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId);
+
+            const transfers = bodyOf(res);
 
             expect(res.status).toBe(200);
-            expect(Array.isArray(res.body)).toBe(true);
-            expect(res.body.length).toBeGreaterThan(0);
-            expect(res.body[0]).toHaveProperty('transfer_number');
+            expect(Array.isArray(transfers)).toBe(true);
+            expect(transfers.length).toBeGreaterThan(0);
+            expect(transfers[0]).toHaveProperty('transfer_number');
         });
 
         it('should fetch a single transfer by ID', async () => {
             const res = await request(app.getHttpServer())
                 .get(`/warehouse-transfers/${transferId}`)
                 .set('Authorization', `Bearer ${authToken}`)
-                .set('x-tenant-id', tenantId);
+                .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId);
+
+            const transfer = bodyOf(res);
 
             expect(res.status).toBe(200);
-            expect(res.body.id).toBe(transferId);
-            expect(res.body).toHaveProperty('items');
+            expect(transfer.id).toBe(transferId);
+            expect(transfer).toHaveProperty('items');
         });
 
         it('should filter transfers by status', async () => {
@@ -211,11 +314,14 @@ describe('Inventory Operations (e2e)', () => {
                 .get('/warehouse-transfers')
                 .set('Authorization', `Bearer ${authToken}`)
                 .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId)
                 .query({ status: 'SENT' });
+
+            const transfers = bodyOf(res);
 
             expect(res.status).toBe(200);
             // Our transfer moved to PARTIALLY_RECEIVED so this should be empty or not include it
-            const found = res.body.find((t: any) => t.id === transferId);
+            const found = transfers.find((t: any) => t.id === transferId);
             expect(found).toBeUndefined();
         });
     });
@@ -233,14 +339,17 @@ describe('Inventory Operations (e2e)', () => {
                 .set('x-tenant-id', tenantId)
                 .set('x-store-id', storeId)
                 .send({
-                    storeId,
-                    note: 'Damaged in storage',
-                    items: [{ productId, quantity: 3, warehouseId: sourceWarehouseId }],
+                    warehouseId: sourceWarehouseId,
+                    reasonId: shrinkageReasonId,
+                    notes: 'Damaged in storage',
+                    items: [{ productId, quantity: 3 }],
                 });
 
+            const shrinkage = bodyOf(res);
+
             expect(res.status).toBe(201);
-            expect(res.body).toHaveProperty('id');
-            expect(res.body.items).toHaveLength(1);
+            expect(shrinkage).toHaveProperty('id');
+            expect(shrinkage.items).toHaveLength(1);
 
             const stockAfter = await db.productStock.findFirst({
                 where: { product_id: productId, warehouse_id: sourceWarehouseId },
@@ -252,11 +361,14 @@ describe('Inventory Operations (e2e)', () => {
             const res = await request(app.getHttpServer())
                 .get('/inventory-shrinkage')
                 .set('Authorization', `Bearer ${authToken}`)
-                .set('x-tenant-id', tenantId);
+                .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId);
+
+            const shrinkages = bodyOf(res);
 
             expect(res.status).toBe(200);
-            expect(Array.isArray(res.body)).toBe(true);
-            expect(res.body.length).toBeGreaterThan(0);
+            expect(Array.isArray(shrinkages)).toBe(true);
+            expect(shrinkages.length).toBeGreaterThan(0);
         });
     });
 
@@ -268,18 +380,21 @@ describe('Inventory Operations (e2e)', () => {
                 .post('/stock-takes')
                 .set('Authorization', `Bearer ${authToken}`)
                 .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId)
                 .send({
                     warehouseId: sourceWarehouseId,
                     startImmediately: true,
                 });
 
+            const session = bodyOf(res);
+
             expect(res.status).toBe(201);
-            expect(res.body).toHaveProperty('id');
-            expect(res.body).toHaveProperty('session_number');
-            expect(res.body.status).toBe('COUNTING');
-            expect(res.body).toHaveProperty('summary');
-            expect(res.body.summary.totalExpectedQuantity).toBeGreaterThan(0);
-            sessionId = res.body.id;
+            expect(session).toHaveProperty('id');
+            expect(session).toHaveProperty('session_number');
+            expect(session.status).toBe('COUNTING');
+            expect(session).toHaveProperty('summary');
+            expect(session.summary.totalExpectedQuantity).toBeGreaterThan(0);
+            sessionId = session.id;
         });
 
         it('should update count lines for the stock-take session', async () => {
@@ -287,33 +402,41 @@ describe('Inventory Operations (e2e)', () => {
                 .get(`/stock-takes/${sessionId}`)
                 .set('Authorization', `Bearer ${authToken}`)
                 .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId)
                 .expect(200);
 
-            const line = sessionDetail.body.lines[0];
+            const session = bodyOf(sessionDetail);
+            const line = session.lines[0];
             const expectedQty = line.expected_quantity;
 
             const res = await request(app.getHttpServer())
                 .patch(`/stock-takes/${sessionId}/counts`)
                 .set('Authorization', `Bearer ${authToken}`)
                 .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId)
                 .send({
                     lines: [{ productId: line.product_id, countedQuantity: expectedQty }],
                 });
 
+            const updated = bodyOf(res);
+
             expect(res.status).toBe(200);
-            expect(res.body.summary).toBeDefined();
+            expect(updated.summary).toBeDefined();
         });
 
         it('should list all stock-take sessions for the tenant', async () => {
             const res = await request(app.getHttpServer())
                 .get('/stock-takes')
                 .set('Authorization', `Bearer ${authToken}`)
-                .set('x-tenant-id', tenantId);
+                .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId);
+
+            const sessions = bodyOf(res);
 
             expect(res.status).toBe(200);
-            expect(Array.isArray(res.body)).toBe(true);
-            expect(res.body.length).toBeGreaterThan(0);
-            expect(res.body[0]).toHaveProperty('session_number');
+            expect(Array.isArray(sessions)).toBe(true);
+            expect(sessions.length).toBeGreaterThan(0);
+            expect(sessions[0]).toHaveProperty('session_number');
         });
 
         it('should post a stock-take session with zero variance without requiring approval', async () => {
@@ -322,14 +445,18 @@ describe('Inventory Operations (e2e)', () => {
                 .get(`/stock-takes/${sessionId}`)
                 .set('Authorization', `Bearer ${authToken}`)
                 .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId)
                 .expect(200);
+
+            const session = bodyOf(sessionDetail);
 
             await request(app.getHttpServer())
                 .patch(`/stock-takes/${sessionId}/counts`)
                 .set('Authorization', `Bearer ${authToken}`)
                 .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId)
                 .send({
-                    lines: sessionDetail.body.lines.map((l: any) => ({
+                    lines: session.lines.map((l: any) => ({
                         productId: l.product_id,
                         countedQuantity: l.expected_quantity,
                     })),
@@ -338,10 +465,13 @@ describe('Inventory Operations (e2e)', () => {
             const res = await request(app.getHttpServer())
                 .post(`/stock-takes/${sessionId}/post`)
                 .set('Authorization', `Bearer ${authToken}`)
-                .set('x-tenant-id', tenantId);
+                .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId);
 
-            expect(res.status).toBe(200);
-            expect(res.body.status).toBe('POSTED');
+            const posted = bodyOf(res);
+
+            expect(res.status).toBe(201);
+            expect(posted.status).toBe('POSTED');
         });
     });
 });

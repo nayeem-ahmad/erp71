@@ -2,6 +2,10 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import POSPage from './page';
 
+jest.mock('../../../components/HelpTooltip', () => ({
+  HelpTooltip: () => null,
+}));
+
 // Mock lucide-react icons
 jest.mock('lucide-react', () => ({
   ShoppingCart: () => <span data-testid="icon-cart" />,
@@ -15,25 +19,33 @@ jest.mock('lucide-react', () => ({
   Store: () => <span data-testid="icon-store" />,
   X: () => <span data-testid="icon-x" />,
   Banknote: () => <span data-testid="icon-banknote" />,
+  CheckCircle: () => <span data-testid="icon-check" />,
+  AlertCircle: () => <span data-testid="icon-alert" />,
+  XCircle: () => <span data-testid="icon-x-circle" />,
+  Printer: () => <span data-testid="icon-printer" />,
+  WifiOff: () => <span data-testid="icon-wifi-off" />,
+  RefreshCw: () => <span data-testid="icon-refresh" />,
 }));
 
 // Mock the API
 jest.mock('../../../lib/api', () => ({
   api: {
     getProducts: jest.fn(),
+    getInventorySettings: jest.fn(),
     createSale: jest.fn(),
   },
 }));
 
 const mockProducts = [
-  { id: 'p1', name: 'Coffee Beans', sku: 'CB-001', price: '15.00', stocks: [{ quantity: 50 }] },
-  { id: 'p2', name: 'Green Tea', sku: 'GT-001', price: '8.00', stocks: [{ quantity: 20 }] },
+  { id: 'p1', name: 'Coffee Beans', sku: 'CB-001', price: '15.00', stocks: [{ quantity: 50, warehouse_id: 'wh-sales' }] },
+  { id: 'p2', name: 'Green Tea', sku: 'GT-001', price: '8.00', stocks: [{ quantity: 20, warehouse_id: 'wh-sales' }] },
 ];
 
 describe('POSPage — Story 10.2: POS Interface UI', () => {
   beforeEach(() => {
     const { api } = require('../../../lib/api');
     api.getProducts.mockResolvedValue(mockProducts);
+    api.getInventorySettings.mockResolvedValue({ default_sales_warehouse_id: 'wh-sales' });
     api.createSale.mockResolvedValue({ id: 'sale-1' });
     localStorage.setItem('store_id', 'store-test');
     jest.clearAllMocks();
@@ -132,6 +144,7 @@ describe('POSPage — Story 10.3 & 10.4: Checkout & Advanced Payments', () => {
   beforeEach(() => {
     const { api } = require('../../../lib/api');
     api.getProducts.mockResolvedValue(mockProducts);
+    api.getInventorySettings.mockResolvedValue({ default_sales_warehouse_id: 'wh-sales' });
     api.createSale.mockResolvedValue({ id: 'sale-1' });
     localStorage.setItem('store_id', 'store-test');
   });
@@ -198,6 +211,7 @@ describe('POSPage — Story 10.3 & 10.4: Checkout & Advanced Payments', () => {
 
     await waitFor(() => {
       expect(api.createSale).toHaveBeenCalled();
+      expect(api.createSale).toHaveBeenCalledWith(expect.objectContaining({ warehouseId: 'wh-sales' }));
     });
   });
 

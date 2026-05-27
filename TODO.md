@@ -80,6 +80,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [ ] Verify 80% coverage threshold is actually met (no coverage reports in repo)
 - [x] Fix 2 failing tests in warranty-claims service (TypeScript error: `warrantyClaim` model not recognized in transaction context) — regenerated Prisma client and added warranty-claims.service.spec.ts
 - [ ] Add E2E tests for critical paths: signup → onboarding → POS sale → billing
+- [ ] Investigate and clean up backend Jest open handles reported after E2E suite completion
 - [ ] Add integration tests for payment webhook handlers
 - [ ] Add load tests for POS endpoint (peak: multiple cashiers × multiple tenants)
 - [x] Verify GitHub Actions CI actually runs tests on every push — CI now triggers on push/PR to main and dev
@@ -164,6 +165,12 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Stabilize backend integration specs (`integration.spec.ts`, `inventory-operations.spec.ts`, `sales-returns-orders.spec.ts`) against current auth/bootstrap, DTO, premium-plan, and response-envelope contracts — done 2026-05-27
+- [x] Re-test localhost login end-to-end and resolve local DB schema drift by running Prisma `db push`; signup/login now return 201 and `/login` redirects to `/dashboard` — done 2026-05-27
+- [x] Start backend e2e remediation: fix `supertest` default imports in 3 integration specs, align signup payload fields, and fix JWT test boot ordering via dynamic `AppModule` imports — done 2026-05-27
+- [x] Fix localhost login 500 by patching auth schema drift in Docker Postgres (`User.token_version`, `User.email_verified_at`, `User.totp_secret`) and add Prisma migration `20260527080500_add_user_token_version` — done 2026-05-27
+- [x] Deploy stack locally with Docker Compose and verify backend health plus frontend HTTP response — done 2026-05-27
+- [x] Fix live POS false "not stock" checkout errors by aligning POS stock display and sale payload to Inventory Settings sales warehouse (`default_sales_warehouse_id`), plus test coverage update in POS page tests — done 2026-05-27
 - [x] Seed product catalog and product categories with Unsplash image URLs (products + ProductGroup image_url upserts) — done 2026-05-27
 - [x] Fix live products API 500 caused by Prisma schema drift (missing Product.compare_at_price, Product.is_featured, ProductGroup.is_featured, ProductGroup.image_url, and tenant storefront columns) via Render CLI SQL patch; /api/v1/products now returns 200 with items — done 2026-05-27
 - [x] Harden auth login response against malformed password hashes and orphaned tenant membership rows — login now returns invalid credentials instead of 500 and ignores broken membership records — done 2026-05-27
