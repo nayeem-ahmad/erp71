@@ -9,7 +9,7 @@ services:
     dockerfilePath: ./apps/backend/Dockerfile
     plan: standard
     autoDeploy: true
-    healthCheckPath: /health
+    healthCheckPath: /api/v1/health
     preDeployCommand: npx prisma db push --skip-generate --schema=packages/database/prisma/schema.prisma
     envVars:
       - key: NODE_ENV
@@ -101,7 +101,7 @@ services:
     plan: starter
     autoDeploy: true
     branch: staging
-    healthCheckPath: /health
+    healthCheckPath: /api/v1/health
     envVars:
       - key: NODE_ENV
         value: staging
