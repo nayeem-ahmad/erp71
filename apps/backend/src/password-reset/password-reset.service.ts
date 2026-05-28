@@ -27,7 +27,8 @@ export class PasswordResetService {
             data: { user_id: user.id, token_hash: tokenHash, expires_at: expiresAt },
         });
 
-        await this.email.sendPasswordReset(user.email, rawToken);
+        // Fire-and-forget — don't block the HTTP response on SMTP delivery
+        this.email.sendPasswordReset(user.email, rawToken);
     }
 
     async resetPassword(rawToken: string, newPassword: string): Promise<void> {

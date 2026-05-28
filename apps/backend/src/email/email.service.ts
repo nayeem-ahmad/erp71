@@ -20,6 +20,9 @@ export class EmailService {
                 port: parseInt(process.env.SMTP_PORT || '587', 10),
                 secure: false,
                 auth: { user: smtpUser, pass: smtpPass },
+                connectionTimeout: 10_000,  // 10s to establish connection
+                greetingTimeout: 10_000,    // 10s for SMTP greeting
+                socketTimeout: 30_000,      // 30s for socket inactivity
             });
         } else {
             this.transporter = null;
