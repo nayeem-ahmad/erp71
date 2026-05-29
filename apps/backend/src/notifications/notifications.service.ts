@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
@@ -35,13 +35,74 @@ export class NotificationsService {
         private sms: SmsService,
     ) {}
 
+    /* ------------------------------------------------------------------ */
+    /*  In-app notification CRUD                                           */
+    /* ------------------------------------------------------------------ */
+
+    async create(
+        tenantId: string,
+        userId: string,
+        type: string,
+        title: string,
+        body: string,
+        link?: string,
+    ) {
+        return this.db.notification.create({
+            data: { tenant_id: tenantId, user_id: userId, type, title, body, link },
+        });
+    }
+
+    async listForUser(tenantId: string, userId: string) {
+        return this.db.notification.findMany({
+            where: { tenant_id: tenantId, user_id: userId },
+            orderBy: [{ read_at: 'asc' }, { created_at: 'desc' }],
+            take: 50,
+            select: {
+                id: true,
+                type: true,
+                title: true,
+                body: true,
+                link: true,
+                read_at: true,
+                created_at: true,
+            },
+        });
+    }
+
+    async getUnreadCount(tenantId: string, userId: string): Promise<number> {
+        return this.db.notification.count({
+            where: { tenant_id: tenantId, user_id: userId, read_at: null },
+        });
+    }
+
+    async markRead(tenantId: string, userId: string, id: string) {
+        const notification = await this.db.notification.findFirst({
+            where: { id, tenant_id: tenantId, user_id: userId },
+        });
+        if (!notification) throw new NotFoundException('Notification not found');
+        return this.db.notification.update({
+            where: { id },
+            data: { read_at: new Date() },
+        });
+    }
+
+    async markAllRead(tenantId: string, userId: string) {
+        await this.db.notification.updateMany({
+            where: { tenant_id: tenantId, user_id: userId, read_at: null },
+            data: { read_at: new Date() },
+        });
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  Scheduled jobs                                                     */
+    /* ------------------------------------------------------------------ */
+
     // Run daily at 08:00
     @Cron('0 8 * * *')
     async sendSubscriptionExpiryWarnings(): Promise<void> {
         const now = new Date();
 
         // Warning tiers: subscriptions expiring within [0,2) days (1-day) or [6,8) days (7-day)
-        // Using day-based floor/ceil so any expiry time during that day is caught regardless of hour
         const startOf = (daysFromNow: number) => {
             const d = new Date(now);
             d.setDate(d.getDate() + daysFromNow);
@@ -68,13 +129,27 @@ export class NotificationsService {
 
         for (const sub of targets) {
             const daysLeft = Math.ceil((sub.current_period_end.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
-            const ownerEmail = sub.tenant.owner?.email;
-            if (!ownerEmail) continue;
+            const owner = sub.tenant.owner;
+            if (!owner) continue;
+
             try {
-                await this.email.sendSubscriptionExpiryWarning(ownerEmail, sub.tenant.name, daysLeft, sub.current_period_end);
-                this.logger.log(`Expiry warning sent for tenant ${sub.tenant_id} (${daysLeft}d left)`);
+                await this.email.sendSubscriptionExpiryWarning(owner.email, sub.tenant.name, daysLeft, sub.current_period_end);
+                this.logger.log(`Expiry warning email sent for tenant ${sub.tenant_id} (${daysLeft}d left)`);
             } catch (err) {
-                this.logger.error(`Failed expiry warning for tenant ${sub.tenant_id}: ${err}`);
+                this.logger.error(`Failed expiry warning email for tenant ${sub.tenant_id}: ${err}`);
+            }
+
+            try {
+                await this.create(
+                    sub.tenant_id,
+                    owner.id,
+                    'SUBSCRIPTION_EXPIRY',
+                    `Subscription expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
+                    `Your ${sub.tenant.name} subscription will expire on ${sub.current_period_end.toLocaleDateString()}.`,
+                    '/dashboard/billing',
+                );
+            } catch (err) {
+                this.logger.error(`Failed in-app notification for tenant ${sub.tenant_id}: ${err}`);
             }
         }
     }
@@ -82,10 +157,10 @@ export class NotificationsService {
     // Run daily at 07:00
     @Cron('0 7 * * *')
     async sendLowStockAlerts(): Promise<void> {
-        // Single query: aggregate stock per product across all tenants, join tenant owners
         const rows = await this.db.$queryRaw<Array<{
             tenant_id: string;
             tenant_name: string;
+            owner_id: string;
             owner_email: string;
             sms_on_low_stock: boolean;
             product_name: string;
@@ -96,6 +171,7 @@ export class NotificationsService {
             SELECT
                 t.id                    AS tenant_id,
                 t.name                  AS tenant_name,
+                t.owner_id,
                 u.email                 AS owner_email,
                 t.sms_on_low_stock,
                 p.name                  AS product_name,
@@ -107,14 +183,15 @@ export class NotificationsService {
             JOIN "Product" p ON p.tenant_id = t.id
             LEFT JOIN "ProductStock" ps ON ps.product_id = p.id
             LEFT JOIN "InventorySettings" inv ON inv.tenant_id = t.id
-            GROUP BY t.id, t.name, u.email, t.sms_on_low_stock, p.id, p.name, p.sku, p.reorder_level, inv.default_reorder_level
+            GROUP BY t.id, t.name, t.owner_id, u.email, t.sms_on_low_stock, p.id, p.name, p.sku, p.reorder_level, inv.default_reorder_level
             HAVING COALESCE(SUM(ps.quantity), 0) <= COALESCE(p.reorder_level, COALESCE(inv.default_reorder_level, 10))
             ORDER BY t.id, total_qty ASC
         `;
 
-        // Group by tenant and send one email per tenant
+        // Group by tenant
         const byTenant = new Map<string, {
             name: string;
+            ownerId: string;
             email: string;
             smsOnLowStock: boolean;
             items: Array<{ name: string; sku: string; quantity: number; reorderPoint: number }>;
@@ -123,6 +200,7 @@ export class NotificationsService {
             if (!byTenant.has(row.tenant_id)) {
                 byTenant.set(row.tenant_id, {
                     name: row.tenant_name,
+                    ownerId: row.owner_id,
                     email: row.owner_email,
                     smsOnLowStock: row.sms_on_low_stock,
                     items: [],
@@ -136,15 +214,31 @@ export class NotificationsService {
             });
         }
 
-        for (const [tenantId, { name, email, smsOnLowStock, items }] of byTenant) {
+        for (const [tenantId, { name, ownerId, email, smsOnLowStock, items }] of byTenant) {
             try {
                 await this.email.sendLowStockAlert(email, name, items.slice(0, 50));
-                this.logger.log(`Low stock alert sent for tenant ${tenantId} (${items.length} items)`);
+                this.logger.log(`Low stock alert email sent for tenant ${tenantId} (${items.length} items)`);
             } catch (err) {
-                this.logger.error(`Failed low stock alert for tenant ${tenantId}: ${err}`);
+                this.logger.error(`Failed low stock alert email for tenant ${tenantId}: ${err}`);
             }
 
-            // Send SMS low-stock alerts if enabled and the tenant owner has a phone number
+            try {
+                const topItems = items.slice(0, 3).map((i) => i.name).join(', ');
+                const body = items.length === 1
+                    ? `${items[0].name} has only ${items[0].quantity} unit(s) remaining.`
+                    : `${items.length} products are running low, including: ${topItems}.`;
+                await this.create(
+                    tenantId,
+                    ownerId,
+                    'LOW_STOCK',
+                    `${items.length} product${items.length === 1 ? '' : 's'} running low`,
+                    body,
+                    '/dashboard/inventory',
+                );
+            } catch (err) {
+                this.logger.error(`Failed in-app notification for tenant ${tenantId}: ${err}`);
+            }
+
             if (smsOnLowStock) {
                 const ownerPhone = await this.getTenantOwnerPhone(tenantId);
                 if (ownerPhone) {
@@ -162,18 +256,12 @@ export class NotificationsService {
         }
     }
 
-    /**
-     * Look up the phone number for the owner of a tenant.
-     * Returns null if the owner has no phone on record.
-     */
     private async getTenantOwnerPhone(tenantId: string): Promise<string | null> {
         const tenant = await this.db.tenant.findUnique({
             where: { id: tenantId },
             select: { owner: { select: { id: true } } },
         });
         if (!tenant?.owner) return null;
-        // User model does not currently have a phone field; return null.
-        // When a phone field is added to User, replace this with the actual lookup.
         return null;
     }
 
@@ -190,12 +278,8 @@ export class NotificationsService {
 
         for (const tenant of tenants) {
             try {
-                // Last full Mon–Sun window (the week that just ended)
                 const now = new Date();
-                const dayOfWeek = now.getDay(); // 0=Sun … 6=Sat; today is Mon=1
                 const lastMonday = new Date(now);
-                lastMonday.setDate(now.getDate() - 7 - ((dayOfWeek + 6) % 7 - 0)); // go back one full week to last Mon
-                // Simpler: today is Monday, so last Mon is 7 days ago
                 lastMonday.setDate(now.getDate() - 7);
                 lastMonday.setHours(0, 0, 0, 0);
                 const lastSunday = new Date(lastMonday);
@@ -227,12 +311,11 @@ export class NotificationsService {
 
         for (const tenant of tenants) {
             try {
-                // Previous calendar month
                 const now = new Date();
                 const firstOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
                 const firstOfLastMonth = new Date(firstOfThisMonth);
                 firstOfLastMonth.setMonth(firstOfThisMonth.getMonth() - 1);
-                const lastOfLastMonth = new Date(firstOfThisMonth.getTime() - 1); // one ms before today's first day
+                const lastOfLastMonth = new Date(firstOfThisMonth.getTime() - 1);
 
                 const data = await this.generateSalesReport(tenant.id, tenant.name, firstOfLastMonth, lastOfLastMonth);
                 const html = this.buildSalesReportHtml(data);
@@ -279,7 +362,6 @@ export class NotificationsService {
         const transactionCount = sales.length;
         const avgSaleValue = transactionCount > 0 ? totalRevenue / transactionCount : 0;
 
-        // Top product by total quantity sold
         const productQty = new Map<string, number>();
         for (const sale of sales) {
             for (const item of sale.items) {
@@ -296,7 +378,6 @@ export class NotificationsService {
             }
         }
 
-        // New customers created within the period
         const newCustomers = await this.db.customer.count({
             where: {
                 tenant_id: tenantId,
@@ -304,17 +385,14 @@ export class NotificationsService {
             },
         });
 
-        // Determine period type: if span <= 8 days → weekly (daily bars), else monthly (weekly bars)
         const spanDays = Math.round((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)) + 1;
         const isWeekly = spanDays <= 8;
 
-        // Build daily/weekly revenue buckets
         const dailyRevenue: DailyRevenue[] = [];
         const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
         if (isWeekly) {
-            // One bucket per day of the week
             const buckets = new Map<string, number>();
             for (let d = new Date(from); d <= to; d = new Date(d.getTime() + 24 * 60 * 60 * 1000)) {
                 const key = d.toISOString().slice(0, 10);
@@ -329,12 +407,10 @@ export class NotificationsService {
                 dailyRevenue.push({ label: `${DAY_NAMES[d.getUTCDay()]} ${d.getUTCDate()} ${MONTH_NAMES[d.getUTCMonth()]}`, amount });
             }
         } else {
-            // One bucket per calendar week within the month
             const weekBuckets = new Map<string, number>();
             const weekLabels = new Map<string, string>();
             for (const sale of sales) {
                 const d = sale.created_at;
-                // Week number within year as key
                 const weekStart = new Date(d);
                 weekStart.setDate(d.getDate() - d.getDay());
                 const key = weekStart.toISOString().slice(0, 10);
@@ -343,9 +419,8 @@ export class NotificationsService {
                     weekLabels.set(key, `${weekStart.getDate()} ${MONTH_NAMES[weekStart.getMonth()]}`);
                 }
             }
-            // Ensure all weeks in range appear
             const cur = new Date(from);
-            cur.setDate(cur.getDate() - cur.getDay()); // align to Sunday
+            cur.setDate(cur.getDate() - cur.getDay());
             while (cur <= to) {
                 const key = cur.toISOString().slice(0, 10);
                 if (!weekBuckets.has(key)) weekBuckets.set(key, 0);
@@ -357,7 +432,6 @@ export class NotificationsService {
             }
         }
 
-        // Human-readable period string
         const fmtDate = (d: Date) => `${d.getDate()} ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
         const period = `${fmtDate(from)} – ${fmtDate(to)}`;
 
@@ -473,25 +547,28 @@ export class NotificationsService {
     async purgeExpiredData(): Promise<void> {
         const now = new Date();
 
-        // Purge used or expired password reset tokens older than 7 days
         const tokenCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         const { count: pwTokens } = await this.db.passwordResetToken.deleteMany({
             where: { OR: [{ used_at: { not: null } }, { expires_at: { lt: tokenCutoff } }] },
         });
 
-        // Purge expired email verification tokens older than 7 days
         const { count: evTokens } = await this.db.emailVerificationToken.deleteMany({
             where: { expires_at: { lt: tokenCutoff } },
         });
 
-        // Purge audit logs older than 90 days (retain 90-day window)
         const auditCutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
         const { count: auditRows } = await this.db.auditLog.deleteMany({
             where: { created_at: { lt: auditCutoff } },
         });
 
+        // Purge notifications older than 30 days
+        const notifCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const { count: notifRows } = await this.db.notification.deleteMany({
+            where: { created_at: { lt: notifCutoff } },
+        });
+
         this.logger.log(
-            `[DataRetention] Purged: ${pwTokens} pw-reset tokens, ${evTokens} verification tokens, ${auditRows} audit logs`,
+            `[DataRetention] Purged: ${pwTokens} pw-reset tokens, ${evTokens} verification tokens, ${auditRows} audit logs, ${notifRows} notifications`,
         );
     }
 }

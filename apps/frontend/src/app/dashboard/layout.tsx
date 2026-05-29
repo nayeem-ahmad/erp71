@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { ArrowLeft, Bell, Zap, X } from 'lucide-react';
+import { ArrowLeft, Zap, X } from 'lucide-react';
+import NotificationBell from '@/components/NotificationBell';
 import Sidebar from '@/components/Sidebar';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import FeedbackWidget from '@/components/FeedbackWidget';
@@ -137,10 +138,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 </select>
                             </div>
                         ) : null}
-                        <div className="relative p-2 text-gray-400 hover:text-gray-600 cursor-pointer transition-colors">
-                            <Bell className="w-5 h-5" />
-                            <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
-                        </div>
+                        <NotificationBell />
                         <div className="h-8 w-px bg-gray-200" />
                         <div className="flex items-center space-x-3">
                             <div className="text-right hidden sm:block">

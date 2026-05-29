@@ -16,7 +16,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Audit all endpoints for missing auth guards — done 2026-05-12
 - [ ] Implement audit logging table (who changed what, when — needed for billing disputes)
 
-### Email & Notifications (nothing exists)
+### Email & Notifications
 - [x] Integrate email service (Resend) — done 2026-05-15
 - [ ] Transactional emails: billing invoices, payment confirmations, payment failures
 - [x] Onboarding welcome email — sent on signup — done 2026-05-15
@@ -24,6 +24,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [ ] User invitation emails (tenant owner inviting staff)
 - [ ] Low-stock / reorder point alert emails
 - [ ] Subscription expiry warnings (7 days and 1 day before)
+- [x] In-app notifications — Notification model, REST API (list/unread-count/mark-read/mark-all-read), bell icon with dropdown panel, 60s polling, hooks into low-stock and expiry crons — done 2026-05-29
 
 ### Infrastructure / Ops
 - [ ] Upgrade Render plan (free tier has no SLA, cold starts, limited RAM)
@@ -176,6 +177,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] In-app notifications — Notification model + migration, NotificationsController (GET /notifications, GET /notifications/unread-count, PATCH /notifications/:id/read, PATCH /notifications/read-all), NotificationBell component with live badge and dropdown panel, hooked into low-stock and expiry crons — done 2026-05-29
 - [x] Implement accounting reports: Profit & Loss, Balance Sheet, Cashbook, Bankbook — backend endpoints + frontend pages; linked from accounting overview — done 2026-05-29
 - [x] Implement sales reports: Customer-wise sales summary and Month-by-month sales by customer — backend endpoints + frontend pages — done 2026-05-29
 

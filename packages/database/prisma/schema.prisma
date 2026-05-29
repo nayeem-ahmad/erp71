@@ -119,6 +119,7 @@ model User {
   emailVerificationTokens   EmailVerificationToken[]
   sentInvitations           UserInvitation[]        @relation("InvitationSender")
   feedbacks                 Feedback[]
+  notifications             Notification[]
 }
 
 model PasswordResetToken {
@@ -263,6 +264,7 @@ model Tenant {
   productionJobs  ProductionJob[]
   loyaltyTransactions LoyaltyTransaction[]
   discountCodes   DiscountCode[]
+  notifications   Notification[]
 }
 
 model TenantUser {
@@ -1548,4 +1550,22 @@ model DiscountCode {
   @@unique([tenantId, code])
   @@index([tenantId, is_active])
   @@map("discount_codes")
+}
+
+model Notification {
+  id         String    @id @default(uuid())
+  tenant_id  String
+  user_id    String
+  type       String    // LOW_STOCK | SUBSCRIPTION_EXPIRY | INFO
+  title      String
+  body       String
+  link       String?
+  read_at    DateTime?
+  created_at DateTime  @default(now())
+
+  tenant     Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, user_id, created_at])
+  @@index([user_id, read_at])
 }

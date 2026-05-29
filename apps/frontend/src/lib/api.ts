@@ -731,4 +731,9 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    // In-app notifications
+    getNotifications: () => fetchWithAuth('/notifications'),
+    getNotificationUnreadCount: () => fetchWithAuth('/notifications/unread-count'),
+    markNotificationRead: (id: string) => fetchWithAuth(`/notifications/${id}/read`, { method: 'PATCH' }),
+    markAllNotificationsRead: () => fetchWithAuth('/notifications/read-all', { method: 'PATCH' }),
 };
