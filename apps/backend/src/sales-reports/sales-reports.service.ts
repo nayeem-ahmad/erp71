@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { GetConsolidatedReportDto, GetSalesByProductDto, GetSalesSummaryDto } from './sales-reports.dto';
+import { GetConsolidatedReportDto, GetMonthlySalesByCustomerDto, GetSalesByCustomerDto, GetSalesByProductDto, GetSalesSummaryDto } from './sales-reports.dto';
 
 @Injectable()
 export class SalesReportsService {
@@ -258,6 +258,123 @@ export class SalesReportsService {
             },
             by_store: byStore,
         };
+    }
+    async getSalesByCustomer(tenantId: string, query: GetSalesByCustomerDto) {
+        const dateFilter = buildDateWindow(query.from, query.to);
+
+        const sales = await this.db.sale.findMany({
+            where: {
+                tenant_id: tenantId,
+                status: 'COMPLETED',
+                ...(query.storeId ? { store_id: query.storeId } : {}),
+                ...dateFilter,
+            },
+            select: {
+                id: true,
+                total_amount: true,
+                customer_id: true,
+                customer: { select: { id: true, name: true, phone: true, customer_code: true } },
+            },
+        });
+
+        const customerMap = new Map<string, {
+            customer: any;
+            orderCount: number;
+            revenue: number;
+        }>();
+
+        for (const sale of sales) {
+            const key = sale.customer_id ?? '__walkin__';
+            const existing = customerMap.get(key) ?? {
+                customer: sale.customer ?? { id: null, name: 'Walk-in Customer', phone: null, customer_code: null },
+                orderCount: 0,
+                revenue: 0,
+            };
+            existing.orderCount += 1;
+            existing.revenue += Number(sale.total_amount);
+            customerMap.set(key, existing);
+        }
+
+        const rows = Array.from(customerMap.values())
+            .sort((a, b) => b.revenue - a.revenue)
+            .map((r) => ({
+                customer: r.customer,
+                orderCount: r.orderCount,
+                revenue: r.revenue,
+                avgOrderValue: r.orderCount > 0 ? r.revenue / r.orderCount : 0,
+            }));
+
+        const totalRevenue = rows.reduce((sum, r) => sum + r.revenue, 0);
+        const totalOrders = rows.reduce((sum, r) => sum + r.orderCount, 0);
+
+        return {
+            summary: {
+                totalRevenue,
+                totalOrders,
+                customerCount: rows.length,
+                avgOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
+            },
+            rows,
+        };
+    }
+
+    async getMonthlySalesByCustomer(tenantId: string, query: GetMonthlySalesByCustomerDto) {
+        const dateFilter = buildDateWindow(query.from, query.to);
+
+        const sales = await this.db.sale.findMany({
+            where: {
+                tenant_id: tenantId,
+                status: 'COMPLETED',
+                ...(query.customerId ? { customer_id: query.customerId } : {}),
+                ...dateFilter,
+            },
+            select: {
+                id: true,
+                total_amount: true,
+                customer_id: true,
+                created_at: true,
+                customer: { select: { id: true, name: true, phone: true } },
+            },
+            orderBy: { created_at: 'asc' },
+        });
+
+        const monthSet = new Set<string>();
+        const customerMap = new Map<string, {
+            customer: any;
+            months: Map<string, { revenue: number; orderCount: number }>;
+        }>();
+
+        for (const sale of sales) {
+            const monthKey = sale.created_at.toISOString().slice(0, 7);
+            monthSet.add(monthKey);
+
+            const customerKey = sale.customer_id ?? '__walkin__';
+            const entry = customerMap.get(customerKey) ?? {
+                customer: sale.customer ?? { id: null, name: 'Walk-in Customer', phone: null },
+                months: new Map(),
+            };
+            const monthData = entry.months.get(monthKey) ?? { revenue: 0, orderCount: 0 };
+            monthData.revenue += Number(sale.total_amount);
+            monthData.orderCount += 1;
+            entry.months.set(monthKey, monthData);
+            customerMap.set(customerKey, entry);
+        }
+
+        const months = Array.from(monthSet).sort();
+
+        const rows = Array.from(customerMap.values())
+            .map((entry) => ({
+                customer: entry.customer,
+                total: months.reduce((sum, m) => sum + (entry.months.get(m)?.revenue ?? 0), 0),
+                monthly: months.map((m) => ({
+                    month: m,
+                    revenue: entry.months.get(m)?.revenue ?? 0,
+                    orderCount: entry.months.get(m)?.orderCount ?? 0,
+                })),
+            }))
+            .sort((a, b) => b.total - a.total);
+
+        return { months, rows };
     }
 }
 

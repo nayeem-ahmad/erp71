@@ -45,3 +45,31 @@ export class GetConsolidatedReportDto {
     @IsString()
     to?: string;
 }
+
+export class GetSalesByCustomerDto {
+    @IsOptional()
+    @IsUUID()
+    storeId?: string;
+
+    @IsOptional()
+    @IsString()
+    from?: string;
+
+    @IsOptional()
+    @IsString()
+    to?: string;
+}
+
+export class GetMonthlySalesByCustomerDto {
+    @IsOptional()
+    @IsString()
+    from?: string;
+
+    @IsOptional()
+    @IsString()
+    to?: string;
+
+    @IsOptional()
+    @IsUUID()
+    customerId?: string;
+}

@@ -104,15 +104,15 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [ ] Bangla number formatting option
 
 ### Accounting Reports
-- [ ] Profit & Loss account (income statement) — revenue vs expenses, net profit/loss for a date range
-- [ ] Balance sheet — assets, liabilities, and equity snapshot at a given date
-- [ ] Cashbook — cash receipts and payments ledger with running balance
-- [ ] Bankbook — bank account receipts and payments ledger with running balance
+- [x] Profit & Loss account (income statement) — revenue vs expenses, net profit/loss for a date range — done 2026-05-29
+- [x] Balance sheet — assets, liabilities, and equity snapshot at a given date — done 2026-05-29
+- [x] Cashbook — cash receipts and payments ledger with running balance — done 2026-05-29
+- [x] Bankbook — bank account receipts and payments ledger with running balance — done 2026-05-29
 
 ### Sales Reports
-- [ ] Product-wise sales summary — quantity sold, revenue, and margin per product for a selected period
-- [ ] Customer-wise sales summary — total orders, revenue, and average order value per customer for a selected period
-- [ ] Month-by-month sales metrics per customer — monthly breakdown of order count, revenue, and trend per customer
+- [x] Product-wise sales summary — quantity sold, revenue, and margin per product for a selected period — done 2026-05-29
+- [x] Customer-wise sales summary — total orders, revenue, and average order value per customer for a selected period — done 2026-05-29
+- [x] Month-by-month sales metrics per customer — monthly breakdown of order count, revenue, and trend per customer — done 2026-05-29
 
 ### Product Completeness
 - [ ] Customer-facing invoice/receipt email after a sale
@@ -175,6 +175,9 @@ Track all work here. Check off items as they're completed. Add new items as they
 ---
 
 ## COMPLETED
+
+- [x] Implement accounting reports: Profit & Loss, Balance Sheet, Cashbook, Bankbook — backend endpoints + frontend pages; linked from accounting overview — done 2026-05-29
+- [x] Implement sales reports: Customer-wise sales summary and Month-by-month sales by customer — backend endpoints + frontend pages — done 2026-05-29
 
 - [x] Stabilize backend integration specs (`integration.spec.ts`, `inventory-operations.spec.ts`, `sales-returns-orders.spec.ts`) against current auth/bootstrap, DTO, premium-plan, and response-envelope contracts — done 2026-05-27
 - [x] Re-test localhost login end-to-end and resolve local DB schema drift by running Prisma `db push`; signup/login now return 201 and `/login` redirects to `/dashboard` — done 2026-05-27

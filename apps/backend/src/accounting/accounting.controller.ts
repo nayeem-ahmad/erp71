@@ -24,6 +24,10 @@ import {
     ListPostingRulesQueryDto,
     UpdatePostingRuleDto,
     ListPostingExceptionsQueryDto,
+    ProfitLossQueryDto,
+    BalanceSheetQueryDto,
+    CashbookQueryDto,
+    BankbookQueryDto,
 } from './accounting.dto';
 
 @Controller('accounting')
@@ -174,5 +178,25 @@ export class AccountingController {
         @Query() query: ListLedgerQueryDto,
     ) {
         return this.accountingService.findLedger(tenant.tenantId, accountId, query);
+    }
+
+    @Get('reports/profit-loss')
+    getProfitLoss(@Tenant() tenant: TenantContext, @Query() query: ProfitLossQueryDto) {
+        return this.accountingService.getProfitLoss(tenant.tenantId, query);
+    }
+
+    @Get('reports/balance-sheet')
+    getBalanceSheet(@Tenant() tenant: TenantContext, @Query() query: BalanceSheetQueryDto) {
+        return this.accountingService.getBalanceSheet(tenant.tenantId, query);
+    }
+
+    @Get('reports/cashbook')
+    getCashbook(@Tenant() tenant: TenantContext, @Query() query: CashbookQueryDto) {
+        return this.accountingService.getCashbook(tenant.tenantId, query);
+    }
+
+    @Get('reports/bankbook')
+    getBankbook(@Tenant() tenant: TenantContext, @Query() query: BankbookQueryDto) {
+        return this.accountingService.getBankbook(tenant.tenantId, query);
     }
 }
