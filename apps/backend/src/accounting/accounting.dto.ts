@@ -283,6 +283,50 @@ export class ListPostingExceptionsQueryDto {
     limit?: number;
 }
 
+export class ProfitLossQueryDto {
+    @IsOptional()
+    @IsDateString()
+    from?: string;
+
+    @IsOptional()
+    @IsDateString()
+    to?: string;
+}
+
+export class BalanceSheetQueryDto {
+    @IsOptional()
+    @IsDateString()
+    asOfDate?: string;
+}
+
+export class CashbookQueryDto {
+    @IsOptional()
+    @IsDateString()
+    from?: string;
+
+    @IsOptional()
+    @IsDateString()
+    to?: string;
+
+    @IsOptional()
+    @IsString()
+    accountId?: string;
+}
+
+export class BankbookQueryDto {
+    @IsOptional()
+    @IsDateString()
+    from?: string;
+
+    @IsOptional()
+    @IsDateString()
+    to?: string;
+
+    @IsOptional()
+    @IsString()
+    accountId?: string;
+}
+
 const EXPORT_FORMATS = ['tally', 'quickbooks'] as const;
 
 export class ExportLedgerQueryDto {

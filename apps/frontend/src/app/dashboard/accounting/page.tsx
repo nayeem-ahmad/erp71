@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, BookOpen, Calculator, ClipboardList, Download, FileText, Settings, AlertTriangle, ChevronDown } from 'lucide-react';
+import { ArrowRight, BookOpen, Calculator, ClipboardList, Download, FileText, Settings, AlertTriangle, ChevronDown, TrendingUp, LayoutDashboard, Landmark } from 'lucide-react';
 import { HelpTooltip } from '@/components/HelpTooltip';
 import { api } from '@/lib/api';
 
@@ -48,6 +48,37 @@ const ACCOUNTING_LINKS = [
         description: 'Monitor and retry failed or skipped auto-posting events for reconciliation.',
         icon: AlertTriangle,
         accent: 'bg-rose-50 text-rose-700 border-rose-100',
+    },
+];
+
+const REPORT_LINKS = [
+    {
+        href: '/dashboard/accounting/reports/pl',
+        title: 'Profit & Loss',
+        description: 'Income statement — revenue vs expenses and net profit for any date range.',
+        icon: TrendingUp,
+        accent: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+    },
+    {
+        href: '/dashboard/accounting/reports/balance-sheet',
+        title: 'Balance Sheet',
+        description: 'Assets, liabilities, and equity snapshot as of any date.',
+        icon: LayoutDashboard,
+        accent: 'bg-sky-50 text-sky-700 border-sky-100',
+    },
+    {
+        href: '/dashboard/accounting/reports/cashbook',
+        title: 'Cashbook',
+        description: 'Cash receipts and payments with running balance.',
+        icon: BookOpen,
+        accent: 'bg-amber-50 text-amber-700 border-amber-100',
+    },
+    {
+        href: '/dashboard/accounting/reports/bankbook',
+        title: 'Bankbook',
+        description: 'Bank deposits and withdrawals ledger with running balance.',
+        icon: Landmark,
+        accent: 'bg-violet-50 text-violet-700 border-violet-100',
     },
 ];
 
@@ -186,6 +217,31 @@ export default function AccountingPage() {
                             </div>
                         </Link>
                     ))}
+                </div>
+
+                <div className="space-y-2">
+                    <p className="text-xs font-black uppercase tracking-[0.24em] text-gray-400">Financial Reports</p>
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        {REPORT_LINKS.map(({ href, title, description, icon: Icon, accent }) => (
+                            <Link
+                                key={title}
+                                href={href}
+                                className="group rounded-3xl border border-gray-200 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg"
+                            >
+                                <div className={`inline-flex rounded-2xl border px-3 py-3 ${accent}`}>
+                                    <Icon className="h-5 w-5" />
+                                </div>
+                                <div className="mt-5 space-y-2">
+                                    <h2 className="text-lg font-black tracking-tight text-gray-950">{title}</h2>
+                                    <p className="text-sm leading-6 text-gray-500">{description}</p>
+                                </div>
+                                <div className="mt-5 flex items-center text-sm font-bold text-gray-900">
+                                    View report
+                                    <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
                 </div>
             </div>
 

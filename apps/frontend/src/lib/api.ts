@@ -462,6 +462,45 @@ export const api = {
     retryPostingException: (id: string) => fetchWithAuth(`/accounting/reconciliation/posting-exceptions/${id}/retry`, {
         method: 'POST',
     }),
+    getProfitLoss: (params?: { from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        return fetchWithAuth(`/accounting/reports/profit-loss${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    getBalanceSheet: (params?: { asOfDate?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.asOfDate) query.set('asOfDate', params.asOfDate);
+        return fetchWithAuth(`/accounting/reports/balance-sheet${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    getCashbook: (params?: { from?: string; to?: string; accountId?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        if (params?.accountId) query.set('accountId', params.accountId);
+        return fetchWithAuth(`/accounting/reports/cashbook${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    getBankbook: (params?: { from?: string; to?: string; accountId?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        if (params?.accountId) query.set('accountId', params.accountId);
+        return fetchWithAuth(`/accounting/reports/bankbook${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    getSalesByCustomer: (params?: { storeId?: string; from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        return fetchWithAuth(`/sales-reports/by-customer${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    getMonthlySalesByCustomer: (params?: { from?: string; to?: string; customerId?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        if (params?.customerId) query.set('customerId', params.customerId);
+        return fetchWithAuth(`/sales-reports/monthly-by-customer${query.toString() ? `?${query.toString()}` : ''}`);
+    },
     exportAccountingLedger: (params: { format: 'tally' | 'quickbooks'; from?: string; to?: string }) => {
         const query = new URLSearchParams();
         query.set('format', params.format);

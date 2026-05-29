@@ -16,6 +16,10 @@ import {
     ListPostingRulesQueryDto,
     UpdatePostingRuleDto,
     ListPostingExceptionsQueryDto,
+    ProfitLossQueryDto,
+    BalanceSheetQueryDto,
+    CashbookQueryDto,
+    BankbookQueryDto,
 } from './accounting.dto';
 
 export const VOUCHER_NUMBER_PREFIXES: Record<VoucherType, string> = {
@@ -910,6 +914,288 @@ export class AccountingService {
             status: 'pending',
             message: 'Retry queued. Re-trigger source workflow to re-run posting.',
         };
+    }
+
+    async getProfitLoss(tenantId: string, query: ProfitLossQueryDto) {
+        const range = this.resolveDateRange(query.from, query.to);
+
+        const accounts = await this.db.account.findMany({
+            where: {
+                tenant_id: tenantId,
+                type: { in: [AccountType.REVENUE, AccountType.EXPENSE] },
+            },
+            include: { group: true, subgroup: true },
+        });
+
+        if (accounts.length === 0) {
+            return {
+                filters: { from: range.from, to: range.to },
+                revenue: { groups: [], total: 0 },
+                expenses: { groups: [], total: 0 },
+                net_profit: 0,
+            };
+        }
+
+        const details = await this.db.voucherDetail.findMany({
+            where: {
+                account_id: { in: accounts.map((a) => a.id) },
+                voucher: {
+                    tenant_id: tenantId,
+                    date: { gte: range.fromDate, lte: range.toDate },
+                },
+            },
+            select: { account_id: true, debit_amount: true, credit_amount: true },
+        });
+
+        const accountTotals = new Map<string, { debit: number; credit: number }>();
+        for (const detail of details) {
+            const existing = accountTotals.get(detail.account_id) ?? { debit: 0, credit: 0 };
+            existing.debit += Number(detail.debit_amount ?? 0);
+            existing.credit += Number(detail.credit_amount ?? 0);
+            accountTotals.set(detail.account_id, existing);
+        }
+
+        const buildPLGroups = (accts: typeof accounts, type: AccountType) => {
+            const groupMap = new Map<string, { group: any; accounts: any[]; total: number }>();
+            for (const account of accts) {
+                const totals = accountTotals.get(account.id) ?? { debit: 0, credit: 0 };
+                const balance = type === AccountType.REVENUE
+                    ? this.roundAmount(totals.credit - totals.debit)
+                    : this.roundAmount(totals.debit - totals.credit);
+                const gid = account.group_id;
+                const existing = groupMap.get(gid) ?? {
+                    group: { id: account.group.id, name: account.group.name },
+                    accounts: [],
+                    total: 0,
+                };
+                existing.accounts.push({
+                    id: account.id,
+                    name: account.name,
+                    code: account.code,
+                    subgroup: account.subgroup ? { id: account.subgroup.id, name: account.subgroup.name } : null,
+                    balance,
+                });
+                existing.total = this.roundAmount(existing.total + balance);
+                groupMap.set(gid, existing);
+            }
+            return Array.from(groupMap.values()).sort((a, b) => a.group.name.localeCompare(b.group.name));
+        };
+
+        const revenueGroups = buildPLGroups(
+            accounts.filter((a) => a.type === AccountType.REVENUE),
+            AccountType.REVENUE,
+        );
+        const expenseGroups = buildPLGroups(
+            accounts.filter((a) => a.type === AccountType.EXPENSE),
+            AccountType.EXPENSE,
+        );
+
+        const totalRevenue = this.roundAmount(revenueGroups.reduce((sum, g) => sum + g.total, 0));
+        const totalExpenses = this.roundAmount(expenseGroups.reduce((sum, g) => sum + g.total, 0));
+
+        return {
+            filters: { from: range.from, to: range.to },
+            revenue: { groups: revenueGroups, total: totalRevenue },
+            expenses: { groups: expenseGroups, total: totalExpenses },
+            net_profit: this.roundAmount(totalRevenue - totalExpenses),
+        };
+    }
+
+    async getBalanceSheet(tenantId: string, query: BalanceSheetQueryDto) {
+        const asOfDateStr = query.asOfDate ?? this.formatDateValue(new Date());
+        const asOfDate = this.toEndOfDay(asOfDateStr);
+
+        const bsAccounts = await this.db.account.findMany({
+            where: {
+                tenant_id: tenantId,
+                type: { in: [AccountType.ASSET, AccountType.LIABILITY, AccountType.EQUITY] },
+            },
+            include: { group: true, subgroup: true },
+        });
+
+        const plAccountIds = await this.db.account.findMany({
+            where: { tenant_id: tenantId, type: { in: [AccountType.REVENUE, AccountType.EXPENSE] } },
+            select: { id: true, type: true },
+        });
+
+        const allIds = [...bsAccounts.map((a) => a.id), ...plAccountIds.map((a) => a.id)];
+
+        const details = allIds.length > 0
+            ? await this.db.voucherDetail.findMany({
+                where: {
+                    account_id: { in: allIds },
+                    voucher: { tenant_id: tenantId, date: { lte: asOfDate } },
+                },
+                select: { account_id: true, debit_amount: true, credit_amount: true },
+              })
+            : [];
+
+        const accountTotals = new Map<string, { debit: number; credit: number }>();
+        for (const detail of details) {
+            const existing = accountTotals.get(detail.account_id) ?? { debit: 0, credit: 0 };
+            existing.debit += Number(detail.debit_amount ?? 0);
+            existing.credit += Number(detail.credit_amount ?? 0);
+            accountTotals.set(detail.account_id, existing);
+        }
+
+        let plRevenue = 0;
+        let plExpenses = 0;
+        for (const plAccount of plAccountIds) {
+            const totals = accountTotals.get(plAccount.id) ?? { debit: 0, credit: 0 };
+            if (plAccount.type === AccountType.REVENUE) {
+                plRevenue += totals.credit - totals.debit;
+            } else {
+                plExpenses += totals.debit - totals.credit;
+            }
+        }
+        const netProfit = this.roundAmount(plRevenue - plExpenses);
+
+        const buildBSGroups = (accts: typeof bsAccounts, type: AccountType) => {
+            const groupMap = new Map<string, { group: any; accounts: any[]; total: number }>();
+            for (const account of accts) {
+                const totals = accountTotals.get(account.id) ?? { debit: 0, credit: 0 };
+                const balance = this.calculateSignedBalance(type, totals.debit, totals.credit);
+                const gid = account.group_id;
+                const existing = groupMap.get(gid) ?? {
+                    group: { id: account.group.id, name: account.group.name },
+                    accounts: [],
+                    total: 0,
+                };
+                existing.accounts.push({
+                    id: account.id,
+                    name: account.name,
+                    code: account.code,
+                    subgroup: account.subgroup ? { id: account.subgroup.id, name: account.subgroup.name } : null,
+                    balance: this.roundAmount(balance),
+                });
+                existing.total = this.roundAmount(existing.total + balance);
+                groupMap.set(gid, existing);
+            }
+            return Array.from(groupMap.values()).sort((a, b) => a.group.name.localeCompare(b.group.name));
+        };
+
+        const assetGroups = buildBSGroups(bsAccounts.filter((a) => a.type === AccountType.ASSET), AccountType.ASSET);
+        const liabilityGroups = buildBSGroups(bsAccounts.filter((a) => a.type === AccountType.LIABILITY), AccountType.LIABILITY);
+        const equityGroups = buildBSGroups(bsAccounts.filter((a) => a.type === AccountType.EQUITY), AccountType.EQUITY);
+
+        const totalAssets = this.roundAmount(assetGroups.reduce((sum, g) => sum + g.total, 0));
+        const totalLiabilities = this.roundAmount(liabilityGroups.reduce((sum, g) => sum + g.total, 0));
+        const totalEquity = this.roundAmount(equityGroups.reduce((sum, g) => sum + g.total, 0) + netProfit);
+        const totalLiabilitiesAndEquity = this.roundAmount(totalLiabilities + totalEquity);
+
+        return {
+            as_of: asOfDateStr,
+            assets: { groups: assetGroups, total: totalAssets },
+            liabilities: { groups: liabilityGroups, total: totalLiabilities },
+            equity: { groups: equityGroups, net_profit: netProfit, total: totalEquity },
+            total_liabilities_and_equity: totalLiabilitiesAndEquity,
+            is_balanced: Math.abs(totalAssets - totalLiabilitiesAndEquity) < 0.01,
+        };
+    }
+
+    private async buildBookReport(
+        tenantId: string,
+        category: AccountCategory,
+        query: CashbookQueryDto | BankbookQueryDto,
+    ) {
+        this.validateDateRange(query.from, query.to);
+        const range = this.resolveDateRange(query.from, query.to);
+
+        const bookAccounts = await this.db.account.findMany({
+            where: {
+                tenant_id: tenantId,
+                category,
+                ...(query.accountId ? { id: query.accountId } : {}),
+            },
+        });
+
+        if (bookAccounts.length === 0) {
+            return {
+                filters: { from: range.from, to: range.to },
+                accounts: [],
+                opening_balance: 0,
+                opening_balance_side: 'neutral' as const,
+                closing_balance: 0,
+                closing_balance_side: 'neutral' as const,
+                totals: { receipts: 0, payments: 0 },
+                rows: [],
+            };
+        }
+
+        const accountIds = bookAccounts.map((a) => a.id);
+
+        const openingTotals = await this.db.voucherDetail.aggregate({
+            where: {
+                account_id: { in: accountIds },
+                voucher: { tenant_id: tenantId, date: { lt: range.fromDate } },
+            },
+            _sum: { debit_amount: true, credit_amount: true },
+        });
+
+        const openingDebit = Number(openingTotals._sum.debit_amount ?? 0);
+        const openingCredit = Number(openingTotals._sum.credit_amount ?? 0);
+        const openingBalanceValue = this.roundAmount(openingDebit - openingCredit);
+        const openingBalance = this.presentBalance(AccountType.ASSET, openingBalanceValue);
+
+        const entries = await this.db.voucherDetail.findMany({
+            where: {
+                account_id: { in: accountIds },
+                voucher: { tenant_id: tenantId, ...this.buildVoucherDateRangeFilter(range.from, range.to) },
+            },
+            include: {
+                voucher: true,
+                account: { select: { id: true, name: true } },
+            },
+            orderBy: [{ voucher: { date: 'asc' } }, { voucher_id: 'asc' }, { created_at: 'asc' }],
+        });
+
+        let runningBalanceValue = openingBalanceValue;
+        let totalReceipts = 0;
+        let totalPayments = 0;
+
+        const rows = entries.map((entry) => {
+            const receipts = Number(entry.debit_amount ?? 0);
+            const payments = Number(entry.credit_amount ?? 0);
+            totalReceipts = this.roundAmount(totalReceipts + receipts);
+            totalPayments = this.roundAmount(totalPayments + payments);
+            runningBalanceValue = this.roundAmount(runningBalanceValue + receipts - payments);
+            const balance = this.presentBalance(AccountType.ASSET, runningBalanceValue);
+            return {
+                id: entry.id,
+                voucher_id: entry.voucher_id,
+                voucher_number: entry.voucher.voucher_number,
+                voucher_type: entry.voucher.voucher_type,
+                date: entry.voucher.date,
+                description: entry.comment ?? entry.voucher.description ?? null,
+                reference_number: entry.voucher.reference_number,
+                account_name: entry.account.name,
+                receipts,
+                payments,
+                running_balance: balance.amount,
+                running_balance_side: balance.side,
+            };
+        });
+
+        const closingBalance = this.presentBalance(AccountType.ASSET, runningBalanceValue);
+
+        return {
+            filters: { from: range.from, to: range.to },
+            accounts: bookAccounts.map((a) => ({ id: a.id, name: a.name, code: a.code })),
+            opening_balance: openingBalance.amount,
+            opening_balance_side: openingBalance.side,
+            closing_balance: closingBalance.amount,
+            closing_balance_side: closingBalance.side,
+            totals: { receipts: totalReceipts, payments: totalPayments },
+            rows,
+        };
+    }
+
+    async getCashbook(tenantId: string, query: CashbookQueryDto) {
+        return this.buildBookReport(tenantId, AccountCategory.CASH, query);
+    }
+
+    async getBankbook(tenantId: string, query: BankbookQueryDto) {
+        return this.buildBookReport(tenantId, AccountCategory.BANK, query);
     }
 
     async exportLedger(tenantId: string, format: 'tally' | 'quickbooks', from?: string, to?: string): Promise<string> {
