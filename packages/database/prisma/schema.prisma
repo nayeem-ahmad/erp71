@@ -102,6 +102,7 @@ model User {
   name              String?
   preferred_locale  String    @default("en")
   token_version     Int       @default(0)
+  is_platform_admin Boolean   @default(false)
   email_verified_at DateTime?
   totp_secret       String?
   created_at        DateTime  @default(now())

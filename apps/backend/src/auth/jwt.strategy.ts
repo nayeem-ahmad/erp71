@@ -17,7 +17,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     async validate(payload: any) {
         const user = await this.db.user.findUnique({
             where: { id: payload.sub },
-            select: { id: true, email: true, token_version: true },
+            select: { id: true, email: true, token_version: true, is_platform_admin: true },
         });
 
         if (!user) throw new UnauthorizedException('User not found');
@@ -27,6 +27,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             throw new UnauthorizedException('Session invalidated');
         }
 
-        return { userId: user.id, email: user.email };
+        return { userId: user.id, email: user.email, isPlatformAdmin: user.is_platform_admin };
     }
 }

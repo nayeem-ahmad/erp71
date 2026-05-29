@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN "is_platform_admin" BOOLEAN NOT NULL DEFAULT false;

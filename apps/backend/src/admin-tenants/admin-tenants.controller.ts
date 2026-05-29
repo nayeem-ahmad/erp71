@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Request, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../auth/platform-admin.guard';
 import { AdminTenantsService } from './admin-tenants.service';
 import {
     ListAdminTenantsQueryDto,
     UpdateAdminTenantSubscriptionDto,
+    SuspendTenantDto,
 } from './admin-tenants.dto';
 
 @Controller('admin/tenants')
@@ -28,5 +29,21 @@ export class AdminTenantsController {
         @Body() dto: UpdateAdminTenantSubscriptionDto,
     ) {
         return this.adminTenantsService.updateSubscription(tenantId, dto);
+    }
+
+    @Patch(':tenantId/suspend')
+    suspendTenant(
+        @Param('tenantId') tenantId: string,
+        @Body() dto: SuspendTenantDto,
+    ) {
+        return this.adminTenantsService.suspendTenant(tenantId, dto);
+    }
+
+    @Post(':tenantId/impersonate')
+    impersonateTenant(
+        @Param('tenantId') tenantId: string,
+        @Request() req: any,
+    ) {
+        return this.adminTenantsService.impersonateTenant(tenantId, req.user.userId);
     }
 }

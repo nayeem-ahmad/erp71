@@ -10,3 +10,17 @@ export class UpdateAdminTenantSubscriptionDto {
     billingCycle?: 'MONTHLY' | 'YEARLY';
     cancelAtPeriodEnd?: boolean;
 }
+
+export class SuspendTenantDto {
+    reason?: string;
+}
+
+export class ListAdminUsersQueryDto {
+    search?: string;
+    page?: number;
+    limit?: number;
+}
+
+export class PromoteUserDto {
+    userId: string;
+}

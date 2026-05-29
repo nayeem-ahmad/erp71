@@ -1,8 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { BillingService } from '../billing/billing.service';
 import { DatabaseService } from '../database/database.service';
 import {
     ListAdminTenantsQueryDto,
+    ListAdminUsersQueryDto,
+    SuspendTenantDto,
     UpdateAdminTenantSubscriptionDto,
 } from './admin-tenants.dto';
 
@@ -11,6 +14,7 @@ export class AdminTenantsService {
     constructor(
         private readonly db: DatabaseService,
         private readonly billingService: BillingService,
+        private readonly jwtService: JwtService,
     ) {}
 
     async listTenants(query: ListAdminTenantsQueryDto) {
@@ -131,6 +135,161 @@ export class AdminTenantsService {
         });
 
         return result;
+    }
+
+    async suspendTenant(tenantId: string, dto: SuspendTenantDto) {
+        const existing = await this.db.tenantSubscription.findUnique({
+            where: { tenant_id: tenantId },
+        });
+
+        if (!existing) {
+            throw new NotFoundException('Tenant or subscription not found');
+        }
+
+        await this.db.tenantSubscription.update({
+            where: { tenant_id: tenantId },
+            data: { status: 'CANCELLED' },
+        });
+
+        return { success: true, reason: dto.reason ?? null };
+    }
+
+    async impersonateTenant(tenantId: string, adminUserId: string) {
+        const tenant = await this.db.tenant.findUnique({
+            where: { id: tenantId },
+            include: {
+                owner: {
+                    select: { id: true, email: true, token_version: true },
+                },
+            },
+        });
+
+        if (!tenant) {
+            throw new NotFoundException('Tenant not found');
+        }
+
+        const payload = {
+            sub: tenant.owner.id,
+            email: tenant.owner.email,
+            tv: tenant.owner.token_version,
+            impersonated_by: adminUserId,
+            impersonated_tenant: tenantId,
+        };
+
+        const token = this.jwtService.sign(payload, { expiresIn: '1h' });
+
+        return {
+            access_token: token,
+            expires_in: 3600,
+            impersonated_user: { id: tenant.owner.id, email: tenant.owner.email },
+            tenant: { id: tenant.id, name: tenant.name },
+        };
+    }
+
+    async getMetrics() {
+        const [totalTenants, totalUsers, subscriptionCounts, newTenantsThisMonth] =
+            await Promise.all([
+                this.db.tenant.count(),
+                this.db.user.count(),
+                this.db.tenantSubscription.groupBy({
+                    by: ['status'],
+                    _count: { status: true },
+                }),
+                this.db.tenant.count({
+                    where: {
+                        created_at: { gte: new Date(new Date().setDate(1)) },
+                    },
+                }),
+            ]);
+
+        const byStatus = Object.fromEntries(
+            subscriptionCounts.map((row) => [row.status, row._count.status]),
+        );
+
+        return {
+            total_tenants: totalTenants,
+            total_users: totalUsers,
+            new_tenants_this_month: newTenantsThisMonth,
+            subscriptions: {
+                active: byStatus['ACTIVE'] ?? 0,
+                trialing: byStatus['TRIALING'] ?? 0,
+                past_due: byStatus['PAST_DUE'] ?? 0,
+                cancelled: byStatus['CANCELLED'] ?? 0,
+            },
+        };
+    }
+
+    async listUsers(query: ListAdminUsersQueryDto) {
+        const page = Math.max(1, query.page ?? 1);
+        const limit = Math.min(100, Math.max(1, query.limit ?? 20));
+        const skip = (page - 1) * limit;
+
+        const where = query.search
+            ? {
+                  OR: [
+                      { email: { contains: query.search, mode: 'insensitive' as const } },
+                      { name: { contains: query.search, mode: 'insensitive' as const } },
+                  ],
+              }
+            : {};
+
+        const [users, total] = await Promise.all([
+            this.db.user.findMany({
+                where,
+                select: {
+                    id: true,
+                    email: true,
+                    name: true,
+                    is_platform_admin: true,
+                    email_verified_at: true,
+                    created_at: true,
+                    _count: { select: { tenantMembers: true } },
+                },
+                orderBy: { created_at: 'desc' },
+                skip,
+                take: limit,
+            }),
+            this.db.user.count({ where }),
+        ]);
+
+        return {
+            data: users.map((u) => ({
+                id: u.id,
+                email: u.email,
+                name: u.name,
+                is_platform_admin: (u as any).is_platform_admin,
+                email_verified: !!u.email_verified_at,
+                tenant_count: (u as any)._count.tenantMembers,
+                created_at: u.created_at,
+            })),
+            total,
+            page,
+            limit,
+        };
+    }
+
+    async promoteUser(userId: string) {
+        const user = await this.db.user.findUnique({ where: { id: userId } });
+        if (!user) throw new NotFoundException('User not found');
+
+        await this.db.user.update({
+            where: { id: userId },
+            data: { is_platform_admin: true },
+        });
+
+        return { success: true, userId, is_platform_admin: true };
+    }
+
+    async demoteUser(userId: string) {
+        const user = await this.db.user.findUnique({ where: { id: userId } });
+        if (!user) throw new NotFoundException('User not found');
+
+        await this.db.user.update({
+            where: { id: userId },
+            data: { is_platform_admin: false },
+        });
+
+        return { success: true, userId, is_platform_admin: false };
     }
 
     private mapTenant(tenant: any) {

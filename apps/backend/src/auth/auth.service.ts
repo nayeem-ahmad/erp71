@@ -195,8 +195,8 @@ export class AuthService {
         const tenantMembers = (user.tenantMembers ?? []).filter((membership) => membership?.tenant);
         const storeAccess = user.storeAccess ?? [];
 
+        const isPlatformAdmin = (user as any).is_platform_admin === true || isPlatformAdminEmail(user.email);
         const payload = { sub: user.id, email: user.email, tv: user.token_version };
-        const isPlatformAdmin = isPlatformAdminEmail(user.email);
         return {
             access_token: this.jwtService.sign(payload),
             is_platform_admin: isPlatformAdmin,
@@ -250,7 +250,7 @@ export class AuthService {
             email: user.email,
             name: user.name,
             preferred_locale: user.preferred_locale,
-            is_platform_admin: isPlatformAdminEmail(user.email),
+            is_platform_admin: (user as any).is_platform_admin === true || isPlatformAdminEmail(user.email),
             email_verified: !!user.email_verified_at,
             two_factor_enabled: twoFactorEnabled,
             tenants: tenantMembers.map((membership) =>
