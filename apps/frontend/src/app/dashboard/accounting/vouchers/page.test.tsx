@@ -21,6 +21,7 @@ jest.mock('lucide-react', () => ({
     ArrowLeft: () => <span data-testid="icon-arrow-left" />,
     CircleCheck: () => <span data-testid="icon-circle-check" />,
     FileText: () => <span data-testid="icon-file-text" />,
+    HelpCircle: () => <span data-testid="icon-help-circle" />,
     Plus: () => <span data-testid="icon-plus" />,
     Scale: () => <span data-testid="icon-scale" />,
     Trash2: () => <span data-testid="icon-trash" />,

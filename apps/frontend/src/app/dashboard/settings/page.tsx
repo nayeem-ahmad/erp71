@@ -464,7 +464,7 @@ function TwoFATab({
                         {/* Manual entry fallback */}
                         <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 space-y-1">
                             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                Can't scan? Enter this key manually:
+                                Can&apos;t scan? Enter this key manually:
                             </p>
                             <code className="text-sm font-mono font-bold text-gray-800 tracking-widest break-all select-all">
                                 {setup.secret}

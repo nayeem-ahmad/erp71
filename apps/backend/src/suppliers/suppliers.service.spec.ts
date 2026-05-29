@@ -51,7 +51,7 @@ describe('SuppliersService', () => {
         await service.findAll('tenant-1');
 
         expect(db.supplier.findMany).toHaveBeenCalledWith({
-            where: { tenant_id: 'tenant-1' },
+            where: { tenant_id: 'tenant-1', deleted_at: null },
             orderBy: { name: 'asc' },
         });
     });

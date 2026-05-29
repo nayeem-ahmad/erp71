@@ -240,7 +240,7 @@ export default function PricingPage() {
                         Simple, transparent pricing
                     </h1>
                     <p className="text-xl text-gray-500 max-w-xl mx-auto">
-                        Built for Bangladeshi retail businesses. Start free — upgrade when you're ready.
+                        Built for Bangladeshi retail businesses. Start free — upgrade when you&apos;re ready.
                     </p>
 
                     {/* Billing toggle */}

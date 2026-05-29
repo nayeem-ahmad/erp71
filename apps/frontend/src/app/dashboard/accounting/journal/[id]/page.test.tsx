@@ -56,7 +56,7 @@ describe('VoucherDetailPage — Story 30.6', () => {
             expect(screen.getByText('Office expense settlement')).toBeInTheDocument();
             expect(screen.getByText('Cash in Hand')).toBeInTheDocument();
             expect(screen.getByText('General Operating Expense')).toBeInTheDocument();
-            expect(screen.getAllByText('125.00').length).toBeGreaterThan(0);
+            expect(screen.getAllByText(/125\.00/).length).toBeGreaterThan(0);
         });
     });
 });
