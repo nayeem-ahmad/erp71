@@ -9,7 +9,10 @@ COPY apps/frontend/package.json ./apps/frontend/
 COPY packages/database/package.json ./packages/database/
 COPY packages/shared-types/package.json ./packages/shared-types/
 RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
-RUN npm install --include=optional
+RUN npm config set fetch-retries 5 \
+ && npm config set fetch-retry-mintimeout 20000 \
+ && npm config set fetch-retry-maxtimeout 120000 \
+ && npm ci --include=optional --no-audit
 
 # Builder stage
 FROM deps AS builder
