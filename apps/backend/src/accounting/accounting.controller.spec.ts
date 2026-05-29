@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import * as request from 'supertest';
+import request from 'supertest';
 import { Reflector } from '@nestjs/core';
 import { AccountingController } from './accounting.controller';
 import { AccountingService } from './accounting.service';

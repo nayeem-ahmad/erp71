@@ -694,7 +694,13 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     getMe: () => fetchWithAuth('/auth/me'),
-    updateProfile: (data: { name: string }) => fetchWithAuth('/auth/me', {
+    updateProfile: (data: { name?: string; preferred_locale?: 'en' | 'bn' | 'ms' }) => fetchWithAuth('/auth/me', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    getTenantLocalizationSettings: () => fetchWithAuth('/tenants/localization-settings'),
+    updateTenantLocalizationSettings: (data: { default_locale: 'en' | 'bn' | 'ms' }) => fetchWithAuth('/tenants/localization-settings', {
         method: 'PATCH',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },

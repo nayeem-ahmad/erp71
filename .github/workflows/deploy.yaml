@@ -91,6 +91,9 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm install
+      - name: Check localization catalog completeness
+        run: npx jest --runInBand src/lib/localization/messages/catalog.test.ts
+        working-directory: apps/frontend
       - name: Run frontend unit tests
         run: |
           npx jest --passWithNoTests --forceExit \

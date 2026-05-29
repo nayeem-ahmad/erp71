@@ -204,6 +204,7 @@ export class AuthService {
                 id: user.id,
                 email: user.email,
                 name: user.name,
+                preferred_locale: user.preferred_locale,
                 is_platform_admin: isPlatformAdmin,
                 email_verified: !!user.email_verified_at,
             },
@@ -248,6 +249,7 @@ export class AuthService {
             id: user.id,
             email: user.email,
             name: user.name,
+            preferred_locale: user.preferred_locale,
             is_platform_admin: isPlatformAdminEmail(user.email),
             email_verified: !!user.email_verified_at,
             two_factor_enabled: twoFactorEnabled,
@@ -258,16 +260,17 @@ export class AuthService {
     }
 
     async updateProfile(userId: string, dto: UpdateProfileDto) {
-        const data: { name?: string } = {};
+        const data: { name?: string; preferred_locale?: string } = {};
         if (dto.name !== undefined) data.name = dto.name.trim();
+        if (dto.preferred_locale !== undefined) data.preferred_locale = dto.preferred_locale;
 
         const user = await this.db.user.update({
             where: { id: userId },
             data,
-            select: { id: true, email: true, name: true },
+            select: { id: true, email: true, name: true, preferred_locale: true },
         });
 
-        return { id: user.id, email: user.email, name: user.name };
+        return { id: user.id, email: user.email, name: user.name, preferred_locale: user.preferred_locale };
     }
 
     async changePassword(userId: string, dto: ChangePasswordDto) {
@@ -405,6 +408,7 @@ export class AuthService {
         return {
             id: membership.tenant.id,
             name: membership.tenant.name,
+            default_locale: membership.tenant.default_locale,
             role: membership.role,
             stores: accessibleStores,
             subscription: subscription

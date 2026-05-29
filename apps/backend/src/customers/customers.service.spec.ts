@@ -2,20 +2,29 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CustomersService } from './customers.service';
 import { DatabaseService } from '../database/database.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { EncryptionService } from '../common/encryption.service';
 
 describe('CustomersService', () => {
   let service: CustomersService;
   let db: any;
+  let encryption: { encrypt: jest.Mock; decrypt: jest.Mock };
 
   beforeEach(async () => {
+    encryption = {
+      encrypt: jest.fn((value: string) => value),
+      decrypt: jest.fn((value: string) => value),
+    };
+
     db = {
       customer: {
         findUnique: jest.fn(),
         create: jest.fn(),
+        count: jest.fn(),
         findMany: jest.fn(),
         findFirst: jest.fn(),
       },
       sale: {
+        count: jest.fn(),
         findMany: jest.fn(),
       },
     };
@@ -23,7 +32,8 @@ describe('CustomersService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CustomersService,
-        { provide: DatabaseService, useValue: db }
+        { provide: DatabaseService, useValue: db },
+        { provide: EncryptionService, useValue: encryption },
       ],
     }).compile();
 
@@ -49,8 +59,10 @@ describe('CustomersService', () => {
 
   it('findAll() should return all customers', async () => {
     db.customer.findMany.mockResolvedValue([{ id: 'c1' }]);
+    db.customer.count.mockResolvedValue(1);
     const res = await service.findAll('t1');
-    expect(res).toHaveLength(1);
+    expect(res.items).toHaveLength(1);
+    expect(res.total).toBe(1);
   });
 
   it('findOne() should return details', async () => {
@@ -64,12 +76,12 @@ describe('CustomersService', () => {
     await expect(service.findOne('t1', 'fake')).rejects.toThrow(NotFoundException);
   });
 
-  describe('getHistory()', () => {
-    it('returns structured history with summary and topProducts', async () => {
+  describe('getPurchaseHistory()', () => {
+    it('returns paginated purchase history', async () => {
       db.customer.findFirst.mockResolvedValue({
-        id: 'c1', name: 'Alice', customer_code: 'CUST-00001',
-        segment_category: 'Regular', total_spent: 1500, created_at: new Date('2025-01-01'),
+        id: 'c1',
       });
+      db.sale.count.mockResolvedValue(2);
       db.sale.findMany.mockResolvedValue([
         {
           id: 's1', total_amount: 1000, created_at: new Date('2026-04-01'),
@@ -86,34 +98,36 @@ describe('CustomersService', () => {
         },
       ]);
 
-      const result = await service.getHistory('t1', 'c1');
+      const result = await service.getPurchaseHistory('t1', 'c1');
 
-      expect(result.summary.totalOrders).toBe(2);
-      expect(result.summary.avgOrderValue).toBe(750);
-      expect(result.summary.lastPurchaseDate).toEqual(new Date('2026-04-01'));
-      expect(result.topProducts[0].name).toBe('Widget');
-      expect(result.topProducts[0].qty).toBe(5);
-      expect(result.sales).toHaveLength(2);
+      expect(db.sale.count).toHaveBeenCalledWith({ where: { customer_id: 'c1' } });
+      expect(result.total).toBe(2);
+      expect(result.page).toBe(1);
+      expect(result.limit).toBe(20);
+      expect(result.totalPages).toBe(1);
+      expect(result.data).toHaveLength(2);
+      expect(result.data[0].items[0].product.name).toBe('Widget');
     });
 
-    it('returns zero-value summary when customer has no sales', async () => {
+    it('returns an empty page when customer has no sales', async () => {
       db.customer.findFirst.mockResolvedValue({
-        id: 'c2', name: 'Bob', customer_code: 'CUST-00002',
-        segment_category: 'New', total_spent: 0, created_at: new Date('2026-04-20'),
+        id: 'c2',
       });
+      db.sale.count.mockResolvedValue(0);
       db.sale.findMany.mockResolvedValue([]);
 
-      const result = await service.getHistory('t1', 'c2');
+      const result = await service.getPurchaseHistory('t1', 'c2');
 
-      expect(result.summary.totalOrders).toBe(0);
-      expect(result.summary.avgOrderValue).toBe(0);
-      expect(result.summary.lastPurchaseDate).toBeNull();
-      expect(result.topProducts).toHaveLength(0);
+      expect(result.total).toBe(0);
+      expect(result.page).toBe(1);
+      expect(result.limit).toBe(20);
+      expect(result.totalPages).toBe(0);
+      expect(result.data).toEqual([]);
     });
 
     it('throws NotFoundException when customer does not exist', async () => {
       db.customer.findFirst.mockResolvedValue(null);
-      await expect(service.getHistory('t1', 'nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(service.getPurchaseHistory('t1', 'nonexistent')).rejects.toThrow(NotFoundException);
     });
   });
 });

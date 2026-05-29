@@ -1,30 +1,112 @@
-/**
- * Formats a numeric amount as Bangladeshi Taka (BDT).
- * Uses the ৳ symbol followed by comma-grouped decimal value.
- */
-export function formatBDT(amount: number | null | undefined): string {
-    if (amount == null) return '৳ 0.00';
-    return '৳ ' + Number(amount).toLocaleString('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    });
+import {
+    DEFAULT_LOCALE,
+    LOCALE_STORAGE_KEY,
+    getLocaleConfig,
+    getLocaleFromHtmlLang,
+    isSupportedLocale,
+    resolveSupportedLocale,
+    type SupportedLocaleCode,
+} from './localization/config';
+
+type CurrencyCode = 'BDT' | 'MYR' | 'USD' | string;
+
+type FormatOptions = {
+    locale?: SupportedLocaleCode | string | null;
+    minimumFractionDigits?: number;
+    maximumFractionDigits?: number;
+};
+
+type CurrencyFormatOptions = FormatOptions & {
+    currency?: CurrencyCode;
+};
+
+const currencySymbols: Record<string, string> = {
+    BDT: '৳',
+    MYR: 'RM',
+    USD: '$',
+};
+
+function getCurrentLocale(): SupportedLocaleCode {
+    if (typeof document !== 'undefined') {
+        const htmlLocale = getLocaleFromHtmlLang(document.documentElement.lang);
+        if (htmlLocale) return htmlLocale;
+    }
+
+    if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
+        if (isSupportedLocale(stored)) return stored;
+    }
+
+    return DEFAULT_LOCALE;
 }
 
-// formatDate: formats a date string/Date using BD convention by default (DD/MM/YYYY)
-// Pass locale='en' for English, 'bn' for Bangla
-export function formatDate(date: string | Date | null | undefined, locale: 'en' | 'bn' = 'en'): string {
+function resolveFormatterLocale(locale?: SupportedLocaleCode | string | null): SupportedLocaleCode {
+    if (isSupportedLocale(locale)) return locale;
+
+    if (typeof locale === 'string') {
+        const htmlLocale = getLocaleFromHtmlLang(locale);
+        if (htmlLocale) return htmlLocale;
+    }
+
+    return getCurrentLocale();
+}
+
+function getCurrencySymbol(currency: CurrencyCode): string {
+    return currencySymbols[currency] || currency;
+}
+
+export function formatCurrency(
+    amount: number | null | undefined,
+    {
+        locale,
+        currency = 'BDT',
+        minimumFractionDigits = 2,
+        maximumFractionDigits = 2,
+    }: CurrencyFormatOptions = {}
+): string {
+    const resolvedLocale = resolveFormatterLocale(locale);
+    const localeConfig = getLocaleConfig(resolvedLocale);
+    const value = amount == null ? 0 : Number(amount);
+
+    return `${getCurrencySymbol(currency)} ${new Intl.NumberFormat(localeConfig.numberLocale, {
+        minimumFractionDigits,
+        maximumFractionDigits,
+    }).format(value)}`;
+}
+
+export function formatBDT(
+    amount: number | null | undefined,
+    options: Omit<CurrencyFormatOptions, 'currency'> = {}
+): string {
+    return formatCurrency(amount, { ...options, currency: 'BDT' });
+}
+
+export function formatDate(
+    date: string | Date | null | undefined,
+    locale?: SupportedLocaleCode | string | null
+): string {
     if (!date) return '—';
+
     const d = typeof date === 'string' ? new Date(date) : date;
     if (isNaN(d.getTime())) return '—';
-    // BD convention: DD/MM/YYYY
-    return d.toLocaleDateString(locale === 'bn' ? 'bn-BD' : 'en-GB', {
+
+    const localeConfig = getLocaleConfig(resolveFormatterLocale(locale));
+
+    return d.toLocaleDateString(localeConfig.dateLocale, {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
     });
 }
 
-// formatNumber: formats a number with locale-appropriate digit grouping
-export function formatNumber(n: number, locale: 'en' | 'bn' = 'en'): string {
-    return new Intl.NumberFormat(locale === 'bn' ? 'bn-BD' : 'en-US').format(n);
+export function formatNumber(
+    n: number,
+    locale?: SupportedLocaleCode | string | null
+): string {
+    const localeConfig = getLocaleConfig(resolveFormatterLocale(locale));
+    return new Intl.NumberFormat(localeConfig.numberLocale).format(n);
+}
+
+export function resolveLocaleForFormatting(locale?: SupportedLocaleCode | string | null): SupportedLocaleCode {
+    return resolveSupportedLocale(resolveFormatterLocale(locale));
 }

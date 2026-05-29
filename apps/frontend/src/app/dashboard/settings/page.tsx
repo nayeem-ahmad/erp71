@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle, XCircle, Loader2, ShieldCheck, ShieldOff, Eye, EyeOff, Palette, Receipt, Gift, MessageSquare, BarChart3 } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, ShieldCheck, ShieldOff, Eye, EyeOff, Palette, Receipt, Gift, MessageSquare, BarChart3, Globe } from 'lucide-react';
 import { api, fetchWithAuth } from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -527,6 +528,7 @@ function TwoFATab({
 /* ------------------------------------------------------------------ */
 
 export default function AccountSettingsPage() {
+    const { t } = useI18n();
     const [activeTab, setActiveTab] = useState<Tab>('profile');
     const [user, setUser] = useState<any>(null);
     const [loadingUser, setLoadingUser] = useState(true);
@@ -557,6 +559,12 @@ export default function AccountSettingsPage() {
     ];
 
     const quickLinks = [
+        {
+            href: '/dashboard/settings/localization',
+            icon: Globe,
+            label: t.settings.quickLinks.localizationLabel,
+            description: t.settings.quickLinks.localizationDescription,
+        },
         {
             href: '/dashboard/settings/branding',
             icon: Palette,

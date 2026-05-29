@@ -100,6 +100,7 @@ model User {
   email             String    @unique
   passwordHash      String
   name              String?
+  preferred_locale  String    @default("en")
   token_version     Int       @default(0)
   email_verified_at DateTime?
   totp_secret       String?
@@ -187,6 +188,7 @@ model Tenant {
   id                   String   @id @default(uuid())
   name                 String
   owner_id             String
+  default_locale       String   @default("en")
   created_at           DateTime @default(now())
   storefront_slug      String?  @unique
   storefront_enabled   Boolean  @default(false)

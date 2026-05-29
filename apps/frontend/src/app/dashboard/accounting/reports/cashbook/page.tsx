@@ -79,7 +79,7 @@ export default function CashbookPage() {
     };
 
     const columns: ColumnDef<BookRow, any>[] = useMemo(() => [
-        columnHelper.accessor((row) => row.date instanceof Date ? new Date(row.date).toISOString().slice(0, 10) : String(row.date).slice(0, 10), {
+        columnHelper.accessor((row) => String(row.date).slice(0, 10), {
             id: 'date', header: 'Date', size: 110,
         }),
         columnHelper.accessor('voucher_number', { header: 'Voucher #', size: 120 }),

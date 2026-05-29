@@ -44,6 +44,7 @@ import {
     type LucideIcon,
 } from 'lucide-react';
 import { useBranding } from '@/lib/branding';
+import { useI18n } from '@/lib/i18n';
 
 /* ------------------------------------------------------------------ */
 /*  Navigation structure                                               */
@@ -69,151 +70,154 @@ interface NavModule {
     soon?: boolean;
 }
 
-const MODULES: NavModule[] = [
+function buildModules(t: ReturnType<typeof useI18n>['t']): NavModule[] {
+    return [
     {
         key: 'dashboard',
         icon: LayoutDashboard,
-        label: 'Dashboard',
+        label: t.sidebar.modules.dashboard,
         href: '/dashboard',
     },
     {
         key: 'sales',
         icon: ShoppingBag,
-        label: 'Sales',
+        label: t.sidebar.modules.sales,
         children: [
-            { href: '/dashboard/pos',               icon: ShoppingCart,    label: 'POS' },
-            { href: '/dashboard/sales',             icon: TrendingUp,      label: 'Sales' },
-            { href: '/dashboard/returns',           icon: ArrowLeftRight,  label: 'Sales Returns' },
-            { href: '/dashboard/orders',            icon: ClipboardList,   label: 'Sales Orders' },
-            { href: '/dashboard/quotes',            icon: FileText,        label: 'Sales Quotations' },
-            { href: '/dashboard/warranty-claims',   icon: ShieldCheck,     label: 'Warranty Claims' },
-            { href: '/dashboard/cashier-sessions',  icon: Clock,           label: 'Cashier Sessions' },
-            { href: '/dashboard/loyalty',           icon: Gift,            label: 'Loyalty Points' },
+            { href: '/dashboard/pos',               icon: ShoppingCart,    label: t.sidebar.items.pos },
+            { href: '/dashboard/sales',             icon: TrendingUp,      label: t.sidebar.items.sales },
+            { href: '/dashboard/returns',           icon: ArrowLeftRight,  label: t.sidebar.items.salesReturns },
+            { href: '/dashboard/orders',            icon: ClipboardList,   label: t.sidebar.items.salesOrders },
+            { href: '/dashboard/quotes',            icon: FileText,        label: t.sidebar.items.salesQuotations },
+            { href: '/dashboard/warranty-claims',   icon: ShieldCheck,     label: t.sidebar.items.warrantyClaims },
+            { href: '/dashboard/cashier-sessions',  icon: Clock,           label: t.sidebar.items.cashierSessions },
+            { href: '/dashboard/loyalty',           icon: Gift,            label: t.sidebar.items.loyaltyPoints },
         ],
     },
     {
         key: 'delivery',
         icon: MapPin,
-        label: 'Delivery',
+        label: t.sidebar.modules.delivery,
         href: '/dashboard/delivery',
     },
     {
         key: 'manufacturing',
         icon: Factory,
-        label: 'Manufacturing',
+        label: t.sidebar.modules.manufacturing,
         children: [
-            { href: '/dashboard/manufacturing', icon: Cog, label: 'Jobs & BOM' },
+            { href: '/dashboard/manufacturing', icon: Cog, label: t.sidebar.items.jobsBom },
         ],
     },
     {
         key: 'purchase',
         icon: Truck,
-        label: 'Purchase',
+        label: t.sidebar.modules.purchase,
         children: [
-            { href: '/dashboard/purchases', icon: ClipboardList, label: 'Purchases' },
-            { href: '/dashboard/purchase-returns', icon: Undo2, label: 'Purchase Returns' },
+            { href: '/dashboard/purchases', icon: ClipboardList, label: t.sidebar.items.purchases },
+            { href: '/dashboard/purchase-returns', icon: Undo2, label: t.sidebar.items.purchaseReturns },
         ],
     },
     {
         key: 'accounting',
         icon: Calculator,
-        label: 'Accounting',
+        label: t.sidebar.modules.accounting,
         children: [
-            { href: '/dashboard/accounting', icon: Calculator, label: 'Overview' },
-            { href: '/dashboard/accounting/vouchers', icon: FileText, label: 'Voucher Entry' },
-            { href: '/dashboard/accounting/journal', icon: ClipboardList, label: 'Journal' },
-            { href: '/dashboard/accounting/ledger', icon: ClipboardList, label: 'Ledger' },
-            { href: '/dashboard/accounting/reconciliation', icon: AlertTriangle, label: 'Posting Exceptions' },
+            { href: '/dashboard/accounting', icon: Calculator, label: t.sidebar.items.overview },
+            { href: '/dashboard/accounting/vouchers', icon: FileText, label: t.sidebar.items.voucherEntry },
+            { href: '/dashboard/accounting/journal', icon: ClipboardList, label: t.sidebar.items.journal },
+            { href: '/dashboard/accounting/ledger', icon: ClipboardList, label: t.sidebar.items.ledger },
+            { href: '/dashboard/accounting/reconciliation', icon: AlertTriangle, label: t.sidebar.items.postingExceptions },
         ],
     },
     {
         key: 'inventory',
         icon: Package,
-        label: 'Inventory',
+        label: t.sidebar.modules.inventory,
         children: [
-            { href: '/dashboard/inventory', icon: Package, label: 'Products' },
-            { href: '/dashboard/inventory/transfers', icon: Boxes, label: 'Transfers' },
-            { href: '/dashboard/inventory/shrinkage', icon: AlertTriangle, label: 'Shrinkage' },
-            { href: '/dashboard/inventory/stock-takes', icon: ClipboardCheck, label: 'Stock Takes' },
-            { href: '/dashboard/inventory/ledger', icon: BookOpen, label: 'Stock Ledger' },
-            { href: '/dashboard/inventory/labels', icon: Tag, label: 'Print Labels' },
+            { href: '/dashboard/inventory', icon: Package, label: t.sidebar.items.products },
+            { href: '/dashboard/inventory/transfers', icon: Boxes, label: t.sidebar.items.transfers },
+            { href: '/dashboard/inventory/shrinkage', icon: AlertTriangle, label: t.sidebar.items.shrinkage },
+            { href: '/dashboard/inventory/stock-takes', icon: ClipboardCheck, label: t.sidebar.items.stockTakes },
+            { href: '/dashboard/inventory/ledger', icon: BookOpen, label: t.sidebar.items.stockLedger },
+            { href: '/dashboard/inventory/labels', icon: Tag, label: t.sidebar.items.printLabels },
         ],
     },
     {
         key: 'reports',
         icon: BarChart3,
-        label: 'Reports',
+        label: t.sidebar.modules.reports,
         children: [
-            { href: '#sales-reports', icon: ShoppingBag, label: 'Sales', section: true, advancedOnly: true },
-            { href: '/dashboard/sales/reports/summary', icon: TrendingUp, label: 'Sales Summary', advancedOnly: true },
-            { href: '/dashboard/sales/reports/products', icon: Package, label: 'Sales by Product', advancedOnly: true },
-            { href: '/dashboard/reports/consolidated', icon: BarChart3, label: 'Consolidated', advancedOnly: true },
-            { href: '#inventory-reports', icon: Package, label: 'Inventory', section: true, advancedOnly: true },
-            { href: '/dashboard/inventory/reports/reorder', icon: TrendingUp, label: 'Reorder Report', advancedOnly: true },
-            { href: '/dashboard/inventory/reports/shrinkage', icon: AlertTriangle, label: 'Shrinkage Report', advancedOnly: true },
-            { href: '/dashboard/inventory/reports/valuation', icon: Calculator, label: 'Valuation', advancedOnly: true },
+            { href: '#sales-reports', icon: ShoppingBag, label: t.sidebar.sections.sales, section: true, advancedOnly: true },
+            { href: '/dashboard/sales/reports/summary', icon: TrendingUp, label: t.sidebar.items.salesSummary, advancedOnly: true },
+            { href: '/dashboard/sales/reports/products', icon: Package, label: t.sidebar.items.salesByProduct, advancedOnly: true },
+            { href: '/dashboard/reports/consolidated', icon: BarChart3, label: t.sidebar.items.consolidated, advancedOnly: true },
+            { href: '#inventory-reports', icon: Package, label: t.sidebar.sections.inventory, section: true, advancedOnly: true },
+            { href: '/dashboard/inventory/reports/reorder', icon: TrendingUp, label: t.sidebar.items.reorderReport, advancedOnly: true },
+            { href: '/dashboard/inventory/reports/shrinkage', icon: AlertTriangle, label: t.sidebar.items.shrinkageReport, advancedOnly: true },
+            { href: '/dashboard/inventory/reports/valuation', icon: Calculator, label: t.sidebar.items.valuation, advancedOnly: true },
         ],
     },
     {
         key: 'storefront',
         icon: Globe,
-        label: 'Storefront',
+        label: t.sidebar.modules.storefront,
         children: [
-            { href: '/dashboard/storefront', icon: ShoppingBag, label: 'Orders' },
-            { href: '/dashboard/storefront/settings', icon: Settings, label: 'Settings' },
+            { href: '/dashboard/storefront', icon: ShoppingBag, label: t.sidebar.items.orders },
+            { href: '/dashboard/storefront/settings', icon: Settings, label: t.sidebar.items.storefrontSettings },
         ],
     },
     {
         key: 'billing',
         icon: CreditCard,
-        label: 'Billing',
+        label: t.sidebar.modules.billing,
         href: '/dashboard/billing',
     },
     {
         key: 'account-settings',
         icon: Settings,
-        label: 'Account Settings',
+        label: t.sidebar.modules.accountSettings,
         href: '/dashboard/settings',
     },
     {
         key: 'admin',
         icon: ShieldCheck,
-        label: 'Platform Admin',
+        label: t.sidebar.modules.admin,
         children: [
-            { href: '/dashboard/admin/tenants', icon: Crown, label: 'Tenants' },
+            { href: '/dashboard/admin/tenants', icon: Crown, label: t.sidebar.items.tenants },
         ],
     },
     {
         key: 'settings',
         icon: Settings,
-        label: 'Settings',
+        label: t.sidebar.modules.settings,
         children: [
-            { href: '#sales-setup', icon: ShoppingBag, label: 'Sales Setup', section: true },
-            { href: '/dashboard/customers', icon: Users, label: 'Customers' },
-            { href: '/dashboard/customer-groups', icon: FolderTree, label: 'Customer Groups' },
-            { href: '/dashboard/territories', icon: MapPin, label: 'Territories' },
-            { href: '#inventory-setup', icon: Package, label: 'Inventory Setup', section: true },
-            { href: '/dashboard/inventory/categories', icon: FolderTree, label: 'Categories' },
-            { href: '/dashboard/inventory/settings', icon: Settings, label: 'Inventory Settings' },
-            { href: '#accounting-setup', icon: Calculator, label: 'Accounting Setup', section: true },
-            { href: '/dashboard/accounting/coa', icon: FolderTree, label: 'Chart of Accounts' },
-            { href: '/dashboard/accounting/posting-rules', icon: Settings, label: 'Posting Rules' },
-            { href: '#branding-setup', icon: Palette, label: 'Branding', section: true },
-            { href: '/dashboard/settings/branding', icon: Palette, label: 'Branding' },
-            { href: '/dashboard/settings/tax', icon: Receipt, label: 'Tax / VAT' },
-            { href: '/dashboard/settings/loyalty', icon: Gift, label: 'Loyalty Program' },
-            { href: '/dashboard/settings/sms', icon: MessageSquare, label: 'SMS Notifications' },
-            { href: '/dashboard/settings/reports', icon: BarChart3, label: 'Report Emails' },
-            { href: '/dashboard/settings/discount-codes', icon: Tag, label: 'Discount Codes' },
+            { href: '#sales-setup', icon: ShoppingBag, label: t.sidebar.sections.salesSetup, section: true },
+            { href: '/dashboard/customers', icon: Users, label: t.sidebar.items.customers },
+            { href: '/dashboard/customer-groups', icon: FolderTree, label: t.sidebar.items.customerGroups },
+            { href: '/dashboard/territories', icon: MapPin, label: t.sidebar.items.territories },
+            { href: '#inventory-setup', icon: Package, label: t.sidebar.sections.inventorySetup, section: true },
+            { href: '/dashboard/inventory/categories', icon: FolderTree, label: t.sidebar.items.categories },
+            { href: '/dashboard/inventory/settings', icon: Settings, label: t.sidebar.items.inventorySettings },
+            { href: '#accounting-setup', icon: Calculator, label: t.sidebar.sections.accountingSetup, section: true },
+            { href: '/dashboard/accounting/coa', icon: FolderTree, label: t.sidebar.items.chartOfAccounts },
+            { href: '/dashboard/accounting/posting-rules', icon: Settings, label: t.sidebar.items.postingRules },
+            { href: '#branding-setup', icon: Palette, label: t.sidebar.sections.branding, section: true },
+            { href: '/dashboard/settings/branding', icon: Palette, label: t.sidebar.items.branding },
+            { href: '/dashboard/settings/tax', icon: Receipt, label: t.sidebar.items.taxVat },
+            { href: '/dashboard/settings/loyalty', icon: Gift, label: t.sidebar.items.loyaltyProgram },
+            { href: '/dashboard/settings/sms', icon: MessageSquare, label: t.sidebar.items.smsNotifications },
+            { href: '/dashboard/settings/reports', icon: BarChart3, label: t.sidebar.items.reportEmails },
+            { href: '/dashboard/settings/discount-codes', icon: Tag, label: t.sidebar.items.discountCodes },
+            { href: '/dashboard/settings/localization', icon: Globe, label: t.sidebar.items.localization },
         ],
     },
     {
         key: 'help',
         icon: HelpCircle,
-        label: 'Help',
+        label: t.sidebar.modules.help,
         href: '/dashboard/help',
     },
 ];
+}
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
@@ -234,9 +238,10 @@ export default function Sidebar({
 }) {
     const pathname = usePathname();
     const { logoUrl, businessName, primaryColor } = useBranding();
+    const { t } = useI18n();
     const [collapsed, setCollapsed] = useState(false);
     const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
-    const modules = MODULES
+    const modules = buildModules(t)
         .filter((module) => {
             if (module.key === 'accounting') return canAccessAccounting;
             if (module.key === 'admin') return canAccessAdmin;
@@ -340,7 +345,7 @@ export default function Sidebar({
                             {businessName || 'RetailSaaS'}
                         </span>
                         <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Workspace</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.sidebar.workspace}</span>
                             {activePlanCode && (
                                 <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ${activePlanCode === 'PREMIUM' ? 'bg-amber-100 text-amber-700' : activePlanCode === 'STANDARD' ? 'bg-indigo-100 text-indigo-700' : activePlanCode === 'BASIC' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                                     {activePlanCode}

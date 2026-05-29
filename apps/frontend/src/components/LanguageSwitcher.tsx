@@ -1,20 +1,41 @@
 'use client';
 
-import { useI18n, type Locale } from '../lib/i18n';
+import type { ChangeEvent } from 'react';
+
+import { api } from '../lib/api';
+import { useI18n } from '../lib/i18n';
 
 export default function LanguageSwitcher() {
-    const { locale, setLocale } = useI18n();
+    const { locale, locales, setLocale, t } = useI18n();
 
-    const toggle = () => setLocale(locale === 'en' ? 'bn' : 'en');
+    const handleChange = (event: ChangeEvent<HTMLSelectElement>) => {
+        const selectedLocale = locales.find((entry) => entry.code === event.target.value);
+        if (selectedLocale) {
+            setLocale(selectedLocale.code);
+            if (globalThis.window !== undefined && localStorage.getItem('access_token')) {
+                void api.updateProfile({ preferred_locale: selectedLocale.code }).catch(() => null);
+            }
+        }
+    };
 
     return (
-        <button
-            onClick={toggle}
-            title={locale === 'en' ? 'Switch to Bangla' : 'Switch to English'}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-gray-200 hover:bg-gray-50 transition-colors text-gray-600"
+        <label
+            title={t.localeSwitcher.title}
+            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 transition-colors hover:bg-gray-50"
         >
-            <span className="text-base leading-none">{locale === 'en' ? '🇧🇩' : '🇺🇸'}</span>
-            <span>{locale === 'en' ? 'বাংলা' : 'English'}</span>
-        </button>
+            <span className="hidden sm:inline">{t.localeSwitcher.label}</span>
+            <select
+                value={locale}
+                aria-label={t.localeSwitcher.label}
+                onChange={handleChange}
+                className="bg-transparent text-xs font-bold text-gray-700 outline-none"
+            >
+                {locales.map((entry) => (
+                    <option key={entry.code} value={entry.code}>
+                        {entry.nativeLabel}
+                    </option>
+                ))}
+            </select>
+        </label>
     );
 }

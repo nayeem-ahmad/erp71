@@ -50,6 +50,7 @@ describe('AuthService', () => {
         id: 'user-1',
         email: 'owner@example.com',
         name: 'Owner',
+        preferred_locale: 'bn',
         token_version: 0,
         email_verified_at: null,
         storeAccess: [{ tenant_id: tenantId, store: { id: storeId } }],
@@ -59,6 +60,7 @@ describe('AuthService', () => {
             tenant: {
                 id: tenantId,
                 name: 'Tenant One',
+                default_locale: 'bn',
                 subscription: {
                     status: 'TRIALING',
                     current_period_start: new Date('2026-03-21T00:00:00.000Z'),
@@ -161,6 +163,7 @@ describe('AuthService', () => {
             id: 'user-1',
             email: 'manager@example.com',
             name: 'Manager',
+            preferred_locale: 'bn',
             token_version: 0,
             email_verified_at: null,
             storeAccess: [
@@ -174,6 +177,7 @@ describe('AuthService', () => {
                 tenant: {
                     id: 'tenant-1',
                     name: 'Tenant One',
+                    default_locale: 'en',
                     subscription: null,
                 },
             }],
@@ -182,6 +186,27 @@ describe('AuthService', () => {
         const result = await service.getMe('user-1');
         expect(result.tenants[0].stores).toHaveLength(1);
         expect(result.tenants[0].stores[0].id).toBe('store-1');
+        expect(result.preferred_locale).toBe('bn');
+        expect(result.tenants[0].default_locale).toBe('en');
+    });
+
+    it('updates preferred locale through updateProfile', async () => {
+        db.user.update.mockResolvedValue({
+            id: 'user-1',
+            email: 'owner@example.com',
+            name: 'Owner',
+            preferred_locale: 'bn',
+        });
+
+        const result = await service.updateProfile('user-1', { preferred_locale: 'bn' });
+
+        expect(db.user.update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { id: 'user-1' },
+                data: { preferred_locale: 'bn' },
+            }),
+        );
+        expect(result.preferred_locale).toBe('bn');
     });
 
     it('rejects duplicate emails on signup', async () => {
@@ -207,6 +232,7 @@ describe('AuthService', () => {
             id: 'user-1',
             email: 'nayeem.ahmad@gmail.com',
             name: 'Nayeem Ahmad',
+            preferred_locale: 'en',
             token_version: 0,
             email_verified_at: null,
             storeAccess: [],

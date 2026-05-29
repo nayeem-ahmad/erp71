@@ -82,6 +82,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Fix 2 failing tests in warranty-claims service (TypeScript error: `warrantyClaim` model not recognized in transaction context) — regenerated Prisma client and added warranty-claims.service.spec.ts
 - [ ] Add E2E tests for critical paths: signup → onboarding → POS sale → billing
 - [ ] Investigate and clean up backend Jest open handles reported after E2E suite completion
+- [ ] Clean up React `act(...)` warnings in login/signup page tests
 - [ ] Add integration tests for payment webhook handlers
 - [ ] Add load tests for POS endpoint (peak: multiple cashiers × multiple tenants)
 - [x] Verify GitHub Actions CI actually runs tests on every push — CI now triggers on push/PR to main and dev
@@ -100,6 +101,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ### Localization
 - [ ] Bangla (Bengali) language support — documented as market requirement in PRD, not built
+- [ ] Migrate remaining frontend literal strings to localization catalogs (dashboard, auth, billing, POS, inventory, storefront, onboarding)
 - [ ] Verify consistent BDT currency formatting throughout UI
 - [ ] Date format localization (BD convention)
 - [ ] Bangla number formatting option
@@ -180,6 +182,10 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] In-app notifications — Notification model + migration, NotificationsController (GET /notifications, GET /notifications/unread-count, PATCH /notifications/:id/read, PATCH /notifications/read-all), NotificationBell component with live badge and dropdown panel, hooked into low-stock and expiry crons — done 2026-05-29
 - [x] Implement accounting reports: Profit & Loss, Balance Sheet, Cashbook, Bankbook — backend endpoints + frontend pages; linked from accounting overview — done 2026-05-29
 - [x] Implement sales reports: Customer-wise sales summary and Month-by-month sales by customer — backend endpoints + frontend pages — done 2026-05-29
+- [x] Build frontend localization foundation: locale registry, message catalogs, cookie-backed provider, dynamic language switcher, and locale-aware formatters with Bangla active and Malay scaffolded — done 2026-05-29
+- [x] Fix unrelated backend TypeScript spec blockers so repo-wide backend `tsc --noEmit` is clean — updated `supertest` import in accounting controller spec and aligned customer service spec with current `getPurchaseHistory`/pagination/encryption contracts — done 2026-05-29
+- [x] Persist locale preferences end-to-end: user preferred locale in auth/profile, tenant default locale in tenant settings API, Prisma migration, and localization settings page — done 2026-05-29
+- [x] Add localization safety rails: CI catalog completeness test plus localized sidebar, dashboard shell, login, and signup flows — done 2026-05-29
 
 - [x] Stabilize backend integration specs (`integration.spec.ts`, `inventory-operations.spec.ts`, `sales-returns-orders.spec.ts`) against current auth/bootstrap, DTO, premium-plan, and response-envelope contracts — done 2026-05-27
 - [x] Re-test localhost login end-to-end and resolve local DB schema drift by running Prisma `db push`; signup/login now return 201 and `/login` redirects to `/dashboard` — done 2026-05-27

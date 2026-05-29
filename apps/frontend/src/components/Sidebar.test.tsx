@@ -50,6 +50,9 @@ jest.mock('lucide-react', () => {
         Receipt: icon,
         HelpCircle: icon,
         Boxes: icon,
+        Gift: icon,
+        Tag: icon,
+        MessageSquare: icon,
     };
 });
 
@@ -60,7 +63,17 @@ jest.mock('@/lib/branding', () => ({
         businessName: null,
         primaryColor: '#2563eb',
     }),
-}));
+}), { virtual: true });
+
+jest.mock('@/lib/i18n', () => {
+    const { enMessages } = require('../lib/localization/messages/en');
+
+    return {
+        useI18n: () => ({
+            t: enMessages,
+        }),
+    };
+}, { virtual: true });
 
 describe('Sidebar — Story 30.1', () => {
     beforeEach(() => {
@@ -80,7 +93,7 @@ describe('Sidebar — Story 30.1', () => {
     });
 
     it('shows platform admin and billing items when enabled', () => {
-        render(<Sidebar canAccessAccounting canAccessAdmin canManageBilling activePlanCode="STANDARD" />);
+        render(<Sidebar canAccessAccounting canAccessAdmin canManageBilling canAccessInventoryReports activePlanCode="STANDARD" />);
 
         expect(screen.getByText('Billing')).toBeInTheDocument();
         expect(screen.getByText('Platform Admin')).toBeInTheDocument();
@@ -92,7 +105,7 @@ describe('Sidebar — Story 30.1', () => {
     it('hides advanced inventory reports for tenants without report entitlement', () => {
         render(<Sidebar canAccessAccounting canAccessInventoryReports={false} />);
 
-        expect(screen.queryByText('Reports')).toBeInTheDocument();
+        expect(screen.queryByText('Reports')).not.toBeInTheDocument();
         expect(screen.queryByText('Reorder Report')).not.toBeInTheDocument();
         expect(screen.queryByText('Shrinkage Report')).not.toBeInTheDocument();
     });

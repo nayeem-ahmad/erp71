@@ -5,14 +5,19 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Lock, Mail, ArrowRight, Loader2, PlayCircle } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
+import { syncLocalePreferenceFromSession } from '@/lib/localization/preference';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE
     || (process.env.NODE_ENV === 'production' ? 'https://retail-saas-backend.onrender.com' : 'http://localhost:4000')) + '/api/v1';
+
+type FormSubmitEvent = Parameters<NonNullable<React.ComponentProps<'form'>['onSubmit']>>[0];
 
 async function storeAuthResponse(res: any) {
     const data = res.data ? res.data : res;
     localStorage.setItem('access_token', data.access_token);
     const meRes = data.tenants ? data : await api.getMe();
+    syncLocalePreferenceFromSession(meRes, { overwrite: true });
     if (meRes.tenants && meRes.tenants.length > 0) {
         const primaryTenant = meRes.tenants[0];
         localStorage.setItem('tenant_id', primaryTenant.id);
@@ -26,6 +31,7 @@ async function storeAuthResponse(res: any) {
 }
 
 function LoginPageContent() {
+    const { t } = useI18n();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
@@ -42,7 +48,7 @@ function LoginPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const handleLogin = async (e: React.FormEvent) => {
+    const submitLogin = async (e: FormSubmitEvent) => {
         e.preventDefault();
         setIsLoading(true);
         setError(null);
@@ -52,10 +58,14 @@ function LoginPageContent() {
             await storeAuthResponse(loginRes);
             router.push('/dashboard');
         } catch (err: any) {
-            setError(err.message || 'Login failed. Please check your credentials.');
+            setError(err.message || t.auth.login.defaultError);
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleLogin: React.ComponentProps<'form'>['onSubmit'] = (e) => {
+        void submitLogin(e);
     };
 
     const handleDemoLogin = async () => {
@@ -72,7 +82,7 @@ function LoginPageContent() {
             await storeAuthResponse(data);
             router.push('/dashboard');
         } catch (err: any) {
-            setError(err.message || 'Demo login failed. Please try again.');
+            setError(err.message || t.auth.login.demoFailed);
         } finally {
             setIsDemoLoading(false);
         }
@@ -86,8 +96,8 @@ function LoginPageContent() {
                         <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-blue-200">
                             <Lock className="text-white w-6 h-6" />
                         </div>
-                        <h1 className="text-2xl font-bold tracking-tight">Welcome back</h1>
-                        <p className="text-gray-500 mt-2 text-sm">Please enter your details to sign in</p>
+                        <h1 className="text-2xl font-bold tracking-tight">{t.auth.login.title}</h1>
+                        <p className="text-gray-500 mt-2 text-sm">{t.auth.login.description}</p>
                     </div>
 
                     {error && (
@@ -98,7 +108,7 @@ function LoginPageContent() {
 
                     <form onSubmit={handleLogin} className="space-y-6">
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700 ml-1">Email address</label>
+                            <label className="text-sm font-medium text-gray-700 ml-1">{t.auth.login.emailLabel}</label>
                             <div className="relative">
                                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                                 <input
@@ -113,7 +123,7 @@ function LoginPageContent() {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700 ml-1">Password</label>
+                            <label className="text-sm font-medium text-gray-700 ml-1">{t.auth.login.passwordLabel}</label>
                             <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                                 <input
@@ -130,9 +140,9 @@ function LoginPageContent() {
                         <div className="flex items-center justify-between text-sm">
                             <label className="flex items-center space-x-2 cursor-pointer group">
                                 <input type="checkbox" className="w-4 h-4 rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500" />
-                                <span className="text-gray-600 group-hover:text-gray-900 transition-colors">Remember me</span>
+                                <span className="text-gray-600 group-hover:text-gray-900 transition-colors">{t.common.rememberMe}</span>
                             </label>
-                            <Link href="/forgot-password" className="font-medium text-blue-600 hover:text-blue-700 transition-colors">Forgot password?</Link>
+                            <Link href="/forgot-password" className="font-medium text-blue-600 hover:text-blue-700 transition-colors">{t.common.forgotPassword}</Link>
                         </div>
 
                         <button
@@ -144,7 +154,7 @@ function LoginPageContent() {
                                 <Loader2 className="w-5 h-5 animate-spin" />
                             ) : (
                                 <>
-                                    <span>Sign in</span>
+                                    <span>{t.auth.login.submit}</span>
                                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                                 </>
                             )}
@@ -170,21 +180,21 @@ function LoginPageContent() {
                         ) : (
                             <>
                                 <PlayCircle className="w-5 h-5 text-blue-500" />
-                                <span>Try Demo</span>
+                                <span>{t.auth.login.demo}</span>
                             </>
                         )}
                     </button>
                     <p className="mt-2 text-center text-xs text-gray-400">
-                        Explore with sample Bangladeshi retail data — no signup needed
+                        {t.auth.login.demoDescription}
                     </p>
 
                     <div className="mt-6 text-center text-sm text-gray-500">
-                        Don&apos;t have an account? <Link href="/signup" className="font-medium text-blue-600 hover:text-blue-700 transition-colors">Sign up for free</Link>
+                        {t.auth.login.noAccount} <Link href="/signup" className="font-medium text-blue-600 hover:text-blue-700 transition-colors">{t.auth.login.signUpForFree}</Link>
                     </div>
                 </div>
 
                 <p className="mt-8 text-center text-xs text-gray-400 uppercase tracking-widest font-semibold">
-                    Retail SaaS Platform v0.1
+                    {t.auth.login.version}
                 </p>
             </div>
         </div>

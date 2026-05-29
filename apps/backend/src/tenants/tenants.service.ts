@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { StorefrontSettingsDto } from '../storefront/storefront.dto';
 import { UpdateBrandingDto } from './update-branding.dto';
+import { UpdateLocalizationSettingsDto } from './localization-settings.dto';
 
 @Injectable()
 export class TenantsService {
@@ -172,6 +173,28 @@ export class TenantsService {
                 report_weekly_enabled: true,
                 report_monthly_enabled: true,
                 report_email: true,
+            },
+        });
+    }
+
+    async getLocalizationSettings(tenantId: string) {
+        return this.db.tenant.findUnique({
+            where: { id: tenantId },
+            select: {
+                default_locale: true,
+            },
+        });
+    }
+
+    async updateLocalizationSettings(tenantId: string, dto: UpdateLocalizationSettingsDto) {
+        const data: Record<string, string> = {};
+        if (dto.default_locale !== undefined) data.default_locale = dto.default_locale;
+
+        return this.db.tenant.update({
+            where: { id: tenantId },
+            data,
+            select: {
+                default_locale: true,
             },
         });
     }

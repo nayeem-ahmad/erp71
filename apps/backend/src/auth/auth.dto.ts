@@ -1,4 +1,6 @@
-import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+
+const SUPPORTED_LOCALES = ['en', 'bn', 'ms'] as const;
 
 export class SignupDto {
     @IsEmail()
@@ -43,7 +45,13 @@ export class CreateStoreDto {
 }
 
 export class UpdateProfileDto {
+    @IsOptional()
+    @IsString()
     name?: string;
+
+    @IsOptional()
+    @IsIn(SUPPORTED_LOCALES)
+    preferred_locale?: (typeof SUPPORTED_LOCALES)[number];
 }
 
 export class ChangePasswordDto {

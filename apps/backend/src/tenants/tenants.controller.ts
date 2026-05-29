@@ -2,6 +2,7 @@ import { Controller, Get, Patch, Body, UseGuards, UseInterceptors } from '@nestj
 import { TenantsService } from './tenants.service';
 import { StorefrontSettingsDto } from '../storefront/storefront.dto';
 import { UpdateBrandingDto } from './update-branding.dto';
+import { UpdateLocalizationSettingsDto } from './localization-settings.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
@@ -75,5 +76,18 @@ export class TenantsController {
         @Body() dto: { report_weekly_enabled?: boolean; report_monthly_enabled?: boolean; report_email?: string | null },
     ) {
         return this.tenantsService.updateReportSettings(tenant.tenantId, dto);
+    }
+
+    @Get('localization-settings')
+    async getLocalizationSettings(@Tenant() tenant: TenantContext) {
+        return this.tenantsService.getLocalizationSettings(tenant.tenantId);
+    }
+
+    @Patch('localization-settings')
+    async updateLocalizationSettings(
+        @Tenant() tenant: TenantContext,
+        @Body() dto: UpdateLocalizationSettingsDto,
+    ) {
+        return this.tenantsService.updateLocalizationSettings(tenant.tenantId, dto);
     }
 }
