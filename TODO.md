@@ -179,8 +179,11 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Merge `claude/happy-brown-d8h3Q` into `main` — fast-forward merged platform-superadmin branch, preserved overlapping local TODO entries after autostash, regenerated Prisma client for `is_platform_admin`, and fixed duplicate locale keys blocking frontend build — done 2026-05-30
 - [x] Platform superadmin login — added `is_platform_admin` DB flag to User model (migration `20260529150000_add_platform_admin_flag`), updated JWT strategy to carry the flag, updated `PlatformAdminGuard` to check DB flag with email-whitelist fallback, added `POST /admin/tenants/:id/impersonate` (1-hour scoped JWT), `PATCH /admin/tenants/:id/suspend`, `GET /admin/metrics`, `GET /admin/users`, `POST /admin/users/:id/promote`, `DELETE /admin/users/:id/promote` — done 2026-05-29
-
+- [x] Rerun the local source app — stopped the previous `dev.sh` session, restarted backend and frontend locally, and re-verified `http://localhost:4000/api/v1/health` plus `http://localhost:3000` — done 2026-05-30
+- [x] Restore local login after localization schema drift — reproduced `/auth/login` 500, traced it to missing local DB columns `User.preferred_locale` / `Tenant.default_locale`, synced local Prisma schema with `prisma db push`, and verified browser login reaches `/dashboard` — done 2026-05-29
+- [x] Run the app locally without Docker — verified root `.env` targets local Postgres on `localhost:5432`, started backend and frontend via `./dev.sh`, and confirmed HTTP 200 on `http://localhost:3000` plus healthy `http://localhost:4000/api/v1/health` — done 2026-05-29
 - [x] Rebuild local Docker stack from current source: added missing backend `@nestjs/swagger` dependency, hardened backend/frontend Docker installs with retry-aware `npm ci`, rebuilt fresh `linux/amd64` images, and verified backend health plus frontend HTTP response on compose — done 2026-05-29
 - [x] In-app notifications — Notification model + migration, NotificationsController (GET /notifications, GET /notifications/unread-count, PATCH /notifications/:id/read, PATCH /notifications/read-all), NotificationBell component with live badge and dropdown panel, hooked into low-stock and expiry crons — done 2026-05-29
 - [x] Implement accounting reports: Profit & Loss, Balance Sheet, Cashbook, Bankbook — backend endpoints + frontend pages; linked from accounting overview — done 2026-05-29

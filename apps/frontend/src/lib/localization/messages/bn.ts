@@ -118,7 +118,6 @@ export const bnMessages: MessageDictionary = {
             orders: 'অর্ডার',
             storefrontSettings: 'সেটিংস',
             tenants: 'টেন্যান্ট',
-            overview: 'সংক্ষিপ্ত বিবরণ',
             users: 'ব্যবহারকারীরা',
             customers: 'গ্রাহক',
             customerGroups: 'গ্রাহক গ্রুপ',

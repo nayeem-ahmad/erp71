@@ -116,7 +116,6 @@ export const enMessages = {
             orders: 'Orders',
             storefrontSettings: 'Settings',
             tenants: 'Tenants',
-            overview: 'Overview',
             users: 'Users',
             customers: 'Customers',
             customerGroups: 'Customer Groups',
