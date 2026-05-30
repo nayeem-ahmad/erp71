@@ -31,6 +31,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [ ] Set up staging environment (separate from prod)
 - [ ] Configure automated database backups (daily minimum, point-in-time recovery)
 - [ ] Verify PgBouncer connection pooling is correctly configured
+- [ ] Configure Postgres backups on the VPS (volume snapshots or logical dumps)
+- [ ] Point `app.nayeemahmad.com` and `api.nayeemahmad.com` DNS to the VPS before enabling live TLS cutover
 - [x] Add `/health` endpoint with DB connectivity check for Render's health probe
 - [x] Implement graceful shutdown in NestJS (SIGTERM → drain → exit)
 - [ ] Write and test production deployment runbook
@@ -178,6 +180,10 @@ Track all work here. Check off items as they're completed. Add new items as they
 ---
 
 ## COMPLETED
+
+- [x] Fix live frontend API target mismatch by accepting `NEXT_PUBLIC_API_URL` anywhere the frontend previously only read `NEXT_PUBLIC_API_BASE` — done 2026-05-30
+- [x] Pivot VPS deployment topology from Supabase-backed app hosting to a full VPS stack with local Postgres in `docker-compose.prod.yml` plus updated env template and runbook — done 2026-05-30
+- [x] Add VPS deployment assets for a Supabase-backed server rollout: `docker-compose.prod.yml`, `Caddyfile`, `.env.production.example`, and `docs/ops/vps-deployment.md` — done 2026-05-30
 
 - [x] Test live local superadmin actions — verified manager user promote/demote through the admin users UI (`Make Admin` → `Revoke Admin` → restored) with success toasts and no console/backend errors, and verified `POST /api/v1/admin/tenants/:id/impersonate` returns a 1-hour token plus tenant/user payload for the selected local tenant — done 2026-05-30
 - [x] Test local superadmin tenants and users routes — verified `/dashboard/admin/tenants` stays on-route with Tenant Management heading plus Impersonate/Suspend controls, and `/dashboard/admin/users` stays on-route with User Management heading plus Make/Revoke Admin controls; no console errors or backend 5xx responses during the browser checks — done 2026-05-30

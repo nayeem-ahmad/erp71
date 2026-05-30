@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { syncLocalePreferenceFromSession } from '@/lib/localization/preference';
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE
+const API_BASE = ((process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL)
     || (process.env.NODE_ENV === 'production' ? 'https://retail-saas-backend.onrender.com' : 'http://localhost:4000')) + '/api/v1';
 
 type FormSubmitEvent = Parameters<NonNullable<React.ComponentProps<'form'>['onSubmit']>>[0];

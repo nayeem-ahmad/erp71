@@ -7,7 +7,7 @@ import { AlertCircle, CheckCircle, Minus, Package, Plus, Search, ShoppingCart, X
 import { formatBDT } from '@/lib/format';
 
 const API_BASE =
-    (process.env.NEXT_PUBLIC_API_BASE ||
+    ((process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL) ||
         (process.env.NODE_ENV === 'production'
             ? 'https://retail-saas-backend.onrender.com'
             : 'http://localhost:4000')) + '/api/v1';

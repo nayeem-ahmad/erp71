@@ -12,7 +12,7 @@ function normalizeApiBase(rawBase?: string) {
     return base.endsWith('/api/v1') ? base : `${base}/api/v1`;
 }
 
-const API_BASE = normalizeApiBase(process.env.NEXT_PUBLIC_API_BASE)
+const API_BASE = normalizeApiBase(process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL)
     || (process.env.NODE_ENV === 'production' ? `${DEFAULT_PROD_API_BASE}/api/v1` : '/api/v1');
 
 export async function fetchBlobWithAuth(endpoint: string, options: RequestInit = {}): Promise<{ blob: Blob; filename: string }> {
