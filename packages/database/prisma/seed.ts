@@ -762,6 +762,79 @@ async function main() {
         }
     }
 
+    // ── 9b. Additional Posting Rules (demo) ──────────────────────────────────
+    // The bootstrap covers the basic cases. These rules handle credit sales,
+    // mobile-wallet payments, and the specific condition keys used by the
+    // stock-take and warehouse-transfer modules (which bootstrap leaves
+    // unmatched, causing those events to be skipped).
+    {
+        const allAccounts = await prisma.account.findMany({
+            where: { tenant_id: tenant.id },
+            select: { id: true, name: true },
+        });
+        const acctByName = new Map(allAccounts.map((a) => [a.name, a.id]));
+
+        const extraRules: Array<{
+            event_type: 'sale' | 'sale_return' | 'purchase' | 'purchase_return' | 'inventory_adjustment' | 'fund_movement';
+            condition_key: 'payment_mode' | 'reason_type' | 'transfer_scope' | 'none';
+            condition_value: string | null;
+            debit_account: string;
+            credit_account: string;
+            priority: number;
+        }> = [
+            // ── Sales: credit (on-account) ──────────────────────────────────
+            { event_type: 'sale',        condition_key: 'payment_mode',  condition_value: 'credit',      debit_account: 'Accounts Receivable', credit_account: 'Sales Revenue',          priority: 30 },
+            // ── Sales: mobile wallets ───────────────────────────────────────
+            { event_type: 'sale',        condition_key: 'payment_mode',  condition_value: 'bkash',       debit_account: 'bKash Account',       credit_account: 'Sales Revenue',          priority: 40 },
+            { event_type: 'sale',        condition_key: 'payment_mode',  condition_value: 'nagad',       debit_account: 'Nagad Account',       credit_account: 'Sales Revenue',          priority: 50 },
+            { event_type: 'sale',        condition_key: 'payment_mode',  condition_value: 'rocket',      debit_account: 'Rocket Account',      credit_account: 'Sales Revenue',          priority: 60 },
+            // ── Sales returns: credit (on-account) ─────────────────────────
+            { event_type: 'sale_return', condition_key: 'payment_mode',  condition_value: 'credit',      debit_account: 'Sales Revenue',       credit_account: 'Accounts Receivable',    priority: 30 },
+            // ── Sales returns: mobile wallets ───────────────────────────────
+            { event_type: 'sale_return', condition_key: 'payment_mode',  condition_value: 'bkash',       debit_account: 'Sales Revenue',       credit_account: 'bKash Account',          priority: 40 },
+            { event_type: 'sale_return', condition_key: 'payment_mode',  condition_value: 'nagad',       debit_account: 'Sales Revenue',       credit_account: 'Nagad Account',          priority: 50 },
+            // ── Inventory adjustment: stock-take discrepancy ────────────────
+            // Specific rule wins over the generic 'none' fallback in bootstrap.
+            { event_type: 'inventory_adjustment', condition_key: 'reason_type', condition_value: 'DISCREPANCY', debit_account: 'Cost of Goods Sold', credit_account: 'Stock on Hand', priority: 10 },
+            // ── Warehouse transfers: inter-store (cross-branch) ─────────────
+            // Goods leave source stock and enter transit.
+            { event_type: 'fund_movement', condition_key: 'transfer_scope', condition_value: 'inter_store', debit_account: 'Goods in Transit', credit_account: 'Stock on Hand', priority: 10 },
+            // ── Warehouse transfers: intra-store (same branch) ──────────────
+            // Immediate receipt: goods move straight from transit/staging to stock.
+            { event_type: 'fund_movement', condition_key: 'transfer_scope', condition_value: 'intra_store', debit_account: 'Stock on Hand', credit_account: 'Goods in Transit', priority: 20 },
+        ];
+
+        for (const rule of extraRules) {
+            const debitId  = acctByName.get(rule.debit_account);
+            const creditId = acctByName.get(rule.credit_account);
+            if (!debitId || !creditId) continue;
+
+            const exists = await prisma.postingRule.findFirst({
+                where: {
+                    tenant_id:       tenant.id,
+                    event_type:      rule.event_type,
+                    condition_key:   rule.condition_key,
+                    condition_value: rule.condition_value,
+                },
+                select: { id: true },
+            });
+            if (exists) continue;
+
+            await prisma.postingRule.create({
+                data: {
+                    tenant_id:        tenant.id,
+                    event_type:       rule.event_type,
+                    condition_key:    rule.condition_key,
+                    condition_value:  rule.condition_value,
+                    debit_account_id: debitId,
+                    credit_account_id: creditId,
+                    priority:         rule.priority,
+                    is_active:        true,
+                },
+            });
+        }
+    }
+
     // ── 10. Suppliers ─────────────────────────────────────────────────────────
     const supplierDefs = [
         { name: 'Agro Fresh Ltd.',        phone: '+880-2-9876543',  email: 'info@agrofresh.bd',    address: 'Tejgaon Industrial Area, Dhaka' },
@@ -964,6 +1037,7 @@ async function main() {
     const purchaseCount    = await prisma.purchase.count({ where: { tenant_id: tenant.id } });
     const accountCount     = await prisma.account.count({ where: { tenant_id: tenant.id } });
     const warehouseCount   = await prisma.warehouse.count({ where: { tenant_id: tenant.id } });
+    const postingRuleCount = await prisma.postingRule.count({ where: { tenant_id: tenant.id } });
 
     console.log('\n✅  Seed complete');
     console.log('─────────────────────────────────────');
@@ -980,6 +1054,7 @@ async function main() {
     console.log(`↩️   Sales Returns:   ${returnCount}`);
     console.log(`🛒  Purchases:       ${purchaseCount}`);
     console.log(`📒  Accounts (CoA):  ${accountCount}`);
+    console.log(`📐  Posting Rules:   ${postingRuleCount}`);
     console.log(`🔑  Store Access:    ${storeAccessCount} entries`);
     console.log(`🛡️   Permissions:     ${permCount} entries`);
     console.log('─────────────────────────────────────');

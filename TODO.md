@@ -181,6 +181,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Add posting-rule seed data for all event/condition combinations (credit sales, mobile wallets, inventory discrepancy, inter/intra-store transfers) — done 2026-06-08
 - [x] Document how to deploy a second app on the same VPS while reusing the existing Postgres server with a separate database/user and shared Caddy routing — done 2026-05-30
 - [x] Fix live frontend API target mismatch by accepting `NEXT_PUBLIC_API_URL` anywhere the frontend previously only read `NEXT_PUBLIC_API_BASE` — done 2026-05-30
 - [x] Pivot VPS deployment topology from Supabase-backed app hosting to a full VPS stack with local Postgres in `docker-compose.prod.yml` plus updated env template and runbook — done 2026-05-30
