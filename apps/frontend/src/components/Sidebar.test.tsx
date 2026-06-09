@@ -1,6 +1,6 @@
 'use client';
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import Sidebar from './Sidebar';
 
 jest.mock('next/link', () => {
@@ -55,6 +55,7 @@ jest.mock('lucide-react', () => {
         MessageSquare: icon,
         UserCog: icon,
         CalendarOff: icon,
+        Landmark: icon,
     };
 });
 
@@ -99,16 +100,30 @@ describe('Sidebar — Story 30.1', () => {
 
         expect(screen.getByText('Billing')).toBeInTheDocument();
         expect(screen.getByText('Platform Admin')).toBeInTheDocument();
-        expect(screen.getByText('Reports')).toBeInTheDocument();
         expect(screen.getByText('Settings')).toBeInTheDocument();
         expect(screen.getByText('STANDARD')).toBeInTheDocument();
+
+        // Open Sales group
+        fireEvent.click(screen.getByText('Sales'));
+        expect(screen.getByText('Sales Reports')).toBeInTheDocument();
+
+        // Open Inventory group
+        fireEvent.click(screen.getByText('Inventory'));
+        expect(screen.getByText('Inventory Reports')).toBeInTheDocument();
     });
 
     it('hides advanced inventory reports for tenants without report entitlement', () => {
         render(<Sidebar canAccessAccounting canAccessInventoryReports={false} />);
 
-        expect(screen.queryByText('Reports')).not.toBeInTheDocument();
+        // Open Sales group
+        fireEvent.click(screen.getByText('Sales'));
+        expect(screen.queryByText('Sales Reports')).not.toBeInTheDocument();
+
+        // Open Inventory group
+        fireEvent.click(screen.getByText('Inventory'));
         expect(screen.queryByText('Reorder Report')).not.toBeInTheDocument();
         expect(screen.queryByText('Shrinkage Report')).not.toBeInTheDocument();
+        expect(screen.getByText('Inventory Reports')).toBeInTheDocument();
+        expect(screen.getByText('Stock Ledger')).toBeInTheDocument();
     });
 });

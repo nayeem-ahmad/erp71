@@ -608,7 +608,7 @@ export default function AccountSettingsPage() {
             <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
                 {/* Page header */}
                 <div>
-                    <h1 className="text-2xl font-black text-gray-900 tracking-tight">Account Settings</h1>
+                    <h1 className="text-2xl font-black text-gray-900 tracking-tight">Settings</h1>
                     <p className="mt-1 text-sm text-gray-500">Manage your profile, password, and security preferences.</p>
                 </div>
 
