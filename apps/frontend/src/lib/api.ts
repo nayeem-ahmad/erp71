@@ -2,8 +2,18 @@ const DEFAULT_PROD_API_BASE = 'https://retail-saas-backend.onrender.com';
 // In dev (remote container) use a relative path so browser calls go to the
 // Next.js dev server which proxies them to the backend via next.config rewrites.
 // In production keep the explicit backend URL.
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE
-    || (process.env.NODE_ENV === 'production' ? DEFAULT_PROD_API_BASE + '/api/v1' : '/api/v1');
+function normalizeApiBase(rawBase?: string) {
+    const base = rawBase?.trim().replace(/\/$/, '');
+
+    if (!base) {
+        return null;
+    }
+
+    return base.endsWith('/api/v1') ? base : `${base}/api/v1`;
+}
+
+const API_BASE = normalizeApiBase(process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL)
+    || (process.env.NODE_ENV === 'production' ? `${DEFAULT_PROD_API_BASE}/api/v1` : '/api/v1');
 
 export async function fetchBlobWithAuth(endpoint: string, options: RequestInit = {}): Promise<{ blob: Blob; filename: string }> {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
@@ -646,6 +656,20 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     getCashTransactions: (sessionId: string) => fetchWithAuth(`/cashier-sessions/${sessionId}/cash-transactions`),
+    // POS Counters
+    getCounters: (storeId: string) => fetchWithAuth(`/counters?storeId=${storeId}`),
+    getActiveCounters: (storeId: string) => fetchWithAuth(`/counters/active?storeId=${storeId}`),
+    createCounter: (data: any) => fetchWithAuth('/counters', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateCounter: (id: string, data: any) => fetchWithAuth(`/counters/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteCounter: (id: string) => fetchWithAuth(`/counters/${id}`, { method: 'DELETE' }),
     login: (data: any) => fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         body: JSON.stringify(data),
@@ -758,6 +782,83 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    // Employees
+    getEmployees: (params?: { page?: number; limit?: number; search?: string; status?: string; departmentId?: string }) => {
+        const query = new URLSearchParams();
+        query.set('limit', String(params?.limit ?? 100));
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.search) query.set('search', params.search);
+        if (params?.status) query.set('status', params.status);
+        if (params?.departmentId) query.set('departmentId', params.departmentId);
+        return fetchWithAuth(`/employees?${query.toString()}`).then((r: any) => r?.items ?? r);
+    },
+    getEmployee: (id: string) => fetchWithAuth(`/employees/${id}`),
+    createEmployee: (data: any) => fetchWithAuth('/employees', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateEmployee: (id: string, data: any) => fetchWithAuth(`/employees/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteEmployee: (id: string) => fetchWithAuth(`/employees/${id}`, { method: 'DELETE' }),
+    getDepartments: () => fetchWithAuth('/employees/departments'),
+    createDepartment: (data: { name: string }) => fetchWithAuth('/employees/departments', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    getDesignations: () => fetchWithAuth('/employees/designations'),
+    createDesignation: (data: { name: string }) => fetchWithAuth('/employees/designations', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    linkEmployeeUser: (id: string, user_id: string) => fetchWithAuth(`/employees/${id}/link-user`, {
+        method: 'POST',
+        body: JSON.stringify({ user_id }),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    unlinkEmployeeUser: (id: string) => fetchWithAuth(`/employees/${id}/link-user`, { method: 'DELETE' }),
+    // Attendance
+    getAttendance: (params?: { employeeId?: string; startDate?: string; endDate?: string; status?: string; page?: number; limit?: number }) => {
+        const q = new URLSearchParams();
+        if (params?.employeeId) q.set('employeeId', params.employeeId);
+        if (params?.startDate) q.set('startDate', params.startDate);
+        if (params?.endDate) q.set('endDate', params.endDate);
+        if (params?.status) q.set('status', params.status);
+        if (params?.page) q.set('page', String(params.page));
+        if (params?.limit) q.set('limit', String(params.limit));
+        return fetchWithAuth(`/attendance?${q}`);
+    },
+    upsertAttendance: (data: any) => fetchWithAuth('/attendance', { method: 'POST', body: JSON.stringify(data) }),
+    deleteAttendance: (id: string) => fetchWithAuth(`/attendance/${id}`, { method: 'DELETE' }),
+    getAttendanceSummary: (employeeId: string, year: number, month: number) =>
+        fetchWithAuth(`/attendance/summary/${employeeId}?year=${year}&month=${month}`),
+    // Leave Types
+    getLeaveTypes: () => fetchWithAuth('/attendance/leave-types'),
+    createLeaveType: (data: any) => fetchWithAuth('/attendance/leave-types', { method: 'POST', body: JSON.stringify(data) }),
+    updateLeaveType: (id: string, data: any) => fetchWithAuth(`/attendance/leave-types/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteLeaveType: (id: string) => fetchWithAuth(`/attendance/leave-types/${id}`, { method: 'DELETE' }),
+    // Leave Balances
+    getLeaveBalances: (employeeId: string) => fetchWithAuth(`/attendance/leave-balances/${employeeId}`),
+    setLeaveBalance: (data: any) => fetchWithAuth('/attendance/leave-balances', { method: 'POST', body: JSON.stringify(data) }),
+    // Leave Requests
+    getLeaveRequests: (params?: { employeeId?: string; status?: string; page?: number; limit?: number }) => {
+        const q = new URLSearchParams();
+        if (params?.employeeId) q.set('employeeId', params.employeeId);
+        if (params?.status) q.set('status', params.status);
+        if (params?.page) q.set('page', String(params.page));
+        if (params?.limit) q.set('limit', String(params.limit));
+        return fetchWithAuth(`/attendance/leave-requests?${q}`);
+    },
+    createLeaveRequest: (data: any) => fetchWithAuth('/attendance/leave-requests', { method: 'POST', body: JSON.stringify(data) }),
+    reviewLeaveRequest: (id: string, data: { status: string; approver_note?: string }) =>
+        fetchWithAuth(`/attendance/leave-requests/${id}/review`, { method: 'PATCH', body: JSON.stringify(data) }),
+    cancelLeaveRequest: (id: string) =>
+        fetchWithAuth(`/attendance/leave-requests/${id}/cancel`, { method: 'PATCH' }),
     // In-app notifications
     getNotifications: () => fetchWithAuth('/notifications'),
     getNotificationUnreadCount: () => fetchWithAuth('/notifications/unread-count'),

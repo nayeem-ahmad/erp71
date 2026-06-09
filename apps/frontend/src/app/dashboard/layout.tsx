@@ -20,6 +20,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const pathname = usePathname();
     const router = useRouter();
     const [user, setUser] = useState<any>(null);
+    const [hasResolvedUser, setHasResolvedUser] = useState(false);
     const [activeStoreId, setActiveStoreId] = useState<string>('');
     const [showOnboardingBanner, setShowOnboardingBanner] = useState(false);
 
@@ -27,7 +28,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         api.getMe().then((me) => {
             syncLocalePreferenceFromSession(me, { overwrite: false });
             setUser(me);
-        }).catch(() => null);
+        }).catch(() => null)
+            .finally(() => setHasResolvedUser(true));
     }, []);
 
     useEffect(() => {
@@ -66,6 +68,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }, [activeTenant, tenantStores]);
 
     useEffect(() => {
+        if (!hasResolvedUser) {
+            return;
+        }
+
         if (!canAccessAccounting && pathname.startsWith('/dashboard/accounting')) {
             router.replace('/dashboard');
         }
@@ -75,7 +81,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         if (!isPlatformAdmin && pathname.startsWith('/dashboard/admin')) {
             router.replace('/dashboard');
         }
-    }, [canAccessAccounting, canAccessInventoryReports, isPlatformAdmin, pathname, router]);
+    }, [canAccessAccounting, canAccessInventoryReports, hasResolvedUser, isPlatformAdmin, pathname, router]);
 
     // Build a human-readable page title from the path
     const pageTitle = (() => {

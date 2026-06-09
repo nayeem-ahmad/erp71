@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Clock, DollarSign, ArrowDownCircle, ArrowUpCircle, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { Clock, DollarSign, ArrowDownCircle, ArrowUpCircle, X, CheckCircle, AlertCircle, Monitor } from 'lucide-react';
 import { api } from '../../../lib/api';
 import { formatBDT } from '../../../lib/format';
 
@@ -17,9 +17,12 @@ export default function CashierSessionsPage() {
     const [showOpenModal, setShowOpenModal] = useState(false);
     const [showCloseModal, setShowCloseModal] = useState(false);
     const [showTxModal, setShowTxModal] = useState(false);
+    const [counters, setCounters] = useState<any[]>([]);
+    const [selectedCounterId, setSelectedCounterId] = useState<string>('');
 
     useEffect(() => {
         loadSession();
+        loadCounters();
     }, []);
 
     const loadSession = async () => {
@@ -38,12 +41,32 @@ export default function CashierSessionsPage() {
         }
     };
 
+    const loadCounters = async () => {
+        try {
+            const storeId = localStorage.getItem('store_id') || '';
+            if (!storeId) return;
+            const data = await api.getActiveCounters(storeId);
+            const list = Array.isArray(data) ? data : (data?.data ?? []);
+            setCounters(list);
+        } catch {
+            // counters are optional — silently ignore if not available
+        }
+    };
+
     const handleOpenSession = async () => {
         try {
             const storeId = localStorage.getItem('store_id') || '';
-            await api.openCashierSession({ storeId, openingCash });
+            const payload: any = { storeId, openingCash };
+            if (selectedCounterId) payload.counterId = selectedCounterId;
+            await api.openCashierSession(payload);
+            if (selectedCounterId) {
+                localStorage.setItem('counter_id', selectedCounterId);
+            } else {
+                localStorage.removeItem('counter_id');
+            }
             setShowOpenModal(false);
             setOpeningCash(0);
+            setSelectedCounterId('');
             loadSession();
         } catch (error: any) {
             alert(error.message || 'Failed to open session');
@@ -54,6 +77,7 @@ export default function CashierSessionsPage() {
         if (!session) return;
         try {
             await api.closeCashierSession(session.id, { closingCash });
+            localStorage.removeItem('counter_id');
             setShowCloseModal(false);
             setClosingCash(0);
             setSession(null);
@@ -126,16 +150,27 @@ export default function CashierSessionsPage() {
                 {session ? (
                     <>
                         <div className="bg-white rounded-3xl shadow-sm p-6 border border-green-100">
-                            <div className="flex items-center space-x-3 mb-4">
-                                <div className="p-2 bg-green-50 rounded-xl text-green-600">
-                                    <CheckCircle className="w-6 h-6" />
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center space-x-3">
+                                    <div className="p-2 bg-green-50 rounded-xl text-green-600">
+                                        <CheckCircle className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-lg font-black tracking-tight">Session Active</h2>
+                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                            Opened: {new Date(session.opened_at).toLocaleString()}
+                                        </p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h2 className="text-lg font-black tracking-tight">Session Active</h2>
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                                        Opened: {new Date(session.opened_at).toLocaleString()}
-                                    </p>
-                                </div>
+                                {session.counter && (
+                                    <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2">
+                                        <Monitor className="w-4 h-4 text-blue-500" />
+                                        <div>
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 block">Counter</span>
+                                            <span className="text-sm font-black text-blue-700">{session.counter.name}</span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                             <div className="grid grid-cols-3 gap-4">
                                 <div className="bg-gray-50 p-4 rounded-2xl">
@@ -225,6 +260,21 @@ export default function CashierSessionsPage() {
                             </button>
                         </div>
                         <div className="p-6 space-y-4">
+                            {counters.length > 0 && (
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">Counter</label>
+                                    <select
+                                        value={selectedCounterId}
+                                        onChange={(e) => setSelectedCounterId(e.target.value)}
+                                        className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-bold text-gray-900 focus:ring-2 focus:ring-green-500/20 focus:bg-white transition-all shadow-sm"
+                                    >
+                                        <option value="">No counter (walk-in)</option>
+                                        {counters.map((c) => (
+                                            <option key={c.id} value={c.id}>#{c.counter_number} — {c.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">Opening Cash Amount</label>
                                 <input

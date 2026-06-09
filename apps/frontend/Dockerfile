@@ -24,7 +24,11 @@ RUN npm run build --workspace=@retail-saas/shared-types || true
 # Generate Prisma client
 RUN npx prisma generate --schema=packages/database/prisma/schema.prisma
 # Build the frontend with debug info
+ARG NEXT_PUBLIC_API_BASE
+ARG NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE}
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 RUN npm run build --workspace=@retail-saas/frontend
 
 # Runner stage

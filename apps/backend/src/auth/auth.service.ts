@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, UnauthorizedException, ConflictExcepti
 import { DatabaseService } from '../database/database.service';
 import { JwtService } from '@nestjs/jwt';
 import { EmailService } from '../email/email.service';
+import { AuditService } from '../audit/audit.service';
 import { bootstrapDefaultAccountingForTenant } from '@retail-saas/database';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
@@ -22,6 +23,7 @@ export class AuthService {
         private readonly db: DatabaseService,
         private readonly jwtService: JwtService,
         private readonly email: EmailService,
+        private readonly audit: AuditService,
     ) { }
 
     async signup(dto: SignupDto) {
@@ -63,6 +65,7 @@ export class AuthService {
         this.sendVerificationEmail(user.id).catch((err) => {
             console.warn(`[AuthService] Verification email failed for ${user.email}:`, err?.message);
         });
+        this.audit.log('USER_SIGNUP', 'User', { userId: user.id }, user.id, { email: user.email }).catch(() => {});
         return this.generateAuthResponse(user.id);
     }
 
@@ -88,9 +91,11 @@ export class AuthService {
         }
 
         if (!isPasswordValid) {
+            this.audit.log('LOGIN_FAILED', 'User', { userId: user.id }, user.id, { email: dto.email }).catch(() => {});
             throw new UnauthorizedException('Invalid credentials');
         }
 
+        this.audit.log('USER_LOGIN', 'User', { userId: user.id }, user.id).catch(() => {});
         return this.generateAuthResponse(user.id);
     }
 
@@ -100,6 +105,7 @@ export class AuthService {
             where: { id: userId },
             data: { token_version: { increment: 1 } },
         });
+        this.audit.log('USER_LOGOUT', 'User', { userId }, userId).catch(() => {});
     }
 
     async sendVerificationEmail(userId: string): Promise<void> {
@@ -297,6 +303,7 @@ export class AuthService {
             where: { id: userId },
             data: { passwordHash: newHash },
         });
+        this.audit.log('PASSWORD_CHANGED', 'User', { userId }, userId).catch(() => {});
     }
 
     async setupStore(userId: string, dto: { name: string; address?: string; planCode?: 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM' }) {

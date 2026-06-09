@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { PasswordResetService } from './password-reset.service';
 import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
+import { AuditService } from '../audit/audit.service';
 import * as crypto from 'crypto';
 
 const db = {
@@ -11,6 +12,7 @@ const db = {
     $transaction: jest.fn(),
 };
 const emailService = { sendPasswordReset: jest.fn().mockResolvedValue(undefined) };
+const auditService = { log: jest.fn().mockResolvedValue(undefined) };
 
 describe('PasswordResetService', () => {
     let service: PasswordResetService;
@@ -23,6 +25,7 @@ describe('PasswordResetService', () => {
                 PasswordResetService,
                 { provide: DatabaseService, useValue: db },
                 { provide: EmailService, useValue: emailService },
+                { provide: AuditService, useValue: auditService },
             ],
         }).compile();
         service = mod.get(PasswordResetService);

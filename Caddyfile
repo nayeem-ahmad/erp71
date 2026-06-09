@@ -1,0 +1,17 @@
+{
+    email nayeem.ahmad@gmail.com
+}
+
+nayeemahmad.com {
+    redir https://app.nayeemahmad.com{uri}
+}
+
+app.nayeemahmad.com {
+    encode zstd gzip
+    reverse_proxy frontend:3000
+}
+
+api.nayeemahmad.com {
+    encode zstd gzip
+    reverse_proxy backend:4000
+}

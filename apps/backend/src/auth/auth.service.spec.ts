@@ -5,6 +5,7 @@ import { JwtService } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
+import { AuditService } from '../audit/audit.service';
 
 jest.mock('bcrypt', () => ({
     hash: jest.fn().mockResolvedValue('hashed-password'),
@@ -60,6 +61,10 @@ describe('AuthService', () => {
         sendEmailVerification: jest.fn().mockResolvedValue(undefined),
     };
 
+    const auditService = {
+        log: jest.fn().mockResolvedValue(undefined),
+    };
+
     const makeUserWithAccess = (storeId: string, tenantId: string) => ({
         id: 'user-1',
         email: 'owner@example.com',
@@ -106,6 +111,7 @@ describe('AuthService', () => {
         db.emailVerificationToken.deleteMany.mockResolvedValue({ count: 0 });
         db.emailVerificationToken.create.mockResolvedValue({});
         jwtService.sign.mockReturnValue('jwt-token');
+        auditService.log.mockResolvedValue(undefined);
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -113,6 +119,7 @@ describe('AuthService', () => {
                 { provide: DatabaseService, useValue: db },
                 { provide: JwtService, useValue: jwtService },
                 { provide: EmailService, useValue: emailService },
+                { provide: AuditService, useValue: auditService },
             ],
         }).compile();
 
@@ -249,19 +256,25 @@ describe('AuthService', () => {
     });
 
     it('marks nayeem.ahmad@gmail.com as platform admin in auth responses', async () => {
-        db.user.findUnique.mockResolvedValue({
-            id: 'user-1',
-            email: 'nayeem.ahmad@gmail.com',
-            name: 'Nayeem Ahmad',
-            preferred_locale: 'en',
-            token_version: 0,
-            email_verified_at: null,
-            storeAccess: [],
-            tenantMembers: [],
-        });
+        const oldAdminEmails = process.env.PLATFORM_ADMIN_EMAILS;
+        process.env.PLATFORM_ADMIN_EMAILS = 'nayeem.ahmad@gmail.com';
+        try {
+            db.user.findUnique.mockResolvedValue({
+                id: 'user-1',
+                email: 'nayeem.ahmad@gmail.com',
+                name: 'Nayeem Ahmad',
+                preferred_locale: 'en',
+                token_version: 0,
+                email_verified_at: null,
+                storeAccess: [],
+                tenantMembers: [],
+            });
 
-        const result = await service.getMe('user-1');
+            const result = await service.getMe('user-1');
 
-        expect(result.is_platform_admin).toBe(true);
+            expect(result.is_platform_admin).toBe(true);
+        } finally {
+            process.env.PLATFORM_ADMIN_EMAILS = oldAdminEmails;
+        }
     });
 });

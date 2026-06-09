@@ -44,6 +44,9 @@ export const StorePermission = {
   // User Management
   MANAGE_USERS: "MANAGE_USERS",
   MANAGE_USER_STORE_ACCESS: "MANAGE_USER_STORE_ACCESS",
+
+  // POS Counters
+  MANAGE_COUNTERS: "MANAGE_COUNTERS",
 } as const;
 export type StorePermission = (typeof StorePermission)[keyof typeof StorePermission];
 
@@ -68,6 +71,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.VIEW_FINANCIAL_REPORTS,
     StorePermission.CREATE_FUND_TRANSFER,
     StorePermission.SWITCH_STORES,
+    StorePermission.MANAGE_COUNTERS,
   ],
   [UserRole.CASHIER]: [
     StorePermission.VIEW_PRODUCT_CATALOG,
@@ -443,6 +447,109 @@ export interface WarrantyClaim {
   sale?: { id: string; serial_number: string } | null;
   customer?: { id: string; name: string; phone: string } | null;
   store?: { id: string; name: string } | null;
+}
+
+export const EmployeeStatus = {
+  ACTIVE: 'ACTIVE',
+  INACTIVE: 'INACTIVE',
+} as const;
+export type EmployeeStatus = (typeof EmployeeStatus)[keyof typeof EmployeeStatus];
+
+export interface Department {
+  id: string;
+  tenant_id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface Designation {
+  id: string;
+  tenant_id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface Employee {
+  id: string;
+  tenant_id: string;
+  employee_code: string;
+  name: string;
+  phone: string;
+  email?: string | null;
+  nid?: string | null;
+  date_of_joining?: string | null;
+  department_id?: string | null;
+  designation_id?: string | null;
+  user_id?: string | null;
+  status: EmployeeStatus;
+  created_at: string;
+  updated_at: string;
+  department?: Department | null;
+  designation?: Designation | null;
+  user?: { id: string; email: string; name?: string | null } | null;
+}
+
+export const AttendanceStatus = {
+  PRESENT: 'PRESENT',
+  ABSENT: 'ABSENT',
+  HALF_DAY: 'HALF_DAY',
+  HOLIDAY: 'HOLIDAY',
+} as const;
+export type AttendanceStatus = (typeof AttendanceStatus)[keyof typeof AttendanceStatus];
+
+export const LeaveRequestStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type LeaveRequestStatus = (typeof LeaveRequestStatus)[keyof typeof LeaveRequestStatus];
+
+export interface LeaveType {
+  id: string;
+  tenant_id: string;
+  name: string;
+  days_per_year: number;
+  created_at: string;
+}
+
+export interface LeaveBalance {
+  id: string;
+  employee_id: string;
+  leave_type_id: string;
+  year: number;
+  total_days: number;
+  used_days: number;
+  leave_type?: LeaveType;
+}
+
+export interface AttendanceRecord {
+  id: string;
+  employee_id: string;
+  date: string;
+  clock_in?: string | null;
+  clock_out?: string | null;
+  status: AttendanceStatus;
+  notes?: string | null;
+  employee?: { id: string; name: string; employee_code: string } | null;
+}
+
+export interface LeaveRequest {
+  id: string;
+  employee_id: string;
+  leave_type_id: string;
+  start_date: string;
+  end_date: string;
+  days: number;
+  reason?: string | null;
+  status: LeaveRequestStatus;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  approver_note?: string | null;
+  created_at: string;
+  employee?: { id: string; name: string; employee_code: string } | null;
+  leave_type?: LeaveType | null;
+  approver?: { id: string; name?: string | null; email: string } | null;
 }
 
 export const ProductSchema = z.object({

@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
+import { AuditService } from '../audit/audit.service';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
 
@@ -9,6 +10,7 @@ export class PasswordResetService {
     constructor(
         private db: DatabaseService,
         private email: EmailService,
+        private audit: AuditService,
     ) {}
 
     async requestReset(emailAddress: string): Promise<void> {
@@ -29,6 +31,7 @@ export class PasswordResetService {
 
         // Fire-and-forget — don't block the HTTP response on SMTP delivery
         this.email.sendPasswordReset(user.email, rawToken);
+        this.audit.log('PASSWORD_RESET_REQUESTED', 'User', { userId: user.id }, user.id).catch(() => {});
     }
 
     async resetPassword(rawToken: string, newPassword: string): Promise<void> {
@@ -50,5 +53,6 @@ export class PasswordResetService {
             }),
             this.db.passwordResetToken.update({ where: { id: record.id }, data: { used_at: new Date() } }),
         ]);
+        this.audit.log('PASSWORD_RESET_COMPLETED', 'User', { userId: record.user_id }, record.user_id).catch(() => {});
     }
 }

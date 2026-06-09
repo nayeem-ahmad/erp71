@@ -7,18 +7,18 @@ Track all work here. Check off items as they're completed. Add new items as they
 ## CRITICAL — Blocking commercial launch
 
 ### Security
-- [ ] Remove `.env` from git history and rotate all exposed secrets (SUPABASE_SERVICE_ROLE_KEY, payment credentials)
+- [x] Remove `.env` from git history and rotate all exposed secrets — confirmed `.env` was never committed; only `.env.example` with placeholder values exists in history; no real secrets were exposed — done 2026-06-09
 - [x] Ensure `.env` is in `.gitignore` and never committed again
 - [x] Add `helmet` middleware to NestJS app (CSP, HSTS, X-Frame-Options, etc.) — done 2026-05-12
 - [x] Implement CSRF protection — Origin-header validation middleware; rejects state-changing requests from untrusted origins — done 2026-05-15
 - [x] Deploy rate limiting — Upstash Redis is wired in `.env.example` but not used in code — done 2026-05-12
 - [x] Add input sanitization (beyond class-validator) to prevent XSS at API boundary — done 2026-05-12
 - [x] Audit all endpoints for missing auth guards — done 2026-05-12
-- [ ] Implement audit logging table (who changed what, when — needed for billing disputes)
+- [x] Implement audit logging table (who changed what, when — needed for billing disputes) — done 2026-06-09
 
 ### Email & Notifications
 - [x] Integrate email service (Resend) — done 2026-05-15
-- [ ] Transactional emails: billing invoices, payment confirmations, payment failures
+- [x] Transactional emails: billing invoices, payment confirmations, payment failures — done 2026-06-09
 - [x] Onboarding welcome email — sent on signup — done 2026-05-15
 - [x] Password reset flow (no email = no self-service account recovery) — POST /auth/forgot-password + POST /auth/reset-password — done 2026-05-15
 - [ ] User invitation emails (tenant owner inviting staff)
@@ -31,6 +31,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [ ] Set up staging environment (separate from prod)
 - [ ] Configure automated database backups (daily minimum, point-in-time recovery)
 - [ ] Verify PgBouncer connection pooling is correctly configured
+- [ ] Configure Postgres backups on the VPS (volume snapshots or logical dumps)
+- [ ] Point `app.nayeemahmad.com` and `api.nayeemahmad.com` DNS to the VPS before enabling live TLS cutover
 - [x] Add `/health` endpoint with DB connectivity check for Render's health probe
 - [x] Implement graceful shutdown in NestJS (SIGTERM → drain → exit)
 - [ ] Write and test production deployment runbook
@@ -175,12 +177,44 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [ ] Public API + API key management for enterprise customers
 - [ ] White-label option
 
+### HR (Epic 60–63)
+- [x] Basic employee management — Employee profiles (code, name, phone, email, NID encrypted, DOJ, department, designation, status), Department and Designation models, full CRUD API, link/unlink system user account — done 2026-06-09
+- [x] Attendance & Leave management (Epic 61) — AttendanceRecord, LeaveType, LeaveBalance, LeaveRequest models + migration; AttendanceModule with full CRUD API (upsert attendance, leave type management, leave balance set/query, leave request create/review/cancel, attendance summary); registered in AppModule — done 2026-06-09
+- [ ] Payroll & Salary management (Epic 62) — salary profiles, loan/advance management, monthly payroll generation, PDF payslips
+- [ ] HR Payroll analytics (Epic 63)
+
 ---
 
 ## COMPLETED
 
-- [x] Platform superadmin login — added `is_platform_admin` DB flag to User model (migration `20260529150000_add_platform_admin_flag`), updated JWT strategy to carry the flag, updated `PlatformAdminGuard` to check DB flag with email-whitelist fallback, added `POST /admin/tenants/:id/impersonate` (1-hour scoped JWT), `PATCH /admin/tenants/:id/suspend`, `GET /admin/metrics`, `GET /admin/users`, `POST /admin/users/:id/promote`, `DELETE /admin/users/:id/promote` — done 2026-05-29
+- [x] Transactional emails: billing invoices, payment confirmations, payment failures — EmailService injected into BillingService; invoice email sent on ACTIVE paid plan; failure email sent on PAST_DUE; fire-and-forget so SMTP errors never block payment flow; 13 new unit tests covering all paths — done 2026-06-09
 
+- [x] Implement audit logging table — migration `20260609020000_add_audit_log_table`; AuditService with `log()` and `query()` methods; AuditController `GET /audit-logs` (tenant-scoped); wired into AuthService (signup, login, login-fail, logout, password-change), PasswordResetService (reset-requested, reset-completed), and BillingService (subscription-changed) — done 2026-06-09
+
+- [x] Confirmed `.env` never in git history — only placeholder `.env.example` committed; no real secrets exposed, no rotation required — done 2026-06-09
+
+- [x] Persist production Prisma enum alignment after VPS redeploy — added `MANAGE_COUNTERS` to Prisma `StorePermission` and guarded the POS counters migration enum change with `IF NOT EXISTS` so source control now matches the live VPS schema — done 2026-06-09
+
+- [x] Storefront loyalty points — customers earn points automatically on every authenticated order; can redeem points for a discount at checkout; points balance displayed in checkout with toggle; `GET /storefront/:slug` now exposes loyalty program settings; `placeOrder` handles earn/redeem in a single DB transaction — done 2026-06-09
+
+- [x] Storefront customer sign up / sign in — new `POST /storefront/:slug/auth/signup` and `POST /storefront/:slug/auth/login` endpoints; Customer model now has optional `user_id` link to User; StorefrontOrder tracks `customerUserId` for authenticated orders; frontend sign-in and sign-up pages at `/store/[slug]/auth/signin` and `/store/[slug]/auth/signup`; header on both storefront pages shows account menu / Sign In button; checkout pre-fills and attaches auth token when signed in; migration `20260609000000_customer_user_link` — done 2026-06-09
+- [x] Multiple POS counters per store — PosCounter model + migration, counter_id on Sale and CashierSession, CountersModule (CRUD API), counter selection in cashier-session open-shift UI, counter_id forwarded to sale payload, POS Counters settings page — done 2026-06-09
+- [x] Add posting-rule seed data for all event/condition combinations (credit sales, mobile wallets, inventory discrepancy, inter/intra-store transfers) — done 2026-06-08
+- [x] Document how to deploy a second app on the same VPS while reusing the existing Postgres server with a separate database/user and shared Caddy routing — done 2026-05-30
+- [x] Fix live frontend API target mismatch by accepting `NEXT_PUBLIC_API_URL` anywhere the frontend previously only read `NEXT_PUBLIC_API_BASE` — done 2026-05-30
+- [x] Pivot VPS deployment topology from Supabase-backed app hosting to a full VPS stack with local Postgres in `docker-compose.prod.yml` plus updated env template and runbook — done 2026-05-30
+- [x] Add VPS deployment assets for a Supabase-backed server rollout: `docker-compose.prod.yml`, `Caddyfile`, `.env.production.example`, and `docs/ops/vps-deployment.md` — done 2026-05-30
+
+- [x] Test live local superadmin actions — verified manager user promote/demote through the admin users UI (`Make Admin` → `Revoke Admin` → restored) with success toasts and no console/backend errors, and verified `POST /api/v1/admin/tenants/:id/impersonate` returns a 1-hour token plus tenant/user payload for the selected local tenant — done 2026-05-30
+- [x] Test local superadmin tenants and users routes — verified `/dashboard/admin/tenants` stays on-route with Tenant Management heading plus Impersonate/Suspend controls, and `/dashboard/admin/users` stays on-route with User Management heading plus Make/Revoke Admin controls; no console errors or backend 5xx responses during the browser checks — done 2026-05-30
+- [x] Fix and test local superadmin UI route — traced `/dashboard/admin` redirect to eager dashboard guard evaluation before `getMe()` resolved and to `NEXT_PUBLIC_API_BASE=http://localhost:4000` missing `/api/v1`; added guard wait-on-session in dashboard layout, normalized explicit API base URLs in frontend client, and re-verified `/dashboard/admin` renders Overview with Tenant Management and User Management links — done 2026-05-30
+- [x] Test local superadmin login — reproduced a 500 from missing local DB column `User.is_platform_admin`, synced local Prisma schema with `prisma db push`, found local `PLATFORM_ADMIN_EMAILS` excluded `nayeem.ahmad@gmail.com`, promoted that local seeded user via DB flag, and re-verified login plus `/api/v1/admin/metrics` access — done 2026-05-30
+- [x] Rerun the local app without Docker — stopped the existing local frontend/backend listeners, restarted via `./dev.sh`, and re-verified `http://localhost:3000` plus `http://localhost:4000/api/v1/health` — done 2026-05-30
+- [x] Merge `claude/happy-brown-d8h3Q` into `main` — fast-forward merged platform-superadmin branch, preserved overlapping local TODO entries after autostash, regenerated Prisma client for `is_platform_admin`, and fixed duplicate locale keys blocking frontend build — done 2026-05-30
+- [x] Platform superadmin login — added `is_platform_admin` DB flag to User model (migration `20260529150000_add_platform_admin_flag`), updated JWT strategy to carry the flag, updated `PlatformAdminGuard` to check DB flag with email-whitelist fallback, added `POST /admin/tenants/:id/impersonate` (1-hour scoped JWT), `PATCH /admin/tenants/:id/suspend`, `GET /admin/metrics`, `GET /admin/users`, `POST /admin/users/:id/promote`, `DELETE /admin/users/:id/promote` — done 2026-05-29
+- [x] Rerun the local source app — stopped the previous `dev.sh` session, restarted backend and frontend locally, and re-verified `http://localhost:4000/api/v1/health` plus `http://localhost:3000` — done 2026-05-30
+- [x] Restore local login after localization schema drift — reproduced `/auth/login` 500, traced it to missing local DB columns `User.preferred_locale` / `Tenant.default_locale`, synced local Prisma schema with `prisma db push`, and verified browser login reaches `/dashboard` — done 2026-05-29
+- [x] Run the app locally without Docker — verified root `.env` targets local Postgres on `localhost:5432`, started backend and frontend via `./dev.sh`, and confirmed HTTP 200 on `http://localhost:3000` plus healthy `http://localhost:4000/api/v1/health` — done 2026-05-29
 - [x] Rebuild local Docker stack from current source: added missing backend `@nestjs/swagger` dependency, hardened backend/frontend Docker installs with retry-aware `npm ci`, rebuilt fresh `linux/amd64` images, and verified backend health plus frontend HTTP response on compose — done 2026-05-29
 - [x] In-app notifications — Notification model + migration, NotificationsController (GET /notifications, GET /notifications/unread-count, PATCH /notifications/:id/read, PATCH /notifications/read-all), NotificationBell component with live badge and dropdown panel, hooked into low-stock and expiry crons — done 2026-05-29
 - [x] Implement accounting reports: Profit & Loss, Balance Sheet, Cashbook, Bankbook — backend endpoints + frontend pages; linked from accounting overview — done 2026-05-29
