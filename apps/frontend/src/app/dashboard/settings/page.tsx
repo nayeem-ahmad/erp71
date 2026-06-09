@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle, XCircle, Loader2, ShieldCheck, ShieldOff, Eye, EyeOff, Palette, Receipt, Gift, MessageSquare, BarChart3, Globe } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, ShieldCheck, ShieldOff, Eye, EyeOff, Palette, Receipt, Gift, MessageSquare, BarChart3, Globe, Monitor } from 'lucide-react';
 import { api, fetchWithAuth } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 
@@ -594,6 +594,12 @@ export default function AccountSettingsPage() {
             icon: BarChart3,
             label: 'Automated Reports',
             description: 'Schedule weekly and monthly sales report emails',
+        },
+        {
+            href: '/dashboard/settings/counters',
+            icon: Monitor,
+            label: 'POS Counters',
+            description: 'Manage sales counters for multiple cashier stations',
         },
     ];
 

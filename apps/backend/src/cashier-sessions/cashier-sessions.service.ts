@@ -2,13 +2,16 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { OpenSessionDto } from './dto/open-session.dto';
 import { CloseSessionDto } from './dto/close-session.dto';
+import { CountersService } from '../counters/counters.service';
 
 @Injectable()
 export class CashierSessionsService {
-  constructor(private db: DatabaseService) {}
+  constructor(
+    private db: DatabaseService,
+    private countersService: CountersService,
+  ) {}
 
   async openSession(tenantId: string, userId: string, dto: OpenSessionDto) {
-    // Check if user already has an open session
     const existingOpenSession = await this.db.cashierSession.findFirst({
       where: {
         tenant_id: tenantId,
@@ -21,14 +24,28 @@ export class CashierSessionsService {
       throw new BadRequestException('User already has an open cashier session');
     }
 
+    if (dto.counterId) {
+      await this.countersService.validateCounterBelongsToStore(tenantId, dto.counterId, dto.storeId);
+
+      const counterInUse = await this.db.cashierSession.findFirst({
+        where: { counter_id: dto.counterId, status: 'OPEN' },
+      });
+
+      if (counterInUse) {
+        throw new BadRequestException('This counter already has an open session');
+      }
+    }
+
     return this.db.cashierSession.create({
       data: {
         tenant_id: tenantId,
         store_id: dto.storeId,
+        counter_id: dto.counterId ?? null,
         user_id: userId,
         opening_cash: dto.openingCash,
         status: 'OPEN',
       },
+      include: { counter: true },
     });
   }
 
@@ -66,6 +83,7 @@ export class CashierSessionsService {
         user_id: userId,
         status: 'OPEN',
       },
+      include: { counter: true },
     });
   }
 
@@ -84,6 +102,7 @@ export class CashierSessionsService {
   async getSessionById(tenantId: string, sessionId: string) {
     const session = await this.db.cashierSession.findUnique({
       where: { id: sessionId },
+      include: { counter: true },
     });
 
     if (!session || session.tenant_id !== tenantId) {
