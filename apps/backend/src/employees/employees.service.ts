@@ -49,7 +49,7 @@ export class EmployeesService {
 
     async createDepartment(tenantId: string, dto: CreateDepartmentDto) {
         const existing = await this.db.department.findFirst({
-            where: { tenant_id: tenantId, name: dto.name, deleted_at: null },
+            where: { tenant_id: tenantId, name: dto.name },
         });
         if (existing) throw new ConflictException('A department with this name already exists.');
 
@@ -69,7 +69,7 @@ export class EmployeesService {
 
     async createDesignation(tenantId: string, dto: CreateDesignationDto) {
         const existing = await this.db.designation.findFirst({
-            where: { tenant_id: tenantId, name: dto.name, deleted_at: null },
+            where: { tenant_id: tenantId, name: dto.name },
         });
         if (existing) throw new ConflictException('A designation with this name already exists.');
 
@@ -82,9 +82,18 @@ export class EmployeesService {
 
     async create(tenantId: string, dto: CreateEmployeeDto) {
         const existing = await this.db.employee.findFirst({
-            where: { tenant_id: tenantId, phone: dto.phone, deleted_at: null },
+            where: { tenant_id: tenantId, phone: dto.phone },
         });
         if (existing) throw new BadRequestException('An employee with this phone number already exists.');
+
+        if (dto.department_id) {
+            const dept = await this.db.department.findFirst({ where: { id: dto.department_id, tenant_id: tenantId, deleted_at: null } });
+            if (!dept) throw new BadRequestException('Department not found.');
+        }
+        if (dto.designation_id) {
+            const desig = await this.db.designation.findFirst({ where: { id: dto.designation_id, tenant_id: tenantId, deleted_at: null } });
+            if (!desig) throw new BadRequestException('Designation not found.');
+        }
 
         const employee_code = await this.generateEmployeeCode(tenantId);
         const { nid, ...rest } = dto;
@@ -151,9 +160,18 @@ export class EmployeesService {
 
         if (dto.phone && dto.phone !== employee.phone) {
             const duplicate = await this.db.employee.findFirst({
-                where: { tenant_id: tenantId, phone: dto.phone, deleted_at: null },
+                where: { tenant_id: tenantId, phone: dto.phone, NOT: { id: employee.id } },
             });
             if (duplicate) throw new BadRequestException('An employee with this phone number already exists.');
+        }
+
+        if (dto.department_id) {
+            const dept = await this.db.department.findFirst({ where: { id: dto.department_id, tenant_id: tenantId, deleted_at: null } });
+            if (!dept) throw new BadRequestException('Department not found.');
+        }
+        if (dto.designation_id) {
+            const desig = await this.db.designation.findFirst({ where: { id: dto.designation_id, tenant_id: tenantId, deleted_at: null } });
+            if (!desig) throw new BadRequestException('Designation not found.');
         }
 
         const { nid, ...rest } = dto;
@@ -176,7 +194,7 @@ export class EmployeesService {
 
         return this.db.employee.update({
             where: { id },
-            data: { deleted_at: new Date() },
+            data: { deleted_at: new Date(), user_id: null },
         });
     }
 

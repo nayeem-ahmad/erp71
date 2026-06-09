@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
-import { User, Phone, Mail, Calendar, Briefcase, LinkIcon, Unlink, Save, Trash2, ChevronRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
+import { User, Phone, Mail, Calendar, Briefcase, LinkIcon, Unlink, Save, ChevronRight } from 'lucide-react';
 import { api } from '../../../../lib/api';
 import { formatDate } from '../../../../lib/format';
 import Link from 'next/link';
 
 interface Department { id: string; name: string; }
 interface Designation { id: string; name: string; }
-interface TenantUser { id: string; user_id: string; role: string; user?: { id: string; email: string; name?: string | null }; }
 
 interface Employee {
     id: string;
@@ -29,8 +29,9 @@ interface Employee {
     user?: { id: string; email: string; name?: string | null } | null;
 }
 
-export default function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = use(params);
+export default function EmployeeDetailPage() {
+    const params = useParams();
+    const id = params.id as string;
     const [employee, setEmployee] = useState<Employee | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -38,7 +39,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     const [success, setSuccess] = useState('');
     const [departments, setDepartments] = useState<Department[]>([]);
     const [designations, setDesignations] = useState<Designation[]>([]);
-    const [tenantUsers, setTenantUsers] = useState<any[]>([]);
+    const [, setTenantUsers] = useState<any[]>([]);
     const [linkUserId, setLinkUserId] = useState('');
     const [linkLoading, setLinkLoading] = useState(false);
 
