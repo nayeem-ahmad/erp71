@@ -72,6 +72,11 @@ enum StorePermission {
   MANAGE_USER_STORE_ACCESS
 }
 
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+}
+
 enum PostingRuleEventType {
   sale
   sale_return
@@ -124,6 +129,7 @@ model User {
   notifications             Notification[]
   storefrontCustomer        Customer?
   storefrontOrders          StorefrontOrder[]
+  employee                  Employee?
 }
 
 model PasswordResetToken {
@@ -271,6 +277,9 @@ model Tenant {
   discountCodes   DiscountCode[]
   notifications   Notification[]
   posCounters     PosCounter[]
+  departments     Department[]
+  designations    Designation[]
+  employees       Employee[]
 }
 
 model TenantUser {
@@ -1604,4 +1613,61 @@ model Notification {
 
   @@index([tenant_id, user_id, created_at])
   @@index([user_id, read_at])
+}
+
+model Department {
+  id         String     @id @default(uuid())
+  tenant_id  String
+  name       String
+  created_at DateTime   @default(now())
+  deleted_at DateTime?
+
+  tenant     Tenant     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employees  Employee[]
+
+  @@unique([tenant_id, name])
+  @@index([tenant_id, deleted_at])
+}
+
+model Designation {
+  id         String     @id @default(uuid())
+  tenant_id  String
+  name       String
+  created_at DateTime   @default(now())
+  deleted_at DateTime?
+
+  tenant     Tenant     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employees  Employee[]
+
+  @@unique([tenant_id, name])
+  @@index([tenant_id, deleted_at])
+}
+
+model Employee {
+  id              String         @id @default(uuid())
+  tenant_id       String
+  employee_code   String
+  name            String
+  phone           String
+  email           String?
+  nid             String?
+  date_of_joining DateTime?
+  department_id   String?
+  designation_id  String?
+  user_id         String?        @unique
+  status          EmployeeStatus @default(ACTIVE)
+  created_at      DateTime       @default(now())
+  updated_at      DateTime       @updatedAt
+  deleted_at      DateTime?
+
+  tenant      Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  department  Department?  @relation(fields: [department_id], references: [id])
+  designation Designation? @relation(fields: [designation_id], references: [id])
+  user        User?        @relation(fields: [user_id], references: [id])
+
+  @@unique([tenant_id, employee_code])
+  @@unique([tenant_id, phone])
+  @@index([tenant_id, status, deleted_at])
+  @@index([tenant_id, department_id])
+  @@index([tenant_id, designation_id])
 }

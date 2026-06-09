@@ -449,6 +449,46 @@ export interface WarrantyClaim {
   store?: { id: string; name: string } | null;
 }
 
+export const EmployeeStatus = {
+  ACTIVE: 'ACTIVE',
+  INACTIVE: 'INACTIVE',
+} as const;
+export type EmployeeStatus = (typeof EmployeeStatus)[keyof typeof EmployeeStatus];
+
+export interface Department {
+  id: string;
+  tenant_id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface Designation {
+  id: string;
+  tenant_id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface Employee {
+  id: string;
+  tenant_id: string;
+  employee_code: string;
+  name: string;
+  phone: string;
+  email?: string | null;
+  nid?: string | null;
+  date_of_joining?: string | null;
+  department_id?: string | null;
+  designation_id?: string | null;
+  user_id?: string | null;
+  status: EmployeeStatus;
+  created_at: string;
+  updated_at: string;
+  department?: Department | null;
+  designation?: Designation | null;
+  user?: { id: string; email: string; name?: string | null } | null;
+}
+
 export const ProductSchema = z.object({
   name: z.string().min(2, "Product name must be at least 2 characters"),
   sku: z.string().min(3, "SKU must be at least 3 characters").optional().or(z.literal("")),

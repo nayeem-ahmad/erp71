@@ -782,6 +782,46 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    // Employees
+    getEmployees: (params?: { page?: number; limit?: number; search?: string; status?: string; departmentId?: string }) => {
+        const query = new URLSearchParams();
+        query.set('limit', String(params?.limit ?? 100));
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.search) query.set('search', params.search);
+        if (params?.status) query.set('status', params.status);
+        if (params?.departmentId) query.set('departmentId', params.departmentId);
+        return fetchWithAuth(`/employees?${query.toString()}`).then((r: any) => r?.items ?? r);
+    },
+    getEmployee: (id: string) => fetchWithAuth(`/employees/${id}`),
+    createEmployee: (data: any) => fetchWithAuth('/employees', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateEmployee: (id: string, data: any) => fetchWithAuth(`/employees/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteEmployee: (id: string) => fetchWithAuth(`/employees/${id}`, { method: 'DELETE' }),
+    getDepartments: () => fetchWithAuth('/employees/departments'),
+    createDepartment: (data: { name: string }) => fetchWithAuth('/employees/departments', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    getDesignations: () => fetchWithAuth('/employees/designations'),
+    createDesignation: (data: { name: string }) => fetchWithAuth('/employees/designations', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    linkEmployeeUser: (id: string, user_id: string) => fetchWithAuth(`/employees/${id}/link-user`, {
+        method: 'POST',
+        body: JSON.stringify({ user_id }),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    unlinkEmployeeUser: (id: string) => fetchWithAuth(`/employees/${id}/link-user`, { method: 'DELETE' }),
     // In-app notifications
     getNotifications: () => fetchWithAuth('/notifications'),
     getNotificationUnreadCount: () => fetchWithAuth('/notifications/unread-count'),

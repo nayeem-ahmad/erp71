@@ -177,6 +177,12 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [ ] Public API + API key management for enterprise customers
 - [ ] White-label option
 
+### HR (Epic 60–63)
+- [x] Basic employee management — Employee profiles (code, name, phone, email, NID encrypted, DOJ, department, designation, status), Department and Designation models, full CRUD API, link/unlink system user account — done 2026-06-09
+- [ ] Attendance & Leave management (Epic 61) — POS clock-in/out, shift definition, leave requests + approval, leave balance tracking
+- [ ] Payroll & Salary management (Epic 62) — salary profiles, loan/advance management, monthly payroll generation, PDF payslips
+- [ ] HR Payroll analytics (Epic 63)
+
 ---
 
 ## COMPLETED
