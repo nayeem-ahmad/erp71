@@ -21,9 +21,9 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Transactional emails: billing invoices, payment confirmations, payment failures — done 2026-06-09
 - [x] Onboarding welcome email — sent on signup — done 2026-05-15
 - [x] Password reset flow (no email = no self-service account recovery) — POST /auth/forgot-password + POST /auth/reset-password — done 2026-05-15
-- [ ] User invitation emails (tenant owner inviting staff)
-- [ ] Low-stock / reorder point alert emails
-- [ ] Subscription expiry warnings (7 days and 1 day before)
+- [x] User invitation emails (tenant owner inviting staff) — already implemented in invitations.service.ts via EmailService.sendInvitation() — done 2026-06-09
+- [x] Low-stock / reorder point alert emails — already implemented in notifications.service.ts daily cron — done 2026-06-09
+- [x] Subscription expiry warnings (7 days and 1 day before) — already implemented in notifications.service.ts daily cron — done 2026-06-09
 - [x] In-app notifications — Notification model, REST API (list/unread-count/mark-read/mark-all-read), bell icon with dropdown panel, 60s polling, hooks into low-stock and expiry crons — done 2026-05-29
 
 ### Infrastructure / Ops
@@ -44,7 +44,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [ ] Configure alerts for: error rate spikes, payment webhook failures, DB connection exhaustion
 
 ### Billing & Payments
-- [ ] Implement dunning management (define what happens after PAST_DUE — auto-cancel after N days)
+- [x] Implement dunning management (define what happens after PAST_DUE — auto-cancel after N days) — done 2026-06-09
 - [ ] Build payment retry logic for failed transactions
 - [ ] Add refund processing flow
 - [ ] Test all payment webhooks end-to-end in staging (SSL Wireless, bKash, Nagad IPN)
@@ -188,6 +188,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 ## COMPLETED
 
 - [x] Multi-branch consolidated reporting + branch-level report — VIEW_CONSOLIDATED_REPORTS permission enforced (OWNER/ACCOUNTANT only); new GET /sales-reports/branch-report endpoint; Branch Report frontend page at /dashboard/reports/branch-report with store selector, KPIs, top products, daily breakdown, and company revenue comparison — done 2026-06-09
+- [x] Dunning management — BillingSchedulerService daily cron (09:00) finds PAST_DUE subscriptions past the grace period (default 7 days, DUNNING_GRACE_DAYS env), downgrades them to FREE/CANCELLED, sends sendSubscriptionCancelled email, logs audit event; 11 unit tests; DUNNING_GRACE_DAYS configurable — done 2026-06-09
 - [x] Transactional emails: billing invoices, payment confirmations, payment failures — EmailService injected into BillingService; invoice email sent on ACTIVE paid plan; failure email sent on PAST_DUE; fire-and-forget so SMTP errors never block payment flow; 13 new unit tests covering all paths — done 2026-06-09
 - [x] Implement audit logging table — migration `20260609020000_add_audit_log_table`; AuditService with `log()` and `query()` methods; AuditController `GET /audit-logs` (tenant-scoped); wired into AuthService (signup, login, login-fail, logout, password-change), PasswordResetService (reset-requested, reset-completed), and BillingService (subscription-changed) — done 2026-06-09
 - [x] Confirmed `.env` never in git history — only placeholder `.env.example` committed; no real secrets exposed, no rotation required — done 2026-06-09
