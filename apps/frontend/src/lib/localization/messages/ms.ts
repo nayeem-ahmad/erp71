@@ -80,6 +80,7 @@ export const msMessages: MessageDictionary = {
             inventory: 'Inventori',
             reports: 'Laporan',
             storefront: 'Kedai Dalam Talian',
+            hr: 'HR',
             billing: 'Bil',
             accountSettings: 'Tetapan Akaun',
             admin: 'Pentadbir Platform',
@@ -133,6 +134,9 @@ export const msMessages: MessageDictionary = {
             reportEmails: 'Emel Laporan',
             discountCodes: 'Kod Diskaun',
             localization: 'Penyetempatan',
+            employees: 'Pekerja',
+            departments: 'Jabatan',
+            designations: 'Jawatan',
         },
         sections: {
             sales: 'Jualan',

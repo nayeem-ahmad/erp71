@@ -78,6 +78,7 @@ export const enMessages = {
             inventory: 'Inventory',
             reports: 'Reports',
             storefront: 'Storefront',
+            hr: 'HR',
             billing: 'Billing',
             accountSettings: 'Account Settings',
             admin: 'Platform Admin',
@@ -131,6 +132,9 @@ export const enMessages = {
             reportEmails: 'Report Emails',
             discountCodes: 'Discount Codes',
             localization: 'Localization',
+            employees: 'Employees',
+            departments: 'Departments',
+            designations: 'Designations',
         },
         sections: {
             sales: 'Sales',

@@ -1024,7 +1024,62 @@ async function main() {
         });
     }
 
-    // ── 13. Summary ──────────────────────────────────────────────────────────
+    // ── 13. HR seed data ─────────────────────────────────────────────────────
+    const deptDefs = ['Sales', 'Operations', 'Finance', 'IT'];
+    const deptMap = new Map<string, string>();
+    for (const name of deptDefs) {
+        const dept = await prisma.department.upsert({
+            where: { tenant_id_name: { tenant_id: tenant.id, name } },
+            update: {},
+            create: { tenant_id: tenant.id, name },
+        });
+        deptMap.set(name, dept.id);
+    }
+
+    const desgDefs = ['Manager', 'Cashier', 'Sales Associate', 'Accountant'];
+    const desgMap = new Map<string, string>();
+    for (const name of desgDefs) {
+        const desg = await prisma.designation.upsert({
+            where: { tenant_id_name: { tenant_id: tenant.id, name } },
+            update: {},
+            create: { tenant_id: tenant.id, name },
+        });
+        desgMap.set(name, desg.id);
+    }
+
+    const empDefs = [
+        { name: 'Rafiq Islam',    phone: '+8801811111101', email: 'manager@retailsaas.com', dept: 'Operations', desg: 'Manager',       doj: '2023-01-15', user_id: managerUser.id },
+        { name: 'Sumaiya Khatun', phone: '+8801811111102', email: 'cashier@retailsaas.com', dept: 'Sales',      desg: 'Cashier',       doj: '2023-03-01', user_id: cashierUser.id },
+        { name: 'Karim Ahmed',    phone: '+8801811111103', email: null,                      dept: 'Finance',    desg: 'Accountant',    doj: '2024-06-01', user_id: null },
+        { name: 'Fatema Begum',   phone: '+8801811111104', email: null,                      dept: 'Sales',      desg: 'Sales Associate', doj: '2024-09-10', user_id: null },
+    ];
+
+    let empCodeCounter = 1;
+    for (const e of empDefs) {
+        const existingEmp = await prisma.employee.findFirst({
+            where: { tenant_id: tenant.id, phone: e.phone },
+        });
+        if (!existingEmp) {
+            const code = `EMP-${String(empCodeCounter).padStart(5, '0')}`;
+            await prisma.employee.create({
+                data: {
+                    tenant_id: tenant.id,
+                    employee_code: code,
+                    name: e.name,
+                    phone: e.phone,
+                    ...(e.email ? { email: e.email } : {}),
+                    date_of_joining: new Date(e.doj),
+                    department_id: deptMap.get(e.dept) ?? null,
+                    designation_id: desgMap.get(e.desg) ?? null,
+                    ...(e.user_id ? { user_id: e.user_id } : {}),
+                    status: 'ACTIVE',
+                },
+            });
+        }
+        empCodeCounter++;
+    }
+
+    // ── 14. Summary ──────────────────────────────────────────────────────────
     const productCount    = await prisma.product.count({ where: { tenant_id: tenant.id } });
     const customerCount    = await prisma.customer.count({ where: { tenant_id: tenant.id } });
     const saleCount        = await prisma.sale.count({ where: { tenant_id: tenant.id } });

@@ -80,6 +80,7 @@ export const bnMessages: MessageDictionary = {
             inventory: 'ইনভেন্টরি',
             reports: 'রিপোর্ট',
             storefront: 'স্টোরফ্রন্ট',
+            hr: 'এইচআর',
             billing: 'বিলিং',
             accountSettings: 'অ্যাকাউন্ট সেটিংস',
             admin: 'প্ল্যাটফর্ম অ্যাডমিন',
@@ -133,6 +134,9 @@ export const bnMessages: MessageDictionary = {
             reportEmails: 'রিপোর্ট ইমেইল',
             discountCodes: 'ডিসকাউন্ট কোড',
             localization: 'লোকালাইজেশন',
+            employees: 'কর্মচারী',
+            departments: 'বিভাগ',
+            designations: 'পদবী',
         },
         sections: {
             sales: 'বিক্রয়',

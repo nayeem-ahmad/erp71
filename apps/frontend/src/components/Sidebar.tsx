@@ -41,6 +41,7 @@ import {
     Gift,
     Tag,
     MessageSquare,
+    UserCog,
     type LucideIcon,
 } from 'lucide-react';
 import { useBranding } from '@/lib/branding';
@@ -163,6 +164,14 @@ function buildModules(t: ReturnType<typeof useI18n>['t']): NavModule[] {
         children: [
             { href: '/dashboard/storefront', icon: ShoppingBag, label: t.sidebar.items.orders },
             { href: '/dashboard/storefront/settings', icon: Settings, label: t.sidebar.items.storefrontSettings },
+        ],
+    },
+    {
+        key: 'hr',
+        icon: UserCog,
+        label: t.sidebar.modules.hr,
+        children: [
+            { href: '/dashboard/employees', icon: Users, label: t.sidebar.items.employees },
         ],
     },
     {
