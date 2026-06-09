@@ -38,6 +38,10 @@ interface StorefrontData {
     tenant: {
         name: string;
         storefront_banner: string | null;
+        loyalty_enabled: boolean;
+        loyalty_earn_rate: number | null;
+        loyalty_redeem_rate: number | null;
+        loyalty_min_redeem: number | null;
     };
     categories: Category[];
     all_products: Product[];
@@ -82,9 +86,13 @@ export default function StorefrontShopPage() {
     const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
     const [orderError, setOrderError] = useState<string | null>(null);
 
+    const [loyaltyPoints, setLoyaltyPoints] = useState<number>(0);
+    const [applyPoints, setApplyPoints] = useState(false);
+
     useEffect(() => {
         if (!slug) return;
 
+        let token: string | null = null;
         try {
             const raw = localStorage.getItem(`storefront_customer_${slug}`);
             if (raw) {
@@ -93,6 +101,7 @@ export default function StorefrontShopPage() {
                 setCustomerName(parsed.customer.name);
                 setCustomerEmail(parsed.customer.email);
                 setCustomerPhone(parsed.customer.phone);
+                token = parsed.access_token;
             }
         } catch {
             // ignore
@@ -110,6 +119,18 @@ export default function StorefrontShopPage() {
             })
             .catch(() => setNotFound(true))
             .finally(() => setLoading(false));
+
+        if (token) {
+            fetch(`${API_BASE}/storefront/${slug}/customer/me`, {
+                headers: { Authorization: `Bearer ${token}` },
+            })
+                .then((r) => r.json())
+                .then((json) => {
+                    const profile = 'data' in json ? json.data : json;
+                    if (typeof profile?.loyalty_points === 'number') setLoyaltyPoints(profile.loyalty_points);
+                })
+                .catch(() => {});
+        }
     }, [slug]);
 
     const handleSignOut = () => {
@@ -118,6 +139,8 @@ export default function StorefrontShopPage() {
         setCustomerName('');
         setCustomerEmail('');
         setCustomerPhone('');
+        setLoyaltyPoints(0);
+        setApplyPoints(false);
         setAccountMenuOpen(false);
     };
 
@@ -268,6 +291,18 @@ export default function StorefrontShopPage() {
     const cartTotal = cart.reduce((total, item) => total + toNumber(item.product.selling_price) * item.quantity, 0);
     const cartCount = cart.reduce((count, item) => count + item.quantity, 0);
 
+    const redeemRate = data?.tenant.loyalty_redeem_rate ?? 0;
+    const minRedeem = data?.tenant.loyalty_min_redeem ?? 0;
+    const loyaltyEligible =
+        !!session &&
+        !!data?.tenant.loyalty_enabled &&
+        loyaltyPoints > 0 &&
+        loyaltyPoints >= minRedeem;
+    const pointsDiscount = applyPoints && loyaltyEligible
+        ? Math.min(loyaltyPoints * redeemRate, cartTotal)
+        : 0;
+    const finalTotal = cartTotal - pointsDiscount;
+
     const handleCheckout = async (event: React.SyntheticEvent<HTMLFormElement>) => {
         event.preventDefault();
         setSubmitting(true);
@@ -285,6 +320,7 @@ export default function StorefrontShopPage() {
                     customerEmail,
                     customerPhone: customerPhone || undefined,
                     notes: notes || undefined,
+                    pointsToRedeem: applyPoints && loyaltyEligible ? loyaltyPoints : undefined,
                     items: cart.map((item) => ({
                         productId: item.product.id,
                         quantity: item.quantity,
@@ -301,10 +337,24 @@ export default function StorefrontShopPage() {
             setOrderSuccess(json.data?.id || json.id || 'SUCCESS');
             setCart([]);
             setCheckoutOpen(false);
-            setCustomerName('');
-            setCustomerEmail('');
-            setCustomerPhone('');
+            setApplyPoints(false);
+            if (!session) {
+                setCustomerName('');
+                setCustomerEmail('');
+                setCustomerPhone('');
+            }
             setNotes('');
+            if (session?.access_token) {
+                fetch(`${API_BASE}/storefront/${slug}/customer/me`, {
+                    headers: { Authorization: `Bearer ${session.access_token}` },
+                })
+                    .then((r) => r.json())
+                    .then((j) => {
+                        const p = 'data' in j ? j.data : j;
+                        if (typeof p?.loyalty_points === 'number') setLoyaltyPoints(p.loyalty_points);
+                    })
+                    .catch(() => {});
+            }
         } catch (err: any) {
             setOrderError(err.message || 'An error occurred during checkout');
         } finally {
@@ -731,11 +781,46 @@ export default function StorefrontShopPage() {
                                             </div>
                                         ))}
                                     </div>
-                                    <div className="border-t border-gray-200 mt-3 pt-3 flex justify-between text-base font-bold text-gray-900">
-                                        <span>Total</span>
-                                        <span className="text-blue-600">{formatBDT(cartTotal)}</span>
+                                    <div className="border-t border-gray-200 mt-3 pt-3 space-y-1">
+                                        {pointsDiscount > 0 && (
+                                            <div className="flex justify-between text-sm text-green-700">
+                                                <span>Points discount</span>
+                                                <span>-{formatBDT(pointsDiscount)}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between text-base font-bold text-gray-900">
+                                            <span>Total</span>
+                                            <span className="text-blue-600">{formatBDT(finalTotal)}</span>
+                                        </div>
                                     </div>
                                 </div>
+
+                                {loyaltyEligible && (
+                                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                                        <label className="flex items-start gap-3 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={applyPoints}
+                                                onChange={(e) => setApplyPoints(e.target.checked)}
+                                                className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-amber-500"
+                                            />
+                                            <div className="text-sm">
+                                                <p className="font-semibold text-amber-800">
+                                                    Use {loyaltyPoints} loyalty points
+                                                </p>
+                                                <p className="text-amber-700 mt-0.5">
+                                                    Worth {formatBDT(Math.min(loyaltyPoints * redeemRate, cartTotal))} off this order
+                                                </p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                )}
+
+                                {session && data?.tenant.loyalty_enabled && data.tenant.loyalty_earn_rate && !loyaltyEligible && (
+                                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                                        🏆 You&apos;ll earn ~{Math.floor(finalTotal * data.tenant.loyalty_earn_rate)} points on this order
+                                    </p>
+                                )}
 
                                 <div className="space-y-4">
                                     <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mt-6 mb-2">Customer Details</h3>
@@ -804,7 +889,7 @@ export default function StorefrontShopPage() {
                                 disabled={submitting}
                                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors disabled:opacity-60 shadow-lg shadow-blue-600/20 text-lg"
                             >
-                                {submitting ? 'Processing...' : `Pay ${formatBDT(cartTotal)}`}
+                                {submitting ? 'Processing...' : `Pay ${formatBDT(finalTotal)}`}
                             </button>
                         </div>
                     </div>

@@ -187,6 +187,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Storefront loyalty points — customers earn points automatically on every authenticated order; can redeem points for a discount at checkout; points balance displayed in checkout with toggle; `GET /storefront/:slug` now exposes loyalty program settings; `placeOrder` handles earn/redeem in a single DB transaction — done 2026-06-09
+
 - [x] Storefront customer sign up / sign in — new `POST /storefront/:slug/auth/signup` and `POST /storefront/:slug/auth/login` endpoints; Customer model now has optional `user_id` link to User; StorefrontOrder tracks `customerUserId` for authenticated orders; frontend sign-in and sign-up pages at `/store/[slug]/auth/signin` and `/store/[slug]/auth/signup`; header on both storefront pages shows account menu / Sign In button; checkout pre-fills and attaches auth token when signed in; migration `20260609000000_customer_user_link` — done 2026-06-09
 - [x] Multiple POS counters per store — PosCounter model + migration, counter_id on Sale and CashierSession, CountersModule (CRUD API), counter selection in cashier-session open-shift UI, counter_id forwarded to sale payload, POS Counters settings page — done 2026-06-09
 - [x] Add posting-rule seed data for all event/condition combinations (credit sales, mobile wallets, inventory discrepancy, inter/intra-store transfers) — done 2026-06-08
