@@ -2,9 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { AlertCircle, CheckCircle, Minus, Package, Plus, ShoppingCart, X } from 'lucide-react';
+import { AlertCircle, CheckCircle, Minus, Package, Plus, ShoppingCart, User, X } from 'lucide-react';
 import Link from 'next/link';
 import { formatBDT } from '@/lib/format';
+
+interface CustomerSession {
+    access_token: string;
+    customer: { id: string; name: string; email: string; phone: string };
+}
 
 const API_BASE =
     ((process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL) ||
@@ -72,6 +77,9 @@ export default function StorefrontPage() {
     const [loading, setLoading] = useState(true);
     const [notFound, setNotFound] = useState(false);
 
+    const [session, setSession] = useState<CustomerSession | null>(null);
+    const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+
     const [cart, setCart] = useState<CartItem[]>([]);
     const [cartOpen, setCartOpen] = useState(false);
     const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -87,6 +95,20 @@ export default function StorefrontPage() {
     useEffect(() => {
         if (!slug) return;
 
+        // Load customer session from localStorage
+        try {
+            const raw = localStorage.getItem(`storefront_customer_${slug}`);
+            if (raw) {
+                const parsed: CustomerSession = JSON.parse(raw);
+                setSession(parsed);
+                setCustomerName(parsed.customer.name);
+                setCustomerEmail(parsed.customer.email);
+                setCustomerPhone(parsed.customer.phone);
+            }
+        } catch {
+            // ignore
+        }
+
         fetch(`${API_BASE}/storefront/${slug}`)
             .then(async (response) => {
                 if (!response.ok) {
@@ -100,6 +122,15 @@ export default function StorefrontPage() {
             .catch(() => setNotFound(true))
             .finally(() => setLoading(false));
     }, [slug]);
+
+    const handleSignOut = () => {
+        localStorage.removeItem(`storefront_customer_${slug}`);
+        setSession(null);
+        setCustomerName('');
+        setCustomerEmail('');
+        setCustomerPhone('');
+        setAccountMenuOpen(false);
+    };
 
     const addToCart = (product: Product) => {
         setCart((prev) => {
@@ -142,9 +173,12 @@ export default function StorefrontPage() {
         setOrderError(null);
 
         try {
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+
             const response = await fetch(`${API_BASE}/storefront/${slug}/orders`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({
                     customerName,
                     customerEmail,
@@ -226,18 +260,56 @@ export default function StorefrontPage() {
                             <a href="#contact" className="text-gray-500 hover:text-gray-900 transition-colors">Contact</a>
                         </nav>
 
-                        <button
-                            type="button"
-                            onClick={() => setCartOpen(true)}
-                            className="relative inline-flex items-center justify-center p-2 text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
-                        >
-                            <ShoppingCart className="w-6 h-6" />
-                            {cartCount > 0 && (
-                                <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-5 h-5 px-1 text-[10px] font-bold text-white bg-blue-600 rounded-full">
-                                    {cartCount}
-                                </span>
+                        <div className="flex items-center gap-2">
+                            {session ? (
+                                <div className="relative">
+                                    <button
+                                        type="button"
+                                        onClick={() => setAccountMenuOpen((v) => !v)}
+                                        className="inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
+                                    >
+                                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-900 text-white text-xs font-bold">
+                                            {session.customer.name.charAt(0).toUpperCase()}
+                                        </span>
+                                        <span className="hidden sm:block">{session.customer.name.split(' ')[0]}</span>
+                                    </button>
+                                    {accountMenuOpen && (
+                                        <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
+                                            <p className="px-4 py-2 text-xs text-gray-400 truncate">{session.customer.email}</p>
+                                            <hr className="border-gray-100" />
+                                            <button
+                                                type="button"
+                                                onClick={handleSignOut}
+                                                className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                                            >
+                                                Sign out
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <Link
+                                    href={`/store/${slug}/auth/signin`}
+                                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
+                                >
+                                    <User className="w-4 h-4" />
+                                    <span className="hidden sm:block">Sign In</span>
+                                </Link>
                             )}
-                        </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setCartOpen(true)}
+                                className="relative inline-flex items-center justify-center p-2 text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
+                            >
+                                <ShoppingCart className="w-6 h-6" />
+                                {cartCount > 0 && (
+                                    <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-5 h-5 px-1 text-[10px] font-bold text-white bg-blue-600 rounded-full">
+                                        {cartCount}
+                                    </span>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </header>
