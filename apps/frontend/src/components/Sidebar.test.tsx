@@ -53,6 +53,8 @@ jest.mock('lucide-react', () => {
         Gift: icon,
         Tag: icon,
         MessageSquare: icon,
+        UserCog: icon,
+        CalendarOff: icon,
     };
 });
 

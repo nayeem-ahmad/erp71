@@ -122,9 +122,9 @@ describe('AccountingLedgerPage — Story 30.8', () => {
                 to: '2026-03-31',
             });
             expect(screen.getByText(/CR-00001/)).toBeInTheDocument();
-            expect(screen.getByText('$125.00 credit')).toBeInTheDocument();
-            expect(screen.getByText('$300.00 debit')).toBeInTheDocument();
-            expect(screen.getByText('$175.00 debit')).toBeInTheDocument();
+            expect(screen.getByText('৳ 125.00 credit')).toBeInTheDocument();
+            expect(screen.getByText('৳ 300.00 debit')).toBeInTheDocument();
+            expect(screen.getByText('৳ 175.00 debit')).toBeInTheDocument();
         });
 
         expect(replace).toHaveBeenCalledWith('/dashboard/accounting/ledger?accountId=cash-1&from=2026-03-01&to=2026-03-31');

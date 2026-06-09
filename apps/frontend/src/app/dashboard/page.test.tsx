@@ -90,12 +90,12 @@ describe('DashboardPage — Story 34.3', () => {
             expect(screen.getByText('Accounting KPIs')).toBeInTheDocument();
             expect(screen.getByText('Cash Flow Movement')).toBeInTheDocument();
             expect(screen.getByText('Net Profit vs Gross Margin')).toBeInTheDocument();
-            expect(screen.getAllByText('$175.00').length).toBeGreaterThan(0);
-            expect(screen.getAllByText('$300.00').length).toBeGreaterThan(0);
-            expect(screen.getAllByText('$125.00').length).toBeGreaterThan(0);
-            expect(screen.getByText('$90.00')).toBeInTheDocument();
-            expect(screen.getByText('$20.00')).toBeInTheDocument();
-            expect(screen.getByText('$15.00')).toBeInTheDocument();
+            expect(screen.getAllByText('175.00').length).toBeGreaterThan(0);
+            expect(screen.getAllByText('300.00').length).toBeGreaterThan(0);
+            expect(screen.getAllByText('125.00').length).toBeGreaterThan(0);
+            expect(screen.getByText('90.00')).toBeInTheDocument();
+            expect(screen.getByText('20.00')).toBeInTheDocument();
+            expect(screen.getByText('15.00')).toBeInTheDocument();
             expect(screen.getByText('Unavailable')).toBeInTheDocument();
         });
 

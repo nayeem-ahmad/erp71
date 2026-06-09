@@ -87,8 +87,8 @@ describe('SalesPage — Sales Transaction List', () => {
     it('displays formatted total amounts', async () => {
         render(<SalesPage />);
         await waitFor(() => {
-            expect(screen.getByText('$55.00')).toBeInTheDocument();
-            expect(screen.getByText('$20.00')).toBeInTheDocument();
+            expect(screen.getAllByText('৳ 55.00').length).toBeGreaterThan(0);
+            expect(screen.getAllByText('৳ 20.00').length).toBeGreaterThan(0);
         });
     });
 

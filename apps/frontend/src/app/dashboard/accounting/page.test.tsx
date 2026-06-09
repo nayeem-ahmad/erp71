@@ -25,6 +25,9 @@ jest.mock('lucide-react', () => ({
     FileText: () => <span data-testid="icon-file-text" />,
     Settings: () => <span data-testid="icon-settings" />,
     AlertTriangle: () => <span data-testid="icon-alert-triangle" />,
+    TrendingUp: () => <span data-testid="icon-trending-up" />,
+    LayoutDashboard: () => <span data-testid="icon-layout-dashboard" />,
+    Landmark: () => <span data-testid="icon-landmark" />,
 }));
 
 describe('AccountingPage — Story 30.1', () => {
