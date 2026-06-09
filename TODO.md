@@ -18,7 +18,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ### Email & Notifications
 - [x] Integrate email service (Resend) — done 2026-05-15
-- [ ] Transactional emails: billing invoices, payment confirmations, payment failures
+- [x] Transactional emails: billing invoices, payment confirmations, payment failures — done 2026-06-09
 - [x] Onboarding welcome email — sent on signup — done 2026-05-15
 - [x] Password reset flow (no email = no self-service account recovery) — POST /auth/forgot-password + POST /auth/reset-password — done 2026-05-15
 - [ ] User invitation emails (tenant owner inviting staff)
@@ -186,6 +186,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 ---
 
 ## COMPLETED
+
+- [x] Transactional emails: billing invoices, payment confirmations, payment failures — EmailService injected into BillingService; invoice email sent on ACTIVE paid plan; failure email sent on PAST_DUE; fire-and-forget so SMTP errors never block payment flow; 13 new unit tests covering all paths — done 2026-06-09
 
 - [x] Implement audit logging table — migration `20260609020000_add_audit_log_table`; AuditService with `log()` and `query()` methods; AuditController `GET /audit-logs` (tenant-scoped); wired into AuthService (signup, login, login-fail, logout, password-change), PasswordResetService (reset-requested, reset-completed), and BillingService (subscription-changed) — done 2026-06-09
 
