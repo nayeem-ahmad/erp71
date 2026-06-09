@@ -268,6 +268,7 @@ model Tenant {
   loyaltyTransactions LoyaltyTransaction[]
   discountCodes   DiscountCode[]
   notifications   Notification[]
+  posCounters     PosCounter[]
 }
 
 model TenantUser {
@@ -306,6 +307,25 @@ model Store {
   fundTransfersSource      FundTransfer[] @relation("FundTransferSourceStore")
   fundTransfersDestination FundTransfer[] @relation("FundTransferDestinationStore")
   warrantyClaims  WarrantyClaim[]
+  posCounters     PosCounter[]
+}
+
+model PosCounter {
+  id             String   @id @default(uuid())
+  tenant_id      String
+  store_id       String
+  name           String
+  counter_number Int
+  status         String   @default("ACTIVE") // ACTIVE, INACTIVE
+  created_at     DateTime @default(now())
+
+  tenant          Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store           Store           @relation(fields: [store_id], references: [id], onDelete: Cascade)
+  cashierSessions CashierSession[]
+  sales           Sale[]
+
+  @@unique([tenant_id, store_id, counter_number])
+  @@index([tenant_id, store_id])
 }
 
 model Warehouse {
@@ -752,6 +772,7 @@ model Sale {
   id             String   @id @default(uuid())
   tenant_id      String
   store_id       String
+  counter_id     String?
   serial_number  String
   total_amount   Decimal  @db.Decimal(12, 2)
   amount_paid    Decimal    @default(0) @db.Decimal(12, 2)
@@ -760,8 +781,9 @@ model Sale {
   created_at     DateTime @default(now())
 
   // Relations
-  tenant         Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  store          Store    @relation(fields: [store_id], references: [id])
+  tenant         Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store          Store       @relation(fields: [store_id], references: [id])
+  counter        PosCounter? @relation(fields: [counter_id], references: [id])
   customer_id    String?
   customer       Customer? @relation(fields: [customer_id], references: [id])
   items          SaleItem[]
@@ -774,6 +796,7 @@ model Sale {
   @@index([tenant_id, created_at])
   @@index([tenant_id, store_id])
   @@index([tenant_id, customer_id])
+  @@index([tenant_id, counter_id])
 }
 
 model Customer {
@@ -1181,20 +1204,23 @@ model CashierSession {
   id            String   @id @default(uuid())
   tenant_id     String
   store_id      String
+  counter_id    String?
   user_id       String   // The cashier/user who opened the session
   opened_at     DateTime @default(now())
   closed_at     DateTime?
   opening_cash  Decimal  @default(0) @db.Decimal(12, 2)
   closing_cash  Decimal  @default(0) @db.Decimal(12, 2)
   status        String   @default("OPEN") // OPEN, CLOSED
-   
+
   // Relations
-  tenant        Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  store         Store    @relation(fields: [store_id], references: [id], onDelete: Cascade)
-  user          User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  tenant        Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store         Store       @relation(fields: [store_id], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  counter       PosCounter? @relation(fields: [counter_id], references: [id])
   cashTransactions CashTransaction[]
-   
+
   @@index([tenant_id, status])
+  @@index([tenant_id, counter_id])
 }
 
 model CashTransaction {

@@ -275,9 +275,11 @@ export default function POSPage() {
         if (bkashAmount > 0) payments.push({ paymentMethod: 'BKASH', amount: bkashAmount });
         if (cardAmount > 0) payments.push({ paymentMethod: 'CARD', amount: cardAmount });
 
+        const counterId = localStorage.getItem('counter_id') || undefined;
         const saleData = {
             storeId: localStorage.getItem('store_id') || '',
             ...(salesWarehouseId ? { warehouseId: salesWarehouseId } : {}),
+            ...(counterId ? { counterId } : {}),
             totalAmount: total,
             amountPaid: totalPaid,
             items: cart.map(item => ({

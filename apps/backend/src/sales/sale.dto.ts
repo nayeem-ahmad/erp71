@@ -14,6 +14,7 @@ export class CreateSaleDto {
     storeId: string;
     warehouseId?: string;
     customerId?: string;
+    counterId?: string;
     totalAmount: number;
     amountPaid: number;
     items: CreateSaleItemDto[];
