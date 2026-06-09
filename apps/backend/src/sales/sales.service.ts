@@ -39,6 +39,7 @@ export class SalesService {
                 data: {
                     tenant_id: tenantId,
                     store_id: dto.storeId,
+                    counter_id: dto.counterId ?? null,
                     customer_id: dto.customerId,
                     serial_number: serialNumber,
                     total_amount: dto.totalAmount,

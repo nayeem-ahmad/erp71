@@ -52,6 +52,7 @@ import { LoyaltyModule } from './loyalty/loyalty.module';
 import { SmsModule } from './sms/sms.module';
 import { DiscountCodesModule } from './discount-codes/discount-codes.module';
 import { EmployeesModule } from './employees/employees.module';
+import { CountersModule } from './counters/counters.module';
 
 @Module({
     imports: [
@@ -105,6 +106,7 @@ import { EmployeesModule } from './employees/employees.module';
         LoyaltyModule,
         DiscountCodesModule,
         EmployeesModule,
+        CountersModule,
     ],
     controllers: [],
     providers: [

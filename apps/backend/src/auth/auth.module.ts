@@ -5,6 +5,7 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { OptionalJwtAuthGuard } from './optional-jwt-auth.guard';
 import { ApiKeyStrategy } from './api-key.strategy';
 import { ApiKeyGuard } from './api-key.guard';
 import { CombinedAuthGuard } from './combined-auth.guard';
@@ -24,6 +25,7 @@ import { TotpService } from './totp.service';
         AuthService,
         JwtStrategy,
         JwtAuthGuard,
+        OptionalJwtAuthGuard,
         ApiKeyStrategy,
         ApiKeyGuard,
         CombinedAuthGuard,
@@ -34,7 +36,9 @@ import { TotpService } from './totp.service';
     controllers: [AuthController],
     exports: [
         AuthService,
+        JwtModule,
         JwtAuthGuard,
+        OptionalJwtAuthGuard,
         ApiKeyGuard,
         CombinedAuthGuard,
         PlatformAdminGuard,

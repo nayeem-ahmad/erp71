@@ -656,6 +656,20 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     getCashTransactions: (sessionId: string) => fetchWithAuth(`/cashier-sessions/${sessionId}/cash-transactions`),
+    // POS Counters
+    getCounters: (storeId: string) => fetchWithAuth(`/counters?storeId=${storeId}`),
+    getActiveCounters: (storeId: string) => fetchWithAuth(`/counters/active?storeId=${storeId}`),
+    createCounter: (data: any) => fetchWithAuth('/counters', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateCounter: (id: string, data: any) => fetchWithAuth(`/counters/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteCounter: (id: string) => fetchWithAuth(`/counters/${id}`, { method: 'DELETE' }),
     login: (data: any) => fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         body: JSON.stringify(data),

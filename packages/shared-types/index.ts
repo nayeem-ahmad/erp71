@@ -44,6 +44,9 @@ export const StorePermission = {
   // User Management
   MANAGE_USERS: "MANAGE_USERS",
   MANAGE_USER_STORE_ACCESS: "MANAGE_USER_STORE_ACCESS",
+
+  // POS Counters
+  MANAGE_COUNTERS: "MANAGE_COUNTERS",
 } as const;
 export type StorePermission = (typeof StorePermission)[keyof typeof StorePermission];
 
@@ -68,6 +71,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.VIEW_FINANCIAL_REPORTS,
     StorePermission.CREATE_FUND_TRANSFER,
     StorePermission.SWITCH_STORES,
+    StorePermission.MANAGE_COUNTERS,
   ],
   [UserRole.CASHIER]: [
     StorePermission.VIEW_PRODUCT_CATALOG,

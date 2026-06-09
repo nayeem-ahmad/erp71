@@ -7,6 +7,7 @@ import {
     ValidateNested,
     IsInt,
     Min,
+    MinLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -46,6 +47,32 @@ export class UpdateOrderStatusDto {
     @IsString()
     @IsNotEmpty()
     status: string;
+}
+
+export class CustomerSignupDto {
+    @IsString()
+    @IsNotEmpty()
+    name: string;
+
+    @IsEmail()
+    email: string;
+
+    @IsString()
+    @MinLength(8)
+    password: string;
+
+    @IsString()
+    @IsNotEmpty()
+    phone: string;
+}
+
+export class CustomerLoginDto {
+    @IsEmail()
+    email: string;
+
+    @IsString()
+    @IsNotEmpty()
+    password: string;
 }
 
 export class StorefrontSettingsDto {
