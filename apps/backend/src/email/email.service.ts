@@ -122,6 +122,16 @@ ${invoiceUrl ? `<p><a href="${invoiceUrl}">View Invoice</a></p>` : ''}`,
         });
     }
 
+    async sendSubscriptionCancelled(to: string, tenantName: string, graceDays: number): Promise<void> {
+        await this.send({
+            to,
+            subject: `Your ${tenantName} subscription has been cancelled`,
+            html: `<h2>Subscription Cancelled</h2>
+<p>Your subscription for <strong>${tenantName}</strong> has been cancelled after ${graceDays} days without a successful payment.</p>
+<p>Your account has been downgraded to the Free plan. To restore access to premium features, <a href="${this.frontendUrl}/dashboard/billing">update your payment method and resubscribe</a>.</p>`,
+        });
+    }
+
     async sendContactForm(from: string, name: string, subject: string, message: string): Promise<void> {
         const supportEmail = process.env.SUPPORT_EMAIL ?? 'support@retailsaas.app';
         this.send({
