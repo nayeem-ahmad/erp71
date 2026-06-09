@@ -122,6 +122,8 @@ model User {
   sentInvitations           UserInvitation[]        @relation("InvitationSender")
   feedbacks                 Feedback[]
   notifications             Notification[]
+  storefrontCustomer        Customer?
+  storefrontOrders          StorefrontOrder[]
 }
 
 model PasswordResetToken {
@@ -819,11 +821,13 @@ model Customer {
   loyalty_points       Int           @default(0)
   created_at           DateTime      @default(now())
   deleted_at           DateTime?
+  user_id              String?       @unique
 
   // Relations
   tenant           Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   customerGroup    CustomerGroup? @relation(fields: [customer_group_id], references: [id])
   territory        Territory?     @relation(fields: [territory_id], references: [id])
+  user             User?          @relation(fields: [user_id], references: [id])
   sales            Sale[]
   salesOrders      SalesOrder[]
   quotations       Quotation[]
@@ -1437,16 +1441,19 @@ model StorefrontOrder {
   customerEmail String
   customerPhone String?
   items         StorefrontOrderItem[]
-  totalAmount   Decimal  @db.Decimal(12, 2)
-  status        String   @default("PENDING")
-  notes         String?
-  created_at    DateTime @default(now())
-  updated_at    DateTime @updatedAt
+  totalAmount      Decimal  @db.Decimal(12, 2)
+  status           String   @default("PENDING")
+  notes            String?
+  customerUserId   String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant       Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerUser User?  @relation(fields: [customerUserId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([tenantId, status])
+  @@index([customerUserId])
   @@map("storefront_orders")
 }
 
