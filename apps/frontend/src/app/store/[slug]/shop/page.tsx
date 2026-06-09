@@ -331,7 +331,7 @@ export default function StorefrontShopPage() {
                         <AlertCircle className="w-8 h-8 text-gray-400" />
                     </div>
                     <h1 className="text-2xl font-bold text-gray-800">Store Not Found</h1>
-                    <p className="text-gray-500">This store doesn't exist or is currently unavailable.</p>
+                    <p className="text-gray-500">This store doesn&apos;t exist or is currently unavailable.</p>
                 </div>
             </div>
         );

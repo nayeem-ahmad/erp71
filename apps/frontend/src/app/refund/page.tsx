@@ -150,7 +150,7 @@ export default function RefundPage() {
                                 <li>
                                     <strong>Downgrades.</strong> When you downgrade to a lower-tier plan, the change
                                     takes effect at the start of your next billing cycle. You retain access to your
-                                    current plan's features until then. No partial refund is issued for the remaining
+                                    current plan&apos;s features until then. No partial refund is issued for the remaining
                                     days on the higher-tier plan.
                                 </li>
                             </ul>
