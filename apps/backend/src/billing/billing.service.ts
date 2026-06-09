@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { AuditService } from '../audit/audit.service';
+import { EmailService } from '../email/email.service';
 import {
     BillingCallbackDto,
     ConfirmCheckoutDto,
@@ -26,6 +27,7 @@ export class BillingService {
     constructor(
         private readonly db: DatabaseService,
         private readonly audit: AuditService,
+        private readonly email: EmailService,
     ) {}
 
     async getSummary(userId: string, tenantId: string) {
@@ -340,10 +342,54 @@ export class BillingService {
             { planCode: input.planCode, status: input.status ?? 'ACTIVE', providerName: input.providerName },
         ).catch(() => {});
 
+        const resolvedStatus = input.status ?? 'ACTIVE';
+        if (resolvedStatus === 'ACTIVE' || resolvedStatus === 'PAST_DUE') {
+            const emailAmount = billingCycle === 'YEARLY'
+                ? Number(plan.yearly_price ?? Number(plan.monthly_price) * 12)
+                : Number(plan.monthly_price);
+
+            if (emailAmount > 0) {
+                this.notifyTenantOwner(input.tenantId, resolvedStatus, {
+                    tenantName: tenant.name,
+                    amount: emailAmount,
+                    currency: 'BDT',
+                }).catch(() => {});
+            }
+        }
+
         return {
             tenant,
             subscription: this.mapSubscription(subscription),
         };
+    }
+
+    private async notifyTenantOwner(
+        tenantId: string,
+        status: 'ACTIVE' | 'PAST_DUE',
+        context: { tenantName: string; amount: number; currency: string },
+    ) {
+        const ownerMembership = await this.db.tenantUser.findFirst({
+            where: { tenant_id: tenantId, role: 'OWNER' },
+            include: { user: { select: { email: true } } },
+        });
+
+        if (!ownerMembership?.user?.email) return;
+
+        if (status === 'ACTIVE') {
+            await this.email.sendBillingInvoice(
+                ownerMembership.user.email,
+                context.tenantName,
+                context.amount,
+                context.currency,
+            );
+        } else {
+            await this.email.sendPaymentFailure(
+                ownerMembership.user.email,
+                context.tenantName,
+                context.amount,
+                context.currency,
+            );
+        }
     }
 
     private async getBillingHistory(tenantId: string) {

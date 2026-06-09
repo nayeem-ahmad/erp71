@@ -3,19 +3,50 @@ import { BillingService } from './billing.service';
 
 describe('BillingService', () => {
     const db = {
-        tenantUser: { findUnique: jest.fn() },
+        tenantUser: { findUnique: jest.fn(), findFirst: jest.fn() },
         subscriptionPlan: { findMany: jest.fn(), findUnique: jest.fn() },
         tenantSubscription: { findUnique: jest.fn(), upsert: jest.fn(), update: jest.fn() },
         tenant: { findUnique: jest.fn() },
         billingEvent: { findMany: jest.fn(), upsert: jest.fn() },
     } as any;
 
+    const audit = { log: jest.fn().mockResolvedValue(undefined) } as any;
+
+    const email = {
+        sendBillingInvoice: jest.fn().mockResolvedValue(undefined),
+        sendPaymentFailure: jest.fn().mockResolvedValue(undefined),
+    } as any;
+
     let service: BillingService;
     const fetchMock = jest.fn();
 
+    const ownerMembership = {
+        role: 'OWNER',
+        user: { email: 'owner@example.com' },
+    };
+
+    const premiumSubscriptionUpsertResult = {
+        status: 'ACTIVE',
+        current_period_start: new Date('2026-03-21T00:00:00.000Z'),
+        current_period_end: new Date('2026-04-20T00:00:00.000Z'),
+        cancel_at_period_end: false,
+        provider_name: 'ssl-wireless',
+        provider_customer_ref: 'tenant-1',
+        provider_subscription_ref: 'bank-ref-1',
+        plan: {
+            code: 'PREMIUM',
+            name: 'Premium',
+            description: 'Advanced plan',
+            monthly_price: 3999,
+            yearly_price: 39990,
+            features_json: {},
+        },
+    };
+
     beforeEach(() => {
         jest.resetAllMocks();
-        service = new BillingService(db);
+        audit.log.mockResolvedValue(undefined);
+        service = new BillingService(db, audit, email);
         (global as any).fetch = fetchMock;
         process.env.BILLING_PROVIDER = 'SSL_WIRELESS';
         process.env.SSL_WIRELESS_STORE_ID = 'store-id';
@@ -31,6 +62,7 @@ describe('BillingService', () => {
             tenant: { id: 'tenant-1', name: 'Tenant One' },
             user: { id: 'user-1', email: 'nayeem.ahmad@gmail.com', name: 'Nayeem Ahmad' },
         });
+        db.tenantUser.findFirst.mockResolvedValue(ownerMembership);
         db.subscriptionPlan.findMany.mockResolvedValue([]);
         db.subscriptionPlan.findUnique.mockResolvedValue({
             id: 'plan-premium',
@@ -45,23 +77,7 @@ describe('BillingService', () => {
         db.billingEvent.findMany.mockResolvedValue([]);
         db.billingEvent.upsert.mockResolvedValue({ id: 'event-1' });
         db.tenant.findUnique.mockResolvedValue({ id: 'tenant-1', name: 'Tenant One' });
-        db.tenantSubscription.upsert.mockResolvedValue({
-            status: 'ACTIVE',
-            current_period_start: new Date('2026-03-21T00:00:00.000Z'),
-            current_period_end: new Date('2026-04-20T00:00:00.000Z'),
-            cancel_at_period_end: false,
-            provider_name: 'ssl-wireless',
-            provider_customer_ref: 'tenant-1',
-            provider_subscription_ref: 'bank-ref-1',
-            plan: {
-                code: 'PREMIUM',
-                name: 'Premium',
-                description: 'Advanced plan',
-                monthly_price: 3999,
-                yearly_price: 39990,
-                features_json: {},
-            },
-        });
+        db.tenantSubscription.upsert.mockResolvedValue(premiumSubscriptionUpsertResult);
     });
 
     it('creates an SSL Wireless hosted checkout session', async () => {
@@ -392,5 +408,201 @@ describe('BillingService', () => {
             }),
         }));
         expect(result).toHaveProperty('subscription');
+    });
+
+    // --- Transactional email tests ---
+
+    it('sends billing invoice email after successful paid plan activation', async () => {
+        await service.applySubscriptionChange({
+            tenantId: 'tenant-1',
+            planCode: 'PREMIUM',
+            billingCycle: 'MONTHLY',
+            status: 'ACTIVE',
+        });
+
+        // Allow the fire-and-forget promise to settle
+        await new Promise(process.nextTick);
+
+        expect(db.tenantUser.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+            where: { tenant_id: 'tenant-1', role: 'OWNER' },
+        }));
+        expect(email.sendBillingInvoice).toHaveBeenCalledWith(
+            'owner@example.com',
+            'Tenant One',
+            3999,
+            'BDT',
+        );
+        expect(email.sendPaymentFailure).not.toHaveBeenCalled();
+    });
+
+    it('sends billing invoice with yearly amount for YEARLY billing cycle', async () => {
+        await service.applySubscriptionChange({
+            tenantId: 'tenant-1',
+            planCode: 'PREMIUM',
+            billingCycle: 'YEARLY',
+            status: 'ACTIVE',
+        });
+
+        await new Promise(process.nextTick);
+
+        expect(email.sendBillingInvoice).toHaveBeenCalledWith(
+            'owner@example.com',
+            'Tenant One',
+            39990,
+            'BDT',
+        );
+    });
+
+    it('sends payment failure email when subscription becomes PAST_DUE', async () => {
+        db.tenantSubscription.upsert.mockResolvedValueOnce({
+            ...premiumSubscriptionUpsertResult,
+            status: 'PAST_DUE',
+        });
+
+        await service.applySubscriptionChange({
+            tenantId: 'tenant-1',
+            planCode: 'PREMIUM',
+            billingCycle: 'MONTHLY',
+            status: 'PAST_DUE',
+        });
+
+        await new Promise(process.nextTick);
+
+        expect(email.sendPaymentFailure).toHaveBeenCalledWith(
+            'owner@example.com',
+            'Tenant One',
+            3999,
+            'BDT',
+        );
+        expect(email.sendBillingInvoice).not.toHaveBeenCalled();
+    });
+
+    it('does not send invoice email for FREE plan activation', async () => {
+        db.subscriptionPlan.findUnique.mockResolvedValueOnce({
+            id: 'plan-free',
+            code: 'FREE',
+            name: 'Free',
+            description: 'Starter',
+            monthly_price: 0,
+            yearly_price: 0,
+            is_active: true,
+            features_json: {},
+        });
+        db.tenantSubscription.upsert.mockResolvedValueOnce({
+            ...premiumSubscriptionUpsertResult,
+            plan: { code: 'FREE', name: 'Free', description: 'Starter', monthly_price: 0, yearly_price: 0, features_json: {} },
+        });
+
+        await service.applySubscriptionChange({
+            tenantId: 'tenant-1',
+            planCode: 'FREE',
+            status: 'ACTIVE',
+        });
+
+        await new Promise(process.nextTick);
+
+        expect(email.sendBillingInvoice).not.toHaveBeenCalled();
+        expect(email.sendPaymentFailure).not.toHaveBeenCalled();
+    });
+
+    it('does not send email when no tenant owner is found', async () => {
+        db.tenantUser.findFirst.mockResolvedValueOnce(null);
+
+        await service.applySubscriptionChange({
+            tenantId: 'tenant-1',
+            planCode: 'PREMIUM',
+            status: 'ACTIVE',
+        });
+
+        await new Promise(process.nextTick);
+
+        expect(email.sendBillingInvoice).not.toHaveBeenCalled();
+    });
+
+    it('does not send email when owner has no email address', async () => {
+        db.tenantUser.findFirst.mockResolvedValueOnce({ role: 'OWNER', user: { email: null } });
+
+        await service.applySubscriptionChange({
+            tenantId: 'tenant-1',
+            planCode: 'PREMIUM',
+            status: 'ACTIVE',
+        });
+
+        await new Promise(process.nextTick);
+
+        expect(email.sendBillingInvoice).not.toHaveBeenCalled();
+    });
+
+    it('does not send email for CANCELLED or TRIALING status', async () => {
+        db.tenantSubscription.upsert.mockResolvedValueOnce({
+            ...premiumSubscriptionUpsertResult,
+            status: 'CANCELLED',
+        });
+
+        await service.applySubscriptionChange({
+            tenantId: 'tenant-1',
+            planCode: 'PREMIUM',
+            status: 'CANCELLED',
+        });
+
+        await new Promise(process.nextTick);
+
+        expect(email.sendBillingInvoice).not.toHaveBeenCalled();
+        expect(email.sendPaymentFailure).not.toHaveBeenCalled();
+    });
+
+    it('sends invoice email after SSL Wireless IPN confirms payment', async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            text: jest.fn().mockResolvedValue(JSON.stringify({
+                status: 'VALID',
+                tran_id: 'sslw_ipn_ref',
+                val_id: 'val-ipn',
+                bank_tran_id: 'bank-ipn-1',
+                amount: '3999.00',
+                currency: 'BDT',
+                value_a: 'tenant-1',
+            })),
+        });
+
+        await service.handleSslWirelessCallback({
+            tran_id: 'sslw_ipn_ref',
+            val_id: 'val-ipn',
+            value_a: 'tenant-1',
+            value_b: 'PREMIUM',
+            value_c: 'MONTHLY',
+        }, 'ipn');
+
+        await new Promise(process.nextTick);
+
+        expect(email.sendBillingInvoice).toHaveBeenCalledWith(
+            'owner@example.com',
+            'Tenant One',
+            3999,
+            'BDT',
+        );
+    });
+
+    it('sends payment failure email after SSL Wireless fail callback', async () => {
+        db.tenantSubscription.upsert.mockResolvedValueOnce({
+            ...premiumSubscriptionUpsertResult,
+            status: 'PAST_DUE',
+        });
+
+        await service.handleSslWirelessCallback({
+            tran_id: 'sslw_tenant_fail',
+            value_a: 'tenant-1',
+            value_b: 'PREMIUM',
+            value_c: 'MONTHLY',
+        }, 'fail');
+
+        await new Promise(process.nextTick);
+
+        expect(email.sendPaymentFailure).toHaveBeenCalledWith(
+            'owner@example.com',
+            'Tenant One',
+            3999,
+            'BDT',
+        );
     });
 });
