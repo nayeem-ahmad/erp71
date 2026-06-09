@@ -133,6 +133,10 @@ export class StorefrontService {
                 storefront_banner: tenant.storefront_banner,
                 storefront_hero_image: tenant.storefront_hero_image,
                 storefront_hero_headline: tenant.storefront_hero_headline,
+                loyalty_enabled: tenant.loyalty_points_enabled,
+                loyalty_earn_rate: tenant.loyalty_earn_rate ? Number(tenant.loyalty_earn_rate) : null,
+                loyalty_redeem_rate: tenant.loyalty_redeem_rate ? Number(tenant.loyalty_redeem_rate) : null,
+                loyalty_min_redeem: tenant.loyalty_min_redeem ?? null,
             },
             categories,
             trending_products,
@@ -191,8 +195,44 @@ export class StorefrontService {
             totalAmount += Number(product.price) * item.quantity;
         }
 
+        // Resolve customer record and loyalty redemption
+        let customer: { id: string; loyalty_points: number } | null = null;
+        let pointsToRedeem = 0;
+        let pointsDiscount = 0;
+
+        if (userId) {
+            customer = await this.db.customer.findFirst({
+                where: { user_id: userId, tenant_id: tenant.id, deleted_at: null },
+                select: { id: true, loyalty_points: true },
+            });
+        }
+
+        if (
+            customer &&
+            dto.pointsToRedeem &&
+            dto.pointsToRedeem > 0 &&
+            tenant.loyalty_points_enabled &&
+            tenant.loyalty_redeem_rate
+        ) {
+            const minRedeem = tenant.loyalty_min_redeem ?? 0;
+            const requested = Math.min(dto.pointsToRedeem, customer.loyalty_points);
+            if (requested < minRedeem) {
+                throw new BadRequestException(
+                    `Minimum redemption is ${minRedeem} points`,
+                );
+            }
+            const redeemRate = Number(tenant.loyalty_redeem_rate);
+            const rawDiscount = requested * redeemRate;
+            // Cap discount at order total; back-calculate points if capped
+            pointsDiscount = Math.min(rawDiscount, totalAmount);
+            pointsToRedeem = pointsDiscount < rawDiscount
+                ? Math.ceil(pointsDiscount / redeemRate)
+                : requested;
+            totalAmount = Math.max(0, totalAmount - pointsDiscount);
+        }
+
         const order = await this.db.$transaction(async (tx) => {
-            return tx.storefrontOrder.create({
+            const created = await tx.storefrontOrder.create({
                 data: {
                     tenantId: tenant.id,
                     customerName: dto.customerName,
@@ -220,6 +260,48 @@ export class StorefrontService {
                     },
                 },
             });
+
+            if (customer) {
+                // Redeem points if requested
+                if (pointsToRedeem > 0) {
+                    await tx.loyaltyTransaction.create({
+                        data: {
+                            tenantId: tenant.id,
+                            customerId: customer.id,
+                            type: 'REDEEM',
+                            points: -pointsToRedeem,
+                            description: `Redeemed for storefront order ${created.id}`,
+                        },
+                    });
+                    await tx.customer.update({
+                        where: { id: customer.id },
+                        data: { loyalty_points: { decrement: pointsToRedeem } },
+                    });
+                }
+
+                // Auto-earn points on the paid amount
+                if (tenant.loyalty_points_enabled && tenant.loyalty_earn_rate) {
+                    const earnRate = Number(tenant.loyalty_earn_rate);
+                    const pointsEarned = Math.floor(totalAmount * earnRate);
+                    if (pointsEarned > 0) {
+                        await tx.loyaltyTransaction.create({
+                            data: {
+                                tenantId: tenant.id,
+                                customerId: customer.id,
+                                type: 'EARN',
+                                points: pointsEarned,
+                                description: `Earned from storefront order ${created.id}`,
+                            },
+                        });
+                        await tx.customer.update({
+                            where: { id: customer.id },
+                            data: { loyalty_points: { increment: pointsEarned } },
+                        });
+                    }
+                }
+            }
+
+            return created;
         });
 
         return order;
@@ -410,6 +492,10 @@ export class StorefrontService {
                 storefront_banner: true,
                 storefront_hero_image: true,
                 storefront_hero_headline: true,
+                loyalty_points_enabled: true,
+                loyalty_earn_rate: true,
+                loyalty_redeem_rate: true,
+                loyalty_min_redeem: true,
             },
         });
         if (!tenant) throw new NotFoundException('Storefront not found or not available');

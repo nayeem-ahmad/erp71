@@ -41,6 +41,11 @@ export class PlaceOrderDto {
     @ValidateNested({ each: true })
     @Type(() => PlaceOrderItemDto)
     items: PlaceOrderItemDto[];
+
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    pointsToRedeem?: number;
 }
 
 export class UpdateOrderStatusDto {
