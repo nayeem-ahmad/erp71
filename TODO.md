@@ -119,6 +119,9 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Customer-wise sales summary — total orders, revenue, and average order value per customer for a selected period — done 2026-05-29
 - [x] Month-by-month sales metrics per customer — monthly breakdown of order count, revenue, and trend per customer — done 2026-05-29
 
+### Supplier Management
+- [x] Supplier management page — list, create, edit, delete at /dashboard/suppliers; PATCH + DELETE backend endpoints added; sidebar link under Purchase module — done 2026-06-10
+
 ### Purchase Reports (Epic 24)
 - [x] Purchase Summary — daily procurement value, returns, and net purchases with date filter — done 2026-06-10
 - [x] Purchases by Product — spend and units ordered per product with group/subgroup filter and % share bar — done 2026-06-10

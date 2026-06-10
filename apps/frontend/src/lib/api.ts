@@ -605,6 +605,8 @@ export const api = {
         if (params?.to) query.set('to', params.to);
         return fetchWithAuth(`/purchase-reports/by-supplier${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    updateSupplier: (id: string, data: any) => fetchWithAuth(`/suppliers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteSupplier: (id: string) => fetchWithAuth(`/suppliers/${id}`, { method: 'DELETE' }),
     getPurchases: () => fetchWithAuth('/purchases'),
     getPurchase: (id: string) => fetchWithAuth(`/purchases/${id}`),
     createPurchase: (data: any) => fetchWithAuth('/purchases', {
