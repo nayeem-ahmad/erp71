@@ -17,7 +17,7 @@ export class SalesService {
         private smsService: SmsService,
     ) { }
 
-    async create(tenantId: string, dto: CreateSaleDto) {
+    async create(tenantId: string, userId: string, dto: CreateSaleDto) {
         const result = await this.db.$transaction(async (tx) => {
             const warehouseId = await resolveWarehouseId(tx, tenantId, dto.storeId, dto.warehouseId, 'sale');
             const saleProducts = await tx.product.findMany({
@@ -46,6 +46,7 @@ export class SalesService {
                     amount_paid: dto.amountPaid,
                     status: 'COMPLETED',
                     note: dto.note,
+                    created_by: userId,
                     payments: dto.payments ? {
                         create: dto.payments.map(p => ({
                             payment_method: p.paymentMethod,

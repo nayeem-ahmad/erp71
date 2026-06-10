@@ -23,7 +23,7 @@ export class SalesOrdersService {
         return parsed;
     }
 
-    async create(tenantId: string, dto: CreateSalesOrderDto) {
+    async create(tenantId: string, userId: string, dto: CreateSalesOrderDto) {
         return this.db.$transaction(async (tx) => {
             const orderNumber = `ORD-${Date.now()}`;
             const deliveryDate = this.normalizeDeliveryDate(dto.deliveryDate);
@@ -44,6 +44,7 @@ export class SalesOrdersService {
                     status: dto.status || 'DRAFT',
                     payment_status: 'UNPAID',
                     delivery_date: deliveryDate,
+                    created_by: userId,
                     items: { create: itemsData }
                 },
                 include: { items: true }

@@ -8,7 +8,7 @@ import { autoPostFromRules } from '../accounting/posting.utils';
 export class SalesReturnsService {
     constructor(private db: DatabaseService) {}
 
-    async create(tenantId: string, dto: CreateSalesReturnDto) {
+    async create(tenantId: string, userId: string, dto: CreateSalesReturnDto) {
         return this.db.$transaction(async (tx) => {
             // 1. Fetch original sale and its items
             const sale = await tx.sale.findUnique({
@@ -68,6 +68,7 @@ export class SalesReturnsService {
                     return_number: returnNumber,
                     total_refund: totalRefund,
                     reason: dto.reason,
+                    created_by: userId,
                     items: {
                         create: returnItemData
                     }

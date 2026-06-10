@@ -13,7 +13,7 @@ export class SalesOrdersController {
 
     @Post()
     async create(@Tenant() tenant: TenantContext, @Body() dto: CreateSalesOrderDto) {
-        return this.ordersService.create(tenant.tenantId, dto);
+        return this.ordersService.create(tenant.tenantId, tenant.userId, dto);
     }
 
     @Get()

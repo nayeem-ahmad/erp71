@@ -13,7 +13,7 @@ export class SalesReturnsController {
 
     @Post()
     async create(@Tenant() tenant: TenantContext, @Body() dto: CreateSalesReturnDto) {
-        return this.returnsService.create(tenant.tenantId, dto);
+        return this.returnsService.create(tenant.tenantId, tenant.userId, dto);
     }
 
     @Get()
