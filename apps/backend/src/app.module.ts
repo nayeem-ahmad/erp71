@@ -28,6 +28,7 @@ import { CashierSessionsModule } from './cashier-sessions/cashier-sessions.modul
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { PurchasesModule } from './purchases/purchases.module';
 import { PurchaseReturnsModule } from './purchase-returns/purchase-returns.module';
+import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
 import { AccountingModule } from './accounting/accounting.module';
 import { ProductGroupsModule } from './product-groups/product-groups.module';
 import { ProductSubgroupsModule } from './product-subgroups/product-subgroups.module';
@@ -85,6 +86,7 @@ import { AttendanceModule } from './attendance/attendance.module';
         SuppliersModule,
         PurchasesModule,
         PurchaseReturnsModule,
+        PurchaseOrdersModule,
         AccountingModule,
         ProductGroupsModule,
         ProductSubgroupsModule,

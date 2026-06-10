@@ -98,6 +98,7 @@ export const msMessages: MessageDictionary = {
             loyaltyPoints: 'Mata Kesetiaan',
             jobsBom: 'Kerja & BOM',
             purchases: 'Pembelian',
+            purchaseOrders: 'Pesanan Pembelian',
             purchaseReturns: 'Pulangan Pembelian',
             suppliers: 'Pembekal',
             overview: 'Gambaran Keseluruhan',

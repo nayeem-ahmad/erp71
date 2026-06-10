@@ -96,6 +96,7 @@ export const enMessages = {
             loyaltyPoints: 'Loyalty Points',
             jobsBom: 'Jobs & BOM',
             purchases: 'Purchases',
+            purchaseOrders: 'Purchase Orders',
             purchaseReturns: 'Purchase Returns',
             suppliers: 'Suppliers',
             overview: 'Overview',

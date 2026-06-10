@@ -98,6 +98,7 @@ export const bnMessages: MessageDictionary = {
             loyaltyPoints: 'লয়্যালটি পয়েন্ট',
             jobsBom: 'জবস ও BOM',
             purchases: 'ক্রয়',
+            purchaseOrders: 'ক্রয় অর্ডার',
             purchaseReturns: 'ক্রয় রিটার্ন',
             suppliers: 'সরবরাহকারী',
             overview: 'সারসংক্ষেপ',

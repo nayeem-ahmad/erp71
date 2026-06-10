@@ -119,6 +119,12 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Customer-wise sales summary — total orders, revenue, and average order value per customer for a selected period — done 2026-05-29
 - [x] Month-by-month sales metrics per customer — monthly breakdown of order count, revenue, and trend per customer — done 2026-05-29
 
+### Purchase Orders (Epic 22)
+- [x] PurchaseOrder + PurchaseOrderItem schema + migration — done 2026-06-10
+- [x] PO Creation API (POST /purchase-orders) with auto-numbered PO# — done 2026-06-10
+- [x] PO status workflow (DRAFT → SENT → RECEIVED/CANCELLED); RECEIVED auto-applies inventory — done 2026-06-10
+- [x] PO list page, detail page, create modal, print/PDF invoice — sidebar link under Purchase module — done 2026-06-10
+
 ### Supplier Management
 - [x] Supplier management page — list, create, edit, delete at /dashboard/suppliers; PATCH + DELETE backend endpoints added; sidebar link under Purchase module — done 2026-06-10
 

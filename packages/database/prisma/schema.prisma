@@ -269,6 +269,7 @@ model Tenant {
   quotations Quotation[]
   suppliers  Supplier[]
   purchases  Purchase[]
+  purchaseOrders PurchaseOrder[]
   customers  Customer[]
   customerGroups CustomerGroup[]
   territories    Territory[]
@@ -332,6 +333,7 @@ model Store {
   salesOrders     SalesOrder[]
   quotations      Quotation[]
   purchases       Purchase[]
+  purchaseOrders  PurchaseOrder[]
   cashierSessions CashierSession[]
   warehouses      Warehouse[]
   userStoreAccess UserStoreAccess[]
@@ -463,6 +465,7 @@ model Product {
   orderItems  SalesOrderItem[]
   quoteItems  QuotationItem[]
   purchaseItems PurchaseItem[]
+  purchaseOrderItems PurchaseOrderItem[]
   prices      ProductPrice[]
   warrantyClaims WarrantyClaim[]
   storefrontOrderItems StorefrontOrderItem[]
@@ -722,6 +725,7 @@ model Supplier {
   tenant      Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   purchases   Purchase[]
   purchaseReturns PurchaseReturn[]
+  purchaseOrders PurchaseOrder[]
 
   @@unique([tenant_id, name])
 }
@@ -799,6 +803,46 @@ model PurchaseReturnItem {
   purchaseReturn   PurchaseReturn @relation(fields: [return_id], references: [id], onDelete: Cascade)
   purchaseItem     PurchaseItem   @relation(fields: [purchase_item_id], references: [id])
   product          Product        @relation(fields: [product_id], references: [id])
+}
+
+model PurchaseOrder {
+  id              String    @id @default(uuid())
+  tenant_id       String
+  store_id        String
+  supplier_id     String?
+  po_number       String
+  status          String    @default("DRAFT")
+  expected_date   DateTime?
+  subtotal_amount Decimal   @default(0) @db.Decimal(12, 2)
+  tax_amount      Decimal   @default(0) @db.Decimal(12, 2)
+  discount_amount Decimal   @default(0) @db.Decimal(12, 2)
+  freight_amount  Decimal   @default(0) @db.Decimal(12, 2)
+  total_amount    Decimal   @default(0) @db.Decimal(12, 2)
+  notes           String?
+  received_at     DateTime?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store    Store     @relation(fields: [store_id], references: [id])
+  supplier Supplier? @relation(fields: [supplier_id], references: [id])
+  items    PurchaseOrderItem[]
+
+  @@unique([tenant_id, po_number])
+  @@index([tenant_id, created_at])
+  @@index([tenant_id, status])
+}
+
+model PurchaseOrderItem {
+  id         String  @id @default(uuid())
+  po_id      String
+  product_id String
+  quantity   Int
+  unit_cost  Decimal @db.Decimal(12, 2)
+  line_total Decimal @db.Decimal(12, 2)
+
+  purchaseOrder PurchaseOrder @relation(fields: [po_id], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [product_id], references: [id])
 }
 
 model Sale {
