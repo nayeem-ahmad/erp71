@@ -746,6 +746,7 @@ model Purchase {
   freight_amount  Decimal  @default(0) @db.Decimal(12, 2)
   total_amount    Decimal  @default(0) @db.Decimal(12, 2)
   notes           String?
+  created_by      String?
   created_at      DateTime @default(now())
 
   tenant          Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -783,6 +784,7 @@ model PurchaseReturn {
   total_amount     Decimal  @default(0) @db.Decimal(12, 2)
   notes            String?
   status           String   @default("RECORDED")
+  created_by       String?
   created_at       DateTime @default(now())
   updated_at       DateTime @updatedAt
 
@@ -824,6 +826,7 @@ model PurchaseOrder {
   total_amount    Decimal   @default(0) @db.Decimal(12, 2)
   notes           String?
   received_at     DateTime?
+  created_by      String?
   created_at      DateTime  @default(now())
   updated_at      DateTime  @updatedAt
 
@@ -894,6 +897,7 @@ model Sale {
   amount_paid    Decimal    @default(0) @db.Decimal(12, 2)
   status         String
   note           String?
+  created_by     String?
   created_at     DateTime @default(now())
 
   // Relations
@@ -1198,6 +1202,7 @@ model SalesReturn {
   total_refund   Decimal  @db.Decimal(12, 2)
   reason         String?
   status         String   @default("COMPLETED")
+  created_by     String?
   created_at     DateTime @default(now())
   
   // Relations
@@ -1234,6 +1239,7 @@ model SalesOrder {
   status         String   @default("DRAFT") // DRAFT, CONFIRMED, PROCESSING, DELIVERED, CANCELLED
   payment_status String   @default("UNPAID") // UNPAID, PARTIAL, PAID
   delivery_date  DateTime?
+  created_by     String?
   created_at     DateTime @default(now())
   
   // Relations

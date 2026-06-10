@@ -13,7 +13,7 @@ export class PurchaseOrdersController {
 
     @Post()
     create(@Tenant() tenant: TenantContext, @Body() dto: CreatePurchaseOrderDto) {
-        return this.service.create(tenant.tenantId, dto);
+        return this.service.create(tenant.tenantId, tenant.userId, dto);
     }
 
     @Get()

@@ -208,6 +208,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Add `created_by` (userId) to all entry models — Sale, Purchase, PurchaseReturn, SalesReturn, SalesOrder, PurchaseOrder now store the creating user's ID; schema updated, migration `20260610020000_add_created_by_to_entries`, Prisma client regenerated, all 6 service `create()` methods and controllers updated — done 2026-06-10
+
 - [x] Multi-branch consolidated reporting + branch-level report — VIEW_CONSOLIDATED_REPORTS permission enforced (OWNER/ACCOUNTANT only); new GET /sales-reports/branch-report endpoint; Branch Report frontend page at /dashboard/reports/branch-report with store selector, KPIs, top products, daily breakdown, and company revenue comparison — done 2026-06-09
 - [x] Audit `SubscriptionAccessGuard` — found ManufacturingController, AttendanceController, ApiKeysController unprotected; added SubscriptionAccessGuard + @RequiresPlan('STANDARD') to manufacturing and attendance, @RequiresFeature('apiAccess') to api-keys; 16 controller integration tests covering STANDARD/PREMIUM allow, BASIC/FREE/PAST_DUE reject, non-member 401 — done 2026-06-09
 

@@ -8,7 +8,7 @@ import { autoPostFromRules } from '../accounting/posting.utils';
 export class PurchaseOrdersService {
     constructor(private db: DatabaseService) {}
 
-    async create(tenantId: string, dto: CreatePurchaseOrderDto) {
+    async create(tenantId: string, userId: string, dto: CreatePurchaseOrderDto) {
         const store = await this.db.store.findFirst({
             where: { id: dto.storeId, tenant_id: tenantId },
         });
@@ -51,6 +51,7 @@ export class PurchaseOrdersService {
                 freight_amount: freight,
                 total_amount: total,
                 notes: dto.notes,
+                created_by: userId,
                 items: {
                     create: dto.items.map((i) => ({
                         product_id: i.productId,
