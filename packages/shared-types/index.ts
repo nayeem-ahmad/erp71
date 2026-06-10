@@ -14,6 +14,7 @@ export const StorePermission = {
   EDIT_PRODUCTS: "EDIT_PRODUCTS",
   EDIT_PRODUCT_PRICES: "EDIT_PRODUCT_PRICES",
   EDIT_SUPPLIERS: "EDIT_SUPPLIERS",
+  EDIT_BRANDS: "EDIT_BRANDS",
 
   // Inventory
   CREATE_INVENTORY_MOVEMENTS: "CREATE_INVENTORY_MOVEMENTS",
@@ -58,6 +59,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.EDIT_PRODUCTS,
     StorePermission.EDIT_PRODUCT_PRICES,
     StorePermission.EDIT_SUPPLIERS,
+    StorePermission.EDIT_BRANDS,
     StorePermission.CREATE_INVENTORY_MOVEMENTS,
     StorePermission.CREATE_GOODS_TRANSFER,
     StorePermission.STOCK_TAKE,
@@ -272,9 +274,21 @@ export type SignupInput = z.infer<typeof SignupSchema>;
 
 // --- PRODUCT SCHEMAS ---
 
+export interface Brand {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description?: string | null;
+  logo_url?: string | null;
+  website_url?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Product {
   id: string;
   tenant_id: string;
+  brand_id?: string | null;
   group_id?: string | null;
   subgroup_id?: string | null;
   name: string;
@@ -286,6 +300,7 @@ export interface Product {
   safety_stock?: number | null;
   lead_time_days?: number | null;
   image_url?: string | null;
+  brand?: Brand | null;
   group?: ProductGroup | null;
   subgroup?: ProductSubgroup | null;
   stocks?: ProductStock[];

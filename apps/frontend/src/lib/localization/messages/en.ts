@@ -128,6 +128,7 @@ export const enMessages = {
             customers: 'Customers',
             customerGroups: 'Customer Groups',
             territories: 'Territories',
+            brands: 'Brands',
             categories: 'Categories',
             inventorySettings: 'Inventory Settings',
             chartOfAccounts: 'Chart of Accounts',

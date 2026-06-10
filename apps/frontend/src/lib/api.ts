@@ -576,6 +576,10 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    getBrands: () => fetchWithAuth('/brands'),
+    createBrand: (data: any) => fetchWithAuth('/brands', { method: 'POST', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } }),
+    updateBrand: (id: string, data: any) => fetchWithAuth(`/brands/${id}`, { method: 'PATCH', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } }),
+    deleteBrand: (id: string) => fetchWithAuth(`/brands/${id}`, { method: 'DELETE' }),
     getSuppliers: () => fetchWithAuth('/suppliers'),
     createSupplier: (data: any) => fetchWithAuth('/suppliers', {
         method: 'POST',

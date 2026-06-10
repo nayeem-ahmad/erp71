@@ -130,6 +130,7 @@ export const bnMessages: MessageDictionary = {
             customers: 'গ্রাহক',
             customerGroups: 'গ্রাহক গ্রুপ',
             territories: 'এরিয়া',
+            brands: 'ব্র্যান্ড',
             categories: 'ক্যাটাগরি',
             inventorySettings: 'ইনভেন্টরি সেটিংস',
             chartOfAccounts: 'চার্ট অফ অ্যাকাউন্টস',
