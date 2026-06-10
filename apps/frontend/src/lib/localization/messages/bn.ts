@@ -163,6 +163,7 @@ export const bnMessages: MessageDictionary = {
             inventoryReports: 'ইনভেন্টরি রিপোর্ট',
             accountingReports: 'হিসাব রিপোর্ট',
             purchaseReports: 'ক্রয় রিপোর্ট',
+            purchaseSetup: 'ক্রয় সেটআপ',
         },
     },
     auth: {

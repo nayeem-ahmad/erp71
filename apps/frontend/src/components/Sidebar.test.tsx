@@ -24,6 +24,7 @@ jest.mock('lucide-react', () => {
         ClipboardList: icon,
         ArrowLeftRight: icon,
         Undo2: icon,
+        FileSearch: icon,
         TrendingUp: icon,
         Clock: icon,
         Settings: icon,
@@ -107,6 +108,11 @@ describe('Sidebar — Story 30.1', () => {
         fireEvent.click(screen.getByText('Sales'));
         expect(screen.getByText('Sales Reports')).toBeInTheDocument();
 
+        // Open Purchase group
+        fireEvent.click(screen.getByText('Purchase'));
+        expect(screen.getByText('Purchase Reports')).toBeInTheDocument();
+        expect(screen.getByText('Purchase Setup')).toBeInTheDocument();
+
         // Open Inventory group
         fireEvent.click(screen.getByText('Inventory'));
         expect(screen.getByText('Inventory Reports')).toBeInTheDocument();
@@ -118,6 +124,11 @@ describe('Sidebar — Story 30.1', () => {
         // Open Sales group
         fireEvent.click(screen.getByText('Sales'));
         expect(screen.queryByText('Sales Reports')).not.toBeInTheDocument();
+
+        // Open Purchase group
+        fireEvent.click(screen.getByText('Purchase'));
+        expect(screen.queryByText('Purchase Reports')).not.toBeInTheDocument();
+        expect(screen.getByText('Purchase Setup')).toBeInTheDocument();
 
         // Open Inventory group
         fireEvent.click(screen.getByText('Inventory'));

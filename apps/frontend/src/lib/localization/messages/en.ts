@@ -161,6 +161,7 @@ export const enMessages = {
             inventoryReports: 'Inventory Reports',
             accountingReports: 'Accounting Reports',
             purchaseReports: 'Purchase Reports',
+            purchaseSetup: 'Purchase Setup',
         },
     },
     auth: {

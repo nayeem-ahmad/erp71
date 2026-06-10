@@ -163,6 +163,7 @@ export const msMessages: MessageDictionary = {
             inventoryReports: 'Laporan Inventori',
             accountingReports: 'Laporan Perakaunan',
             purchaseReports: 'Laporan Pembelian',
+            purchaseSetup: 'Tetapan Pembelian',
         },
     },
     auth: {
