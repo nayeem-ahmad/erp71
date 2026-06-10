@@ -110,6 +110,9 @@ export const enMessages = {
             printLabels: 'Print Labels',
             salesSummary: 'Sales Summary',
             salesByProduct: 'Sales by Product',
+            purchaseSummary: 'Purchase Summary',
+            purchasesByProduct: 'Purchases by Product',
+            purchasesBySupplier: 'Purchases by Supplier',
             consolidated: 'Consolidated',
             branchReport: 'Branch Report',
             reorderReport: 'Reorder Report',
@@ -154,6 +157,7 @@ export const enMessages = {
             salesReports: 'Sales Reports',
             inventoryReports: 'Inventory Reports',
             accountingReports: 'Accounting Reports',
+            purchaseReports: 'Purchase Reports',
         },
     },
     auth: {

@@ -112,6 +112,9 @@ export const bnMessages: MessageDictionary = {
             printLabels: 'লেবেল প্রিন্ট',
             salesSummary: 'বিক্রয় সারাংশ',
             salesByProduct: 'পণ্যভিত্তিক বিক্রয়',
+            purchaseSummary: 'ক্রয় সারাংশ',
+            purchasesByProduct: 'পণ্যভিত্তিক ক্রয়',
+            purchasesBySupplier: 'সরবরাহকারীভিত্তিক ক্রয়',
             consolidated: 'কনসোলিডেটেড',
             branchReport: 'শাখা রিপোর্ট',
             reorderReport: 'রি-অর্ডার রিপোর্ট',
@@ -156,6 +159,7 @@ export const bnMessages: MessageDictionary = {
             salesReports: 'বিক্রয় রিপোর্ট',
             inventoryReports: 'ইনভেন্টরি রিপোর্ট',
             accountingReports: 'হিসাব রিপোর্ট',
+            purchaseReports: 'ক্রয় রিপোর্ট',
         },
     },
     auth: {

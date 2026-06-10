@@ -112,6 +112,9 @@ export const msMessages: MessageDictionary = {
             printLabels: 'Cetak Label',
             salesSummary: 'Ringkasan Jualan',
             salesByProduct: 'Jualan Mengikut Produk',
+            purchaseSummary: 'Ringkasan Pembelian',
+            purchasesByProduct: 'Pembelian Mengikut Produk',
+            purchasesBySupplier: 'Pembelian Mengikut Pembekal',
             consolidated: 'Disatukan',
             branchReport: 'Laporan Cawangan',
             reorderReport: 'Laporan Pesanan Semula',
@@ -156,6 +159,7 @@ export const msMessages: MessageDictionary = {
             salesReports: 'Laporan Jualan',
             inventoryReports: 'Laporan Inventori',
             accountingReports: 'Laporan Perakaunan',
+            purchaseReports: 'Laporan Pembelian',
         },
     },
     auth: {

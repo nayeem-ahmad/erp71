@@ -37,6 +37,7 @@ import { InventoryShrinkageModule } from './inventory-shrinkage/inventory-shrink
 import { StockTakesModule } from './stock-takes/stock-takes.module';
 import { InventoryReportsModule } from './inventory-reports/inventory-reports.module';
 import { SalesReportsModule } from './sales-reports/sales-reports.module';
+import { PurchaseReportsModule } from './purchase-reports/purchase-reports.module';
 import { BillingModule } from './billing/billing.module';
 import { AdminTenantsModule } from './admin-tenants/admin-tenants.module';
 import { WarrantyClaimsModule } from './warranty-claims/warranty-claims.module';
@@ -93,6 +94,7 @@ import { AttendanceModule } from './attendance/attendance.module';
         StockTakesModule,
         InventoryReportsModule,
         SalesReportsModule,
+        PurchaseReportsModule,
         BillingModule,
         AdminTenantsModule,
         WarrantyClaimsModule,

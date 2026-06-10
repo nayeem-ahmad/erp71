@@ -116,6 +116,11 @@ function buildModules(t: ReturnType<typeof useI18n>['t']): NavModule[] {
         children: [
             { href: '/dashboard/purchases', icon: ClipboardList, label: t.sidebar.items.purchases },
             { href: '/dashboard/purchase-returns', icon: Undo2, label: t.sidebar.items.purchaseReturns },
+            // Purchase Reports
+            { href: '#purchase-reports', icon: BarChart3, label: t.sidebar.sections.purchaseReports, section: true },
+            { href: '/dashboard/purchases/reports/summary', icon: TrendingUp, label: t.sidebar.items.purchaseSummary },
+            { href: '/dashboard/purchases/reports/by-product', icon: Package, label: t.sidebar.items.purchasesByProduct },
+            { href: '/dashboard/purchases/reports/by-supplier', icon: Truck, label: t.sidebar.items.purchasesBySupplier },
         ],
     },
     {
