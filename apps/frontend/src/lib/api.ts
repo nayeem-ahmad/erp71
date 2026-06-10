@@ -607,6 +607,7 @@ export const api = {
     },
     updateSupplier: (id: string, data: any) => fetchWithAuth(`/suppliers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteSupplier: (id: string) => fetchWithAuth(`/suppliers/${id}`, { method: 'DELETE' }),
+    getPurchaseInvoice: (id: string) => fetchWithAuth(`/purchases/${id}/invoice`),
     getPurchases: () => fetchWithAuth('/purchases'),
     getPurchase: (id: string) => fetchWithAuth(`/purchases/${id}`),
     createPurchase: (data: any) => fetchWithAuth('/purchases', {

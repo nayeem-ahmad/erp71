@@ -21,6 +21,11 @@ export class PurchasesController {
         return this.purchasesService.findAll(tenant.tenantId);
     }
 
+    @Get(':id/invoice')
+    getInvoice(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.purchasesService.getInvoiceData(tenant.tenantId, id);
+    }
+
     @Get(':id')
     findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.purchasesService.findOne(tenant.tenantId, id);

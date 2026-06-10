@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ClipboardList, Plus } from 'lucide-react';
+import { ClipboardList, Plus, Printer } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
+import Link from 'next/link';
 import { DataTable } from '@/components/data-table';
 import { api } from '../../../lib/api';
 import { formatBDT, formatDate } from '../../../lib/format';
@@ -123,6 +124,22 @@ export default function PurchasesPage() {
                     />
                 ),
                 size: 120,
+            }),
+            columnHelper.display({
+                id: 'actions',
+                header: '',
+                cell: ({ row }) => (
+                    <Link
+                        href={`/dashboard/purchases/${row.original.id}/invoice`}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors inline-flex"
+                        title="Print Invoice"
+                    >
+                        <Printer className="w-4 h-4" />
+                    </Link>
+                ),
+                enableSorting: false,
+                enableResizing: false,
+                size: 50,
             }),
         ],
         [],

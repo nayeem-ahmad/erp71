@@ -186,6 +186,34 @@ export class PurchasesService {
         });
     }
 
+    async getInvoiceData(tenantId: string, id: string) {
+        const [purchase, tenant] = await Promise.all([
+            this.db.purchase.findFirst({
+                where: { id, tenant_id: tenantId },
+                include: {
+                    supplier: true,
+                    store: { select: { name: true } },
+                    items: { include: { product: true } },
+                },
+            }),
+            this.db.tenant.findUnique({
+                where: { id: tenantId },
+                select: {
+                    name: true,
+                    brand_primary_color: true,
+                    brand_logo_url: true,
+                    brand_business_name: true,
+                    vat_registration_no: true,
+                    business_tin: true,
+                },
+            }),
+        ]);
+
+        if (!purchase) throw new NotFoundException('Purchase not found');
+
+        return { purchase, tenant };
+    }
+
     async findOne(tenantId: string, id: string) {
         const purchase = await this.db.purchase.findFirst({
             where: { id, tenant_id: tenantId },
