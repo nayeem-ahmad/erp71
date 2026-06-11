@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import InvoicePage from './page';
 
-jest.mock('@/lib/api', () => ({
+jest.mock('../../../../../lib/api', () => ({
     api: {
         getSaleInvoice: jest.fn(),
     },
@@ -20,7 +20,7 @@ jest.mock('lucide-react', () => ({
     Printer: () => <span data-testid="icon-printer" />,
 }));
 
-// window.print mock
+// Mock window.print
 const mockPrint = jest.fn();
 Object.defineProperty(window, 'print', { value: mockPrint, writable: true });
 
@@ -62,9 +62,7 @@ const mockInvoiceData = {
                 },
             },
         ],
-        payments: [
-            { payment_method: 'CASH', amount: '11500' },
-        ],
+        payments: [{ payment_method: 'CASH', amount: '11500' }],
     },
     tenant: {
         name: 'Acme Bangladesh Ltd',
@@ -77,16 +75,16 @@ const mockInvoiceData = {
     },
 };
 
+const getApi = () => require('../../../../../lib/api').api;
+
 describe('InvoicePage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        const { api } = require('@/lib/api');
-        api.getSaleInvoice.mockResolvedValue(mockInvoiceData);
+        getApi().getSaleInvoice.mockResolvedValue(mockInvoiceData);
     });
 
     it('shows loading state initially', () => {
-        const { api } = require('@/lib/api');
-        api.getSaleInvoice.mockReturnValue(new Promise(() => {}));
+        getApi().getSaleInvoice.mockReturnValue(new Promise(() => {}));
         render(<InvoicePage />);
         expect(screen.getByText('Loading invoice…')).toBeInTheDocument();
     });
@@ -132,7 +130,7 @@ describe('InvoicePage', () => {
         });
     });
 
-    it('shows VAT column in line items table', async () => {
+    it('shows VAT column header in line items table', async () => {
         render(<InvoicePage />);
         await waitFor(() => {
             expect(screen.getByText('VAT')).toBeInTheDocument();
@@ -194,7 +192,7 @@ describe('InvoicePage', () => {
         expect(mockPrint).toHaveBeenCalled();
     });
 
-    it('renders status badge with correct styling for COMPLETED', async () => {
+    it('renders COMPLETED status badge', async () => {
         render(<InvoicePage />);
         await waitFor(() => {
             expect(screen.getByText('COMPLETED')).toBeInTheDocument();
@@ -202,17 +200,15 @@ describe('InvoicePage', () => {
     });
 
     it('shows error when invoice fetch fails', async () => {
-        const { api } = require('@/lib/api');
-        api.getSaleInvoice.mockRejectedValue(new Error('Server error'));
+        getApi().getSaleInvoice.mockRejectedValue(new Error('Server error'));
         render(<InvoicePage />);
         await waitFor(() => {
             expect(screen.getByText('Failed to load invoice')).toBeInTheDocument();
         });
     });
 
-    it('renders without VAT section when no VAT items', async () => {
-        const { api } = require('@/lib/api');
-        const noVatData = {
+    it('renders plain Invoice label (no VAT) when no VAT items', async () => {
+        getApi().getSaleInvoice.mockResolvedValue({
             ...mockInvoiceData,
             sale: {
                 ...mockInvoiceData.sale,
@@ -229,8 +225,7 @@ describe('InvoicePage', () => {
                 ...mockInvoiceData.tenant,
                 default_vat_rate: 0,
             },
-        };
-        api.getSaleInvoice.mockResolvedValue(noVatData);
+        });
         render(<InvoicePage />);
         await waitFor(() => {
             expect(screen.queryByText('VAT Invoice (Mushak 6.3)')).not.toBeInTheDocument();
@@ -239,8 +234,7 @@ describe('InvoicePage', () => {
     });
 
     it('shows Walk-in Customer section when no customer', async () => {
-        const { api } = require('@/lib/api');
-        api.getSaleInvoice.mockResolvedValue({
+        getApi().getSaleInvoice.mockResolvedValue({
             ...mockInvoiceData,
             sale: { ...mockInvoiceData.sale, customer: null },
         });
@@ -251,8 +245,7 @@ describe('InvoicePage', () => {
     });
 
     it('shows note when sale has a note', async () => {
-        const { api } = require('@/lib/api');
-        api.getSaleInvoice.mockResolvedValue({
+        getApi().getSaleInvoice.mockResolvedValue({
             ...mockInvoiceData,
             sale: { ...mockInvoiceData.sale, note: 'Deliver by afternoon' },
         });
@@ -262,9 +255,8 @@ describe('InvoicePage', () => {
         });
     });
 
-    it('shows balance due when amount_paid is less than total', async () => {
-        const { api } = require('@/lib/api');
-        api.getSaleInvoice.mockResolvedValue({
+    it('shows Balance Due when amount_paid is less than total', async () => {
+        getApi().getSaleInvoice.mockResolvedValue({
             ...mockInvoiceData,
             sale: { ...mockInvoiceData.sale, amount_paid: '5000', total_amount: '11500' },
         });
@@ -275,8 +267,7 @@ describe('InvoicePage', () => {
     });
 
     it('shows Change when amount_paid exceeds total', async () => {
-        const { api } = require('@/lib/api');
-        api.getSaleInvoice.mockResolvedValue({
+        getApi().getSaleInvoice.mockResolvedValue({
             ...mockInvoiceData,
             sale: { ...mockInvoiceData.sale, amount_paid: '12000', total_amount: '11500' },
         });
@@ -287,14 +278,36 @@ describe('InvoicePage', () => {
     });
 
     it('uses fallback business name from tenant.name when brand_business_name is null', async () => {
-        const { api } = require('@/lib/api');
-        api.getSaleInvoice.mockResolvedValue({
+        getApi().getSaleInvoice.mockResolvedValue({
             ...mockInvoiceData,
             tenant: { ...mockInvoiceData.tenant, brand_business_name: null },
         });
         render(<InvoicePage />);
         await waitFor(() => {
             expect(screen.getAllByText('Acme Bangladesh Ltd').length).toBeGreaterThan(0);
+        });
+    });
+
+    it('shows Seller section with business info', async () => {
+        render(<InvoicePage />);
+        await waitFor(() => {
+            expect(screen.getByText('Seller')).toBeInTheDocument();
+        });
+    });
+
+    it('shows Invoice No., Date, Status meta section', async () => {
+        render(<InvoicePage />);
+        await waitFor(() => {
+            expect(screen.getByText('Invoice No.')).toBeInTheDocument();
+            expect(screen.getByText('Date')).toBeInTheDocument();
+            expect(screen.getByText('Status')).toBeInTheDocument();
+        });
+    });
+
+    it('renders thank you footer', async () => {
+        render(<InvoicePage />);
+        await waitFor(() => {
+            expect(screen.getByText(/thank you for your business/i)).toBeInTheDocument();
         });
     });
 });

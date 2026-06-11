@@ -97,6 +97,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Write unit tests for consolidated report page and branch report page (2 new test files: reports/consolidated/page.test.tsx with 15 tests, reports/branch-report/page.test.tsx with 18 tests — covering API calls, summary cards, store breakdown table, bar chart, empty states, error handling, Generate button, date filtering) — done 2026-06-11
 - [x] Write unit tests for storefront.service.ts (56 tests: getStorefront, placeOrder with loyalty earn/redeem/cap, getOrders, updateOrderStatus, customerSignup, customerLogin, getCustomerProfile, getCustomerOrders) — done 2026-06-11
 - [x] Write unit tests for sales-reports.service.ts (30 tests: getSalesSummary, getSalesByProduct, getConsolidatedReport, getSalesByCustomer, getBranchReport, getMonthlySalesByCustomer) — done 2026-06-11
+- [x] Write comprehensive unit tests for src/lib/api.ts (300 tests covering fetchWithAuth, fetchBlobWithAuth, and all 150+ api.* helper methods), and compound-units.ts (51 tests covering COMPOUND_UNIT_DEFS, isCompoundUnit, toCompoundParts, fromCompoundParts, formatCompoundQty) — done 2026-06-11
 - [ ] Add E2E tests for critical paths: signup → onboarding → POS sale → billing
 - [ ] Investigate and clean up backend Jest open handles reported after E2E suite completion
 - [ ] Clean up React `act(...)` warnings in login/signup page tests

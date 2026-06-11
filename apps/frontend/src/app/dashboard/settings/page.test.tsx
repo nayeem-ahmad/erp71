@@ -91,7 +91,7 @@ describe('AccountSettingsPage', () => {
     it('switches to password tab when clicked', async () => {
         render(<AccountSettingsPage />);
         await waitFor(() => {
-            expect(screen.getByText('Test User')).toBeInTheDocument();
+            expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
         });
 
         fireEvent.click(screen.getByRole('button', { name: 'Password' }));
@@ -103,7 +103,7 @@ describe('AccountSettingsPage', () => {
     it('switches to Two-Factor Auth tab when clicked', async () => {
         render(<AccountSettingsPage />);
         await waitFor(() => {
-            expect(screen.getByText('Test User')).toBeInTheDocument();
+            expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
         });
 
         fireEvent.click(screen.getByRole('button', { name: 'Two-Factor Auth' }));
@@ -120,7 +120,7 @@ describe('AccountSettingsPage', () => {
 
         render(<AccountSettingsPage />);
         await waitFor(() => {
-            expect(screen.getByText('Test User')).toBeInTheDocument();
+            expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
         });
 
         fireEvent.click(screen.getByRole('button', { name: 'Two-Factor Auth' }));
@@ -168,16 +168,12 @@ describe('AccountSettingsPage', () => {
     it('shows password mismatch error when passwords do not match', async () => {
         render(<AccountSettingsPage />);
         await waitFor(() => {
-            expect(screen.getByText('Test User')).toBeInTheDocument();
+            expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
         });
 
         fireEvent.click(screen.getByRole('button', { name: 'Password' }));
 
-        const [currentInput, newInput, confirmInput] = screen.getAllByRole('textbox', { hidden: true }).filter(
-            (el) => el.tagName === 'INPUT',
-        );
-
-        // Use password inputs
+        // Use password inputs by placeholder
         const inputs = screen.getAllByPlaceholderText(/password|characters|repeat/i);
         fireEvent.change(inputs[0], { target: { value: 'OldPass123' } });
         fireEvent.change(inputs[1], { target: { value: 'NewPass123' } });
@@ -193,7 +189,7 @@ describe('AccountSettingsPage', () => {
     it('shows error when new password is too short', async () => {
         render(<AccountSettingsPage />);
         await waitFor(() => {
-            expect(screen.getByText('Test User')).toBeInTheDocument();
+            expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
         });
 
         fireEvent.click(screen.getByRole('button', { name: 'Password' }));
@@ -213,7 +209,7 @@ describe('AccountSettingsPage', () => {
     it('shows error when new password same as current', async () => {
         render(<AccountSettingsPage />);
         await waitFor(() => {
-            expect(screen.getByText('Test User')).toBeInTheDocument();
+            expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
         });
 
         fireEvent.click(screen.getByRole('button', { name: 'Password' }));
@@ -242,7 +238,7 @@ describe('AccountSettingsPage', () => {
 
         render(<AccountSettingsPage />);
         await waitFor(() => {
-            expect(screen.getByText('Test User')).toBeInTheDocument();
+            expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
         });
 
         fireEvent.click(screen.getByRole('button', { name: 'Two-Factor Auth' }));
@@ -263,7 +259,7 @@ describe('AccountSettingsPage', () => {
 
         render(<AccountSettingsPage />);
         await waitFor(() => {
-            expect(screen.getByText('Test User')).toBeInTheDocument();
+            expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
         });
 
         fireEvent.click(screen.getByRole('button', { name: 'Two-Factor Auth' }));
@@ -276,6 +272,9 @@ describe('AccountSettingsPage', () => {
 
     it('renders all quick link hrefs correctly', async () => {
         render(<AccountSettingsPage />);
+        await waitFor(() => {
+            expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
+        });
         await waitFor(() => {
             expect(screen.getByRole('link', { name: /branding/i })).toHaveAttribute(
                 'href',
