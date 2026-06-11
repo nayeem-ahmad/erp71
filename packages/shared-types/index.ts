@@ -48,6 +48,13 @@ export const StorePermission = {
 
   // POS Counters
   MANAGE_COUNTERS: "MANAGE_COUNTERS",
+
+  // CRM
+  VIEW_CRM_INTERACTIONS: "VIEW_CRM_INTERACTIONS",
+  CREATE_CRM_INTERACTIONS: "CREATE_CRM_INTERACTIONS",
+  MANAGE_CRM_TASKS: "MANAGE_CRM_TASKS",
+  VIEW_CUSTOMER_CREDIT: "VIEW_CUSTOMER_CREDIT",
+  MANAGE_CUSTOMER_CREDIT: "MANAGE_CUSTOMER_CREDIT",
 } as const;
 export type StorePermission = (typeof StorePermission)[keyof typeof StorePermission];
 
@@ -74,6 +81,11 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.CREATE_FUND_TRANSFER,
     StorePermission.SWITCH_STORES,
     StorePermission.MANAGE_COUNTERS,
+    StorePermission.VIEW_CRM_INTERACTIONS,
+    StorePermission.CREATE_CRM_INTERACTIONS,
+    StorePermission.MANAGE_CRM_TASKS,
+    StorePermission.VIEW_CUSTOMER_CREDIT,
+    StorePermission.MANAGE_CUSTOMER_CREDIT,
   ],
   [UserRole.CASHIER]: [
     StorePermission.VIEW_PRODUCT_CATALOG,

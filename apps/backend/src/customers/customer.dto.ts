@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEmail, IsEnum, IsUUID, IsNumber, Min, Max, Matches } from 'class-validator';
+import { IsString, IsOptional, IsEmail, IsEnum, IsUUID, IsNumber, IsBoolean, IsDateString, Min, Max, Matches } from 'class-validator';
 
 export enum CustomerTypeDto {
     INDIVIDUAL = 'INDIVIDUAL',
@@ -51,6 +51,22 @@ export class CreateCustomerDto {
     @IsOptional()
     @IsString()
     nid?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    credit_enabled?: boolean;
+
+    @IsOptional()
+    @IsString()
+    preferred_channel?: string;
+
+    @IsOptional()
+    @IsDateString()
+    birthday?: string;
+
+    @IsOptional()
+    @IsDateString()
+    anniversary?: string;
 }
 
 export class UpdateCustomerDto {
@@ -101,4 +117,30 @@ export class UpdateCustomerDto {
     @IsOptional()
     @IsString()
     nid?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    credit_enabled?: boolean;
+
+    @IsOptional()
+    @IsString()
+    preferred_channel?: string;
+
+    @IsOptional()
+    @IsDateString()
+    birthday?: string;
+
+    @IsOptional()
+    @IsDateString()
+    anniversary?: string;
+}
+
+export class RecordCreditPaymentDto {
+    @IsNumber()
+    @Min(0.01)
+    amount: number;
+
+    @IsOptional()
+    @IsString()
+    notes?: string;
 }

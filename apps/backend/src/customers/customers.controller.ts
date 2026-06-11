@@ -1,7 +1,7 @@
 import { Controller, Post, Get, Patch, Body, Param, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { CustomersService } from './customers.service';
 import { SegmentsService } from './segments.service';
-import { CreateCustomerDto, UpdateCustomerDto } from './customer.dto';
+import { CreateCustomerDto, UpdateCustomerDto, RecordCreditPaymentDto } from './customer.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
@@ -69,6 +69,38 @@ export class CustomersController {
             from,
             to,
         });
+    }
+
+    @Get(':id/analytics')
+    async getAnalytics(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.customersService.getAnalytics(tenant.tenantId, id);
+    }
+
+    @Get(':id/credit')
+    async getCreditLedger(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Query('page') page?: string,
+        @Query('limit') limit?: string,
+    ) {
+        return this.customersService.getCreditLedger(tenant.tenantId, id, {
+            page: page ? parseInt(page, 10) : undefined,
+            limit: limit ? parseInt(limit, 10) : undefined,
+        });
+    }
+
+    @Post(':id/credit/payment')
+    async recordCreditPayment(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: RecordCreditPaymentDto,
+    ) {
+        return this.customersService.recordCreditPayment(tenant.tenantId, id, tenant.userId, dto);
+    }
+
+    @Get('reports/due-aging')
+    async getDueAgingReport(@Tenant() tenant: TenantContext) {
+        return this.customersService.getDueAgingReport(tenant.tenantId);
     }
 
     @Patch(':id')
