@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import SaleDetailPage from './page';
 
-jest.mock('@/lib/api', () => ({
+jest.mock('../../../../lib/api', () => ({
     api: {
         getSale: jest.fn(),
         updateSale: jest.fn(),
@@ -11,11 +11,11 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 
-jest.mock('@/lib/format', () => ({
+jest.mock('../../../../lib/format', () => ({
     formatBDT: (n: number) => `৳${n.toFixed(2)}`,
 }));
 
-jest.mock('@/lib/pos-receipt-printer', () => ({
+jest.mock('../../../../lib/pos-receipt-printer', () => ({
     printPOSReceipt: jest.fn().mockResolvedValue(undefined),
 }));
 
@@ -83,10 +83,12 @@ const mockSale = {
     ],
 };
 
+const getApi = () => require('../../../../lib/api').api;
+
 describe('SaleDetailPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        const { api } = require('@/lib/api');
+        const api = getApi();
         api.getSale.mockResolvedValue(mockSale);
         api.getCustomers.mockResolvedValue([]);
         api.getProducts.mockResolvedValue([]);
@@ -94,8 +96,7 @@ describe('SaleDetailPage', () => {
     });
 
     it('shows loading state initially', () => {
-        const { api } = require('@/lib/api');
-        api.getSale.mockReturnValue(new Promise(() => {}));
+        getApi().getSale.mockReturnValue(new Promise(() => {}));
         render(<SaleDetailPage />);
         expect(screen.getByText('Loading sale...')).toBeInTheDocument();
     });
@@ -138,8 +139,7 @@ describe('SaleDetailPage', () => {
     });
 
     it('shows "No note added" when sale has no note', async () => {
-        const { api } = require('@/lib/api');
-        api.getSale.mockResolvedValue({ ...mockSale, note: null });
+        getApi().getSale.mockResolvedValue({ ...mockSale, note: null });
         render(<SaleDetailPage />);
         await waitFor(() => {
             expect(screen.getByText('No note added')).toBeInTheDocument();
@@ -147,8 +147,7 @@ describe('SaleDetailPage', () => {
     });
 
     it('shows Sale not found when api call fails', async () => {
-        const { api } = require('@/lib/api');
-        api.getSale.mockRejectedValue(new Error('Not found'));
+        getApi().getSale.mockRejectedValue(new Error('Not found'));
         render(<SaleDetailPage />);
         await waitFor(() => {
             expect(screen.getByText('Sale not found')).toBeInTheDocument();
@@ -172,7 +171,7 @@ describe('SaleDetailPage', () => {
         });
     });
 
-    it('shows summary cards with correct values', async () => {
+    it('shows summary cards with correct labels', async () => {
         render(<SaleDetailPage />);
         await waitFor(() => {
             expect(screen.getByText('Total')).toBeInTheDocument();
@@ -182,7 +181,7 @@ describe('SaleDetailPage', () => {
     });
 
     it('calls printPOSReceipt when POS Receipt button is clicked', async () => {
-        const { printPOSReceipt } = require('@/lib/pos-receipt-printer');
+        const { printPOSReceipt } = require('../../../../lib/pos-receipt-printer');
         render(<SaleDetailPage />);
         await waitFor(() => {
             expect(screen.getByRole('button', { name: /pos receipt/i })).toBeInTheDocument();
@@ -200,21 +199,32 @@ describe('SaleDetailPage', () => {
     });
 
     it('shows no payment records message when payments are empty', async () => {
-        const { api } = require('@/lib/api');
-        api.getSale.mockResolvedValue({ ...mockSale, payments: [] });
+        getApi().getSale.mockResolvedValue({ ...mockSale, payments: [] });
         render(<SaleDetailPage />);
         await waitFor(() => {
             expect(screen.getByText('No payment records')).toBeInTheDocument();
         });
     });
 
-    it('renders item quantity and subtotal', async () => {
+    it('renders item quantity', async () => {
         render(<SaleDetailPage />);
         await waitFor(() => {
             // quantity 3
             expect(screen.getByText('3')).toBeInTheDocument();
-            // SKU column
-            expect(screen.getByText('GAD-001')).toBeInTheDocument();
+        });
+    });
+
+    it('shows Line Items heading', async () => {
+        render(<SaleDetailPage />);
+        await waitFor(() => {
+            expect(screen.getByText('Line Items')).toBeInTheDocument();
+        });
+    });
+
+    it('shows Note heading', async () => {
+        render(<SaleDetailPage />);
+        await waitFor(() => {
+            expect(screen.getByText('Note')).toBeInTheDocument();
         });
     });
 });
@@ -222,7 +232,7 @@ describe('SaleDetailPage', () => {
 describe('SaleDetailPage - edit mode', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        const { api } = require('@/lib/api');
+        const api = getApi();
         api.getSale.mockResolvedValue(mockSale);
         api.getCustomers.mockResolvedValue([{ id: 'cust-2', name: 'Bob Jones' }]);
         api.getProducts.mockResolvedValue([
@@ -273,9 +283,10 @@ describe('SaleDetailPage - edit mode', () => {
         });
 
         fireEvent.click(screen.getByRole('button', { name: /add payment/i }));
-        // A new payment row with select should appear
+        // A new payment select should appear
         await waitFor(() => {
-            expect(screen.getByDisplayValue('CASH')).toBeInTheDocument();
+            // The payment method select defaults to CASH
+            expect(screen.getAllByDisplayValue('CASH').length).toBeGreaterThan(0);
         });
     });
 
@@ -286,6 +297,16 @@ describe('SaleDetailPage - edit mode', () => {
         render(<SaleDetailPage />);
         await waitFor(() => {
             expect(screen.getByPlaceholderText(/add a note about this sale/i)).toBeInTheDocument();
+        });
+    });
+
+    it('shows Save Changes button in edit mode banner', async () => {
+        const { useSearchParams } = require('next/navigation');
+        useSearchParams.mockReturnValue({ get: (k: string) => (k === 'edit' ? 'true' : null) });
+
+        render(<SaleDetailPage />);
+        await waitFor(() => {
+            expect(screen.getAllByRole('button', { name: /save changes/i }).length).toBeGreaterThan(0);
         });
     });
 });

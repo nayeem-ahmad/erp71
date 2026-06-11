@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import OrderDetailsPage from './page';
 
-jest.mock('@/lib/api', () => ({
+jest.mock('../../../../lib/api', () => ({
     api: {
         getOrder: jest.fn(),
         updateOrderStatus: jest.fn(),
@@ -13,7 +13,7 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 
-jest.mock('@/lib/format', () => ({
+jest.mock('../../../../lib/format', () => ({
     formatBDT: (n: number) => `৳${n.toFixed(2)}`,
     formatDate: (d: string) => d,
 }));
@@ -64,10 +64,12 @@ const mockOrder = {
     deposits: [],
 };
 
+const getApi = () => require('../../../../lib/api').api;
+
 describe('OrderDetailsPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        const { api } = require('@/lib/api');
+        const api = getApi();
         api.getOrder.mockResolvedValue(mockOrder);
         api.getCustomers.mockResolvedValue([]);
         api.getProducts.mockResolvedValue([]);
@@ -77,8 +79,7 @@ describe('OrderDetailsPage', () => {
     });
 
     it('shows loading state initially', () => {
-        const { api } = require('@/lib/api');
-        api.getOrder.mockReturnValue(new Promise(() => {}));
+        getApi().getOrder.mockReturnValue(new Promise(() => {}));
         render(<OrderDetailsPage />);
         expect(screen.getByText('Loading order...')).toBeInTheDocument();
     });
@@ -121,8 +122,7 @@ describe('OrderDetailsPage', () => {
     });
 
     it('shows Start Processing button for CONFIRMED orders', async () => {
-        const { api } = require('@/lib/api');
-        api.getOrder.mockResolvedValue({ ...mockOrder, status: 'CONFIRMED' });
+        getApi().getOrder.mockResolvedValue({ ...mockOrder, status: 'CONFIRMED' });
         render(<OrderDetailsPage />);
         await waitFor(() => {
             expect(screen.getByRole('button', { name: /start processing/i })).toBeInTheDocument();
@@ -130,8 +130,7 @@ describe('OrderDetailsPage', () => {
     });
 
     it('shows Mark Delivered button for PROCESSING orders', async () => {
-        const { api } = require('@/lib/api');
-        api.getOrder.mockResolvedValue({ ...mockOrder, status: 'PROCESSING' });
+        getApi().getOrder.mockResolvedValue({ ...mockOrder, status: 'PROCESSING' });
         render(<OrderDetailsPage />);
         await waitFor(() => {
             expect(screen.getByRole('button', { name: /mark delivered/i })).toBeInTheDocument();
@@ -147,17 +146,15 @@ describe('OrderDetailsPage', () => {
     });
 
     it('shows Walk-in Customer text when no customer', async () => {
-        const { api } = require('@/lib/api');
-        api.getOrder.mockResolvedValue({ ...mockOrder, customer: null });
+        getApi().getOrder.mockResolvedValue({ ...mockOrder, customer: null });
         render(<OrderDetailsPage />);
         await waitFor(() => {
             expect(screen.getByText('Walk-in Customer')).toBeInTheDocument();
         });
     });
 
-    it('shows order not found when api returns null', async () => {
-        const { api } = require('@/lib/api');
-        api.getOrder.mockRejectedValue(new Error('Not found'));
+    it('shows order not found when api call fails', async () => {
+        getApi().getOrder.mockRejectedValue(new Error('Not found'));
         render(<OrderDetailsPage />);
         await waitFor(() => {
             expect(screen.getByText('Order not found')).toBeInTheDocument();
@@ -165,7 +162,7 @@ describe('OrderDetailsPage', () => {
     });
 
     it('calls updateOrderStatus when Confirm Order is clicked', async () => {
-        const { api } = require('@/lib/api');
+        const api = getApi();
         render(<OrderDetailsPage />);
         await waitFor(() => {
             expect(screen.getByRole('button', { name: /confirm order/i })).toBeInTheDocument();
@@ -194,8 +191,7 @@ describe('OrderDetailsPage', () => {
     });
 
     it('hides deposit button when amount_paid equals total_amount', async () => {
-        const { api } = require('@/lib/api');
-        api.getOrder.mockResolvedValue({
+        getApi().getOrder.mockResolvedValue({
             ...mockOrder,
             amount_paid: '5000',
             payment_status: 'PAID',
@@ -207,8 +203,7 @@ describe('OrderDetailsPage', () => {
     });
 
     it('shows deposit history when deposits exist', async () => {
-        const { api } = require('@/lib/api');
-        api.getOrder.mockResolvedValue({
+        getApi().getOrder.mockResolvedValue({
             ...mockOrder,
             deposits: [
                 {
@@ -234,11 +229,36 @@ describe('OrderDetailsPage', () => {
     });
 
     it('does not show Edit button for DELIVERED orders', async () => {
-        const { api } = require('@/lib/api');
-        api.getOrder.mockResolvedValue({ ...mockOrder, status: 'DELIVERED' });
+        getApi().getOrder.mockResolvedValue({ ...mockOrder, status: 'DELIVERED' });
         render(<OrderDetailsPage />);
         await waitFor(() => {
             expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument();
+        });
+    });
+
+    it('shows delivery date in customer details when present', async () => {
+        render(<OrderDetailsPage />);
+        await waitFor(() => {
+            expect(screen.getByText('Delivery Date')).toBeInTheDocument();
+        });
+    });
+
+    it('renders payment tracker section', async () => {
+        render(<OrderDetailsPage />);
+        await waitFor(() => {
+            expect(screen.getByText('Payment Tracker')).toBeInTheDocument();
+        });
+    });
+
+    it('does not show Record Deposit button for CANCELLED orders with amount due', async () => {
+        getApi().getOrder.mockResolvedValue({
+            ...mockOrder,
+            status: 'CANCELLED',
+            amount_paid: '0',
+        });
+        render(<OrderDetailsPage />);
+        await waitFor(() => {
+            expect(screen.queryByText(/record payment deposit/i)).not.toBeInTheDocument();
         });
     });
 });
@@ -246,8 +266,7 @@ describe('OrderDetailsPage', () => {
 describe('OrderDetailsPage - edit mode', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-
-        const { api } = require('@/lib/api');
+        const api = getApi();
         api.getOrder.mockResolvedValue(mockOrder);
         api.getCustomers.mockResolvedValue([{ id: 'cust-2', name: 'Jane Smith' }]);
         api.getProducts.mockResolvedValue([
