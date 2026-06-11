@@ -3,7 +3,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import SuppliersPage from './page';
 
-jest.mock('../../../../lib/api', () => ({
+jest.mock('../../../lib/api', () => ({
     api: {
         getSuppliers: jest.fn(),
         createSupplier: jest.fn(),
@@ -24,13 +24,13 @@ jest.mock('next/navigation', () => ({
 
 describe('SuppliersPage', () => {
     beforeEach(() => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getSuppliers.mockResolvedValue([]);
         jest.clearAllMocks();
     });
 
     it('renders the page heading', async () => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getSuppliers.mockResolvedValue([]);
         render(<SuppliersPage />);
         await waitFor(() => {
@@ -39,7 +39,7 @@ describe('SuppliersPage', () => {
     });
 
     it('displays loaded supplier data', async () => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getSuppliers.mockResolvedValue([
             {
                 id: '1',
@@ -57,7 +57,7 @@ describe('SuppliersPage', () => {
     });
 
     it('handles empty state', async () => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getSuppliers.mockResolvedValue([]);
         render(<SuppliersPage />);
         await waitFor(() => {
@@ -66,7 +66,7 @@ describe('SuppliersPage', () => {
     });
 
     it('renders the New Supplier button', async () => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getSuppliers.mockResolvedValue([]);
         render(<SuppliersPage />);
         await waitFor(() => {

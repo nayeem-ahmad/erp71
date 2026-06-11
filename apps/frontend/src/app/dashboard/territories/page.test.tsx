@@ -68,8 +68,8 @@ describe('TerritoriesPage', () => {
     it('displays territories loaded from the API', async () => {
         render(<TerritoriesPage />);
         await waitFor(() => {
-            expect(screen.getByText('Dhaka')).toBeInTheDocument();
-            expect(screen.getByText('Mirpur')).toBeInTheDocument();
+            expect(screen.getAllByText('Dhaka').length).toBeGreaterThan(0);
+            expect(screen.getAllByText('Mirpur').length).toBeGreaterThan(0);
         });
     });
 

@@ -3,7 +3,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import LoyaltyPage from './page';
 
-jest.mock('../../../../lib/api', () => ({
+jest.mock('../../../lib/api', () => ({
     fetchWithAuth: jest.fn(),
 }));
 
@@ -19,13 +19,13 @@ jest.mock('next/navigation', () => ({
 
 describe('LoyaltyPage', () => {
     beforeEach(() => {
-        const { fetchWithAuth } = require('../../../../lib/api');
+        const { fetchWithAuth } = require('../../../lib/api');
         fetchWithAuth.mockResolvedValue([]);
         jest.clearAllMocks();
     });
 
     it('renders the page heading', async () => {
-        const { fetchWithAuth } = require('../../../../lib/api');
+        const { fetchWithAuth } = require('../../../lib/api');
         fetchWithAuth.mockResolvedValue([]);
         render(<LoyaltyPage />);
         await waitFor(() => {
@@ -34,7 +34,7 @@ describe('LoyaltyPage', () => {
     });
 
     it('displays loaded customer data', async () => {
-        const { fetchWithAuth } = require('../../../../lib/api');
+        const { fetchWithAuth } = require('../../../lib/api');
         fetchWithAuth.mockResolvedValue([
             {
                 id: '1',
@@ -51,7 +51,7 @@ describe('LoyaltyPage', () => {
     });
 
     it('handles empty customer list', async () => {
-        const { fetchWithAuth } = require('../../../../lib/api');
+        const { fetchWithAuth } = require('../../../lib/api');
         fetchWithAuth.mockResolvedValue([]);
         render(<LoyaltyPage />);
         await waitFor(() => {
@@ -60,7 +60,7 @@ describe('LoyaltyPage', () => {
     });
 
     it('renders the search input', async () => {
-        const { fetchWithAuth } = require('../../../../lib/api');
+        const { fetchWithAuth } = require('../../../lib/api');
         fetchWithAuth.mockResolvedValue([]);
         render(<LoyaltyPage />);
         await waitFor(() => {

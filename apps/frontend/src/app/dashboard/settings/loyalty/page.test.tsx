@@ -3,7 +3,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import LoyaltySettingsPage from './page';
 
-jest.mock('../../../../../lib/api', () => ({
+jest.mock('../../../../lib/api', () => ({
     fetchWithAuth: jest.fn(),
 }));
 
@@ -19,7 +19,7 @@ jest.mock('next/navigation', () => ({
 
 describe('LoyaltySettingsPage', () => {
     beforeEach(() => {
-        const { fetchWithAuth } = require('../../../../../lib/api');
+        const { fetchWithAuth } = require('../../../../lib/api');
         fetchWithAuth.mockResolvedValue({
             loyalty_points_enabled: false,
             loyalty_earn_rate: null,
@@ -30,7 +30,7 @@ describe('LoyaltySettingsPage', () => {
     });
 
     it('renders the page heading', async () => {
-        const { fetchWithAuth } = require('../../../../../lib/api');
+        const { fetchWithAuth } = require('../../../../lib/api');
         fetchWithAuth.mockResolvedValue({
             loyalty_points_enabled: false,
             loyalty_earn_rate: null,
@@ -44,7 +44,7 @@ describe('LoyaltySettingsPage', () => {
     });
 
     it('renders the Save Settings button after loading', async () => {
-        const { fetchWithAuth } = require('../../../../../lib/api');
+        const { fetchWithAuth } = require('../../../../lib/api');
         fetchWithAuth.mockResolvedValue({
             loyalty_points_enabled: true,
             loyalty_earn_rate: '1.0',
@@ -58,7 +58,7 @@ describe('LoyaltySettingsPage', () => {
     });
 
     it('shows Enable Loyalty Program toggle label', async () => {
-        const { fetchWithAuth } = require('../../../../../lib/api');
+        const { fetchWithAuth } = require('../../../../lib/api');
         fetchWithAuth.mockResolvedValue({
             loyalty_points_enabled: false,
             loyalty_earn_rate: null,
@@ -72,7 +72,7 @@ describe('LoyaltySettingsPage', () => {
     });
 
     it('shows Settings breadcrumb link', async () => {
-        const { fetchWithAuth } = require('../../../../../lib/api');
+        const { fetchWithAuth } = require('../../../../lib/api');
         fetchWithAuth.mockResolvedValue({
             loyalty_points_enabled: false,
             loyalty_earn_rate: null,

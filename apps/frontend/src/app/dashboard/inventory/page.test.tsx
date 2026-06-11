@@ -112,7 +112,7 @@ describe('InventoryPage', () => {
         await waitFor(() => {
             expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
         });
-        expect(screen.getByText('Products')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Products' })).toBeInTheDocument();
     });
 
     it('calls getProducts on mount', async () => {

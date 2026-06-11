@@ -52,7 +52,7 @@ const mockOrders = [
 
 describe('DeliveryPage', () => {
     beforeEach(() => {
-        const { fetchWithAuth } = require('../../../../lib/api');
+        const { fetchWithAuth } = require('../../../lib/api');
         fetchWithAuth.mockResolvedValue({ items: mockOrders, total: 2, pages: 1 });
     });
 
@@ -112,7 +112,7 @@ describe('DeliveryPage', () => {
     });
 
     it('shows empty state when no delivery orders exist', async () => {
-        const { fetchWithAuth } = require('../../../../lib/api');
+        const { fetchWithAuth } = require('../../../lib/api');
         fetchWithAuth.mockResolvedValue({ items: [], total: 0, pages: 1 });
         render(<DeliveryPage />);
         await waitFor(() => {
@@ -130,7 +130,7 @@ describe('DeliveryPage', () => {
     });
 
     it('calls fetchWithAuth on mount', async () => {
-        const { fetchWithAuth } = require('../../../../lib/api');
+        const { fetchWithAuth } = require('../../../lib/api');
         render(<DeliveryPage />);
         await waitFor(() => {
             expect(fetchWithAuth).toHaveBeenCalledTimes(1);

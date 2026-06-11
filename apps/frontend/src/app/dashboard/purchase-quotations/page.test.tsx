@@ -3,7 +3,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import PurchaseQuotationsPage from './page';
 
-jest.mock('../../../../lib/api', () => ({
+jest.mock('../../../lib/api', () => ({
     api: {
         getPurchaseQuotations: jest.fn(),
         deletePurchaseQuotation: jest.fn(),
@@ -32,7 +32,7 @@ jest.mock('./CreatePurchaseQuotationModal', () => {
 
 describe('PurchaseQuotationsPage', () => {
     beforeEach(() => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getPurchaseQuotations.mockResolvedValue([]);
         api.getSuppliers.mockResolvedValue([]);
         api.getProducts.mockResolvedValue([]);
@@ -41,7 +41,7 @@ describe('PurchaseQuotationsPage', () => {
     });
 
     it('renders the page heading', async () => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getPurchaseQuotations.mockResolvedValue([]);
         render(<PurchaseQuotationsPage />);
         await waitFor(() => {
@@ -50,7 +50,7 @@ describe('PurchaseQuotationsPage', () => {
     });
 
     it('displays loaded purchase quotation data', async () => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getPurchaseQuotations.mockResolvedValue([
             {
                 id: '1',
@@ -72,7 +72,7 @@ describe('PurchaseQuotationsPage', () => {
     });
 
     it('handles empty state', async () => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getPurchaseQuotations.mockResolvedValue([]);
         render(<PurchaseQuotationsPage />);
         await waitFor(() => {
@@ -81,7 +81,7 @@ describe('PurchaseQuotationsPage', () => {
     });
 
     it('renders the New RFQ button', async () => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getPurchaseQuotations.mockResolvedValue([]);
         render(<PurchaseQuotationsPage />);
         await waitFor(() => {

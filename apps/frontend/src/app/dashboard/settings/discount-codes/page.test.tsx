@@ -3,7 +3,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import DiscountCodesPage from './page';
 
-jest.mock('../../../../../lib/api', () => ({
+jest.mock('../../../../lib/api', () => ({
     api: {
         getDiscountCodes: jest.fn(),
         createDiscountCode: jest.fn(),
@@ -24,13 +24,13 @@ jest.mock('next/navigation', () => ({
 
 describe('DiscountCodesPage', () => {
     beforeEach(() => {
-        const { api } = require('../../../../../lib/api');
+        const { api } = require('../../../../lib/api');
         api.getDiscountCodes.mockResolvedValue([]);
         jest.clearAllMocks();
     });
 
     it('renders the page heading', async () => {
-        const { api } = require('../../../../../lib/api');
+        const { api } = require('../../../../lib/api');
         api.getDiscountCodes.mockResolvedValue([]);
         render(<DiscountCodesPage />);
         await waitFor(() => {
@@ -39,7 +39,7 @@ describe('DiscountCodesPage', () => {
     });
 
     it('displays loaded discount codes', async () => {
-        const { api } = require('../../../../../lib/api');
+        const { api } = require('../../../../lib/api');
         api.getDiscountCodes.mockResolvedValue([
             {
                 id: '1',
@@ -64,7 +64,7 @@ describe('DiscountCodesPage', () => {
     });
 
     it('shows empty state when no codes exist', async () => {
-        const { api } = require('../../../../../lib/api');
+        const { api } = require('../../../../lib/api');
         api.getDiscountCodes.mockResolvedValue([]);
         render(<DiscountCodesPage />);
         await waitFor(() => {
@@ -73,7 +73,7 @@ describe('DiscountCodesPage', () => {
     });
 
     it('renders the New Code button', async () => {
-        const { api } = require('../../../../../lib/api');
+        const { api } = require('../../../../lib/api');
         api.getDiscountCodes.mockResolvedValue([]);
         render(<DiscountCodesPage />);
         await waitFor(() => {

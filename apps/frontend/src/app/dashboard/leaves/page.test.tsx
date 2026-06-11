@@ -3,7 +3,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import LeavesPage from './page';
 
-jest.mock('../../../../lib/api', () => ({
+jest.mock('../../../lib/api', () => ({
     api: {
         getLeaveRequests: jest.fn(),
         getLeaveTypes: jest.fn(),
@@ -29,7 +29,7 @@ jest.mock('next/navigation', () => ({
 
 describe('LeavesPage', () => {
     beforeEach(() => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getLeaveRequests.mockResolvedValue([]);
         api.getLeaveTypes.mockResolvedValue([]);
         api.getEmployees.mockResolvedValue([]);
@@ -37,7 +37,7 @@ describe('LeavesPage', () => {
     });
 
     it('renders the page heading', async () => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getLeaveRequests.mockResolvedValue([]);
         api.getLeaveTypes.mockResolvedValue([]);
         api.getEmployees.mockResolvedValue([]);
@@ -48,7 +48,7 @@ describe('LeavesPage', () => {
     });
 
     it('displays loaded leave requests', async () => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getLeaveRequests.mockResolvedValue([
             {
                 id: '1',
@@ -75,7 +75,7 @@ describe('LeavesPage', () => {
     });
 
     it('handles empty leave requests', async () => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getLeaveRequests.mockResolvedValue([]);
         api.getLeaveTypes.mockResolvedValue([]);
         api.getEmployees.mockResolvedValue([]);
@@ -86,7 +86,7 @@ describe('LeavesPage', () => {
     });
 
     it('renders the New Request button', async () => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getLeaveRequests.mockResolvedValue([]);
         api.getLeaveTypes.mockResolvedValue([]);
         api.getEmployees.mockResolvedValue([]);

@@ -3,7 +3,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import WarrantyClaimsPage from './page';
 
-jest.mock('../../../../lib/api', () => ({
+jest.mock('../../../lib/api', () => ({
     api: {
         getWarrantyClaims: jest.fn(),
         lookupWarrantySerial: jest.fn(),
@@ -24,13 +24,13 @@ jest.mock('next/navigation', () => ({
 
 describe('WarrantyClaimsPage', () => {
     beforeEach(() => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getWarrantyClaims.mockResolvedValue([]);
         jest.clearAllMocks();
     });
 
     it('renders the page heading', async () => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getWarrantyClaims.mockResolvedValue([]);
         render(<WarrantyClaimsPage />);
         await waitFor(() => {
@@ -39,7 +39,7 @@ describe('WarrantyClaimsPage', () => {
     });
 
     it('displays loaded warranty claims', async () => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getWarrantyClaims.mockResolvedValue([
             {
                 id: '1',
@@ -62,7 +62,7 @@ describe('WarrantyClaimsPage', () => {
     });
 
     it('handles empty claims list', async () => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getWarrantyClaims.mockResolvedValue([]);
         render(<WarrantyClaimsPage />);
         await waitFor(() => {
@@ -71,7 +71,7 @@ describe('WarrantyClaimsPage', () => {
     });
 
     it('renders the New Claim button', async () => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getWarrantyClaims.mockResolvedValue([]);
         render(<WarrantyClaimsPage />);
         await waitFor(() => {

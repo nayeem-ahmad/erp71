@@ -3,7 +3,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import CashierSessionsPage from './page';
 
-jest.mock('../../../../lib/api', () => ({
+jest.mock('../../../lib/api', () => ({
     api: {
         getOpenCashierSession: jest.fn(),
         getCashTransactions: jest.fn(),
@@ -26,15 +26,15 @@ jest.mock('next/navigation', () => ({
 
 describe('CashierSessionsPage', () => {
     beforeEach(() => {
-        const { api } = require('../../../../lib/api');
+        jest.clearAllMocks();
+        const { api } = require('../../../lib/api');
         api.getOpenCashierSession.mockRejectedValue(new Error('No open session'));
         api.getCashTransactions.mockResolvedValue([]);
         api.getActiveCounters.mockResolvedValue([]);
-        jest.clearAllMocks();
     });
 
     it('renders the page heading', async () => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getOpenCashierSession.mockRejectedValue(new Error('No open session'));
         api.getActiveCounters.mockResolvedValue([]);
         render(<CashierSessionsPage />);
@@ -44,17 +44,17 @@ describe('CashierSessionsPage', () => {
     });
 
     it('shows Open Session button when no session is active', async () => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getOpenCashierSession.mockRejectedValue(new Error('No open session'));
         api.getActiveCounters.mockResolvedValue([]);
         render(<CashierSessionsPage />);
         await waitFor(() => {
-            expect(screen.getByText('Open Session')).toBeInTheDocument();
+            expect(screen.getByText('Open Shift')).toBeInTheDocument();
         });
     });
 
     it('shows session details when session is open', async () => {
-        const { api } = require('../../../../lib/api');
+        const { api } = require('../../../lib/api');
         api.getOpenCashierSession.mockResolvedValue({
             id: 'sess-1',
             counter: { name: 'Counter 1' },
