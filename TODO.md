@@ -94,6 +94,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Write unit tests for admin-tenants.service.ts (33 tests covering listTenants, getTenant, updateSubscription, suspendTenant, impersonateTenant, getMetrics, listUsers, promoteUser, demoteUser) — done 2026-06-11
 - [x] Write unit tests for inventory.service.ts (34 tests: getWarehouses, createWarehouse, updateWarehouse, getSettings/ensureSettings, updateSettings, listReasons, createReason, updateReason, getLedger — full happy + error paths) — done 2026-06-11
 - [x] Write unit tests for assets.service.ts (25 tests: onModuleInit, uploadFile, deleteFile, getOptimisedUrl — both enabled and disabled Cloudinary states) — done 2026-06-11
+- [x] Write unit tests for consolidated report page and branch report page (2 new test files: reports/consolidated/page.test.tsx with 15 tests, reports/branch-report/page.test.tsx with 18 tests — covering API calls, summary cards, store breakdown table, bar chart, empty states, error handling, Generate button, date filtering) — done 2026-06-11
 - [ ] Add E2E tests for critical paths: signup → onboarding → POS sale → billing
 - [ ] Investigate and clean up backend Jest open handles reported after E2E suite completion
 - [ ] Clean up React `act(...)` warnings in login/signup page tests
