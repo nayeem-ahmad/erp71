@@ -347,6 +347,55 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    getCustomerAnalytics: (id: string) => fetchWithAuth(`/customers/${id}/analytics`),
+    getCustomerCreditLedger: (id: string, params?: { page?: number; limit?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.limit) query.set('limit', String(params.limit));
+        return fetchWithAuth(`/customers/${id}/credit${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    recordCreditPayment: (id: string, data: { amount: number; notes?: string }) => fetchWithAuth(`/customers/${id}/credit/payment`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    getDueAgingReport: () => fetchWithAuth('/customers/reports/due-aging'),
+    // CRM Interactions
+    getCrmInteractions: (params?: { customerId?: string; page?: number; limit?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.customerId) query.set('customerId', params.customerId);
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.limit) query.set('limit', String(params.limit));
+        return fetchWithAuth(`/crm/interactions${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    createCrmInteraction: (data: any) => fetchWithAuth('/crm/interactions', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteCrmInteraction: (id: string) => fetchWithAuth(`/crm/interactions/${id}`, { method: 'DELETE' }),
+    // CRM Tasks
+    getCrmTasks: (params?: { customerId?: string; status?: string; dueToday?: boolean; page?: number; limit?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.customerId) query.set('customerId', params.customerId);
+        if (params?.status) query.set('status', params.status);
+        if (params?.dueToday) query.set('dueToday', 'true');
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.limit) query.set('limit', String(params.limit));
+        return fetchWithAuth(`/crm/tasks${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    getCrmTaskSummary: () => fetchWithAuth('/crm/tasks/summary'),
+    createCrmTask: (data: any) => fetchWithAuth('/crm/tasks', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateCrmTask: (id: string, data: any) => fetchWithAuth(`/crm/tasks/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteCrmTask: (id: string) => fetchWithAuth(`/crm/tasks/${id}`, { method: 'DELETE' }),
     // Customer Groups
     getCustomerGroups: () => fetchWithAuth('/customer-groups'),
     getCustomerGroup: (id: string) => fetchWithAuth(`/customer-groups/${id}`),

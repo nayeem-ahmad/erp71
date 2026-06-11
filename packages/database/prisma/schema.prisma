@@ -154,6 +154,10 @@ model User {
   storefrontOrders          StorefrontOrder[]
   employee                  Employee?
   approvedLeaves            LeaveRequest[] @relation("LeaveApprover")
+  createdInteractions       CustomerInteraction[] @relation("InteractionCreator")
+  assignedCrmTasks          CrmTask[]     @relation("CrmTaskAssignee")
+  createdCrmTasks           CrmTask[]     @relation("CrmTaskCreator")
+  createdCreditTransactions CustomerCreditTransaction[] @relation("CreditTransactionCreator")
 }
 
 model PasswordResetToken {
@@ -317,6 +321,9 @@ model Tenant {
   fixedAssets      FixedAsset[]
   recurringJournals RecurringJournal[]
   bankReconciliations BankReconciliation[]
+  customerInteractions CustomerInteraction[]
+  crmTasks            CrmTask[]
+  customerCreditTransactions CustomerCreditTransaction[]
 }
 
 model TenantUser {
@@ -971,6 +978,12 @@ model Customer {
   nid                  String?
   segment_category     String        @default("Regular")
   loyalty_points       Int           @default(0)
+  due_balance          Decimal       @default(0) @db.Decimal(12, 2)
+  credit_enabled       Boolean       @default(false)
+  last_contacted_at    DateTime?
+  preferred_channel    String        @default("PHONE")
+  birthday             DateTime?
+  anniversary          DateTime?
   created_at           DateTime      @default(now())
   deleted_at           DateTime?
   user_id              String?       @unique
@@ -985,6 +998,9 @@ model Customer {
   quotations       Quotation[]
   warrantyClaims   WarrantyClaim[]
   loyaltyTransactions LoyaltyTransaction[]
+  interactions     CustomerInteraction[]
+  crmTasks         CrmTask[]
+  creditTransactions CustomerCreditTransaction[]
 
   @@unique([tenant_id, phone])
   @@unique([tenant_id, customer_code])
@@ -1024,6 +1040,72 @@ model Territory {
   customers Customer[]
 
   @@unique([tenant_id, name, parent_id])
+}
+
+model CustomerInteraction {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  store_id    String?
+  customer_id String
+  type        String   // CALL | SMS | WHATSAPP | EMAIL | VISIT | NOTE
+  direction   String   @default("OUTBOUND")
+  summary     String
+  outcome     String?
+  created_by  String?
+  created_at  DateTime @default(now())
+
+  tenant    Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  customer  Customer  @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  creator   User?     @relation("InteractionCreator", fields: [created_by], references: [id])
+
+  @@index([tenant_id, customer_id])
+  @@index([tenant_id, created_at])
+}
+
+model CrmTask {
+  id           String    @id @default(uuid())
+  tenant_id    String
+  store_id     String?
+  customer_id  String
+  type         String    // FOLLOW_UP | COLLECTION | BIRTHDAY | REORDER_REMINDER
+  title        String
+  due_at       DateTime
+  completed_at DateTime?
+  assigned_to  String?
+  created_by   String?
+  notes        String?
+  status       String    @default("PENDING")
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  customer Customer  @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  assignee User?     @relation("CrmTaskAssignee", fields: [assigned_to], references: [id])
+  creator  User?     @relation("CrmTaskCreator", fields: [created_by], references: [id])
+
+  @@index([tenant_id, status, due_at])
+  @@index([tenant_id, customer_id])
+}
+
+model CustomerCreditTransaction {
+  id             String   @id @default(uuid())
+  tenant_id      String
+  customer_id    String
+  type           String   // CREDIT_SALE | PAYMENT | ADJUSTMENT
+  amount         Decimal  @db.Decimal(12, 2)
+  balance_after  Decimal  @db.Decimal(12, 2)
+  reference_type String?
+  reference_id   String?
+  notes          String?
+  created_by     String?
+  created_at     DateTime @default(now())
+
+  tenant    Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  customer  Customer  @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  creator   User?     @relation("CreditTransactionCreator", fields: [created_by], references: [id])
+
+  @@index([tenant_id, customer_id])
+  @@index([tenant_id, created_at])
 }
 
 model AccountGroup {

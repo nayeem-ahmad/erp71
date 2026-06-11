@@ -45,6 +45,7 @@ import {
     CalendarOff,
     Landmark,
     FileSearch,
+    CheckSquare,
     type LucideIcon,
 } from 'lucide-react';
 import { useBranding } from '@/lib/branding';
@@ -103,6 +104,9 @@ function buildModules(t: ReturnType<typeof useI18n>['t']): NavModule[] {
             { href: '/dashboard/sales/reports/products', icon: Package,    label: t.sidebar.items.salesByProduct, advancedOnly: true },
             { href: '/dashboard/reports/consolidated', icon: BarChart3,    label: t.sidebar.items.consolidated, advancedOnly: true },
             { href: '/dashboard/reports/branch-report', icon: BarChart3,   label: t.sidebar.items.branchReport, advancedOnly: true },
+            // CRM
+            { href: '#crm',                         icon: Users,           label: 'CRM', section: true },
+            { href: '/dashboard/crm/tasks',         icon: CheckSquare,     label: 'Tasks & Follow-ups' },
             // Sales Setup
             { href: '#sales-setup',                 icon: Settings,        label: t.sidebar.sections.salesSetup, section: true },
             { href: '/dashboard/customers',         icon: Users,           label: t.sidebar.items.customers },

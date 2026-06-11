@@ -59,6 +59,8 @@ import { EmployeesModule } from './employees/employees.module';
 import { CountersModule } from './counters/counters.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { BrandsModule } from './brands/brands.module';
+import { CrmInteractionsModule } from './crm-interactions/crm-interactions.module';
+import { CrmTasksModule } from './crm-tasks/crm-tasks.module';
 
 @Module({
     imports: [
@@ -119,6 +121,8 @@ import { BrandsModule } from './brands/brands.module';
         CountersModule,
         AttendanceModule,
         BrandsModule,
+        CrmInteractionsModule,
+        CrmTasksModule,
     ],
     controllers: [],
     providers: [

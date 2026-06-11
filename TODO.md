@@ -228,6 +228,19 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [ ] If deferring: remove mobile references from marketing materials
 - [ ] If deferring near-term: evaluate PWA wrapper as stopgap (Next.js supports this)
 
+### CRM Module (Epic 70–74)
+- [x] Phase 1 — Customer Intelligence: added `due_balance`, `credit_enabled`, `last_contacted_at`, `preferred_channel`, `birthday`, `anniversary` fields to Customer; migration `20260611010000_add_crm_module` — done 2026-06-11
+- [x] Phase 2 — Interaction Log: `CustomerInteraction` model, `CrmInteractionsModule` (POST/GET/PATCH/DELETE `/crm/interactions`), interaction timeline on customer detail page — done 2026-06-11
+- [x] Phase 3 — CRM Tasks: `CrmTask` model, `CrmTasksModule` (POST/GET/PATCH/DELETE `/crm/tasks`), today-summary endpoint, birthday + reorder-reminder auto-creation crons, CRM Tasks page at `/dashboard/crm/tasks` — done 2026-06-11
+- [x] Phase 4 — Credit/Due Management: `CustomerCreditTransaction` model, credit ledger endpoint, record-payment endpoint, due-aging report endpoint, Credit/Due tab on customer detail page — done 2026-06-11
+- [x] CRM permissions added to shared-types (VIEW_CRM_INTERACTIONS, CREATE_CRM_INTERACTIONS, MANAGE_CRM_TASKS, VIEW_CUSTOMER_CREDIT, MANAGE_CUSTOMER_CREDIT) — done 2026-06-11
+- [x] Customer detail page redesigned with tabs: Purchase History | Interactions | Credit/Due — done 2026-06-11
+- [x] CRM Tasks & Follow-ups sidebar link added under Sales → CRM section — done 2026-06-11
+- [ ] Phase 5 — Campaigns: bulk SMS/WhatsApp to customer segments with ROI tracking
+- [ ] Due aging report frontend page at /dashboard/customers/reports/due-aging
+- [ ] CRM task creation modal on customer detail page
+- [ ] WhatsApp/SMS integration for outbound interactions
+
 ---
 
 ## ROADMAP — Post-launch features
