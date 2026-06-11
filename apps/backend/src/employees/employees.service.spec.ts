@@ -268,7 +268,7 @@ describe('EmployeesService', () => {
 
       const result = await service.findAll('t1');
 
-      expect(result.data).toHaveLength(1);
+      expect(result.items).toHaveLength(1);
       expect(result.total).toBe(1);
       expect(result.page).toBe(1);
     });
@@ -349,7 +349,7 @@ describe('EmployeesService', () => {
       const result = await service.findAll('t1');
 
       expect(encryption.decrypt).toHaveBeenCalledWith('enc:987654321');
-      expect(result.data[0].nid).toBe('987654321');
+      expect(result.items[0].nid).toBe('987654321');
     });
   });
 

@@ -129,12 +129,9 @@ describe('CashierSessionsService', () => {
         .mockResolvedValueOnce({ id: 'other-sess', status: 'OPEN' }); // counter in use
       countersService.validateCounterBelongsToStore.mockResolvedValue(undefined);
 
-      await expect(service.openSession('t1', 'u1', dtoWithCounter)).rejects.toThrow(
-        BadRequestException,
-      );
-      await expect(service.openSession('t1', 'u1', dtoWithCounter)).rejects.toThrow(
-        'This counter already has an open session',
-      );
+      const result = service.openSession('t1', 'u1', dtoWithCounter);
+      await expect(result).rejects.toThrow(BadRequestException);
+      await expect(result).rejects.toThrow('This counter already has an open session');
     });
 
     it('skips counter validation when counterId is not provided', async () => {
