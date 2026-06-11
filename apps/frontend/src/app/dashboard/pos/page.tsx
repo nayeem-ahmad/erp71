@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ShoppingCart, Search, Package, Trash2, Plus, Minus, CreditCard, ChevronRight, Store, X, Banknote, CheckCircle, AlertCircle, XCircle, Printer, WifiOff, RefreshCw } from 'lucide-react';
+import { ShoppingCart, Search, Package, Trash2, Plus, Minus, CreditCard, ChevronRight, Store, X, Banknote, CheckCircle, AlertCircle, XCircle, Printer, WifiOff, RefreshCw, LayoutGrid, List } from 'lucide-react';
 import { HelpTooltip } from '@/components/HelpTooltip';
 import { api } from '../../../lib/api';
 import { printPOSReceipt } from '../../../lib/pos-receipt-printer';
@@ -29,6 +29,7 @@ export default function POSPage() {
     const [cart, setCart] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
+    const [viewMode, setViewMode] = useState<'gallery' | 'compact'>('gallery');
     const [notifications, setNotifications] = useState<Notification[]>([]);
 
     const [showCheckout, setShowCheckout] = useState(false);
@@ -418,22 +419,40 @@ export default function POSPage() {
                             <h1 className="text-2xl font-black tracking-tight inline-flex items-center gap-2">POS Terminal <HelpTooltip text="Select items, choose a payment method, then press Checkout. For split payments, add multiple payment rows. Change due is calculated automatically." /></h1>
                             <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">Quick selection &amp; billing</p>
                         </div>
-                        <div className="relative w-72">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                            <input
-                                type="text"
-                                placeholder="Search SKU or Name..."
-                                className="w-full bg-white border-none rounded-xl py-2.5 pl-10 pr-4 text-sm shadow-sm focus:ring-2 focus:ring-blue-500/10 transition-all font-medium"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
+                        <div className="flex items-center gap-2">
+                            <div className="relative w-72">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                <input
+                                    type="text"
+                                    placeholder="Search SKU or Name..."
+                                    className="w-full bg-white border-none rounded-xl py-2.5 pl-10 pr-4 text-sm shadow-sm focus:ring-2 focus:ring-blue-500/10 transition-all font-medium"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex items-center bg-white rounded-xl shadow-sm p-1 gap-0.5">
+                                <button
+                                    onClick={() => setViewMode('gallery')}
+                                    title="Gallery view"
+                                    className={`p-2 rounded-lg transition-all ${viewMode === 'gallery' ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-700'}`}
+                                >
+                                    <LayoutGrid className="w-4 h-4" />
+                                </button>
+                                <button
+                                    onClick={() => setViewMode('compact')}
+                                    title="Compact view"
+                                    className={`p-2 rounded-lg transition-all ${viewMode === 'compact' ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-700'}`}
+                                >
+                                    <List className="w-4 h-4" />
+                                </button>
+                            </div>
                         </div>
                     </div>
 
                     <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
                         {loading ? (
                             <div className="flex items-center justify-center h-full text-gray-400 font-bold uppercase tracking-widest text-xs">Loading Products...</div>
-                        ) : (
+                        ) : viewMode === 'gallery' ? (
                             <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                                 {filteredProducts.map((product) => (
                                     <div
@@ -456,6 +475,37 @@ export default function POSPage() {
                                                 <span className="bg-gray-100 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest text-gray-500">
                                                     {getStockForSalesWarehouse(product)} left
                                                 </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-1.5">
+                                {filteredProducts.map((product) => (
+                                    <div
+                                        key={product.id}
+                                        onClick={() => addToCart(product)}
+                                        className="bg-white rounded-2xl border border-transparent hover:border-blue-500/20 hover:shadow-md hover:shadow-blue-500/5 cursor-pointer transition-all group flex items-center gap-3 px-3 py-2.5"
+                                    >
+                                        <div className="w-10 h-10 flex-shrink-0 bg-gray-50 rounded-xl flex items-center justify-center overflow-hidden">
+                                            {product.image_url ? (
+                                                <img src={product.image_url} alt={product.name} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                                            ) : (
+                                                <Package className="w-5 h-5 text-gray-200" />
+                                            )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-black tracking-tight text-gray-900 truncate leading-tight">{product.name}</p>
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{product.sku || 'N/A'}</p>
+                                        </div>
+                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                            <span className="bg-gray-100 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest text-gray-500">
+                                                {getStockForSalesWarehouse(product)} left
+                                            </span>
+                                            <span className="text-sm font-black text-blue-600 w-20 text-right">{formatBDT(parseFloat(product.price))}</span>
+                                            <div className="w-7 h-7 rounded-lg bg-gray-100 group-hover:bg-blue-600 flex items-center justify-center transition-colors flex-shrink-0">
+                                                <Plus className="w-3.5 h-3.5 text-gray-400 group-hover:text-white transition-colors" />
                                             </div>
                                         </div>
                                     </div>

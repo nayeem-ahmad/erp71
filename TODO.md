@@ -268,6 +268,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] POS compact view — added gallery/compact toggle (LayoutGrid / List icons) next to the search bar; compact view renders a dense single-column list with thumbnail, name, SKU, stock badge, price, and a + button; gallery view unchanged — done 2026-06-11
+
 - [x] Platform settings for SMS, Email, and payment gateways — `PlatformSetting` DB model + migration `20260611000000_add_platform_settings`; `PlatformSettingsModule` (global, `@Global()`) with AES-256-GCM encryption for secrets; `GET/PATCH /admin/platform-settings/:group` endpoints guarded by `PlatformAdminGuard`; test endpoints for SMS and email; `SmsService` and `EmailService` refactored to read credentials from `PlatformSettingsService` (with 60s in-memory cache + env var fallback); admin frontend pages at `/dashboard/admin/platform-settings/{sms,email,payments,general}` with masked secret display and "Send Test" buttons; Platform Settings link added to admin overview — done 2026-06-11
 
 - [x] Add accounting features 8-15 (Fiscal Period Locking, Opening Balance Import, Budget vs Actual, Cost Centers, Fixed Assets & Depreciation, Recurring Journals, Bank Reconciliation, Audit Trail) — 21 service methods inserted before buildBookReport, 22 controller endpoints appended, controller DTO imports updated, createVoucher now passes userId for audit logging, accounting.module.ts updated with AuditService — done 2026-06-11
