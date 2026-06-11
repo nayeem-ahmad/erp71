@@ -69,7 +69,7 @@ describe('AccountingService — Story 30.2', () => {
                 },
                 {
                     provide: AuditService,
-                    useValue: { log: jest.fn() },
+                    useValue: { log: jest.fn().mockResolvedValue(undefined) },
                 },
             ],
         }).compile();
