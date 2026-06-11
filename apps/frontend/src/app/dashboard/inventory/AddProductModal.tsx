@@ -26,12 +26,14 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
         safetyStock: '',
         leadTimeDays: '',
         image_url: '',
+        brandId: '',
         groupId: '',
         subgroupId: '',
         unitType: 'none' as CompoundUnitType,
     });
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [brands, setBrands] = useState<any[]>([]);
     const [groups, setGroups] = useState<any[]>([]);
     const [subgroups, setSubgroups] = useState<any[]>([]);
 
@@ -40,10 +42,12 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
 
         const loadCategoryOptions = async () => {
             try {
-                const [groupData, subgroupData] = await Promise.all([
+                const [brandData, groupData, subgroupData] = await Promise.all([
+                    api.getBrands(),
                     api.getProductGroups(),
                     api.getProductSubgroups(),
                 ]);
+                setBrands(brandData);
                 setGroups(groupData);
                 setSubgroups(subgroupData);
             } catch (error) {
@@ -69,6 +73,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                 safetyStock: initialProduct.safety_stock != null ? String(initialProduct.safety_stock) : '',
                 leadTimeDays: initialProduct.lead_time_days != null ? String(initialProduct.lead_time_days) : '',
                 image_url: initialProduct.image_url || '',
+                brandId: initialProduct.brand?.id || '',
                 groupId: initialProduct.group?.id || '',
                 subgroupId: initialProduct.subgroup?.id || '',
                 unitType: (initialProduct.unit_type as CompoundUnitType) || 'none',
@@ -88,6 +93,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                 safetyStock: '',
                 leadTimeDays: '',
                 image_url: '',
+                brandId: '',
                 groupId: '',
                 subgroupId: '',
                 unitType: 'none',
@@ -132,6 +138,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                 reorderLevel: parseOptionalInt(formData.reorderLevel),
                 safetyStock: parseOptionalInt(formData.safetyStock),
                 leadTimeDays: parseOptionalInt(formData.leadTimeDays),
+                brandId: formData.brandId || undefined,
                 groupId: formData.groupId || undefined,
                 subgroupId: formData.subgroupId || undefined,
                 unitType: formData.unitType,
@@ -315,6 +322,22 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                             >
                                 {(Object.keys(COMPOUND_UNIT_DEFS) as CompoundUnitType[]).map((key) => (
                                     <option key={key} value={key}>{COMPOUND_UNIT_DEFS[key].label}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5 ml-1">Brand</label>
+                            <select
+                                className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-blue-500/10 transition-all font-medium"
+                                value={formData.brandId}
+                                onChange={(e) => setFormData({ ...formData, brandId: e.target.value })}
+                            >
+                                <option value="">No Brand</option>
+                                {brands.map((brand) => (
+                                    <option key={brand.id} value={brand.id}>
+                                        {brand.name}
+                                    </option>
                                 ))}
                             </select>
                         </div>

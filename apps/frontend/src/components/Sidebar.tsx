@@ -170,6 +170,7 @@ function buildModules(t: ReturnType<typeof useI18n>['t']): NavModule[] {
             { href: '/dashboard/inventory/reports/valuation', icon: Calculator, label: t.sidebar.items.valuation, advancedOnly: true },
             // Inventory Setup
             { href: '#inventory-setup',               icon: Settings,        label: t.sidebar.sections.inventorySetup, section: true },
+            { href: '/dashboard/brands',              icon: Tag,             label: t.sidebar.items.brands },
             { href: '/dashboard/inventory/categories', icon: FolderTree,      label: t.sidebar.items.categories },
             { href: '/dashboard/inventory/settings',  icon: Settings,        label: t.sidebar.items.inventorySettings },
         ],

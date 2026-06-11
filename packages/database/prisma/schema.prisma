@@ -40,6 +40,7 @@ enum StorePermission {
   EDIT_PRODUCTS
   EDIT_PRODUCT_PRICES
   EDIT_SUPPLIERS
+  EDIT_BRANDS
 
   // Inventory
   CREATE_INVENTORY_MOVEMENTS
@@ -252,6 +253,7 @@ model Tenant {
 
   apiKeys         ApiKey[]
   deliveryOrders  DeliveryOrder[]
+  brands     Brand[]
   products   Product[]
   productGroups ProductGroup[]
   productSubgroups ProductSubgroup[]
@@ -431,9 +433,28 @@ model ProductSubgroup {
   @@index([group_id])
 }
 
+model Brand {
+  id          String    @id @default(uuid())
+  tenant_id   String
+  name        String
+  description String?
+  logo_url    String?
+  website_url String?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  deleted_at  DateTime?
+
+  tenant      Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  products    Product[]
+
+  @@unique([tenant_id, name])
+  @@index([tenant_id, deleted_at])
+}
+
 model Product {
   id          String   @id @default(uuid())
   tenant_id   String
+  brand_id    String?
   group_id    String?
   subgroup_id String?
   name        String
@@ -454,6 +475,7 @@ model Product {
 
   // Relations
   tenant      Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  brand       Brand?   @relation(fields: [brand_id], references: [id])
   group       ProductGroup? @relation(fields: [group_id], references: [id])
   subgroup    ProductSubgroup? @relation(fields: [subgroup_id], references: [id])
   stocks      ProductStock[]
@@ -476,6 +498,7 @@ model Product {
   bomComponents BomComponent[] @relation("BomComponent")
 
   @@unique([tenant_id, sku])
+  @@index([tenant_id, brand_id])
   @@index([tenant_id, group_id])
   @@index([tenant_id, subgroup_id])
   @@index([tenant_id, deleted_at])

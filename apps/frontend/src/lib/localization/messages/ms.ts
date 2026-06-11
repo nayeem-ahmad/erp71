@@ -130,6 +130,7 @@ export const msMessages: MessageDictionary = {
             customers: 'Pelanggan',
             customerGroups: 'Kumpulan Pelanggan',
             territories: 'Wilayah',
+            brands: 'Jenama',
             categories: 'Kategori',
             inventorySettings: 'Tetapan Inventori',
             chartOfAccounts: 'Carta Akaun',

@@ -208,6 +208,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Brand management — Brand CRUD (POST/GET/PATCH/DELETE /brands), Brand model in Prisma with soft delete, EDIT_BRANDS permission, brand select on product create/edit modal, Brands page at /dashboard/brands, sidebar nav link under Inventory Setup — done 2026-06-10
+
 - [x] Fix Render deployment backend build error (unaligned ordersService.create argument count in convertToOrder) and align the five backend service unit tests with the userId parameter requirements — done 2026-06-10
 
 - [x] Add `created_by` (userId) to all entry models — Sale, Purchase, PurchaseReturn, SalesReturn, SalesOrder, PurchaseOrder now store the creating user's ID; schema updated, migration `20260610020000_add_created_by_to_entries`, Prisma client regenerated, all 6 service `create()` methods and controllers updated — done 2026-06-10

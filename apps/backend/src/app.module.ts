@@ -57,6 +57,7 @@ import { DiscountCodesModule } from './discount-codes/discount-codes.module';
 import { EmployeesModule } from './employees/employees.module';
 import { CountersModule } from './counters/counters.module';
 import { AttendanceModule } from './attendance/attendance.module';
+import { BrandsModule } from './brands/brands.module';
 
 @Module({
     imports: [
@@ -115,6 +116,7 @@ import { AttendanceModule } from './attendance/attendance.module';
         EmployeesModule,
         CountersModule,
         AttendanceModule,
+        BrandsModule,
     ],
     controllers: [],
     providers: [

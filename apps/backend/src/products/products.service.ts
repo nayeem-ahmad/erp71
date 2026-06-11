@@ -18,6 +18,9 @@ export class ProductsService {
     async create(tenantId: string, dto: CreateProductDto) {
         const result = await this.db.$transaction(async (tx) => {
             const categoryIds = await this.validateCategorySelection(tx, tenantId, dto.groupId, dto.subgroupId);
+            if (dto.brandId) {
+                await this.validateBrand(tx, tenantId, dto.brandId);
+            }
             const product = await tx.product.create({
                 data: {
                     tenant_id: tenantId,
@@ -32,6 +35,7 @@ export class ProductsService {
                     lead_time_days: dto.leadTimeDays ?? null,
                     image_url: dto.image_url,
                     unit_type: dto.unitType ?? 'none',
+                    brand_id: dto.brandId ?? null,
                     group_id: categoryIds.groupId,
                     subgroup_id: categoryIds.subgroupId,
                 },
@@ -134,6 +138,9 @@ export class ProductsService {
         await this.findOne(tenantId, id);
 
         const categoryIds = await this.validateCategorySelection(txLike(this.db), tenantId, dto.groupId, dto.subgroupId);
+        if (dto.brandId !== undefined && dto.brandId !== null) {
+            await this.validateBrand(txLike(this.db), tenantId, dto.brandId);
+        }
 
         const result = await this.db.product.update({
             where: { id },
@@ -151,6 +158,7 @@ export class ProductsService {
                 ...(dto.leadTimeDays !== undefined ? { lead_time_days: dto.leadTimeDays } : {}),
                 ...(dto.image_url !== undefined ? { image_url: dto.image_url || null } : {}),
                 ...(dto.unitType !== undefined ? { unit_type: dto.unitType } : {}),
+                ...(dto.brandId !== undefined ? { brand_id: dto.brandId || null } : {}),
                 ...(dto.groupId !== undefined ? { group_id: categoryIds.groupId } : {}),
                 ...(dto.subgroupId !== undefined ? { subgroup_id: categoryIds.subgroupId } : {}),
             },
@@ -299,6 +307,7 @@ export class ProductsService {
 
     private productInclude() {
         return {
+            brand: true,
             group: true,
             subgroup: {
                 include: { group: true },
@@ -308,6 +317,13 @@ export class ProductsService {
                 orderBy: [{ warehouse: { is_default: 'desc' as const } }, { warehouse: { name: 'asc' as const } }],
             },
         };
+    }
+
+    private async validateBrand(db: any, tenantId: string, brandId: string) {
+        const brand = await db.brand.findFirst({ where: { id: brandId, tenant_id: tenantId, deleted_at: null } });
+        if (!brand) {
+            throw new BadRequestException('Brand not found for this tenant.');
+        }
     }
 }
 

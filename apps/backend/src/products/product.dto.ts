@@ -25,6 +25,10 @@ export class CreateProductDto {
 
     @IsOptional()
     @IsUUID()
+    brandId?: string;
+
+    @IsOptional()
+    @IsUUID()
     groupId?: string;
 
     @IsOptional()
@@ -82,6 +86,10 @@ export class UpdateProductDto {
     @IsOptional()
     @IsString()
     image_url?: string;
+
+    @IsOptional()
+    @IsUUID()
+    brandId?: string;
 
     @IsOptional()
     @IsUUID()
