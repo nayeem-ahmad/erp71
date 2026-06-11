@@ -864,6 +864,41 @@ export const api = {
     },
     promoteUser: (userId: string) => fetchWithAuth(`/admin/users/${userId}/promote`, { method: 'POST' }),
     demoteUser: (userId: string) => fetchWithAuth(`/admin/users/${userId}/promote`, { method: 'DELETE' }),
+    // Team & permissions (tenant-scoped staff management)
+    getTeamMembers: () => fetchWithAuth('/team/members'),
+    getTeamMember: (userId: string) => fetchWithAuth(`/team/members/${userId}`),
+    getTeamStores: () => fetchWithAuth('/team/stores'),
+    getTeamInvitations: () => fetchWithAuth('/team/invitations'),
+    sendTeamInvitation: (data: { email: string; role: string }) => fetchWithAuth('/team/invitations', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    revokeTeamInvitation: (id: string) => fetchWithAuth(`/team/invitations/${id}`, { method: 'DELETE' }),
+    updateMemberRole: (userId: string, data: { role: string; reseedPermissions?: boolean }) =>
+        fetchWithAuth(`/team/members/${userId}/role`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    grantMemberStoreAccess: (
+        userId: string,
+        data: { storeId: string; accessLevel: 'STORE_ONLY' | 'MULTI_STORE_CAPABLE'; seedDefaults?: boolean },
+    ) =>
+        fetchWithAuth(`/team/members/${userId}/stores`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    revokeMemberStoreAccess: (userId: string, storeId: string) =>
+        fetchWithAuth(`/team/members/${userId}/stores/${storeId}`, { method: 'DELETE' }),
+    setMemberStorePermissions: (userId: string, storeId: string, permissions: string[]) =>
+        fetchWithAuth(`/team/members/${userId}/stores/${storeId}/permissions`, {
+            method: 'PUT',
+            body: JSON.stringify({ permissions }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    removeMember: (userId: string) => fetchWithAuth(`/team/members/${userId}`, { method: 'DELETE' }),
     getMe: () => fetchWithAuth('/auth/me'),
     updateProfile: (data: { name?: string; preferred_locale?: 'en' | 'bn' | 'ms' }) => fetchWithAuth('/auth/me', {
         method: 'PATCH',

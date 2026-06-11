@@ -49,6 +49,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const hasInventoryReportEntitlement = Boolean(planFeatures.premiumInventoryReports) || activePlanCode === 'STANDARD' || activePlanCode === 'PREMIUM';
     const isPlatformAdmin = Boolean(user?.is_platform_admin);
     const canManageBilling = primaryRole === 'OWNER' || primaryRole === 'MANAGER';
+    const canManageTeam = primaryRole === 'OWNER' || primaryRole === 'MANAGER';
     const canAccessAccounting = (primaryRole === 'OWNER' || primaryRole === 'MANAGER') && hasPaidPlan && hasAccountingEntitlement;
     const canAccessInventoryReports = Boolean(hasInventoryReportEntitlement);
 
@@ -81,7 +82,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         if (!isPlatformAdmin && pathname.startsWith('/dashboard/admin')) {
             router.replace('/dashboard');
         }
-    }, [canAccessAccounting, canAccessInventoryReports, hasResolvedUser, isPlatformAdmin, pathname, router]);
+        if (!canManageTeam && pathname.startsWith('/dashboard/team')) {
+            router.replace('/dashboard');
+        }
+    }, [canAccessAccounting, canAccessInventoryReports, canManageTeam, hasResolvedUser, isPlatformAdmin, pathname, router]);
 
     // Build a human-readable page title from the path
     const pageTitle = (() => {
@@ -112,6 +116,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 canAccessInventoryReports={canAccessInventoryReports}
                 canAccessAdmin={isPlatformAdmin}
                 canManageBilling={canManageBilling}
+                canManageTeam={canManageTeam}
                 activePlanCode={activePlanCode}
             />
 

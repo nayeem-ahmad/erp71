@@ -208,6 +208,12 @@ function buildModules(t: ReturnType<typeof useI18n>['t']): NavModule[] {
         href: '/dashboard/billing',
     },
     {
+        key: 'team',
+        icon: UserCog,
+        label: 'Team & Permissions',
+        href: '/dashboard/team',
+    },
+    {
         key: 'account-settings',
         icon: Settings,
         label: t.sidebar.modules.accountSettings,
@@ -241,12 +247,14 @@ export default function Sidebar({
     canAccessInventoryReports = false,
     canAccessAdmin = false,
     canManageBilling = false,
+    canManageTeam = false,
     activePlanCode,
 }: {
     canAccessAccounting?: boolean;
     canAccessInventoryReports?: boolean;
     canAccessAdmin?: boolean;
     canManageBilling?: boolean;
+    canManageTeam?: boolean;
     activePlanCode?: string | null;
 }) {
     const pathname = usePathname();
@@ -259,6 +267,7 @@ export default function Sidebar({
             if (module.key === 'accounting') return canAccessAccounting;
             if (module.key === 'admin') return canAccessAdmin;
             if (module.key === 'billing') return canManageBilling;
+            if (module.key === 'team') return canManageTeam;
             return true;
         })
         .map((module) => {

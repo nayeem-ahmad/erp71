@@ -14,6 +14,7 @@ import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { PasswordResetModule } from './password-reset/password-reset.module';
 import { InvitationsModule } from './invitations/invitations.module';
+import { TeamModule } from './team/team.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ProductsModule } from './products/products.module';
 import { AssetsModule } from './assets/assets.module';
@@ -81,6 +82,7 @@ import { CrmCampaignsModule } from './crm-campaigns/crm-campaigns.module';
         AuthModule,
         PasswordResetModule,
         InvitationsModule,
+        TeamModule,
         NotificationsModule,
         ProductsModule,
         AssetsModule,
