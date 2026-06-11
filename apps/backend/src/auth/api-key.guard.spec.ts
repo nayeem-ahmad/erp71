@@ -92,32 +92,31 @@ describe('ApiKeyGuard', () => {
             parentCanActivate.mockRestore();
         });
 
-        it('passes through the result from the parent (truthy)', () => {
+        it('passes through the result from the parent (truthy)', async () => {
             const ctx = makeContext({ 'x-api-key': 'valid-key' });
 
             const parentCanActivate = jest.spyOn(
                 Object.getPrototypeOf(Object.getPrototypeOf(guard)),
                 'canActivate',
-            ).mockReturnValue(Promise.resolve(true) as any);
+            ).mockResolvedValue(true as any);
 
-            const result = guard.canActivate(ctx);
+            const result = await guard.canActivate(ctx);
 
-            // Result should be whatever the parent returned
-            expect(result).toEqual(Promise.resolve(true));
+            expect(result).toBe(true);
             parentCanActivate.mockRestore();
         });
 
-        it('passes through the result from the parent (falsy)', () => {
+        it('passes through the result from the parent (falsy)', async () => {
             const ctx = makeContext({});
 
             const parentCanActivate = jest.spyOn(
                 Object.getPrototypeOf(Object.getPrototypeOf(guard)),
                 'canActivate',
-            ).mockReturnValue(Promise.resolve(false) as any);
+            ).mockResolvedValue(false as any);
 
-            const result = guard.canActivate(ctx);
+            const result = await guard.canActivate(ctx);
 
-            expect(result).toEqual(Promise.resolve(false));
+            expect(result).toBe(false);
             parentCanActivate.mockRestore();
         });
     });
