@@ -63,6 +63,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Session invalidation on password change — done 2026-06-09
 - [ ] Consider TOTP 2FA for OWNER role
 - [x] Implement refresh token rotation
+- [x] Shop-owner team & permissions management — `TeamModule` (GET/POST/PATCH/PUT/DELETE under `/team`) for listing members, inviting/revoking staff, changing roles, assigning branch access (STORE_ONLY vs MULTI_STORE_CAPABLE), and editing per-branch feature permissions; Team & Permissions UI at `/dashboard/team` with feature×branch matrix; gated to OWNER/MANAGER; audit-logged — done 2026-06-11
 
 ### API Hardening
 - [ ] Add API versioning (`/api/v1/`) before any external integrations are built
@@ -234,6 +235,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Phase 3 — CRM Tasks: `CrmTask` model, `CrmTasksModule` (POST/GET/PATCH/DELETE `/crm/tasks`), today-summary endpoint, birthday + reorder-reminder auto-creation crons, CRM Tasks page at `/dashboard/crm/tasks` — done 2026-06-11
 - [x] Phase 4 — Credit/Due Management: `CustomerCreditTransaction` model, credit ledger endpoint, record-payment endpoint, due-aging report endpoint, Credit/Due tab on customer detail page — done 2026-06-11
 - [x] CRM permissions added to shared-types (VIEW_CRM_INTERACTIONS, CREATE_CRM_INTERACTIONS, MANAGE_CRM_TASKS, VIEW_CUSTOMER_CREDIT, MANAGE_CUSTOMER_CREDIT) — done 2026-06-11
+- [x] CRM permissions added to the Prisma `StorePermission` enum (migration `20260611020000_add_crm_store_permissions`) — they were in shared-types/ROLE_DEFAULT_PERMISSIONS but missing from the DB enum, which broke seeding a MANAGER's default permissions — done 2026-06-11
 - [x] Customer detail page redesigned with tabs: Purchase History | Interactions | Credit/Due — done 2026-06-11
 - [x] CRM Tasks & Follow-ups sidebar link added under Sales → CRM section — done 2026-06-11
 - [ ] Phase 5 — Campaigns: bulk SMS/WhatsApp to customer segments with ROI tracking

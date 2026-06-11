@@ -104,6 +104,107 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
   ],
 };
 
+/** Human-readable labels for each store permission (used by the team management UI). */
+export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
+  [StorePermission.VIEW_PRODUCT_CATALOG]: "View product catalog",
+  [StorePermission.EDIT_PRODUCTS]: "Add & edit products",
+  [StorePermission.EDIT_PRODUCT_PRICES]: "Edit product prices",
+  [StorePermission.EDIT_SUPPLIERS]: "Manage suppliers",
+  [StorePermission.EDIT_BRANDS]: "Manage brands",
+  [StorePermission.CREATE_INVENTORY_MOVEMENTS]: "Adjust inventory",
+  [StorePermission.CREATE_GOODS_TRANSFER]: "Create goods transfers",
+  [StorePermission.APPROVE_GOODS_TRANSFER]: "Approve goods transfers",
+  [StorePermission.STOCK_TAKE]: "Perform stock takes",
+  [StorePermission.CREATE_SALE]: "Create sales",
+  [StorePermission.CREATE_PURCHASE]: "Create purchases",
+  [StorePermission.CREATE_RETURN]: "Process returns",
+  [StorePermission.CREATE_SALES_ORDER]: "Create sales orders",
+  [StorePermission.CREATE_QUOTATION]: "Create quotations",
+  [StorePermission.VIEW_LEDGER]: "View ledger",
+  [StorePermission.CREATE_VOUCHER]: "Create vouchers",
+  [StorePermission.VIEW_FINANCIAL_REPORTS]: "View financial reports",
+  [StorePermission.CREATE_FUND_TRANSFER]: "Create fund transfers",
+  [StorePermission.APPROVE_FUND_TRANSFER]: "Approve fund transfers",
+  [StorePermission.SWITCH_STORES]: "Switch between branches",
+  [StorePermission.VIEW_CONSOLIDATED_REPORTS]: "View consolidated reports",
+  [StorePermission.MANAGE_USERS]: "Manage team members",
+  [StorePermission.MANAGE_USER_STORE_ACCESS]: "Manage branch access",
+  [StorePermission.MANAGE_COUNTERS]: "Manage POS counters",
+  [StorePermission.VIEW_CRM_INTERACTIONS]: "View CRM interactions",
+  [StorePermission.CREATE_CRM_INTERACTIONS]: "Log CRM interactions",
+  [StorePermission.MANAGE_CRM_TASKS]: "Manage CRM tasks",
+  [StorePermission.VIEW_CUSTOMER_CREDIT]: "View customer credit",
+  [StorePermission.MANAGE_CUSTOMER_CREDIT]: "Manage customer credit",
+};
+
+/** Store permissions grouped by feature area — drives the per-branch permission matrix UI. */
+export const STORE_PERMISSION_GROUPS: { label: string; permissions: StorePermission[] }[] = [
+  {
+    label: "Products & Catalog",
+    permissions: [
+      StorePermission.VIEW_PRODUCT_CATALOG,
+      StorePermission.EDIT_PRODUCTS,
+      StorePermission.EDIT_PRODUCT_PRICES,
+      StorePermission.EDIT_SUPPLIERS,
+      StorePermission.EDIT_BRANDS,
+    ],
+  },
+  {
+    label: "Inventory",
+    permissions: [
+      StorePermission.CREATE_INVENTORY_MOVEMENTS,
+      StorePermission.CREATE_GOODS_TRANSFER,
+      StorePermission.APPROVE_GOODS_TRANSFER,
+      StorePermission.STOCK_TAKE,
+    ],
+  },
+  {
+    label: "Sales & Purchases",
+    permissions: [
+      StorePermission.CREATE_SALE,
+      StorePermission.CREATE_PURCHASE,
+      StorePermission.CREATE_RETURN,
+      StorePermission.CREATE_SALES_ORDER,
+      StorePermission.CREATE_QUOTATION,
+    ],
+  },
+  {
+    label: "Accounting & Funds",
+    permissions: [
+      StorePermission.VIEW_LEDGER,
+      StorePermission.CREATE_VOUCHER,
+      StorePermission.VIEW_FINANCIAL_REPORTS,
+      StorePermission.CREATE_FUND_TRANSFER,
+      StorePermission.APPROVE_FUND_TRANSFER,
+    ],
+  },
+  {
+    label: "Multi-Branch",
+    permissions: [
+      StorePermission.SWITCH_STORES,
+      StorePermission.VIEW_CONSOLIDATED_REPORTS,
+    ],
+  },
+  {
+    label: "CRM",
+    permissions: [
+      StorePermission.VIEW_CRM_INTERACTIONS,
+      StorePermission.CREATE_CRM_INTERACTIONS,
+      StorePermission.MANAGE_CRM_TASKS,
+      StorePermission.VIEW_CUSTOMER_CREDIT,
+      StorePermission.MANAGE_CUSTOMER_CREDIT,
+    ],
+  },
+  {
+    label: "Administration",
+    permissions: [
+      StorePermission.MANAGE_USERS,
+      StorePermission.MANAGE_USER_STORE_ACCESS,
+      StorePermission.MANAGE_COUNTERS,
+    ],
+  },
+];
+
 export interface TenantUser {
   id: string;
   tenant_id: string;
