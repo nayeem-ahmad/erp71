@@ -52,6 +52,7 @@ import { TenantsModule } from './tenants/tenants.module';
 import { DeliveryModule } from './delivery/delivery.module';
 import { ManufacturingModule } from './manufacturing/manufacturing.module';
 import { LoyaltyModule } from './loyalty/loyalty.module';
+import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
 import { SmsModule } from './sms/sms.module';
 import { DiscountCodesModule } from './discount-codes/discount-codes.module';
 import { EmployeesModule } from './employees/employees.module';
@@ -67,6 +68,7 @@ import { BrandsModule } from './brands/brands.module';
         CommonModule,
         CacheModule,
         DatabaseModule,
+        PlatformSettingsModule,
         EmailModule,
         SmsModule,
         AuditModule,

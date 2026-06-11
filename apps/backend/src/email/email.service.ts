@@ -1,46 +1,46 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 
 @Injectable()
 export class EmailService {
     private readonly logger = new Logger(EmailService.name);
-    private readonly transporter: nodemailer.Transporter | null;
-    private readonly from: string;
-    private readonly frontendUrl: string;
 
-    constructor() {
-        const smtpUser = process.env.SMTP_USER;
-        const smtpPass = process.env.SMTP_PASS;
-        this.from = process.env.EMAIL_FROM || 'noreply@yourdomain.com';
-        this.frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    constructor(private readonly platformSettings: PlatformSettingsService) {}
 
-        if (smtpUser && smtpPass) {
-            this.transporter = nodemailer.createTransport({
-                host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
-                port: parseInt(process.env.SMTP_PORT || '587', 10),
-                secure: false,
-                auth: { user: smtpUser, pass: smtpPass },
-                connectionTimeout: 10_000,  // 10s to establish connection
-                greetingTimeout: 10_000,    // 10s for SMTP greeting
-                socketTimeout: 30_000,      // 30s for socket inactivity
-            });
-        } else {
-            this.transporter = null;
-            this.logger.warn('SMTP_USER/SMTP_PASS not set — emails will be logged only');
-        }
+    private async getTransportConfig() {
+        const [smtpHost, smtpPort, smtpUser, smtpPass, emailFrom, frontendUrl] = await Promise.all([
+            this.platformSettings.getRawValue('email', 'smtp_host'),
+            this.platformSettings.getRawValue('email', 'smtp_port'),
+            this.platformSettings.getRawValue('email', 'smtp_user'),
+            this.platformSettings.getRawValue('email', 'smtp_pass'),
+            this.platformSettings.getRawValue('email', 'email_from'),
+            this.platformSettings.getRawValue('email', 'frontend_url'),
+        ]);
+
+        return {
+            host: smtpHost ?? process.env.SMTP_HOST ?? 'smtp-relay.brevo.com',
+            port: parseInt(smtpPort ?? process.env.SMTP_PORT ?? '587', 10),
+            user: smtpUser ?? process.env.SMTP_USER ?? null,
+            pass: smtpPass ?? process.env.SMTP_PASS ?? null,
+            from: emailFrom ?? process.env.EMAIL_FROM ?? 'noreply@retailsaas.app',
+            frontendUrl: frontendUrl ?? process.env.FRONTEND_URL ?? 'http://localhost:3000',
+        };
     }
 
     async sendWelcome(to: string, name: string): Promise<void> {
+        const { frontendUrl } = await this.getTransportConfig();
         await this.send({
             to,
             subject: 'Welcome to RetailSaaS',
             html: `<h2>Welcome, ${name || to}!</h2>
-<p>Your account is ready. <a href="${this.frontendUrl}/login">Sign in</a> to get started.</p>`,
+<p>Your account is ready. <a href="${frontendUrl}/login">Sign in</a> to get started.</p>`,
         });
     }
 
     async sendEmailVerification(to: string, token: string): Promise<void> {
-        const link = `${this.frontendUrl}/verify-email?token=${token}`;
+        const { frontendUrl } = await this.getTransportConfig();
+        const link = `${frontendUrl}/verify-email?token=${token}`;
         await this.send({
             to,
             subject: 'Verify your email address',
@@ -52,7 +52,8 @@ export class EmailService {
     }
 
     async sendPasswordReset(to: string, token: string): Promise<void> {
-        const link = `${this.frontendUrl}/reset-password?token=${token}`;
+        const { frontendUrl } = await this.getTransportConfig();
+        const link = `${frontendUrl}/reset-password?token=${token}`;
         await this.send({
             to,
             subject: 'Reset your password',
@@ -64,7 +65,8 @@ export class EmailService {
     }
 
     async sendInvitation(to: string, tenantName: string, inviterName: string, token: string): Promise<void> {
-        const link = `${this.frontendUrl}/accept-invitation?token=${token}`;
+        const { frontendUrl } = await this.getTransportConfig();
+        const link = `${frontendUrl}/accept-invitation?token=${token}`;
         await this.send({
             to,
             subject: `You've been invited to join ${tenantName} on RetailSaaS`,
@@ -76,16 +78,18 @@ export class EmailService {
     }
 
     async sendSubscriptionExpiryWarning(to: string, tenantName: string, daysLeft: number, expiresAt: Date): Promise<void> {
+        const { frontendUrl } = await this.getTransportConfig();
         await this.send({
             to,
             subject: `Your RetailSaaS subscription expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
             html: `<h2>Subscription Expiry Notice</h2>
 <p>Your subscription for <strong>${tenantName}</strong> expires on <strong>${expiresAt.toDateString()}</strong> (${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining).</p>
-<p><a href="${this.frontendUrl}/dashboard/billing">Renew Now</a></p>`,
+<p><a href="${frontendUrl}/dashboard/billing">Renew Now</a></p>`,
         });
     }
 
     async sendLowStockAlert(to: string, tenantName: string, items: Array<{ name: string; sku: string; quantity: number; reorderPoint: number }>): Promise<void> {
+        const { frontendUrl } = await this.getTransportConfig();
         const rows = items
             .map((i) => `<tr><td>${i.name}</td><td>${i.sku}</td><td>${i.quantity}</td><td>${i.reorderPoint}</td></tr>`)
             .join('');
@@ -98,7 +102,7 @@ export class EmailService {
   <thead><tr><th>Product</th><th>SKU</th><th>Qty</th><th>Reorder Point</th></tr></thead>
   <tbody>${rows}</tbody>
 </table>
-<p><a href="${this.frontendUrl}/dashboard/inventory">View Inventory</a></p>`,
+<p><a href="${frontendUrl}/dashboard/inventory">View Inventory</a></p>`,
         });
     }
 
@@ -113,27 +117,31 @@ ${invoiceUrl ? `<p><a href="${invoiceUrl}">View Invoice</a></p>` : ''}`,
     }
 
     async sendPaymentFailure(to: string, tenantName: string, amount: number, currency: string): Promise<void> {
+        const { frontendUrl } = await this.getTransportConfig();
         await this.send({
             to,
             subject: `Payment failed for ${tenantName}`,
             html: `<h2>Payment Failed</h2>
 <p>We were unable to process a payment of <strong>${currency} ${amount.toFixed(2)}</strong> for <strong>${tenantName}</strong>.</p>
-<p>Please <a href="${this.frontendUrl}/dashboard/billing">update your payment method</a> to avoid service interruption.</p>`,
+<p>Please <a href="${frontendUrl}/dashboard/billing">update your payment method</a> to avoid service interruption.</p>`,
         });
     }
 
     async sendSubscriptionCancelled(to: string, tenantName: string, graceDays: number): Promise<void> {
+        const { frontendUrl } = await this.getTransportConfig();
         await this.send({
             to,
             subject: `Your ${tenantName} subscription has been cancelled`,
             html: `<h2>Subscription Cancelled</h2>
 <p>Your subscription for <strong>${tenantName}</strong> has been cancelled after ${graceDays} days without a successful payment.</p>
-<p>Your account has been downgraded to the Free plan. To restore access to premium features, <a href="${this.frontendUrl}/dashboard/billing">update your payment method and resubscribe</a>.</p>`,
+<p>Your account has been downgraded to the Free plan. To restore access to premium features, <a href="${frontendUrl}/dashboard/billing">update your payment method and resubscribe</a>.</p>`,
         });
     }
 
     async sendContactForm(from: string, name: string, subject: string, message: string): Promise<void> {
-        const supportEmail = process.env.SUPPORT_EMAIL ?? 'support@retailsaas.app';
+        const supportEmail = await this.platformSettings.getRawValue('general', 'support_email')
+            ?? process.env.SUPPORT_EMAIL
+            ?? 'support@retailsaas.app';
         this.send({
             to: supportEmail,
             subject: `[Contact] ${subject}`,
@@ -161,12 +169,24 @@ ${page ? `<p><strong>Page:</strong> ${page}</p>` : ''}
     }
 
     private async send(opts: { to: string; subject: string; html: string }): Promise<void> {
-        if (!this.transporter) {
+        const config = await this.getTransportConfig();
+
+        if (!config.user || !config.pass) {
             this.logger.log(`[EMAIL] To: ${opts.to} | Subject: ${opts.subject}`);
             return;
         }
+
         try {
-            await this.transporter.sendMail({ from: this.from, ...opts });
+            const transporter = nodemailer.createTransport({
+                host: config.host,
+                port: config.port,
+                secure: false,
+                auth: { user: config.user, pass: config.pass },
+                connectionTimeout: 10_000,
+                greetingTimeout: 10_000,
+                socketTimeout: 30_000,
+            });
+            await transporter.sendMail({ from: config.from, ...opts });
         } catch (err) {
             this.logger.error(`Failed to send email to ${opts.to}: ${err}`);
         }
