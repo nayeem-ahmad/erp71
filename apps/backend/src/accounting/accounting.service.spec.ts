@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AccountingService, VOUCHER_NUMBER_PREFIXES } from './accounting.service';
 import { AccountCategory, AccountType, VoucherType } from './accounting.constants';
 import { DatabaseService } from '../database/database.service';
+import { AuditService } from '../audit/audit.service';
 
 describe('AccountingService — Story 30.2', () => {
     let service: AccountingService;
@@ -65,6 +66,10 @@ describe('AccountingService — Story 30.2', () => {
                 {
                     provide: DatabaseService,
                     useValue: db,
+                },
+                {
+                    provide: AuditService,
+                    useValue: { log: jest.fn().mockResolvedValue(undefined) },
                 },
             ],
         }).compile();

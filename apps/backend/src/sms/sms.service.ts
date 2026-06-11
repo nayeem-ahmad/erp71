@@ -1,25 +1,28 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 
 @Injectable()
 export class SmsService {
     private readonly logger = new Logger(SmsService.name);
-    private readonly apiKey: string | null;
-    private readonly senderId: string;
-    private readonly baseUrl = 'http://bulksmsbd.net/api/smsapi';
 
-    constructor() {
-        this.apiKey = process.env.SMS_API_KEY ?? null;
-        this.senderId = process.env.SMS_SENDER_ID ?? '8809617621294';
+    constructor(private readonly platformSettings: PlatformSettingsService) {}
 
-        if (!this.apiKey) {
-            this.logger.warn('SMS_API_KEY not set — SMS messages will be logged only');
-        }
-    }
-
-    // Normalize Bangladeshi number to 880XXXXXXXXXX format
     private normalizePhone(phone: string): string {
         const digits = phone.replace(/\D/g, '');
         return digits.startsWith('0') ? '880' + digits.slice(1) : digits;
+    }
+
+    private async getCredentials() {
+        const [apiKey, senderId, baseUrl] = await Promise.all([
+            this.platformSettings.getRawValue('sms', 'api_key'),
+            this.platformSettings.getRawValue('sms', 'sender_id'),
+            this.platformSettings.getRawValue('sms', 'base_url'),
+        ]);
+        return {
+            apiKey: apiKey ?? process.env.SMS_API_KEY ?? null,
+            senderId: senderId ?? process.env.SMS_SENDER_ID ?? '8809617621294',
+            baseUrl: baseUrl ?? 'http://bulksmsbd.net/api/smsapi',
+        };
     }
 
     async sendSms(to: string | string[], message: string): Promise<void> {
@@ -27,21 +30,23 @@ export class SmsService {
             .map((n) => this.normalizePhone(n))
             .join(',');
 
-        if (!this.apiKey) {
+        const { apiKey, senderId, baseUrl } = await this.getCredentials();
+
+        if (!apiKey) {
             this.logger.log(`[SMS] To: ${numbers} | Message: ${message}`);
             return;
         }
 
         try {
             const params = new URLSearchParams({
-                api_key: this.apiKey,
+                api_key: apiKey,
                 type: 'text',
                 number: numbers,
-                senderid: this.senderId,
+                senderid: senderId,
                 message,
             });
 
-            const response = await fetch(`${this.baseUrl}?${params.toString()}`);
+            const response = await fetch(`${baseUrl}?${params.toString()}`);
 
             if (!response.ok) {
                 const body = await response.text().catch(() => '');

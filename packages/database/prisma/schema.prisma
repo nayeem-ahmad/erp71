@@ -2070,3 +2070,16 @@ model BankStatementEntry {
   @@index([reconciliation_id])
   @@map("bank_statement_entries")
 }
+
+model PlatformSetting {
+  id         Int      @id @default(autoincrement())
+  group      String
+  key        String
+  value      String?
+  is_secret  Boolean  @default(false)
+  updated_at DateTime @updatedAt
+  updated_by String?
+
+  @@unique([group, key])
+  @@map("platform_settings")
+}

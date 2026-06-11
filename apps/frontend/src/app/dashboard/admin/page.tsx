@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Building2, Users, TrendingUp, ShieldCheck, ArrowRight, Loader2 } from 'lucide-react';
+import { Building2, Users, TrendingUp, ShieldCheck, ArrowRight, Loader2, Settings } from 'lucide-react';
 import { api } from '@/lib/api';
 
 type Metrics = {
@@ -80,6 +80,12 @@ export default function PlatformAdminPage() {
                         icon={Users}
                         title="User Management"
                         description="List all platform users, grant or revoke superadmin access."
+                    />
+                    <QuickLink
+                        href="/dashboard/admin/platform-settings"
+                        icon={Settings}
+                        title="Platform Settings"
+                        description="Configure SMS gateway, email / SMTP, payment gateway credentials, and global defaults."
                     />
                 </div>
             </div>
