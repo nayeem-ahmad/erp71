@@ -7,10 +7,19 @@ import { formatBDT, formatDate } from '../../../../lib/format';
 import {
     ArrowLeft, Phone, Mail, ShoppingBag, CreditCard, MapPin, Building2,
     FolderTree, Map, ChevronLeft, ChevronRight, MessageSquare, Wallet,
-    Plus, Trash2, CheckCircle2, Send,
+    Plus, Trash2, CheckCircle2, Send, ClipboardList, AlertCircle,
 } from 'lucide-react';
 
-type Tab = 'history' | 'interactions' | 'credit';
+type Tab = 'history' | 'interactions' | 'credit' | 'tasks';
+
+const TASK_TYPES = ['FOLLOW_UP', 'COLLECTION', 'BIRTHDAY', 'REORDER_REMINDER'] as const;
+const taskTypeLabels: Record<string, string> = {
+    FOLLOW_UP: 'Follow Up', COLLECTION: 'Collection', BIRTHDAY: 'Birthday', REORDER_REMINDER: 'Reorder',
+};
+const taskTypeColors: Record<string, string> = {
+    FOLLOW_UP: 'bg-blue-50 text-blue-700', COLLECTION: 'bg-amber-50 text-amber-700',
+    BIRTHDAY: 'bg-rose-50 text-rose-700', REORDER_REMINDER: 'bg-violet-50 text-violet-700',
+};
 
 const INTERACTION_TYPES = ['CALL', 'SMS', 'WHATSAPP', 'EMAIL', 'VISIT', 'NOTE'] as const;
 const typeIcons: Record<string, string> = {
@@ -36,6 +45,14 @@ export default function CustomerProfile() {
     const [newInteraction, setNewInteraction] = useState({ type: 'CALL', summary: '', outcome: '' });
     const [savingInteraction, setSavingInteraction] = useState(false);
 
+    // Tasks state
+    const [tasks, setTasks] = useState<any[]>([]);
+    const [tasksLoading, setTasksLoading] = useState(false);
+    const [showTaskForm, setShowTaskForm] = useState(false);
+    const [newTask, setNewTask] = useState({ type: 'FOLLOW_UP', title: '', due_at: '', notes: '' });
+    const [savingTask, setSavingTask] = useState(false);
+    const [completingTask, setCompletingTask] = useState<string | null>(null);
+
     // Credit state
     const [creditLedger, setCreditLedger] = useState<any>(null);
     const [creditLoading, setCreditLoading] = useState(false);
@@ -55,6 +72,7 @@ export default function CustomerProfile() {
     useEffect(() => {
         if (id && activeTab === 'interactions') void loadInteractions();
         if (id && activeTab === 'credit') void loadCredit();
+        if (id && activeTab === 'tasks') void loadTasks();
     }, [id, activeTab]);
 
     const loadCustomer = async () => {
@@ -83,6 +101,39 @@ export default function CustomerProfile() {
             setInteractions(data?.items ?? data ?? []);
         } finally {
             setInteractionsLoading(false);
+        }
+    };
+
+    const loadTasks = async () => {
+        setTasksLoading(true);
+        try {
+            const data = await api.getCrmTasks({ customerId: id as string, limit: 50 });
+            setTasks(data?.items ?? data ?? []);
+        } finally {
+            setTasksLoading(false);
+        }
+    };
+
+    const saveTask = async () => {
+        if (!newTask.title.trim() || !newTask.due_at) return;
+        setSavingTask(true);
+        try {
+            await api.createCrmTask({ ...newTask, customer_id: id });
+            setNewTask({ type: 'FOLLOW_UP', title: '', due_at: '', notes: '' });
+            setShowTaskForm(false);
+            await loadTasks();
+        } finally {
+            setSavingTask(false);
+        }
+    };
+
+    const completeTask = async (taskId: string) => {
+        setCompletingTask(taskId);
+        try {
+            await api.updateCrmTask(taskId, { status: 'DONE' });
+            await loadTasks();
+        } finally {
+            setCompletingTask(null);
         }
     };
 
@@ -203,6 +254,7 @@ export default function CustomerProfile() {
                         { key: 'history', label: 'Purchase History', icon: <ShoppingBag className="w-4 h-4" /> },
                         { key: 'interactions', label: 'Interactions', icon: <MessageSquare className="w-4 h-4" /> },
                         { key: 'credit', label: 'Credit / Due', icon: <Wallet className="w-4 h-4" /> },
+                        { key: 'tasks', label: 'Tasks', icon: <ClipboardList className="w-4 h-4" /> },
                     ] as const).map(({ key, label, icon }) => (
                         <button
                             key={key}
@@ -487,6 +539,109 @@ export default function CustomerProfile() {
                                     </div>
                                 )}
                             </>
+                        )}
+                    </div>
+                )}
+
+                {/* Tab: Tasks */}
+                {activeTab === 'tasks' && (
+                    <div className="p-6 space-y-4">
+                        <div className="flex justify-end">
+                            <button
+                                onClick={() => setShowTaskForm((v) => !v)}
+                                className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700"
+                            >
+                                <Plus className="w-4 h-4" /> Add Task
+                            </button>
+                        </div>
+
+                        {showTaskForm && (
+                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
+                                <div className="flex gap-2 flex-wrap">
+                                    {TASK_TYPES.map((t) => (
+                                        <button
+                                            key={t}
+                                            onClick={() => setNewTask((n) => ({ ...n, type: t }))}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                                newTask.type === t ? 'bg-violet-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                                            }`}
+                                        >
+                                            {taskTypeLabels[t]}
+                                        </button>
+                                    ))}
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Task title *"
+                                    value={newTask.title}
+                                    onChange={(e) => setNewTask((n) => ({ ...n, title: e.target.value }))}
+                                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                                />
+                                <div className="flex gap-3">
+                                    <input
+                                        type="datetime-local"
+                                        value={newTask.due_at}
+                                        onChange={(e) => setNewTask((n) => ({ ...n, due_at: e.target.value }))}
+                                        className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                                    />
+                                    <input
+                                        type="text"
+                                        placeholder="Notes (optional)"
+                                        value={newTask.notes}
+                                        onChange={(e) => setNewTask((n) => ({ ...n, notes: e.target.value }))}
+                                        className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                                    />
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={saveTask}
+                                        disabled={savingTask || !newTask.title.trim() || !newTask.due_at}
+                                        className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                                    >
+                                        <Send className="w-4 h-4" /> Save Task
+                                    </button>
+                                    <button onClick={() => setShowTaskForm(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600">Cancel</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {tasksLoading ? (
+                            <div className="py-8 text-center text-gray-400 text-sm">Loading...</div>
+                        ) : tasks.length === 0 ? (
+                            <div className="py-12 text-center text-gray-400">
+                                <ClipboardList className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                                <p className="text-sm">No tasks yet</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {tasks.map((task: any) => {
+                                    const overdue = new Date(task.due_at) < new Date() && task.status === 'PENDING';
+                                    return (
+                                        <div key={task.id} className={`flex items-start gap-3 bg-white border rounded-xl p-4 ${overdue ? 'border-rose-200' : 'border-gray-100'} ${task.status === 'DONE' ? 'opacity-60' : ''}`}>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-0.5">
+                                                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${taskTypeColors[task.type] ?? 'bg-gray-100 text-gray-600'}`}>
+                                                        {taskTypeLabels[task.type] ?? task.type}
+                                                    </span>
+                                                    {overdue && <AlertCircle className="w-3.5 h-3.5 text-rose-500" />}
+                                                </div>
+                                                <p className={`text-sm font-medium text-gray-800 ${task.status === 'DONE' ? 'line-through' : ''}`}>{task.title}</p>
+                                                <p className="text-xs text-gray-400 mt-0.5">Due {new Date(task.due_at).toLocaleString()}</p>
+                                                {task.notes && <p className="text-xs text-gray-400">{task.notes}</p>}
+                                            </div>
+                                            {task.status === 'PENDING' && (
+                                                <button
+                                                    onClick={() => completeTask(task.id)}
+                                                    disabled={completingTask === task.id}
+                                                    className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white text-xs rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex-shrink-0"
+                                                >
+                                                    <CheckCircle2 className="w-3.5 h-3.5" /> Done
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         )}
                     </div>
                 )}

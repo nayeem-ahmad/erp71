@@ -46,6 +46,7 @@ import {
     Landmark,
     FileSearch,
     CheckSquare,
+    Megaphone,
     type LucideIcon,
 } from 'lucide-react';
 import { useBranding } from '@/lib/branding';
@@ -107,6 +108,8 @@ function buildModules(t: ReturnType<typeof useI18n>['t']): NavModule[] {
             // CRM
             { href: '#crm',                         icon: Users,           label: 'CRM', section: true },
             { href: '/dashboard/crm/tasks',         icon: CheckSquare,     label: 'Tasks & Follow-ups' },
+            { href: '/dashboard/crm/campaigns',     icon: Megaphone,       label: 'Campaigns' },
+            { href: '/dashboard/customers/reports/due-aging', icon: Clock, label: 'Due Aging' },
             // Sales Setup
             { href: '#sales-setup',                 icon: Settings,        label: t.sidebar.sections.salesSetup, section: true },
             { href: '/dashboard/customers',         icon: Users,           label: t.sidebar.items.customers },

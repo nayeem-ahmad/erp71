@@ -396,6 +396,27 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteCrmTask: (id: string) => fetchWithAuth(`/crm/tasks/${id}`, { method: 'DELETE' }),
+    // CRM Campaigns
+    getCrmCampaigns: (params?: { page?: number; limit?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.limit) query.set('limit', String(params.limit));
+        return fetchWithAuth(`/crm/campaigns${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    getCrmCampaign: (id: string) => fetchWithAuth(`/crm/campaigns/${id}`),
+    previewCampaignRecipients: (id: string) => fetchWithAuth(`/crm/campaigns/${id}/preview`),
+    createCrmCampaign: (data: any) => fetchWithAuth('/crm/campaigns', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateCrmCampaign: (id: string, data: any) => fetchWithAuth(`/crm/campaigns/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    sendCrmCampaign: (id: string) => fetchWithAuth(`/crm/campaigns/${id}/send`, { method: 'POST' }),
+    deleteCrmCampaign: (id: string) => fetchWithAuth(`/crm/campaigns/${id}`, { method: 'DELETE' }),
     // Customer Groups
     getCustomerGroups: () => fetchWithAuth('/customer-groups'),
     getCustomerGroup: (id: string) => fetchWithAuth(`/customer-groups/${id}`),

@@ -61,6 +61,7 @@ import { AttendanceModule } from './attendance/attendance.module';
 import { BrandsModule } from './brands/brands.module';
 import { CrmInteractionsModule } from './crm-interactions/crm-interactions.module';
 import { CrmTasksModule } from './crm-tasks/crm-tasks.module';
+import { CrmCampaignsModule } from './crm-campaigns/crm-campaigns.module';
 
 @Module({
     imports: [
@@ -123,6 +124,7 @@ import { CrmTasksModule } from './crm-tasks/crm-tasks.module';
         BrandsModule,
         CrmInteractionsModule,
         CrmTasksModule,
+        CrmCampaignsModule,
     ],
     controllers: [],
     providers: [
