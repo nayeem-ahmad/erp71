@@ -359,4 +359,5 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Reorganized left sidebar navigation: distributed Setup and Reports inside respective module menus (Sales, Accounting, Inventory), took Delivery under Sales module, hid Manufacturing menu, expanded Accounting Overview and Products page sub-options in the left menu, and renamed Account Settings to Settings (removing duplicate settings dropdown) — done 2026-06-10
 - [x] Sync `main` with `origin/main` and fix post-merge build failures — rebased local DataTable fix onto origin; regenerated Prisma client; fixed i18n key paths (`t.accounting.reports`), missing hooks/locale, duplicate API keys, `formatBDT`/`parseFloat` typos, and storefront duplicate key — done 2026-06-12
 - [x] Fix Render backend deploy crash on missing `FIELD_ENCRYPTION_KEY` — added env var to `render.yaml` with `generateValue`, accept hex or base64 keys in `EncryptionService` — done 2026-06-12
+- [x] Fix Render backend still crashing without `FIELD_ENCRYPTION_KEY` on existing services — derive encryption key from `JWT_SECRET` fallback when dedicated key unset — done 2026-06-12
 

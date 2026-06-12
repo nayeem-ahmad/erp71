@@ -26,7 +26,32 @@ export function parseFieldEncryptionKey(raw: string | undefined): Buffer | null 
         // fall through
     }
 
+    // Passphrase-style secrets (e.g. Render generateValue strings)
+    if (trimmed.length >= 8) {
+        return crypto.createHash('sha256').update(trimmed, 'utf8').digest();
+    }
+
     return null;
+}
+
+export function resolveFieldEncryptionKey(env: NodeJS.ProcessEnv = process.env): {
+    key: Buffer | null;
+    source: 'FIELD_ENCRYPTION_KEY' | 'JWT_SECRET' | null;
+} {
+    const direct = parseFieldEncryptionKey(env.FIELD_ENCRYPTION_KEY);
+    if (direct) {
+        return { key: direct, source: 'FIELD_ENCRYPTION_KEY' };
+    }
+
+    const jwtSecret = env.JWT_SECRET?.trim();
+    if (jwtSecret && jwtSecret.length >= 8) {
+        return {
+            key: crypto.createHash('sha256').update(`field-encryption:v1:${jwtSecret}`, 'utf8').digest(),
+            source: 'JWT_SECRET',
+        };
+    }
+
+    return { key: null, source: null };
 }
 
 @Injectable()
@@ -36,10 +61,15 @@ export class EncryptionService {
     private readonly enabled: boolean;
 
     constructor() {
-        const parsed = parseFieldEncryptionKey(process.env.FIELD_ENCRYPTION_KEY);
-        if (parsed) {
-            this.key = parsed;
+        const { key, source } = resolveFieldEncryptionKey();
+        if (key) {
+            this.key = key;
             this.enabled = true;
+            if (source === 'JWT_SECRET') {
+                this.logger.warn(
+                    'FIELD_ENCRYPTION_KEY not set — deriving field encryption key from JWT_SECRET; set a dedicated FIELD_ENCRYPTION_KEY in production',
+                );
+            }
         } else {
             const message = 'FIELD_ENCRYPTION_KEY not set or invalid — field encryption disabled';
             if (process.env.NODE_ENV === 'production') {
