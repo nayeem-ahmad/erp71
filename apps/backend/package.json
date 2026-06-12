@@ -21,6 +21,7 @@
     "@nestjs/schedule": "^6.1.1",
     "@nestjs/swagger": "^11.4.4",
     "@nestjs/throttler": "^6.5.0",
+    "@prisma/client": "^5.22.0",
     "@retail-saas/database": "*",
     "@retail-saas/shared-types": "*",
     "@sentry/nestjs": "^10.53.1",
