@@ -249,6 +249,7 @@ export class SalesService {
                             customer.name ?? 'Customer',
                             totalAmount,
                             serialNumber,
+                            tenantId,
                         ),
                     );
                 }

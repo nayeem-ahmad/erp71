@@ -154,6 +154,43 @@ async function main() {
         },
     });
 
+    // ── SMS top-up packages + starter credits for the demo tenant ────────────
+    const smsPackages = [
+        { name: 'Starter — 500 SMS', credits: 500, price: 250 },
+        { name: 'Business — 2,000 SMS', credits: 2000, price: 900 },
+        { name: 'Pro — 5,000 SMS', credits: 5000, price: 2000 },
+        { name: 'Enterprise — 20,000 SMS', credits: 20000, price: 7000 },
+    ];
+    for (const [index, pkg] of smsPackages.entries()) {
+        const existing = await prisma.smsPackage.findFirst({ where: { name: pkg.name } });
+        if (existing) {
+            await prisma.smsPackage.update({
+                where: { id: existing.id },
+                data: { credits: pkg.credits, price: pkg.price, is_active: true, sort_order: index },
+            });
+        } else {
+            await prisma.smsPackage.create({
+                data: { ...pkg, currency: 'BDT', is_active: true, sort_order: index },
+            });
+        }
+    }
+
+    if (tenant.sms_credits === 0) {
+        await prisma.tenant.update({
+            where: { id: tenant.id },
+            data: { sms_enabled: true, sms_credits: 1000 },
+        });
+        await prisma.smsTransaction.create({
+            data: {
+                tenant_id: tenant.id,
+                type: 'ADJUSTMENT',
+                credits: 1000,
+                balance_after: 1000,
+                description: 'Seed starter SMS credits',
+            },
+        });
+    }
+
     // ── 3. Tenant memberships ────────────────────────────────────────────────
     await prisma.tenantUser.upsert({
         where: { tenant_id_user_id: { tenant_id: tenant.id, user_id: adminUser.id } },

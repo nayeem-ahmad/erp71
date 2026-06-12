@@ -209,6 +209,12 @@ function buildModules(t: ReturnType<typeof useI18n>['t']): NavModule[] {
         href: '/dashboard/billing',
     },
     {
+        key: 'sms-credits',
+        icon: MessageSquare,
+        label: 'SMS Credits',
+        href: '/dashboard/sms-credits',
+    },
+    {
         key: 'team',
         icon: UserCog,
         label: 'Team & Permissions',

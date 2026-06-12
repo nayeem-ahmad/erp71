@@ -256,6 +256,7 @@ model Tenant {
   sms_enabled          Boolean  @default(false)
   sms_on_sale          Boolean  @default(false)  // send SMS receipt after each sale
   sms_on_low_stock     Boolean  @default(false)  // send SMS for low stock alerts
+  sms_credits          Int      @default(0)      // prepaid SMS credit balance (number of message segments remaining)
 
   report_weekly_enabled  Boolean  @default(false)
   report_monthly_enabled Boolean  @default(false)
@@ -336,6 +337,7 @@ model Tenant {
   crmCampaigns        CrmCampaign[]
   expenseCategories ExpenseCategory[]
   expenseEntries    ExpenseEntry[]
+  smsTransactions   SmsTransaction[]
 }
 
 model TenantUser {
@@ -1578,6 +1580,39 @@ model BillingEvent {
   @@unique([provider_name, external_event_id])
   @@index([tenant_id, created_at])
   @@index([tenant_id, provider_name])
+}
+
+// ── SMS Credits (prepaid balance the shop spends when sending SMS) ────────────
+
+// Purchasable top-up packages (number of SMS credits for a fixed price).
+model SmsPackage {
+  id         String   @id @default(uuid())
+  name       String
+  credits    Int                              // SMS credits granted on purchase
+  price      Decimal  @db.Decimal(12, 2)      // price for the package
+  currency   String   @default("BDT")
+  is_active  Boolean  @default(true)
+  sort_order Int      @default(0)
+  created_at DateTime @default(now())
+
+  @@index([is_active, sort_order])
+}
+
+// Ledger of every change to a tenant's SMS credit balance.
+model SmsTransaction {
+  id            String   @id @default(uuid())
+  tenant_id     String
+  type          String   // PURCHASE | USAGE | ADJUSTMENT | REFUND
+  credits       Int      // positive = credited, negative = consumed
+  balance_after Int      // resulting balance after this entry
+  description   String?
+  recipient     String?  // destination phone number for USAGE entries
+  reference     String?  // billing/payment reference for PURCHASE entries
+  created_at    DateTime @default(now())
+
+  tenant        Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, created_at])
 }
 
 // ── Multi-Store Access & Permission Models ───────────────────────────────────

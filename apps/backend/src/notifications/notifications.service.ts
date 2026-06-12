@@ -252,7 +252,7 @@ export class NotificationsService {
                 if (ownerPhone) {
                     for (const item of items.slice(0, 20)) {
                         try {
-                            await this.sms.sendLowStockAlert(ownerPhone, item.name, item.quantity);
+                            await this.sms.sendLowStockAlert(ownerPhone, item.name, item.quantity, tenantId);
                         } catch (err) {
                             this.logger.error(
                                 `Failed SMS low stock alert for tenant ${tenantId}, product ${item.name}: ${err}`,
