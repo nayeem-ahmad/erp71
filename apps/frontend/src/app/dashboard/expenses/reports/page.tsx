@@ -192,6 +192,8 @@ export default function ExpenseReportsPage() {
                         <div className="space-y-3">
                             <h2 className="text-sm font-black uppercase tracking-widest text-gray-500">{t.expenses.byCategory}</h2>
                             <DataTable
+                                tableId="expense-reports-by-category"
+                                title="Expenses by Category"
                                 data={summary.byCategory}
                                 columns={categoryColumns}
                                 searchPlaceholder={t.expenses.searchCategories}
@@ -202,6 +204,8 @@ export default function ExpenseReportsPage() {
                         <div className="space-y-3">
                             <h2 className="text-sm font-black uppercase tracking-widest text-gray-500">{t.expenses.monthlyTrend}</h2>
                             <DataTable
+                                tableId="expense-reports-monthly"
+                                title="Monthly Expense Trend"
                                 data={summary.monthlyTrend}
                                 columns={trendColumns}
                                 emptyMessage={t.common.noData}

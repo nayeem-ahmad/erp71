@@ -168,7 +168,7 @@ export default function ExpenseCategoriesPage() {
                         {t.common.loading}
                     </div>
                 ) : (
-                    <DataTable data={categories} columns={columns} searchPlaceholder={t.expenses.searchCategories} emptyMessage={t.common.noData} />
+                    <DataTable tableId="expense-categories" title="Expense Categories" data={categories} columns={columns} searchPlaceholder={t.expenses.searchCategories} emptyMessage={t.common.noData} />
                 )}
             </div>
 

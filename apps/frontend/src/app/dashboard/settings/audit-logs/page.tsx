@@ -235,6 +235,8 @@ export default function AuditLogsPage() {
                 ) : (
                     <>
                         <DataTable
+                            tableId="audit-logs"
+                            title="Audit Logs"
                             data={rows}
                             columns={columns}
                             searchPlaceholder={t.settings.audit.searchPlaceholder}

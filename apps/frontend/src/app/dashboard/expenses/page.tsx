@@ -268,6 +268,8 @@ export default function ExpensesPage() {
                     </div>
                 ) : (
                     <DataTable
+                        tableId="expenses"
+                        title="Expenses"
                         data={entries}
                         columns={columns}
                         searchPlaceholder={t.expenses.searchEntries}

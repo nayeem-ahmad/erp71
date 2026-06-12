@@ -350,6 +350,8 @@ export default function TeamSettingsPage() {
                 <section className="space-y-3">
                     <h2 className="text-sm font-black uppercase tracking-widest text-gray-500">{t.settings.team.membersTitle}</h2>
                     <DataTable
+                        tableId="team-members"
+                        title="Team Members"
                         data={members}
                         columns={memberColumns}
                         searchPlaceholder={t.settings.team.searchMembers}
@@ -360,6 +362,8 @@ export default function TeamSettingsPage() {
                 <section className="space-y-3">
                     <h2 className="text-sm font-black uppercase tracking-widest text-gray-500">{t.settings.team.pendingTitle}</h2>
                     <DataTable
+                        tableId="team-pending"
+                        title="Pending Invitations"
                         data={pending}
                         columns={pendingColumns}
                         searchPlaceholder={t.settings.team.searchPending}
