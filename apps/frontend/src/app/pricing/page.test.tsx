@@ -42,7 +42,7 @@ describe('PricingPage', () => {
         expect(screen.getByText('Try it out, no strings attached')).toBeInTheDocument();
         expect(screen.getByText('For small shops just getting started')).toBeInTheDocument();
         expect(screen.getByText('For growing businesses with multiple locations')).toBeInTheDocument();
-        expect(screen.getByText('For enterprise retailers with no limits')).toBeInTheDocument();
+        expect(screen.getByText('For enterprise retailers scaling fast')).toBeInTheDocument();
     });
 
     it('renders "Free" price for free plan by default (monthly)', () => {
@@ -73,9 +73,15 @@ describe('PricingPage', () => {
         render(<PricingPage />);
         const toggle = screen.getByRole('button', { name: /toggle billing period/i });
         fireEvent.click(toggle);
-        // BASIC: save ~17%, STANDARD: save ~17%, PREMIUM: save ~17%
-        const savingsMessages = screen.getAllByText(/Save \d+% vs monthly/);
-        expect(savingsMessages.length).toBeGreaterThan(0);
+        const savingsMessages = screen.getAllByText(/Save 17% vs monthly/);
+        expect(savingsMessages.length).toBe(3);
+    });
+
+    it('renders monthly prices aligned with backend seed', () => {
+        render(<PricingPage />);
+        expect(screen.getByText('৳499')).toBeInTheDocument();
+        expect(screen.getByText('৳999')).toBeInTheDocument();
+        expect(screen.getByText('৳1,499')).toBeInTheDocument();
     });
 
     it('switches back to monthly when the toggle is clicked twice', () => {

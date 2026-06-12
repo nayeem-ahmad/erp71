@@ -117,8 +117,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 ## IMPORTANT — First month after launch
 
 ### Marketing & Onboarding
-- [ ] Build real marketing/landing page (current `page.tsx` is a placeholder)
-- [ ] Pricing page with feature comparison table across all 4 tiers
+- [x] Build real marketing/landing page — `apps/frontend/src/app/page.tsx` with hero preview, how-it-works, modules, 4-tier pricing preview, shared marketing components — done 2026-06-12
+- [x] Pricing page with feature comparison table across all 4 tiers — `apps/frontend/src/app/pricing/page.tsx` + `src/lib/marketing/plans.ts` aligned with seed prices — done 2026-06-12
 - [x] Onboarding wizard for new tenants (add store → add products → first sale) — `apps/frontend/src/app/dashboard/onboarding/page.tsx` with i18n, sale detection, auto-redirect — done 2026-06-12
 - [ ] In-app contextual help / tooltips for complex features (COA, posting rules, stock takes)
 - [ ] Demo/sandbox account for prospects to try before subscribing
