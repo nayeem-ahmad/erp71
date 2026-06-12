@@ -357,4 +357,5 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Fix login and signup responses to unwrap data from NestJS global TransformInterceptor — done 2026-05-24
 - [x] Fix delivery page "Failed to load deliveries" — root cause: fetchWithAuth already parses+unwraps JSON, so calling .json() on returned object threw TypeError; also fixed double /api/v1 prefix in delivery, manufacturing, settings/reports, settings/tax, settings/sms pages — done 2026-05-24
 - [x] Reorganized left sidebar navigation: distributed Setup and Reports inside respective module menus (Sales, Accounting, Inventory), took Delivery under Sales module, hid Manufacturing menu, expanded Accounting Overview and Products page sub-options in the left menu, and renamed Account Settings to Settings (removing duplicate settings dropdown) — done 2026-06-10
+- [x] Sync `main` with `origin/main` and fix post-merge build failures — rebased local DataTable fix onto origin; regenerated Prisma client; fixed i18n key paths (`t.accounting.reports`), missing hooks/locale, duplicate API keys, `formatBDT`/`parseFloat` typos, and storefront duplicate key — done 2026-06-12
 
