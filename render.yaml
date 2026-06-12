@@ -22,6 +22,8 @@ services:
         sync: false
       - key: JWT_SECRET
         generateValue: true
+      - key: FIELD_ENCRYPTION_KEY
+        generateValue: true
       - key: FRONTEND_URL
         sync: false
       - key: BACKEND_PUBLIC_URL
@@ -112,6 +114,8 @@ services:
       - key: DIRECT_URL
         sync: false
       - key: JWT_SECRET
+        generateValue: true
+      - key: FIELD_ENCRYPTION_KEY
         generateValue: true
       - key: FRONTEND_URL
         sync: false

@@ -3,11 +3,31 @@ import * as crypto from 'crypto';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
-const TAG_LENGTH = 16;
 const ENCODING = 'base64';
 
 // Format: <iv_b64>.<tag_b64>.<ciphertext_b64>
 const SEPARATOR = '.';
+
+export function parseFieldEncryptionKey(raw: string | undefined): Buffer | null {
+    if (!raw?.trim()) return null;
+
+    const trimmed = raw.trim();
+
+    if (/^[0-9a-fA-F]{64}$/.test(trimmed)) {
+        return Buffer.from(trimmed, 'hex');
+    }
+
+    try {
+        const decoded = Buffer.from(trimmed, 'base64');
+        if (decoded.length === 32) {
+            return decoded;
+        }
+    } catch {
+        // fall through
+    }
+
+    return null;
+}
 
 @Injectable()
 export class EncryptionService {
@@ -16,9 +36,9 @@ export class EncryptionService {
     private readonly enabled: boolean;
 
     constructor() {
-        const raw = process.env.FIELD_ENCRYPTION_KEY;
-        if (raw && raw.length === 64) {
-            this.key = Buffer.from(raw, 'hex');
+        const parsed = parseFieldEncryptionKey(process.env.FIELD_ENCRYPTION_KEY);
+        if (parsed) {
+            this.key = parsed;
             this.enabled = true;
         } else {
             const message = 'FIELD_ENCRYPTION_KEY not set or invalid — field encryption disabled';
