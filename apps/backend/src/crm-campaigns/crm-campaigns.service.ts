@@ -143,7 +143,7 @@ export class CrmCampaignsService {
             skipDuplicates: true,
         });
 
-        void this.dispatchCampaign(id, campaign.message, campaign.channel, customers).catch((err) =>
+        void this.dispatchCampaign(tenantId, id, campaign.message, campaign.channel, customers).catch((err) =>
             this.logger.error(`Campaign ${id} dispatch error: ${err}`),
         );
 
@@ -202,6 +202,7 @@ export class CrmCampaignsService {
     }
 
     private async dispatchCampaign(
+        tenantId: string,
         campaignId: string,
         message: string,
         channel: string,
@@ -213,7 +214,13 @@ export class CrmCampaignsService {
         for (const customer of customers) {
             try {
                 if (channel === 'SMS') {
-                    await this.sms.sendSms(customer.phone, message);
+                    const result = await this.sms.sendSms(customer.phone, message, {
+                        tenantId,
+                        purpose: 'CRM campaign',
+                    });
+                    if (!result.sent) {
+                        throw new Error('Insufficient SMS credits');
+                    }
                 } else if (channel === 'WHATSAPP') {
                     await this.whatsapp.sendMessage(customer.phone, message);
                 }

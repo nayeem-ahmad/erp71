@@ -860,6 +860,17 @@ export const api = {
     cancelBillingAtPeriodEnd: () => fetchWithAuth('/billing/cancel-at-period-end', {
         method: 'POST',
     }),
+    getSmsCreditSummary: () => fetchWithAuth('/sms-credits/summary'),
+    purchaseSmsCredits: (data: { packageId: string }) => fetchWithAuth('/sms-credits/purchase', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    confirmSmsCreditsPurchase: (data: { packageId: string; reference?: string }) => fetchWithAuth('/sms-credits/confirm', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     getAdminTenants: (params?: { search?: string; planCode?: string; status?: string }) => {
         const query = new URLSearchParams();
         if (params?.search) query.set('search', params.search);

@@ -3,6 +3,7 @@ import { SalesService } from './sales.service';
 import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
+import { CrmCampaignsService } from '../crm-campaigns/crm-campaigns.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
@@ -41,6 +42,12 @@ describe('SalesService', () => {
       },
       customer: {
         update: jest.fn(),
+      },
+      tenant: {
+        findUnique: jest.fn(),
+      },
+      loyaltyTransaction: {
+        create: jest.fn(),
       },
       paymentRecord: {
         deleteMany: jest.fn(),
@@ -84,11 +91,15 @@ describe('SalesService', () => {
         { provide: DatabaseService, useValue: db },
         { provide: EmailService, useValue: { sendBillingInvoice: jest.fn() } },
         { provide: SmsService, useValue: { sendSaleReceipt: jest.fn() } },
+        { provide: CrmCampaignsService, useValue: { attributeSale: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 
     service = module.get<SalesService>(SalesService);
     (resolveWarehouseId as jest.Mock).mockResolvedValue('wh-1');
+    // mockReset (not just clearAllMocks) so any leftover `...Once()` queue from a
+    // prior test cannot leak a rejection into the next one.
+    (applyInventoryMovement as jest.Mock).mockReset();
     (applyInventoryMovement as jest.Mock).mockResolvedValue(0);
     (autoPostFromRules as jest.Mock).mockResolvedValue({
       postingStatus: 'posted',
