@@ -212,7 +212,7 @@ export default function DashboardPage() {
     ] as const, [copy, financialKpis]);
 
     return (
-        <div className="overflow-y-auto h-full p-8">
+        <div className="overflow-y-auto h-full p-4 md:p-8">
             <div className="mb-8">
                 <h1 className="text-2xl font-bold tracking-tight">{copy.title}</h1>
                 <p className="text-gray-500 text-sm mt-1 uppercase font-medium tracking-wide">
@@ -220,7 +220,7 @@ export default function DashboardPage() {
                 </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
                 <StatCard
                     title={copy.totalSales}
                     value={`${totalSalesAmount.toLocaleString()}`}

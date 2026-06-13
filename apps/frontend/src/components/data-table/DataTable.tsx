@@ -344,7 +344,7 @@ export default function DataTable<T>({
                     </div>
 
                     {/* Toolbar buttons */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                         {/* Advanced Filters */}
                         <button
                             onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}

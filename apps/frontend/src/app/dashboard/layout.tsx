@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { ArrowLeft, Zap, X } from 'lucide-react';
+import { ArrowLeft, Menu, Zap, X } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import Sidebar from '@/components/Sidebar';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
@@ -27,6 +27,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const [showDemoBanner, setShowDemoBanner] = useState(false);
     const [showEmailVerificationBanner, setShowEmailVerificationBanner] = useState(false);
     const [resendingVerification, setResendingVerification] = useState(false);
+    const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
     useEffect(() => {
         api.getMe().then((me) => {
@@ -147,36 +148,46 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 canManageBilling={canManageBilling}
                 canManageTeam={canManageTeam}
                 activePlanCode={activePlanCode}
+                isOpen={mobileNavOpen}
+                onClose={() => setMobileNavOpen(false)}
             />
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Top header */}
-                <header className="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-6 flex-shrink-0">
-                    <div className="flex items-center space-x-3">
+                <header className="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-3 md:px-6 flex-shrink-0">
+                    <div className="flex items-center space-x-2 md:space-x-3 min-w-0">
+                        {/* Hamburger — mobile only */}
+                        <button
+                            className="md:hidden p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors flex-shrink-0"
+                            onClick={() => setMobileNavOpen(true)}
+                            aria-label="Open navigation"
+                        >
+                            <Menu className="w-5 h-5" />
+                        </button>
                         {isDashboardHome ? null : (
                             <button
                                 onClick={() => router.back()}
-                                className="flex items-center space-x-1.5 text-gray-500 hover:text-gray-900 transition-colors group"
+                                className="flex items-center space-x-1.5 text-gray-500 hover:text-gray-900 transition-colors group flex-shrink-0"
                             >
                                 <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-                                <span className="text-sm font-semibold">{t.common.back}</span>
+                                <span className="text-sm font-semibold hidden sm:block">{t.common.back}</span>
                             </button>
                         )}
                         {!isDashboardHome && (
-                            <span className="text-gray-300 text-sm select-none">·</span>
+                            <span className="text-gray-300 text-sm select-none hidden sm:block">·</span>
                         )}
-                        <span className="text-sm font-bold text-gray-700 tracking-tight">{pageTitle}</span>
+                        <span className="text-sm font-bold text-gray-700 tracking-tight truncate">{pageTitle}</span>
                     </div>
 
-                    <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2 md:space-x-4 flex-shrink-0">
                         <LanguageSwitcher />
                         {tenantStores.length > 0 ? (
-                            <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-2 py-1">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">{t.dashboardLayout.branchLabel}</span>
+                            <div className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-2 py-1">
+                                <span className="hidden sm:inline text-[10px] font-black uppercase tracking-widest text-gray-500">{t.dashboardLayout.branchLabel}</span>
                                 <select
                                     value={activeStoreId}
                                     onChange={(e) => handleStoreChange(e.target.value)}
-                                    className="bg-transparent text-xs font-semibold text-gray-700 outline-none"
+                                    className="bg-transparent text-xs font-semibold text-gray-700 outline-none max-w-[100px] sm:max-w-none"
                                     aria-label="Select branch"
                                 >
                                     {tenantStores.map((store: any) => (
@@ -188,15 +199,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                             </div>
                         ) : null}
                         <NotificationBell />
-                        <div className="h-8 w-px bg-gray-200" />
-                        <div className="flex items-center space-x-3">
+                        <div className="h-8 w-px bg-gray-200 hidden sm:block" />
+                        <div className="flex items-center space-x-2 md:space-x-3">
                             <div className="text-right hidden sm:block">
                                 <p className="text-sm font-semibold tracking-tight leading-none">{user?.name || '—'}</p>
                                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
                                     {activeTenant?.role || t.dashboardLayout.userFallbackRole}
                                 </p>
                             </div>
-                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 text-sm font-black border border-blue-200 cursor-pointer hover:scale-105 transition-transform">
+                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 text-sm font-black border border-blue-200 cursor-pointer hover:scale-105 transition-transform flex-shrink-0">
                                 {user?.name?.split(' ').map((n: string) => n[0]).join('') || '??'}
                             </div>
                         </div>

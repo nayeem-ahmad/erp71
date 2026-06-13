@@ -85,6 +85,8 @@ export default function POSPage() {
     const [redeemPointsEnabled, setRedeemPointsEnabled] = useState(false);
     const [pointsToRedeem, setPointsToRedeem] = useState(0);
 
+    const [showMobileCart, setShowMobileCart] = useState(false);
+
     const { isOnline, pendingCount, isSyncing, syncNow, refreshPendingCount } = useOfflineSync();
 
     const addNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -534,16 +536,16 @@ export default function POSPage() {
                 </div>
             )}
 
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex flex-col md:flex-row flex-1 overflow-hidden relative">
                 {/* Left Section: Product Selection */}
-                <div className="flex-1 flex flex-col p-6 space-y-6 overflow-hidden">
-                    <div className="flex items-center justify-between">
+                <div className="flex-1 flex flex-col p-4 md:p-6 space-y-4 md:space-y-6 overflow-hidden">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div>
                             <h1 className="text-2xl font-black tracking-tight inline-flex items-center gap-2">{t.pos.title} <HelpTooltip text={t.pos.helpTooltip} /></h1>
                             <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">{t.pos.subtitle}</p>
                         </div>
                         <div className="flex items-center gap-2">
-                            <div className="relative w-72">
+                            <div className="relative flex-1 min-w-0 sm:flex-none sm:w-64">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                                 <input
                                     type="text"
@@ -553,7 +555,7 @@ export default function POSPage() {
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                 />
                             </div>
-                            <div className="flex items-center bg-white rounded-xl shadow-sm p-1 gap-0.5">
+                            <div className="flex items-center bg-white rounded-xl shadow-sm p-1 gap-0.5 flex-shrink-0">
                                 <button
                                     onClick={() => setViewMode('gallery')}
                                     title={t.pos.galleryViewTitle}
@@ -576,7 +578,7 @@ export default function POSPage() {
                         {loading ? (
                             <div className="flex items-center justify-center h-full text-gray-400 font-bold uppercase tracking-widest text-xs">{t.pos.loadingProducts}</div>
                         ) : viewMode === 'gallery' ? (
-                            <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                                 {filteredProducts.map((product) => (
                                     <div
                                         key={product.id}
@@ -638,8 +640,37 @@ export default function POSPage() {
                     </div>
                 </div>
 
+                {/* Mobile backdrop */}
+                {showMobileCart && (
+                    <div
+                        className="md:hidden fixed inset-0 z-30 bg-black/50"
+                        onClick={() => setShowMobileCart(false)}
+                    />
+                )}
+
+                {/* Mobile floating cart button */}
+                <button
+                    className={`md:hidden fixed bottom-6 right-6 z-20 bg-blue-600 text-white rounded-2xl px-5 py-3 shadow-xl font-black text-sm flex items-center gap-2 transition-all duration-200 ${
+                        cart.length > 0 && !showMobileCart ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
+                    }`}
+                    onClick={() => setShowMobileCart(true)}
+                >
+                    <ShoppingCart className="w-5 h-5" />
+                    <span>{t.pos.cart.currentCart}</span>
+                    <span className="bg-white text-blue-600 rounded-full w-5 h-5 flex items-center justify-center text-[11px] font-black">
+                        {cart.length}
+                    </span>
+                </button>
+
                 {/* Right Section: Cart & Checkout */}
-                <div className="w-[400px] bg-white border-l border-gray-100 flex flex-col shadow-2xl">
+                <div className={`
+                    fixed bottom-0 left-0 right-0 z-40 h-[90vh] flex flex-col
+                    bg-white rounded-t-3xl shadow-2xl
+                    transition-transform duration-300
+                    ${showMobileCart ? 'translate-y-0' : 'translate-y-full'}
+                    md:relative md:h-auto md:bottom-auto md:left-auto md:right-auto md:z-auto
+                    md:translate-y-0 md:rounded-none md:w-[400px] md:border-l md:border-gray-100 md:shadow-2xl
+                `}>
                     <div className="p-6 border-b border-gray-50 flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                             <div className="p-2 bg-blue-50 rounded-xl text-blue-600">
@@ -647,9 +678,18 @@ export default function POSPage() {
                             </div>
                             <h2 className="text-lg font-black tracking-tight">{t.pos.cart.currentCart}</h2>
                         </div>
-                        <span className="bg-gray-900 text-white px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
-                            {interpolate(t.pos.cart.itemsCount, { count: cart.length })}
-                        </span>
+                        <div className="flex items-center gap-2">
+                            <span className="bg-gray-900 text-white px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
+                                {interpolate(t.pos.cart.itemsCount, { count: cart.length })}
+                            </span>
+                            <button
+                                className="md:hidden p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors"
+                                onClick={() => setShowMobileCart(false)}
+                                aria-label="Close cart"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
@@ -748,8 +788,8 @@ export default function POSPage() {
 
             {/* Print Receipt Modal */}
             {lastSale && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-                    <div className="bg-white w-[420px] rounded-3xl shadow-2xl overflow-hidden">
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-[420px] rounded-3xl shadow-2xl overflow-hidden">
                         <div className="p-6 border-b border-gray-100 bg-green-50/50 flex items-center space-x-4">
                             <div className="p-3 bg-green-100 rounded-2xl text-green-600">
                                 <CheckCircle className="w-7 h-7" />
@@ -796,8 +836,8 @@ export default function POSPage() {
 
             {/* Checkout Modal */}
             {showCheckout && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-                    <div className="bg-white w-[500px] rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+                    <div className="bg-white w-full sm:max-w-[500px] rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] sm:max-h-[90vh]">
                         <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
                             <div className="flex items-center space-x-3">
                                 <div className="p-2 bg-blue-50 rounded-xl text-blue-600">
@@ -812,7 +852,7 @@ export default function POSPage() {
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
-                        <div className="p-6 space-y-6">
+                        <div className="p-6 space-y-6 overflow-y-auto flex-1">
                             <div className="bg-blue-50 p-4 rounded-2xl flex items-center justify-between border border-blue-100">
                                 <div>
                                     <span className="font-black uppercase tracking-widest text-blue-900 text-sm">{t.pos.payment.totalDue}</span>
