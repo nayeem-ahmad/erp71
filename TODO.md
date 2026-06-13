@@ -279,8 +279,9 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Sidebar link "AI Credits" (Sparkles icon) added — done 2026-06-13
 - [x] `api.getAiUsage()`, `api.aiNarrateReport()`, `api.aiDraftMessage()` added to `apps/frontend/src/lib/api.ts` — done 2026-06-13
 - [x] Add `ANTHROPIC_API_KEY` to `render.yaml` and `.env.example` — done 2026-06-13
-- [ ] Wire `aiNarrateReport` into the sales reports page for a one-click "Narrate this report" button
-- [ ] Wire `aiDraftMessage` into the CRM interactions page for a "Draft WhatsApp message" button
+- [x] Wire `aiNarrateReport` into the sales summary report page — "AI Narrate" button + insight card — done 2026-06-13
+- [x] Wire `aiDraftMessage` into the CRM interactions tab — "AI Draft" panel with channel/purpose selector, pre-fills interaction form — done 2026-06-13
+- [x] Platform admin AI settings page at `/dashboard/admin/platform-settings/ai` — Anthropic key (encrypted), model selector, "Test connection", pricing table — done 2026-06-13
 
 ---
 
