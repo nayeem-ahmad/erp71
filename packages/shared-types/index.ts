@@ -695,3 +695,44 @@ export const ProductSchema = z.object({
 });
 
 export type ProductInput = z.infer<typeof ProductSchema>;
+
+// ---------------------------------------------------------------------------
+// System health monitoring (platform-admin)
+// ---------------------------------------------------------------------------
+
+/**
+ * State of a single monitored dependency or of the system overall.
+ * - `ok`       — reachable and within thresholds
+ * - `degraded` — reachable but unhealthy (slow, near a limit, or a non-critical
+ *                dependency is down)
+ * - `down`     — unreachable / failing
+ * - `disabled` — not configured for this environment (never affects rollup)
+ * - `unknown`  — could not be determined
+ */
+export type DependencyState = "ok" | "degraded" | "down" | "disabled" | "unknown";
+
+export interface CheckResult {
+  /** Stable identifier, e.g. "database", "redis", "bkash". */
+  name: string;
+  /** Human-friendly label for the dashboard. */
+  label: string;
+  state: DependencyState;
+  /** Probe round-trip time in milliseconds, when measured. */
+  latency_ms?: number;
+  /** Short explanation, especially for non-ok states. */
+  message?: string;
+  /** Whether this check can pull the overall status to `down` (vs. capped at `degraded`). */
+  critical: boolean;
+  /** Additional structured data (pool stats, db size, etc.). */
+  details?: Record<string, unknown>;
+}
+
+export interface SystemHealthReport {
+  /** Worst-of rollup across all checks (optional/disabled deps excluded). */
+  status: DependencyState;
+  generated_at: string;
+  uptime_seconds: number;
+  /** Total wall-clock time spent running all checks. */
+  duration_ms: number;
+  checks: CheckResult[];
+}

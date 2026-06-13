@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SegmentsService, SEGMENT_THRESHOLDS } from './segments.service';
 import { AppLogger } from '../common/app-logger.service';
 import { DatabaseService } from '../database/database.service';
+import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 
 const NOW = new Date('2026-05-08T00:00:00Z');
 
@@ -27,6 +28,7 @@ describe('SegmentsService', () => {
                 SegmentsService,
                 { provide: DatabaseService, useValue: db },
                 { provide: AppLogger, useValue: mockLogger },
+                { provide: JobTrackerService, useValue: { track: (_n: string, fn: () => any) => fn() } },
             ],
         }).compile();
 

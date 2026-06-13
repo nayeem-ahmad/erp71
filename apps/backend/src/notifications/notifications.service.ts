@@ -5,6 +5,8 @@ import { PaginatedResult } from '../common/pagination.dto';
 import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
+import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
+import { JOB_NAMES } from '../system-health/jobs/job-names';
 
 /* ── Report types ─────────────────────────────────────────────────── */
 
@@ -35,6 +37,7 @@ export class NotificationsService {
         private db: DatabaseService,
         private email: EmailService,
         private sms: SmsService,
+        private jobTracker: JobTrackerService,
     ) {}
 
     /* ------------------------------------------------------------------ */
@@ -108,6 +111,10 @@ export class NotificationsService {
     // Run daily at 08:00
     @Cron('0 8 * * *')
     async sendSubscriptionExpiryWarnings(): Promise<void> {
+        await this.jobTracker.track(JOB_NAMES.NOTIFICATIONS_EXPIRY_WARNINGS, () => this.sendSubscriptionExpiryWarningsImpl());
+    }
+
+    private async sendSubscriptionExpiryWarningsImpl(): Promise<void> {
         const now = new Date();
 
         // Warning tiers: subscriptions expiring within [0,2) days (1-day) or [6,8) days (7-day)
@@ -165,6 +172,10 @@ export class NotificationsService {
     // Run daily at 07:00
     @Cron('0 7 * * *')
     async sendLowStockAlerts(): Promise<void> {
+        await this.jobTracker.track(JOB_NAMES.NOTIFICATIONS_LOW_STOCK, () => this.sendLowStockAlertsImpl());
+    }
+
+    private async sendLowStockAlertsImpl(): Promise<void> {
         const rows = await this.db.$queryRaw<Array<{
             tenant_id: string;
             tenant_name: string;
@@ -279,6 +290,10 @@ export class NotificationsService {
 
     @Cron('0 7 * * 1')
     async sendWeeklyReports(): Promise<void> {
+        await this.jobTracker.track(JOB_NAMES.NOTIFICATIONS_WEEKLY, () => this.sendWeeklyReportsImpl());
+    }
+
+    private async sendWeeklyReportsImpl(): Promise<void> {
         const tenants = await this.db.tenant.findMany({
             where: { report_weekly_enabled: true },
             include: { owner: true },
@@ -312,6 +327,10 @@ export class NotificationsService {
 
     @Cron('0 7 1 * *')
     async sendMonthlyReports(): Promise<void> {
+        await this.jobTracker.track(JOB_NAMES.NOTIFICATIONS_MONTHLY, () => this.sendMonthlyReportsImpl());
+    }
+
+    private async sendMonthlyReportsImpl(): Promise<void> {
         const tenants = await this.db.tenant.findMany({
             where: { report_monthly_enabled: true },
             include: { owner: true },
@@ -553,6 +572,10 @@ export class NotificationsService {
     // #74 Data retention — runs daily at 03:00
     @Cron('0 3 * * *')
     async purgeExpiredData(): Promise<void> {
+        await this.jobTracker.track(JOB_NAMES.NOTIFICATIONS_PURGE, () => this.purgeExpiredDataImpl());
+    }
+
+    private async purgeExpiredDataImpl(): Promise<void> {
         const now = new Date();
 
         const tokenCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -575,8 +598,11 @@ export class NotificationsService {
             where: { created_at: { lt: notifCutoff } },
         });
 
+        // Purge job-run history older than 30 days (system-health observability)
+        const jobRows = await this.jobTracker.purgeOlderThan(30);
+
         this.logger.log(
-            `[DataRetention] Purged: ${pwTokens} pw-reset tokens, ${evTokens} verification tokens, ${auditRows} audit logs, ${notifRows} notifications`,
+            `[DataRetention] Purged: ${pwTokens} pw-reset tokens, ${evTokens} verification tokens, ${auditRows} audit logs, ${notifRows} notifications, ${jobRows} job runs`,
         );
     }
 }

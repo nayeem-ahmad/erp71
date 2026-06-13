@@ -3,6 +3,8 @@ import { Cron } from '@nestjs/schedule';
 import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
+import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
+import { JOB_NAMES } from '../system-health/jobs/job-names';
 
 @Injectable()
 export class BillingSchedulerService {
@@ -16,11 +18,16 @@ export class BillingSchedulerService {
         private readonly db: DatabaseService,
         private readonly email: EmailService,
         private readonly audit: AuditService,
+        private readonly jobTracker: JobTrackerService,
     ) {}
 
     // Run daily at 08:00 — remind PAST_DUE tenants to retry payment before dunning cancels them
     @Cron('0 8 * * *')
     async retryFailedPayments(): Promise<void> {
+        await this.jobTracker.track(JOB_NAMES.BILLING_RETRY, () => this.retryFailedPaymentsImpl());
+    }
+
+    private async retryFailedPaymentsImpl(): Promise<void> {
         const graceCutoff = new Date();
         graceCutoff.setDate(graceCutoff.getDate() - this.graceDays);
 
@@ -86,6 +93,10 @@ export class BillingSchedulerService {
     // Run daily at 09:00 — cancel subscriptions that have been PAST_DUE beyond the grace period
     @Cron('0 9 * * *')
     async performDunning(): Promise<void> {
+        await this.jobTracker.track(JOB_NAMES.BILLING_DUNNING, () => this.performDunningImpl());
+    }
+
+    private async performDunningImpl(): Promise<void> {
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - this.graceDays);
 

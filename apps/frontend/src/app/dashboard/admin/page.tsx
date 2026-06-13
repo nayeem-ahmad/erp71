@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Building2, Users, TrendingUp, ShieldCheck, ArrowRight, Loader2, Settings } from 'lucide-react';
+import { Building2, Users, TrendingUp, ShieldCheck, ArrowRight, Loader2, Settings, Activity } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 
@@ -75,6 +75,7 @@ export default function PlatformAdminPage() {
                     <QuickLink href="/dashboard/admin/tenants" icon={Building2} title={m.quickLinks.tenants.title} description={m.quickLinks.tenants.description} />
                     <QuickLink href="/dashboard/admin/users" icon={Users} title={m.quickLinks.users.title} description={m.quickLinks.users.description} />
                     <QuickLink href="/dashboard/admin/platform-settings" icon={Settings} title={m.quickLinks.platformSettings.title} description={m.quickLinks.platformSettings.description} />
+                    <QuickLink href="/dashboard/admin/system-health" icon={Activity} title={t.admin.systemHealth.quickLink.title} description={t.admin.systemHealth.quickLink.description} />
                 </div>
             </div>
         </div>

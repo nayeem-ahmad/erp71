@@ -1,4 +1,5 @@
 import { SmsService } from './sms.service';
+import { CircuitBreakerRegistry } from '../system-health/resilience/circuit-breaker.registry';
 
 describe('SmsService credit deduction', () => {
     const platformSettings = { getRawValue: jest.fn().mockResolvedValue(null) } as any;
@@ -13,7 +14,7 @@ describe('SmsService credit deduction', () => {
         jest.resetAllMocks();
         platformSettings.getRawValue.mockResolvedValue(null);
         delete process.env.SMS_API_KEY;
-        service = new SmsService(platformSettings, smsCredits);
+        service = new SmsService(platformSettings, smsCredits, new CircuitBreakerRegistry());
     });
 
     it('does not touch credits when no tenant is provided', async () => {

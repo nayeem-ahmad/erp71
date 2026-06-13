@@ -17,6 +17,26 @@ export class RedisService {
         }
     }
 
+    /** True when Upstash credentials are configured and caching is active. */
+    isEnabled(): boolean {
+        return this.client !== null;
+    }
+
+    /**
+     * Round-trips a lightweight command to verify Redis is reachable.
+     * Returns false if Redis is disabled or the command fails.
+     */
+    async ping(): Promise<boolean> {
+        if (!this.client) return false;
+        try {
+            const pong = await this.client.ping();
+            return pong === 'PONG';
+        } catch (err) {
+            this.logger.warn(`Redis ping failed: ${err}`);
+            return false;
+        }
+    }
+
     async get<T>(key: string): Promise<T | null> {
         if (!this.client) return null;
         try {

@@ -230,6 +230,22 @@ model AuditLog {
   @@index([entity, entity_id])
 }
 
+/// Execution record for scheduled (cron) jobs — platform-scoped, not
+/// tenant-scoped. Powers cron-job observability in system-health monitoring.
+model JobRun {
+  id          String    @id @default(uuid())
+  job_name    String
+  status      String    // RUNNING | SUCCESS | FAILED
+  started_at  DateTime  @default(now())
+  finished_at DateTime?
+  duration_ms Int?
+  error       String?
+  created_at  DateTime  @default(now())
+
+  @@index([job_name, started_at])
+  @@index([job_name, status, finished_at])
+}
+
 model Tenant {
   id                   String   @id @default(uuid())
   name                 String

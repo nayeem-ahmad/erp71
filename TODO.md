@@ -42,6 +42,13 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Add structured logging (Winston or Pino) — replace bare Logger.debug calls
 - [x] Set up uptime monitoring (BetterStack or similar) — `docs/ops/uptime-monitoring.md` + `scripts/smoke-check.sh` with production URLs — done 2026-06-12
 - [x] Configure alerts for: error rate spikes, payment webhook failures, DB connection exhaustion — documented in `docs/ops/uptime-monitoring.md`; Sentry payment tag wired — done 2026-06-12
+- [x] Write dev-ready system-health monitoring plan — `docs/ops/system-health-monitoring-plan.md` (6 phases: deep health checks, cron observability, metrics endpoint, alerting, admin dashboard) — done 2026-06-13
+- [x] Implement system-health Phase 0–1: `system-health` module + deep health/readiness checks (DB pool/latency/size, Redis ping, external provider reachability) behind `PlatformAdminGuard` at `GET /api/v1/admin/system-health` — done 2026-06-13
+- [x] Implement system-health Phase 2: cron job observability — `JobRun` model + `JobTrackerService` wrapping all 11 scheduled jobs, overdue detection, `GET /api/v1/admin/system-health/jobs`, 30-day retention purge — done 2026-06-13
+- [x] Implement system-health Phase 3: Prometheus metrics — token-guarded `GET /api/v1/metrics` (default Node runtime metrics + HTTP request count/latency via global interceptor + per-job gauges); `METRICS_TOKEN` wired in render.yaml + env examples — done 2026-06-13
+- [x] Implement system-health Phase 4: threshold alerting — `HealthAlertService` (5-min cron) emails/SMSes platform admins on degraded/down with cooldown + recovery notice; added payment-webhook-failure + SMS-credit-low health checks; Sentry rules + behavior documented in `docs/ops/system-health-alerting.md` — done 2026-06-13
+- [x] Implement system-health Phase 5: platform-admin System Health dashboard at `/dashboard/admin/system-health` — live overall status, uptime, dependency checks, and scheduled-job table with auto-refresh; i18n in en/bn/ms; linked from admin overview — done 2026-06-13
+- [x] Implement system-health Phase 6: circuit breakers for outbound calls — shared `CircuitBreakerRegistry` wrapping SSLCommerz (billing), BulkSMSBD (SMS), and SMTP (email) with timeouts + fail-fast; breaker state surfaced in the health report/dashboard — done 2026-06-13
 
 ### Billing & Payments
 - [x] Implement dunning management (define what happens after PAST_DUE — auto-cancel after N days) — done 2026-06-09
