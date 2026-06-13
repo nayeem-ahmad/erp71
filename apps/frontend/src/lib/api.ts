@@ -893,6 +893,8 @@ export const api = {
         method: 'POST',
     }),
     getAdminMetrics: () => fetchWithAuth('/admin/metrics'),
+    getSystemHealth: () => fetchWithAuth('/admin/system-health'),
+    getSystemHealthJobs: () => fetchWithAuth('/admin/system-health/jobs'),
     getAdminUsers: (params?: { search?: string; page?: number; limit?: number }) => {
         const query = new URLSearchParams();
         if (params?.search) query.set('search', params.search);
