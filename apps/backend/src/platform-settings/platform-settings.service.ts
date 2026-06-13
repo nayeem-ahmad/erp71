@@ -42,6 +42,10 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
         phone_number_id: { isSecret: false },
         api_version:     { isSecret: false, default: 'v18.0' },
     },
+    ai: {
+        api_key: { isSecret: true },
+        default_model: { isSecret: false, default: 'claude-haiku-4-5-20251001' },
+    },
     general: {
         platform_name:    { isSecret: false, default: 'RetailSaaS' },
         support_email:    { isSecret: false, default: 'support@retailsaas.app' },

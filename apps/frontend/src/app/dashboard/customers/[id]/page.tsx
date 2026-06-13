@@ -7,7 +7,7 @@ import { formatBDT, formatDate } from '../../../../lib/format';
 import {
     ArrowLeft, Phone, Mail, ShoppingBag, CreditCard, MapPin, Building2,
     FolderTree, Map, ChevronLeft, ChevronRight, MessageSquare, Wallet,
-    Plus, Trash2, CheckCircle2, Send, ClipboardList, AlertCircle,
+    Plus, Trash2, CheckCircle2, Send, ClipboardList, AlertCircle, Sparkles, Loader2,
 } from 'lucide-react';
 import { useI18n, formatMessage } from '@/lib/i18n';
 
@@ -51,6 +51,12 @@ export default function CustomerProfile() {
     const [showInteractionForm, setShowInteractionForm] = useState(false);
     const [newInteraction, setNewInteraction] = useState({ type: 'CALL', summary: '', outcome: '' });
     const [savingInteraction, setSavingInteraction] = useState(false);
+
+    // AI message drafting state
+    const [draftingMessage, setDraftingMessage] = useState(false);
+    const [draftPurpose, setDraftPurpose] = useState('follow_up');
+    const [draftChannel, setDraftChannel] = useState('WHATSAPP');
+    const [showDraftPanel, setShowDraftPanel] = useState(false);
 
     // Tasks state
     const [tasks, setTasks] = useState<any[]>([]);
@@ -171,6 +177,32 @@ export default function CustomerProfile() {
         if (!confirm(t.customers.profile.deleteInteractionConfirm)) return;
         await api.deleteCrmInteraction(interactionId);
         await loadInteractions();
+    };
+
+    const handleDraftMessage = async () => {
+        if (!customer) return;
+        setDraftingMessage(true);
+        try {
+            const result = await api.aiDraftMessage({
+                channel: draftChannel.toLowerCase(),
+                purpose: draftPurpose,
+                customerContext: {
+                    name: customer.name,
+                    phone: customer.phone,
+                    total_spent: customer.total_spent,
+                    due_balance: customer.due_balance,
+                    segment: customer.segment_category,
+                    last_contacted_at: customer.last_contacted_at,
+                },
+            });
+            setNewInteraction((n) => ({ ...n, type: draftChannel as any, summary: result.draft }));
+            setShowDraftPanel(false);
+            setShowInteractionForm(true);
+        } catch (err: any) {
+            alert(err.message ?? 'AI drafting failed.');
+        } finally {
+            setDraftingMessage(false);
+        }
     };
 
     const savePayment = async () => {
@@ -338,14 +370,70 @@ export default function CustomerProfile() {
                 {/* Tab: Interactions */}
                 {activeTab === 'interactions' && (
                     <div className="p-6 space-y-4">
-                        <div className="flex justify-end">
+                        <div className="flex justify-end gap-2 flex-wrap">
                             <button
-                                onClick={() => setShowInteractionForm((v) => !v)}
+                                onClick={() => { setShowDraftPanel((v) => !v); setShowInteractionForm(false); }}
+                                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700"
+                            >
+                                <Sparkles className="w-4 h-4" /> AI Draft
+                            </button>
+                            <button
+                                onClick={() => { setShowInteractionForm((v) => !v); setShowDraftPanel(false); }}
                                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
                             >
                                 <Plus className="w-4 h-4" /> {t.customers.profile.logInteraction}
                             </button>
                         </div>
+
+                        {showDraftPanel && (
+                            <div className="bg-purple-50 rounded-xl p-4 space-y-3 border border-purple-200">
+                                <p className="text-xs font-black uppercase tracking-widest text-purple-400">AI Message Drafter</p>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-600 mb-1">Channel</label>
+                                        <select
+                                            value={draftChannel}
+                                            onChange={(e) => setDraftChannel(e.target.value)}
+                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                                        >
+                                            <option value="WHATSAPP">WhatsApp</option>
+                                            <option value="SMS">SMS</option>
+                                            <option value="EMAIL">Email</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-600 mb-1">Purpose</label>
+                                        <select
+                                            value={draftPurpose}
+                                            onChange={(e) => setDraftPurpose(e.target.value)}
+                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                                        >
+                                            <option value="follow_up">Follow-up</option>
+                                            <option value="payment_reminder">Payment reminder</option>
+                                            <option value="promotion">Promotion</option>
+                                            <option value="birthday">Birthday</option>
+                                            <option value="reorder_reminder">Reorder reminder</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-gray-500">
+                                    Claude will draft a ready-to-send message using {customer?.name}'s profile. The draft will pre-fill the interaction form below.
+                                </p>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleDraftMessage}
+                                        disabled={draftingMessage}
+                                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                                    >
+                                        {draftingMessage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                                        {draftingMessage ? 'Drafting…' : 'Generate draft'}
+                                    </button>
+                                    <button onClick={() => setShowDraftPanel(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 bg-white">
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         {showInteractionForm && (
                             <div className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-200">

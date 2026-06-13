@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { MessageSquare, Mail, CreditCard, Settings, ChevronRight, ShieldCheck } from 'lucide-react';
+import { MessageSquare, Mail, CreditCard, Settings, ChevronRight, ShieldCheck, Sparkles } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
 export default function PlatformSettingsIndexPage() {
@@ -40,6 +40,14 @@ export default function PlatformSettingsIndexPage() {
             description: m.sections.general.description,
             color: 'text-amber-600',
             bg: 'bg-amber-50',
+        },
+        {
+            href: '/dashboard/admin/platform-settings/ai',
+            icon: Sparkles,
+            label: 'AI (Anthropic)',
+            description: 'Anthropic API key and default model for AI-powered features across all tenants.',
+            color: 'text-purple-600',
+            bg: 'bg-purple-50',
         },
     ];
 

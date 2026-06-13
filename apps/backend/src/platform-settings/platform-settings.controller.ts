@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../auth/platform-admin.guard';
 import { SmsService } from '../sms/sms.service';
 import { EmailService } from '../email/email.service';
+import { AiService } from '../ai/ai.service';
 import { PlatformSettingsService, VALID_GROUPS } from './platform-settings.service';
 import { UpsertGroupSettingsDto, TestSmsDto, TestEmailDto } from './platform-settings.dto';
 
@@ -23,6 +24,7 @@ export class PlatformSettingsController {
         private readonly platformSettings: PlatformSettingsService,
         private readonly smsService: SmsService,
         private readonly emailService: EmailService,
+        private readonly aiService: AiService,
     ) {}
 
     @Get(':group')
@@ -53,6 +55,11 @@ export class PlatformSettingsController {
         const to = dto.email || req.user.email;
         await this.emailService.sendWelcome(to, 'Platform Admin');
         return { message: `Test email dispatched to ${to}` };
+    }
+
+    @Post('ai/test')
+    async testAi() {
+        return this.aiService.testConnection();
     }
 
     private validateGroup(group: string) {

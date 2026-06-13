@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import Anthropic from '@anthropic-ai/sdk';
 import { DatabaseService } from '../database/database.service';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { NarrateReportDto, DraftMessageDto } from './ai.dto';
 import { AI_CREDITS_PER_PLAN, AI_TOKENS_PER_CREDIT, SubscriptionPlanCode } from '@retail-saas/shared-types';
 
@@ -14,10 +15,35 @@ const MODEL_RATES: Record<ModelId, { input: number; output: number; cacheRead: n
 
 @Injectable()
 export class AiService {
-    private readonly anthropic: Anthropic;
+    constructor(
+        private readonly db: DatabaseService,
+        private readonly platformSettings: PlatformSettingsService,
+    ) {}
 
-    constructor(private readonly db: DatabaseService) {
-        this.anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    private async getClient(): Promise<Anthropic> {
+        const dbKey = await this.platformSettings.getRawValue('ai', 'api_key');
+        const apiKey = dbKey ?? process.env.ANTHROPIC_API_KEY ?? '';
+        return new Anthropic({ apiKey });
+    }
+
+    async testConnection(): Promise<{ success: boolean; model: string; message: string }> {
+        const anthropic = await this.getClient();
+        if (!anthropic.apiKey) {
+            return { success: false, model: '', message: 'No API key configured.' };
+        }
+        try {
+            const model: ModelId = 'claude-haiku-4-5-20251001';
+            const response = await anthropic.messages.create({
+                model,
+                max_tokens: 16,
+                messages: [{ role: 'user', content: 'Reply with just: ok' }],
+            });
+            const text = response.content.find((b) => b.type === 'text');
+            return { success: true, model, message: text?.type === 'text' ? text.text : 'ok' };
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return { success: false, model: '', message: msg };
+        }
     }
 
     async getUsageSummary(tenantId: string) {
@@ -109,10 +135,11 @@ export class AiService {
         systemPrompt: string,
         userMessage: string,
     ): Promise<string> {
-        let response: Awaited<ReturnType<typeof this.anthropic.messages.create>>;
+        const anthropic = await this.getClient();
+        let response: Awaited<ReturnType<typeof anthropic.messages.create>>;
 
         try {
-            response = await this.anthropic.messages.create({
+            response = await anthropic.messages.create({
                 model,
                 max_tokens: 512,
                 system: systemPrompt,

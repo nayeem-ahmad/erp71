@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, Sparkles, Loader2, X } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { api } from '../../../../../lib/api';
 import { formatBDT } from '../../../../../lib/format';
@@ -43,6 +43,8 @@ export default function SalesSummaryPage() {
     const [fromDate, setFromDate] = useState(defaultFrom());
     const [toDate, setToDate] = useState(defaultTo());
     const [loading, setLoading] = useState(true);
+    const [narrating, setNarrating] = useState(false);
+    const [narration, setNarration] = useState<string | null>(null);
 
     useEffect(() => {
         void loadReport();
@@ -50,6 +52,7 @@ export default function SalesSummaryPage() {
 
     const loadReport = async () => {
         setLoading(true);
+        setNarration(null);
         try {
             const data = await api.getSalesSummary({
                 from: fromDate || undefined,
@@ -61,6 +64,31 @@ export default function SalesSummaryPage() {
             console.error('Failed to load sales summary', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleNarrate = async () => {
+        if (!summary) return;
+        setNarrating(true);
+        try {
+            const result = await api.aiNarrateReport({
+                reportType: 'sales_summary',
+                reportData: {
+                    period: `${fromDate} to ${toDate}`,
+                    totalRevenue: summary.totalRevenue,
+                    totalReturns: summary.totalReturns,
+                    netRevenue: summary.netRevenue,
+                    transactionCount: summary.transactionCount,
+                    avgOrderValue: summary.avgOrderValue,
+                    dailyRows: rows.slice(0, 10),
+                },
+                locale,
+            });
+            setNarration(result.narration);
+        } catch (err: any) {
+            setNarration(`Error: ${err.message ?? 'AI narration failed.'}`);
+        } finally {
+            setNarrating(false);
         }
     };
 
@@ -134,25 +162,49 @@ export default function SalesSummaryPage() {
                     </div>
                 </div>
 
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap gap-3 items-end">
-                    <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.salesReports.common.from}</span>
-                        <input
-                            type="date"
-                            value={fromDate}
-                            onChange={(e) => setFromDate(e.target.value)}
-                            className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium"
-                        />
+                {/* AI Narration */}
+                {narration && (
+                    <div className="bg-purple-50 border border-purple-200 rounded-2xl p-5 flex gap-3">
+                        <Sparkles className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                            <p className="text-xs font-black uppercase tracking-widest text-purple-400 mb-1">AI Insight</p>
+                            <p className="text-sm text-gray-800 leading-relaxed">{narration}</p>
+                        </div>
+                        <button onClick={() => setNarration(null)} className="text-purple-300 hover:text-purple-500 shrink-0">
+                            <X className="w-4 h-4" />
+                        </button>
                     </div>
-                    <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.salesReports.common.to}</span>
-                        <input
-                            type="date"
-                            value={toDate}
-                            onChange={(e) => setToDate(e.target.value)}
-                            className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium"
-                        />
+                )}
+
+                <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap gap-3 items-end justify-between">
+                    <div className="flex flex-wrap gap-3 items-end">
+                        <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.salesReports.common.from}</span>
+                            <input
+                                type="date"
+                                value={fromDate}
+                                onChange={(e) => setFromDate(e.target.value)}
+                                className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium"
+                            />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.salesReports.common.to}</span>
+                            <input
+                                type="date"
+                                value={toDate}
+                                onChange={(e) => setToDate(e.target.value)}
+                                className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium"
+                            />
+                        </div>
                     </div>
+                    <button
+                        onClick={handleNarrate}
+                        disabled={narrating || !summary || loading}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-xl text-sm font-bold hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        {narrating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                        {narrating ? 'Generating…' : 'AI Narrate'}
+                    </button>
                 </div>
 
                 <DataTable<SummaryRow>
