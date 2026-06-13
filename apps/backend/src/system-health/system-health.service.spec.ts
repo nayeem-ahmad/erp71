@@ -56,12 +56,16 @@ describe('SystemHealthService', () => {
         redis: CheckResult,
         externals: CheckResult[],
         cron: CheckResult = check({ name: 'cron_jobs', label: 'Scheduled jobs', state: 'ok' }),
+        payments: CheckResult = check({ name: 'payments', label: 'Payment webhooks', state: 'ok' }),
+        smsCredit: CheckResult = check({ name: 'sms_credit', label: 'SMS credit', state: 'ok' }),
     ) =>
         new SystemHealthService(
             { run: jest.fn().mockResolvedValue(database) } as any,
             { run: jest.fn().mockResolvedValue(redis) } as any,
             { run: jest.fn().mockResolvedValue(externals) } as any,
             { run: jest.fn().mockResolvedValue(cron) } as any,
+            { run: jest.fn().mockResolvedValue(payments) } as any,
+            { run: jest.fn().mockResolvedValue(smsCredit) } as any,
             { getJobStatuses: jest.fn().mockResolvedValue([]) } as any,
         );
 
@@ -75,8 +79,10 @@ describe('SystemHealthService', () => {
         const report = await service.getReport();
 
         expect(report.status).toBe('ok');
-        expect(report.checks).toHaveLength(4);
-        expect(report.checks.map((c) => c.name)).toEqual(['database', 'redis', 'cron_jobs', 'bkash']);
+        expect(report.checks).toHaveLength(6);
+        expect(report.checks.map((c) => c.name)).toEqual([
+            'database', 'redis', 'cron_jobs', 'payments', 'sms_credit', 'bkash',
+        ]);
         expect(typeof report.uptime_seconds).toBe('number');
         expect(typeof report.duration_ms).toBe('number');
         expect(() => new Date(report.generated_at).toISOString()).not.toThrow();

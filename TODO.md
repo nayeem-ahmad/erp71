@@ -46,7 +46,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Implement system-health Phase 0–1: `system-health` module + deep health/readiness checks (DB pool/latency/size, Redis ping, external provider reachability) behind `PlatformAdminGuard` at `GET /api/v1/admin/system-health` — done 2026-06-13
 - [x] Implement system-health Phase 2: cron job observability — `JobRun` model + `JobTrackerService` wrapping all 11 scheduled jobs, overdue detection, `GET /api/v1/admin/system-health/jobs`, 30-day retention purge — done 2026-06-13
 - [x] Implement system-health Phase 3: Prometheus metrics — token-guarded `GET /api/v1/metrics` (default Node runtime metrics + HTTP request count/latency via global interceptor + per-job gauges); `METRICS_TOKEN` wired in render.yaml + env examples — done 2026-06-13
-- [ ] Implement system-health Phase 4: threshold alerting (degraded-state email/SMS to platform admins, SMS-credit-low, cooldown)
+- [x] Implement system-health Phase 4: threshold alerting — `HealthAlertService` (5-min cron) emails/SMSes platform admins on degraded/down with cooldown + recovery notice; added payment-webhook-failure + SMS-credit-low health checks; Sentry rules + behavior documented in `docs/ops/system-health-alerting.md` — done 2026-06-13
 - [ ] Implement system-health Phase 5: platform-admin System Health dashboard page (`dashboard/admin/system-health`)
 - [ ] Implement system-health Phase 6 (optional): circuit breakers for payment/SMS/email providers
 

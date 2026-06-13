@@ -6,11 +6,14 @@ import { DatabaseCheck } from './checks/database.check';
 import { RedisCheck } from './checks/redis.check';
 import { ExternalCheck } from './checks/external.check';
 import { CronCheck } from './checks/cron.check';
+import { PaymentsCheck } from './checks/payments.check';
+import { SmsCreditCheck } from './checks/sms-credit.check';
+import { HealthAlertService } from './alerts/health-alert.service';
 
 /**
- * System health monitoring: deep dependency checks and cron-job observability
- * for platform admins. DatabaseService, RedisService, and JobTrackerService
- * come from their @Global() modules.
+ * System health monitoring: deep dependency checks, cron-job observability,
+ * and threshold alerting for platform admins. DatabaseService, RedisService,
+ * EmailService, SmsService, and JobTrackerService come from @Global() modules.
  */
 @Module({
     controllers: [SystemHealthController],
@@ -20,6 +23,9 @@ import { CronCheck } from './checks/cron.check';
         RedisCheck,
         ExternalCheck,
         CronCheck,
+        PaymentsCheck,
+        SmsCreditCheck,
+        HealthAlertService,
         PlatformAdminGuard,
     ],
 })

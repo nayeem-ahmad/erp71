@@ -179,6 +179,15 @@ ${page ? `<p><strong>Page:</strong> ${page}</p>` : ''}
         });
     }
 
+    /**
+     * Sends a platform-operational alert (e.g. system-health degradation) to
+     * one or more recipients. Public wrapper around the internal transport.
+     */
+    async sendSystemAlert(to: string | string[], subject: string, html: string): Promise<void> {
+        const recipients = Array.isArray(to) ? to : [to];
+        await Promise.all(recipients.map((addr) => this.send({ to: addr, subject, html })));
+    }
+
     private async send(opts: { to: string; subject: string; html: string }): Promise<void> {
         const config = await this.getTransportConfig();
 

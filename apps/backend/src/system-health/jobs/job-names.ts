@@ -15,6 +15,7 @@ export const JOB_NAMES = {
     CRM_REORDER_TASKS: 'crm.reorder-reminder-tasks',
     CRM_BIRTHDAY_TASKS: 'crm.birthday-tasks',
     CUSTOMER_SEGMENTS: 'customers.recalculate-segments',
+    HEALTH_ALERTS: 'system-health.evaluate-alerts',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -48,4 +49,5 @@ export const JOB_REGISTRY: JobDefinition[] = [
     { name: JOB_NAMES.CRM_REORDER_TASKS, label: 'CRM: reorder reminder tasks', schedule: '0 8 * * *', maxIntervalMs: DAY + 2 * HOUR },
     { name: JOB_NAMES.CRM_BIRTHDAY_TASKS, label: 'CRM: birthday tasks', schedule: '0 8 * * *', maxIntervalMs: DAY + 2 * HOUR },
     { name: JOB_NAMES.CUSTOMER_SEGMENTS, label: 'Customers: recalculate segments', schedule: '0 0 * * *', maxIntervalMs: DAY + 2 * HOUR },
+    { name: JOB_NAMES.HEALTH_ALERTS, label: 'System health: evaluate alerts', schedule: '*/5 * * * *', maxIntervalMs: 15 * 60 * 1000 },
 ];
