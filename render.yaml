@@ -24,6 +24,8 @@ services:
         generateValue: true
       - key: FIELD_ENCRYPTION_KEY
         generateValue: true
+      - key: METRICS_TOKEN
+        generateValue: true
       - key: FRONTEND_URL
         sync: false
       - key: BACKEND_PUBLIC_URL
@@ -116,6 +118,8 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: FIELD_ENCRYPTION_KEY
+        generateValue: true
+      - key: METRICS_TOKEN
         generateValue: true
       - key: FRONTEND_URL
         sync: false
