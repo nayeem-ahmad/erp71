@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { BillingService } from './billing.service';
+import { CircuitBreakerRegistry } from '../system-health/resilience/circuit-breaker.registry';
 
 describe('BillingService', () => {
     const db = {
@@ -46,7 +47,7 @@ describe('BillingService', () => {
     beforeEach(() => {
         jest.resetAllMocks();
         audit.log.mockResolvedValue(undefined);
-        service = new BillingService(db, audit, email);
+        service = new BillingService(db, audit, email, new CircuitBreakerRegistry());
         (global as any).fetch = fetchMock;
         process.env.BILLING_PROVIDER = 'SSL_WIRELESS';
         process.env.SSL_WIRELESS_STORE_ID = 'store-id';

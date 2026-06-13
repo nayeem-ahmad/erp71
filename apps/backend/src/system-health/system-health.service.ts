@@ -6,6 +6,7 @@ import { ExternalCheck } from './checks/external.check';
 import { CronCheck } from './checks/cron.check';
 import { PaymentsCheck } from './checks/payments.check';
 import { SmsCreditCheck } from './checks/sms-credit.check';
+import { CircuitBreakerCheck } from './checks/circuit-breaker.check';
 import { JobTrackerService, JobStatus } from './jobs/job-tracker.service';
 
 const SEVERITY: Record<'ok' | 'degraded' | 'down', number> = { ok: 0, degraded: 1, down: 2 };
@@ -49,6 +50,7 @@ export class SystemHealthService {
         private readonly cronCheck: CronCheck,
         private readonly paymentsCheck: PaymentsCheck,
         private readonly smsCreditCheck: SmsCreditCheck,
+        private readonly circuitBreakerCheck: CircuitBreakerCheck,
         private readonly jobTracker: JobTrackerService,
     ) {}
 
@@ -57,16 +59,17 @@ export class SystemHealthService {
 
         // Run everything in parallel; a failing check resolves to a `down`
         // CheckResult rather than rejecting, so allSettled is belt-and-braces.
-        const [database, redis, externals, cron, payments, smsCredit] = await Promise.all([
+        const [database, redis, externals, cron, payments, smsCredit, breakers] = await Promise.all([
             this.databaseCheck.run(),
             this.redisCheck.run(),
             this.externalCheck.run(),
             this.cronCheck.run(),
             this.paymentsCheck.run(),
             this.smsCreditCheck.run(),
+            this.circuitBreakerCheck.run(),
         ]);
 
-        const checks: CheckResult[] = [database, redis, cron, payments, smsCredit, ...externals];
+        const checks: CheckResult[] = [database, redis, cron, payments, smsCredit, breakers, ...externals];
 
         return {
             status: rollupStatus(checks),

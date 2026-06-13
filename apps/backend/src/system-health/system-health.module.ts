@@ -8,6 +8,7 @@ import { ExternalCheck } from './checks/external.check';
 import { CronCheck } from './checks/cron.check';
 import { PaymentsCheck } from './checks/payments.check';
 import { SmsCreditCheck } from './checks/sms-credit.check';
+import { CircuitBreakerCheck } from './checks/circuit-breaker.check';
 import { HealthAlertService } from './alerts/health-alert.service';
 
 /**
@@ -25,6 +26,7 @@ import { HealthAlertService } from './alerts/health-alert.service';
         CronCheck,
         PaymentsCheck,
         SmsCreditCheck,
+        CircuitBreakerCheck,
         HealthAlertService,
         PlatformAdminGuard,
     ],

@@ -58,6 +58,7 @@ describe('SystemHealthService', () => {
         cron: CheckResult = check({ name: 'cron_jobs', label: 'Scheduled jobs', state: 'ok' }),
         payments: CheckResult = check({ name: 'payments', label: 'Payment webhooks', state: 'ok' }),
         smsCredit: CheckResult = check({ name: 'sms_credit', label: 'SMS credit', state: 'ok' }),
+        breakers: CheckResult = check({ name: 'circuit_breakers', label: 'Circuit breakers', state: 'disabled' }),
     ) =>
         new SystemHealthService(
             { run: jest.fn().mockResolvedValue(database) } as any,
@@ -66,6 +67,7 @@ describe('SystemHealthService', () => {
             { run: jest.fn().mockResolvedValue(cron) } as any,
             { run: jest.fn().mockResolvedValue(payments) } as any,
             { run: jest.fn().mockResolvedValue(smsCredit) } as any,
+            { run: jest.fn().mockResolvedValue(breakers) } as any,
             { getJobStatuses: jest.fn().mockResolvedValue([]) } as any,
         );
 
@@ -79,9 +81,9 @@ describe('SystemHealthService', () => {
         const report = await service.getReport();
 
         expect(report.status).toBe('ok');
-        expect(report.checks).toHaveLength(6);
+        expect(report.checks).toHaveLength(7);
         expect(report.checks.map((c) => c.name)).toEqual([
-            'database', 'redis', 'cron_jobs', 'payments', 'sms_credit', 'bkash',
+            'database', 'redis', 'cron_jobs', 'payments', 'sms_credit', 'circuit_breakers', 'bkash',
         ]);
         expect(typeof report.uptime_seconds).toBe('number');
         expect(typeof report.duration_ms).toBe('number');

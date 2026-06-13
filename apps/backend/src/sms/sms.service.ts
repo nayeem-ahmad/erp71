@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { SmsCreditService } from './sms-credit.service';
+import { CircuitBreakerRegistry } from '../system-health/resilience/circuit-breaker.registry';
 
 export interface SendSmsOptions {
     /** When set, the send is billed against this tenant's prepaid SMS credits. */
@@ -21,6 +22,7 @@ export class SmsService {
     constructor(
         private readonly platformSettings: PlatformSettingsService,
         private readonly smsCredits: SmsCreditService,
+        private readonly breakers: CircuitBreakerRegistry,
     ) {}
 
     private normalizePhone(phone: string): string {
@@ -81,7 +83,9 @@ export class SmsService {
                 message,
             });
 
-            const response = await fetch(`${baseUrl}?${params.toString()}`);
+            const response = await this.breakers
+                .get('bulksmsbd', { timeoutMs: 10_000 })
+                .execute(() => fetch(`${baseUrl}?${params.toString()}`));
 
             if (!response.ok) {
                 const body = await response.text().catch(() => '');

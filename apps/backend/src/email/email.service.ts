@@ -1,12 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
+import { CircuitBreakerRegistry } from '../system-health/resilience/circuit-breaker.registry';
 
 @Injectable()
 export class EmailService {
     private readonly logger = new Logger(EmailService.name);
 
-    constructor(private readonly platformSettings: PlatformSettingsService) {}
+    constructor(
+        private readonly platformSettings: PlatformSettingsService,
+        private readonly breakers: CircuitBreakerRegistry,
+    ) {}
 
     private async getTransportConfig() {
         const [smtpHost, smtpPort, smtpUser, smtpPass, emailFrom, frontendUrl] = await Promise.all([
@@ -206,7 +210,9 @@ ${page ? `<p><strong>Page:</strong> ${page}</p>` : ''}
                 greetingTimeout: 10_000,
                 socketTimeout: 30_000,
             });
-            await transporter.sendMail({ from: config.from, ...opts });
+            await this.breakers
+                .get('email-smtp', { timeoutMs: 35_000 })
+                .execute(() => transporter.sendMail({ from: config.from, ...opts }));
         } catch (err) {
             this.logger.error(`Failed to send email to ${opts.to}: ${err}`);
         }

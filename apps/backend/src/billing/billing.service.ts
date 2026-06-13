@@ -4,11 +4,14 @@ import {
     Injectable,
     InternalServerErrorException,
     NotFoundException,
+    ServiceUnavailableException,
     UnauthorizedException,
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
+import { CircuitBreakerRegistry } from '../system-health/resilience/circuit-breaker.registry';
+import { CircuitOpenError } from '../system-health/resilience/circuit-breaker';
 import * as Sentry from '@sentry/nestjs';
 import {
     BillingCallbackDto,
@@ -30,6 +33,7 @@ export class BillingService {
         private readonly db: DatabaseService,
         private readonly audit: AuditService,
         private readonly email: EmailService,
+        private readonly breakers: CircuitBreakerRegistry,
     ) {}
 
     async getSummary(userId: string, tenantId: string) {
@@ -625,13 +629,15 @@ export class BillingService {
             value_d: input.userId,
         });
 
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: body.toString(),
-        });
+        const response = await this.callSslWireless('sslcommerz-checkout', () =>
+            fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: body.toString(),
+            }),
+        );
         const payload = await this.parseJsonResponse(response);
 
         if (!response.ok || !payload.GatewayPageURL) {
@@ -650,6 +656,22 @@ export class BillingService {
             requires_confirmation: false,
             raw_payload: payload,
         };
+    }
+
+    /**
+     * Runs an SSL Wireless HTTP call under a circuit breaker (10s timeout). When
+     * the circuit is open we fail fast with a 503 instead of hammering a dead
+     * gateway; underlying network errors propagate unchanged.
+     */
+    private async callSslWireless(breaker: string, fn: () => Promise<Response>): Promise<Response> {
+        try {
+            return await this.breakers.get(breaker, { timeoutMs: 10_000 }).execute(fn);
+        } catch (err) {
+            if (err instanceof CircuitOpenError) {
+                throw new ServiceUnavailableException('Payment gateway is temporarily unavailable. Please try again shortly.');
+            }
+            throw err;
+        }
     }
 
     private async validateSslWirelessTransaction(valId: string | undefined, reference: string) {
@@ -671,7 +693,9 @@ export class BillingService {
         url.searchParams.set('store_passwd', storePassword);
         url.searchParams.set('format', 'json');
 
-        const response = await fetch(url.toString(), { method: 'GET' });
+        const response = await this.callSslWireless('sslcommerz-validate', () =>
+            fetch(url.toString(), { method: 'GET' }),
+        );
         const payload = await this.parseJsonResponse(response);
 
         if (!response.ok) {

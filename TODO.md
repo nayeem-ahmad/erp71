@@ -48,7 +48,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Implement system-health Phase 3: Prometheus metrics — token-guarded `GET /api/v1/metrics` (default Node runtime metrics + HTTP request count/latency via global interceptor + per-job gauges); `METRICS_TOKEN` wired in render.yaml + env examples — done 2026-06-13
 - [x] Implement system-health Phase 4: threshold alerting — `HealthAlertService` (5-min cron) emails/SMSes platform admins on degraded/down with cooldown + recovery notice; added payment-webhook-failure + SMS-credit-low health checks; Sentry rules + behavior documented in `docs/ops/system-health-alerting.md` — done 2026-06-13
 - [x] Implement system-health Phase 5: platform-admin System Health dashboard at `/dashboard/admin/system-health` — live overall status, uptime, dependency checks, and scheduled-job table with auto-refresh; i18n in en/bn/ms; linked from admin overview — done 2026-06-13
-- [ ] Implement system-health Phase 6 (optional): circuit breakers for payment/SMS/email providers
+- [x] Implement system-health Phase 6: circuit breakers for outbound calls — shared `CircuitBreakerRegistry` wrapping SSLCommerz (billing), BulkSMSBD (SMS), and SMTP (email) with timeouts + fail-fast; breaker state surfaced in the health report/dashboard — done 2026-06-13
 
 ### Billing & Payments
 - [x] Implement dunning management (define what happens after PAST_DUE — auto-cancel after N days) — done 2026-06-09
