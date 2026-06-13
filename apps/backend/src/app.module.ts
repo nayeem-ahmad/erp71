@@ -12,6 +12,7 @@ import { EmailModule } from './email/email.module';
 import { AuditModule } from './audit/audit.module';
 import { HealthModule } from './health/health.module';
 import { SystemHealthModule } from './system-health/system-health.module';
+import { JobsModule } from './system-health/jobs/jobs.module';
 import { AuthModule } from './auth/auth.module';
 import { PasswordResetModule } from './password-reset/password-reset.module';
 import { InvitationsModule } from './invitations/invitations.module';
@@ -81,6 +82,7 @@ import { ExpensesModule } from './expenses/expenses.module';
         WhatsAppModule,
         AuditModule,
         HealthModule,
+        JobsModule,
         SystemHealthModule,
         AuthModule,
         PasswordResetModule,

@@ -4,6 +4,7 @@ import { NotificationsService } from './notifications.service';
 import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
+import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 
 describe('NotificationsService', () => {
   let service: NotificationsService;
@@ -68,6 +69,7 @@ describe('NotificationsService', () => {
         { provide: DatabaseService, useValue: db },
         { provide: EmailService, useValue: email },
         { provide: SmsService, useValue: sms },
+        { provide: JobTrackerService, useValue: { track: (_n: string, fn: () => any) => fn(), purgeOlderThan: jest.fn().mockResolvedValue(0) } },
       ],
     }).compile();
 

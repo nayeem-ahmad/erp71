@@ -16,6 +16,11 @@ describe('BillingSchedulerService', () => {
         log: jest.fn().mockResolvedValue(undefined),
     } as any;
 
+    // Passthrough tracker: invokes the wrapped job body so tests exercise it.
+    const jobTracker = {
+        track: jest.fn((_name: string, fn: () => any) => fn()),
+    } as any;
+
     let service: BillingSchedulerService;
 
     const freePlan = { id: 'plan-free', code: 'FREE', name: 'Free', monthly_price: 0, yearly_price: 0 };
@@ -42,7 +47,8 @@ describe('BillingSchedulerService', () => {
     beforeEach(() => {
         jest.resetAllMocks();
         audit.log.mockResolvedValue(undefined);
-        service = new BillingSchedulerService(db, email, audit);
+        jobTracker.track.mockImplementation((_name: string, fn: () => any) => fn());
+        service = new BillingSchedulerService(db, email, audit, jobTracker);
         delete process.env.DUNNING_GRACE_DAYS;
 
         db.subscriptionPlan.findUnique.mockResolvedValue(freePlan);
@@ -187,7 +193,7 @@ describe('BillingSchedulerService', () => {
 
     it('respects DUNNING_GRACE_DAYS env variable', async () => {
         process.env.DUNNING_GRACE_DAYS = '14';
-        const freshService = new BillingSchedulerService(db, email, audit);
+        const freshService = new BillingSchedulerService(db, email, audit, jobTracker);
 
         db.tenantSubscription.findMany.mockResolvedValue([makeSubscription()]);
 

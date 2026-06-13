@@ -5,10 +5,12 @@ import { SystemHealthService } from './system-health.service';
 import { DatabaseCheck } from './checks/database.check';
 import { RedisCheck } from './checks/redis.check';
 import { ExternalCheck } from './checks/external.check';
+import { CronCheck } from './checks/cron.check';
 
 /**
- * System health monitoring (Phase 0-1): deep dependency checks for platform
- * admins. DatabaseService and RedisService come from their @Global() modules.
+ * System health monitoring: deep dependency checks and cron-job observability
+ * for platform admins. DatabaseService, RedisService, and JobTrackerService
+ * come from their @Global() modules.
  */
 @Module({
     controllers: [SystemHealthController],
@@ -17,6 +19,7 @@ import { ExternalCheck } from './checks/external.check';
         DatabaseCheck,
         RedisCheck,
         ExternalCheck,
+        CronCheck,
         PlatformAdminGuard,
     ],
 })

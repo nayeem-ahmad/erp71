@@ -4,12 +4,15 @@ import { DatabaseService } from '../database/database.service';
 import { AppLogger } from '../common/app-logger.service';
 import { CreateCrmTaskDto, UpdateCrmTaskDto } from './crm-tasks.dto';
 import { paginate } from '../common/pagination.dto';
+import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
+import { JOB_NAMES } from '../system-health/jobs/job-names';
 
 @Injectable()
 export class CrmTasksService {
     constructor(
         private db: DatabaseService,
         private readonly logger: AppLogger,
+        private readonly jobTracker: JobTrackerService,
     ) {}
 
     async create(tenantId: string, userId: string, dto: CreateCrmTaskDto) {
@@ -144,6 +147,10 @@ export class CrmTasksService {
 
     @Cron(CronExpression.EVERY_DAY_AT_8AM)
     async autoCreateBirthdayTasks() {
+        return this.jobTracker.track(JOB_NAMES.CRM_BIRTHDAY_TASKS, () => this.autoCreateBirthdayTasksImpl());
+    }
+
+    private async autoCreateBirthdayTasksImpl() {
         const today = new Date();
         const month = today.getMonth() + 1;
         const day = today.getDate();
@@ -187,6 +194,10 @@ export class CrmTasksService {
 
     @Cron(CronExpression.EVERY_DAY_AT_8AM)
     async autoCreateReorderReminders() {
+        return this.jobTracker.track(JOB_NAMES.CRM_REORDER_TASKS, () => this.autoCreateReorderRemindersImpl());
+    }
+
+    private async autoCreateReorderRemindersImpl() {
         const sixtyDaysAgo = new Date();
         sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 

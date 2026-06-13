@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { AppLogger } from '../common/app-logger.service';
 import { DatabaseService } from '../database/database.service';
+import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
+import { JOB_NAMES } from '../system-health/jobs/job-names';
 
 export const SEGMENT_THRESHOLDS = {
     VIP_SPEND_BDT: 50000,
@@ -16,6 +18,7 @@ export class SegmentsService {
     constructor(
         private db: DatabaseService,
         private readonly logger: AppLogger,
+        private readonly jobTracker: JobTrackerService,
     ) {}
 
     classifyCustomer(params: {
@@ -96,6 +99,10 @@ export class SegmentsService {
 
     @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
     async handleCron() {
+        await this.jobTracker.track(JOB_NAMES.CUSTOMER_SEGMENTS, () => this.handleCronImpl());
+    }
+
+    private async handleCronImpl() {
         this.logger.debug('Running Customer Segmentation evaluation (all tenants)');
         const result = await this.runForTenant(null);
         this.logger.log(`Segmentation evaluation complete: updated=${result.updated}, total=${result.total}`);

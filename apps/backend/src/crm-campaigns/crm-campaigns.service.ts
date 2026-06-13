@@ -6,6 +6,8 @@ import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { AppLogger } from '../common/app-logger.service';
 import { CreateCampaignDto, UpdateCampaignDto } from './crm-campaigns.dto';
 import { paginate } from '../common/pagination.dto';
+import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
+import { JOB_NAMES } from '../system-health/jobs/job-names';
 
 @Injectable()
 export class CrmCampaignsService {
@@ -14,6 +16,7 @@ export class CrmCampaignsService {
         private sms: SmsService,
         private whatsapp: WhatsAppService,
         private readonly logger: AppLogger,
+        private readonly jobTracker: JobTrackerService,
     ) {}
 
     async create(tenantId: string, userId: string, dto: CreateCampaignDto) {
@@ -182,6 +185,10 @@ export class CrmCampaignsService {
     /** Cron: dispatch SCHEDULED campaigns whose scheduled_at has passed. */
     @Cron('*/5 * * * *')
     async processScheduledCampaigns(): Promise<void> {
+        await this.jobTracker.track(JOB_NAMES.CRM_CAMPAIGNS, () => this.processScheduledCampaignsImpl());
+    }
+
+    private async processScheduledCampaignsImpl(): Promise<void> {
         const now = new Date();
 
         const dueCampaigns = await this.db.crmCampaign.findMany({

@@ -3,6 +3,8 @@ import type { CheckResult, DependencyState, SystemHealthReport } from '@retail-s
 import { DatabaseCheck } from './checks/database.check';
 import { RedisCheck } from './checks/redis.check';
 import { ExternalCheck } from './checks/external.check';
+import { CronCheck } from './checks/cron.check';
+import { JobTrackerService, JobStatus } from './jobs/job-tracker.service';
 
 const SEVERITY: Record<'ok' | 'degraded' | 'down', number> = { ok: 0, degraded: 1, down: 2 };
 
@@ -42,6 +44,8 @@ export class SystemHealthService {
         private readonly databaseCheck: DatabaseCheck,
         private readonly redisCheck: RedisCheck,
         private readonly externalCheck: ExternalCheck,
+        private readonly cronCheck: CronCheck,
+        private readonly jobTracker: JobTrackerService,
     ) {}
 
     async getReport(): Promise<SystemHealthReport> {
@@ -49,13 +53,14 @@ export class SystemHealthService {
 
         // Run everything in parallel; a failing check resolves to a `down`
         // CheckResult rather than rejecting, so allSettled is belt-and-braces.
-        const [database, redis, externals] = await Promise.all([
+        const [database, redis, externals, cron] = await Promise.all([
             this.databaseCheck.run(),
             this.redisCheck.run(),
             this.externalCheck.run(),
+            this.cronCheck.run(),
         ]);
 
-        const checks: CheckResult[] = [database, redis, ...externals];
+        const checks: CheckResult[] = [database, redis, cron, ...externals];
 
         return {
             status: rollupStatus(checks),
@@ -72,5 +77,9 @@ export class SystemHealthService {
             this.externalCheck.run(),
         ]);
         return [redis, ...externals];
+    }
+
+    async getJobStatuses(): Promise<JobStatus[]> {
+        return this.jobTracker.getJobStatuses();
     }
 }

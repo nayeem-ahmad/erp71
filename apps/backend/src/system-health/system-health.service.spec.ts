@@ -55,11 +55,14 @@ describe('SystemHealthService', () => {
         database: CheckResult,
         redis: CheckResult,
         externals: CheckResult[],
+        cron: CheckResult = check({ name: 'cron_jobs', label: 'Scheduled jobs', state: 'ok' }),
     ) =>
         new SystemHealthService(
             { run: jest.fn().mockResolvedValue(database) } as any,
             { run: jest.fn().mockResolvedValue(redis) } as any,
             { run: jest.fn().mockResolvedValue(externals) } as any,
+            { run: jest.fn().mockResolvedValue(cron) } as any,
+            { getJobStatuses: jest.fn().mockResolvedValue([]) } as any,
         );
 
     it('aggregates all checks into a report', async () => {
@@ -72,8 +75,8 @@ describe('SystemHealthService', () => {
         const report = await service.getReport();
 
         expect(report.status).toBe('ok');
-        expect(report.checks).toHaveLength(3);
-        expect(report.checks.map((c) => c.name)).toEqual(['database', 'redis', 'bkash']);
+        expect(report.checks).toHaveLength(4);
+        expect(report.checks.map((c) => c.name)).toEqual(['database', 'redis', 'cron_jobs', 'bkash']);
         expect(typeof report.uptime_seconds).toBe('number');
         expect(typeof report.duration_ms).toBe('number');
         expect(() => new Date(report.generated_at).toISOString()).not.toThrow();
@@ -88,5 +91,17 @@ describe('SystemHealthService', () => {
 
         const report = await service.getReport();
         expect(report.status).toBe('down');
+    });
+
+    it('degrades when a cron job is failing or overdue', async () => {
+        const service = makeService(
+            check({ name: 'database', critical: true, state: 'ok' }),
+            check({ name: 'redis', state: 'disabled' }),
+            [],
+            check({ name: 'cron_jobs', label: 'Scheduled jobs', state: 'degraded', message: '1 job(s) failing or overdue' }),
+        );
+
+        const report = await service.getReport();
+        expect(report.status).toBe('degraded');
     });
 });

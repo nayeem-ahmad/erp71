@@ -22,4 +22,9 @@ export class SystemHealthController {
     getDependencies() {
         return this.systemHealth.getDependencies();
     }
+
+    @Get('jobs')
+    getJobs() {
+        return this.systemHealth.getJobStatuses();
+    }
 }
