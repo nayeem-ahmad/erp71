@@ -1,160 +1,160 @@
 export const helpMessages = {
-        title: "Help Center",
-        description: "Frequently asked questions and guides",
-        quickLinks: {
-            emailSupport: {
-                title: "Email Support",
-                subtitle: "support@retailsaas.app",
-            },
-            contact: {
-                title: "Contact Us",
-                subtitle: "Send a message",
-            },
-            status: {
-                title: "System Status",
-                subtitle: "Check uptime",
-            },
+    title: "Pusat Bantuan",
+    description: "Soalan lazim dan panduan",
+    quickLinks: {
+        emailSupport: {
+            title: "Sokongan E-mel",
+            subtitle: "support@retailsaas.app",
         },
-        footerPrefix: "Can't find what you're looking for?",
-        footerLink: "Contact our support team",
-        sections: {
-            gettingStarted: {
-                title: "Getting Started",
-                icon: "🚀",
-                faqs: [
-                    {
-                        q: "How do I add my first product?",
-                        a: "Go to Inventory → Products and click \"Add Product\". Fill in the name, SKU, price, and stock quantity. You can also bulk import products using a CSV file via the \"Import CSV\" button.",
-                    },
-                    {
-                        q: "How do I create a store and start selling?",
-                        a: "Go to Setup → Stores and create your store. Then navigate to POS (Point of Sale) to start ringing up sales. Select products, enter payment, and complete the transaction.",
-                    },
-                    {
-                        q: "How do I invite staff members?",
-                        a: "Go to Settings → Users and click \"Invite\". Enter the staff member's email and assign a role (Cashier, Manager, etc.). They'll receive an invitation email to join your account.",
-                    },
-                    {
-                        q: "What subscription plans are available?",
-                        a: "We offer FREE, BASIC, STANDARD, and PREMIUM plans. Visit /pricing to compare features. You can upgrade anytime from the Billing section in your dashboard.",
-                    },
-                ],
-            },
-            pos: {
-                title: "Point of Sale (POS)",
-                icon: "🛒",
-                faqs: [
-                    {
-                        q: "How does the offline POS work?",
-                        a: "The POS works offline automatically. When your internet connection drops, a yellow banner appears and sales are saved locally. When you reconnect, sales sync automatically to the server.",
-                    },
-                    {
-                        q: "Can I accept multiple payment methods in one sale?",
-                        a: "Yes! You can split payments across Cash, Card, bKash, Nagad, and other methods in a single transaction by adding multiple payment rows in the POS checkout screen.",
-                    },
-                    {
-                        q: "How do I apply a discount to a sale?",
-                        a: "In the POS checkout screen, there is a discount field where you can enter a percentage or fixed amount discount before completing the sale.",
-                    },
-                    {
-                        q: "How do I print a receipt?",
-                        a: "After completing a sale, a receipt preview appears with a Print button. Make sure your printer is configured and connected. Receipts include your business name, BIN (if set), VAT breakdown, and sale details.",
-                    },
-                ],
-            },
-            inventory: {
-                title: "Inventory Management",
-                icon: "📦",
-                faqs: [
-                    {
-                        q: "How do I track stock across multiple warehouses?",
-                        a: "Go to Inventory → Warehouses to set up your warehouses. Stock is tracked per warehouse. Use Inventory → Transfers to move stock between warehouses.",
-                    },
-                    {
-                        q: "How do I set up low-stock alerts?",
-                        a: "On each product, set the \"Reorder Level\". When stock falls to or below this level, the system sends a daily low-stock alert email to your registered email address.",
-                    },
-                    {
-                        q: "How do I import products in bulk?",
-                        a: "Go to Inventory → Products and click \"Import CSV\". Download the template, fill it in with your products (name, SKU, price, stock), and upload. Products with matching SKUs are updated; new SKUs are created.",
-                    },
-                    {
-                        q: "What is a stock take?",
-                        a: "A stock take (stocktake) is a physical count of your inventory. Go to Inventory → Stock Takes to start a session. Count each item and the system will show variances between your count and recorded stock.",
-                    },
-                ],
-            },
-            accounting: {
-                title: "Accounting",
-                icon: "📊",
-                faqs: [
-                    {
-                        q: "How does double-entry accounting work in this system?",
-                        a: "The system uses double-entry bookkeeping automatically. Sales create debit entries in Cash/Receivables and credit entries in Revenue. Purchases create debit entries in Inventory/Expense and credit entries in Payables.",
-                    },
-                    {
-                        q: "How do I export to Tally or QuickBooks?",
-                        a: "Go to Accounting → Overview and click \"Export\". Choose your format (Tally XML or QuickBooks IIF) and date range. The file downloads immediately and can be imported into your accounting software.",
-                    },
-                    {
-                        q: "What is the Chart of Accounts?",
-                        a: "The Chart of Accounts (COA) is a list of all accounts used in your business: assets, liabilities, equity, revenue, and expenses. Go to Accounting → Chart of Accounts to view and manage accounts.",
-                    },
-                ],
-            },
-            billing: {
-                title: "Billing & Subscription",
-                icon: "💳",
-                faqs: [
-                    {
-                        q: "How do I upgrade my plan?",
-                        a: "Go to Billing in the sidebar and click \"Upgrade\". Select your plan and billing cycle (monthly or yearly — yearly saves 20%). Pay via SSL Wireless using your preferred method (card, bKash, Nagad).",
-                    },
-                    {
-                        q: "Can I cancel my subscription?",
-                        a: "Yes. Go to Billing and click \"Cancel Subscription\". Your access continues until the end of the current billing period. See our Refund Policy at /refund for details.",
-                    },
-                    {
-                        q: "What happens if my subscription expires?",
-                        a: "You'll receive warning emails 7 days and 1 day before expiry. After expiry, your account is locked to read-only mode until you renew. Your data is never deleted.",
-                    },
-                ],
-            },
-            storefront: {
-                title: "E-commerce Storefront",
-                icon: "🌐",
-                faqs: [
-                    {
-                        q: "How do I enable my online store?",
-                        a: "Go to Storefront → Settings, enable the toggle, set a URL slug (e.g. \"my-shop\"), and optionally add a banner message. Your public store will be at /store/your-slug.",
-                    },
-                    {
-                        q: "How do customers place orders?",
-                        a: "Customers visit your store URL, browse in-stock products, add to cart, and fill in their name, email, and phone. Orders appear in Storefront → Orders where you can confirm or cancel them.",
-                    },
-                    {
-                        q: "Are storefront orders automatically added to inventory?",
-                        a: "Currently, storefront orders need to be manually confirmed and fulfilled. Inventory deduction for storefront orders is on our roadmap for a future release.",
-                    },
-                ],
-            },
-            security: {
-                title: "Security & Account",
-                icon: "🔒",
-                faqs: [
-                    {
-                        q: "How do I enable two-factor authentication (2FA)?",
-                        a: "Go to Settings → Account → 2FA tab. Click \"Set Up 2FA\", scan the QR code with Google Authenticator or Authy, enter the 6-digit code to verify, and save. From then on, logins require your phone.",
-                    },
-                    {
-                        q: "What happens if I forget my password?",
-                        a: "Click \"Forgot Password\" on the login page. Enter your email and you'll receive a password reset link valid for 1 hour. If you don't receive it, check your spam folder.",
-                    },
-                    {
-                        q: "How do I download my data (GDPR/export)?",
-                        a: "Go to Settings → Account and find \"Export My Data\". This generates a JSON file with all your account data. For data deletion requests, use the \"Request Data Deletion\" option.",
-                    },
-                ],
-            },
+        contact: {
+            title: "Hubungi Kami",
+            subtitle: "Hantar mesej",
         },
-    } as const;
+        status: {
+            title: "Status Sistem",
+            subtitle: "Semak masa operasi",
+        },
+    },
+    footerPrefix: "Tidak jumpa apa yang anda cari?",
+    footerLink: "Hubungi pasukan sokongan kami",
+    sections: {
+        gettingStarted: {
+            title: "Memulakan",
+            icon: "🚀",
+            faqs: [
+                {
+                    q: "Bagaimana saya menambah produk pertama saya?",
+                    a: "Pergi ke Inventori → Produk dan klik \"Tambah Produk\". Isikan nama, SKU, harga, dan kuantiti stok. Anda juga boleh mengimport produk secara pukal menggunakan fail CSV melalui butang \"Import CSV\".",
+                },
+                {
+                    q: "Bagaimana saya membuat kedai dan mula menjual?",
+                    a: "Pergi ke Persediaan → Kedai dan cipta kedai anda. Kemudian navigasi ke POS (Point of Sale) untuk mula merekodkan jualan. Pilih produk, masukkan pembayaran, dan selesaikan transaksi.",
+                },
+                {
+                    q: "Bagaimana saya menjemput ahli kakitangan?",
+                    a: "Pergi ke Tetapan → Pengguna dan klik \"Jemput\". Masukkan e-mel ahli kakitangan dan tetapkan peranan (Juruwang, Pengurus, dll.). Mereka akan menerima e-mel jemputan untuk menyertai akaun anda.",
+                },
+                {
+                    q: "Apakah pelan langganan yang tersedia?",
+                    a: "Kami menawarkan pelan FREE, BASIC, STANDARD, dan PREMIUM. Lawati /pricing untuk membandingkan ciri-ciri. Anda boleh menaik taraf pada bila-bila masa dari bahagian Pengebilan dalam papan pemuka anda.",
+                },
+            ],
+        },
+        pos: {
+            title: "Titik Jualan (POS)",
+            icon: "🛒",
+            faqs: [
+                {
+                    q: "Bagaimana POS luar talian berfungsi?",
+                    a: "POS berfungsi secara luar talian secara automatik. Apabila sambungan internet anda terputus, sepanduk kuning muncul dan jualan disimpan secara tempatan. Apabila anda menyambung semula, jualan disegerakkan secara automatik ke pelayan.",
+                },
+                {
+                    q: "Bolehkah saya menerima pelbagai kaedah pembayaran dalam satu jualan?",
+                    a: "Ya! Anda boleh membahagikan pembayaran antara Tunai, Kad, bKash, Nagad, dan kaedah lain dalam satu transaksi dengan menambah beberapa baris pembayaran di skrin daftar keluar POS.",
+                },
+                {
+                    q: "Bagaimana saya menerapkan diskaun pada jualan?",
+                    a: "Di skrin daftar keluar POS, terdapat medan diskaun di mana anda boleh memasukkan diskaun peratusan atau jumlah tetap sebelum menyelesaikan jualan.",
+                },
+                {
+                    q: "Bagaimana saya mencetak resit?",
+                    a: "Selepas menyelesaikan jualan, pratonton resit muncul dengan butang Cetak. Pastikan pencetak anda dikonfigurasi dan disambungkan. Resit merangkumi nama perniagaan anda, BIN (jika ditetapkan), pecahan VAT, dan butiran jualan.",
+                },
+            ],
+        },
+        inventory: {
+            title: "Pengurusan Inventori",
+            icon: "📦",
+            faqs: [
+                {
+                    q: "Bagaimana saya menjejak stok di pelbagai gudang?",
+                    a: "Pergi ke Inventori → Gudang untuk menyediakan gudang anda. Stok dijejak mengikut gudang. Gunakan Inventori → Pindahan untuk memindahkan stok antara gudang.",
+                },
+                {
+                    q: "Bagaimana saya menyediakan amaran stok rendah?",
+                    a: "Pada setiap produk, tetapkan \"Tahap Pesanan Semula\". Apabila stok jatuh ke atau di bawah tahap ini, sistem menghantar e-mel amaran stok rendah harian ke alamat e-mel berdaftar anda.",
+                },
+                {
+                    q: "Bagaimana saya mengimport produk secara pukal?",
+                    a: "Pergi ke Inventori → Produk dan klik \"Import CSV\". Muat turun templat, isikan dengan produk anda (nama, SKU, harga, stok), dan muat naik. Produk dengan SKU yang sepadan dikemas kini; SKU baharu dicipta.",
+                },
+                {
+                    q: "Apakah pengiraan stok?",
+                    a: "Pengiraan stok adalah kiraan fizikal inventori anda. Pergi ke Inventori → Pengiraan Stok untuk memulakan sesi. Kira setiap item dan sistem akan menunjukkan perbezaan antara kiraan anda dan stok yang direkodkan.",
+                },
+            ],
+        },
+        accounting: {
+            title: "Perakaunan",
+            icon: "📊",
+            faqs: [
+                {
+                    q: "Bagaimana perakaunan catatan berganda berfungsi dalam sistem ini?",
+                    a: "Sistem menggunakan pembukuan catatan berganda secara automatik. Jualan mencipta catatan debit dalam Tunai/Penghutang dan catatan kredit dalam Hasil. Pembelian mencipta catatan debit dalam Inventori/Perbelanjaan dan catatan kredit dalam Pemiutang.",
+                },
+                {
+                    q: "Bagaimana saya mengeksport ke Tally atau QuickBooks?",
+                    a: "Pergi ke Perakaunan → Gambaran Keseluruhan dan klik \"Eksport\". Pilih format anda (Tally XML atau QuickBooks IIF) dan julat tarikh. Fail dimuat turun serta-merta dan boleh diimport ke dalam perisian perakaunan anda.",
+                },
+                {
+                    q: "Apakah Carta Akaun?",
+                    a: "Carta Akaun (COA) adalah senarai semua akaun yang digunakan dalam perniagaan anda: aset, liabiliti, ekuiti, hasil, dan perbelanjaan. Pergi ke Perakaunan → Carta Akaun untuk melihat dan mengurus akaun.",
+                },
+            ],
+        },
+        billing: {
+            title: "Pengebilan & Langganan",
+            icon: "💳",
+            faqs: [
+                {
+                    q: "Bagaimana saya menaik taraf pelan saya?",
+                    a: "Pergi ke Pengebilan di bar sisi dan klik \"Naik Taraf\". Pilih pelan dan kitaran pengebilan anda (bulanan atau tahunan — tahunan menjimatkan 20%). Bayar melalui SSL Wireless menggunakan kaedah pilihan anda (kad, bKash, Nagad).",
+                },
+                {
+                    q: "Bolehkah saya membatalkan langganan saya?",
+                    a: "Ya. Pergi ke Pengebilan dan klik \"Batal Langganan\". Akses anda berterusan sehingga akhir tempoh pengebilan semasa. Lihat Dasar Bayaran Balik kami di /refund untuk butiran.",
+                },
+                {
+                    q: "Apa yang berlaku jika langganan saya tamat tempoh?",
+                    a: "Anda akan menerima e-mel amaran 7 hari dan 1 hari sebelum tamat tempoh. Selepas tamat tempoh, akaun anda dikunci ke mod baca sahaja sehingga anda memperbaharui. Data anda tidak akan dipadam.",
+                },
+            ],
+        },
+        storefront: {
+            title: "Kedai Dalam Talian",
+            icon: "🌐",
+            faqs: [
+                {
+                    q: "Bagaimana saya mengaktifkan kedai dalam talian saya?",
+                    a: "Pergi ke Kedai Dalam Talian → Tetapan, aktifkan togol, tetapkan slug URL (cth. \"kedai-saya\"), dan secara pilihan tambah mesej sepanduk. Kedai awam anda akan berada di /store/slug-anda.",
+                },
+                {
+                    q: "Bagaimana pelanggan membuat pesanan?",
+                    a: "Pelanggan melawati URL kedai anda, melayari produk yang ada stok, menambah ke troli, dan mengisi nama, e-mel, dan telefon mereka. Pesanan muncul di Kedai Dalam Talian → Pesanan di mana anda boleh mengesahkan atau membatalkannya.",
+                },
+                {
+                    q: "Adakah pesanan kedai dalam talian ditambah secara automatik ke inventori?",
+                    a: "Buat masa ini, pesanan kedai dalam talian perlu disahkan dan ditunaikan secara manual. Potongan inventori untuk pesanan kedai dalam talian ada dalam peta jalan kami untuk keluaran akan datang.",
+                },
+            ],
+        },
+        security: {
+            title: "Keselamatan & Akaun",
+            icon: "🔒",
+            faqs: [
+                {
+                    q: "Bagaimana saya mengaktifkan pengesahan dua faktor (2FA)?",
+                    a: "Pergi ke Tetapan → Akaun → tab 2FA. Klik \"Sediakan 2FA\", imbas kod QR dengan Google Authenticator atau Authy, masukkan kod 6 digit untuk mengesahkan, dan simpan. Mulai sekarang, log masuk memerlukan telefon anda.",
+                },
+                {
+                    q: "Apa yang berlaku jika saya terlupa kata laluan saya?",
+                    a: "Klik \"Terlupa Kata Laluan\" di halaman log masuk. Masukkan e-mel anda dan anda akan menerima pautan tetapan semula kata laluan yang sah selama 1 jam. Jika anda tidak menerimanya, semak folder spam anda.",
+                },
+                {
+                    q: "Bagaimana saya memuat turun data saya (GDPR/eksport)?",
+                    a: "Pergi ke Tetapan → Akaun dan cari \"Eksport Data Saya\". Ini menjana fail JSON dengan semua data akaun anda. Untuk permintaan pemadaman data, gunakan pilihan \"Minta Pemadaman Data\".",
+                },
+            ],
+        },
+    },
+} as const;

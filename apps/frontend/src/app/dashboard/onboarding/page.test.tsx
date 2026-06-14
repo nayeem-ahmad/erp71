@@ -17,6 +17,10 @@ jest.mock('lucide-react', () => ({
     Zap: () => <span />,
     Store: () => <span />,
     Loader2: () => <span data-testid="loader" />,
+    Stethoscope: () => <span />,
+    ShoppingBag: () => <span />,
+    Computer: () => <span />,
+    Pill: () => <span />,
 }));
 
 jest.mock('../../../lib/api', () => ({

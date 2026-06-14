@@ -23,7 +23,7 @@ describe('I18nProvider', () => {
         const select = screen.getByLabelText('Language');
         expect(screen.getByRole('option', { name: 'English' })).toBeInTheDocument();
         expect(screen.getByRole('option', { name: 'বাংলা' })).toBeInTheDocument();
-        expect(screen.queryByRole('option', { name: 'Bahasa Melayu' })).not.toBeInTheDocument();
+        expect(screen.getByRole('option', { name: 'Bahasa Melayu' })).toBeInTheDocument();
         expect(select).toHaveValue('en');
     });
 

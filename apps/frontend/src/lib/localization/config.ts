@@ -30,7 +30,7 @@ export const localeRegistry = {
         dir: 'ltr',
         numberLocale: 'ms-MY',
         dateLocale: 'ms-MY',
-        enabled: false,
+        enabled: true,
     },
 } as const;
 
