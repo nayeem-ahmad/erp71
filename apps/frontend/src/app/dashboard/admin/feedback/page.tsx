@@ -51,8 +51,8 @@ export default function AdminFeedbackPage() {
         setError('');
         try {
             const res: any = await api.getAdminFeedback({
-                search: opts?.search ?? search || undefined,
-                type: opts?.type ?? typeFilter || undefined,
+                search: (opts?.search ?? search) || undefined,
+                type: (opts?.type ?? typeFilter) || undefined,
                 limit: 50,
             });
             setItems(res.data ?? []);
