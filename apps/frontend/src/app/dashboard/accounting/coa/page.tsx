@@ -135,7 +135,7 @@ export default function ChartOfAccountsPage() {
 
     return (
         <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="max-w-[1400px] mx-auto space-y-6">
+            <div className="w-full space-y-6">
                 <Link href="/dashboard/accounting" className="inline-flex items-center text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
                     <ArrowLeft className="w-4 h-4 mr-2" />
                     {t.accountingShared.backToAccounting}

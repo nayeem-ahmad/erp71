@@ -72,7 +72,7 @@ export default function AdminUsersPage() {
 
     return (
         <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="max-w-4xl mx-auto space-y-6">
+            <div className="w-full space-y-6">
                 <div>
                     <h1 className="text-2xl font-black tracking-tight">{m.title}</h1>
                     <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mt-1">

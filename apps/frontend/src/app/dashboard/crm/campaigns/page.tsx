@@ -149,7 +149,7 @@ export default function CrmCampaignsPage() {
     const smsPages = Math.ceil(charCount / 160) || 0;
 
     return (
-        <div className="p-6 max-w-5xl mx-auto">
+        <div className="p-6 w-full">
             {toast && <Toast {...toast} onClose={() => setToast(null)} />}
 
             <div className="flex items-center justify-between mb-6">

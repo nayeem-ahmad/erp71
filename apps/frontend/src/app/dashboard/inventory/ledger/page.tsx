@@ -103,7 +103,7 @@ export default function InventoryLedgerPage() {
 
     return (
         <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="max-w-[1400px] mx-auto space-y-6">
+            <div className="w-full space-y-6">
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-2xl font-black tracking-tight">{t.inventoryLedger.title}</h1>

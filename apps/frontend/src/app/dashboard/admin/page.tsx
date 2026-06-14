@@ -34,7 +34,7 @@ export default function PlatformAdminPage() {
 
     return (
         <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="max-w-5xl mx-auto space-y-8">
+            <div className="w-full space-y-8">
                 <div>
                     <div className="flex items-center gap-2 mb-1">
                         <ShieldCheck className="w-5 h-5 text-indigo-600" />
