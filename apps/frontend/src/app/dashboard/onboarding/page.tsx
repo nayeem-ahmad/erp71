@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Package, ShoppingCart, CheckCircle2, ArrowRight, Plus, Zap, Store, Loader2,
+    Stethoscope, ShoppingBag, Computer, Pill,
 } from 'lucide-react';
 import { api } from '../../../lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -51,6 +52,13 @@ function StepIndicator({ current, labels }: { current: Step; labels: Record<Step
     );
 }
 
+const BUSINESS_TYPES = [
+    { value: 'SURGICAL_MEDICAL', label: 'Surgical / Medical', icon: Stethoscope, description: '1,173 products pre-loaded' },
+    { value: 'PHARMACY', label: 'Pharmacy', icon: Pill, description: 'Coming soon' },
+    { value: 'GROCERY', label: 'Grocery', icon: ShoppingBag, description: 'Coming soon' },
+    { value: 'COMPUTER_HARDWARE', label: 'Computer Hardware', icon: Computer, description: 'Coming soon' },
+] as const;
+
 function StoreStep({
     existingStore,
     onNext,
@@ -61,6 +69,7 @@ function StoreStep({
     const { t } = useI18n();
     const copy = t.onboarding.store;
     const [form, setForm] = useState({ tenantName: '', storeName: '', address: '' });
+    const [businessType, setBusinessType] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -107,6 +116,7 @@ function StoreStep({
                 name: form.storeName.trim(),
                 address: form.address.trim() || undefined,
                 planCode: 'FREE',
+                businessType: businessType ?? undefined,
             });
             if (result?.tenant?.id) {
                 localStorage.setItem('tenant_id', result.tenant.id);
@@ -155,6 +165,38 @@ function StoreStep({
                     value={form.address}
                     onChange={(e) => setForm({ ...form, address: e.target.value })}
                 />
+            </div>
+            <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Business Type <span className="text-gray-400 font-normal">(optional — pre-loads products)</span></label>
+                <div className="grid grid-cols-2 gap-2">
+                    {BUSINESS_TYPES.map(({ value, label, icon: Icon, description }) => {
+                        const isAvailable = value === 'SURGICAL_MEDICAL';
+                        const isSelected = businessType === value;
+                        return (
+                            <button
+                                key={value}
+                                type="button"
+                                disabled={!isAvailable}
+                                onClick={() => setBusinessType(isSelected ? null : value)}
+                                className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all ${
+                                    isSelected
+                                        ? 'border-blue-500 bg-blue-50'
+                                        : isAvailable
+                                        ? 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                        : 'border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed'
+                                }`}
+                            >
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                                    <Icon className={`w-4 h-4 ${isSelected ? 'text-blue-600' : 'text-gray-500'}`} />
+                                </div>
+                                <div>
+                                    <p className={`text-xs font-semibold ${isSelected ? 'text-blue-700' : 'text-gray-700'}`}>{label}</p>
+                                    <p className={`text-xs ${isSelected ? 'text-blue-500' : 'text-gray-400'}`}>{description}</p>
+                                </div>
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
             <button
                 type="submit"

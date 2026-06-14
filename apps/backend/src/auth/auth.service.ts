@@ -4,7 +4,7 @@ import { DatabaseService } from '../database/database.service';
 import { JwtService } from '@nestjs/jwt';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
-import { bootstrapDefaultAccountingForTenant } from '@retail-saas/database';
+import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate } from '@retail-saas/database';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
 import { SignupDto, LoginDto, UpdateProfileDto, ChangePasswordDto } from './auth.dto';
@@ -17,6 +17,7 @@ type TenantProvisionDto = {
     storeName: string;
     address?: string;
     planCode?: 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM';
+    businessType?: string;
 };
 
 @Injectable()
@@ -350,15 +351,24 @@ export class AuthService {
         );
     }
 
-    async setupTenant(userId: string, dto: { tenantName: string; storeName: string; address?: string; planCode?: 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM' }) {
-        return this.db.$transaction(async (tx) =>
+    async setupTenant(userId: string, dto: { tenantName: string; storeName: string; address?: string; planCode?: 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM'; businessType?: string }) {
+        const result = await this.db.$transaction(async (tx) =>
             this.provisionTenant(tx, userId, {
                 tenantName: dto.tenantName,
                 storeName: dto.storeName,
                 address: dto.address,
                 planCode: dto.planCode,
+                businessType: dto.businessType,
             }),
         );
+
+        if (dto.businessType) {
+            seedBusinessTypeTemplate(this.db, result.tenant.id, dto.businessType).catch((err) =>
+                console.error(`Failed to seed product template for ${dto.businessType}:`, err),
+            );
+        }
+
+        return result;
     }
 
     private async provisionTenant(
@@ -379,6 +389,7 @@ export class AuthService {
             data: {
                 name: dto.tenantName,
                 owner_id: userId,
+                ...(dto.businessType ? { business_type: dto.businessType } : {}),
             },
         });
 

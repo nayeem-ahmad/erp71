@@ -264,6 +264,8 @@ model Tenant {
   default_vat_rate     Decimal? @db.Decimal(5, 2)  // e.g. 15.00 for 15% BD VAT
   vat_registration_no  String?                      // NBR VAT registration number
   business_tin         String?                      // Tax Identification Number
+  business_type        String?  // e.g. SURGICAL_MEDICAL, PHARMACY, GROCERY, COMPUTER_HARDWARE
+
   loyalty_points_enabled Boolean  @default(false)
   loyalty_earn_rate      Decimal? @db.Decimal(8, 4)  // points per BDT (e.g. 1.0 = 1 point per ৳1)
   loyalty_redeem_rate    Decimal? @db.Decimal(8, 4)  // BDT value per point (e.g. 0.01 = 1 point = ৳0.01)
