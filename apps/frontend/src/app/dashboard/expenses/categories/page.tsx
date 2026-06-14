@@ -138,7 +138,7 @@ export default function ExpenseCategoriesPage() {
 
     return (
         <div className="h-full overflow-y-auto bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="max-w-[1000px] mx-auto space-y-6">
+            <div className="w-full space-y-6">
                 <div className="flex items-start justify-between gap-4">
                     <div>
                         <Link href="/dashboard/expenses" className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-gray-700 mb-3">
