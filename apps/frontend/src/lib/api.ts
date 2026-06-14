@@ -840,7 +840,7 @@ export const api = {
         if (!res.ok) throw new Error(body?.message || 'Failed to load plans');
         return body && 'data' in body ? body.data : body;
     }),
-    setupTenant: (data: { tenantName: string; name: string; address?: string; planCode?: string }) =>
+    setupTenant: (data: { tenantName: string; name: string; address?: string; planCode?: string; businessType?: string }) =>
         fetchWithAuth('/auth/setup-tenant', {
             method: 'POST',
             body: JSON.stringify(data),

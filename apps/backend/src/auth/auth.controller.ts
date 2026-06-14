@@ -56,6 +56,7 @@ export class AuthController {
             storeName: dto.name,
             address: dto.address,
             planCode: dto.planCode,
+            businessType: dto.businessType,
         });
     }
 

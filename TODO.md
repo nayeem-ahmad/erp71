@@ -268,6 +268,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Pre-populated products by business type (surgical/medical) — 1,173 real products from Care Force Medical PDF classified into 24 groups / 104 subgroups; `packages/database/prisma/templates/surgical-medical.json` (194KB) + `seed-template.ts` with `seedBusinessTypeTemplate(prisma, tenantId, businessType)`; `business_type` field added to Tenant schema (migration `20260614000000_add_business_type_to_tenant`); seeder auto-triggered in `setupTenant` after registration; onboarding UI shows 4 business type tiles (surgical/medical live, others "coming soon") — done 2026-06-14
+
 - [x] Prepaid SMS credit balance & top-up — shops buy SMS credits that are deducted whenever an SMS is sent. Schema: `Tenant.sms_credits`, `SmsPackage`, `SmsTransaction` (ledger) + migration `20260612010000_add_sms_credits`; `SmsCreditService` (segment-aware billing, atomic `consume`, purchase/confirm) + `SmsCreditController` (`GET /sms-credits/summary`, `POST /sms-credits/purchase`, `POST /sms-credits/confirm`); `SmsService.sendSms` now deducts credits per recipient×segment and skips sending when out of balance; wired into sale receipts, low-stock alerts, and CRM campaigns; seed adds 4 packages + 1,000 starter credits; frontend balance/top-up/history page at `/dashboard/sms-credits` + sidebar link — done 2026-06-12
 
 - [x] POS compact view — added gallery/compact toggle (LayoutGrid / List icons) next to the search bar; compact view renders a dense single-column list with thumbnail, name, SKU, stock badge, price, and a + button; gallery view unchanged — done 2026-06-11

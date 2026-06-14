@@ -42,6 +42,7 @@ export class CreateStoreDto {
     name: string;
     address?: string;
     planCode?: 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM';
+    businessType?: string;
 }
 
 export class UpdateProfileDto {
