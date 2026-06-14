@@ -20,8 +20,8 @@
 #   SMTP_PASS=...
 #   EMAIL_FROM=monitoring@yourdomain.com
 #   # optional non-secret overrides (set as repo variables, not secrets):
-#   PROD_BASE_URL=https://app.nayeemahmad.com
-#   PROD_API_URL=https://api.nayeemahmad.com
+#   PROD_BASE_URL=https://retail-saas-frontend.onrender.com
+#   PROD_API_URL=https://retail-saas-backend.onrender.com
 #   REPORT_EMAIL_TO=nayeem.ahmad@gmail.com
 
 set -euo pipefail
