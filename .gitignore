@@ -5,6 +5,10 @@ node_modules
 
 # Testing
 coverage
+playwright-report/
+playwright-results.json
+test-results/
+e2e-report.html
 
 # Next.js
 .next/

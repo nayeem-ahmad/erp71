@@ -1,7 +1,12 @@
 import { test, expect, Page, ConsoleMessage } from '@playwright/test';
 
-const BASE = 'http://localhost:3000';
-const API  = 'http://localhost:4000';
+// Base URLs and credentials are env-overridable so this read-only suite can run
+// against a local stack (default) or the live deployment (nightly smoke test).
+const BASE = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
+const API  = process.env.E2E_API_URL || 'http://localhost:4000';
+
+const E2E_EMAIL    = process.env.E2E_TEST_EMAIL || 'nayeem.ahmad@gmail.com';
+const E2E_PASSWORD = process.env.E2E_TEST_PASSWORD || 'password123';
 
 // All sidebar routes extracted from Sidebar.tsx
 const ROUTES = [
@@ -104,7 +109,7 @@ async function loginAndGetToken(): Promise<string> {
     const res = await fetch(`${API}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: 'nayeem.ahmad@gmail.com', password: 'password123' }),
+        body: JSON.stringify({ email: E2E_EMAIL, password: E2E_PASSWORD }),
     });
     const data = await res.json();
     return data.data.access_token;
@@ -123,7 +128,7 @@ async function setupAuth(page: Page, token: string, tenantId: string, storeId: s
     );
 }
 
-test.describe('Sidebar navigation — all routes load without errors', () => {
+test.describe('Sidebar navigation — all routes load without errors', { tag: '@readonly' }, () => {
     let token: string;
     let tenantId: string;
     let storeId: string;
@@ -132,7 +137,7 @@ test.describe('Sidebar navigation — all routes load without errors', () => {
         const res = await fetch(`${API}/api/v1/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: 'nayeem.ahmad@gmail.com', password: 'password123' }),
+            body: JSON.stringify({ email: E2E_EMAIL, password: E2E_PASSWORD }),
         });
         const data = await res.json();
         token    = data.data.access_token;

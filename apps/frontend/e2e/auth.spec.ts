@@ -8,7 +8,7 @@ import { test, expect } from '@playwright/test';
  */
 
 test.describe('Authentication', () => {
-    test('signup page renders and validates required fields', async ({ page }) => {
+    test('signup page renders and validates required fields', { tag: '@readonly' }, async ({ page }) => {
         await page.goto('/signup');
         await expect(page.getByRole('heading', { name: /sign up|create account|register/i })).toBeVisible();
 
@@ -17,7 +17,7 @@ test.describe('Authentication', () => {
         await expect(page.getByText(/required|please enter|invalid/i)).toBeVisible();
     });
 
-    test('login page renders and shows error for wrong credentials', async ({ page }) => {
+    test('login page renders and shows error for wrong credentials', { tag: '@readonly' }, async ({ page }) => {
         await page.goto('/login');
         await expect(page.getByRole('heading', { name: /sign in|log in/i })).toBeVisible();
 
@@ -45,7 +45,7 @@ test.describe('Authentication', () => {
         await expect(page).toHaveURL(/dashboard|onboarding/, { timeout: 15_000 });
     });
 
-    test('successful login redirects to dashboard', async ({ page }) => {
+    test('successful login redirects to dashboard', { tag: '@readonly' }, async ({ page }) => {
         // This test depends on a seeded test account; adjust credentials per environment
         const email = process.env.E2E_TEST_EMAIL || 'test@example.com';
         const password = process.env.E2E_TEST_PASSWORD || 'TestPassword123!';
@@ -59,7 +59,7 @@ test.describe('Authentication', () => {
         await expect(page).toHaveURL(/dashboard/, { timeout: 15_000 });
     });
 
-    test('navigating to dashboard while logged out redirects to login', async ({ page }) => {
+    test('navigating to dashboard while logged out redirects to login', { tag: '@readonly' }, async ({ page }) => {
         // No auth token present — should redirect to login
         await page.goto('/dashboard');
         await expect(page).toHaveURL(/login/, { timeout: 10_000 });

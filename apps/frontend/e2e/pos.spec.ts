@@ -27,7 +27,7 @@ test.describe('POS — Point of Sale', () => {
         await loginIfNeeded(page);
     });
 
-    test('POS page loads with product search and cart', async ({ page }) => {
+    test('POS page loads with product search and cart', { tag: '@readonly' }, async ({ page }) => {
         await page.goto('/dashboard/pos');
         await expect(page).toHaveURL(/pos/);
 
@@ -55,7 +55,7 @@ test.describe('POS — Point of Sale', () => {
         }
     });
 
-    test('cart shows line items and a checkout/complete-sale button', async ({ page }) => {
+    test('cart shows line items and a checkout/complete-sale button', { tag: '@readonly' }, async ({ page }) => {
         await page.goto('/dashboard/pos');
 
         // If there are products in the cart already (or after adding), expect checkout button

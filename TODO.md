@@ -49,6 +49,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Implement system-health Phase 4: threshold alerting — `HealthAlertService` (5-min cron) emails/SMSes platform admins on degraded/down with cooldown + recovery notice; added payment-webhook-failure + SMS-credit-low health checks; Sentry rules + behavior documented in `docs/ops/system-health-alerting.md` — done 2026-06-13
 - [x] Implement system-health Phase 5: platform-admin System Health dashboard at `/dashboard/admin/system-health` — live overall status, uptime, dependency checks, and scheduled-job table with auto-refresh; i18n in en/bn/ms; linked from admin overview — done 2026-06-13
 - [x] Implement system-health Phase 6: circuit breakers for outbound calls — shared `CircuitBreakerRegistry` wrapping SSLCommerz (billing), BulkSMSBD (SMS), and SMTP (email) with timeouts + fail-fast; breaker state surfaced in the health report/dashboard — done 2026-06-13
+- [x] Nightly read-only E2E smoke test against production — `@readonly`-tagged Playwright suite (69 checks; mutating signup/sale cases excluded) run by `.github/workflows/nightly-readonly-e2e.yml` at midnight Dhaka (cron `0 18 * * *`); `scripts/format-e2e-report.js` builds a pass/fail summary + failed-case list emailed via Brevo SMTP — done 2026-06-14
 
 ### Billing & Payments
 - [x] Implement dunning management (define what happens after PAST_DUE — auto-cancel after N days) — done 2026-06-09
@@ -305,6 +306,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 ---
 
 ## COMPLETED
+
+- [x] Nightly read-only E2E monitoring — every midnight Bangladesh time a scheduled GitHub Actions workflow (`.github/workflows/nightly-readonly-e2e.yml`, cron `0 18 * * *`) runs the `@readonly`-tagged Playwright suite against the live deployment (`https://app.nayeemahmad.com`) to confirm all feature routes and read-only flows are up. Tagged 69 read-only cases across `sidebar-routes`/`auth`/`billing`/`pos` specs and parameterized their base URLs + login via env (`PLAYWRIGHT_BASE_URL`, `E2E_API_URL`, `E2E_TEST_EMAIL/PASSWORD`); data-mutating cases (signup, complete-sale, critical-path) are excluded so prod data is never touched. `scripts/format-e2e-report.js` turns the Playwright JSON report into an email subject + HTML body that lists every failed case, sent to nayeem.ahmad@gmail.com via Brevo SMTP. Requires repo secrets (`E2E_TEST_EMAIL/PASSWORD`, `SMTP_HOST/PORT/USER/PASS`, `EMAIL_FROM`) — done 2026-06-14
 
 - [x] Pre-populated products by business type (surgical/medical) — 1,173 real products from Care Force Medical PDF classified into 24 groups / 104 subgroups; `packages/database/prisma/templates/surgical-medical.json` (194KB) + `seed-template.ts` with `seedBusinessTypeTemplate(prisma, tenantId, businessType)`; `business_type` field added to Tenant schema (migration `20260614000000_add_business_type_to_tenant`); seeder auto-triggered in `setupTenant` after registration; onboarding UI shows 4 business type tiles (surgical/medical live, others "coming soon") — done 2026-06-14
 

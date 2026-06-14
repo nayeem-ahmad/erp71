@@ -1,0 +1,99 @@
+name: Nightly Read-Only E2E
+
+# Runs the read-only (@readonly tagged) Playwright suite against the live
+# deployment every midnight Bangladesh time (Asia/Dhaka, UTC+6) and emails the
+# result, listing any failed cases.
+#
+# Midnight Dhaka = 18:00 UTC the previous day.
+#
+# Required configuration (Settings → Secrets and variables → Actions):
+#   Secrets:
+#     E2E_TEST_EMAIL     — login for a DEDICATED read-only smoke-test account
+#     E2E_TEST_PASSWORD  — its password
+#     SMTP_HOST          — e.g. smtp-relay.brevo.com
+#     SMTP_PORT          — e.g. 587
+#     SMTP_USER          — Brevo SMTP login
+#     SMTP_PASS          — Brevo SMTP key
+#     EMAIL_FROM         — verified sender address
+#   Variables (optional — defaults shown):
+#     PROD_BASE_URL      — frontend URL  (default https://app.nayeemahmad.com)
+#     PROD_API_URL       — backend  URL  (default https://api.nayeemahmad.com)
+#     REPORT_EMAIL_TO    — recipient     (default nayeem.ahmad@gmail.com)
+
+on:
+  schedule:
+    - cron: '0 18 * * *'   # 00:00 Asia/Dhaka
+  workflow_dispatch:        # allow manual runs from the Actions tab
+
+permissions:
+  contents: read
+
+jobs:
+  readonly-e2e:
+    name: Read-only E2E against production
+    runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_BASE_URL: ${{ vars.PROD_BASE_URL || 'https://app.nayeemahmad.com' }}
+      E2E_API_URL: ${{ vars.PROD_API_URL || 'https://api.nayeemahmad.com' }}
+      E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+      E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm install
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/frontend
+
+      - name: Run read-only E2E suite against ${{ env.PLAYWRIGHT_BASE_URL }}
+        id: e2e
+        working-directory: apps/frontend
+        continue-on-error: true
+        env:
+          # json reporter writes to this file; list reporter still prints to the log
+          PLAYWRIGHT_JSON_OUTPUT_NAME: playwright-results.json
+        run: |
+          npx playwright test --grep @readonly --reporter=list,json 2> e2e-stderr.log
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Format result into email report
+        id: report
+        working-directory: apps/frontend
+        run: node ../../scripts/format-e2e-report.js playwright-results.json e2e-stderr.log
+
+      - name: Upload Playwright report artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nightly-playwright-report
+          path: |
+            apps/frontend/playwright-report/
+            apps/frontend/playwright-results.json
+            apps/frontend/e2e-report.html
+          retention-days: 14
+
+      - name: Email result
+        if: always()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_HOST }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          secure: false
+          username: ${{ secrets.SMTP_USER }}
+          password: ${{ secrets.SMTP_PASS }}
+          subject: ${{ steps.report.outputs.subject }}
+          to: ${{ vars.REPORT_EMAIL_TO || 'nayeem.ahmad@gmail.com' }}
+          from: RetailSaaS Monitoring <${{ secrets.EMAIL_FROM }}>
+          html_body: file://apps/frontend/e2e-report.html
+
+      - name: Fail the job if any read-only check failed
+        if: steps.report.outputs.status != 'pass'
+        run: |
+          echo "Read-only E2E status: ${{ steps.report.outputs.status }} (${{ steps.report.outputs.failed_count }} failed)"
+          exit 1

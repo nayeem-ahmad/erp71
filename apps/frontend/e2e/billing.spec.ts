@@ -20,7 +20,7 @@ async function loginIfNeeded(page: Page) {
     }
 }
 
-test.describe('Billing', () => {
+test.describe('Billing', { tag: '@readonly' }, () => {
     test.beforeEach(async ({ page }) => {
         await loginIfNeeded(page);
     });
