@@ -1019,12 +1019,24 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    updateDepartment: (id: string, data: { name: string }) => fetchWithAuth(`/employees/departments/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteDepartment: (id: string) => fetchWithAuth(`/employees/departments/${id}`, { method: 'DELETE' }),
     getDesignations: () => fetchWithAuth('/employees/designations'),
     createDesignation: (data: { name: string }) => fetchWithAuth('/employees/designations', {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    updateDesignation: (id: string, data: { name: string }) => fetchWithAuth(`/employees/designations/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteDesignation: (id: string) => fetchWithAuth(`/employees/designations/${id}`, { method: 'DELETE' }),
     linkEmployeeUser: (id: string, user_id: string) => fetchWithAuth(`/employees/${id}/link-user`, {
         method: 'POST',
         body: JSON.stringify({ user_id }),

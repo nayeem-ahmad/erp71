@@ -48,6 +48,8 @@ import {
     CheckSquare,
     Megaphone,
     Sparkles,
+    Layers,
+    BadgeCheck,
     type LucideIcon,
 } from 'lucide-react';
 import { useBranding } from '@/lib/branding';
@@ -199,6 +201,8 @@ function buildModules(t: ReturnType<typeof useI18n>['t']): NavModule[] {
         label: t.sidebar.modules.hr,
         children: [
             { href: '/dashboard/employees', icon: Users, label: t.sidebar.items.employees },
+            { href: '/dashboard/employees/departments', icon: Layers, label: t.sidebar.items.departments },
+            { href: '/dashboard/employees/designations', icon: BadgeCheck, label: t.sidebar.items.designations },
             { href: '/dashboard/attendance', icon: Clock, label: t.sidebar.items.attendance },
             { href: '/dashboard/leaves', icon: CalendarOff, label: t.sidebar.items.leaves },
         ],

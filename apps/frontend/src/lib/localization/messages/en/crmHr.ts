@@ -70,6 +70,48 @@ export const crmHrMessages = {
             "new": "New"
         }
     },
+    "departments": {
+        "title": "Departments",
+        "subtitle": "Manage company departments",
+        "newDepartment": "New Department",
+        "emptyMessage": "No departments yet",
+        "searchPlaceholder": "Search departments...",
+        "nameRequired": "Department name is required",
+        "saveFailed": "Failed to save department",
+        "deleteTitle": "Delete Department",
+        "deleteDescription": "Are you sure you want to delete this department? This cannot be undone.",
+        "deleteFailed": "Failed to delete department",
+        "saving": "Saving...",
+        "editDepartment": "Edit Department",
+        "columns": {
+            "name": "Department",
+            "created": "Created"
+        },
+        "placeholders": {
+            "name": "e.g. Sales"
+        }
+    },
+    "designations": {
+        "title": "Designations",
+        "subtitle": "Manage job titles and positions",
+        "newDesignation": "New Designation",
+        "emptyMessage": "No designations yet",
+        "searchPlaceholder": "Search designations...",
+        "nameRequired": "Designation name is required",
+        "saveFailed": "Failed to save designation",
+        "deleteTitle": "Delete Designation",
+        "deleteDescription": "Are you sure you want to delete this designation? This cannot be undone.",
+        "deleteFailed": "Failed to delete designation",
+        "saving": "Saving...",
+        "editDesignation": "Edit Designation",
+        "columns": {
+            "name": "Designation",
+            "created": "Created"
+        },
+        "placeholders": {
+            "name": "e.g. Sales Manager"
+        }
+    },
     "employees": {
         "title": "Employees",
         "subtitle": "Manage staff records, departments, and system access",

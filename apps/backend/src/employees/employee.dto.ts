@@ -78,7 +78,17 @@ export class CreateDepartmentDto {
     name: string;
 }
 
+export class UpdateDepartmentDto {
+    @IsString()
+    name: string;
+}
+
 export class CreateDesignationDto {
+    @IsString()
+    name: string;
+}
+
+export class UpdateDesignationDto {
     @IsString()
     name: string;
 }
