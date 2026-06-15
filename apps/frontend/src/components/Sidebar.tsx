@@ -257,12 +257,17 @@ function buildModules(t: ReturnType<typeof useI18n>['t']): NavModule[] {
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
+/** Modules visible when acting as the Platform Admin (no shop/tenant scope). */
+const PLATFORM_ADMIN_MODULES = new Set(['admin', 'help']);
+
 export default function Sidebar({
     canAccessAccounting = true,
     canAccessInventoryReports = false,
     canAccessAdmin = false,
     canManageBilling = false,
     canManageTeam = false,
+    platformAdminMode = false,
+    canSwitchAccount = false,
     activePlanCode,
     isOpen = false,
     onClose,
@@ -272,6 +277,10 @@ export default function Sidebar({
     canAccessAdmin?: boolean;
     canManageBilling?: boolean;
     canManageTeam?: boolean;
+    /** When true, hide all shop modules and show only the admin console. */
+    platformAdminMode?: boolean;
+    /** When true, show a "Switch account" affordance. */
+    canSwitchAccount?: boolean;
     activePlanCode?: string | null;
     /** Mobile overlay open state */
     isOpen?: boolean;
@@ -285,6 +294,8 @@ export default function Sidebar({
     const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
     const modules = buildModules(t)
         .filter((module) => {
+            // Platform-admin console: shop owner/user options are hidden entirely.
+            if (platformAdminMode) return PLATFORM_ADMIN_MODULES.has(module.key);
             if (module.key === 'accounting') return canAccessAccounting;
             if (module.key === 'admin') return canAccessAdmin;
             if (module.key === 'billing') return canManageBilling;
@@ -524,8 +535,20 @@ export default function Sidebar({
                     })}
                 </nav>
 
-                {/* Sign out */}
-                <div className={`border-t border-gray-100 p-2 flex-shrink-0 ${collapsed ? 'flex justify-center' : ''}`}>
+                {/* Switch account + Sign out */}
+                <div className={`border-t border-gray-100 p-2 flex-shrink-0 space-y-1 ${collapsed ? 'flex flex-col items-center' : ''}`}>
+                    {canSwitchAccount && (
+                        <Link
+                            href="/select-account"
+                            title={collapsed ? 'Switch account' : undefined}
+                            className={`flex items-center rounded-xl text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors group ${
+                                collapsed ? 'w-10 h-10 justify-center' : 'space-x-3 w-full px-3 py-2'
+                            }`}
+                        >
+                            <ArrowLeftRight className="w-5 h-5 flex-shrink-0" />
+                            {!collapsed && <span className="font-medium text-sm">Switch account</span>}
+                        </Link>
+                    )}
                     <button
                         onClick={() => { localStorage.clear(); window.location.href = '/login'; }}
                         title={collapsed ? 'Sign out' : undefined}

@@ -26,6 +26,22 @@ function LoginPageContent() {
         return redirect && redirect.startsWith('/') ? redirect : '/dashboard';
     })();
 
+    // The auth helper tells us where to land (a shop dashboard, the admin
+    // console, or the account chooser). Preserve any ?redirect= the user came
+    // in with: honour it once a single workspace is resolved, or carry it
+    // through the chooser so it applies after selection.
+    const resolveDestination = (redirectTo: string) => {
+        if (redirectTo === '/select-account') {
+            return postAuthPath === '/dashboard'
+                ? '/select-account'
+                : `/select-account?redirect=${encodeURIComponent(postAuthPath)}`;
+        }
+        if (redirectTo === '/dashboard') {
+            return postAuthPath;
+        }
+        return redirectTo;
+    };
+
     // Auto-trigger demo login when ?demo=1 is present in the URL
     useEffect(() => {
         if (searchParams.get('demo') === '1') {
@@ -45,8 +61,8 @@ function LoginPageContent() {
                 setTwoFactorUserId(loginRes.user_id);
                 return;
             }
-            await storeAuthResponse(loginRes);
-            router.push(postAuthPath);
+            const { redirectTo } = await storeAuthResponse(loginRes);
+            router.push(resolveDestination(redirectTo));
         } catch (err: any) {
             setError(err.message || t.auth.login.defaultError);
         } finally {
@@ -61,8 +77,8 @@ function LoginPageContent() {
         setError(null);
         try {
             const loginRes = await api.verify2FALogin(twoFactorUserId, twoFactorCode);
-            await storeAuthResponse(loginRes);
-            router.push(postAuthPath);
+            const { redirectTo } = await storeAuthResponse(loginRes);
+            router.push(resolveDestination(redirectTo));
         } catch (err: any) {
             setError(err.message || t.auth.login.defaultError);
         } finally {

@@ -43,23 +43,41 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             .finally(() => setHasResolvedUser(true));
     }, []);
 
+    const isDashboardHome = pathname === '/dashboard';
+    const activeContext = globalThis.window === undefined ? null : localStorage.getItem('active_context');
+    const activeTenantId = globalThis.window === undefined ? null : localStorage.getItem('tenant_id');
+    // Platform admins choose between the admin console and any shop they belong
+    // to. In admin-console mode we never resolve a shop/tenant so the dashboard
+    // shows only platform-admin options.
+    const inPlatformAdminMode = Boolean(user?.is_platform_admin) && activeContext === 'platform-admin';
+    const tenantCount = user?.tenants?.length || 0;
+    const contextCount = (user?.is_platform_admin ? 1 : 0) + tenantCount;
+    const canSwitchAccount = contextCount > 1;
+    const activeTenant = inPlatformAdminMode
+        ? null
+        : user?.tenants?.find((tenant: any) => tenant.id === activeTenantId) || user?.tenants?.[0];
+
     useEffect(() => {
+        if (inPlatformAdminMode) return;
         const done = localStorage.getItem('onboarding_complete');
         if (!done && pathname === '/dashboard') setShowOnboardingBanner(true);
-    }, [pathname]);
+    }, [pathname, inPlatformAdminMode]);
 
     useEffect(() => {
         if (!hasResolvedUser) return;
+        // In admin-console mode the generic shop dashboard doesn't apply — send
+        // platform admins to their console instead of shop onboarding.
+        if (inPlatformAdminMode) {
+            if (pathname === '/dashboard') router.replace('/dashboard/admin');
+            return;
+        }
         const done = localStorage.getItem('onboarding_complete');
         if (done) return;
         if (pathname === '/dashboard') {
             router.replace('/dashboard/onboarding');
         }
-    }, [hasResolvedUser, pathname, router]);
+    }, [hasResolvedUser, pathname, router, inPlatformAdminMode]);
 
-    const isDashboardHome = pathname === '/dashboard';
-    const activeTenantId = globalThis.window === undefined ? null : localStorage.getItem('tenant_id');
-    const activeTenant = user?.tenants?.find((tenant: any) => tenant.id === activeTenantId) || user?.tenants?.[0];
     const tenantStores = activeTenant?.stores || [];
     const primaryRole = activeTenant?.role;
     const activePlanCode = activeTenant?.subscription?.plan?.code || null;
@@ -67,7 +85,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const hasPaidPlan = activePlanCode && activePlanCode !== 'FREE';
     const hasAccountingEntitlement = Boolean(planFeatures.premiumAccounting) || activePlanCode === 'STANDARD' || activePlanCode === 'PREMIUM';
     const hasInventoryReportEntitlement = Boolean(planFeatures.premiumInventoryReports) || activePlanCode === 'STANDARD' || activePlanCode === 'PREMIUM';
-    const isPlatformAdmin = Boolean(user?.is_platform_admin);
+    const isPlatformAdmin = inPlatformAdminMode;
     const canManageBilling = primaryRole === 'OWNER' || primaryRole === 'MANAGER';
     const canManageTeam = primaryRole === 'OWNER' || primaryRole === 'MANAGER';
     const canViewAudit = canManageTeam;
@@ -147,6 +165,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 canAccessAdmin={isPlatformAdmin}
                 canManageBilling={canManageBilling}
                 canManageTeam={canManageTeam}
+                platformAdminMode={inPlatformAdminMode}
+                canSwitchAccount={canSwitchAccount}
                 activePlanCode={activePlanCode}
                 isOpen={mobileNavOpen}
                 onClose={() => setMobileNavOpen(false)}
@@ -204,7 +224,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                             <div className="text-right hidden sm:block">
                                 <p className="text-sm font-semibold tracking-tight leading-none">{user?.name || '—'}</p>
                                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
-                                    {activeTenant?.role || t.dashboardLayout.userFallbackRole}
+                                    {inPlatformAdminMode ? 'Platform Admin' : (activeTenant?.role || t.dashboardLayout.userFallbackRole)}
                                 </p>
                             </div>
                             <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 text-sm font-black border border-blue-200 cursor-pointer hover:scale-105 transition-transform flex-shrink-0">
