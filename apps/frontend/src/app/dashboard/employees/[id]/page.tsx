@@ -21,6 +21,7 @@ interface Employee {
     date_of_joining?: string | null;
     department_id?: string | null;
     designation_id?: string | null;
+    basic_salary?: string | number | null;
     user_id?: string | null;
     status: string;
     created_at: string;
@@ -47,7 +48,7 @@ export default function EmployeeDetailPage() {
 
     const [form, setForm] = useState({
         name: '', phone: '', email: '', nid: '',
-        date_of_joining: '', department_id: '', designation_id: '', status: 'ACTIVE',
+        date_of_joining: '', department_id: '', designation_id: '', basic_salary: '', status: 'ACTIVE',
     });
 
     useEffect(() => {
@@ -68,6 +69,7 @@ export default function EmployeeDetailPage() {
                 date_of_joining: emp.date_of_joining ? emp.date_of_joining.split('T')[0] : '',
                 department_id: emp.department_id ?? '',
                 designation_id: emp.designation_id ?? '',
+                basic_salary: emp.basic_salary != null ? String(emp.basic_salary) : '',
                 status: emp.status ?? 'ACTIVE',
             });
         }).catch(() => setError(t.employees.detail.loadFailed))
@@ -104,6 +106,7 @@ export default function EmployeeDetailPage() {
             else payload.department_id = null;
             if (form.designation_id) payload.designation_id = form.designation_id;
             else payload.designation_id = null;
+            payload.basic_salary = form.basic_salary !== '' ? Number(form.basic_salary) : null;
 
             const updated = await api.updateEmployee(id, payload);
             setEmployee(updated);
@@ -278,6 +281,13 @@ export default function EmployeeDetailPage() {
                                 <option value="">{t.common.none}</option>
                                 {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                             </select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.employees.modal.basicSalary}</label>
+                            <input type="number" min="0" step="0.01" value={form.basic_salary} onChange={set('basic_salary')}
+                                className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-bold text-gray-600 text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
+                                placeholder="0.00" />
                         </div>
 
                         <div className="space-y-2">

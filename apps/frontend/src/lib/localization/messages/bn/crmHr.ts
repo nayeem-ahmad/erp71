@@ -94,6 +94,7 @@ export const crmHrMessages = {
                 dateOfJoining: "যোগদানের তারিখ",
                 department: "বিভাগ",
                 designation: "পদবি",
+                basicSalary: "মূল বেতন",
                 status: "স্ট্যাটাস",
                 nationalId: "জাতীয় পরিচয়পত্র",
                 adding: "যোগ করা হচ্ছে...",

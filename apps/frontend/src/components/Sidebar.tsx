@@ -43,6 +43,7 @@ import {
     MessageSquare,
     UserCog,
     CalendarOff,
+    Banknote,
     Landmark,
     FileSearch,
     CheckSquare,
@@ -201,6 +202,7 @@ function buildModules(t: ReturnType<typeof useI18n>['t']): NavModule[] {
             { href: '/dashboard/employees', icon: Users, label: t.sidebar.items.employees },
             { href: '/dashboard/attendance', icon: Clock, label: t.sidebar.items.attendance },
             { href: '/dashboard/leaves', icon: CalendarOff, label: t.sidebar.items.leaves },
+            { href: '/dashboard/salary-payments', icon: Banknote, label: t.sidebar.items.salaryPayments },
         ],
     },
     {

@@ -14,7 +14,7 @@ interface AddEmployeeModalProps {
 const emptyForm = {
     name: '', phone: '', email: '', nid: '',
     date_of_joining: '', department_id: '', designation_id: '',
-    status: 'ACTIVE',
+    basic_salary: '', status: 'ACTIVE',
 };
 
 export default function AddEmployeeModal({ isOpen, onClose, onAdd }: AddEmployeeModalProps) {
@@ -45,6 +45,7 @@ export default function AddEmployeeModal({ isOpen, onClose, onAdd }: AddEmployee
             if (formData.date_of_joining) payload.date_of_joining = formData.date_of_joining;
             if (formData.department_id) payload.department_id = formData.department_id;
             if (formData.designation_id) payload.designation_id = formData.designation_id;
+            if (formData.basic_salary) payload.basic_salary = Number(formData.basic_salary);
 
             await onAdd(payload);
             setFormData({ ...emptyForm });
@@ -141,6 +142,13 @@ export default function AddEmployeeModal({ isOpen, onClose, onAdd }: AddEmployee
                                 <option value="">{t.common.none}</option>
                                 {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                             </select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.employees.modal.basicSalary} <span className="text-gray-300">({t.common.optional})</span></label>
+                            <input type="number" min="0" step="0.01" value={formData.basic_salary} onChange={set('basic_salary')}
+                                className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm"
+                                placeholder="0.00" />
                         </div>
 
                         <div className="space-y-2">

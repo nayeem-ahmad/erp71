@@ -94,6 +94,7 @@ export const crmHrMessages = {
             dateOfJoining: "Tarikh Menyertai",
             department: "Jabatan",
             designation: "Jawatan",
+            basicSalary: "Gaji Asas",
             status: "Status",
             nationalId: "Kad Pengenalan",
             adding: "Menambah...",

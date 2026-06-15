@@ -308,7 +308,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 ### HR (Epic 60–63)
 - [x] Basic employee management — Employee profiles (code, name, phone, email, NID encrypted, DOJ, department, designation, status), Department and Designation models, full CRUD API, link/unlink system user account — done 2026-06-09
 - [x] Attendance & Leave management (Epic 61) — AttendanceRecord, LeaveType, LeaveBalance, LeaveRequest models + migration; AttendanceModule with full CRUD API (upsert attendance, leave type management, leave balance set/query, leave request create/review/cancel, attendance summary); registered in AppModule — done 2026-06-09
-- [ ] Payroll & Salary management (Epic 62) — salary profiles, loan/advance management, monthly payroll generation, PDF payslips
+- [ ] Payroll & Salary management (Epic 62) — remaining: salary profiles beyond basic salary, loan/advance management, monthly payroll generation, PDF payslips
+  - [x] Salary payment option — `SalaryPayment` model (employee, amount, pay_period YYYY-MM, payment_date, method, notes) + `basic_salary` on Employee; migration `20260615000000_add_salary_payments`; `SalaryPaymentsModule` (GET/POST/PATCH/DELETE `/salary-payments` + `/salary-payments/summary`) with one-payment-per-employee-per-period guard; salary field on add/edit employee forms; Salary Payments page at `/dashboard/salary-payments` (pay form prefilled from basic salary, period/date/employee filters, period total) + sidebar link under HR; i18n en/bn/ms — done 2026-06-15
 - [ ] HR Payroll analytics (Epic 63)
 
 ---
