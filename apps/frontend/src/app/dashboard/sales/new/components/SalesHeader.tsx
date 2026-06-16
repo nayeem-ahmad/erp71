@@ -1,5 +1,13 @@
 import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
+
+// Formats a Date as `yyyy-MM-dd HH:mm` in local time.
+function formatNow(date: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return (
+        `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+        `${pad(date.getHours())}:${pad(date.getMinutes())}`
+    );
+}
 
 interface SalesHeaderProps {
     refNumber: string;
@@ -8,10 +16,10 @@ interface SalesHeaderProps {
 }
 
 export default function SalesHeader({ refNumber, setRefNumber, currentUser }: SalesHeaderProps) {
-    const [now, setNow] = useState<string>(format(new Date(), 'yyyy-MM-dd HH:mm'));
+    const [now, setNow] = useState<string>(formatNow(new Date()));
 
     useEffect(() => {
-        setNow(format(new Date(), 'yyyy-MM-dd HH:mm'));
+        setNow(formatNow(new Date()));
     }, []);
 
     return (

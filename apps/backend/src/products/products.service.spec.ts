@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ProductsService } from './products.service';
 import { DatabaseService } from '../database/database.service';
 import { RedisService } from '../cache/redis.service';
+import { PriceListsService } from '../price-lists/price-lists.service';
 import { NotFoundException } from '@nestjs/common';
 
 describe('ProductsService', () => {
@@ -57,11 +58,14 @@ describe('ProductsService', () => {
 
     const redis = { get: jest.fn().mockResolvedValue(null), set: jest.fn(), invalidatePattern: jest.fn() };
 
+    const priceLists = { addProductToAllActiveLists: jest.fn().mockResolvedValue(undefined) };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProductsService,
         { provide: DatabaseService, useValue: db },
         { provide: RedisService, useValue: redis },
+        { provide: PriceListsService, useValue: priceLists },
       ],
     }).compile();
 

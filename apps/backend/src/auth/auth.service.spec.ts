@@ -26,6 +26,7 @@ describe('AuthService', () => {
         accountSubgroup: { upsert: jest.fn() },
         account: {
             upsert: jest.fn(),
+            findFirst: jest.fn().mockResolvedValue({ id: 'cash-id', name: 'Cash in Hand' }),
             findMany: jest.fn().mockResolvedValue([
                 { id: 'cash-id', name: 'Cash in Hand' },
                 { id: 'bank-id', name: 'Main Bank Account' },
@@ -100,6 +101,7 @@ describe('AuthService', () => {
         db.accountGroup.upsert.mockResolvedValue({ id: 'group-1', name: 'Current Assets' });
         db.accountSubgroup.upsert.mockResolvedValue({ id: 'subgroup-1', name: 'Cash and Bank' });
         db.account.upsert.mockResolvedValue({ id: 'account-1', name: 'Cash in Hand' });
+        db.account.findFirst.mockResolvedValue({ id: 'cash-id', name: 'Cash in Hand' });
         db.account.findMany.mockResolvedValue([
             { id: 'cash-id', name: 'Cash in Hand' },
             { id: 'bank-id', name: 'Main Bank Account' },
