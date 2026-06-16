@@ -18,12 +18,15 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
     purchase_return: 'Purchase Return',
     inventory_adjustment: 'Inventory Adjustment',
     fund_movement: 'Fund Movement',
+    loan_disbursement: 'Loan Disbursement',
+    loan_repayment: 'Loan Repayment',
 };
 
 const CONDITION_KEY_LABELS: Record<string, string> = {
     payment_mode: 'Payment Mode',
     reason_type: 'Reason Type',
     transfer_scope: 'Transfer Scope',
+    loan_direction: 'Loan Direction',
     none: 'None (default)',
 };
 
@@ -34,6 +37,8 @@ const EVENT_TYPE_BADGE: Record<string, string> = {
     purchase_return: 'bg-orange-50 text-orange-700 border-orange-200',
     inventory_adjustment: 'bg-violet-50 text-violet-700 border-violet-200',
     fund_movement: 'bg-gray-50 text-gray-700 border-gray-200',
+    loan_disbursement: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    loan_repayment: 'bg-teal-50 text-teal-700 border-teal-200',
 };
 
 interface Account {

@@ -114,12 +114,15 @@ enum PostingRuleEventType {
   purchase_return
   inventory_adjustment
   fund_movement
+  loan_disbursement
+  loan_repayment
 }
 
 enum PostingRuleConditionKey {
   payment_mode
   reason_type
   transfer_scope
+  loan_direction
   none
 }
 

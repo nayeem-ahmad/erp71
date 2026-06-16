@@ -337,6 +337,8 @@ export const PostingRuleEventType = {
   PURCHASE_RETURN: 'purchase_return',
   INVENTORY_ADJUSTMENT: 'inventory_adjustment',
   FUND_MOVEMENT: 'fund_movement',
+  LOAN_DISBURSEMENT: 'loan_disbursement',
+  LOAN_REPAYMENT: 'loan_repayment',
 } as const;
 export type PostingRuleEventType = (typeof PostingRuleEventType)[keyof typeof PostingRuleEventType];
 
@@ -344,6 +346,7 @@ export const PostingRuleConditionKey = {
   PAYMENT_MODE: 'payment_mode',
   REASON_TYPE: 'reason_type',
   TRANSFER_SCOPE: 'transfer_scope',
+  LOAN_DIRECTION: 'loan_direction',
   NONE: 'none',
 } as const;
 export type PostingRuleConditionKey = (typeof PostingRuleConditionKey)[keyof typeof PostingRuleConditionKey];

@@ -8,13 +8,15 @@ export type PostingEventType =
     | 'purchase'
     | 'purchase_return'
     | 'inventory_adjustment'
-    | 'fund_movement';
+    | 'fund_movement'
+    | 'loan_disbursement'
+    | 'loan_repayment';
 
 export interface AutoPostInput {
     tx: Prisma.TransactionClient;
     tenantId: string;
     eventType: PostingEventType;
-    conditionKey?: 'payment_mode' | 'reason_type' | 'transfer_scope' | 'none';
+    conditionKey?: 'payment_mode' | 'reason_type' | 'transfer_scope' | 'loan_direction' | 'none';
     conditionValue?: string | null;
     sourceModule: string;
     sourceType: string;
@@ -48,6 +50,10 @@ const VOUCHER_TYPE_BY_EVENT: Record<PostingEventType, string> = {
     purchase_return: VoucherType.CASH_RECEIVE,
     inventory_adjustment: VoucherType.JOURNAL,
     fund_movement: VoucherType.FUND_TRANSFER,
+    // A single loan event covers both directions (payable/receivable), so a
+    // neutral journal voucher is used rather than a cash-in/out specific type.
+    loan_disbursement: VoucherType.JOURNAL,
+    loan_repayment: VoucherType.JOURNAL,
 };
 
 function voucherSequenceId(tenantId: string, voucherType: string) {

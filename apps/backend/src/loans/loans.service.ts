@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { ensureLoanPostingSetup } from '@retail-saas/database';
 import { DatabaseService } from '../database/database.service';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
+import { autoPostFromRules } from '../accounting/posting.utils';
 import {
     CreateLoanDto,
     CreateLoanPaymentDto,
@@ -54,24 +56,54 @@ export class LoansService {
             await this.assertStoreExists(tenantId, dto.storeId);
         }
 
-        const loan = await this.db.loan.create({
-            data: {
-                tenant_id: tenantId,
-                store_id: dto.storeId ?? null,
-                counterparty: dto.counterparty.trim(),
-                direction: dto.direction ?? 'PAYABLE',
-                principal: dto.principal,
-                interest_rate: dto.interestRate ?? null,
-                start_date: new Date(dto.startDate),
-                due_date: dto.dueDate ? new Date(dto.dueDate) : null,
-                reference: dto.reference?.trim() || null,
-                notes: dto.notes?.trim() || null,
-                created_by: userId,
-            },
-            include: { payments: { select: { amount: true } } },
+        const direction = dto.direction ?? 'PAYABLE';
+
+        const { loan, posting } = await this.db.$transaction(async (tx) => {
+            const created = await tx.loan.create({
+                data: {
+                    tenant_id: tenantId,
+                    store_id: dto.storeId ?? null,
+                    counterparty: dto.counterparty.trim(),
+                    direction,
+                    principal: dto.principal,
+                    interest_rate: dto.interestRate ?? null,
+                    start_date: new Date(dto.startDate),
+                    due_date: dto.dueDate ? new Date(dto.dueDate) : null,
+                    reference: dto.reference?.trim() || null,
+                    notes: dto.notes?.trim() || null,
+                    created_by: userId,
+                },
+                include: { payments: { select: { amount: true } } },
+            });
+
+            // Make sure loan accounts + posting rules exist for this tenant
+            // (lazy for tenants provisioned before the loans feature shipped).
+            await ensureLoanPostingSetup(tx, tenantId);
+
+            const result = await autoPostFromRules({
+                tx,
+                tenantId,
+                eventType: 'loan_disbursement',
+                conditionKey: 'loan_direction',
+                conditionValue: direction,
+                sourceModule: 'loans',
+                sourceType: 'loan',
+                sourceId: created.id,
+                amount: Number(created.principal),
+                description: `Loan disbursement — ${created.counterparty}`,
+                referenceNumber: created.reference ?? undefined,
+                date: created.start_date,
+            });
+
+            return { loan: created, posting: result };
         });
 
-        return this.withBalance(loan);
+        return {
+            ...this.withBalance(loan),
+            posting_status: posting.postingStatus,
+            voucher_id: posting.voucherId ?? null,
+            voucher_number: posting.voucherNumber ?? null,
+        };
     }
 
     async updateLoan(tenantId: string, id: string, dto: UpdateLoanDto) {
@@ -118,23 +150,42 @@ export class LoansService {
             );
         }
 
-        await this.db.loanPayment.create({
-            data: {
-                tenant_id: tenantId,
-                loan_id: loanId,
-                amount: dto.amount,
-                payment_date: new Date(dto.paymentDate),
-                payment_method: dto.paymentMethod ?? 'CASH',
-                notes: dto.notes?.trim() || null,
-                created_by: userId,
-            },
-        });
+        await this.db.$transaction(async (tx) => {
+            const payment = await tx.loanPayment.create({
+                data: {
+                    tenant_id: tenantId,
+                    loan_id: loanId,
+                    amount: dto.amount,
+                    payment_date: new Date(dto.paymentDate),
+                    payment_method: dto.paymentMethod ?? 'CASH',
+                    notes: dto.notes?.trim() || null,
+                    created_by: userId,
+                },
+            });
 
-        // Auto-close the loan once it is fully repaid.
-        const newPaid = paid + dto.amount;
-        if (newPaid >= Number(loan.principal) - 0.005 && loan.status !== 'CLOSED') {
-            await this.db.loan.update({ where: { id: loanId }, data: { status: 'CLOSED' } });
-        }
+            // Auto-close the loan once it is fully repaid.
+            const newPaid = paid + dto.amount;
+            if (newPaid >= Number(loan.principal) - 0.005 && loan.status !== 'CLOSED') {
+                await tx.loan.update({ where: { id: loanId }, data: { status: 'CLOSED' } });
+            }
+
+            await ensureLoanPostingSetup(tx, tenantId);
+
+            await autoPostFromRules({
+                tx,
+                tenantId,
+                eventType: 'loan_repayment',
+                conditionKey: 'loan_direction',
+                conditionValue: loan.direction,
+                sourceModule: 'loans',
+                sourceType: 'loan_payment',
+                sourceId: payment.id,
+                amount: dto.amount,
+                description: `Loan repayment — ${loan.counterparty}`,
+                referenceNumber: loan.reference ?? undefined,
+                date: payment.payment_date,
+            });
+        });
 
         return this.getLoan(tenantId, loanId);
     }

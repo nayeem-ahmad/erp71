@@ -16,6 +16,7 @@ describe('bootstrapDefaultAccountingForTenant — Story 30.2', () => {
         };
         const account = {
             upsert: jest.fn().mockResolvedValue({ id: 'account-id' }),
+            findFirst: jest.fn().mockResolvedValue({ id: 'cash-id' }),
             findMany: jest.fn().mockResolvedValue([
                 { id: 'cash-id', name: 'Cash in Hand' },
                 { id: 'bank-id', name: 'Main Bank Account' },
@@ -64,6 +65,7 @@ describe('bootstrapDefaultAccountingForTenant — Story 30.2', () => {
         };
         const account = {
             upsert: jest.fn().mockResolvedValue({ id: 'account-id' }),
+            findFirst: jest.fn().mockResolvedValue({ id: 'cash-id' }),
             findMany: jest.fn().mockResolvedValue([
                 { id: 'cash-id', name: 'Cash in Hand' },
                 { id: 'bank-id', name: 'Main Bank Account' },

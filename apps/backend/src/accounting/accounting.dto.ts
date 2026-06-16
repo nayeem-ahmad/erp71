@@ -200,12 +200,15 @@ const POSTING_RULE_EVENT_TYPES = [
     'purchase_return',
     'inventory_adjustment',
     'fund_movement',
+    'loan_disbursement',
+    'loan_repayment',
 ] as const;
 
 const POSTING_RULE_CONDITION_KEYS = [
     'payment_mode',
     'reason_type',
     'transfer_scope',
+    'loan_direction',
     'none',
 ] as const;
 
