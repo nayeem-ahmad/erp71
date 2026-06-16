@@ -9,6 +9,11 @@ import { ListAdminUsersQueryDto } from './admin-tenants.dto';
 export class AdminUsersController {
     constructor(private readonly adminTenantsService: AdminTenantsService) {}
 
+    @Get('lookup')
+    lookupUser(@Query('email') email: string) {
+        return this.adminTenantsService.lookupUserByEmail(email);
+    }
+
     @Get()
     listUsers(@Query() query: ListAdminUsersQueryDto) {
         return this.adminTenantsService.listUsers(query);

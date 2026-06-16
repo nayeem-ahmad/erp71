@@ -6,6 +6,7 @@ import {
     ListAdminTenantsQueryDto,
     UpdateAdminTenantSubscriptionDto,
     SuspendTenantDto,
+    CreateAdminTenantDto,
 } from './admin-tenants.dto';
 
 @Controller('admin/tenants')
@@ -16,6 +17,14 @@ export class AdminTenantsController {
     @Get()
     listTenants(@Query() query: ListAdminTenantsQueryDto) {
         return this.adminTenantsService.listTenants(query);
+    }
+
+    @Post()
+    createTenant(
+        @Body() dto: CreateAdminTenantDto,
+        @Request() req: any,
+    ) {
+        return this.adminTenantsService.createTenant(dto, req.user.userId);
     }
 
     @Get(':tenantId')
