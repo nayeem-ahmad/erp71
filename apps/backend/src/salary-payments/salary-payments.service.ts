@@ -4,8 +4,11 @@ import {
     Injectable,
     NotFoundException,
 } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
+import { bootstrapDefaultAccountingForTenant } from '@retail-saas/database';
 import { DatabaseService } from '../database/database.service';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
+import { autoPostFromRules, reversePostedVoucher } from '../accounting/posting.utils';
 import {
     CreateSalaryPaymentDto,
     ListSalaryPaymentsQueryDto,
@@ -13,9 +16,28 @@ import {
     UpdateSalaryPaymentDto,
 } from './salary-payments.dto';
 
+const SALARY_SOURCE_MODULE = 'salary';
+const SALARY_SOURCE_TYPE = 'salary_payment';
+
 @Injectable()
 export class SalaryPaymentsService {
     constructor(private db: DatabaseService) {}
+
+    /** Maps a payment method to the posting-rule condition value (cash vs. bank). */
+    private paymentMode(method: string): 'cash' | 'bank' {
+        return method?.toUpperCase() === 'CASH' ? 'cash' : 'bank';
+    }
+
+    /** Lazily provision the Salary & Wages account + posting rules for tenants created before this feature. */
+    private async ensureSalaryPostingRules(tx: Prisma.TransactionClient, tenantId: string) {
+        const rule = await tx.postingRule.findFirst({
+            where: { tenant_id: tenantId, event_type: 'salary_payment' },
+            select: { id: true },
+        });
+        if (!rule) {
+            await bootstrapDefaultAccountingForTenant(tx, tenantId);
+        }
+    }
 
     async list(
         tenantId: string,
@@ -69,18 +91,43 @@ export class SalaryPaymentsService {
             );
         }
 
-        return this.db.salaryPayment.create({
-            data: {
-                tenant_id: tenantId,
-                employee_id: dto.employeeId,
-                amount: dto.amount,
-                pay_period: dto.payPeriod,
-                payment_date: new Date(dto.paymentDate),
-                payment_method: dto.paymentMethod ?? 'CASH',
-                notes: dto.notes,
-                created_by: userId,
-            },
-            include: this.paymentInclude(),
+        return this.db.$transaction(async (tx) => {
+            const payment = await tx.salaryPayment.create({
+                data: {
+                    tenant_id: tenantId,
+                    employee_id: dto.employeeId,
+                    amount: dto.amount,
+                    pay_period: dto.payPeriod,
+                    payment_date: new Date(dto.paymentDate),
+                    payment_method: dto.paymentMethod ?? 'CASH',
+                    notes: dto.notes,
+                    created_by: userId,
+                },
+                include: this.paymentInclude(),
+            });
+
+            await this.ensureSalaryPostingRules(tx, tenantId);
+            const posting = await autoPostFromRules({
+                tx,
+                tenantId,
+                eventType: 'salary_payment',
+                conditionKey: 'payment_mode',
+                conditionValue: this.paymentMode(payment.payment_method),
+                sourceModule: SALARY_SOURCE_MODULE,
+                sourceType: SALARY_SOURCE_TYPE,
+                sourceId: payment.id,
+                amount: Number(payment.amount),
+                description: `Salary payment — ${payment.employee?.name ?? ''} (${payment.pay_period})`.trim(),
+                referenceNumber: payment.pay_period,
+                date: payment.payment_date,
+            });
+
+            return {
+                ...payment,
+                posting_status: posting.postingStatus,
+                voucher_id: posting.voucherId ?? null,
+                voucher_number: posting.voucherNumber ?? null,
+            };
         });
     }
 
@@ -104,24 +151,79 @@ export class SalaryPaymentsService {
             }
         }
 
-        return this.db.salaryPayment.update({
-            where: { id },
-            data: {
-                ...(dto.amount !== undefined ? { amount: dto.amount } : {}),
-                ...(dto.payPeriod !== undefined ? { pay_period: dto.payPeriod } : {}),
-                ...(dto.paymentDate !== undefined
-                    ? { payment_date: new Date(dto.paymentDate) }
-                    : {}),
-                ...(dto.paymentMethod !== undefined ? { payment_method: dto.paymentMethod } : {}),
-                ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
-            },
-            include: this.paymentInclude(),
+        // Changes to amount, method or date alter the journal entry and require re-posting.
+        const financialChange =
+            (dto.amount !== undefined && Number(dto.amount) !== Number(existing.amount)) ||
+            (dto.paymentMethod !== undefined && dto.paymentMethod !== existing.payment_method) ||
+            (dto.paymentDate !== undefined &&
+                new Date(dto.paymentDate).getTime() !== existing.payment_date.getTime());
+
+        return this.db.$transaction(async (tx) => {
+            const payment = await tx.salaryPayment.update({
+                where: { id },
+                data: {
+                    ...(dto.amount !== undefined ? { amount: dto.amount } : {}),
+                    ...(dto.payPeriod !== undefined ? { pay_period: dto.payPeriod } : {}),
+                    ...(dto.paymentDate !== undefined
+                        ? { payment_date: new Date(dto.paymentDate) }
+                        : {}),
+                    ...(dto.paymentMethod !== undefined ? { payment_method: dto.paymentMethod } : {}),
+                    ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+                },
+                include: this.paymentInclude(),
+            });
+
+            if (!financialChange) {
+                return payment;
+            }
+
+            // Reverse the existing voucher and post a fresh one reflecting the new values.
+            await reversePostedVoucher({
+                tx,
+                tenantId,
+                eventType: 'salary_payment',
+                sourceId: id,
+                description: `Reversal (edit) of salary payment ${existing.pay_period}`,
+                resetEvent: true,
+            });
+            await this.ensureSalaryPostingRules(tx, tenantId);
+            const posting = await autoPostFromRules({
+                tx,
+                tenantId,
+                eventType: 'salary_payment',
+                conditionKey: 'payment_mode',
+                conditionValue: this.paymentMode(payment.payment_method),
+                sourceModule: SALARY_SOURCE_MODULE,
+                sourceType: SALARY_SOURCE_TYPE,
+                sourceId: payment.id,
+                amount: Number(payment.amount),
+                description: `Salary payment — ${payment.employee?.name ?? ''} (${payment.pay_period})`.trim(),
+                referenceNumber: payment.pay_period,
+                date: payment.payment_date,
+            });
+
+            return {
+                ...payment,
+                posting_status: posting.postingStatus,
+                voucher_id: posting.voucherId ?? null,
+                voucher_number: posting.voucherNumber ?? null,
+            };
         });
     }
 
     async remove(tenantId: string, id: string) {
-        await this.findOne(tenantId, id);
-        return this.db.salaryPayment.delete({ where: { id } });
+        const existing = await this.findOne(tenantId, id);
+        return this.db.$transaction(async (tx) => {
+            // Auto-reverse the journal entry so the ledger stays balanced.
+            await reversePostedVoucher({
+                tx,
+                tenantId,
+                eventType: 'salary_payment',
+                sourceId: id,
+                description: `Reversal of deleted salary payment ${existing.pay_period}`,
+            });
+            return tx.salaryPayment.delete({ where: { id } });
+        });
     }
 
     async getSummary(tenantId: string, query: SalaryPaymentSummaryQueryDto) {

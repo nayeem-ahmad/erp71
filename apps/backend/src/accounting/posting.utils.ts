@@ -8,7 +8,8 @@ export type PostingEventType =
     | 'purchase'
     | 'purchase_return'
     | 'inventory_adjustment'
-    | 'fund_movement';
+    | 'fund_movement'
+    | 'salary_payment';
 
 export interface AutoPostInput {
     tx: Prisma.TransactionClient;
@@ -48,6 +49,7 @@ const VOUCHER_TYPE_BY_EVENT: Record<PostingEventType, string> = {
     purchase_return: VoucherType.CASH_RECEIVE,
     inventory_adjustment: VoucherType.JOURNAL,
     fund_movement: VoucherType.FUND_TRANSFER,
+    salary_payment: VoucherType.CASH_PAYMENT,
 };
 
 function voucherSequenceId(tenantId: string, voucherType: string) {
@@ -250,4 +252,103 @@ export async function autoPostFromRules(input: AutoPostInput): Promise<AutoPostR
         voucherNumber: voucher.voucher_number,
         voucherType: voucher.voucher_type,
     };
+}
+
+export interface ReversePostingInput {
+    tx: Prisma.TransactionClient;
+    tenantId: string;
+    eventType: PostingEventType;
+    sourceId: string;
+    description?: string;
+    date?: Date;
+    /** When true, the posting event is cleared so the source can be re-posted (used on edits). */
+    resetEvent?: boolean;
+}
+
+export interface ReversePostingResult {
+    reversed: boolean;
+    voucherId?: string;
+    voucherNumber?: string;
+}
+
+/**
+ * Creates a reversing journal voucher (swapping debits and credits) for the
+ * voucher a source document is currently posted to, so deleting/editing the
+ * source keeps the ledger balanced. Resolves the active voucher via the
+ * source's PostingEvent and is idempotent per reversed voucher.
+ */
+export async function reversePostedVoucher(
+    input: ReversePostingInput,
+): Promise<ReversePostingResult> {
+    const idempotencyKey = `${input.tenantId}:${input.eventType}:${input.sourceId}`;
+
+    const event = await input.tx.postingEvent.findUnique({
+        where: {
+            tenant_id_idempotency_key: {
+                tenant_id: input.tenantId,
+                idempotency_key: idempotencyKey,
+            },
+        },
+        include: { voucher: { include: { details: true } } },
+    });
+
+    if (!event || event.status !== 'posted' || !event.voucher) {
+        if (event && input.resetEvent) {
+            await input.tx.postingEvent.delete({ where: { id: event.id } });
+        }
+        return { reversed: false };
+    }
+
+    const original = event.voucher;
+    const reversalKey = `${input.tenantId}:reversal:${original.id}`;
+
+    const existingReversal = await input.tx.voucher.findFirst({
+        where: { tenant_id: input.tenantId, idempotency_key: reversalKey },
+    });
+
+    let result: ReversePostingResult;
+    if (existingReversal) {
+        result = {
+            reversed: true,
+            voucherId: existingReversal.id,
+            voucherNumber: existingReversal.voucher_number,
+        };
+    } else {
+        const voucherType = VoucherType.JOURNAL;
+        const voucherNumber = await generateVoucherNumber(input.tx, input.tenantId, voucherType);
+
+        const reversal = await input.tx.voucher.create({
+            data: {
+                tenant_id: input.tenantId,
+                voucher_number: voucherNumber,
+                voucher_type: voucherType,
+                source_module: original.source_module,
+                source_type: `${original.source_type}_reversal`,
+                source_id: input.sourceId,
+                idempotency_key: reversalKey,
+                description: input.description ?? `Reversal of ${original.voucher_number}`,
+                reference_number: original.reference_number,
+                date: input.date ?? new Date(),
+                details: {
+                    create: original.details.map((detail) => ({
+                        account_id: detail.account_id,
+                        debit_amount: detail.credit_amount,
+                        credit_amount: detail.debit_amount,
+                    })),
+                },
+            },
+        });
+        result = {
+            reversed: true,
+            voucherId: reversal.id,
+            voucherNumber: reversal.voucher_number,
+        };
+    }
+
+    // On edits, clear the posting event so autoPostFromRules can create a fresh voucher.
+    if (input.resetEvent) {
+        await input.tx.postingEvent.delete({ where: { id: event.id } });
+    }
+
+    return result;
 }

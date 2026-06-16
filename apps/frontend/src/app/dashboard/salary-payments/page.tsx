@@ -115,7 +115,7 @@ export default function SalaryPaymentsPage() {
         }
         setSaving(true);
         try {
-            await api.createSalaryPayment({
+            const created: any = await api.createSalaryPayment({
                 employeeId: formEmployeeId,
                 amount: Number(formAmount),
                 payPeriod: formPayPeriod,
@@ -123,7 +123,10 @@ export default function SalaryPaymentsPage() {
                 paymentMethod: formPaymentMethod,
                 notes: formNotes.trim() || undefined,
             });
-            setToast({ type: 'success', message: 'Salary payment recorded.' });
+            const message = created?.voucher_number
+                ? `Salary payment recorded — posted to journal voucher ${created.voucher_number}.`
+                : 'Salary payment recorded.';
+            setToast({ type: 'success', message });
             setShowForm(false);
             resetForm();
             await loadData();
@@ -135,10 +138,10 @@ export default function SalaryPaymentsPage() {
     };
 
     const handleDelete = async (payment: SalaryPayment) => {
-        if (!globalThis.confirm('Delete this salary payment?')) return;
+        if (!globalThis.confirm('Delete this salary payment? Its journal voucher will be reversed.')) return;
         try {
             await api.deleteSalaryPayment(payment.id);
-            setToast({ type: 'success', message: 'Salary payment deleted.' });
+            setToast({ type: 'success', message: 'Salary payment deleted and journal voucher reversed.' });
             await loadData();
         } catch (error: any) {
             setToast({ type: 'error', message: error?.message || t.common.error });

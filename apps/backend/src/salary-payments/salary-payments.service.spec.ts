@@ -2,6 +2,24 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { SalaryPaymentsService } from './salary-payments.service';
 import { DatabaseService } from '../database/database.service';
+import { autoPostFromRules, reversePostedVoucher } from '../accounting/posting.utils';
+
+jest.mock('../accounting/posting.utils', () => ({
+    autoPostFromRules: jest.fn().mockResolvedValue({
+        postingStatus: 'posted',
+        voucherId: 'v1',
+        voucherNumber: 'CP-00001',
+    }),
+    reversePostedVoucher: jest.fn().mockResolvedValue({ reversed: true, voucherId: 'rev1' }),
+}));
+
+jest.mock('@retail-saas/database', () => ({
+    ...jest.requireActual('@retail-saas/database'),
+    bootstrapDefaultAccountingForTenant: jest.fn().mockResolvedValue(undefined),
+}));
+
+const mockAutoPost = autoPostFromRules as jest.Mock;
+const mockReverse = reversePostedVoucher as jest.Mock;
 
 describe('SalaryPaymentsService', () => {
     let service: SalaryPaymentsService;
@@ -21,6 +39,10 @@ describe('SalaryPaymentsService', () => {
             employee: {
                 findFirst: jest.fn(),
             },
+            postingRule: {
+                findFirst: jest.fn().mockResolvedValue({ id: 'rule-1' }),
+            },
+            $transaction: jest.fn().mockImplementation(async (cb: any) => cb(db)),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -32,6 +54,13 @@ describe('SalaryPaymentsService', () => {
 
         service = module.get<SalaryPaymentsService>(SalaryPaymentsService);
         jest.clearAllMocks();
+        db.postingRule.findFirst.mockResolvedValue({ id: 'rule-1' });
+        mockAutoPost.mockResolvedValue({
+            postingStatus: 'posted',
+            voucherId: 'v1',
+            voucherNumber: 'CP-00001',
+        });
+        mockReverse.mockResolvedValue({ reversed: true, voucherId: 'rev1' });
     });
 
     describe('list', () => {
@@ -83,12 +112,19 @@ describe('SalaryPaymentsService', () => {
             paymentDate: '2026-06-30',
         };
 
-        it('records a salary payment for a valid employee', async () => {
+        it('records a salary payment and auto-posts a journal voucher', async () => {
             db.employee.findFirst.mockResolvedValue({ id: 'e1', tenant_id: 't1' });
             db.salaryPayment.findUnique.mockResolvedValue(null);
-            db.salaryPayment.create.mockResolvedValue({ id: 'p1', ...dto });
+            db.salaryPayment.create.mockResolvedValue({
+                id: 'p1',
+                amount: 5000,
+                pay_period: '2026-06',
+                payment_method: 'CASH',
+                payment_date: new Date('2026-06-30'),
+                employee: { id: 'e1', name: 'Alice' },
+            });
 
-            const result = await service.create('t1', 'u1', dto as any);
+            const result: any = await service.create('t1', 'u1', dto as any);
 
             expect(db.salaryPayment.create).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -101,7 +137,57 @@ describe('SalaryPaymentsService', () => {
                     }),
                 }),
             );
-            expect(result).toEqual({ id: 'p1', ...dto });
+            expect(mockAutoPost).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    eventType: 'salary_payment',
+                    conditionKey: 'payment_mode',
+                    conditionValue: 'cash',
+                    sourceModule: 'salary',
+                    sourceType: 'salary_payment',
+                    sourceId: 'p1',
+                    amount: 5000,
+                }),
+            );
+            expect(result.posting_status).toBe('posted');
+            expect(result.voucher_number).toBe('CP-00001');
+        });
+
+        it('posts against the bank account for non-cash methods', async () => {
+            db.employee.findFirst.mockResolvedValue({ id: 'e1', tenant_id: 't1' });
+            db.salaryPayment.findUnique.mockResolvedValue(null);
+            db.salaryPayment.create.mockResolvedValue({
+                id: 'p1',
+                amount: 5000,
+                pay_period: '2026-06',
+                payment_method: 'BANK',
+                payment_date: new Date('2026-06-30'),
+                employee: { id: 'e1', name: 'Alice' },
+            });
+
+            await service.create('t1', 'u1', { ...dto, paymentMethod: 'BANK' } as any);
+
+            expect(mockAutoPost).toHaveBeenCalledWith(
+                expect.objectContaining({ conditionValue: 'bank' }),
+            );
+        });
+
+        it('lazily bootstraps posting rules when missing', async () => {
+            const { bootstrapDefaultAccountingForTenant } = require('@retail-saas/database');
+            db.employee.findFirst.mockResolvedValue({ id: 'e1', tenant_id: 't1' });
+            db.salaryPayment.findUnique.mockResolvedValue(null);
+            db.postingRule.findFirst.mockResolvedValue(null);
+            db.salaryPayment.create.mockResolvedValue({
+                id: 'p1',
+                amount: 5000,
+                pay_period: '2026-06',
+                payment_method: 'CASH',
+                payment_date: new Date('2026-06-30'),
+                employee: { id: 'e1', name: 'Alice' },
+            });
+
+            await service.create('t1', 'u1', dto as any);
+
+            expect(bootstrapDefaultAccountingForTenant).toHaveBeenCalledWith(db, 't1');
         });
 
         it('rejects unknown employees', async () => {
@@ -131,31 +217,69 @@ describe('SalaryPaymentsService', () => {
             );
         });
 
-        it('updates fields when valid', async () => {
+        it('reverses and re-posts the voucher when the amount changes', async () => {
             db.salaryPayment.findFirst.mockResolvedValue({
                 id: 'p1',
                 tenant_id: 't1',
                 employee_id: 'e1',
                 pay_period: '2026-06',
+                amount: 5000,
+                payment_method: 'CASH',
+                payment_date: new Date('2026-06-30'),
             });
-            db.salaryPayment.update.mockResolvedValue({ id: 'p1', amount: 6000 });
+            db.salaryPayment.update.mockResolvedValue({
+                id: 'p1',
+                amount: 6000,
+                pay_period: '2026-06',
+                payment_method: 'CASH',
+                payment_date: new Date('2026-06-30'),
+                employee: { id: 'e1', name: 'Alice' },
+            });
 
-            const result = await service.update('t1', 'p1', { amount: 6000 } as any);
+            const result: any = await service.update('t1', 'p1', { amount: 6000 } as any);
 
-            expect(db.salaryPayment.update).toHaveBeenCalledWith(
-                expect.objectContaining({ where: { id: 'p1' }, data: { amount: 6000 } }),
+            expect(mockReverse).toHaveBeenCalledWith(
+                expect.objectContaining({ eventType: 'salary_payment', sourceId: 'p1', resetEvent: true }),
             );
-            expect(result).toEqual({ id: 'p1', amount: 6000 });
+            expect(mockAutoPost).toHaveBeenCalledWith(
+                expect.objectContaining({ sourceId: 'p1', amount: 6000 }),
+            );
+            expect(result.posting_status).toBe('posted');
+        });
+
+        it('does not touch the ledger when only notes change', async () => {
+            db.salaryPayment.findFirst.mockResolvedValue({
+                id: 'p1',
+                tenant_id: 't1',
+                employee_id: 'e1',
+                pay_period: '2026-06',
+                amount: 5000,
+                payment_method: 'CASH',
+                payment_date: new Date('2026-06-30'),
+            });
+            db.salaryPayment.update.mockResolvedValue({ id: 'p1', notes: 'Bonus included' });
+
+            await service.update('t1', 'p1', { notes: 'Bonus included' } as any);
+
+            expect(mockReverse).not.toHaveBeenCalled();
+            expect(mockAutoPost).not.toHaveBeenCalled();
         });
     });
 
     describe('remove', () => {
-        it('deletes an existing payment', async () => {
-            db.salaryPayment.findFirst.mockResolvedValue({ id: 'p1', tenant_id: 't1' });
+        it('reverses the journal voucher then deletes the payment', async () => {
+            db.salaryPayment.findFirst.mockResolvedValue({
+                id: 'p1',
+                tenant_id: 't1',
+                pay_period: '2026-06',
+            });
             db.salaryPayment.delete.mockResolvedValue({ id: 'p1' });
 
             await service.remove('t1', 'p1');
 
+            expect(mockReverse).toHaveBeenCalledWith(
+                expect.objectContaining({ eventType: 'salary_payment', sourceId: 'p1' }),
+            );
             expect(db.salaryPayment.delete).toHaveBeenCalledWith({ where: { id: 'p1' } });
         });
     });

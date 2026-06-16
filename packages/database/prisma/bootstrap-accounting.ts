@@ -109,6 +109,17 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                     },
                 ],
             },
+            {
+                name: 'Payroll',
+                accounts: [
+                    {
+                        name: 'Salary & Wages Expense',
+                        code: '5020',
+                        type: AccountType.EXPENSE,
+                        category: AccountCategory.GENERAL,
+                    },
+                ],
+            },
         ],
     },
 ];
@@ -195,6 +206,7 @@ export async function bootstrapDefaultAccountingForTenant(
     const salesRevenueId = accountByName.get('Sales Revenue');
     const purchasePayableId = accountByName.get('Purchase Payable');
     const expenseId = accountByName.get('General Operating Expense');
+    const salaryExpenseId = accountByName.get('Salary & Wages Expense');
 
     const defaultRules: Array<{
         event_type: PostingRuleEventType;
@@ -283,6 +295,22 @@ export async function bootstrapDefaultAccountingForTenant(
             debit_account_id: bankId,
             credit_account_id: cashId,
             priority: 100,
+        },
+        {
+            event_type: 'salary_payment',
+            condition_key: 'payment_mode',
+            condition_value: 'cash',
+            debit_account_id: salaryExpenseId,
+            credit_account_id: cashId,
+            priority: 10,
+        },
+        {
+            event_type: 'salary_payment',
+            condition_key: 'payment_mode',
+            condition_value: 'bank',
+            debit_account_id: salaryExpenseId,
+            credit_account_id: bankId,
+            priority: 20,
         },
     ];
 

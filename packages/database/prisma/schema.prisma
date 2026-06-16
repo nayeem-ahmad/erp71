@@ -110,6 +110,7 @@ enum PostingRuleEventType {
   purchase_return
   inventory_adjustment
   fund_movement
+  salary_payment
 }
 
 enum PostingRuleConditionKey {
