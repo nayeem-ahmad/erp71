@@ -16,6 +16,13 @@ const PAYMENT_METHODS = [
     { value: 'Bank', label: 'Bank Transfer' },
 ];
 
+const ACCOUNT_TYPE_MAP: Record<string, string> = {
+    'Cash': 'Cash',
+    'Mobile Wallet': 'Wallet',
+    'Card': 'Card',
+    'Bank': 'Bank',
+};
+
 export default function PaymentSection({ payments, total, onPaymentChange }: PaymentSectionProps) {
     const [newPayment, setNewPayment] = useState<Partial<Payment>>({ method: 'Cash', amount: total });
     const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
@@ -44,6 +51,12 @@ export default function PaymentSection({ payments, total, onPaymentChange }: Pay
         }
     };
 
+    const getFilteredAccounts = (method: string | undefined) => {
+        if (!method) return [];
+        const accountType = ACCOUNT_TYPE_MAP[method];
+        return accounts.filter((a) => a.type.includes(accountType) || a.category === method.toLowerCase());
+    };
+
     const handleAddPayment = () => {
         if (!newPayment.method || !newPayment.amount || newPayment.amount <= 0) {
             alert('Please select a payment method and enter an amount');
@@ -52,7 +65,12 @@ export default function PaymentSection({ payments, total, onPaymentChange }: Pay
 
         const updatedPayments = [...payments, newPayment as Payment];
         onPaymentChange(updatedPayments);
-        setNewPayment({ method: 'Cash', amount: total - updatedPayments.reduce((sum, p) => sum + p.amount, 0) });
+
+        // Calculate remaining amount
+        const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
+        const remaining = Math.max(0, total - totalPaid);
+
+        setNewPayment({ method: 'Cash', amount: remaining });
     };
 
     const handleRemovePayment = (index: number) => {
@@ -143,15 +161,14 @@ export default function PaymentSection({ payments, total, onPaymentChange }: Pay
                                     setNewPayment({ ...newPayment, accountId: e.target.value || undefined })
                                 }
                                 className="w-full px-3 py-2 border rounded text-sm"
+                                disabled={getFilteredAccounts(newPayment.method).length === 0}
                             >
                                 <option value="">-- Select Account --</option>
-                                {accounts
-                                    .filter((a) => a.type.includes(newPayment.method || ''))
-                                    .map((account) => (
-                                        <option key={account.id} value={account.id}>
-                                            {account.name}
-                                        </option>
-                                    ))}
+                                {getFilteredAccounts(newPayment.method).map((account) => (
+                                    <option key={account.id} value={account.id}>
+                                        {account.name}
+                                    </option>
+                                ))}
                             </select>
                         </div>
                     )}

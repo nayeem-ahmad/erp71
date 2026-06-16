@@ -98,24 +98,45 @@ export default function NewSalePage() {
         });
     };
 
+    const validateCheckout = (): { valid: boolean; errors: string[] } => {
+        const errors: string[] = [];
+
+        if (items.length === 0) {
+            errors.push('Please add at least one item to the sale');
+        }
+
+        const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+        const balance = totals.total - totalPaid;
+
+        if (Math.abs(balance) > 0.01) {
+            errors.push(
+                balance > 0
+                    ? `Payment amount is ৳${balance.toFixed(2)} short of the total`
+                    : `Payment amount exceeds total by ৳${Math.abs(balance).toFixed(2)}`
+            );
+        }
+
+        if (payments.length === 0) {
+            errors.push('Please add at least one payment method');
+        }
+
+        return { valid: errors.length === 0, errors };
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (items.length === 0) {
-            alert('Please add at least one item');
-            return;
-        }
-
-        if (payments.reduce((sum, p) => sum + p.amount, 0) < totals.total) {
-            alert('Payment amount must equal or exceed total');
+        const validation = validateCheckout();
+        if (!validation.valid) {
+            alert(validation.errors.join('\n'));
             return;
         }
 
         setSubmitting(true);
         try {
-            await api.createNewSale({
-                storeId: currentUser?.storeId,
-                referenceNumber: refNumber,
+            const saleData = {
+                storeId: currentUser?.store_id,
+                referenceNumber: refNumber || undefined,
                 customerId: customer?.id,
                 items: items.map((item) => ({
                     productId: item.productId,
@@ -124,19 +145,27 @@ export default function NewSalePage() {
                 })),
                 totalAmount: totals.total,
                 amountPaid: payments.reduce((sum, p) => sum + p.amount, 0),
-                discountAmount: totals.discount,
-                note: description,
+                discountAmount: totals.discount > 0 ? totals.discount : undefined,
+                note: description || undefined,
                 payments: payments.map((p) => ({
                     paymentMethod: p.method,
                     amount: p.amount,
                     accountId: p.accountId,
                 })),
-            });
+            };
 
+            const response = await api.createNewSale(saleData);
+
+            // Clear cart and show success
             clearCart();
-            alert('Sale created successfully');
+            alert(`Sale created successfully!\nSale #: ${response.serial_number}`);
+
+            // Optionally redirect to sales list or new sale
+            // router.push('/dashboard/sales');
         } catch (error: any) {
-            alert(error.message || 'Failed to create sale');
+            const errorMsg = error.message || 'Failed to create sale';
+            console.error('Sale creation error:', error);
+            alert(errorMsg);
         } finally {
             setSubmitting(false);
         }
