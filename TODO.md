@@ -241,6 +241,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [ ] Verify VAT/tax handling in invoices meets Bangladesh NBR requirements
 
 ### Support
+- [x] Set up support chat between platform admin and shop owners — bidirectional thread-based chat with 10s polling; SupportThread/SupportMessage Prisma models; backend SupportModule (shop owner + admin controllers); shop owner page at /dashboard/support; admin page at /dashboard/admin/support; en/bn/ms i18n — done 2026-06-16
 - [ ] Set up support email or ticket system before first paying customer
 - [ ] Status page (statuspage.io or similar)
 - [ ] In-app feedback mechanism

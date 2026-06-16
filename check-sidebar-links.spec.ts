@@ -66,9 +66,11 @@ const SIDEBAR_LINKS = [
     '/dashboard/ai-credits',
     '/dashboard/team',
     '/dashboard/settings',
+    '/dashboard/support',
     '/dashboard/admin',
     '/dashboard/admin/tenants',
     '/dashboard/admin/users',
+    '/dashboard/admin/support',
     '/dashboard/help',
 ];
 

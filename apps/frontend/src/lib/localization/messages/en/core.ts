@@ -256,6 +256,8 @@ export const coreMessages = {
             tenants: 'Tenants',
             users: 'Users',
             feedback: 'Feedback',
+            support: 'Support',
+            adminSupport: 'Support Chat',
             customers: 'Customers',
             customerGroups: 'Customer Groups',
             territories: 'Territories',

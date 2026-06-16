@@ -242,6 +242,12 @@ function buildModules(t: ReturnType<typeof useI18n>['t']): NavModule[] {
         href: '/dashboard/settings',
     },
     {
+        key: 'support',
+        icon: MessageSquare,
+        label: t.sidebar.items.support,
+        href: '/dashboard/support',
+    },
+    {
         key: 'admin',
         icon: ShieldCheck,
         label: t.sidebar.modules.admin,
@@ -250,6 +256,7 @@ function buildModules(t: ReturnType<typeof useI18n>['t']): NavModule[] {
             { href: '/dashboard/admin/tenants', icon: Crown, label: t.sidebar.items.tenants },
             { href: '/dashboard/admin/users', icon: Users, label: t.sidebar.items.users },
             { href: '/dashboard/admin/feedback', icon: MessageSquare, label: t.sidebar.items.feedback },
+            { href: '/dashboard/admin/support', icon: MessageSquare, label: t.sidebar.items.adminSupport },
         ],
     },
     {

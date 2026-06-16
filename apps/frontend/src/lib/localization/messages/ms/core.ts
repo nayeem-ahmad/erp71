@@ -256,6 +256,8 @@ export const coreMessages = {
                 tenants: "Penyewa",
                 users: "Pengguna",
                 feedback: "Maklum Balas",
+                support: "Sokongan",
+                adminSupport: "Sembang Sokongan",
                 customers: "Pelanggan",
                 customerGroups: "Kumpulan Pelanggan",
                 territories: "Wilayah",

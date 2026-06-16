@@ -256,6 +256,8 @@ export const coreMessages = {
                 tenants: "টেন্যান্ট",
                 users: "ব্যবহারকারীরা",
                 feedback: "ফিডব্যাক",
+                support: "সাপোর্ট",
+                adminSupport: "সাপোর্ট চ্যাট",
                 customers: "গ্রাহক",
                 customerGroups: "গ্রাহক গ্রুপ",
                 territories: "এরিয়া",

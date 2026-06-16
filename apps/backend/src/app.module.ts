@@ -72,6 +72,7 @@ import { ExpensesModule } from './expenses/expenses.module';
 import { LoansModule } from './loans/loans.module';
 import { SalaryPaymentsModule } from './salary-payments/salary-payments.module';
 import { AiModule } from './ai/ai.module';
+import { SupportModule } from './support/support.module';
 
 @Module({
     imports: [
@@ -145,6 +146,7 @@ import { AiModule } from './ai/ai.module';
         LoansModule,
         SalaryPaymentsModule,
         AiModule,
+        SupportModule,
     ],
     controllers: [],
     providers: [

@@ -165,6 +165,7 @@ model User {
   emailVerificationTokens   EmailVerificationToken[]
   sentInvitations           UserInvitation[]        @relation("InvitationSender")
   feedbacks                 Feedback[]
+  supportMessages           SupportMessage[]         @relation("SupportMessageSender")
   notifications             Notification[]
   storefrontCustomer        Customer?
   storefrontOrders          StorefrontOrder[]
@@ -337,6 +338,7 @@ model Tenant {
   warrantyClaims    WarrantyClaim[]
   invitations       UserInvitation[]
   feedbacks         Feedback[]
+  supportThreads    SupportThread[]
   storefrontOrders  StorefrontOrder[]
   bomRecipes      BomRecipe[]
   productionJobs  ProductionJob[]
@@ -2412,4 +2414,36 @@ model AiUsageLog {
 
   @@index([tenant_id, created_at])
   @@index([tenant_id, feature, created_at])
+}
+
+// ── Support Chat ──────────────────────────────────────────────────────────────
+
+model SupportThread {
+  id        String   @id @default(cuid())
+  tenantId  String
+  subject   String
+  status    String   @default("open")  // open | resolved
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messages SupportMessage[]
+
+  @@index([tenantId, status])
+  @@map("support_threads")
+}
+
+model SupportMessage {
+  id         String   @id @default(cuid())
+  threadId   String
+  senderId   String
+  senderRole String   // "owner" | "admin"
+  body       String
+  createdAt  DateTime @default(now())
+
+  thread SupportThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender User          @relation("SupportMessageSender", fields: [senderId], references: [id])
+
+  @@index([threadId, createdAt])
+  @@map("support_messages")
 }

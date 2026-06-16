@@ -912,6 +912,50 @@ export const api = {
         if (params?.limit) query.set('limit', String(params.limit));
         return fetchWithAuth(`/admin/feedback${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    // Support chat (shop owner)
+    getSupportThreads: () => fetchWithAuth('/support/threads'),
+    createSupportThread: (data: { subject: string; body: string }) =>
+        fetchWithAuth('/support/threads', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    getSupportMessages: (threadId: string) => fetchWithAuth(`/support/threads/${threadId}/messages`),
+    sendSupportMessage: (threadId: string, body: string) =>
+        fetchWithAuth(`/support/threads/${threadId}/messages`, {
+            method: 'POST',
+            body: JSON.stringify({ body }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    // Support chat (admin)
+    getAdminSupportThreads: (params?: { status?: string; search?: string; page?: number; limit?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.status) query.set('status', params.status);
+        if (params?.search) query.set('search', params.search);
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.limit) query.set('limit', String(params.limit));
+        return fetchWithAuth(`/admin/support/threads${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    getAdminSupportMessages: (threadId: string) =>
+        fetchWithAuth(`/admin/support/threads/${threadId}/messages`),
+    sendAdminSupportMessage: (threadId: string, body: string) =>
+        fetchWithAuth(`/admin/support/threads/${threadId}/messages`, {
+            method: 'POST',
+            body: JSON.stringify({ body }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    resolveThread: (threadId: string) =>
+        fetchWithAuth(`/admin/support/threads/${threadId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status: 'resolved' }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    reopenThread: (threadId: string) =>
+        fetchWithAuth(`/admin/support/threads/${threadId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status: 'open' }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     // Team & permissions (tenant-scoped staff management)
     getTeamMembers: () => fetchWithAuth('/team/members?limit=100').then((r: any) => r?.items ?? r),
     getTeamMember: (userId: string) => fetchWithAuth(`/team/members/${userId}`),
