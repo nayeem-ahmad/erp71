@@ -438,7 +438,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 ### New Sales Page Feature (Sales > New Sales)
 - [x] Phase 1: Database & Backend APIs — PaymentMethod model (link types to accounts), SalesSettings model (paper size, reference format), extend PaymentRecord with account_id, extend Sale with reference_number, payment-methods CRUD module, sales-settings module, product search by quantity endpoint, reference number generation — done 2026-06-16
 - [x] Phase 2: Frontend Core Page — /dashboard/sales/new page with form layout, SalesHeader (sales #, reference, user, date/time), CustomerSelection (search + info), ProductSearch (sorted by qty_sold), LineItemsTable (editable discounts/qty), TotalsFooter (auto-calc VAT/discount/rounding), useNewSaleCart state hook, API endpoints — done 2026-06-16
-- [ ] Phase 3: Payment & Checkout — payment mode selection (Cash/Wallet/Card/Bank) with account linking, split payment UI, checkout button flow, account validation
+- [x] Phase 3: Payment & Checkout — payment mode selection (Cash/Wallet/Card/Bank) with account linking, split payment UI, checkout validation, payment amount auto-fill, account filtering by type — done 2026-06-16
 - [ ] Phase 4: Print & Polish — print functionality with paper size selection, form validation, success notification, localization strings
 - [ ] Phase 5: Settings Integration — admin settings panel, link paper size/reference format to new page, fetch settings on page load
 
