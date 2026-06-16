@@ -5,7 +5,9 @@ import {
 import { EmployeesService } from './employees.service';
 import {
     CreateEmployeeDto, UpdateEmployeeDto,
-    CreateDepartmentDto, CreateDesignationDto, LinkUserDto,
+    CreateDepartmentDto, UpdateDepartmentDto,
+    CreateDesignationDto, UpdateDesignationDto,
+    LinkUserDto,
 } from './employee.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
@@ -29,6 +31,17 @@ export class EmployeesController {
         return this.employeesService.createDepartment(tenant.tenantId, dto);
     }
 
+    @Patch('departments/:id')
+    updateDepartment(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateDepartmentDto) {
+        return this.employeesService.updateDepartment(tenant.tenantId, id, dto);
+    }
+
+    @Delete('departments/:id')
+    @HttpCode(HttpStatus.NO_CONTENT)
+    deleteDepartment(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.employeesService.deleteDepartment(tenant.tenantId, id);
+    }
+
     // ── Designations ──────────────────────────────────────────────────────────
 
     @Get('designations')
@@ -39,6 +52,17 @@ export class EmployeesController {
     @Post('designations')
     createDesignation(@Tenant() tenant: TenantContext, @Body() dto: CreateDesignationDto) {
         return this.employeesService.createDesignation(tenant.tenantId, dto);
+    }
+
+    @Patch('designations/:id')
+    updateDesignation(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateDesignationDto) {
+        return this.employeesService.updateDesignation(tenant.tenantId, id, dto);
+    }
+
+    @Delete('designations/:id')
+    @HttpCode(HttpStatus.NO_CONTENT)
+    deleteDesignation(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.employeesService.deleteDesignation(tenant.tenantId, id);
     }
 
     // ── Employees ─────────────────────────────────────────────────────────────
