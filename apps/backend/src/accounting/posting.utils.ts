@@ -8,7 +8,8 @@ export type PostingEventType =
     | 'purchase'
     | 'purchase_return'
     | 'inventory_adjustment'
-    | 'fund_movement';
+    | 'fund_movement'
+    | 'expense';
 
 export interface AutoPostInput {
     tx: Prisma.TransactionClient;
@@ -48,6 +49,7 @@ const VOUCHER_TYPE_BY_EVENT: Record<PostingEventType, string> = {
     purchase_return: VoucherType.CASH_RECEIVE,
     inventory_adjustment: VoucherType.JOURNAL,
     fund_movement: VoucherType.FUND_TRANSFER,
+    expense: VoucherType.CASH_PAYMENT,
 };
 
 function voucherSequenceId(tenantId: string, voucherType: string) {
