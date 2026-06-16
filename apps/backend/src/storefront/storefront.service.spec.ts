@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { StorefrontService } from './storefront.service';
 import { DatabaseService } from '../database/database.service';
+import { PriceListsService } from '../price-lists/price-lists.service';
 import { JwtService } from '@nestjs/jwt';
 import {
     BadRequestException,
@@ -28,6 +29,7 @@ describe('StorefrontService', () => {
     let service: StorefrontService;
     let db: any;
     let jwtService: any;
+    let priceListsService: any;
 
     beforeEach(async () => {
         jest.clearAllMocks();
@@ -111,11 +113,17 @@ describe('StorefrontService', () => {
             sign: jest.fn().mockReturnValue('test-token'),
         };
 
+        priceListsService = {
+            resolvePriceListForCustomer: jest.fn().mockResolvedValue(null),
+            getResolvedPricesForProducts: jest.fn().mockResolvedValue(new Map()),
+        };
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 StorefrontService,
                 { provide: DatabaseService, useValue: db },
                 { provide: JwtService, useValue: jwtService },
+                { provide: PriceListsService, useValue: priceListsService },
             ],
         }).compile();
 

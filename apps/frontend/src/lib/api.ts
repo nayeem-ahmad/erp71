@@ -434,6 +434,34 @@ export const api = {
     deleteCustomerGroup: (id: string) => fetchWithAuth(`/customer-groups/${id}`, {
         method: 'DELETE',
     }),
+    // Price Lists
+    getPriceLists: () => fetchWithAuth('/price-lists?limit=100').then((r: any) => r?.items ?? r),
+    getPriceList: (id: string) => fetchWithAuth(`/price-lists/${id}`),
+    createPriceList: (data: any) => fetchWithAuth('/price-lists', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updatePriceList: (id: string, data: any) => fetchWithAuth(`/price-lists/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deletePriceList: (id: string) => fetchWithAuth(`/price-lists/${id}`, { method: 'DELETE' }),
+    getPriceListItems: (id: string, params?: { page?: number; limit?: number; search?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.limit) query.set('limit', String(params.limit));
+        if (params?.search) query.set('search', params.search);
+        const qs = query.toString();
+        return fetchWithAuth(`/price-lists/${id}/items${qs ? `?${qs}` : ''}`);
+    },
+    updatePriceListItem: (listId: string, productId: string, data: any) => fetchWithAuth(`/price-lists/${listId}/items/${productId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    syncPriceListProducts: (id: string) => fetchWithAuth(`/price-lists/${id}/sync`, { method: 'POST' }),
     // Territories
     getTerritories: () => fetchWithAuth('/territories?limit=100').then((r: any) => r?.items ?? r),
     getTerritory: (id: string) => fetchWithAuth(`/territories/${id}`),

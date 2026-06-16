@@ -275,6 +275,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] WhatsApp/SMS integration for outbound interactions — `WhatsAppService` with Meta Cloud API, graceful no-op without credentials, WHATSAPP channel added to campaigns — done 2026-06-11
 - [x] Campaign scheduling — `@Cron('*/5 * * * *')` in `CrmCampaignsService.processScheduledCampaigns()` auto-dispatches SCHEDULED campaigns once `scheduled_at` passes — done 2026-06-11
 - [x] Campaign ROI tracking — `CrmCampaignsService.attributeSale()` called fire-and-forget from `SalesService.create()`; 30-day attribution window; increments `attributed_revenue` + `attributed_orders` on the campaign; ROI stats shown in campaign detail modal — done 2026-06-11
+- [x] Product Price Lists — `PriceList` + `PriceListItem` models, CRUD API, dashboard pages (`/dashboard/price-lists`, detail editor), customer group price list assignment, storefront price resolution for logged-in customers by group — done 2026-06-17
 
 ---
 
@@ -434,4 +435,5 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Fix Render backend still crashing without `FIELD_ENCRYPTION_KEY` on existing services — derive encryption key from `JWT_SECRET` fallback when dedicated key unset — done 2026-06-12
 - [x] Fix login 500 after recent deployment — root cause: local DB missing `sms_credits` column (Tenant table) and new tables (SmsPackage, SmsTransaction, AiUsageLog, JobRun) from recent migrations; fixed by running `prisma db push`; also fixed HttpExceptionFilter to log unhandled exceptions via NestJS Logger instead of silently swallowing them — done 2026-06-13
 - [x] Write comprehensive shop owner & staff user manual — covers all 20 topic areas (POS, sales, inventory, purchases, CRM, accounting, HR, loyalty, e-commerce, billing, etc.) — `docs/user-manual/shop-owner-guide.md` — done 2026-06-13
+- [x] Product Price Lists — named price lists with overall + per-product discounts/selling prices; linked to customer groups; storefront applies group pricelist for authenticated shoppers — done 2026-06-17
 

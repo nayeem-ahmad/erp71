@@ -119,6 +119,7 @@ function buildModules(t: ReturnType<typeof useI18n>['t']): NavModule[] {
             { href: '#sales-setup',                 icon: Settings,        label: t.sidebar.sections.salesSetup, section: true },
             { href: '/dashboard/customers',         icon: Users,           label: t.sidebar.items.customers },
             { href: '/dashboard/customer-groups',   icon: FolderTree,      label: t.sidebar.items.customerGroups },
+            { href: '/dashboard/price-lists',       icon: Tag,             label: t.sidebar.items.priceLists },
             { href: '/dashboard/territories',       icon: MapPin,          label: t.sidebar.items.territories },
         ],
     },

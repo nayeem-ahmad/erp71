@@ -260,6 +260,7 @@ export const coreMessages = {
                 adminSupport: "Sembang Sokongan",
                 customers: "Pelanggan",
                 customerGroups: "Kumpulan Pelanggan",
+                priceLists: "Senarai Harga",
                 territories: "Wilayah",
                 brands: "Jenama",
                 categories: "Kategori",

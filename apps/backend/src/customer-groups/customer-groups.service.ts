@@ -2,11 +2,15 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { DatabaseService } from '../database/database.service';
+import { PriceListsService } from '../price-lists/price-lists.service';
 import { CreateCustomerGroupDto, UpdateCustomerGroupDto } from './customer-group.dto';
 
 @Injectable()
 export class CustomerGroupsService {
-    constructor(private db: DatabaseService) {}
+    constructor(
+        private db: DatabaseService,
+        private priceListsService: PriceListsService,
+    ) {}
 
     async create(tenantId: string, dto: CreateCustomerGroupDto) {
         const existing = await this.db.customerGroup.findUnique({
@@ -16,8 +20,13 @@ export class CustomerGroupsService {
             throw new BadRequestException('A customer group with this name already exists.');
         }
 
+        if (dto.price_list_id) {
+            await this.priceListsService.validatePriceListBelongsToTenant(tenantId, dto.price_list_id);
+        }
+
         return this.db.customerGroup.create({
             data: { tenant_id: tenantId, ...dto },
+            include: { priceList: { select: { id: true, name: true } } },
         });
     }
 
@@ -26,7 +35,10 @@ export class CustomerGroupsService {
             findMany: (args) =>
                 this.db.customerGroup.findMany({
                     ...(args as object),
-                    include: { _count: { select: { customers: true } } },
+                    include: {
+                        priceList: { select: { id: true, name: true } },
+                        _count: { select: { customers: true } },
+                    },
                 }),
             count: (args) => this.db.customerGroup.count(args as any),
             where: { tenant_id: tenantId },
@@ -39,7 +51,10 @@ export class CustomerGroupsService {
     async findOne(tenantId: string, id: string) {
         const group = await this.db.customerGroup.findFirst({
             where: { id, tenant_id: tenantId },
-            include: { _count: { select: { customers: true } } },
+            include: {
+                priceList: { select: { id: true, name: true } },
+                _count: { select: { customers: true } },
+            },
         });
         if (!group) throw new NotFoundException('Customer group not found');
         return group;
@@ -47,6 +62,10 @@ export class CustomerGroupsService {
 
     async update(tenantId: string, id: string, dto: UpdateCustomerGroupDto) {
         await this.findOne(tenantId, id);
+
+        if (dto.price_list_id) {
+            await this.priceListsService.validatePriceListBelongsToTenant(tenantId, dto.price_list_id);
+        }
 
         if (dto.name) {
             const duplicate = await this.db.customerGroup.findFirst({
@@ -60,6 +79,7 @@ export class CustomerGroupsService {
         return this.db.customerGroup.update({
             where: { id },
             data: dto,
+            include: { priceList: { select: { id: true, name: true } } },
         });
     }
 

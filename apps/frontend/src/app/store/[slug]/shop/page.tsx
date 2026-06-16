@@ -113,7 +113,10 @@ export default function StorefrontShopPage() {
             // ignore
         }
 
-        fetch(`${API_BASE}/storefront/${slug}`)
+        const storefrontHeaders: Record<string, string> = {};
+        if (token) storefrontHeaders.Authorization = `Bearer ${token}`;
+
+        fetch(`${API_BASE}/storefront/${slug}`, { headers: storefrontHeaders })
             .then(async (response) => {
                 if (!response.ok) {
                     setNotFound(true);

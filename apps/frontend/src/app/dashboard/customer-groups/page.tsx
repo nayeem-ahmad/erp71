@@ -12,6 +12,8 @@ interface CustomerGroup {
     name: string;
     description?: string | null;
     default_discount_pct?: string | number | null;
+    price_list_id?: string | null;
+    priceList?: { id: string; name: string } | null;
     _count?: { customers?: number };
 }
 
@@ -91,6 +93,16 @@ export default function CustomerGroupsPage() {
                 ),
                 sortingFn: (a, b) => Number(a.getValue('customers')) - Number(b.getValue('customers')),
                 size: 110,
+            }),
+            columnHelper.display({
+                id: 'priceList',
+                header: t.customerGroups.priceList,
+                cell: (info) => (
+                    <span className="text-sm font-bold text-gray-700">
+                        {info.row.original.priceList?.name || t.customerGroups.noPriceList}
+                    </span>
+                ),
+                size: 160,
             }),
             columnHelper.accessor('default_discount_pct', {
                 header: t.customerGroups.defaultDiscount,
@@ -183,8 +195,14 @@ function GroupForm({ group, onSave, onCancel }: { group: any; onSave: (d: any) =
     const [name, setName] = useState(group?.name || '');
     const [description, setDescription] = useState(group?.description || '');
     const [discount, setDiscount] = useState(group?.default_discount_pct ? String(Number(group.default_discount_pct)) : '');
+    const [priceListId, setPriceListId] = useState(group?.price_list_id || '');
+    const [priceLists, setPriceLists] = useState<{ id: string; name: string }[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+
+    useEffect(() => {
+        api.getPriceLists().then(setPriceLists).catch(() => {});
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -194,6 +212,7 @@ function GroupForm({ group, onSave, onCancel }: { group: any; onSave: (d: any) =
             const payload: any = { name };
             if (description) payload.description = description;
             if (discount) payload.default_discount_pct = parseFloat(discount);
+            payload.price_list_id = priceListId || null;
             await onSave(payload);
         } catch (err: any) {
             setError(err.message || t.customerGroups.saveFailed);
@@ -217,6 +236,15 @@ function GroupForm({ group, onSave, onCancel }: { group: any; onSave: (d: any) =
                 <div className="flex-1 min-w-[200px]">
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">{t.common.description} <span className="text-gray-300">({t.common.optional})</span></label>
                     <input value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-2.5 px-4 font-bold text-gray-600 text-sm focus:ring-2 focus:ring-blue-500/20" placeholder={t.customerGroups.placeholders.description} />
+                </div>
+                <div className="w-44">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">{t.customerGroups.priceList}</label>
+                    <select value={priceListId} onChange={e => setPriceListId(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-2.5 px-3 font-bold text-sm">
+                        <option value="">{t.customerGroups.noPriceList}</option>
+                        {priceLists.map((list) => (
+                            <option key={list.id} value={list.id}>{list.name}</option>
+                        ))}
+                    </select>
                 </div>
                 <div className="w-32">
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">{t.customerGroups.discountPct}</label>

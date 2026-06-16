@@ -5,6 +5,7 @@ import { CsvProductRow } from './import-products.dto';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant, ensureDefaultWarehouse } from '../database/inventory.utils';
 import { paginate, PaginatedResult, cursorPaginate, CursorPaginatedResult } from '../common/pagination.dto';
 import { RedisService } from '../cache/redis.service';
+import { PriceListsService } from '../price-lists/price-lists.service';
 
 const CACHE_TTL = 60; // seconds
 
@@ -13,6 +14,7 @@ export class ProductsService {
     constructor(
         private db: DatabaseService,
         private redis: RedisService,
+        private priceListsService: PriceListsService,
     ) { }
 
     async create(tenantId: string, dto: CreateProductDto) {
@@ -67,6 +69,7 @@ export class ProductsService {
             });
         });
 
+        await this.priceListsService.addProductToAllActiveLists(tenantId, result!.id);
         await this.redis.invalidatePattern(`products:${tenantId}:`);
         return result;
     }
@@ -220,6 +223,7 @@ export class ProductsService {
                 const price = Number(row.selling_price) || 0;
                 const initialStock = Number(row.stock_quantity) || 0;
 
+                let createdProductId: string | null = null;
                 await this.db.$transaction(async (tx) => {
                     const product = await tx.product.create({
                         data: {
@@ -231,6 +235,7 @@ export class ProductsService {
                             unit_type: row.unit ? String(row.unit).trim() : 'none',
                         },
                     });
+                    createdProductId = product.id;
 
                     if (initialStock > 0) {
                         const warehouse = settings?.default_product_warehouse_id
@@ -249,6 +254,10 @@ export class ProductsService {
                         });
                     }
                 });
+
+                if (createdProductId) {
+                    await this.priceListsService.addProductToAllActiveLists(tenantId, createdProductId);
+                }
 
                 created++;
             } catch (err: any) {

@@ -183,6 +183,49 @@ export const customersMessages = {
             "description": "Group description"
         },
         "discountPct": "Discount %",
+        "priceList": "Price List",
+        "noPriceList": "None (use default)",
+        "saving": "Saving..."
+    },
+    "priceLists": {
+        "title": "Price Lists",
+        "subtitle": "Manage product pricing by customer segment",
+        "newList": "New Price List",
+        "editList": "Edit Price List",
+        "emptyMessage": "No price lists found",
+        "searchPlaceholder": "Search by name...",
+        "defaultBadge": "Default",
+        "overallDiscount": "Overall Discount",
+        "noDiscount": "No overall discount",
+        "products": "Products",
+        "groups": "Groups",
+        "deleteConfirm": "Delete this price list?",
+        "deleteFailed": "Cannot delete a price list assigned to customer groups.",
+        "saveFailed": "Failed to save price list",
+        "detailTitle": "Price List Details",
+        "backToLists": "Back to Price Lists",
+        "syncProducts": "Sync Products",
+        "syncing": "Syncing...",
+        "syncComplete": "{count} product(s) added",
+        "basePrice": "Base Price",
+        "finalPrice": "Final Price",
+        "setPrice": "Set Price",
+        "applyDiscount": "Apply Discount",
+        "discountType": "Discount Type",
+        "percentage": "Percentage (%)",
+        "fixedAmount": "Fixed Amount (৳)",
+        "clearOverride": "Clear Override",
+        "itemSaveFailed": "Failed to save item",
+        "columns": {
+            "name": "Name",
+            "overallDiscount": "Overall Discount",
+            "products": "Products",
+            "groups": "Customer Groups"
+        },
+        "placeholders": {
+            "name": "e.g. Wholesale Pricing",
+            "description": "Optional description"
+        },
         "saving": "Saving..."
     },
     "territories": {

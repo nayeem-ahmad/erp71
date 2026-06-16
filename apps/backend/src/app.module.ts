@@ -25,6 +25,7 @@ import { AssetsModule } from './assets/assets.module';
 import { SalesModule } from './sales/sales.module';
 import { CustomersModule } from './customers/customers.module';
 import { CustomerGroupsModule } from './customer-groups/customer-groups.module';
+import { PriceListsModule } from './price-lists/price-lists.module';
 import { TerritoriesModule } from './territories/territories.module';
 import { SalesReturnsModule } from './sales-returns/sales-returns.module';
 import { SalesOrdersModule } from './sales-orders/sales-orders.module';
@@ -102,6 +103,7 @@ import { SupportModule } from './support/support.module';
         SalesModule,
         CustomersModule,
         CustomerGroupsModule,
+        PriceListsModule,
         TerritoriesModule,
         SalesReturnsModule,
         SalesOrdersModule,

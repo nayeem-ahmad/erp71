@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { CustomerGroupsService } from './customer-groups.service';
 import { DatabaseService } from '../database/database.service';
+import { PriceListsService } from '../price-lists/price-lists.service';
 
 describe('CustomerGroupsService', () => {
     let service: CustomerGroupsService;
@@ -22,10 +23,15 @@ describe('CustomerGroupsService', () => {
             },
         };
 
+        const priceListsService = {
+            validatePriceListBelongsToTenant: jest.fn(),
+        };
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CustomerGroupsService,
                 { provide: DatabaseService, useValue: db },
+                { provide: PriceListsService, useValue: priceListsService },
             ],
         }).compile();
 
@@ -50,6 +56,7 @@ describe('CustomerGroupsService', () => {
             });
             expect(db.customerGroup.create).toHaveBeenCalledWith({
                 data: { tenant_id: tenantId, ...dto },
+                include: { priceList: { select: { id: true, name: true } } },
             });
             expect(result).toEqual(created);
         });
@@ -84,7 +91,10 @@ describe('CustomerGroupsService', () => {
             expect(db.customerGroup.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
                     where: { tenant_id: tenantId },
-                    include: { _count: { select: { customers: true } } },
+                    include: {
+                        priceList: { select: { id: true, name: true } },
+                        _count: { select: { customers: true } },
+                    },
                     orderBy: { name: 'asc' },
                 }),
             );
@@ -117,7 +127,10 @@ describe('CustomerGroupsService', () => {
 
             expect(db.customerGroup.findFirst).toHaveBeenCalledWith({
                 where: { id: groupId, tenant_id: tenantId },
-                include: { _count: { select: { customers: true } } },
+                include: {
+                    priceList: { select: { id: true, name: true } },
+                    _count: { select: { customers: true } },
+                },
             });
             expect(result).toEqual(group);
         });
@@ -153,6 +166,7 @@ describe('CustomerGroupsService', () => {
             expect(db.customerGroup.update).toHaveBeenCalledWith({
                 where: { id: groupId },
                 data: dto,
+                include: { priceList: { select: { id: true, name: true } } },
             });
             expect(result).toEqual(updated);
         });

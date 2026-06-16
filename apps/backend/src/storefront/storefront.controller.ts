@@ -52,10 +52,11 @@ export class StorefrontController {
         return this.storefrontService.updateOrderStatus(tenant.tenantId, id, dto.status);
     }
 
-    /** Public: browse a storefront by slug */
+    /** Public (optional auth): browse a storefront by slug */
     @Get(':slug')
-    async getStorefront(@Param('slug') slug: string) {
-        return this.storefrontService.getStorefront(slug);
+    @UseGuards(OptionalJwtAuthGuard)
+    async getStorefront(@Param('slug') slug: string, @Req() req: any) {
+        return this.storefrontService.getStorefront(slug, req.user?.userId);
     }
 
     /** Public (optional auth): place an order — attaches customerUserId if signed in */

@@ -124,8 +124,11 @@ export default function StorefrontPage() {
             // ignore
         }
 
+        const storefrontHeaders: Record<string, string> = {};
+        if (token) storefrontHeaders.Authorization = `Bearer ${token}`;
+
         // Fetch storefront data
-        fetch(`${API_BASE}/storefront/${slug}`)
+        fetch(`${API_BASE}/storefront/${slug}`, { headers: storefrontHeaders })
             .then(async (response) => {
                 if (!response.ok) {
                     setNotFound(true);

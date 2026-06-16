@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { DatabaseService } from '../database/database.service';
+import { PriceListsService } from '../price-lists/price-lists.service';
 import { PlaceOrderDto, CustomerSignupDto, CustomerLoginDto } from './storefront.dto';
 import { paginate } from '../common/pagination.dto';
 import * as bcrypt from 'bcrypt';
@@ -16,10 +17,12 @@ export class StorefrontService {
     constructor(
         private readonly db: DatabaseService,
         private readonly jwtService: JwtService,
+        private readonly priceListsService: PriceListsService,
     ) {}
 
-    async getStorefront(slug: string) {
+    async getStorefront(slug: string, userId?: string) {
         const tenant = await this.findEnabledTenant(slug);
+        const priceList = await this.resolvePriceListForUser(tenant.id, userId);
 
         // Fetch featured categories only
         const featuredCategories = await this.db.productGroup.findMany({
@@ -80,15 +83,24 @@ export class StorefrontService {
             take: 8,
         });
 
-        const trending_products = trendingProducts.map((p) => ({
-            id: p.id,
-            name: p.name,
-            selling_price: p.price,
-            compare_at_price: p.compare_at_price,
-            image_url: p.image_url,
-            group_name: p.group?.name || 'Uncategorized',
-            stock_quantity: p.stocks.reduce((sum, s) => sum + s.quantity, 0),
-        }));
+        const trendingResolved = await this.priceListsService.getResolvedPricesForProducts(
+            tenant.id,
+            trendingProducts.map((p) => p.id),
+            priceList?.id,
+        );
+
+        const trending_products = trendingProducts.map((p) => {
+            const resolved = trendingResolved.get(p.id);
+            return {
+                id: p.id,
+                name: p.name,
+                selling_price: resolved?.sellingPrice ?? Number(p.price),
+                compare_at_price: resolved?.compareAtPrice ?? p.compare_at_price,
+                image_url: p.image_url,
+                group_name: p.group?.name || 'Uncategorized',
+                stock_quantity: p.stocks.reduce((sum, s) => sum + s.quantity, 0),
+            };
+        });
 
         // Fetch all products for Shop page
         const allProducts = await this.db.product.findMany({
@@ -117,15 +129,24 @@ export class StorefrontService {
             orderBy: { name: 'asc' },
         });
 
-        const all_products = allProducts.map((p) => ({
-            id: p.id,
-            name: p.name,
-            selling_price: p.price,
-            compare_at_price: p.compare_at_price,
-            image_url: p.image_url,
-            group_name: p.group?.name || 'Uncategorized',
-            stock_quantity: p.stocks.reduce((sum, s) => sum + s.quantity, 0),
-        }));
+        const allResolved = await this.priceListsService.getResolvedPricesForProducts(
+            tenant.id,
+            allProducts.map((p) => p.id),
+            priceList?.id,
+        );
+
+        const all_products = allProducts.map((p) => {
+            const resolved = allResolved.get(p.id);
+            return {
+                id: p.id,
+                name: p.name,
+                selling_price: resolved?.sellingPrice ?? Number(p.price),
+                compare_at_price: resolved?.compareAtPrice ?? p.compare_at_price,
+                image_url: p.image_url,
+                group_name: p.group?.name || 'Uncategorized',
+                stock_quantity: p.stocks.reduce((sum, s) => sum + s.quantity, 0),
+            };
+        });
 
         return {
             tenant: {
@@ -185,26 +206,36 @@ export class StorefrontService {
             }
         }
 
-        // Calculate total
-        let totalAmount = 0;
-        for (const item of dto.items) {
-            const product = productMap.get(item.productId);
-            if (!product) {
-                throw new BadRequestException(`Product not found: ${item.productId}`);
-            }
-            totalAmount += Number(product.price) * item.quantity;
-        }
-
-        // Resolve customer record and loyalty redemption
-        let customer: { id: string; loyalty_points: number } | null = null;
+        // Resolve customer record and price list
+        let customer: { id: string; loyalty_points: number; customer_group_id: string | null } | null = null;
         let pointsToRedeem = 0;
         let pointsDiscount = 0;
 
         if (userId) {
             customer = await this.db.customer.findFirst({
                 where: { user_id: userId, tenant_id: tenant.id, deleted_at: null },
-                select: { id: true, loyalty_points: true },
+                select: { id: true, loyalty_points: true, customer_group_id: true },
             });
+        }
+
+        const priceList = await this.priceListsService.resolvePriceListForCustomer(
+            tenant.id,
+            customer?.customer_group_id,
+        );
+        const resolvedPrices = await this.priceListsService.getResolvedPricesForProducts(
+            tenant.id,
+            productIds,
+            priceList?.id,
+        );
+
+        let totalAmount = 0;
+        for (const item of dto.items) {
+            const product = productMap.get(item.productId);
+            if (!product) {
+                throw new BadRequestException(`Product not found: ${item.productId}`);
+            }
+            const unitPrice = resolvedPrices.get(item.productId)?.sellingPrice ?? Number(product.price);
+            totalAmount += unitPrice * item.quantity;
         }
 
         if (
@@ -246,7 +277,9 @@ export class StorefrontService {
                         create: dto.items.map((item) => ({
                             productId: item.productId,
                             quantity: item.quantity,
-                            priceAtOrder: Number(productMap.get(item.productId)?.price ?? 0),
+                            priceAtOrder:
+                                resolvedPrices.get(item.productId)?.sellingPrice
+                                ?? Number(productMap.get(item.productId)?.price ?? 0),
                         })),
                     },
                 },
@@ -482,6 +515,19 @@ export class StorefrontService {
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    private async resolvePriceListForUser(tenantId: string, userId?: string) {
+        if (!userId) {
+            return this.priceListsService.resolvePriceListForCustomer(tenantId, null);
+        }
+
+        const customer = await this.db.customer.findFirst({
+            where: { user_id: userId, tenant_id: tenantId, deleted_at: null },
+            select: { customer_group_id: true },
+        });
+
+        return this.priceListsService.resolvePriceListForCustomer(tenantId, customer?.customer_group_id);
+    }
 
     private async findEnabledTenant(slug: string) {
         const tenant = await this.db.tenant.findFirst({

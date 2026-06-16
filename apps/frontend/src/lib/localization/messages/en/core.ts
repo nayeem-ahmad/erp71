@@ -260,6 +260,7 @@ export const coreMessages = {
             adminSupport: 'Support Chat',
             customers: 'Customers',
             customerGroups: 'Customer Groups',
+            priceLists: 'Price Lists',
             territories: 'Territories',
             brands: 'Brands',
             categories: 'Categories',

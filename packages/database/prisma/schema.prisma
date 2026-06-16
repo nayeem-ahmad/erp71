@@ -35,6 +35,11 @@ enum CustomerType {
   ORGANIZATION
 }
 
+enum PriceListDiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
 enum StorePermission {
   // Product & Catalog
   VIEW_PRODUCT_CATALOG
@@ -321,6 +326,7 @@ model Tenant {
   purchaseQuotations PurchaseQuotation[]
   customers  Customer[]
   customerGroups CustomerGroup[]
+  priceLists     PriceList[]
   territories    Territory[]
   accountGroups  AccountGroup[]
   accountSubgroups AccountSubgroup[]
@@ -558,6 +564,7 @@ model Product {
   purchaseOrderItems PurchaseOrderItem[]
   purchaseQuotationItems PurchaseQuotationItem[]
   prices      ProductPrice[]
+  priceListItems PriceListItem[]
   warrantyClaims WarrantyClaim[]
   storefrontOrderItems StorefrontOrderItem[]
   bomRecipe    BomRecipe?
@@ -1063,14 +1070,54 @@ model CustomerGroup {
   name                 String
   description          String?
   default_discount_pct Decimal? @db.Decimal(5, 2)
+  price_list_id        String?
   created_at           DateTime @default(now())
   updated_at           DateTime @updatedAt
 
   // Relations
   tenant    Tenant     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  priceList PriceList? @relation(fields: [price_list_id], references: [id], onDelete: SetNull)
   customers Customer[]
 
   @@unique([tenant_id, name])
+  @@index([price_list_id])
+}
+
+model PriceList {
+  id                     String                 @id @default(uuid())
+  tenant_id              String
+  name                   String
+  description            String?
+  is_default             Boolean                @default(false)
+  is_active              Boolean                @default(true)
+  overall_discount_type  PriceListDiscountType?
+  overall_discount_value Decimal?               @db.Decimal(12, 2)
+  created_at             DateTime               @default(now())
+  updated_at             DateTime               @updatedAt
+
+  tenant         Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  items          PriceListItem[]
+  customerGroups CustomerGroup[]
+
+  @@unique([tenant_id, name])
+  @@index([tenant_id, is_default])
+}
+
+model PriceListItem {
+  id             String                 @id @default(uuid())
+  price_list_id  String
+  product_id     String
+  selling_price  Decimal?               @db.Decimal(12, 2)
+  discount_type  PriceListDiscountType?
+  discount_value Decimal?               @db.Decimal(12, 2)
+  created_at     DateTime               @default(now())
+  updated_at     DateTime               @updatedAt
+
+  priceList PriceList @relation(fields: [price_list_id], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  @@unique([price_list_id, product_id])
+  @@index([price_list_id])
 }
 
 model Territory {

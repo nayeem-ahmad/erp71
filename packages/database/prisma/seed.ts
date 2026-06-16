@@ -491,24 +491,64 @@ async function main() {
         }
     }
 
-    // ── 5b. Customer Groups ─────────────────────────────────────────────────
+    // ── 5b. Price Lists ─────────────────────────────────────────────────────
+    const priceListDefs = [
+        { name: 'Standard Retail', description: 'Default catalog prices for guests and retail', is_default: true },
+        { name: 'Wholesale', description: 'Bulk buyer pricing', overall_discount_type: 'PERCENTAGE' as const, overall_discount_value: 10 },
+        { name: 'VIP Members', description: 'Premium loyalty member pricing', overall_discount_type: 'PERCENTAGE' as const, overall_discount_value: 15 },
+    ];
+
+    const priceLists: any[] = [];
+    for (const def of priceListDefs) {
+        const list = await prisma.priceList.upsert({
+            where: { tenant_id_name: { tenant_id: tenant.id, name: def.name } },
+            update: {},
+            create: {
+                tenant_id: tenant.id,
+                name: def.name,
+                description: def.description,
+                is_default: def.is_default ?? false,
+                overall_discount_type: def.overall_discount_type ?? null,
+                overall_discount_value: def.overall_discount_value ?? null,
+            },
+        });
+        priceLists.push(list);
+    }
+
+    const allTenantProducts = await prisma.product.findMany({
+        where: { tenant_id: tenant.id, deleted_at: null },
+        select: { id: true },
+    });
+    for (const list of priceLists) {
+        await prisma.priceListItem.createMany({
+            data: allTenantProducts.map((p) => ({
+                price_list_id: list.id,
+                product_id: p.id,
+            })),
+            skipDuplicates: true,
+        });
+    }
+
+    const priceListByName = Object.fromEntries(priceLists.map((l) => [l.name, l]));
+
+    // ── 5c. Customer Groups ─────────────────────────────────────────────────
     const groupDefs = [
-        { name: 'Retail',    description: 'Walk-in retail customers',    default_discount_pct: 0 },
-        { name: 'Wholesale', description: 'Bulk buyers with discounts',  default_discount_pct: 10 },
-        { name: 'VIP Members', description: 'Premium loyalty members',   default_discount_pct: 15 },
+        { name: 'Retail',    description: 'Walk-in retail customers',    default_discount_pct: 0, price_list_id: priceListByName['Standard Retail']?.id },
+        { name: 'Wholesale', description: 'Bulk buyers with discounts',  default_discount_pct: 10, price_list_id: priceListByName['Wholesale']?.id },
+        { name: 'VIP Members', description: 'Premium loyalty members',   default_discount_pct: 15, price_list_id: priceListByName['VIP Members']?.id },
     ];
 
     const groups: any[] = [];
     for (const def of groupDefs) {
         const g = await prisma.customerGroup.upsert({
             where: { tenant_id_name: { tenant_id: tenant.id, name: def.name } },
-            update: {},
+            update: { price_list_id: def.price_list_id ?? null },
             create: { tenant_id: tenant.id, ...def },
         });
         groups.push(g);
     }
 
-    // ── 5c. Territories ──────────────────────────────────────────────────────
+    // ── 5d. Territories ──────────────────────────────────────────────────────
     const findOrCreateTerritory = async (name: string, parentId?: string, description?: string) => {
         const existing = await prisma.territory.findFirst({
             where: { tenant_id: tenant.id, name, parent_id: parentId ?? null },

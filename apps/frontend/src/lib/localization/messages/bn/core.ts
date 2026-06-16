@@ -260,6 +260,7 @@ export const coreMessages = {
                 adminSupport: "সাপোর্ট চ্যাট",
                 customers: "গ্রাহক",
                 customerGroups: "গ্রাহক গ্রুপ",
+                priceLists: "প্রাইস লিস্ট",
                 territories: "এরিয়া",
                 brands: "ব্র্যান্ড",
                 categories: "ক্যাটাগরি",
