@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '@/shared/prisma/prisma.service';
+import { Injectable } from '@nestjs/common';
+import { DatabaseService } from '../database/database.service';
 import {
   UpdateSalesSettingsDto,
   SalesSettingsResponseDto,
@@ -8,15 +8,15 @@ import {
 
 @Injectable()
 export class SalesSettingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly db: DatabaseService) {}
 
   async getOrCreate(tenantId: string): Promise<SalesSettingsResponseDto> {
-    let settings = await this.prisma.salesSettings.findUnique({
+    let settings = await this.db.salesSettings.findUnique({
       where: { tenant_id: tenantId },
     });
 
     if (!settings) {
-      settings = await this.prisma.salesSettings.create({
+      settings = await this.db.salesSettings.create({
         data: {
           tenant_id: tenantId,
           paper_size: PaperSize.A4,
@@ -32,12 +32,12 @@ export class SalesSettingsService {
     tenantId: string,
     dto: UpdateSalesSettingsDto,
   ): Promise<SalesSettingsResponseDto> {
-    let settings = await this.prisma.salesSettings.findUnique({
+    let settings = await this.db.salesSettings.findUnique({
       where: { tenant_id: tenantId },
     });
 
     if (!settings) {
-      settings = await this.prisma.salesSettings.create({
+      settings = await this.db.salesSettings.create({
         data: {
           tenant_id: tenantId,
           paper_size: dto.paper_size || PaperSize.A4,
@@ -45,7 +45,7 @@ export class SalesSettingsService {
         },
       });
     } else {
-      settings = await this.prisma.salesSettings.update({
+      settings = await this.db.salesSettings.update({
         where: { tenant_id: tenantId },
         data: {
           paper_size: dto.paper_size || settings.paper_size,

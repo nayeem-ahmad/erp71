@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '@/shared/prisma/prisma.service';
+import { DatabaseService } from '../database/database.service';
 import {
   CreatePaymentMethodDto,
   UpdatePaymentMethodDto,
@@ -9,14 +9,14 @@ import {
 
 @Injectable()
 export class PaymentMethodsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly db: DatabaseService) {}
 
   async create(
     tenantId: string,
     dto: CreatePaymentMethodDto,
   ): Promise<PaymentMethodResponseDto> {
     // Check for duplicate name
-    const existing = await this.prisma.paymentMethod.findFirst({
+    const existing = await this.db.paymentMethod.findFirst({
       where: {
         tenant_id: tenantId,
         name: dto.name,
@@ -29,7 +29,7 @@ export class PaymentMethodsService {
 
     // Validate account exists if provided
     if (dto.account_id) {
-      const account = await this.prisma.account.findUnique({
+      const account = await this.db.account.findUnique({
         where: { id: dto.account_id },
       });
 
@@ -38,7 +38,7 @@ export class PaymentMethodsService {
       }
     }
 
-    const paymentMethod = await this.prisma.paymentMethod.create({
+    const paymentMethod = await this.db.paymentMethod.create({
       data: {
         tenant_id: tenantId,
         type: dto.type,
@@ -53,7 +53,7 @@ export class PaymentMethodsService {
   }
 
   async findAll(tenantId: string, type?: PaymentMethodType): Promise<PaymentMethodResponseDto[]> {
-    const paymentMethods = await this.prisma.paymentMethod.findMany({
+    const paymentMethods = await this.db.paymentMethod.findMany({
       where: {
         tenant_id: tenantId,
         ...(type && { type }),
@@ -65,7 +65,7 @@ export class PaymentMethodsService {
   }
 
   async findById(id: string, tenantId: string): Promise<PaymentMethodResponseDto> {
-    const paymentMethod = await this.prisma.paymentMethod.findFirst({
+    const paymentMethod = await this.db.paymentMethod.findFirst({
       where: {
         id,
         tenant_id: tenantId,
@@ -84,7 +84,7 @@ export class PaymentMethodsService {
     tenantId: string,
     dto: UpdatePaymentMethodDto,
   ): Promise<PaymentMethodResponseDto> {
-    const paymentMethod = await this.prisma.paymentMethod.findFirst({
+    const paymentMethod = await this.db.paymentMethod.findFirst({
       where: {
         id,
         tenant_id: tenantId,
@@ -97,7 +97,7 @@ export class PaymentMethodsService {
 
     // Check for duplicate name if updating name
     if (dto.name && dto.name !== paymentMethod.name) {
-      const existing = await this.prisma.paymentMethod.findFirst({
+      const existing = await this.db.paymentMethod.findFirst({
         where: {
           tenant_id: tenantId,
           name: dto.name,
@@ -111,7 +111,7 @@ export class PaymentMethodsService {
 
     // Validate account exists if updating account
     if (dto.account_id) {
-      const account = await this.prisma.account.findUnique({
+      const account = await this.db.account.findUnique({
         where: { id: dto.account_id },
       });
 
@@ -120,7 +120,7 @@ export class PaymentMethodsService {
       }
     }
 
-    const updated = await this.prisma.paymentMethod.update({
+    const updated = await this.db.paymentMethod.update({
       where: { id },
       data: {
         type: dto.type,
@@ -135,7 +135,7 @@ export class PaymentMethodsService {
   }
 
   async delete(id: string, tenantId: string): Promise<void> {
-    const paymentMethod = await this.prisma.paymentMethod.findFirst({
+    const paymentMethod = await this.db.paymentMethod.findFirst({
       where: {
         id,
         tenant_id: tenantId,
@@ -146,7 +146,7 @@ export class PaymentMethodsService {
       throw new NotFoundException('Payment method not found');
     }
 
-    await this.prisma.paymentMethod.delete({
+    await this.db.paymentMethod.delete({
       where: { id },
     });
   }
@@ -155,7 +155,7 @@ export class PaymentMethodsService {
     tenantId: string,
     type: PaymentMethodType,
   ): Promise<PaymentMethodResponseDto | null> {
-    const paymentMethod = await this.prisma.paymentMethod.findFirst({
+    const paymentMethod = await this.db.paymentMethod.findFirst({
       where: {
         tenant_id: tenantId,
         type,

@@ -8,10 +8,11 @@ import {
   Param,
   Query,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '@/shared/auth/jwt-auth.guard';
-import { TenantInterceptor } from '@/shared/interceptors/tenant.interceptor';
-import { CurrentTenant } from '@/shared/decorators/current-tenant.decorator';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { TenantInterceptor } from '../database/tenant.interceptor';
+import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { PaymentMethodsService } from './payment-methods.service';
 import {
   CreatePaymentMethodDto,
@@ -22,55 +23,56 @@ import {
 
 @Controller('payment-methods')
 @UseGuards(JwtAuthGuard)
+@UseInterceptors(TenantInterceptor)
 export class PaymentMethodsController {
   constructor(private readonly paymentMethodsService: PaymentMethodsService) {}
 
   @Post()
   async create(
-    @CurrentTenant() tenantId: string,
+    @Tenant() tenant: TenantContext,
     @Body() dto: CreatePaymentMethodDto,
   ): Promise<PaymentMethodResponseDto> {
-    return this.paymentMethodsService.create(tenantId, dto);
+    return this.paymentMethodsService.create(tenant.tenantId, dto);
   }
 
   @Get()
   async findAll(
-    @CurrentTenant() tenantId: string,
+    @Tenant() tenant: TenantContext,
     @Query('type') type?: PaymentMethodType,
   ): Promise<PaymentMethodResponseDto[]> {
-    return this.paymentMethodsService.findAll(tenantId, type);
+    return this.paymentMethodsService.findAll(tenant.tenantId, type);
   }
 
   @Get('default/:type')
   async getDefault(
-    @CurrentTenant() tenantId: string,
+    @Tenant() tenant: TenantContext,
     @Param('type') type: PaymentMethodType,
   ): Promise<PaymentMethodResponseDto | null> {
-    return this.paymentMethodsService.getDefaultByType(tenantId, type);
+    return this.paymentMethodsService.getDefaultByType(tenant.tenantId, type);
   }
 
   @Get(':id')
   async findOne(
-    @CurrentTenant() tenantId: string,
+    @Tenant() tenant: TenantContext,
     @Param('id') id: string,
   ): Promise<PaymentMethodResponseDto> {
-    return this.paymentMethodsService.findById(id, tenantId);
+    return this.paymentMethodsService.findById(id, tenant.tenantId);
   }
 
   @Patch(':id')
   async update(
-    @CurrentTenant() tenantId: string,
+    @Tenant() tenant: TenantContext,
     @Param('id') id: string,
     @Body() dto: UpdatePaymentMethodDto,
   ): Promise<PaymentMethodResponseDto> {
-    return this.paymentMethodsService.update(id, tenantId, dto);
+    return this.paymentMethodsService.update(id, tenant.tenantId, dto);
   }
 
   @Delete(':id')
   async delete(
-    @CurrentTenant() tenantId: string,
+    @Tenant() tenant: TenantContext,
     @Param('id') id: string,
   ): Promise<void> {
-    return this.paymentMethodsService.delete(id, tenantId);
+    return this.paymentMethodsService.delete(id, tenant.tenantId);
   }
 }

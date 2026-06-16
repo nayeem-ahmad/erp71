@@ -32,6 +32,10 @@ describe('SalesService', () => {
         create: jest.fn(),
         findFirst: jest.fn(),
         update: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
+      },
+      salesSettings: {
+        findUnique: jest.fn().mockResolvedValue(null),
       },
       saleItem: {
         create: jest.fn(),
@@ -221,8 +225,8 @@ describe('SalesService', () => {
         data: expect.objectContaining({
           payments: {
             create: [
-              { payment_method: 'CASH', amount: 60 },
-              { payment_method: 'BKASH', amount: 40 },
+              { payment_method: 'CASH', amount: 60, account_id: null },
+              { payment_method: 'BKASH', amount: 40, account_id: null },
             ],
           },
         }),
