@@ -1437,4 +1437,40 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    // Payment Methods
+    getPaymentMethods: (type?: string) => {
+        const q = type ? `?type=${type}` : '';
+        return fetchWithAuth(`/payment-methods${q}`);
+    },
+    createPaymentMethod: (data: any) => fetchWithAuth('/payment-methods', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updatePaymentMethod: (id: string, data: any) => fetchWithAuth(`/payment-methods/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deletePaymentMethod: (id: string) => fetchWithAuth(`/payment-methods/${id}`, { method: 'DELETE' }),
+    // Sales Settings
+    getSalesSettings: () => fetchWithAuth('/sales-settings'),
+    updateSalesSettings: (data: any) => fetchWithAuth('/sales-settings', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    // New Sales
+    createNewSale: (data: any) => fetchWithAuth('/sales', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    searchProductsByQuantity: (query: string, limit?: number) => {
+        const q = new URLSearchParams();
+        q.set('q', query);
+        if (limit) q.set('limit', String(limit));
+        return fetchWithAuth(`/products/search/by-quantity?${q}`);
+    },
+    getCurrentUser: () => fetchWithAuth('/auth/me'),
 };

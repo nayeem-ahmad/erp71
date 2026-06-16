@@ -165,6 +165,16 @@ export class ProductsController {
         });
     }
 
+    @Get('search/by-quantity')
+    searchByQuantity(
+        @Tenant() tenant: TenantContext,
+        @Query('q') query: string,
+        @Query('limit') limit?: string,
+    ) {
+        const parsedLimit = limit ? Math.min(parseInt(limit, 10), 100) : 20;
+        return this.productsService.searchByQuantitySold(tenant.tenantId, query || '', parsedLimit);
+    }
+
     @Get(':id')
     findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.productsService.findOne(tenant.tenantId, id);

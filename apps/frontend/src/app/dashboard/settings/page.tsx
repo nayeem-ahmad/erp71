@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle, XCircle, Loader2, ShieldCheck, ShieldOff, Eye, EyeOff, Palette, Receipt, Gift, MessageSquare, BarChart3, Globe, Monitor, UserCog, ScrollText } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, ShieldCheck, ShieldOff, Eye, EyeOff, Palette, Receipt, Gift, MessageSquare, BarChart3, Globe, Monitor, UserCog, ScrollText, ShoppingBag, CreditCard } from 'lucide-react';
 import { api, fetchWithAuth } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 
@@ -689,6 +689,18 @@ export default function AccountSettingsPage() {
             icon: Monitor,
             label: t.settings.quickLinks.countersLabel,
             description: t.settings.quickLinks.countersDescription,
+        },
+        {
+            href: '/dashboard/settings/sales',
+            icon: ShoppingBag,
+            label: 'Sales Settings',
+            description: 'Default paper size, reference number format',
+        },
+        {
+            href: '/dashboard/settings/payment-methods',
+            icon: CreditCard,
+            label: 'Payment Methods',
+            description: 'Manage cash, card, mobile wallet methods',
         },
     ];
 

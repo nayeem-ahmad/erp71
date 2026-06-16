@@ -217,13 +217,22 @@ export default function SalesPage() {
                             {t.sales.subtitle}
                         </p>
                     </div>
-                    <Link
-                        href="/dashboard/pos"
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                    >
-                        <Plus className="w-4 h-4 mr-2" />
-                        {t.sales.newSale}
-                    </Link>
+                    <div className="flex items-center gap-2">
+                        <Link
+                            href="/dashboard/sales/new"
+                            className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center transition-all hover:-translate-y-0.5 active:translate-y-0"
+                        >
+                            <Plus className="w-4 h-4 mr-2" />
+                            New Sales Entry
+                        </Link>
+                        <Link
+                            href="/dashboard/pos"
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                        >
+                            <Plus className="w-4 h-4 mr-2" />
+                            {t.sales.newSale}
+                        </Link>
+                    </div>
                 </div>
 
                 <DataTable<Sale>

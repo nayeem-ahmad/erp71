@@ -376,6 +376,36 @@ model Tenant {
   salaryPayments    SalaryPayment[]
   smsTransactions   SmsTransaction[]
   aiUsageLogs       AiUsageLog[]
+  paymentMethods    PaymentMethod[]
+  salesSettings     SalesSettings?
+}
+
+model PaymentMethod {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  type        String   // Cash, Mobile Wallet, Card, Bank
+  name        String   // e.g. "Cash Register", "bKash Account", "Bank A/C"
+  account_id  String?  // Links to Account for posting
+  is_active   Boolean  @default(true)
+  sort_order  Int      @default(0)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, name])
+  @@index([tenant_id, type, is_active])
+}
+
+model SalesSettings {
+  id                     String   @id @default(uuid())
+  tenant_id              String   @unique
+  paper_size             String   @default("A4") // A4, Letter, Thermal80, Thermal58
+  reference_number_format String @default("YYMM-#") // Format template
+  created_at             DateTime @default(now())
+  updated_at             DateTime @updatedAt
+
+  tenant                 Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 }
 
 model TenantUser {
@@ -989,6 +1019,7 @@ model Sale {
   store_id       String
   counter_id     String?
   serial_number  String
+  reference_number String?  // User-editable reference, unique per tenant
   total_amount   Decimal  @db.Decimal(12, 2)
   amount_paid    Decimal    @default(0) @db.Decimal(12, 2)
   status         String
@@ -1009,6 +1040,7 @@ model Sale {
   deliveryOrders DeliveryOrder[]
 
   @@unique([tenant_id, serial_number])
+  @@unique([tenant_id, reference_number])
   @@index([tenant_id, created_at])
   @@index([tenant_id, store_id])
   @@index([tenant_id, customer_id])
@@ -1304,6 +1336,7 @@ model Account {
   creditPostingRules PostingRule[] @relation("PostingRuleCreditAccount")
   budgets        AccountBudget[]
   recurringJournalLines RecurringJournalLine[]
+  paymentRecords PaymentRecord[]
 
   @@unique([tenant_id, name])
   @@index([tenant_id])
@@ -1434,10 +1467,14 @@ model PaymentRecord {
   sale_id        String
   payment_method String
   amount         Decimal  @db.Decimal(12, 2)
+  account_id     String?  // Links payment to account (for accounting integration)
   created_at     DateTime @default(now())
-  
+
   // Relations
   sale           Sale     @relation(fields: [sale_id], references: [id], onDelete: Cascade)
+  account        Account? @relation(fields: [account_id], references: [id], onDelete: SetNull)
+
+  @@index([account_id])
 }
 
 model SaleItem {

@@ -437,3 +437,10 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Write comprehensive shop owner & staff user manual — covers all 20 topic areas (POS, sales, inventory, purchases, CRM, accounting, HR, loyalty, e-commerce, billing, etc.) — `docs/user-manual/shop-owner-guide.md` — done 2026-06-13
 - [x] Product Price Lists — named price lists with overall + per-product discounts/selling prices; linked to customer groups; storefront applies group pricelist for authenticated shoppers — done 2026-06-17
 
+### New Sales Page Feature (Sales > New Sales)
+- [x] Phase 1: Database & Backend APIs — PaymentMethod model (link types to accounts), SalesSettings model (paper size, reference format), extend PaymentRecord with account_id, extend Sale with reference_number, payment-methods CRUD module, sales-settings module, product search by quantity endpoint, reference number generation — done 2026-06-16
+- [x] Phase 2: Frontend Core Page — /dashboard/sales/new page with form layout, SalesHeader (sales #, reference, user, date/time), CustomerSelection (search + info), ProductSearch (sorted by qty_sold), LineItemsTable (editable discounts/qty), TotalsFooter (auto-calc VAT/discount/rounding), useNewSaleCart state hook, API endpoints — done 2026-06-16
+- [x] Phase 3: Payment & Checkout — payment mode selection (Cash/Wallet/Card/Bank) with account linking, split payment UI, checkout validation, payment amount auto-fill, account filtering by type — done 2026-06-16
+- [x] Phase 4: Print & Polish — `sales-invoice-printer.ts` (A4/Letter/Thermal80/Thermal58), Print button with per-session paper-size dropdown overlay, `New Sales Entry` button on sales list page — done 2026-06-16
+- [x] Phase 5: Settings Integration — `/dashboard/settings/sales` panel (paper size + reference format), `/dashboard/settings/payment-methods` CRUD page, sidebar links for both, Settings quick-link cards updated — done 2026-06-16
+

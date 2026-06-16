@@ -314,6 +314,55 @@ export class ProductsService {
         return { groupId: resolvedGroupId ?? null, subgroupId: resolvedSubgroupId ?? null };
     }
 
+    async searchByQuantitySold(
+        tenantId: string,
+        query: string,
+        limit: number = 20,
+    ): Promise<any[]> {
+        const searchTerm = `%${query.toLowerCase()}%`;
+
+        const results = await this.db.$queryRaw`
+            SELECT
+                p.id,
+                p.name,
+                p.sku,
+                p.price,
+                p.unit_type,
+                p.brand_id,
+                p.group_id,
+                p.subgroup_id,
+                COALESCE(SUM(si.quantity), 0) as qty_sold
+            FROM "Product" p
+            LEFT JOIN "SaleItem" si ON p.id = si.product_id
+            LEFT JOIN "Sale" s ON si.sale_id = s.id AND s.tenant_id = ${tenantId}
+            WHERE p.tenant_id = ${tenantId}
+            AND p.deleted_at IS NULL
+            AND (
+                LOWER(p.name) LIKE ${searchTerm}
+                OR LOWER(p.sku) LIKE ${searchTerm}
+            )
+            GROUP BY p.id, p.name, p.sku, p.price, p.unit_type, p.brand_id, p.group_id, p.subgroup_id
+            ORDER BY qty_sold DESC, p.name ASC
+            LIMIT ${limit}
+        `;
+
+        // Fetch full product details with includes
+        const productIds = (results as any[]).map(r => r.id);
+        if (productIds.length === 0) return [];
+
+        const products = await this.db.product.findMany({
+            where: { id: { in: productIds } },
+            include: this.productInclude(),
+        });
+
+        // Add qty_sold to products
+        const qtySoldMap = new Map((results as any[]).map(r => [r.id, r.qty_sold]));
+        return products.map(p => ({
+            ...p,
+            qty_sold: qtySoldMap.get(p.id) || 0,
+        })).sort((a, b) => b.qty_sold - a.qty_sold);
+    }
+
     private productInclude() {
         return {
             brand: true,

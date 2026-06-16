@@ -63,7 +63,12 @@ export class SalesService {
             // 1. Generate Serial Number (Simplified for v0.1)
             const serialNumber = `SL-${Date.now()}`;
 
-            // 2. Create Sale Record
+            // 2. Generate and validate reference number
+            const referenceNumber = dto.referenceNumber
+                ? await this.validateReferenceNumber(tenantId, dto.referenceNumber)
+                : await this.generateReferenceNumber(tenantId, tx);
+
+            // 3. Create Sale Record
             const sale = await tx.sale.create({
                 data: {
                     tenant_id: tenantId,
@@ -71,6 +76,7 @@ export class SalesService {
                     counter_id: dto.counterId ?? null,
                     customer_id: dto.customerId,
                     serial_number: serialNumber,
+                    reference_number: referenceNumber,
                     total_amount: computedTotal,
                     amount_paid: dto.amountPaid,
                     status: 'COMPLETED',
@@ -79,7 +85,8 @@ export class SalesService {
                     payments: dto.payments ? {
                         create: dto.payments.map(p => ({
                             payment_method: p.paymentMethod,
-                            amount: p.amount
+                            amount: p.amount,
+                            account_id: p.accountId || null
                         }))
                     } : undefined
                 },
@@ -531,5 +538,49 @@ export class SalesService {
 
             item.serialNumbers = normalizedSerials;
         }
+    }
+
+    async validateReferenceNumber(tenantId: string, referenceNumber: string | undefined) {
+        if (!referenceNumber) return null;
+
+        const existing = await this.db.sale.findFirst({
+            where: { tenant_id: tenantId, reference_number: referenceNumber },
+        });
+
+        if (existing) {
+            throw new BadRequestException('Reference number already exists');
+        }
+
+        return referenceNumber;
+    }
+
+    async generateReferenceNumber(tenantId: string, tx: any): Promise<string> {
+        const settings = await tx.salesSettings.findUnique({ where: { tenant_id: tenantId } });
+        const format = settings?.reference_number_format || 'YYMM-#';
+
+        // Generate based on format
+        if (format.includes('YYMM')) {
+            const now = new Date();
+            const yy = String(now.getFullYear()).slice(-2);
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const prefix = format.replace('YYMM', `${yy}${mm}`);
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+
+            const countToday = await tx.sale.count({
+                where: {
+                    tenant_id: tenantId,
+                    reference_number: { startsWith: prefix },
+                    created_at: { gte: today, lt: tomorrow },
+                },
+            });
+
+            return prefix.replace('#', String(countToday + 1).padStart(3, '0'));
+        }
+
+        throw new BadRequestException('Invalid reference number format in settings');
     }
 }

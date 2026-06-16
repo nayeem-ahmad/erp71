@@ -8,6 +8,7 @@ export class CreateSaleItemDto {
 export class CreatePaymentDto {
     paymentMethod: string;
     amount: number;
+    accountId?: string; // Links payment to account for accounting
 }
 
 export class CreateSaleDto {
@@ -15,6 +16,7 @@ export class CreateSaleDto {
     warehouseId?: string;
     customerId?: string;
     counterId?: string;
+    referenceNumber?: string; // User-editable reference number
     totalAmount: number;
     amountPaid: number;
     items: CreateSaleItemDto[];
@@ -36,6 +38,7 @@ export class UpdateSaleItemDto {
 export class UpdatePaymentDto {
     paymentMethod: string;
     amount: number;
+    accountId?: string;
 }
 
 export class UpdateSaleDto {
