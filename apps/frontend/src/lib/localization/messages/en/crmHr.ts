@@ -136,6 +136,7 @@ export const crmHrMessages = {
             "dateOfJoining": "Date of Joining",
             "department": "Department",
             "designation": "Designation",
+            "basicSalary": "Basic Salary",
             "status": "Status",
             "nationalId": "National ID",
             "adding": "Adding...",

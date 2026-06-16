@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEmail, IsEnum, IsUUID, IsDateString, Matches } from 'class-validator';
+import { IsString, IsOptional, IsEmail, IsEnum, IsUUID, IsDateString, IsNumber, Min, Matches } from 'class-validator';
 
 export enum EmployeeStatusDto {
     ACTIVE = 'ACTIVE',
@@ -34,6 +34,11 @@ export class CreateEmployeeDto {
     designation_id?: string;
 
     @IsOptional()
+    @IsNumber()
+    @Min(0)
+    basic_salary?: number;
+
+    @IsOptional()
     @IsEnum(EmployeeStatusDto)
     status?: EmployeeStatusDto;
 }
@@ -67,6 +72,11 @@ export class UpdateEmployeeDto {
     @IsOptional()
     @IsUUID()
     designation_id?: string;
+
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    basic_salary?: number;
 
     @IsOptional()
     @IsEnum(EmployeeStatusDto)

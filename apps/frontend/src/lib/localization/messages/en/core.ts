@@ -276,6 +276,7 @@ export const coreMessages = {
             designations: 'Designations',
             attendance: 'Attendance',
             leaves: 'Leaves',
+            salaryPayments: 'Salary Payments',
             delivery: 'Delivery',
             profitAndLoss: 'Profit & Loss',
             balanceSheet: 'Balance Sheet',

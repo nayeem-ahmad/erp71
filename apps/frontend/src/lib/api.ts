@@ -1264,6 +1264,42 @@ export const api = {
         if (params?.to) q.set('to', params.to);
         return fetchWithAuth(`/expenses/summary?${q}`);
     },
+    // Salary Payments
+    getSalaryPayments: (params?: { page?: number; limit?: number; employeeId?: string; payPeriod?: string; from?: string; to?: string }) => {
+        const q = new URLSearchParams();
+        q.set('limit', String(params?.limit ?? 100));
+        if (params?.page) q.set('page', String(params.page));
+        if (params?.employeeId) q.set('employeeId', params.employeeId);
+        if (params?.payPeriod) q.set('payPeriod', params.payPeriod);
+        if (params?.from) q.set('from', params.from);
+        if (params?.to) q.set('to', params.to);
+        return fetchWithAuth(`/salary-payments?${q.toString()}`);
+    },
+    getSalaryPayment: (id: string) => fetchWithAuth(`/salary-payments/${id}`),
+    createSalaryPayment: (data: {
+        employeeId: string;
+        amount: number;
+        payPeriod: string;
+        paymentDate: string;
+        paymentMethod?: string;
+        notes?: string;
+    }) => fetchWithAuth('/salary-payments', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateSalaryPayment: (id: string, data: Record<string, unknown>) => fetchWithAuth(`/salary-payments/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteSalaryPayment: (id: string) => fetchWithAuth(`/salary-payments/${id}`, { method: 'DELETE' }),
+    getSalaryPaymentSummary: (params?: { from?: string; to?: string }) => {
+        const q = new URLSearchParams();
+        if (params?.from) q.set('from', params.from);
+        if (params?.to) q.set('to', params.to);
+        return fetchWithAuth(`/salary-payments/summary?${q}`);
+    },
     acceptInvitation: (token: string) => fetchWithAuth('/invitations/accept', {
         method: 'POST',
         body: JSON.stringify({ token }),

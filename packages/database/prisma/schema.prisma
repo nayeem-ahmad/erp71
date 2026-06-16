@@ -355,6 +355,7 @@ model Tenant {
   crmCampaigns        CrmCampaign[]
   expenseCategories ExpenseCategory[]
   expenseEntries    ExpenseEntry[]
+  salaryPayments    SalaryPayment[]
   smsTransactions   SmsTransaction[]
   aiUsageLogs       AiUsageLog[]
 }
@@ -2000,6 +2001,7 @@ model Employee {
   department_id   String?
   designation_id  String?
   user_id         String?        @unique
+  basic_salary    Decimal?       @db.Decimal(12, 2)
   status          EmployeeStatus @default(ACTIVE)
   created_at      DateTime       @default(now())
   updated_at      DateTime       @updatedAt
@@ -2012,6 +2014,7 @@ model Employee {
   attendanceRecords AttendanceRecord[]
   leaveBalances     LeaveBalance[]
   leaveRequests     LeaveRequest[]
+  salaryPayments    SalaryPayment[]
 
   @@unique([tenant_id, employee_code])
   @@unique([tenant_id, phone])
@@ -2308,6 +2311,29 @@ model ExpenseEntry {
   store          Store?   @relation(fields: [store_id], references: [id])
   @@index([tenant_id, expense_date])
   @@index([tenant_id, category_id])
+}
+
+// ── Salary Payments ─────────────────────────────────────────────────────────
+
+model SalaryPayment {
+  id             String   @id @default(uuid())
+  tenant_id      String
+  employee_id    String
+  amount         Decimal  @db.Decimal(12, 2)
+  pay_period     String   // 'YYYY-MM' — the month the salary is for
+  payment_date   DateTime @db.Date
+  payment_method String   @default("CASH")
+  notes          String?
+  created_by     String?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employee_id], references: [id])
+
+  @@unique([tenant_id, employee_id, pay_period])
+  @@index([tenant_id, payment_date])
+  @@index([tenant_id, employee_id])
 }
 
 // ── AI Usage Logging ──────────────────────────────────────────────────────────
