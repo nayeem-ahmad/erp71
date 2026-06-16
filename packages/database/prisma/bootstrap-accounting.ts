@@ -41,6 +41,17 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                     },
                 ],
             },
+            {
+                name: 'Loans Receivable',
+                accounts: [
+                    {
+                        name: 'Loans Receivable',
+                        code: '1030',
+                        type: AccountType.ASSET,
+                        category: AccountCategory.GENERAL,
+                    },
+                ],
+            },
         ],
     },
     {
@@ -53,6 +64,17 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                     {
                         name: 'Purchase Payable',
                         code: '2010',
+                        type: AccountType.LIABILITY,
+                        category: AccountCategory.GENERAL,
+                    },
+                ],
+            },
+            {
+                name: 'Loans Payable',
+                accounts: [
+                    {
+                        name: 'Loans Payable',
+                        code: '2020',
                         type: AccountType.LIABILITY,
                         category: AccountCategory.GENERAL,
                     },
@@ -343,6 +365,168 @@ export async function bootstrapDefaultAccountingForTenant(
                 tenant_id: tenantId,
                 event_type: rule.event_type,
                 condition_key: rule.condition_key,
+                condition_value: rule.condition_value,
+                debit_account_id: rule.debit_account_id,
+                credit_account_id: rule.credit_account_id,
+                priority: rule.priority,
+                is_active: true,
+            },
+        });
+    }
+
+    await ensureLoanPostingSetup(db, tenantId);
+}
+
+/**
+ * Idempotently ensure the loan accounts (Loans Payable / Loans Receivable) and
+ * the default loan posting rules exist for a tenant. New tenants get these via
+ * the accounting bootstrap; existing tenants get them lazily the first time a
+ * loan is created or repaid. Safe to call repeatedly — it returns early once
+ * the loan rules are present.
+ */
+export async function ensureLoanPostingSetup(
+    db: AccountingBootstrapClient,
+    tenantId: string,
+) {
+    const alreadyConfigured = await db.postingRule.findFirst({
+        where: {
+            tenant_id: tenantId,
+            event_type: 'loan_disbursement',
+            condition_key: 'loan_direction',
+        },
+        select: { id: true },
+    });
+    if (alreadyConfigured) {
+        return;
+    }
+
+    const assetGroup = await db.accountGroup.upsert({
+        where: { tenant_id_name: { tenant_id: tenantId, name: 'Current Assets' } },
+        update: {},
+        create: { tenant_id: tenantId, name: 'Current Assets', type: AccountType.ASSET },
+    });
+    const liabilityGroup = await db.accountGroup.upsert({
+        where: { tenant_id_name: { tenant_id: tenantId, name: 'Current Liabilities' } },
+        update: {},
+        create: { tenant_id: tenantId, name: 'Current Liabilities', type: AccountType.LIABILITY },
+    });
+
+    const receivableSubgroup = await db.accountSubgroup.upsert({
+        where: { group_id_name: { group_id: assetGroup.id, name: 'Loans Receivable' } },
+        update: {},
+        create: { tenant_id: tenantId, group_id: assetGroup.id, name: 'Loans Receivable' },
+    });
+    const payableSubgroup = await db.accountSubgroup.upsert({
+        where: { group_id_name: { group_id: liabilityGroup.id, name: 'Loans Payable' } },
+        update: {},
+        create: { tenant_id: tenantId, group_id: liabilityGroup.id, name: 'Loans Payable' },
+    });
+
+    const loanReceivable = await db.account.upsert({
+        where: { tenant_id_name: { tenant_id: tenantId, name: 'Loans Receivable' } },
+        update: {},
+        create: {
+            tenant_id: tenantId,
+            group_id: assetGroup.id,
+            subgroup_id: receivableSubgroup.id,
+            name: 'Loans Receivable',
+            code: '1030',
+            type: AccountType.ASSET,
+            category: AccountCategory.GENERAL,
+        },
+    });
+    const loanPayable = await db.account.upsert({
+        where: { tenant_id_name: { tenant_id: tenantId, name: 'Loans Payable' } },
+        update: {},
+        create: {
+            tenant_id: tenantId,
+            group_id: liabilityGroup.id,
+            subgroup_id: payableSubgroup.id,
+            name: 'Loans Payable',
+            code: '2020',
+            type: AccountType.LIABILITY,
+            category: AccountCategory.GENERAL,
+        },
+    });
+
+    // Cash is the contra account for both directions. Prefer the canonical
+    // "Cash in Hand"; fall back to any cash-category account.
+    const cashAccount =
+        (await db.account.findFirst({
+            where: { tenant_id: tenantId, name: 'Cash in Hand' },
+            select: { id: true },
+        })) ??
+        (await db.account.findFirst({
+            where: { tenant_id: tenantId, category: AccountCategory.CASH },
+            orderBy: { code: 'asc' },
+            select: { id: true },
+        }));
+
+    if (!cashAccount) {
+        // No cash account to post against — postings will be skipped gracefully
+        // by the engine until the tenant configures rules manually.
+        return;
+    }
+
+    const loanRules: Array<{
+        event_type: PostingRuleEventType;
+        condition_value: string;
+        debit_account_id: string;
+        credit_account_id: string;
+        priority: number;
+    }> = [
+        // Borrowed money: cash comes in, loan liability rises.
+        {
+            event_type: 'loan_disbursement',
+            condition_value: 'PAYABLE',
+            debit_account_id: cashAccount.id,
+            credit_account_id: loanPayable.id,
+            priority: 10,
+        },
+        // Lent money out: loan asset rises, cash goes out.
+        {
+            event_type: 'loan_disbursement',
+            condition_value: 'RECEIVABLE',
+            debit_account_id: loanReceivable.id,
+            credit_account_id: cashAccount.id,
+            priority: 20,
+        },
+        // Repaying borrowed money: loan liability falls, cash goes out.
+        {
+            event_type: 'loan_repayment',
+            condition_value: 'PAYABLE',
+            debit_account_id: loanPayable.id,
+            credit_account_id: cashAccount.id,
+            priority: 10,
+        },
+        // Collecting on money lent: cash comes in, loan asset falls.
+        {
+            event_type: 'loan_repayment',
+            condition_value: 'RECEIVABLE',
+            debit_account_id: cashAccount.id,
+            credit_account_id: loanReceivable.id,
+            priority: 20,
+        },
+    ];
+
+    for (const rule of loanRules) {
+        const exists = await db.postingRule.findFirst({
+            where: {
+                tenant_id: tenantId,
+                event_type: rule.event_type,
+                condition_key: 'loan_direction',
+                condition_value: rule.condition_value,
+            },
+            select: { id: true },
+        });
+        if (exists) {
+            continue;
+        }
+        await db.postingRule.create({
+            data: {
+                tenant_id: tenantId,
+                event_type: rule.event_type,
+                condition_key: 'loan_direction',
                 condition_value: rule.condition_value,
                 debit_account_id: rule.debit_account_id,
                 credit_account_id: rule.credit_account_id,

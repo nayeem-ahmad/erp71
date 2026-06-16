@@ -69,6 +69,7 @@ import { CrmInteractionsModule } from './crm-interactions/crm-interactions.modul
 import { CrmTasksModule } from './crm-tasks/crm-tasks.module';
 import { CrmCampaignsModule } from './crm-campaigns/crm-campaigns.module';
 import { ExpensesModule } from './expenses/expenses.module';
+import { LoansModule } from './loans/loans.module';
 import { SalaryPaymentsModule } from './salary-payments/salary-payments.module';
 import { AiModule } from './ai/ai.module';
 
@@ -141,6 +142,7 @@ import { AiModule } from './ai/ai.module';
         CrmTasksModule,
         CrmCampaignsModule,
         ExpensesModule,
+        LoansModule,
         SalaryPaymentsModule,
         AiModule,
     ],

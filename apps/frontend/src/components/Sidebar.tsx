@@ -37,6 +37,7 @@ import {
     Factory,
     Cog,
     Receipt,
+    HandCoins,
     HelpCircle,
     Gift,
     Tag,
@@ -151,6 +152,7 @@ function buildModules(t: ReturnType<typeof useI18n>['t']): NavModule[] {
             { href: '/dashboard/accounting/ledger', icon: ClipboardList, label: t.sidebar.items.ledger },
             { href: '/dashboard/accounting/reconciliation', icon: AlertTriangle, label: t.sidebar.items.postingExceptions },
             { href: '/dashboard/expenses', icon: Receipt, label: t.sidebar.items.expenses },
+            { href: '/dashboard/loans', icon: HandCoins, label: t.sidebar.items.loans },
             // Accounting Reports
             { href: '#accounting-reports',          icon: BarChart3,       label: t.sidebar.sections.accountingReports, section: true },
             { href: '/dashboard/accounting/reports/pl', icon: TrendingUp,  label: t.sidebar.items.profitAndLoss },

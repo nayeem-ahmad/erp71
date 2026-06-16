@@ -82,6 +82,10 @@ enum StorePermission {
   MANAGE_CRM_TASKS
   VIEW_CUSTOMER_CREDIT
   MANAGE_CUSTOMER_CREDIT
+
+  // Loans
+  VIEW_LOANS
+  MANAGE_LOANS
 }
 
 enum EmployeeStatus {
@@ -111,12 +115,15 @@ enum PostingRuleEventType {
   inventory_adjustment
   fund_movement
   expense
+  loan_disbursement
+  loan_repayment
 }
 
 enum PostingRuleConditionKey {
   payment_mode
   reason_type
   transfer_scope
+  loan_direction
   none
 }
 
@@ -356,6 +363,8 @@ model Tenant {
   crmCampaigns        CrmCampaign[]
   expenseCategories ExpenseCategory[]
   expenseEntries    ExpenseEntry[]
+  loans             Loan[]
+  loanPayments      LoanPayment[]
   salaryPayments    SalaryPayment[]
   smsTransactions   SmsTransaction[]
   aiUsageLogs       AiUsageLog[]
@@ -401,6 +410,7 @@ model Store {
   warrantyClaims  WarrantyClaim[]
   posCounters     PosCounter[]
   expenseEntries  ExpenseEntry[]
+  loans           Loan[]
 }
 
 model PosCounter {
@@ -2312,6 +2322,52 @@ model ExpenseEntry {
   store          Store?   @relation(fields: [store_id], references: [id])
   @@index([tenant_id, expense_date])
   @@index([tenant_id, category_id])
+}
+
+// ── Loans ───────────────────────────────────────────────────────────────────
+
+model Loan {
+  id            String    @id @default(uuid())
+  tenant_id     String
+  store_id      String?
+  // Who the loan is with: the lender (for PAYABLE) or the borrower (for RECEIVABLE).
+  counterparty  String
+  // PAYABLE  = money the business borrowed (a liability)
+  // RECEIVABLE = money the business lent out (an asset)
+  direction     String    @default("PAYABLE")
+  principal     Decimal   @db.Decimal(14, 2)
+  // Optional annual interest rate (%), informational only.
+  interest_rate Decimal?  @db.Decimal(5, 2)
+  start_date    DateTime  @db.Date
+  due_date      DateTime? @db.Date
+  // ACTIVE | CLOSED
+  status        String    @default("ACTIVE")
+  reference     String?
+  notes         String?
+  created_by    String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  tenant        Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store         Store?        @relation(fields: [store_id], references: [id])
+  payments      LoanPayment[]
+  @@index([tenant_id, status])
+  @@index([tenant_id, direction])
+}
+
+model LoanPayment {
+  id             String   @id @default(uuid())
+  tenant_id      String
+  loan_id        String
+  amount         Decimal  @db.Decimal(14, 2)
+  payment_date   DateTime @db.Date
+  payment_method String   @default("CASH")
+  notes          String?
+  created_by     String?
+  created_at     DateTime @default(now())
+  tenant         Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  loan           Loan     @relation(fields: [loan_id], references: [id], onDelete: Cascade)
+  @@index([tenant_id, loan_id])
+  @@index([tenant_id, payment_date])
 }
 
 // ── Salary Payments ─────────────────────────────────────────────────────────
