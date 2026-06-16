@@ -4,6 +4,7 @@ import { BillingService } from '../billing/billing.service';
 import { DatabaseService } from '../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
+import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
 import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate } from '@retail-saas/database';
 import { ROLE_DEFAULT_PERMISSIONS, UserRole } from '@retail-saas/shared-types';
@@ -238,9 +239,12 @@ export class AdminTenantsService {
 
         const { tenant } = await this.db.$transaction(async (tx: any) => {
             if (dto.ownerMode === 'new') {
-                // Create the user inside the transaction so it rolls back on any failure
+                // Create the user inside the transaction so it rolls back on any failure.
+                // passwordHash is non-nullable, so store a hash of a random throwaway
+                // value — the owner sets their real password via the reset email below.
+                const throwawayPasswordHash = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
                 const newUser = await tx.user.create({
-                    data: { email: ownerEmail, name: ownerName ?? null, passwordHash: null },
+                    data: { email: ownerEmail, name: ownerName ?? null, passwordHash: throwawayPasswordHash },
                 });
                 ownerId = newUser.id;
 

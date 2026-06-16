@@ -4,6 +4,10 @@ jest.mock('@retail-saas/database', () => ({
     PrismaClient: class MockPrismaClient {},
 }));
 
+jest.mock('bcrypt', () => ({
+    hash: jest.fn().mockResolvedValue('hashed-throwaway-password'),
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -774,7 +778,7 @@ describe('AdminTenantsService', () => {
 
         expect(db.user.create).toHaveBeenCalledWith(
           expect.objectContaining({
-            data: expect.objectContaining({ email: 'owner@acme.com', name: 'Alice', passwordHash: null }),
+            data: expect.objectContaining({ email: 'owner@acme.com', name: 'Alice', passwordHash: expect.any(String) }),
           }),
         );
         expect(db.passwordResetToken.create).toHaveBeenCalledWith(
