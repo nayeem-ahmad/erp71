@@ -9,6 +9,7 @@ export type PostingEventType =
     | 'purchase_return'
     | 'inventory_adjustment'
     | 'fund_movement'
+    | 'expense'
     | 'loan_disbursement'
     | 'loan_repayment';
 
@@ -50,6 +51,7 @@ const VOUCHER_TYPE_BY_EVENT: Record<PostingEventType, string> = {
     purchase_return: VoucherType.CASH_RECEIVE,
     inventory_adjustment: VoucherType.JOURNAL,
     fund_movement: VoucherType.FUND_TRANSFER,
+    expense: VoucherType.CASH_PAYMENT,
     // A single loan event covers both directions (payable/receivable), so a
     // neutral journal voucher is used rather than a cash-in/out specific type.
     loan_disbursement: VoucherType.JOURNAL,

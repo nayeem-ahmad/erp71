@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
+import { autoPostFromRules } from '../accounting/posting.utils';
 import {
     CreateExpenseCategoryDto,
     CreateExpenseEntryDto,
@@ -109,18 +110,50 @@ export class ExpensesService {
             await this.assertStoreExists(tenantId, dto.storeId);
         }
 
-        return this.db.expenseEntry.create({
-            data: {
-                tenant_id: tenantId,
-                category_id: dto.categoryId,
-                store_id: dto.storeId,
-                amount: dto.amount,
-                expense_date: new Date(dto.expenseDate),
-                description: dto.description,
-                payment_method: dto.paymentMethod ?? 'CASH',
-                created_by: userId,
-            },
-            include: this.entryInclude(),
+        const paymentMethod = dto.paymentMethod ?? 'CASH';
+        const paymentMode = paymentMethod.toLowerCase().includes('bank')
+            || paymentMethod.toLowerCase().includes('bkash')
+            || paymentMethod.toLowerCase().includes('nagad')
+            || paymentMethod.toLowerCase().includes('transfer')
+            ? 'bank'
+            : 'cash';
+
+        return this.db.$transaction(async (tx) => {
+            const entry = await tx.expenseEntry.create({
+                data: {
+                    tenant_id: tenantId,
+                    category_id: dto.categoryId,
+                    store_id: dto.storeId,
+                    amount: dto.amount,
+                    expense_date: new Date(dto.expenseDate),
+                    description: dto.description,
+                    payment_method: paymentMethod,
+                    created_by: userId,
+                },
+                include: this.entryInclude(),
+            });
+
+            const posting = await autoPostFromRules({
+                tx,
+                tenantId,
+                eventType: 'expense',
+                conditionKey: 'payment_mode',
+                conditionValue: paymentMode,
+                sourceModule: 'expenses',
+                sourceType: 'expense_entry',
+                sourceId: entry.id,
+                amount: Number(entry.amount),
+                description: `Auto-posted expense${entry.description ? `: ${entry.description}` : ''}`,
+                date: entry.expense_date,
+            });
+
+            return {
+                ...entry,
+                posting_status: posting.postingStatus,
+                voucher_id: posting.voucherId ?? null,
+                voucher_number: posting.voucherNumber ?? null,
+                voucher_type: posting.voucherType ?? null,
+            };
         });
     }
 

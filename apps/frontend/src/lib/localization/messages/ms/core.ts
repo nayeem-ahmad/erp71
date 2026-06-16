@@ -276,6 +276,7 @@ export const coreMessages = {
                 designations: "Jawatan",
                 attendance: "Kehadiran",
                 leaves: "Cuti",
+                salaryPayments: "Pembayaran Gaji",
                 delivery: "Penghantaran",
                 profitAndLoss: "Untung Rugi",
                 balanceSheet: "Kunci Kira-kira",

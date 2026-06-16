@@ -70,6 +70,7 @@ import { CrmTasksModule } from './crm-tasks/crm-tasks.module';
 import { CrmCampaignsModule } from './crm-campaigns/crm-campaigns.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { LoansModule } from './loans/loans.module';
+import { SalaryPaymentsModule } from './salary-payments/salary-payments.module';
 import { AiModule } from './ai/ai.module';
 
 @Module({
@@ -142,6 +143,7 @@ import { AiModule } from './ai/ai.module';
         CrmCampaignsModule,
         ExpensesModule,
         LoansModule,
+        SalaryPaymentsModule,
         AiModule,
     ],
     controllers: [],

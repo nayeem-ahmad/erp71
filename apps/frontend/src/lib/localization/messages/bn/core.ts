@@ -276,6 +276,7 @@ export const coreMessages = {
                 designations: "পদবী",
                 attendance: "উপস্থিতি",
                 leaves: "ছুটি",
+                salaryPayments: "বেতন প্রদান",
                 delivery: "ডেলিভারি",
                 profitAndLoss: "লাভ ও ক্ষতি",
                 balanceSheet: "ব্যালেন্স শীট",

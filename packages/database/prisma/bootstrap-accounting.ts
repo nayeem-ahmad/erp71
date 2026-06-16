@@ -306,6 +306,30 @@ export async function bootstrapDefaultAccountingForTenant(
             credit_account_id: cashId,
             priority: 100,
         },
+        {
+            event_type: 'expense',
+            condition_key: 'payment_mode',
+            condition_value: 'cash',
+            debit_account_id: expenseId,
+            credit_account_id: cashId,
+            priority: 10,
+        },
+        {
+            event_type: 'expense',
+            condition_key: 'payment_mode',
+            condition_value: 'bank',
+            debit_account_id: expenseId,
+            credit_account_id: bankId,
+            priority: 20,
+        },
+        {
+            event_type: 'expense',
+            condition_key: 'none',
+            condition_value: null,
+            debit_account_id: expenseId,
+            credit_account_id: cashId,
+            priority: 100,
+        },
     ];
 
     for (const rule of defaultRules) {

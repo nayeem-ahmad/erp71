@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { EncryptionService } from '../common/encryption.service';
-import { CreateEmployeeDto, UpdateEmployeeDto, CreateDepartmentDto, CreateDesignationDto } from './employee.dto';
+import { CreateEmployeeDto, UpdateEmployeeDto, CreateDepartmentDto, UpdateDepartmentDto, CreateDesignationDto, UpdateDesignationDto } from './employee.dto';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 
 @Injectable()
@@ -49,13 +49,41 @@ export class EmployeesService {
 
     async createDepartment(tenantId: string, dto: CreateDepartmentDto) {
         const existing = await this.db.department.findFirst({
-            where: { tenant_id: tenantId, name: dto.name },
+            where: { tenant_id: tenantId, name: dto.name, deleted_at: null },
         });
         if (existing) throw new ConflictException('A department with this name already exists.');
 
         return this.db.department.create({
             data: { tenant_id: tenantId, name: dto.name },
         });
+    }
+
+    async updateDepartment(tenantId: string, id: string, dto: UpdateDepartmentDto) {
+        const dept = await this.db.department.findFirst({
+            where: { id, tenant_id: tenantId, deleted_at: null },
+        });
+        if (!dept) throw new NotFoundException('Department not found.');
+
+        const duplicate = await this.db.department.findFirst({
+            where: { tenant_id: tenantId, name: dto.name, deleted_at: null, NOT: { id } },
+        });
+        if (duplicate) throw new ConflictException('A department with this name already exists.');
+
+        return this.db.department.update({ where: { id }, data: { name: dto.name } });
+    }
+
+    async deleteDepartment(tenantId: string, id: string) {
+        const dept = await this.db.department.findFirst({
+            where: { id, tenant_id: tenantId, deleted_at: null },
+        });
+        if (!dept) throw new NotFoundException('Department not found.');
+
+        const assigned = await this.db.employee.count({
+            where: { department_id: id, deleted_at: null },
+        });
+        if (assigned > 0) throw new BadRequestException('Cannot delete a department that has employees assigned to it.');
+
+        return this.db.department.update({ where: { id }, data: { deleted_at: new Date() } });
     }
 
     // ── Designations ──────────────────────────────────────────────────────────
@@ -69,13 +97,41 @@ export class EmployeesService {
 
     async createDesignation(tenantId: string, dto: CreateDesignationDto) {
         const existing = await this.db.designation.findFirst({
-            where: { tenant_id: tenantId, name: dto.name },
+            where: { tenant_id: tenantId, name: dto.name, deleted_at: null },
         });
         if (existing) throw new ConflictException('A designation with this name already exists.');
 
         return this.db.designation.create({
             data: { tenant_id: tenantId, name: dto.name },
         });
+    }
+
+    async updateDesignation(tenantId: string, id: string, dto: UpdateDesignationDto) {
+        const desig = await this.db.designation.findFirst({
+            where: { id, tenant_id: tenantId, deleted_at: null },
+        });
+        if (!desig) throw new NotFoundException('Designation not found.');
+
+        const duplicate = await this.db.designation.findFirst({
+            where: { tenant_id: tenantId, name: dto.name, deleted_at: null, NOT: { id } },
+        });
+        if (duplicate) throw new ConflictException('A designation with this name already exists.');
+
+        return this.db.designation.update({ where: { id }, data: { name: dto.name } });
+    }
+
+    async deleteDesignation(tenantId: string, id: string) {
+        const desig = await this.db.designation.findFirst({
+            where: { id, tenant_id: tenantId, deleted_at: null },
+        });
+        if (!desig) throw new NotFoundException('Designation not found.');
+
+        const assigned = await this.db.employee.count({
+            where: { designation_id: id, deleted_at: null },
+        });
+        if (assigned > 0) throw new BadRequestException('Cannot delete a designation that has employees assigned to it.');
+
+        return this.db.designation.update({ where: { id }, data: { deleted_at: new Date() } });
     }
 
     // ── Employees ─────────────────────────────────────────────────────────────
