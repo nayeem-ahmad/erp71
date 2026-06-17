@@ -159,10 +159,11 @@ function LoginPageContent() {
                     ) : (
                     <form onSubmit={handleLogin} className="space-y-6">
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700 ml-1">{t.auth.login.emailLabel}</label>
+                            <label htmlFor="login-email" className="text-sm font-medium text-gray-700 ml-1">{t.auth.login.emailLabel}</label>
                             <div className="relative">
                                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                                 <input
+                                    id="login-email"
                                     type="email"
                                     required
                                     value={email}
@@ -174,10 +175,11 @@ function LoginPageContent() {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700 ml-1">{t.auth.login.passwordLabel}</label>
+                            <label htmlFor="login-password" className="text-sm font-medium text-gray-700 ml-1">{t.auth.login.passwordLabel}</label>
                             <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                                 <input
+                                    id="login-password"
                                     type="password"
                                     required
                                     value={password}

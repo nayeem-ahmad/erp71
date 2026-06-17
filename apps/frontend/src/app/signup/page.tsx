@@ -117,42 +117,42 @@ function SignupPageContent() {
 
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700 ml-1">{t.auth.signup.nameLabel}</label>
+                            <label htmlFor="signup-name" className="text-sm font-medium text-gray-700 ml-1">{t.auth.signup.nameLabel}</label>
                             <div className="relative">
                                 <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                                <input value={form.name} onChange={(e) => handleChange('name', e.target.value)} required className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="Nayeem Ahmed" />
+                                <input id="signup-name" value={form.name} onChange={(e) => handleChange('name', e.target.value)} required className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="Nayeem Ahmed" />
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700 ml-1">{t.auth.signup.emailLabel}</label>
+                            <label htmlFor="signup-email" className="text-sm font-medium text-gray-700 ml-1">{t.auth.signup.emailLabel}</label>
                             <div className="relative">
                                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                                <input type="email" value={form.email} onChange={(e) => handleChange('email', e.target.value)} required className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="owner@company.com" />
+                                <input id="signup-email" type="email" value={form.email} onChange={(e) => handleChange('email', e.target.value)} required className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="owner@company.com" />
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700 ml-1">{t.auth.signup.passwordLabel}</label>
+                            <label htmlFor="signup-password" className="text-sm font-medium text-gray-700 ml-1">{t.auth.signup.passwordLabel}</label>
                             <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                                <input type="password" value={form.password} onChange={(e) => handleChange('password', e.target.value)} required minLength={8} className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="At least 8 characters" />
+                                <input id="signup-password" type="password" value={form.password} onChange={(e) => handleChange('password', e.target.value)} required minLength={8} className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="At least 8 characters" />
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700 ml-1">{t.auth.signup.organizationLabel}</label>
+                            <label htmlFor="signup-organization" className="text-sm font-medium text-gray-700 ml-1">{t.auth.signup.organizationLabel}</label>
                             <div className="relative">
                                 <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                                <input value={form.tenantName} onChange={(e) => handleChange('tenantName', e.target.value)} required className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="Dhaka Retail Co." />
+                                <input id="signup-organization" value={form.tenantName} onChange={(e) => handleChange('tenantName', e.target.value)} required className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="Dhaka Retail Co." />
                             </div>
                         </div>
 
                         <div className="space-y-2 md:col-span-2">
-                            <label className="text-sm font-medium text-gray-700 ml-1">{t.auth.signup.storeLabel}</label>
+                            <label htmlFor="signup-store" className="text-sm font-medium text-gray-700 ml-1">{t.auth.signup.storeLabel}</label>
                             <div className="relative">
                                 <Store className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                                <input value={form.storeName} onChange={(e) => handleChange('storeName', e.target.value)} required className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="Gulshan Branch" />
+                                <input id="signup-store" value={form.storeName} onChange={(e) => handleChange('storeName', e.target.value)} required className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="Gulshan Branch" />
                             </div>
                         </div>
 

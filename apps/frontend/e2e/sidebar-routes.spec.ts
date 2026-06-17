@@ -5,8 +5,8 @@ import { test, expect, Page, ConsoleMessage } from '@playwright/test';
 const BASE = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
 const API  = process.env.E2E_API_URL || 'http://localhost:4000';
 
-const E2E_EMAIL    = process.env.E2E_TEST_EMAIL || 'nayeem.ahmad@gmail.com';
-const E2E_PASSWORD = process.env.E2E_TEST_PASSWORD || 'password123';
+const E2E_EMAIL    = process.env.E2E_TEST_EMAIL || 'test@example.com';
+const E2E_PASSWORD = process.env.E2E_TEST_PASSWORD || 'TestPassword123!';
 
 // All sidebar routes extracted from Sidebar.tsx
 const ROUTES = [
