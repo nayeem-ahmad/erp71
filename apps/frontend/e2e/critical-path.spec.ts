@@ -10,12 +10,12 @@ test.describe('Critical launch path', () => {
         const email = `critical-path-${timestamp}@example.com`;
 
         await page.goto('/signup');
-        await page.getByLabel(/name/i).fill('Critical Path User');
-        await page.getByLabel(/email/i).fill(email);
+        await page.getByLabel(/your name/i).fill('Critical Path User');
+        await page.getByLabel(/email address/i).fill(email);
         await page.getByLabel(/password/i).fill('SecurePassword123!');
-        await page.getByLabel(/store|shop/i).first().fill('Critical Store');
-        await page.getByLabel(/workspace|tenant|business/i).first().fill('Critical Workspace');
-        await page.getByRole('button', { name: /sign up|create account|register/i }).click();
+        await page.getByLabel(/organization name/i).fill('Critical Workspace');
+        await page.getByLabel(/store name/i).fill('Critical Store');
+        await page.getByRole('button', { name: /create workspace|sign up|create account|register/i }).click();
 
         await expect(page).toHaveURL(/verify-email/, { timeout: 15_000 });
         await expect(page.getByText(/check your inbox/i)).toBeVisible();

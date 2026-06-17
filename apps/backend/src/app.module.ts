@@ -80,7 +80,10 @@ import { SupportModule } from './support/support.module';
 @Module({
     imports: [
         SentryModule.forRoot(),
-        ThrottlerModule.forRoot([{ ttl: 60_000, limit: 20 }]),
+        ThrottlerModule.forRoot([{
+            ttl: Number(process.env.THROTTLE_TTL_MS ?? 60_000),
+            limit: Number(process.env.THROTTLE_LIMIT ?? 20),
+        }]),
         ScheduleModule.forRoot(),
         CommonModule,
         CacheModule,

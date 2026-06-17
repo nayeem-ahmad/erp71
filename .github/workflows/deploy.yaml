@@ -127,6 +127,9 @@ jobs:
       FIELD_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
       NODE_ENV: test
       NEXT_PUBLIC_API_URL: http://localhost:4000
+      # E2E drives many requests per IP (e.g. the sidebar route sweep); relax the
+      # API rate limiter so legitimate test traffic isn't throttled with 429s.
+      THROTTLE_LIMIT: '100000'
     services:
       postgres:
         image: postgres:16
