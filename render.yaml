@@ -10,7 +10,7 @@ services:
     plan: standard
     autoDeploy: true
     healthCheckPath: /api/v1/health
-    preDeployCommand: DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --schema=packages/database/prisma/schema.prisma
+    preDeployCommand: DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma
     envVars:
       - key: NODE_ENV
         value: production
