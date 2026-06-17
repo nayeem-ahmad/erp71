@@ -45,4 +45,4 @@ ENV HOSTNAME="0.0.0.0"
 # DIRECT_URL is overridden with DATABASE_URL so prisma db push uses the
 # internal Render hostname, bypassing the IP allowlist that blocks external
 # connections during preDeployCommand.
-CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --schema=packages/database/prisma/schema.prisma && npm run db:seed --workspace=@retail-saas/database && node apps/backend/dist/src/main.js"]
+CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed --workspace=@retail-saas/database && node apps/backend/dist/src/main.js"]
