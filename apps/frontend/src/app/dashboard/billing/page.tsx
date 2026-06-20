@@ -8,7 +8,7 @@ import { formatBDT, formatDate } from '../../../lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { redirectTo } from '../../../lib/browser';
 
-type PlanCode = 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM';
+type PlanCode = 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
 
 type BillingSummary = {
     tenant: { id: string; name: string };

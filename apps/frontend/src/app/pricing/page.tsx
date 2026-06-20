@@ -100,7 +100,7 @@ export default function PricingPage() {
             </section>
 
             <section className="py-12 px-6 bg-white">
-                <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+                <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                     {MARKETING_PLANS.map((plan) => {
                         const price = yearly ? plan.yearlyPrice : plan.monthlyPrice;
                         const saving = yearly ? yearlySavingsPercent(plan) : 0;
@@ -206,6 +206,7 @@ export default function PricingPage() {
                                         <td className="px-6 py-3.5 font-medium text-gray-700">{row.feature}</td>
                                         <td className="px-4 py-3.5 text-center"><Cell value={row.free} /></td>
                                         <td className="px-4 py-3.5 text-center"><Cell value={row.basic} /></td>
+                                        <td className="px-4 py-3.5 text-center"><Cell value={row.accounting} /></td>
                                         <td className="px-4 py-3.5 text-center bg-blue-50/40"><Cell value={row.standard} /></td>
                                         <td className="px-4 py-3.5 text-center"><Cell value={row.premium} /></td>
                                     </tr>

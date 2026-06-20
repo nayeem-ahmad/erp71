@@ -26,6 +26,7 @@ enum SubscriptionStatus {
 enum SubscriptionPlanCode {
   FREE
   BASIC
+  ACCOUNTING
   STANDARD
   PREMIUM
 }

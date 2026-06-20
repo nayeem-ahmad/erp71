@@ -10,7 +10,7 @@ import { useI18n } from '@/lib/i18n';
 import { syncLocalePreferenceFromSession } from '@/lib/localization/preference';
 
 type Plan = {
-    code: 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM';
+    code: 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
     name: string;
     description?: string | null;
     monthly_price: number;
@@ -46,7 +46,7 @@ function SignupPageContent() {
         password: '',
         tenantName: '',
         storeName: '',
-        planCode: 'FREE' as 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM',
+        planCode: 'FREE' as 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM',
     });
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -162,6 +162,7 @@ function SignupPageContent() {
                                 {(plans.length > 0 ? plans : [
                                     { code: 'FREE', name: 'Free', description: 'Starter plan for single-store onboarding', monthly_price: 0 },
                                     { code: 'BASIC', name: 'Basic', description: 'Core operations for small teams', monthly_price: 499 },
+                                    { code: 'ACCOUNTING', name: 'Accounting', description: 'Bookkeeping pack: accounting, reports, expenses & funds', monthly_price: 749 },
                                     { code: 'STANDARD', name: 'Standard', description: 'Multi-branch operations with analytics', monthly_price: 999 },
                                     { code: 'PREMIUM', name: 'Premium', description: 'Full suite with advanced controls', monthly_price: 1499 },
                                 ]).map((plan) => {

@@ -50,6 +50,7 @@ export const adminMessages = {
             plans: {
                 free: 'Percuma',
                 basic: 'Asas',
+                accounting: 'Perakaunan',
                 standard: 'Standard',
                 premium: 'Premium',
             },

@@ -16,7 +16,7 @@ type TenantProvisionDto = {
     tenantName: string;
     storeName: string;
     address?: string;
-    planCode?: 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM';
+    planCode?: 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
     businessType?: string;
 };
 
@@ -340,7 +340,7 @@ export class AuthService {
         this.audit.log('PASSWORD_CHANGED', 'User', { userId }, userId).catch(() => {});
     }
 
-    async setupStore(userId: string, dto: { name: string; address?: string; planCode?: 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM' }) {
+    async setupStore(userId: string, dto: { name: string; address?: string; planCode?: 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM' }) {
         return this.db.$transaction(async (tx) =>
             this.provisionTenant(tx, userId, {
                 tenantName: dto.name,
@@ -351,7 +351,7 @@ export class AuthService {
         );
     }
 
-    async setupTenant(userId: string, dto: { tenantName: string; storeName: string; address?: string; planCode?: 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM'; businessType?: string }) {
+    async setupTenant(userId: string, dto: { tenantName: string; storeName: string; address?: string; planCode?: 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM'; businessType?: string }) {
         const result = await this.db.$transaction(async (tx) =>
             this.provisionTenant(tx, userId, {
                 tenantName: dto.tenantName,

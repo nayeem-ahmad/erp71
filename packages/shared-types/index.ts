@@ -242,6 +242,7 @@ export type SubscriptionStatus = (typeof SubscriptionStatus)[keyof typeof Subscr
 export const SubscriptionPlanCode = {
   FREE: 'FREE',
   BASIC: 'BASIC',
+  ACCOUNTING: 'ACCOUNTING',
   STANDARD: 'STANDARD',
   PREMIUM: 'PREMIUM',
 } as const;
@@ -748,6 +749,7 @@ export interface CheckResult {
 export const AI_CREDITS_PER_PLAN: Record<SubscriptionPlanCode, number> = {
   FREE: 0,
   BASIC: 100,
+  ACCOUNTING: 100,
   STANDARD: 500,
   PREMIUM: 2000,
 };

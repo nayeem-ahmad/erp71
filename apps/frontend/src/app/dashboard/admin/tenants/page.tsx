@@ -6,7 +6,7 @@ import { Building2, CheckCircle, Loader2, LogIn, Plus, Search, ShieldCheck, User
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 
-type PlanCode = 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM';
+type PlanCode = 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
 
 type TenantRecord = {
     id: string;
@@ -314,6 +314,7 @@ export default function AdminTenantsPage() {
                                 <option value="">{m.allPlans}</option>
                                 <option value="FREE">{m.plans.free}</option>
                                 <option value="BASIC">{m.plans.basic}</option>
+                                <option value="ACCOUNTING">{m.plans.accounting}</option>
                                 <option value="STANDARD">{m.plans.standard}</option>
                                 <option value="PREMIUM">{m.plans.premium}</option>
                             </select>
@@ -421,6 +422,7 @@ export default function AdminTenantsPage() {
                                         <select value={draft.planCode} onChange={(event) => setDraft((current) => ({ ...current, planCode: event.target.value as PlanCode }))} className="rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm font-medium outline-none">
                                             <option value="FREE">Free</option>
                                             <option value="BASIC">Basic</option>
+                                            <option value="ACCOUNTING">Accounting</option>
                                             <option value="STANDARD">Standard</option>
                                             <option value="PREMIUM">Premium</option>
                                         </select>
@@ -625,6 +627,7 @@ export default function AdminTenantsPage() {
                                 >
                                     <option value="FREE">Free</option>
                                     <option value="BASIC">Basic</option>
+                                    <option value="ACCOUNTING">Accounting</option>
                                     <option value="STANDARD">Standard</option>
                                     <option value="PREMIUM">Premium</option>
                                 </select>

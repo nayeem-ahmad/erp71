@@ -1,8 +1,8 @@
-export type PlanId = 'free' | 'basic' | 'standard' | 'premium';
+export type PlanId = 'free' | 'basic' | 'accounting' | 'standard' | 'premium';
 
 export type MarketingPlan = {
     id: PlanId;
-    code: 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM';
+    code: 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
     name: string;
     monthlyPrice: number;
     yearlyPrice: number;
@@ -44,6 +44,24 @@ export const MARKETING_PLANS: MarketingPlan[] = [
             '3 user accounts',
             '1 store location',
             'Up to 2,000 products',
+            'Email support',
+        ],
+    },
+    {
+        id: 'accounting',
+        code: 'ACCOUNTING',
+        name: 'ACCOUNTING',
+        monthlyPrice: 749,
+        yearlyPrice: 624,
+        highlight: false,
+        tagline: 'Bookkeeping-focused pack for accountants',
+        features: [
+            'Full accounting module',
+            'Financial reports (P&L, balance sheet, cashbook)',
+            'Expense & fund management',
+            'Loan tracking',
+            '5 user accounts',
+            '1 store location',
             'Email support',
         ],
     },
@@ -95,25 +113,27 @@ export type ComparisonRow = {
     feature: string;
     free: ComparisonCell;
     basic: ComparisonCell;
+    accounting: ComparisonCell;
     standard: ComparisonCell;
     premium: ComparisonCell;
 };
 
 export const PLAN_COMPARISON_ROWS: ComparisonRow[] = [
-    { feature: 'POS terminal', free: true, basic: true, standard: true, premium: true },
-    { feature: 'Inventory management', free: false, basic: true, standard: true, premium: true },
-    { feature: 'Purchase orders', free: false, basic: true, standard: true, premium: true },
-    { feature: 'Sales orders', free: false, basic: false, standard: true, premium: true },
-    { feature: 'Accounting module', free: false, basic: false, standard: true, premium: true },
-    { feature: 'Financial reports', free: false, basic: false, standard: true, premium: true },
-    { feature: 'Customer management', free: false, basic: false, standard: true, premium: true },
-    { feature: 'Supplier management', free: false, basic: false, standard: true, premium: true },
-    { feature: 'Multi-store support', free: '1 store', basic: '1 store', standard: '3 stores', premium: '10 stores' },
-    { feature: 'E-commerce storefront', free: false, basic: false, standard: true, premium: true },
-    { feature: 'Manufacturing / BOM', free: false, basic: false, standard: false, premium: true },
-    { feature: 'White-label branding', free: false, basic: false, standard: false, premium: true },
-    { feature: 'Public API access', free: false, basic: false, standard: false, premium: true },
-    { feature: 'Priority support', free: false, basic: false, standard: true, premium: true },
+    { feature: 'POS terminal', free: true, basic: true, accounting: false, standard: true, premium: true },
+    { feature: 'Inventory management', free: false, basic: true, accounting: false, standard: true, premium: true },
+    { feature: 'Purchase orders', free: false, basic: true, accounting: false, standard: true, premium: true },
+    { feature: 'Sales orders', free: false, basic: false, accounting: false, standard: true, premium: true },
+    { feature: 'Accounting module', free: false, basic: false, accounting: true, standard: true, premium: true },
+    { feature: 'Financial reports', free: false, basic: false, accounting: true, standard: true, premium: true },
+    { feature: 'Expense & fund management', free: false, basic: false, accounting: true, standard: true, premium: true },
+    { feature: 'Customer management', free: false, basic: false, accounting: false, standard: true, premium: true },
+    { feature: 'Supplier management', free: false, basic: false, accounting: false, standard: true, premium: true },
+    { feature: 'Multi-store support', free: '1 store', basic: '1 store', accounting: '1 store', standard: '3 stores', premium: '10 stores' },
+    { feature: 'E-commerce storefront', free: false, basic: false, accounting: false, standard: true, premium: true },
+    { feature: 'Manufacturing / BOM', free: false, basic: false, accounting: false, standard: false, premium: true },
+    { feature: 'White-label branding', free: false, basic: false, accounting: false, standard: false, premium: true },
+    { feature: 'Public API access', free: false, basic: false, accounting: false, standard: false, premium: true },
+    { feature: 'Priority support', free: false, basic: false, accounting: false, standard: true, premium: true },
 ];
 
 export const PRICING_FAQS = [

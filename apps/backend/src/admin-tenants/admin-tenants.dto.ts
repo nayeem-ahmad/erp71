@@ -3,12 +3,12 @@ import { Type } from 'class-transformer';
 
 export class ListAdminTenantsQueryDto {
     @IsOptional() @IsString() search?: string;
-    @IsOptional() @IsString() planCode?: 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM';
+    @IsOptional() @IsString() planCode?: 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
     @IsOptional() @IsString() status?: 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'TRIALING';
 }
 
 export class UpdateAdminTenantSubscriptionDto {
-    @IsOptional() @IsString() planCode?: 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM';
+    @IsOptional() @IsString() planCode?: 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
     @IsOptional() @IsString() status?: 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'TRIALING';
     @IsOptional() @IsString() billingCycle?: 'MONTHLY' | 'YEARLY';
     @IsOptional() cancelAtPeriodEnd?: boolean;
@@ -59,6 +59,6 @@ export class CreateAdminTenantDto {
     @IsString()
     businessType?: string;
 
-    @IsIn(['FREE', 'BASIC', 'STANDARD', 'PREMIUM'])
-    planCode: 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM';
+    @IsIn(['FREE', 'BASIC', 'ACCOUNTING', 'STANDARD', 'PREMIUM'])
+    planCode: 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
 }

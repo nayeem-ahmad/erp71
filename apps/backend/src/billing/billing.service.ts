@@ -25,7 +25,7 @@ type BillingCycle = 'MONTHLY' | 'YEARLY';
 type SubscriptionStatus = 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'TRIALING';
 type BillingProviderName = 'manual' | 'ssl-wireless';
 type SslWirelessCallbackMode = 'success' | 'fail' | 'cancel' | 'ipn';
-type PlanCode = 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM';
+type PlanCode = 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
 
 @Injectable()
 export class BillingService {

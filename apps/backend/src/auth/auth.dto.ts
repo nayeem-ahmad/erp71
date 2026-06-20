@@ -26,7 +26,7 @@ export class SignupDto {
 
     @IsOptional()
     @IsString()
-    planCode?: 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM';
+    planCode?: 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
 }
 
 export class LoginDto {
@@ -41,7 +41,7 @@ export class CreateStoreDto {
     tenantName?: string;
     name: string;
     address?: string;
-    planCode?: 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM';
+    planCode?: 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
     businessType?: string;
 }
 

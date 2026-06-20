@@ -14,7 +14,7 @@ async function main() {
     const passwordHash = await bcrypt.hash('password123', 10);
 
     const upsertPlan = (data: {
-        code: 'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM';
+        code: 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
         name: string;
         description: string;
         monthly_price: number;
@@ -69,6 +69,22 @@ async function main() {
             maxUsers: 3,
             maxSkus: 2000,
             premiumAccounting: false,
+            premiumInventoryReports: false,
+            multiStore: false,
+        },
+    });
+
+    await upsertPlan({
+        code: 'ACCOUNTING',
+        name: 'Accounting',
+        description: 'Focused pack for bookkeeping: full accounting module, financial reports, expenses, and fund management',
+        monthly_price: 749,
+        yearly_price: 7490,
+        features_json: {
+            maxStores: 1,
+            maxUsers: 5,
+            maxSkus: 5000,
+            premiumAccounting: true,
             premiumInventoryReports: false,
             multiStore: false,
         },
