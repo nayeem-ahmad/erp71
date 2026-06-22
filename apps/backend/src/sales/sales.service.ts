@@ -563,22 +563,36 @@ export class SalesService {
             const now = new Date();
             const yy = String(now.getFullYear()).slice(-2);
             const mm = String(now.getMonth() + 1).padStart(2, '0');
-            const prefix = format.replace('YYMM', `${yy}${mm}`);
+            const template = format.replace('YYMM', `${yy}${mm}`); // e.g. '2606-#'
+            // The literal prefix is everything before the '#' placeholder. Matching
+            // on `template` directly would include the '#' and never match a stored
+            // reference, so the sequence always reset to 001 and collided.
+            const literalPrefix = template.slice(0, template.indexOf('#'));
 
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const tomorrow = new Date(today);
             tomorrow.setDate(tomorrow.getDate() + 1);
 
-            const countToday = await tx.sale.count({
+            // Take the highest existing sequence for this prefix today and add one.
+            // Counting rows is fragile (a deleted sale would let a number be reused
+            // and trip the (tenant_id, reference_number) unique constraint).
+            const existing = await tx.sale.findMany({
                 where: {
                     tenant_id: tenantId,
-                    reference_number: { startsWith: prefix },
+                    reference_number: { startsWith: literalPrefix },
                     created_at: { gte: today, lt: tomorrow },
                 },
+                select: { reference_number: true },
             });
 
-            return prefix.replace('#', String(countToday + 1).padStart(3, '0'));
+            let maxSeq = 0;
+            for (const { reference_number } of existing) {
+                const seq = parseInt(reference_number.slice(literalPrefix.length), 10);
+                if (!Number.isNaN(seq) && seq > maxSeq) maxSeq = seq;
+            }
+
+            return `${literalPrefix}${String(maxSeq + 1).padStart(3, '0')}`;
         }
 
         throw new BadRequestException('Invalid reference number format in settings');

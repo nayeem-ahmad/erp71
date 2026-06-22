@@ -46,6 +46,7 @@ describe('ProductsService', () => {
 
     db = {
       $transaction: jest.fn().mockImplementation((cb) => cb(tx)),
+      $queryRaw: jest.fn(),
       product: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
@@ -220,6 +221,29 @@ describe('ProductsService', () => {
           data: expect.objectContaining({ deleted_at: expect.any(Date) }),
         }),
       );
+    });
+  });
+
+  describe('searchByQuantitySold()', () => {
+    it('handles BigInt qty_sold from the raw SUM without throwing and returns numbers sorted desc', async () => {
+      // Postgres SUM()/COALESCE returns bigint, which Prisma $queryRaw surfaces as JS BigInt.
+      db.$queryRaw.mockResolvedValue([
+        { id: 'p1', qty_sold: BigInt(5) },
+        { id: 'p2', qty_sold: BigInt(12) },
+      ]);
+      db.product.findMany.mockResolvedValue([
+        { id: 'p1', name: 'Rice' },
+        { id: 'p2', name: 'Oil' },
+      ]);
+
+      const result = await service.searchByQuantitySold('tenant-1', 'ri', 20);
+
+      expect(result).toHaveLength(2);
+      // qty_sold must be a plain number (not BigInt) and sorted highest-first.
+      expect(typeof result[0].qty_sold).toBe('number');
+      expect(result[0].id).toBe('p2');
+      expect(result[0].qty_sold).toBe(12);
+      expect(result[1].qty_sold).toBe(5);
     });
   });
 });

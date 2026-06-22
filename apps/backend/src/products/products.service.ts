@@ -355,11 +355,13 @@ export class ProductsService {
             include: this.productInclude(),
         });
 
-        // Add qty_sold to products
-        const qtySoldMap = new Map((results as any[]).map(r => [r.id, r.qty_sold]));
+        // Add qty_sold to products. The raw SUM()/COALESCE comes back as a
+        // BigInt; coerce to a plain number so arithmetic (and the sort
+        // comparator, which must return a number) doesn't throw.
+        const qtySoldMap = new Map((results as any[]).map(r => [r.id, Number(r.qty_sold ?? 0)]));
         return products.map(p => ({
             ...p,
-            qty_sold: qtySoldMap.get(p.id) || 0,
+            qty_sold: qtySoldMap.get(p.id) ?? 0,
         })).sort((a, b) => b.qty_sold - a.qty_sold);
     }
 

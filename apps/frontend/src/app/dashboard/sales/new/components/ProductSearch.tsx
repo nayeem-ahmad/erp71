@@ -15,14 +15,12 @@ export default function ProductSearch({ onProductSelect }: ProductSearchProps) {
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     const searchProducts = async (searchQuery: string) => {
-        if (searchQuery.trim().length < 2) {
-            setProducts([]);
-            return;
-        }
-
+        const term = searchQuery.trim();
         try {
             setLoading(true);
-            const data = await api.searchProductsByQuantity(searchQuery, 20);
+            // Empty term → backend returns the most-sold products so the list can
+            // be browsed without typing. Use a larger limit when browsing.
+            const data = await api.searchProductsByQuantity(term, term ? 20 : 50);
             setProducts(data || []);
         } catch (error) {
             console.error('Failed to search products', error);
@@ -32,13 +30,12 @@ export default function ProductSearch({ onProductSelect }: ProductSearchProps) {
         }
     };
 
+    // Fetch whenever the dropdown is open (including an empty query → browse all).
     useEffect(() => {
-        const timer = setTimeout(() => {
-            if (query) searchProducts(query);
-        }, 300);
-
+        if (!showDropdown) return;
+        const timer = setTimeout(() => searchProducts(query), 300);
         return () => clearTimeout(timer);
-    }, [query]);
+    }, [query, showDropdown]);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -86,14 +83,16 @@ export default function ProductSearch({ onProductSelect }: ProductSearchProps) {
                 >
                     {loading ? (
                         <div className="p-3 text-center text-gray-500 text-sm">Searching...</div>
-                    ) : query.trim().length < 2 ? (
-                        <div className="p-3 text-center text-gray-500 text-sm">
-                            Type at least 2 characters to search
-                        </div>
                     ) : products.length === 0 ? (
                         <div className="p-3 text-center text-gray-500 text-sm">No products found</div>
                     ) : (
-                        products.map((product) => (
+                        <>
+                            {!query.trim() && (
+                                <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400 bg-gray-50 border-b sticky top-0">
+                                    Popular products
+                                </div>
+                            )}
+                            {products.map((product) => (
                             <div
                                 key={product.id}
                                 onClick={() => handleSelectProduct(product)}
@@ -102,7 +101,7 @@ export default function ProductSearch({ onProductSelect }: ProductSearchProps) {
                                 <div className="flex-1 min-w-0">
                                     <div className="font-medium text-gray-900 text-sm truncate">{product.name}</div>
                                     <div className="text-xs text-gray-600">
-                                        SKU: {product.sku || 'N/A'} | ৳{product.price?.toFixed(2)}
+                                        SKU: {product.sku || 'N/A'} | ৳{Number(product.price).toFixed(2)}
                                         {product.qty_sold > 0 && (
                                             <span className="text-green-600 ml-2">⭐ {product.qty_sold} sold</span>
                                         )}
@@ -113,7 +112,8 @@ export default function ProductSearch({ onProductSelect }: ProductSearchProps) {
                                 </div>
                                 <Plus className="w-4 h-4 text-blue-600 flex-shrink-0" />
                             </div>
-                        ))
+                            ))}
+                        </>
                     )}
                 </div>
             )}

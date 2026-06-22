@@ -140,7 +140,9 @@ export default function NewSalePage() {
         addItem({
             productId: product.id,
             name: product.name,
-            price: product.price,
+            // API serializes Decimal price as a string; coerce to number so
+            // cart math and `.toFixed()` downstream work correctly.
+            price: Number(product.price),
             group: product.group?.name,
             subgroup: product.subgroup?.name,
             quantity: 1,
@@ -185,7 +187,10 @@ export default function NewSalePage() {
         setSubmitting(true);
         try {
             const saleData = {
-                storeId: currentUser?.store_id,
+                // The active branch/store is persisted in localStorage and sent
+                // as x-store-id on every request; the sale body needs the same id.
+                // (Owners have no currentUser.store_id, so don't rely on it.)
+                storeId: localStorage.getItem('store_id') || '',
                 referenceNumber: refNumber || undefined,
                 customerId: customer?.id,
                 items: items.map((item) => ({
