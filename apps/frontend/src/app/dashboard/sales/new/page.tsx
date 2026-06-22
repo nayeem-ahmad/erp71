@@ -226,7 +226,7 @@ export default function NewSalePage() {
     }
 
     return (
-        <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden bg-gray-50 text-sm">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-y-auto lg:overflow-hidden bg-gray-50 text-sm">
             {/* Top strip: title + sale meta fields, one slim row */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 border-b bg-white flex-shrink-0">
                 <div className="flex items-center gap-2">
@@ -243,10 +243,12 @@ export default function NewSalePage() {
                 />
             </div>
 
-            {/* Body: left work area + right summary/payment panel */}
-            <div className="flex flex-1 flex-col lg:flex-row overflow-hidden">
+            {/* Body: left work area + right summary/payment panel. On mobile this
+                flows at natural height so the page scrolls; at lg+ it fills the
+                viewport and only the item list scrolls. */}
+            <div className="flex flex-col lg:flex-1 lg:flex-row lg:overflow-hidden">
                 {/* Left work area */}
-                <div className="flex-1 flex flex-col overflow-hidden p-3 gap-2 min-w-0">
+                <div className="flex flex-col lg:flex-1 lg:overflow-hidden p-3 gap-2 min-w-0">
                     <div className="flex flex-col sm:flex-row gap-2 flex-shrink-0">
                         <div className="sm:w-72 flex-shrink-0">
                             <CustomerSelection customer={customer} setCustomer={setCustomer} />
@@ -256,8 +258,8 @@ export default function NewSalePage() {
                         </div>
                     </div>
 
-                    {/* Item list — the only scrolling region */}
-                    <div className="flex-1 overflow-hidden min-h-0">
+                    {/* Item list — the only scrolling region on desktop */}
+                    <div className="min-h-[240px] lg:flex-1 lg:min-h-0 lg:overflow-hidden">
                         <LineItemsTable items={items} onUpdateItem={updateItem} onRemoveItem={removeItem} />
                     </div>
 
@@ -272,8 +274,8 @@ export default function NewSalePage() {
                 </div>
 
                 {/* Right panel: totals, payment, actions */}
-                <div className="w-full lg:w-80 flex-shrink-0 border-t lg:border-t-0 lg:border-l bg-white flex flex-col overflow-hidden">
-                    <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                <div className="w-full lg:w-80 flex-shrink-0 border-t lg:border-t-0 lg:border-l bg-white flex flex-col lg:overflow-hidden">
+                    <div className="lg:flex-1 lg:overflow-y-auto p-3 space-y-3">
                         <TotalsFooter
                             totals={totals}
                             onTotalsChange={(newTotals) => setTotals((prev) => ({ ...prev, ...newTotals }))}
@@ -284,8 +286,9 @@ export default function NewSalePage() {
                         </div>
                     </div>
 
-                    {/* Actions pinned to panel bottom */}
-                    <div className="flex items-center gap-2 p-3 border-t flex-shrink-0">
+                    {/* Actions pinned to panel bottom. Extra bottom padding on desktop
+                        keeps the primary button clear of the floating feedback widget. */}
+                    <div className="flex items-center gap-2 p-3 pb-20 lg:pb-16 border-t flex-shrink-0">
                         <Link
                             href="/dashboard/sales"
                             className="px-3 py-2 border rounded text-gray-700 hover:bg-gray-50 text-sm"
