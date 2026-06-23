@@ -569,19 +569,13 @@ export class SalesService {
             // reference, so the sequence always reset to 001 and collided.
             const literalPrefix = template.slice(0, template.indexOf('#'));
 
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const tomorrow = new Date(today);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-
-            // Take the highest existing sequence for this prefix today and add one.
-            // Counting rows is fragile (a deleted sale would let a number be reused
-            // and trip the (tenant_id, reference_number) unique constraint).
+            // Take the highest existing sequence for this YYMM prefix and add one.
+            // The prefix already scopes the period (e.g. 2606- = June 2026), so do not
+            // filter by created_at — yesterday's 2606-005 must yield 2606-006 today.
             const existing = await tx.sale.findMany({
                 where: {
                     tenant_id: tenantId,
                     reference_number: { startsWith: literalPrefix },
-                    created_at: { gte: today, lt: tomorrow },
                 },
                 select: { reference_number: true },
             });

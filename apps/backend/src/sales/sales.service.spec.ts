@@ -339,6 +339,27 @@ describe('SalesService', () => {
     });
   });
 
+  describe('generateReferenceNumber()', () => {
+    it('increments the max sequence for the YYMM prefix across all dates', async () => {
+      tx.salesSettings.findUnique.mockResolvedValue({ reference_number_format: 'YYMM-#' });
+      tx.sale.findMany.mockResolvedValue([
+        { reference_number: '2606-001' },
+        { reference_number: '2606-005' },
+      ]);
+
+      const result = await service.generateReferenceNumber('tenant-1', tx);
+
+      expect(tx.sale.findMany).toHaveBeenCalledWith({
+        where: {
+          tenant_id: 'tenant-1',
+          reference_number: { startsWith: '2606-' },
+        },
+        select: { reference_number: true },
+      });
+      expect(result).toBe('2606-006');
+    });
+  });
+
   describe('update()', () => {
     it('should update a sale note', async () => {
       tx.sale.findFirst.mockResolvedValue({ id: 's1', items: [], payments: [], total_amount: 20, customer_id: null });
