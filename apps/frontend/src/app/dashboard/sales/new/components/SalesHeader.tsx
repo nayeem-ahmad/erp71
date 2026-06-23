@@ -15,6 +15,8 @@ interface SalesHeaderProps {
     currentUser: any;
 }
 
+// Renders the sale meta fields (sales #, reference, user, date) as a compact
+// inline row that lives in the page's top strip — no card, no heavy padding.
 export default function SalesHeader({ refNumber, setRefNumber, currentUser }: SalesHeaderProps) {
     const [now, setNow] = useState<string>(formatNow(new Date()));
 
@@ -23,53 +25,29 @@ export default function SalesHeader({ refNumber, setRefNumber, currentUser }: Sa
     }, []);
 
     return (
-        <div className="bg-white rounded-lg border p-6 space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {/* Sales Number */}
-                <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Sales Number</label>
-                    <input
-                        type="text"
-                        placeholder="Auto-generated"
-                        disabled
-                        className="w-full px-3 py-2 border rounded bg-gray-50 text-sm text-gray-700"
-                    />
-                </div>
-
-                {/* Reference Number */}
-                <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Reference #</label>
-                    <input
-                        type="text"
-                        value={refNumber}
-                        onChange={(e) => setRefNumber(e.target.value)}
-                        placeholder="Optional"
-                        className="w-full px-3 py-2 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                </div>
-
-                {/* User */}
-                <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">User</label>
-                    <input
-                        type="text"
-                        value={currentUser?.name || ''}
-                        disabled
-                        className="w-full px-3 py-2 border rounded bg-gray-50 text-sm text-gray-700"
-                    />
-                </div>
-
-                {/* Date/Time */}
-                <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Date/Time</label>
-                    <input
-                        type="datetime-local"
-                        value={now}
-                        disabled
-                        className="w-full px-3 py-2 border rounded bg-gray-50 text-sm text-gray-700"
-                    />
-                </div>
-            </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+            <span className="flex items-center gap-1">
+                <span className="font-semibold uppercase tracking-wide text-[10px] text-gray-400">Sales #</span>
+                <span className="text-gray-400 italic">Auto</span>
+            </span>
+            <label className="flex items-center gap-1">
+                <span className="font-semibold uppercase tracking-wide text-[10px] text-gray-400">Ref #</span>
+                <input
+                    type="text"
+                    value={refNumber}
+                    onChange={(e) => setRefNumber(e.target.value)}
+                    placeholder="Optional"
+                    className="w-24 px-1.5 py-0.5 border rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                />
+            </label>
+            <span className="flex items-center gap-1">
+                <span className="font-semibold uppercase tracking-wide text-[10px] text-gray-400">User</span>
+                <span className="text-gray-700 font-medium">{currentUser?.name || '—'}</span>
+            </span>
+            <span className="flex items-center gap-1">
+                <span className="font-semibold uppercase tracking-wide text-[10px] text-gray-400">Date</span>
+                <span className="text-gray-700 font-medium">{now}</span>
+            </span>
         </div>
     );
 }

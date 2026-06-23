@@ -11,7 +11,11 @@ export interface LineItem {
 }
 
 export interface Payment {
+    // `method` is the canonical, accounting-classifiable string (e.g. "Cash",
+    // "Mobile Wallet", "Card", "Bank") sent to the backend. `label` is the
+    // friendly display name of the chosen defined method (e.g. "bKash").
     method: string;
+    label?: string;
     amount: number;
     accountId?: string;
 }

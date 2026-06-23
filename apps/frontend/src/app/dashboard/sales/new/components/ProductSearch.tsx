@@ -15,14 +15,12 @@ export default function ProductSearch({ onProductSelect }: ProductSearchProps) {
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     const searchProducts = async (searchQuery: string) => {
-        if (searchQuery.trim().length < 2) {
-            setProducts([]);
-            return;
-        }
-
+        const term = searchQuery.trim();
         try {
             setLoading(true);
-            const data = await api.searchProductsByQuantity(searchQuery, 20);
+            // Empty term → backend returns the most-sold products so the list can
+            // be browsed without typing. Use a larger limit when browsing.
+            const data = await api.searchProductsByQuantity(term, term ? 20 : 50);
             setProducts(data || []);
         } catch (error) {
             console.error('Failed to search products', error);
@@ -32,13 +30,12 @@ export default function ProductSearch({ onProductSelect }: ProductSearchProps) {
         }
     };
 
+    // Fetch whenever the dropdown is open (including an empty query → browse all).
     useEffect(() => {
-        const timer = setTimeout(() => {
-            if (query) searchProducts(query);
-        }, 300);
-
+        if (!showDropdown) return;
+        const timer = setTimeout(() => searchProducts(query), 300);
         return () => clearTimeout(timer);
-    }, [query]);
+    }, [query, showDropdown]);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -63,73 +60,60 @@ export default function ProductSearch({ onProductSelect }: ProductSearchProps) {
     };
 
     return (
-        <div className="bg-white rounded-lg border p-6 space-y-4">
-            <h3 className="font-semibold text-gray-900">Add Products</h3>
-
-            <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                    ref={inputRef}
-                    type="text"
-                    value={query}
-                    onChange={(e) => {
-                        setQuery(e.target.value);
-                        setShowDropdown(true);
-                    }}
-                    onFocus={() => setShowDropdown(true)}
-                    placeholder="Search by product name, SKU, or code... (shows popular products first)"
-                    className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-            </div>
+        <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(e) => {
+                    setQuery(e.target.value);
+                    setShowDropdown(true);
+                }}
+                onFocus={() => setShowDropdown(true)}
+                placeholder="Add product — search by name, SKU, or code…"
+                className="w-full pl-8 pr-3 py-1.5 border rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+            />
 
             {/* Results Dropdown */}
             {showDropdown && (
                 <div
                     ref={dropdownRef}
-                    className="absolute top-20 left-0 right-0 border rounded-lg bg-white shadow-lg z-50 max-h-80 overflow-y-auto"
+                    className="absolute top-full left-0 right-0 mt-1 border rounded bg-white shadow-lg z-50 max-h-80 overflow-y-auto"
                 >
                     {loading ? (
-                        <div className="p-4 text-center text-gray-500 text-sm">Searching...</div>
-                    ) : query.trim().length < 2 ? (
-                        <div className="p-4 text-center text-gray-500 text-sm">
-                            Type at least 2 characters to search
-                        </div>
+                        <div className="p-3 text-center text-gray-500 text-sm">Searching...</div>
                     ) : products.length === 0 ? (
-                        <div className="p-4 text-center text-gray-500 text-sm">No products found</div>
+                        <div className="p-3 text-center text-gray-500 text-sm">No products found</div>
                     ) : (
-                        products.map((product) => (
+                        <>
+                            {!query.trim() && (
+                                <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400 bg-gray-50 border-b sticky top-0">
+                                    Popular products
+                                </div>
+                            )}
+                            {products.map((product) => (
                             <div
                                 key={product.id}
-                                className="p-3 hover:bg-blue-50 cursor-pointer border-b last:border-b-0 flex justify-between items-start"
+                                onClick={() => handleSelectProduct(product)}
+                                className="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b last:border-b-0 flex justify-between items-center gap-2"
                             >
-                                <div
-                                    onClick={() => handleSelectProduct(product)}
-                                    className="flex-1"
-                                >
-                                    <div className="font-medium text-gray-900">{product.name}</div>
-                                    <div className="text-xs text-gray-600 mt-1">
-                                        SKU: {product.sku || 'N/A'} | Price: ৳{product.price?.toFixed(2)}
+                                <div className="flex-1 min-w-0">
+                                    <div className="font-medium text-gray-900 text-sm truncate">{product.name}</div>
+                                    <div className="text-xs text-gray-600">
+                                        SKU: {product.sku || 'N/A'} | ৳{Number(product.price).toFixed(2)}
+                                        {product.qty_sold > 0 && (
+                                            <span className="text-green-600 ml-2">⭐ {product.qty_sold} sold</span>
+                                        )}
+                                        {product.subgroup && (
+                                            <span className="text-gray-400 ml-2">{product.group?.name} → {product.subgroup.name}</span>
+                                        )}
                                     </div>
-                                    {product.qty_sold > 0 && (
-                                        <div className="text-xs text-green-600 mt-1">
-                                            ⭐ {product.qty_sold} sold recently
-                                        </div>
-                                    )}
-                                    {product.subgroup && (
-                                        <div className="text-xs text-gray-500 mt-1">
-                                            {product.group?.name} → {product.subgroup.name}
-                                        </div>
-                                    )}
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={() => handleSelectProduct(product)}
-                                    className="ml-2 p-1 text-blue-600 hover:bg-blue-100 rounded"
-                                >
-                                    <Plus className="w-4 h-4" />
-                                </button>
+                                <Plus className="w-4 h-4 text-blue-600 flex-shrink-0" />
                             </div>
-                        ))
+                            ))}
+                        </>
                     )}
                 </div>
             )}

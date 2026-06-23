@@ -140,7 +140,9 @@ export default function NewSalePage() {
         addItem({
             productId: product.id,
             name: product.name,
-            price: product.price,
+            // API serializes Decimal price as a string; coerce to number so
+            // cart math and `.toFixed()` downstream work correctly.
+            price: Number(product.price),
             group: product.group?.name,
             subgroup: product.subgroup?.name,
             quantity: 1,
@@ -185,7 +187,10 @@ export default function NewSalePage() {
         setSubmitting(true);
         try {
             const saleData = {
-                storeId: currentUser?.store_id,
+                // The active branch/store is persisted in localStorage and sent
+                // as x-store-id on every request; the sale body needs the same id.
+                // (Owners have no currentUser.store_id, so don't rely on it.)
+                storeId: localStorage.getItem('store_id') || '',
                 referenceNumber: refNumber || undefined,
                 customerId: customer?.id,
                 items: items.map((item) => ({
@@ -226,113 +231,121 @@ export default function NewSalePage() {
     }
 
     return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <Link href="/dashboard/sales" className="text-gray-500 hover:text-gray-700">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-y-auto lg:overflow-hidden bg-gray-50 text-sm">
+            {/* Top strip: title + sale meta fields, one slim row */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 border-b bg-white flex-shrink-0">
+                <div className="flex items-center gap-2">
+                    <Link href="/dashboard/sales" className="text-gray-400 hover:text-gray-700">
                         <ChevronLeft className="w-5 h-5" />
                     </Link>
-                    <h1 className="text-2xl font-bold text-gray-900">New Sale</h1>
+                    <h1 className="text-base font-bold text-gray-900 whitespace-nowrap">New Sale</h1>
                 </div>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Sales Header Section */}
+                <div className="h-5 w-px bg-gray-200 hidden sm:block" />
                 <SalesHeader
                     refNumber={refNumber}
                     setRefNumber={setRefNumber}
                     currentUser={currentUser}
                 />
+            </div>
 
-                {/* Customer & Description Section */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2">
-                        <CustomerSelection customer={customer} setCustomer={setCustomer} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Description (Optional)
-                        </label>
-                        <textarea
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            placeholder="Add notes about this sale..."
-                            rows={4}
-                            className="w-full border rounded-lg p-3 text-sm"
-                        />
-                    </div>
-                </div>
-
-                {/* Product Search */}
-                <ProductSearch onProductSelect={handleAddItem} />
-
-                {/* Line Items Table */}
-                <LineItemsTable items={items} onUpdateItem={updateItem} onRemoveItem={removeItem} />
-
-                {/* Totals Section */}
-                <TotalsFooter
-                    totals={totals}
-                    onTotalsChange={(newTotals) => setTotals((prev) => ({ ...prev, ...newTotals }))}
-                    tenantVatRate={salesSettings?.tenant?.default_vat_rate || 0}
-                />
-
-                {/* Payment Section */}
-                <PaymentSection payments={payments} total={totals.total} onPaymentChange={updatePayment} />
-
-                {/* Actions */}
-                <div className="flex gap-4 justify-end">
-                    <Link
-                        href="/dashboard/sales"
-                        className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50"
-                    >
-                        Cancel
-                    </Link>
-                    {/* Print button with paper-size dropdown */}
-                    <div className="relative" ref={printMenuRef}>
-                        <div className="flex items-center border rounded-lg overflow-hidden">
-                            <button
-                                type="button"
-                                onClick={() => handlePrint()}
-                                className="px-4 py-2 text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                            >
-                                <Printer className="w-4 h-4" />
-                                Print ({paperSize})
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setShowPaperMenu((v) => !v)}
-                                className="px-2 py-2 border-l text-gray-500 hover:bg-gray-50"
-                                title="Choose paper size"
-                            >
-                                <ChevronDown className="w-4 h-4" />
-                            </button>
+            {/* Body: left work area + right summary/payment panel. On mobile this
+                flows at natural height so the page scrolls; at lg+ it fills the
+                viewport and only the item list scrolls. */}
+            <div className="flex flex-col lg:flex-1 lg:flex-row lg:overflow-hidden">
+                {/* Left work area */}
+                <div className="flex flex-col lg:flex-1 lg:overflow-hidden p-3 gap-2 min-w-0">
+                    <div className="flex flex-col sm:flex-row gap-2 flex-shrink-0">
+                        <div className="sm:w-72 flex-shrink-0">
+                            <CustomerSelection customer={customer} setCustomer={setCustomer} />
                         </div>
-                        {showPaperMenu && (
-                            <div className="absolute right-0 bottom-full mb-1 z-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
-                                <p className="px-3 py-1 text-xs font-bold text-gray-400 uppercase tracking-wider">Paper Size</p>
-                                {(['A4', 'Letter', 'Thermal80', 'Thermal58'] as PaperSize[]).map((size) => (
-                                    <button
-                                        key={size}
-                                        type="button"
-                                        onClick={() => { setPaperSize(size); handlePrint(size); }}
-                                        className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 ${paperSize === size ? 'font-bold text-blue-600' : 'text-gray-700'}`}
-                                    >
-                                        {size === 'Thermal80' ? '80mm Thermal' : size === 'Thermal58' ? '58mm Thermal' : size}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
+                        <div className="flex-1 min-w-0">
+                            <ProductSearch onProductSelect={handleAddItem} />
+                        </div>
                     </div>
-                    <button
-                        type="submit"
-                        disabled={submitting || items.length === 0}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-                    >
-                        {submitting ? 'Creating...' : 'Create Sale'}
-                    </button>
+
+                    {/* Item list — the only scrolling region on desktop */}
+                    <div className="min-h-[240px] lg:flex-1 lg:min-h-0 lg:overflow-hidden">
+                        <LineItemsTable items={items} onUpdateItem={updateItem} onRemoveItem={removeItem} />
+                    </div>
+
+                    {/* Note */}
+                    <input
+                        type="text"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Note (optional)…"
+                        className="w-full border rounded px-2 py-1.5 text-sm flex-shrink-0"
+                    />
                 </div>
-            </form>
-        </div>
+
+                {/* Right panel: totals, payment, actions */}
+                <div className="w-full lg:w-80 flex-shrink-0 border-t lg:border-t-0 lg:border-l bg-white flex flex-col lg:overflow-hidden">
+                    <div className="lg:flex-1 lg:overflow-y-auto p-3 space-y-3">
+                        <TotalsFooter
+                            totals={totals}
+                            onTotalsChange={(newTotals) => setTotals((prev) => ({ ...prev, ...newTotals }))}
+                            tenantVatRate={salesSettings?.tenant?.default_vat_rate || 0}
+                        />
+                        <div className="border-t pt-3">
+                            <PaymentSection payments={payments} total={totals.total} onPaymentChange={updatePayment} />
+                        </div>
+                    </div>
+
+                    {/* Actions pinned to panel bottom. Extra bottom padding on desktop
+                        keeps the primary button clear of the floating feedback widget. */}
+                    <div className="flex items-center gap-2 p-3 pb-20 lg:pb-16 border-t flex-shrink-0">
+                        <Link
+                            href="/dashboard/sales"
+                            className="px-3 py-2 border rounded text-gray-700 hover:bg-gray-50 text-sm"
+                        >
+                            Cancel
+                        </Link>
+                        {/* Print button with paper-size dropdown */}
+                        <div className="relative" ref={printMenuRef}>
+                            <div className="flex items-center border rounded overflow-hidden">
+                                <button
+                                    type="button"
+                                    onClick={() => handlePrint()}
+                                    className="px-3 py-2 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 text-sm"
+                                >
+                                    <Printer className="w-4 h-4" />
+                                    {paperSize}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPaperMenu((v) => !v)}
+                                    className="px-1.5 py-2 border-l text-gray-500 hover:bg-gray-50"
+                                    title="Choose paper size"
+                                >
+                                    <ChevronDown className="w-4 h-4" />
+                                </button>
+                            </div>
+                            {showPaperMenu && (
+                                <div className="absolute right-0 bottom-full mb-1 z-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
+                                    <p className="px-3 py-1 text-xs font-bold text-gray-400 uppercase tracking-wider">Paper Size</p>
+                                    {(['A4', 'Letter', 'Thermal80', 'Thermal58'] as PaperSize[]).map((size) => (
+                                        <button
+                                            key={size}
+                                            type="button"
+                                            onClick={() => { setPaperSize(size); handlePrint(size); }}
+                                            className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 ${paperSize === size ? 'font-bold text-blue-600' : 'text-gray-700'}`}
+                                        >
+                                            {size === 'Thermal80' ? '80mm Thermal' : size === 'Thermal58' ? '58mm Thermal' : size}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <button
+                            type="submit"
+                            disabled={submitting || items.length === 0}
+                            className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 text-sm font-medium"
+                        >
+                            {submitting ? 'Creating…' : 'Create Sale'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
     );
 }

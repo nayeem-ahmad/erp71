@@ -31,6 +31,7 @@ describe('SalesService', () => {
       sale: {
         create: jest.fn(),
         findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
         update: jest.fn(),
         count: jest.fn().mockResolvedValue(0),
       },
@@ -335,6 +336,27 @@ describe('SalesService', () => {
       db.sale.findFirst.mockResolvedValue(null);
 
       await expect(service.findOne('tenant-1', 'missing')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('generateReferenceNumber()', () => {
+    it('increments the max sequence for the YYMM prefix across all dates', async () => {
+      tx.salesSettings.findUnique.mockResolvedValue({ reference_number_format: 'YYMM-#' });
+      tx.sale.findMany.mockResolvedValue([
+        { reference_number: '2606-001' },
+        { reference_number: '2606-005' },
+      ]);
+
+      const result = await service.generateReferenceNumber('tenant-1', tx);
+
+      expect(tx.sale.findMany).toHaveBeenCalledWith({
+        where: {
+          tenant_id: 'tenant-1',
+          reference_number: { startsWith: '2606-' },
+        },
+        select: { reference_number: true },
+      });
+      expect(result).toBe('2606-006');
     });
   });
 
