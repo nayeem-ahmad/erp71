@@ -1,4 +1,5 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { applyE2ESession, fetchE2ESession, type E2ESession } from './helpers/auth';
 
 /**
  * E2E: POS sale critical path
@@ -8,23 +9,15 @@ import { test, expect, Page } from '@playwright/test';
  * or the E2E_AUTH_TOKEN env variable.
  */
 
-async function loginIfNeeded(page: Page) {
-    const email = process.env.E2E_TEST_EMAIL || 'test@example.com';
-    const password = process.env.E2E_TEST_PASSWORD || 'TestPassword123!';
-
-    await page.goto('/login', { waitUntil: 'domcontentloaded' });
-    // If already authenticated, the app redirects away from /login
-    if (!page.url().includes('/login')) return;
-
-    await page.getByLabel(/email/i).fill(email);
-    await page.getByLabel(/password/i).fill(password);
-    await page.getByRole('button', { name: /sign in/i }).click();
-    await page.waitForURL(/dashboard/, { timeout: 30_000 });
-}
-
 test.describe('POS — Point of Sale', () => {
+    let session: E2ESession;
+
+    test.beforeAll(async () => {
+        session = await fetchE2ESession();
+    });
+
     test.beforeEach(async ({ page }) => {
-        await loginIfNeeded(page);
+        await applyE2ESession(page, session);
     });
 
     test('POS page loads with product search and cart', { tag: '@readonly' }, async ({ page }) => {

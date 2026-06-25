@@ -10,13 +10,13 @@ export const viewport: Viewport = {
     initialScale: 1,
     maximumScale: 5,
     userScalable: true,
+    themeColor: '#2563eb',
 };
 
 export const metadata: Metadata = {
     title: 'RetailSaaS — Retail management for Bangladeshi businesses',
     description: 'All-in-one retail management platform with POS, inventory, sales analytics, and integrated BDT payments.',
     manifest: '/manifest.json',
-    themeColor: '#2563eb',
     appleWebApp: {
         capable: true,
         statusBarStyle: 'default',

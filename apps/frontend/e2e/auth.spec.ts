@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { loginViaUi } from './helpers/auth';
 
 /**
  * E2E: Signup → Login critical path
@@ -8,6 +9,12 @@ import { test, expect } from '@playwright/test';
  */
 
 test.describe('Authentication', () => {
+    // UI login is sensitive to auth rate limits — run before signup creates extra traffic.
+    test('successful login redirects to dashboard', { tag: '@readonly' }, async ({ page }) => {
+        await loginViaUi(page);
+        await expect(page).toHaveURL(/dashboard/, { timeout: 15_000 });
+    });
+
     test('signup page renders and validates required fields', { tag: '@readonly' }, async ({ page }) => {
         await page.goto('/signup');
         await expect(page.getByRole('heading', { name: /create your retail saas workspace|sign up|create account|register/i })).toBeVisible();
@@ -53,20 +60,6 @@ test.describe('Authentication', () => {
         // New accounts are unverified, so the app routes to email verification;
         // a configured-verified environment lands on the dashboard/onboarding.
         await expect(page).toHaveURL(/verify-email|dashboard|onboarding/, { timeout: 15_000 });
-    });
-
-    test('successful login redirects to dashboard', { tag: '@readonly' }, async ({ page }) => {
-        // This test depends on a seeded test account; adjust credentials per environment
-        const email = process.env.E2E_TEST_EMAIL || 'test@example.com';
-        const password = process.env.E2E_TEST_PASSWORD || 'TestPassword123!';
-
-        await page.goto('/login');
-
-        await page.getByLabel(/email/i).fill(email);
-        await page.getByLabel(/password/i).fill(password);
-        await page.getByRole('button', { name: /sign in|log in/i }).click();
-
-        await expect(page).toHaveURL(/dashboard/, { timeout: 15_000 });
     });
 
     test('navigating to dashboard while logged out does not show the dashboard', { tag: '@readonly' }, async ({ page }) => {

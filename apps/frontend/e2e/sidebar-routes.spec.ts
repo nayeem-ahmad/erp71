@@ -1,12 +1,7 @@
 import { test, expect, Page, ConsoleMessage } from '@playwright/test';
+import { E2E_BASE_URL, applyE2ESession, fetchE2ESession, type E2ESession } from './helpers/auth';
 
-// Base URLs and credentials are env-overridable so this read-only suite can run
-// against a local stack (default) or the live deployment (nightly smoke test).
-const BASE = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
-const API  = process.env.E2E_API_URL || 'http://localhost:4000';
-
-const E2E_EMAIL    = process.env.E2E_TEST_EMAIL || 'test@example.com';
-const E2E_PASSWORD = process.env.E2E_TEST_PASSWORD || 'TestPassword123!';
+const BASE = E2E_BASE_URL;
 
 // All sidebar routes extracted from Sidebar.tsx
 const ROUTES = [
@@ -106,44 +101,11 @@ const CONSOLE_ERROR_IGNORE = [
     /BILLING_PROVIDER/i,
 ];
 
-async function loginAndGetToken(): Promise<string> {
-    const res = await fetch(`${API}/api/v1/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: E2E_EMAIL, password: E2E_PASSWORD }),
-    });
-    const data = await res.json();
-    return data.data.access_token;
-}
-
-async function setupAuth(page: Page, token: string, tenantId: string, storeId: string) {
-    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
-    // Inject auth into localStorage the way the app expects it
-    await page.evaluate(
-        ({ token, tenantId, storeId }) => {
-            localStorage.setItem('access_token', token);
-            localStorage.setItem('tenant_id', tenantId);
-            localStorage.setItem('store_id', storeId);
-        },
-        { token, tenantId, storeId }
-    );
-}
-
 test.describe('Sidebar navigation — all routes load without errors', { tag: '@readonly' }, () => {
-    let token: string;
-    let tenantId: string;
-    let storeId: string;
+    let session: E2ESession;
 
     test.beforeAll(async () => {
-        const res = await fetch(`${API}/api/v1/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: E2E_EMAIL, password: E2E_PASSWORD }),
-        });
-        const data = await res.json();
-        token    = data.data.access_token;
-        tenantId = data.data.tenants[0].id;
-        storeId  = data.data.tenants[0].stores[0].id;
+        session = await fetchE2ESession();
     });
 
     for (const route of ROUTES) {
@@ -169,16 +131,7 @@ test.describe('Sidebar navigation — all routes load without errors', { tag: '@
                 }
             });
 
-            // Set auth state
-            await page.goto(BASE, { waitUntil: 'domcontentloaded' });
-            await page.evaluate(
-                ({ token, tenantId, storeId }) => {
-                    localStorage.setItem('access_token', token);
-                    localStorage.setItem('tenant_id', tenantId);
-                    localStorage.setItem('store_id', storeId);
-                },
-                { token, tenantId, storeId }
-            );
+            await applyE2ESession(page, session);
 
             // Navigate to the route
             await page.goto(`${BASE}${route.path}`, { waitUntil: 'networkidle', timeout: 15000 });

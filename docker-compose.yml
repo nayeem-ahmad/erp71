@@ -44,6 +44,8 @@ services:
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://postgres:password123@db:5432/retail_saas
+      # Relaxed for local E2E (sidebar route sweep hits many /auth/me calls per IP).
+      - THROTTLE_LIMIT=100000
     depends_on:
       - db
     restart: always

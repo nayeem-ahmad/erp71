@@ -33,8 +33,21 @@ async function globalSetup() {
                 failOnStatusCode: false,
             });
             lastStatus = res.status();
-            // 201/200 = created, 409 = already present (acceptable for reruns).
-            if ([200, 201, 409].includes(lastStatus)) return;
+            // 201/200 = created. 409 = account exists — verify credentials still work.
+            if ([200, 201].includes(lastStatus)) return;
+            if (lastStatus === 409) {
+                const loginRes = await ctx.post(`${apiUrl}/api/v1/auth/login`, {
+                    data: { email, password },
+                    failOnStatusCode: false,
+                });
+                if (loginRes.ok()) return;
+                lastBody = await loginRes.text();
+                throw new Error(
+                    `E2E account exists but login failed (${loginRes.status()}). ` +
+                        'Reset test@example.com password or delete the user and re-run. ' +
+                        lastBody,
+                );
+            }
             lastBody = await res.text();
             await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
         }

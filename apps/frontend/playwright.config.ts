@@ -5,8 +5,9 @@ export default defineConfig({
     globalSetup: './e2e/global-setup.ts',
     fullyParallel: true,
     forbidOnly: !!process.env.CI,
-    retries: process.env.CI ? 2 : 0,
-    workers: process.env.CI ? 1 : undefined,
+    retries: process.env.CI ? 2 : 1,
+    // Shared E2E account + route sweep are sensitive to parallel load locally.
+    workers: 1,
     reporter: [
         ['list'],
         ['html', { outputFolder: 'playwright-report', open: 'never' }],
