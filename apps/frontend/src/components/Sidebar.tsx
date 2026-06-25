@@ -38,6 +38,7 @@ import {
     Cog,
     Receipt,
     HandCoins,
+    Wallet,
     HelpCircle,
     Gift,
     Tag,
@@ -97,6 +98,8 @@ function buildModules(t: ReturnType<typeof useI18n>['t']): NavModule[] {
             // Core Sales / Operations
             { href: '/dashboard/pos',               icon: ShoppingCart,    label: t.sidebar.items.pos },
             { href: '/dashboard/sales',             icon: TrendingUp,      label: t.sidebar.items.sales },
+            { href: '/dashboard/sales/customer-payments', icon: Wallet,    label: t.sidebar.items.customerPayment },
+            { href: '/dashboard/sales/customer-ledger', icon: BookOpen,    label: t.sidebar.items.customerLedger },
             { href: '/dashboard/delivery',          icon: MapPin,          label: t.sidebar.items.delivery },
             { href: '/dashboard/returns',           icon: ArrowLeftRight,  label: t.sidebar.items.salesReturns },
             { href: '/dashboard/orders',            icon: ClipboardList,   label: t.sidebar.items.salesOrders },
@@ -131,6 +134,8 @@ function buildModules(t: ReturnType<typeof useI18n>['t']): NavModule[] {
         label: t.sidebar.modules.purchase,
         children: [
             { href: '/dashboard/purchases', icon: ClipboardList, label: t.sidebar.items.purchases },
+            { href: '/dashboard/purchases/supplier-payments', icon: Wallet, label: t.sidebar.items.supplierPayment },
+            { href: '/dashboard/purchases/supplier-ledger', icon: BookOpen, label: t.sidebar.items.supplierLedger },
             { href: '/dashboard/purchase-orders', icon: FileText, label: t.sidebar.items.purchaseOrders },
             { href: '/dashboard/purchase-quotations', icon: FileSearch, label: t.sidebar.items.purchaseQuotations },
             { href: '/dashboard/purchase-returns', icon: Undo2, label: t.sidebar.items.purchaseReturns },

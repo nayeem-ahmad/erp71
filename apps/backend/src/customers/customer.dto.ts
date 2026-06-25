@@ -1,4 +1,10 @@
 import { IsString, IsOptional, IsEmail, IsEnum, IsUUID, IsNumber, IsBoolean, IsDateString, Min, Max, Matches } from 'class-validator';
+import { PaginationDto } from '../common/pagination.dto';
+
+export enum CustomerPaymentDirectionDto {
+    RECEIVE = 'receive',
+    PAY = 'pay',
+}
 
 export enum CustomerTypeDto {
     INDIVIDUAL = 'INDIVIDUAL',
@@ -141,6 +147,43 @@ export class RecordCreditPaymentDto {
     amount: number;
 
     @IsOptional()
+    @IsEnum(CustomerPaymentDirectionDto)
+    direction?: CustomerPaymentDirectionDto;
+
+    @IsOptional()
     @IsString()
     notes?: string;
+}
+
+export class UpdateCreditPaymentDto {
+    @IsOptional()
+    @IsNumber()
+    @Min(0.01)
+    amount?: number;
+
+    @IsOptional()
+    @IsEnum(CustomerPaymentDirectionDto)
+    direction?: CustomerPaymentDirectionDto;
+
+    @IsOptional()
+    @IsString()
+    notes?: string;
+}
+
+export class ListCustomerCreditPaymentsQueryDto extends PaginationDto {
+    @IsOptional()
+    @IsUUID()
+    customerId?: string;
+
+    @IsOptional()
+    @IsDateString()
+    from?: string;
+
+    @IsOptional()
+    @IsDateString()
+    to?: string;
+
+    @IsOptional()
+    @IsString()
+    search?: string;
 }

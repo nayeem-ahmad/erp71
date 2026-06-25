@@ -3,18 +3,19 @@
 import {
     Package,
     TrendingUp,
-    TrendingDown,
     Clock,
     MoreVertical,
     Landmark,
     Wallet,
     ReceiptText,
-    CircleAlert,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../lib/api';
 import { formatBDT, formatDate } from '../../lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
+import DashboardBreadcrumb from '@/components/dashboard/DashboardBreadcrumb';
+import FrequentQuickLinks from '@/components/dashboard/FrequentQuickLinks';
+import { FinancialKpiTile, StatKpiTile } from '@/components/dashboard/KpiTile';
 
 type FinancialKpis = {
     cash_inflow: number;
@@ -203,47 +204,55 @@ export default function DashboardPage() {
             icon: Package,
         },
         {
-            title: copy.taxLiability,
-            value: formatOptionalCurrency(financialKpis.tax_liability, copy.notConfigured),
-            helper: financialKpis.tax_liability === null ? copy.noTaxLiabilityConfigured : copy.configuredTaxObligations,
-            tone: 'neutral',
-            icon: CircleAlert,
+            title: copy.netProfit,
+            value: formatCurrency(financialComparison.net_profit),
+            helper: copy.netProfitHelper,
+            tone: financialComparison.net_profit >= 0 ? 'positive' : 'negative',
+            icon: TrendingUp,
         },
-    ] as const, [copy, financialKpis]);
+    ] as const, [copy, financialKpis, financialComparison]);
 
     return (
-        <div className="overflow-y-auto h-full p-4 md:p-8">
-            <div className="mb-8">
-                <h1 className="text-2xl font-bold tracking-tight">{copy.title}</h1>
-                <p className="text-gray-500 text-sm mt-1 uppercase font-medium tracking-wide">
-                    {formatMessage(copy.tenantSubtitle, { tenant: tenantName })}
-                </p>
+        <div className="overflow-y-auto h-full bg-[#F0F2F5] p-4 md:p-8">
+            <div className="mb-4 space-y-4">
+                <DashboardBreadcrumb />
+                <div>
+                    <h1 className="text-2xl font-black tracking-tight text-gray-900">{copy.businessMonitor}</h1>
+                    <p className="text-gray-500 text-sm mt-1 font-medium">
+                        {formatMessage(copy.tenantSubtitle, { tenant: tenantName })}
+                    </p>
+                </div>
+                <FrequentQuickLinks />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
-                <StatCard
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+                <StatKpiTile
                     title={copy.totalSales}
                     value={`${totalSalesAmount.toLocaleString()}`}
                     trend={copy.trendFromLastMonth}
                     isPositive={true}
+                    tone="blue"
                 />
-                <StatCard
+                <StatKpiTile
                     title={copy.activeOrders}
                     value={activeOrdersCount.toString()}
                     trend={copy.realTimeData}
                     isPositive={true}
+                    tone="green"
                 />
-                <StatCard
+                <StatKpiTile
                     title={copy.products}
                     value={products.length.toString()}
                     trend={copy.inInventory}
                     isPositive={true}
+                    tone="purple"
                 />
-                <StatCard
+                <StatKpiTile
                     title={copy.lowStockItems}
                     value={lowStockCount === null ? '—' : lowStockCount.toString()}
                     trend={lowStockTrend}
                     isPositive={lowStockCount !== null && lowStockCount === 0}
+                    tone={lowStockCount !== null && lowStockCount > 0 ? 'peach' : 'green'}
                 />
             </div>
 
@@ -272,23 +281,16 @@ export default function DashboardPage() {
                                 </div>
                             ))}
                         </div>
-                        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.8fr)_minmax(18rem,1fr)]">
-                            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5 animate-pulse">
-                                <div className="h-4 w-40 rounded bg-gray-200" />
-                                <div className="mt-6 h-48 rounded-2xl bg-gray-200" />
-                            </div>
-                            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5 animate-pulse">
-                                <div className="h-4 w-40 rounded bg-gray-200" />
-                                <div className="mt-6 h-20 rounded-2xl bg-gray-200" />
-                                <div className="mt-4 h-20 rounded-2xl bg-gray-200" />
-                            </div>
+                        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5 animate-pulse">
+                            <div className="h-4 w-40 rounded bg-gray-200" />
+                            <div className="mt-6 h-48 rounded-2xl bg-gray-200" />
                         </div>
                     </div>
                 ) : (
                     <div className="space-y-6 pt-6">
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                             {financialTiles.map((tile) => (
-                                <FinancialTile
+                                <FinancialKpiTile
                                     key={tile.title}
                                     title={tile.title}
                                     value={tile.value}
@@ -299,43 +301,22 @@ export default function DashboardPage() {
                             ))}
                         </div>
 
-                        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.8fr)_minmax(18rem,1fr)]">
-                            <section className="rounded-2xl border border-gray-100 bg-slate-950 p-5 text-white shadow-sm">
-                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                    <div>
-                                        <p className="text-xs font-black uppercase tracking-[0.24em] text-slate-400">{copy.cashFlowMovement}</p>
-                                        <h3 className="mt-2 text-xl font-black tracking-tight">{copy.inflowVsOutflow}</h3>
+                        <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <p className="text-xs font-black uppercase tracking-[0.24em] text-gray-400">{copy.cashFlowMovement}</p>
+                                    <h3 className="mt-2 text-xl font-black tracking-tight text-gray-950">{copy.inflowVsOutflow}</h3>
+                                </div>
+                                {financialTrendError ? (
+                                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
+                                        {financialTrendError}
                                     </div>
-                                    {financialTrendError ? (
-                                        <div className="rounded-2xl border border-amber-300/40 bg-amber-200/10 px-3 py-2 text-sm font-bold text-amber-100">
-                                            {financialTrendError}
-                                        </div>
-                                    ) : null}
-                                </div>
-                                <div className="mt-6">
-                                    <CashFlowChart points={financialTrends} locale={locale} />
-                                </div>
-                            </section>
-
-                            <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-                                <p className="text-xs font-black uppercase tracking-[0.24em] text-gray-400">{copy.netProfitVsGrossMargin}</p>
-                                <h3 className="mt-2 text-xl font-black tracking-tight text-gray-950">{copy.periodComparison}</h3>
-                                <div className="mt-6 space-y-4">
-                                    <ComparisonMetricCard
-                                        title={copy.netProfit}
-                                        value={formatCurrency(financialComparison.net_profit)}
-                                        helper={copy.netProfitHelper}
-                                        tone={financialComparison.net_profit >= 0 ? 'positive' : 'negative'}
-                                    />
-                                    <ComparisonMetricCard
-                                        title={copy.grossMargin}
-                                        value={copy.unavailable}
-                                        helper={financialComparison.gross_margin_reason}
-                                        tone="neutral"
-                                    />
-                                </div>
-                            </section>
-                        </div>
+                                ) : null}
+                            </div>
+                            <div className="mt-6">
+                                <CashFlowChart points={financialTrends} locale={locale} />
+                            </div>
+                        </section>
                     </div>
                 )}
             </section>
@@ -390,111 +371,61 @@ export default function DashboardPage() {
     );
 }
 
-function FinancialTile({
-    title,
-    value,
-    helper,
-    tone,
-    Icon,
-}: {
-    title: string;
-    value: string;
-    helper: string;
-    tone: 'positive' | 'negative' | 'neutral';
-    Icon: React.ComponentType<{ className?: string }>;
-}) {
-    const toneClass = tone === 'positive'
-        ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
-        : tone === 'negative'
-            ? 'border-rose-100 bg-rose-50 text-rose-700'
-            : 'border-slate-100 bg-slate-50 text-slate-700';
-
-    return (
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-            <div className="flex items-start justify-between gap-4">
-                <div>
-                    <p className="text-xs font-black uppercase tracking-[0.24em] text-gray-400">{title}</p>
-                    <h3 className="mt-3 text-3xl font-black tracking-tight text-gray-950">{value}</h3>
-                </div>
-                <div className={`rounded-2xl border px-3 py-3 ${toneClass}`}>
-                    <Icon className="h-5 w-5" />
-                </div>
-            </div>
-            <p className="mt-4 text-sm font-medium text-gray-500">{helper}</p>
-        </div>
-    );
-}
-
 function CashFlowChart({ points, locale }: { points: FinancialTrendPoint[]; locale: string }) {
     const { t } = useI18n();
     const copy = t.dashboardHome;
 
     if (points.length === 0 || !points.some((point) => point.cash_inflow !== 0 || point.cash_outflow !== 0)) {
         return (
-            <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 px-5 py-12 text-center">
-                <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-300">{copy.noAccountingMovement}</p>
-                <p className="mt-2 text-sm text-slate-400">{copy.noCashMovementPeriod}</p>
+            <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-12 text-center">
+                <p className="text-sm font-bold uppercase tracking-[0.2em] text-gray-400">{copy.noAccountingMovement}</p>
+                <p className="mt-2 text-sm text-gray-500">{copy.noCashMovementPeriod}</p>
             </div>
         );
     }
 
     const peak = Math.max(...points.flatMap((point) => [point.cash_inflow, point.cash_outflow]), 1);
+    const labelInterval = points.length > 14 ? Math.ceil(points.length / 7) : 1;
 
     return (
         <div>
-            <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
-                <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />{copy.inflow}</span>
-                <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-rose-400" />{copy.outflow}</span>
+            <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-[0.2em] text-gray-500">
+                <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />{copy.inflow}</span>
+                <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-rose-500" />{copy.outflow}</span>
             </div>
-            <div className="mt-6 flex h-56 items-end gap-2 overflow-x-auto pb-2">
-                {points.map((point, index) => (
-                    <div key={point.date} className="flex min-w-8 flex-1 flex-col items-center justify-end gap-2">
-                        <div className="flex h-44 items-end gap-1">
-                            <div
-                                aria-label={formatMessage(copy.cashInflowAria, { date: point.date })}
-                                className="w-3 rounded-t-full bg-emerald-400 transition-all"
-                                style={{ height: `${Math.max((point.cash_inflow / peak) * 100, point.cash_inflow > 0 ? 6 : 0)}%` }}
-                            />
-                            <div
-                                aria-label={formatMessage(copy.cashOutflowAria, { date: point.date })}
-                                className="w-3 rounded-t-full bg-rose-400 transition-all"
-                                style={{ height: `${Math.max((point.cash_outflow / peak) * 100, point.cash_outflow > 0 ? 6 : 0)}%` }}
-                            />
-                        </div>
-                        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                            {index === 0 || index === points.length - 1 || point.cash_inflow !== 0 || point.cash_outflow !== 0
-                                ? new Date(point.date).toLocaleDateString(locale, { month: 'short', day: 'numeric' })
-                                : '·'}
-                        </span>
-                    </div>
-                ))}
+            <div className="mt-6 w-full rounded-xl border border-gray-100 bg-gray-50/60 p-4">
+                <div className="flex h-52 w-full items-end gap-px sm:gap-1">
+                    {points.map((point, index) => {
+                        const showLabel = index === 0
+                            || index === points.length - 1
+                            || index % labelInterval === 0
+                            || point.cash_inflow !== 0
+                            || point.cash_outflow !== 0;
+
+                        return (
+                            <div key={point.date} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1.5">
+                                <div className="flex h-40 w-full max-w-8 items-end justify-center gap-px sm:gap-0.5">
+                                    <div
+                                        aria-label={formatMessage(copy.cashInflowAria, { date: point.date })}
+                                        className="w-[42%] max-w-3 rounded-t-sm bg-emerald-500 transition-all"
+                                        style={{ height: `${Math.max((point.cash_inflow / peak) * 100, point.cash_inflow > 0 ? 6 : 0)}%` }}
+                                    />
+                                    <div
+                                        aria-label={formatMessage(copy.cashOutflowAria, { date: point.date })}
+                                        className="w-[42%] max-w-3 rounded-t-sm bg-rose-500 transition-all"
+                                        style={{ height: `${Math.max((point.cash_outflow / peak) * 100, point.cash_outflow > 0 ? 6 : 0)}%` }}
+                                    />
+                                </div>
+                                <span className="w-full truncate text-center text-[9px] font-bold uppercase tracking-tight text-gray-400 sm:text-[10px]">
+                                    {showLabel
+                                        ? new Date(point.date).toLocaleDateString(locale, { month: 'short', day: 'numeric' })
+                                        : ''}
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
-        </div>
-    );
-}
-
-function ComparisonMetricCard({
-    title,
-    value,
-    helper,
-    tone,
-}: {
-    title: string;
-    value: string;
-    helper: string;
-    tone: 'positive' | 'negative' | 'neutral';
-}) {
-    const toneClass = tone === 'positive'
-        ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
-        : tone === 'negative'
-            ? 'border-rose-100 bg-rose-50 text-rose-700'
-            : 'border-slate-100 bg-slate-50 text-slate-700';
-
-    return (
-        <div className={`rounded-2xl border p-4 ${toneClass}`}>
-            <p className="text-xs font-black uppercase tracking-[0.24em]">{title}</p>
-            <p className="mt-3 text-3xl font-black tracking-tight">{value}</p>
-            <p className="mt-3 text-sm font-medium text-current/80">{helper}</p>
         </div>
     );
 }
@@ -514,19 +445,6 @@ function formatOptionalCurrency(value: number | null, notConfiguredLabel: string
     }
 
     return formatCurrency(value);
-}
-
-function StatCard({ title, value, trend, isPositive }: { title: string, value: string, trend: string, isPositive: boolean }) {
-    return (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 transition-all hover:shadow-md hover:-translate-y-1">
-            <p className="text-gray-500 font-semibold text-xs uppercase tracking-widest mb-1">{title}</p>
-            <h3 className="text-3xl font-bold tracking-tight mb-4">{value}</h3>
-            <div className={`flex items-center space-x-1 text-xs font-bold ${isPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                <span className="uppercase tracking-tight">{trend}</span>
-            </div>
-        </div>
-    );
 }
 
 function ActivityItem({ title, description, time }: { title: string, description: string, time: string }) {

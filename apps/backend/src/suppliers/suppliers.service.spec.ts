@@ -15,7 +15,14 @@ describe('SuppliersService', () => {
                 findMany: jest.fn(),
                 count: jest.fn(),
                 findFirst: jest.fn(),
+                update: jest.fn(),
             },
+            supplierCreditTransaction: {
+                count: jest.fn(),
+                findMany: jest.fn(),
+                create: jest.fn(),
+            },
+            $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -60,5 +67,32 @@ describe('SuppliersService', () => {
         db.supplier.findFirst.mockResolvedValue(null);
 
         await expect(service.findOne('tenant-1', 'missing')).rejects.toThrow(NotFoundException);
+    });
+
+    it('records a supplier credit payment and reduces due balance', async () => {
+        db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', due_balance: 500 });
+        db.supplierCreditTransaction.create.mockResolvedValue({ id: 'tx-1', type: 'PAYMENT' });
+        db.supplier.update.mockResolvedValue({ id: 'sup-1', due_balance: 300 });
+
+        const result = await service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 200 });
+
+        expect(db.supplierCreditTransaction.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+                tenant_id: 'tenant-1',
+                supplier_id: 'sup-1',
+                type: 'PAYMENT',
+                amount: 200,
+                balance_after: 300,
+            }),
+        });
+        expect(result.type).toBe('PAYMENT');
+    });
+
+    it('rejects supplier payment above payable balance', async () => {
+        db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', due_balance: 100 });
+
+        await expect(
+            service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 150 }),
+        ).rejects.toThrow(BadRequestException);
     });
 });

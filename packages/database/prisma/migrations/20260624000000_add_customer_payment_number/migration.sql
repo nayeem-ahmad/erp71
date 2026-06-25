@@ -1,0 +1,2 @@
+ALTER TABLE "CustomerCreditTransaction" ADD COLUMN "payment_number" TEXT;
+CREATE UNIQUE INDEX "CustomerCreditTransaction_tenant_id_payment_number_key" ON "CustomerCreditTransaction"("tenant_id", "payment_number");

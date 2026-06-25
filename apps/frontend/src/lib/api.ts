@@ -349,17 +349,55 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     getCustomerAnalytics: (id: string) => fetchWithAuth(`/customers/${id}/analytics`),
-    getCustomerCreditLedger: (id: string, params?: { page?: number; limit?: number }) => {
+    getCustomerCreditLedger: (id: string, params?: { page?: number; limit?: number; from?: string; to?: string }) => {
         const query = new URLSearchParams();
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
-        return fetchWithAuth(`/customers/${id}/credit${query.toString() ? `?${query.toString()}` : ''}`);
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        return fetchWithAuth(`/customers/${id}/credit${query.toString() ? `?${query.toString()}` : ''}`).then(
+            (r: { transactions?: unknown[]; items?: unknown[] } | unknown[]) => {
+                if (Array.isArray(r)) {
+                    return { transactions: r, opening_balance: 0, closing_balance: 0, due_balance: 0 };
+                }
+                const transactions = r?.transactions ?? r?.items ?? [];
+                return { ...r, transactions: Array.isArray(transactions) ? transactions : [] };
+            },
+        );
     },
-    recordCreditPayment: (id: string, data: { amount: number; notes?: string }) => fetchWithAuth(`/customers/${id}/credit/payment`, {
+    recordCreditPayment: (id: string, data: { amount: number; direction?: 'receive' | 'pay'; notes?: string }) => fetchWithAuth(`/customers/${id}/credit/payment`, {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    getCustomerCreditPayments: (params?: {
+        page?: number;
+        limit?: number;
+        from?: string;
+        to?: string;
+        customerId?: string;
+        search?: string;
+    }) => {
+        const query = new URLSearchParams();
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.limit) query.set('limit', String(params.limit));
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        if (params?.customerId) query.set('customerId', params.customerId);
+        if (params?.search) query.set('search', params.search);
+        return fetchWithAuth(`/customers/credit/payments${query.toString() ? `?${query.toString()}` : ''}`).then(
+            (r: { items?: unknown[] } | unknown[]) => (Array.isArray(r) ? r : (r?.items ?? [])),
+        );
+    },
+    getCustomerCreditPayment: (paymentId: string) => fetchWithAuth(`/customers/credit/payments/${paymentId}`),
+    updateCustomerCreditPayment: (paymentId: string, data: { amount?: number; direction?: 'receive' | 'pay'; notes?: string }) =>
+        fetchWithAuth(`/customers/credit/payments/${paymentId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteCustomerCreditPayment: (paymentId: string) =>
+        fetchWithAuth(`/customers/credit/payments/${paymentId}`, { method: 'DELETE' }),
     getDueAgingReport: () => fetchWithAuth('/customers/reports/due-aging'),
     // CRM Interactions
     getCrmInteractions: (params?: { customerId?: string; page?: number; limit?: number }) => {
@@ -680,6 +718,17 @@ export const api = {
     updateBrand: (id: string, data: any) => fetchWithAuth(`/brands/${id}`, { method: 'PATCH', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } }),
     deleteBrand: (id: string) => fetchWithAuth(`/brands/${id}`, { method: 'DELETE' }),
     getSuppliers: () => fetchWithAuth('/suppliers?limit=100').then((r: any) => r?.items ?? r),
+    getSupplierCreditLedger: (id: string, params?: { page?: number; limit?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.limit) query.set('limit', String(params.limit));
+        return fetchWithAuth(`/suppliers/${id}/credit${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    recordSupplierCreditPayment: (id: string, data: { amount: number; notes?: string }) => fetchWithAuth(`/suppliers/${id}/credit/payment`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     createSupplier: (data: any) => fetchWithAuth('/suppliers', {
         method: 'POST',
         body: JSON.stringify(data),

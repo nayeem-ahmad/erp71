@@ -59,6 +59,12 @@ jest.mock('lucide-react', () => {
         Landmark: icon,
         Megaphone: icon,
         CheckSquare: icon,
+        Wallet: icon,
+        HandCoins: icon,
+        Sparkles: icon,
+        Layers: icon,
+        BadgeCheck: icon,
+        Banknote: icon,
     };
 });
 

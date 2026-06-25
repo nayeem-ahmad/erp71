@@ -1,7 +1,13 @@
-import { Controller, Post, Get, Patch, Body, Param, Query, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Delete, Body, Param, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { CustomersService } from './customers.service';
 import { SegmentsService } from './segments.service';
-import { CreateCustomerDto, UpdateCustomerDto, RecordCreditPaymentDto } from './customer.dto';
+import {
+    CreateCustomerDto,
+    UpdateCustomerDto,
+    RecordCreditPaymentDto,
+    UpdateCreditPaymentDto,
+    ListCustomerCreditPaymentsQueryDto,
+} from './customer.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
@@ -44,6 +50,39 @@ export class CustomersController {
         });
     }
 
+    @Get('credit/payments')
+    async listCreditPayments(
+        @Tenant() tenant: TenantContext,
+        @Query() query: ListCustomerCreditPaymentsQueryDto,
+    ) {
+        return this.customersService.listCreditPayments(tenant.tenantId, query);
+    }
+
+    @Get('credit/payments/:paymentId')
+    async getCreditPayment(
+        @Tenant() tenant: TenantContext,
+        @Param('paymentId') paymentId: string,
+    ) {
+        return this.customersService.getCreditPayment(tenant.tenantId, paymentId);
+    }
+
+    @Patch('credit/payments/:paymentId')
+    async updateCreditPayment(
+        @Tenant() tenant: TenantContext,
+        @Param('paymentId') paymentId: string,
+        @Body() dto: UpdateCreditPaymentDto,
+    ) {
+        return this.customersService.updateCreditPayment(tenant.tenantId, paymentId, dto);
+    }
+
+    @Delete('credit/payments/:paymentId')
+    async deleteCreditPayment(
+        @Tenant() tenant: TenantContext,
+        @Param('paymentId') paymentId: string,
+    ) {
+        return this.customersService.deleteCreditPayment(tenant.tenantId, paymentId);
+    }
+
     @Post('segments/evaluate')
     async evaluateSegments(@Tenant() tenant: TenantContext) {
         return this.segmentsService.evaluateForTenant(tenant.tenantId);
@@ -82,10 +121,14 @@ export class CustomersController {
         @Param('id') id: string,
         @Query('page') page?: string,
         @Query('limit') limit?: string,
+        @Query('from') from?: string,
+        @Query('to') to?: string,
     ) {
         return this.customersService.getCreditLedger(tenant.tenantId, id, {
             page: page ? parseInt(page, 10) : undefined,
             limit: limit ? parseInt(limit, 10) : undefined,
+            from,
+            to,
         });
     }
 

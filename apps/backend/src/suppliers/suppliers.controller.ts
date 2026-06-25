@@ -3,7 +3,7 @@ import { PaginationDto } from '../common/pagination.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
-import { CreateSupplierDto, UpdateSupplierDto } from './supplier.dto';
+import { CreateSupplierDto, RecordSupplierCreditPaymentDto, UpdateSupplierDto } from './supplier.dto';
 import { SuppliersService } from './suppliers.service';
 
 @Controller('suppliers')
@@ -20,6 +20,27 @@ export class SuppliersController {
     @Get()
     findAll(@Tenant() tenant: TenantContext, @Query() query: PaginationDto) {
         return this.suppliersService.findAll(tenant.tenantId, query.page, query.limit);
+    }
+
+    @Get(':id/credit')
+    getCreditLedger(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Query() query: PaginationDto,
+    ) {
+        return this.suppliersService.getCreditLedger(tenant.tenantId, id, {
+            page: query.page,
+            limit: query.limit,
+        });
+    }
+
+    @Post(':id/credit/payment')
+    recordCreditPayment(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: RecordSupplierCreditPaymentDto,
+    ) {
+        return this.suppliersService.recordCreditPayment(tenant.tenantId, id, tenant.userId, dto);
     }
 
     @Get(':id')

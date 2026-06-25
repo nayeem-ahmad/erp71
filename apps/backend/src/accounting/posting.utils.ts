@@ -11,13 +11,14 @@ export type PostingEventType =
     | 'fund_movement'
     | 'expense'
     | 'loan_disbursement'
-    | 'loan_repayment';
+    | 'loan_repayment'
+    | 'customer_payment';
 
 export interface AutoPostInput {
     tx: Prisma.TransactionClient;
     tenantId: string;
     eventType: PostingEventType;
-    conditionKey?: 'payment_mode' | 'reason_type' | 'transfer_scope' | 'loan_direction' | 'none';
+    conditionKey?: 'payment_mode' | 'reason_type' | 'transfer_scope' | 'loan_direction' | 'payment_direction' | 'none';
     conditionValue?: string | null;
     sourceModule: string;
     sourceType: string;
@@ -56,7 +57,19 @@ const VOUCHER_TYPE_BY_EVENT: Record<PostingEventType, string> = {
     // neutral journal voucher is used rather than a cash-in/out specific type.
     loan_disbursement: VoucherType.JOURNAL,
     loan_repayment: VoucherType.JOURNAL,
+    customer_payment: VoucherType.CASH_RECEIVE,
 };
+
+function resolveVoucherType(
+    eventType: PostingEventType,
+    conditionKey?: AutoPostInput['conditionKey'],
+    conditionValue?: string | null,
+): string {
+    if (eventType === 'customer_payment' && conditionKey === 'payment_direction' && conditionValue === 'pay') {
+        return VoucherType.CASH_PAYMENT;
+    }
+    return VOUCHER_TYPE_BY_EVENT[eventType];
+}
 
 function voucherSequenceId(tenantId: string, voucherType: string) {
     return `${tenantId}:${voucherType}`;
@@ -211,7 +224,7 @@ export async function autoPostFromRules(input: AutoPostInput): Promise<AutoPostR
         throw new BadRequestException('AUTO_POSTING_ACCOUNT_INVALID');
     }
 
-    const voucherType = VOUCHER_TYPE_BY_EVENT[input.eventType];
+    const voucherType = resolveVoucherType(input.eventType, conditionKey, conditionValue);
     const voucherNumber = await generateVoucherNumber(input.tx, input.tenantId, voucherType);
 
     const voucher = await input.tx.voucher.create({
@@ -258,4 +271,31 @@ export async function autoPostFromRules(input: AutoPostInput): Promise<AutoPostR
         voucherNumber: voucher.voucher_number,
         voucherType: voucher.voucher_type,
     };
+}
+
+/** Remove auto-posted voucher + posting event so the source can be reposted or deleted. */
+export async function voidAutoPostedVoucher(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    eventType: PostingEventType,
+    sourceId: string,
+): Promise<void> {
+    const idempotencyKey = `${tenantId}:${eventType}:${sourceId}`;
+    const event = await tx.postingEvent.findUnique({
+        where: {
+            tenant_id_idempotency_key: {
+                tenant_id: tenantId,
+                idempotency_key: idempotencyKey,
+            },
+        },
+    });
+
+    if (!event) return;
+
+    if (event.voucher_id) {
+        await tx.voucherDetail.deleteMany({ where: { voucher_id: event.voucher_id } });
+        await tx.voucher.delete({ where: { id: event.voucher_id } });
+    }
+
+    await tx.postingEvent.delete({ where: { id: event.id } });
 }

@@ -123,6 +123,7 @@ enum PostingRuleEventType {
   expense
   loan_disbursement
   loan_repayment
+  customer_payment
 }
 
 enum PostingRuleConditionKey {
@@ -130,6 +131,7 @@ enum PostingRuleConditionKey {
   reason_type
   transfer_scope
   loan_direction
+  payment_direction
   none
 }
 
@@ -181,6 +183,7 @@ model User {
   assignedCrmTasks          CrmTask[]     @relation("CrmTaskAssignee")
   createdCrmTasks           CrmTask[]     @relation("CrmTaskCreator")
   createdCreditTransactions CustomerCreditTransaction[] @relation("CreditTransactionCreator")
+  createdSupplierCreditTransactions SupplierCreditTransaction[] @relation("SupplierCreditTransactionCreator")
   createdCampaigns          CrmCampaign[]              @relation("CampaignCreator")
 }
 
@@ -369,6 +372,7 @@ model Tenant {
   customerInteractions CustomerInteraction[]
   crmTasks            CrmTask[]
   customerCreditTransactions CustomerCreditTransaction[]
+  supplierCreditTransactions SupplierCreditTransaction[]
   crmCampaigns        CrmCampaign[]
   expenseCategories ExpenseCategory[]
   expenseEntries    ExpenseEntry[]
@@ -848,6 +852,7 @@ model Supplier {
   phone       String?
   email       String?
   address     String?
+  due_balance Decimal  @default(0) @db.Decimal(12, 2)
   created_at  DateTime  @default(now())
   updated_at  DateTime  @updatedAt
   deleted_at  DateTime?
@@ -857,8 +862,30 @@ model Supplier {
   purchaseReturns PurchaseReturn[]
   purchaseOrders PurchaseOrder[]
   purchaseQuotations PurchaseQuotation[]
+  creditTransactions SupplierCreditTransaction[]
 
   @@unique([tenant_id, name])
+}
+
+model SupplierCreditTransaction {
+  id             String   @id @default(uuid())
+  tenant_id      String
+  supplier_id    String
+  type           String   // CREDIT_PURCHASE | PAYMENT | ADJUSTMENT
+  amount         Decimal  @db.Decimal(12, 2)
+  balance_after  Decimal  @db.Decimal(12, 2)
+  reference_type String?
+  reference_id   String?
+  notes          String?
+  created_by     String?
+  created_at     DateTime @default(now())
+
+  tenant    Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  supplier  Supplier  @relation(fields: [supplier_id], references: [id], onDelete: Cascade)
+  creator   User?     @relation("SupplierCreditTransactionCreator", fields: [created_by], references: [id])
+
+  @@index([tenant_id, supplier_id])
+  @@index([tenant_id, created_at])
 }
 
 model Purchase {
@@ -1225,6 +1252,7 @@ model CustomerCreditTransaction {
   balance_after  Decimal  @db.Decimal(12, 2)
   reference_type String?
   reference_id   String?
+  payment_number String?
   notes          String?
   created_by     String?
   created_at     DateTime @default(now())
@@ -1233,6 +1261,7 @@ model CustomerCreditTransaction {
   customer  Customer  @relation(fields: [customer_id], references: [id], onDelete: Cascade)
   creator   User?     @relation("CreditTransactionCreator", fields: [created_by], references: [id])
 
+  @@unique([tenant_id, payment_number])
   @@index([tenant_id, customer_id])
   @@index([tenant_id, created_at])
 }

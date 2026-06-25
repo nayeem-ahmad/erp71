@@ -2,6 +2,19 @@ import { render, screen, waitFor } from '@testing-library/react';
 import DashboardPage from './page';
 import { api } from '../../lib/api';
 
+jest.mock('next/link', () => ({
+    __esModule: true,
+    default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+}));
+
+jest.mock('next/image', () => ({
+    __esModule: true,
+    default: ({ alt, ...props }: { alt: string; [key: string]: unknown }) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img alt={alt} {...props} />
+    ),
+}));
+
 jest.mock('lucide-react', () => ({
     Package: () => <span data-testid="icon-package" />,
     TrendingUp: () => <span data-testid="icon-trending-up" />,
@@ -12,6 +25,11 @@ jest.mock('lucide-react', () => ({
     Wallet: () => <span data-testid="icon-wallet" />,
     ReceiptText: () => <span data-testid="icon-receipt-text" />,
     CircleAlert: () => <span data-testid="icon-circle-alert" />,
+    ChevronRight: () => <span data-testid="icon-chevron-right" />,
+    ShoppingCart: () => <span data-testid="icon-shopping-cart" />,
+    Truck: () => <span data-testid="icon-truck" />,
+    BookOpen: () => <span data-testid="icon-book-open" />,
+    Receipt: () => <span data-testid="icon-receipt" />,
 }));
 
 jest.mock('../../lib/api', () => ({
@@ -87,16 +105,18 @@ describe('DashboardPage — Story 34.3', () => {
         render(<DashboardPage />);
 
         await waitFor(() => {
+            expect(screen.getAllByText('Business Monitor').length).toBeGreaterThan(0);
+            expect(screen.getByText('Sales Entry')).toBeInTheDocument();
             expect(screen.getByText('Accounting KPIs')).toBeInTheDocument();
             expect(screen.getByText('Cash Flow Movement')).toBeInTheDocument();
-            expect(screen.getByText('Net Profit vs Gross Margin')).toBeInTheDocument();
+            expect(screen.getByText('Net Profit')).toBeInTheDocument();
+            expect(screen.queryByText('Net Profit vs Gross Margin')).not.toBeInTheDocument();
+            expect(screen.queryByText('Tax Liability')).not.toBeInTheDocument();
             expect(screen.getAllByText('175.00').length).toBeGreaterThan(0);
             expect(screen.getAllByText('300.00').length).toBeGreaterThan(0);
             expect(screen.getAllByText('125.00').length).toBeGreaterThan(0);
             expect(screen.getByText('90.00')).toBeInTheDocument();
             expect(screen.getByText('20.00')).toBeInTheDocument();
-            expect(screen.getByText('15.00')).toBeInTheDocument();
-            expect(screen.getByText('Unavailable')).toBeInTheDocument();
         });
 
         expect(screen.getByText('Northwind Retail • Last updated: Today')).toBeInTheDocument();
@@ -146,10 +166,10 @@ describe('DashboardPage — Story 34.3', () => {
 
         await waitFor(() => {
             expect(screen.getByText('No accounting movement')).toBeInTheDocument();
-            expect(screen.getByText('Unavailable')).toBeInTheDocument();
+            expect(screen.getByText('Net Profit')).toBeInTheDocument();
         });
 
-        expect(screen.getByText('Dashboard Overview')).toBeInTheDocument();
+        expect(screen.getAllByText('Business Monitor').length).toBeGreaterThan(0);
         expect(screen.getByText('Inventory Overview')).toBeInTheDocument();
     });
 });

@@ -480,8 +480,85 @@ async function ensureLoanPostingSetup(db, tenantId) {
 	}
 }
 
+async function ensureCustomerPaymentPostingSetup(db, tenantId) {
+	const alreadyConfigured = await db.postingRule.findFirst({
+		where: {
+			tenant_id: tenantId,
+			event_type: 'customer_payment',
+			condition_key: 'payment_direction',
+		},
+		select: { id: true },
+	});
+	if (alreadyConfigured) {
+		return;
+	}
+
+	const cashAccount =
+		(await db.account.findFirst({
+			where: { tenant_id: tenantId, name: 'Cash in Hand' },
+			select: { id: true },
+		})) ??
+		(await db.account.findFirst({
+			where: { tenant_id: tenantId, category: AccountCategory.CASH },
+			orderBy: { code: 'asc' },
+			select: { id: true },
+		}));
+
+	const arAccount = await db.account.findFirst({
+		where: { tenant_id: tenantId, name: 'Accounts Receivable' },
+		select: { id: true },
+	});
+
+	if (!cashAccount || !arAccount) {
+		return;
+	}
+
+	const rules = [
+		{
+			condition_value: 'receive',
+			debit_account_id: cashAccount.id,
+			credit_account_id: arAccount.id,
+			priority: 10,
+		},
+		{
+			condition_value: 'pay',
+			debit_account_id: arAccount.id,
+			credit_account_id: cashAccount.id,
+			priority: 20,
+		},
+	];
+
+	for (const rule of rules) {
+		const exists = await db.postingRule.findFirst({
+			where: {
+				tenant_id: tenantId,
+				event_type: 'customer_payment',
+				condition_key: 'payment_direction',
+				condition_value: rule.condition_value,
+			},
+			select: { id: true },
+		});
+		if (exists) {
+			continue;
+		}
+		await db.postingRule.create({
+			data: {
+				tenant_id: tenantId,
+				event_type: 'customer_payment',
+				condition_key: 'payment_direction',
+				condition_value: rule.condition_value,
+				debit_account_id: rule.debit_account_id,
+				credit_account_id: rule.credit_account_id,
+				priority: rule.priority,
+				is_active: true,
+			},
+		});
+	}
+}
+
 module.exports = {
 	DEFAULT_ACCOUNTING_TEMPLATE,
 	bootstrapDefaultAccountingForTenant,
 	ensureLoanPostingSetup,
+	ensureCustomerPaymentPostingSetup,
 };

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { Loader2, Plus, Receipt, Settings2, BarChart3, Trash2 } from 'lucide-react';
@@ -38,8 +39,9 @@ function defaultTo() {
     return new Date().toISOString().slice(0, 10);
 }
 
-export default function ExpensesPage() {
+function ExpensesPageContent() {
     const { t } = useI18n();
+    const searchParams = useSearchParams();
     const [entries, setEntries] = useState<ExpenseEntry[]>([]);
     const [categories, setCategories] = useState<ExpenseCategory[]>([]);
     const [loading, setLoading] = useState(true);
@@ -80,6 +82,12 @@ export default function ExpensesPage() {
     useEffect(() => {
         void loadData();
     }, [fromDate, toDate, categoryFilter]);
+
+    useEffect(() => {
+        if (searchParams.get('new') === '1') {
+            setShowForm(true);
+        }
+    }, [searchParams]);
 
     const resetForm = () => {
         setFormCategoryId(categories[0]?.id ?? '');
@@ -334,5 +342,14 @@ export default function ExpensesPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function ExpensesPage() {
+    const { t } = useI18n();
+    return (
+        <Suspense fallback={<div className="p-8 text-sm text-gray-500">{t.common.loading}</div>}>
+            <ExpensesPageContent />
+        </Suspense>
     );
 }
