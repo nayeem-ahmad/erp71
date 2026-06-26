@@ -1554,6 +1554,11 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    updateProfileAvatar: (formData: FormData) =>
+        fetchWithAuth('/auth/me/avatar', {
+            method: 'PATCH',
+            body: formData,
+        }),
     searchProductsByQuantity: (query: string, limit?: number) => {
         const q = new URLSearchParams();
         q.set('q', query);

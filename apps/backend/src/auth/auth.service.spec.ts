@@ -2,6 +2,7 @@ import { ConflictException, ServiceUnavailableException, UnauthorizedException }
 import { Test, TestingModule } from '@nestjs/testing';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
+import { AssetsService } from '../assets/assets.service';
 import { AuthService } from './auth.service';
 import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
@@ -124,6 +125,7 @@ describe('AuthService', () => {
                 { provide: EmailService, useValue: emailService },
                 { provide: AuditService, useValue: auditService },
                 { provide: TotpService, useValue: { isEnabled: jest.fn().mockReturnValue(false) } },
+                { provide: AssetsService, useValue: { uploadFile: jest.fn() } },
             ],
         }).compile();
 

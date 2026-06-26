@@ -1,4 +1,5 @@
-import { Controller, Post, Patch, Body, UseGuards, Request, Get, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Patch, Body, UseGuards, Request, Get, Query, HttpCode, HttpStatus, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { SignupDto, LoginDto, CreateStoreDto, UpdateProfileDto, ChangePasswordDto } from './auth.dto';
@@ -115,6 +116,16 @@ export class AuthController {
     async totpDisable(@Request() req, @Body() body: { code: string }) {
         await this.totpService.disableTotp(req.user.userId, body.code);
         return { message: '2FA disabled successfully' };
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @UseInterceptors(FileInterceptor('avatar'))
+    @Patch('me/avatar')
+    async updateAvatar(@Request() req, @UploadedFile() file: Express.Multer.File) {
+        if (!file) {
+            throw new BadRequestException('No avatar file provided');
+        }
+        return this.authService.updateAvatar(req.user.userId, file);
     }
 
     @Throttle({ default: { ttl: 60_000, limit: 10 } })

@@ -5,6 +5,8 @@
 export const routes = {
     home: '/dashboard',
     onboarding: '/dashboard/onboarding',
+    profile: '/profile',
+    selectAccount: '/select-account',
 
     sales: {
         root: '/sales',

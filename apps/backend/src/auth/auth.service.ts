@@ -4,6 +4,7 @@ import { DatabaseService } from '../database/database.service';
 import { JwtService } from '@nestjs/jwt';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
+import { AssetsService } from '../assets/assets.service';
 import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate } from '@retail-saas/database';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
@@ -28,6 +29,7 @@ export class AuthService {
         private readonly email: EmailService,
         private readonly audit: AuditService,
         private readonly totp: TotpService,
+        private readonly assets: AssetsService,
     ) { }
 
     async signup(dto: SignupDto) {
@@ -293,6 +295,7 @@ export class AuthService {
             is_demo: this.isDemoAccount(user.email),
             email_verified: !!user.email_verified_at,
             two_factor_enabled: twoFactorEnabled,
+            avatar_url: (user as any).avatar_url || null,
             tenants: tenantMembers.map((membership) =>
                 this.mapTenantMembership(membership, storeAccess),
             ),
@@ -311,6 +314,29 @@ export class AuthService {
         });
 
         return { id: user.id, email: user.email, name: user.name, preferred_locale: user.preferred_locale };
+    }
+
+    async updateAvatar(userId: string, file: Express.Multer.File) {
+        if (!file.mimetype?.startsWith('image/')) {
+            throw new BadRequestException('Avatar must be an image file');
+        }
+
+        let avatarUrl: string;
+        try {
+            avatarUrl = await this.assets.uploadFile(file, `avatars/${userId}`);
+        } catch {
+            throw new ServiceUnavailableException(
+                'Avatar upload is not available. Configure Cloudinary or try again later.',
+            );
+        }
+
+        const user = await this.db.user.update({
+            where: { id: userId },
+            data: { avatar_url: avatarUrl },
+            select: { id: true, avatar_url: true },
+        });
+
+        return { avatarUrl: user.avatar_url };
     }
 
     async changePassword(userId: string, dto: ChangePasswordDto) {

@@ -156,6 +156,7 @@ model User {
   token_version     Int       @default(0)
   is_platform_admin Boolean   @default(false)
   email_verified_at DateTime?
+  avatar_url        String?
   totp_secret       String?
   created_at        DateTime  @default(now())
   updated_at        DateTime  @updatedAt

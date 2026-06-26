@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { ArrowLeft, Menu, Zap, X } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
+import AvatarDropdown from '@/components/AvatarDropdown';
 import Sidebar from '@/components/Sidebar';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import DemoSandboxBanner from '@/components/DemoSandboxBanner';
@@ -194,7 +195,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 canManageBilling={canManageBilling}
                 canManageTeam={canManageTeam}
                 platformAdminMode={inPlatformAdminMode}
-                canSwitchAccount={canSwitchAccount}
                 activePlanCode={activePlanCode}
                 isOpen={mobileNavOpen}
                 onClose={() => setMobileNavOpen(false)}
@@ -248,17 +248,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                         ) : null}
                         <NotificationBell />
                         <div className="h-8 w-px bg-gray-200 hidden sm:block" />
-                        <div className="flex items-center space-x-2 md:space-x-3">
-                            <div className="text-right hidden sm:block">
-                                <p className="text-sm font-semibold tracking-tight leading-none">{user?.name || '—'}</p>
-                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
-                                    {inPlatformAdminMode ? 'Platform Admin' : (activeTenant?.role || t.dashboardLayout.userFallbackRole)}
-                                </p>
-                            </div>
-                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 text-sm font-black border border-blue-200 cursor-pointer hover:scale-105 transition-transform flex-shrink-0">
-                                {user?.name?.split(' ').map((n: string) => n[0]).join('') || '??'}
-                            </div>
-                        </div>
+                        <AvatarDropdown
+                            userName={user?.name || '—'}
+                            roleLabel={
+                                inPlatformAdminMode
+                                    ? 'Platform Admin'
+                                    : (activeTenant?.role || t.dashboardLayout.userFallbackRole)
+                            }
+                            avatarUrl={user?.avatar_url}
+                            canSwitchAccount={canSwitchAccount}
+                        />
                     </div>
                 </header>
 

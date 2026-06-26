@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { AssetsModule } from '../assets/assets.module';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
@@ -15,6 +16,7 @@ import { TotpService } from './totp.service';
 
 @Module({
     imports: [
+        AssetsModule,
         PassportModule,
         JwtModule.register({
             secret: process.env.JWT_SECRET || 'fallback-secret-for-dev-only',
