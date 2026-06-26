@@ -55,6 +55,32 @@ Create these `A` records and point them to the VPS IP:
 
 TLS issuance will fail until the subdomains resolve to the VPS.
 
+## Shared host (integrated reverse proxy)
+
+On a host that already runs another reverse proxy owning ports 80/443 (the
+production VPS at `66.116.236.127` runs an existing Caddy for
+`ai.nayeemahmad.com`), do **not** start this stack's own `caddy` service — it
+is gated behind the `standalone-edge` Compose profile and skipped by default.
+Instead:
+
+1. Deploy without the edge proxy: `docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build` (starts `db`, `backend`, `frontend` only).
+2. Ensure the existing proxy shares a Docker network with these containers so it can resolve them by name (`retail-saas-frontend-1`, `retail-saas-backend-1`).
+3. Add site blocks to the existing proxy's Caddyfile (back it up first, `caddy validate`, then `caddy reload`):
+
+   ```
+   app.nayeemahmad.com {
+   	encode zstd gzip
+   	reverse_proxy retail-saas-frontend-1:3000
+   }
+   api.nayeemahmad.com {
+   	encode zstd gzip
+   	reverse_proxy retail-saas-backend-1:4000
+   }
+   ```
+
+For a dedicated host, enable this stack's own proxy instead:
+`docker compose --profile standalone-edge -f docker-compose.prod.yml up -d`.
+
 ## Verification
 
 ```bash
