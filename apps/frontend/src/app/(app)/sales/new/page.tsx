@@ -13,7 +13,7 @@ import TotalsFooter from './components/TotalsFooter';
 import PaymentSection from './components/PaymentSection';
 import SalesHeader from './components/SalesHeader';
 import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
-import { printSalesInvoice, type PaperSize } from '@/lib/sales-invoice-printer';
+import { printSalesInvoice, PAPER_SIZES, type PaperSize } from '@/lib/sales-invoice-printer';
 
 export default function NewSalePage() {
     const { t } = useI18n();
@@ -323,7 +323,7 @@ export default function NewSalePage() {
                             {showPaperMenu && (
                                 <div className="absolute right-0 bottom-full mb-1 z-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
                                     <p className="px-3 py-1 text-xs font-bold text-gray-400 uppercase tracking-wider">Paper Size</p>
-                                    {(['A4', 'Letter', 'Thermal80', 'Thermal58'] as PaperSize[]).map((size) => (
+                                    {PAPER_SIZES.map((size) => (
                                         <button
                                             key={size}
                                             type="button"

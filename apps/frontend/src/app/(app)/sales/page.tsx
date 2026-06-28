@@ -83,8 +83,6 @@ const SALES_HUB_SECTIONS: HubSectionConfig[] = [
         sectionKey: 'customersCrm',
         links: [
             { href: routes.sales.customers, key: 'customers', icon: Users, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
-            { href: routes.sales.crm.tasks, key: 'crmTasks', icon: CheckSquare, accent: 'bg-teal-50 text-teal-700 border-teal-100' },
-            { href: routes.sales.crm.campaigns, key: 'crmCampaigns', icon: Megaphone, accent: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-100' },
             { href: routes.sales.loyalty, key: 'loyalty', icon: Gift, accent: 'bg-pink-50 text-pink-700 border-pink-100' },
         ],
     },

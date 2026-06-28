@@ -37,6 +37,7 @@ function Toast({ toast, onDismiss }: { toast: ToastState; onDismiss: () => void 
 
 const PAPER_SIZE_OPTIONS: { value: PaperSize; label: string }[] = [
     { value: 'A4', label: 'A4 (210 × 297 mm)' },
+    { value: 'A5', label: 'A5 (148 × 210 mm)' },
     { value: 'Letter', label: 'Letter (8.5 × 11 in)' },
     { value: 'Thermal80', label: '80mm Thermal Roll' },
     { value: 'Thermal58', label: '58mm Thermal Roll' },

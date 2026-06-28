@@ -132,6 +132,7 @@ export const PLAN_COMPARISON_ROWS: ComparisonRow[] = [
     { feature: 'E-commerce storefront', free: false, basic: false, accounting: false, standard: true, premium: true },
     { feature: 'Manufacturing / BOM', free: false, basic: false, accounting: false, standard: false, premium: true },
     { feature: 'White-label branding', free: false, basic: false, accounting: false, standard: false, premium: true },
+    { feature: 'Lead management & conversations', free: false, basic: false, accounting: false, standard: false, premium: true },
     { feature: 'Public API access', free: false, basic: false, accounting: false, standard: false, premium: true },
     { feature: 'Priority support', free: false, basic: false, accounting: false, standard: true, premium: true },
 ];

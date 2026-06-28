@@ -1,6 +1,8 @@
 import { formatBDT } from './format';
 
-export type PaperSize = 'A4' | 'Letter' | 'Thermal80' | 'Thermal58';
+export type PaperSize = 'A4' | 'A5' | 'Letter' | 'Thermal80' | 'Thermal58';
+
+export const PAPER_SIZES: PaperSize[] = ['A4', 'A5', 'Letter', 'Thermal80', 'Thermal58'];
 
 export interface InvoiceItem {
     name: string;
@@ -39,6 +41,7 @@ export interface InvoiceData {
 
 const PAGE_CSS: Record<PaperSize, string> = {
     A4:        '@page { size: A4 portrait; margin: 15mm; }',
+    A5:        '@page { size: A5 portrait; margin: 10mm; }',
     Letter:    '@page { size: letter portrait; margin: 15mm; }',
     Thermal80: '@page { size: 80mm auto; margin: 4mm; }',
     Thermal58: '@page { size: 58mm auto; margin: 3mm; }',
@@ -259,8 +262,10 @@ function buildHtml(data: InvoiceData, paperSize: PaperSize): string {
 
 export function printSalesInvoice(data: InvoiceData, paperSize: PaperSize = 'A4'): void {
     const isThermal = paperSize === 'Thermal80' || paperSize === 'Thermal58';
-    const width = isThermal ? (paperSize === 'Thermal58' ? '320' : '420') : '950';
-    const height = isThermal ? '700' : '850';
+    const width = isThermal
+        ? (paperSize === 'Thermal58' ? '320' : '420')
+        : paperSize === 'A5' ? '670' : '950';
+    const height = isThermal ? '700' : paperSize === 'A5' ? '600' : '850';
 
     const html = buildHtml(data, paperSize);
     const win = window.open('', '_blank', `width=${width},height=${height}`);

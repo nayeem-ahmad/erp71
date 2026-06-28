@@ -28,8 +28,8 @@ export const routes = {
         cashierSessions: '/sales/cashier-sessions',
         loyalty: '/sales/loyalty',
         crm: {
-            tasks: '/sales/crm/tasks',
-            campaigns: '/sales/crm/campaigns',
+            tasks: '/crm/tasks',
+            campaigns: '/crm/campaigns',
         },
         customers: '/sales/customers',
         customerDetail: (id: string) => `/sales/customers/${id}` as const,
@@ -124,6 +124,15 @@ export const routes = {
             shrinkage: '/inventory/reports/shrinkage',
             valuation: '/inventory/reports/valuation',
         },
+    },
+
+    crm: {
+        root: '/crm',
+        customers: '/crm/customers',
+        leads: '/crm/leads',
+        leadDetail: (id: string) => `/crm/leads/${id}` as const,
+        tasks: '/crm/tasks',
+        campaigns: '/crm/campaigns',
     },
 
     hr: {

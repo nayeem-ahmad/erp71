@@ -1,4 +1,83 @@
 export const crmHrMessages = {
+    crm: {
+        hub: {
+            moduleLabel: "CRM মডিউল",
+            title: "গ্রাহক সম্পর্ক",
+            subtitle: "লিড, ফলো-আপ, ক্যাম্পেইন ও গ্রাহক যোগাযোগ পরিচালনা।",
+            pipeline: "পাইপলাইন",
+            relationships: "সম্পর্ক",
+            premiumRequired: "লিড ম্যানেজমেন্ট Premium প্ল্যানে উপলব্ধ।",
+            upgradeCta: "Premium-এ আপগ্রেড করুন",
+            links: {
+                leads: { title: "লিড", description: "গ্রাহক হওয়ার আগে সম্ভাব্য ক্রেতা ট্র্যাক করুন।" },
+                customers: { title: "গ্রাহক", description: "গ্রাহক ব্রাউজ করুন ও প্রোফাইল খুলুন।" },
+                crmTasks: { title: "টাস্ক ও ফলো-আপ", description: "গ্রাহক বা লিড-লিঙ্কড ফলো-আপ টাস্ক।" },
+                crmCampaigns: { title: "ক্যাম্পেইন", description: "আউটবাউন্ড বিক্রয় ক্যাম্পেইন পরিচালনা।" },
+            },
+        },
+        leads: {
+            title: "লিড",
+            subtitle: "সম্ভাব্য ক্রেতা ও প্রি-সেল পাইপলাইন",
+            newLead: "নতুন লিড",
+            emptyMessage: "কোনো লিড নেই",
+            searchPlaceholder: "নাম বা ফোন দিয়ে খুঁজুন...",
+            allStatuses: "সব স্ট্যাটাস",
+            allSources: "সব উৎস",
+            convert: "গ্রাহকে রূপান্তর",
+            convertConfirm: "এই লিডকে গ্রাহকে রূপান্তর করবেন?",
+            converted: "লিড সফলভাবে রূপান্তরিত",
+            convertFailed: "রূপান্তর ব্যর্থ",
+            customerExists: "এই ফোনে ইতিমধ্যে একজন গ্রাহক আছে।",
+            viewCustomer: "গ্রাহক দেখুন",
+            createFailed: "লিড তৈরি ব্যর্থ",
+            deleteConfirm: "এই লিড মুছবেন?",
+            columns: {
+                name: "নাম",
+                phone: "ফোন",
+                source: "উৎস",
+                status: "স্ট্যাটাস",
+                lastContact: "শেষ যোগাযোগ",
+                assigned: "দায়িত্বপ্রাপ্ত",
+            },
+            statuses: {
+                NEW: "নতুন",
+                CONTACTED: "যোগাযোগ করা",
+                QUALIFIED: "যোগ্য",
+                LOST: "হারানো",
+                CONVERTED: "রূপান্তরিত",
+            },
+            sources: {
+                WALK_IN: "ওয়াক-ইন",
+                PHONE: "ফোন",
+                FACEBOOK: "Facebook",
+                REFERRAL: "রেফারেল",
+                WEBSITE: "ওয়েবসাইট",
+                OTHER: "অন্যান্য",
+            },
+            detail: {
+                conversations: "কথোপকথন",
+                logConversation: "কথোপকথন লগ করুন",
+                createTask: "টাস্ক তৈরি",
+                notes: "নোট",
+                noConversations: "এখনো কোনো কথোপকথন নেই",
+            },
+            customers: {
+                title: "গ্রাহক",
+                subtitle: "সম্পর্ক ভিউ — ক্রেডিট ও বিক্রয় Sales মডিউলে",
+                openInSales: "Sales-এ খুলুন",
+            },
+        },
+        leadConversations: {
+            types: {
+                CALL: "কল",
+                SMS: "SMS",
+                WHATSAPP: "WhatsApp",
+                EMAIL: "ইমেইল",
+                VISIT: "ভিজিট",
+                NOTE: "নোট",
+            },
+        },
+    },
     hr: {
         hub: {
             moduleLabel: "HR মডিউল",
@@ -18,6 +97,11 @@ export const crmHrMessages = {
         },
     },
         crmTasks: {
+            targetFilter: {
+                all: "সব",
+                customers: "গ্রাহক",
+                leads: "লিড",
+            },
             title: "CRM কাজ",
             subtitle: "এক কিউতে ফলো-আপ, আদায় ও গ্রাহক রিমাইন্ডার",
             dueToday: "আজ বাকি",
@@ -33,6 +117,7 @@ export const crmHrMessages = {
             viewCustomer: "গ্রাহক দেখুন",
             columns: {
                 customer: "গ্রাহক",
+                lead: "লিড",
                 type: "ধরন",
                 title: "শিরোনাম",
                 dueDate: "নির্ধারিত তারিখ",

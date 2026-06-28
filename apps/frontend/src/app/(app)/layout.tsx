@@ -95,6 +95,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         Boolean(planFeatures.premiumAccounting)
         || (activePlanCode ? ACCOUNTING_PLAN_CODES.has(activePlanCode) : false);
     const hasInventoryReportEntitlement = Boolean(planFeatures.premiumInventoryReports) || activePlanCode === 'STANDARD' || activePlanCode === 'PREMIUM';
+    const hasPremiumCrm = activePlanCode === 'PREMIUM' || Boolean(planFeatures.premiumCrm);
     const isPlatformAdmin = inPlatformAdminMode;
     const canManageBilling = primaryRole === 'OWNER' || primaryRole === 'MANAGER';
     const canManageTeam = primaryRole === 'OWNER' || primaryRole === 'MANAGER';
@@ -162,7 +163,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         if (!canAccessAccounting && pathname.startsWith(routes.accounting.expenses)) {
             router.replace(routes.home);
         }
-    }, [canAccessAccounting, canAccessInventoryReports, canManageTeam, canViewAudit, hasResolvedUser, isPlatformAdmin, pathname, router]);
+        if (!hasPremiumCrm && pathname.startsWith(routes.crm.leads)) {
+            router.replace(routes.crm.root);
+        }
+    }, [canAccessAccounting, canAccessInventoryReports, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, router]);
 
     // Build a human-readable page title from the path
     const pageTitle = (() => {
@@ -191,6 +195,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <Sidebar
                 canAccessAccounting={canAccessAccounting}
                 canAccessInventoryReports={canAccessInventoryReports}
+                canAccessPremiumCrm={hasPremiumCrm}
                 canAccessAdmin={isPlatformAdmin}
                 canManageBilling={canManageBilling}
                 canManageTeam={canManageTeam}

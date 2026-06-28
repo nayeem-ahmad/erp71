@@ -88,6 +88,10 @@ enum StorePermission {
   MANAGE_CRM_TASKS
   VIEW_CUSTOMER_CREDIT
   MANAGE_CUSTOMER_CREDIT
+  VIEW_LEADS
+  MANAGE_LEADS
+  VIEW_LEAD_CONVERSATIONS
+  CREATE_LEAD_CONVERSATIONS
 
   // Loans
   VIEW_LOANS
@@ -183,6 +187,9 @@ model User {
   createdInteractions       CustomerInteraction[] @relation("InteractionCreator")
   assignedCrmTasks          CrmTask[]     @relation("CrmTaskAssignee")
   createdCrmTasks           CrmTask[]     @relation("CrmTaskCreator")
+  assignedLeads             Lead[]        @relation("LeadAssignee")
+  createdLeads              Lead[]        @relation("LeadCreator")
+  createdLeadConversations  LeadConversation[] @relation("LeadConversationCreator")
   createdCreditTransactions CustomerCreditTransaction[] @relation("CreditTransactionCreator")
   createdSupplierCreditTransactions SupplierCreditTransaction[] @relation("SupplierCreditTransactionCreator")
   createdCampaigns          CrmCampaign[]              @relation("CampaignCreator")
@@ -372,6 +379,8 @@ model Tenant {
   bankReconciliations BankReconciliation[]
   customerInteractions CustomerInteraction[]
   crmTasks            CrmTask[]
+  leads               Lead[]
+  leadConversations   LeadConversation[]
   customerCreditTransactions CustomerCreditTransaction[]
   supplierCreditTransactions SupplierCreditTransaction[]
   crmCampaigns        CrmCampaign[]
@@ -406,7 +415,7 @@ model PaymentMethod {
 model SalesSettings {
   id                     String   @id @default(uuid())
   tenant_id              String   @unique
-  paper_size             String   @default("A4") // A4, Letter, Thermal80, Thermal58
+  paper_size             String   @default("A4") // A4, A5, Letter, Thermal80, Thermal58
   reference_number_format String @default("YYMM-#") // Format template
   created_at             DateTime @default(now())
   updated_at             DateTime @updatedAt
@@ -1120,6 +1129,7 @@ model Customer {
   crmTasks           CrmTask[]
   creditTransactions CustomerCreditTransaction[]
   campaignRecipients CrmCampaignRecipient[]
+  convertedFromLeads Lead[] @relation("LeadConvertedCustomer")
 
   @@unique([tenant_id, phone])
   @@unique([tenant_id, customer_code])
@@ -1221,11 +1231,62 @@ model CustomerInteraction {
   @@index([tenant_id, created_at])
 }
 
+model Lead {
+  id                    String    @id @default(uuid())
+  tenant_id             String
+  store_id              String?
+  name                  String
+  phone                 String
+  email                 String?
+  address               String?
+  source                String    @default("OTHER") // WALK_IN | PHONE | FACEBOOK | REFERRAL | WEBSITE | OTHER
+  status                String    @default("NEW")     // NEW | CONTACTED | QUALIFIED | LOST | CONVERTED
+  assigned_to           String?
+  notes                 String?
+  last_contacted_at     DateTime?
+  converted_customer_id String?
+  created_by            String?
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
+
+  tenant             Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  assignee           User?     @relation("LeadAssignee", fields: [assigned_to], references: [id])
+  creator            User?     @relation("LeadCreator", fields: [created_by], references: [id])
+  convertedCustomer  Customer? @relation("LeadConvertedCustomer", fields: [converted_customer_id], references: [id])
+  conversations      LeadConversation[]
+  crmTasks           CrmTask[]
+
+  @@unique([tenant_id, phone])
+  @@index([tenant_id, status])
+  @@index([tenant_id, assigned_to])
+}
+
+model LeadConversation {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  store_id    String?
+  lead_id     String
+  type        String   // CALL | SMS | WHATSAPP | EMAIL | VISIT | NOTE
+  direction   String   @default("OUTBOUND")
+  summary     String
+  outcome     String?
+  created_by  String?
+  created_at  DateTime @default(now())
+
+  tenant   Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  lead     Lead   @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+  creator  User?  @relation("LeadConversationCreator", fields: [created_by], references: [id])
+
+  @@index([tenant_id, lead_id])
+  @@index([tenant_id, created_at])
+}
+
 model CrmTask {
   id           String    @id @default(uuid())
   tenant_id    String
   store_id     String?
-  customer_id  String
+  customer_id  String?
+  lead_id      String?
   type         String    // FOLLOW_UP | COLLECTION | BIRTHDAY | REORDER_REMINDER
   title        String
   due_at       DateTime
@@ -1238,12 +1299,14 @@ model CrmTask {
   updated_at   DateTime  @updatedAt
 
   tenant   Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  customer Customer  @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  lead     Lead?     @relation(fields: [lead_id], references: [id], onDelete: Cascade)
   assignee User?     @relation("CrmTaskAssignee", fields: [assigned_to], references: [id])
   creator  User?     @relation("CrmTaskCreator", fields: [created_by], references: [id])
 
   @@index([tenant_id, status, due_at])
   @@index([tenant_id, customer_id])
+  @@index([tenant_id, lead_id])
 }
 
 model CustomerCreditTransaction {

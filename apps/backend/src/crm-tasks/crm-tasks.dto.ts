@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsUUID, IsDateString, IsIn } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsUUID, IsDateString } from 'class-validator';
 
 export enum CrmTaskType {
     FOLLOW_UP = 'FOLLOW_UP',
@@ -14,8 +14,13 @@ export enum CrmTaskStatus {
 }
 
 export class CreateCrmTaskDto {
+    @IsOptional()
     @IsUUID()
-    customer_id: string;
+    customer_id?: string;
+
+    @IsOptional()
+    @IsUUID()
+    lead_id?: string;
 
     @IsEnum(CrmTaskType)
     type: CrmTaskType;

@@ -50,6 +50,7 @@ import {
     FileSearch,
     CheckSquare,
     Megaphone,
+    UserPlus,
     Sparkles,
     Layers,
     BadgeCheck,
@@ -70,6 +71,7 @@ interface NavLink {
     /** If true, renders as a non-clickable section header */
     section?: boolean;
     advancedOnly?: boolean;
+    premiumOnly?: boolean;
     /** If true, only exact path match counts as active (for module hub routes) */
     exact?: boolean;
 }
@@ -89,14 +91,22 @@ function isNavSubgroup(child: NavChild): child is NavSubgroup {
     return 'type' in child && child.type === 'subgroup';
 }
 
-function filterModuleNavChildren(children: NavChild[], canAccessAdvanced: boolean): NavChild[] {
+function filterModuleNavChildren(
+    children: NavChild[],
+    canAccessAdvanced: boolean,
+    canAccessPremiumCrm = false,
+): NavChild[] {
     return children
         .map((child) => {
             if (!isNavSubgroup(child)) {
+                if (child.premiumOnly && !canAccessPremiumCrm) return null;
                 return !child.advancedOnly || canAccessAdvanced ? child : null;
             }
             if (child.advancedOnly && !canAccessAdvanced) return null;
-            const filteredLinks = child.children.filter((link) => !link.advancedOnly || canAccessAdvanced);
+            const filteredLinks = child.children.filter((link) => {
+                if (link.premiumOnly && !canAccessPremiumCrm) return false;
+                return !link.advancedOnly || canAccessAdvanced;
+            });
             if (filteredLinks.length === 0) return null;
             return { ...child, children: filteredLinks };
         })
@@ -168,13 +178,11 @@ function buildModules(t: ReturnType<typeof useI18n>['t']): NavModule[] {
             },
             {
                 type: 'subgroup',
-                key: 'customers-crm',
+                key: 'customers',
                 icon: Users,
                 label: t.sales.hub.customersCrm,
                 children: [
                     { href: routes.sales.customers, icon: Users, label: t.sidebar.items.customers },
-                    { href: routes.sales.crm.tasks, icon: CheckSquare, label: t.sidebar.items.crmTasks },
-                    { href: routes.sales.crm.campaigns, icon: Megaphone, label: t.sidebar.items.crmCampaigns },
                     { href: routes.sales.loyalty, icon: Gift, label: t.sidebar.items.loyaltyPoints },
                 ],
             },
@@ -329,6 +337,18 @@ function buildModules(t: ReturnType<typeof useI18n>['t']): NavModule[] {
         ],
     },
     {
+        key: 'crm',
+        icon: Users,
+        label: t.sidebar.modules.crm,
+        children: [
+            { href: routes.crm.root, icon: LayoutDashboard, label: t.sidebar.items.overview, exact: true },
+            { href: routes.crm.leads, icon: UserPlus, label: t.sidebar.items.crmLeads, premiumOnly: true },
+            { href: routes.crm.customers, icon: Users, label: t.sidebar.items.crmCustomers },
+            { href: routes.crm.tasks, icon: CheckSquare, label: t.sidebar.items.crmTasks },
+            { href: routes.crm.campaigns, icon: Megaphone, label: t.sidebar.items.crmCampaigns },
+        ],
+    },
+    {
         key: 'hr',
         icon: UserCog,
         label: t.sidebar.modules.hr,
@@ -407,6 +427,7 @@ const PLATFORM_ADMIN_MODULES = new Set(['admin', 'help']);
 export default function Sidebar({
     canAccessAccounting = true,
     canAccessInventoryReports = false,
+    canAccessPremiumCrm = false,
     canAccessAdmin = false,
     canManageBilling = false,
     canManageTeam = false,
@@ -417,6 +438,7 @@ export default function Sidebar({
 }: {
     canAccessAccounting?: boolean;
     canAccessInventoryReports?: boolean;
+    canAccessPremiumCrm?: boolean;
     canAccessAdmin?: boolean;
     canManageBilling?: boolean;
     canManageTeam?: boolean;
@@ -459,7 +481,14 @@ export default function Sidebar({
             if (['sales', 'purchase', 'inventory'].includes(module.key)) {
                 return {
                     ...module,
-                    children: filterModuleNavChildren(module.children, canAccessInventoryReports),
+                    children: filterModuleNavChildren(module.children, canAccessInventoryReports, canAccessPremiumCrm),
+                };
+            }
+
+            if (module.key === 'crm') {
+                return {
+                    ...module,
+                    children: filterModuleNavChildren(module.children, true, canAccessPremiumCrm),
                 };
             }
 
@@ -470,6 +499,7 @@ export default function Sidebar({
         platformAdminMode,
         canAccessAccounting,
         canAccessInventoryReports,
+        canAccessPremiumCrm,
         canAccessAdmin,
         canManageBilling,
         canManageTeam,

@@ -54,6 +54,7 @@ async function main() {
             maxSkus: 100,
             premiumAccounting: false,
             premiumInventoryReports: false,
+            premiumCrm: false,
             multiStore: false,
         },
     });
@@ -70,6 +71,7 @@ async function main() {
             maxSkus: 2000,
             premiumAccounting: false,
             premiumInventoryReports: false,
+            premiumCrm: false,
             multiStore: false,
         },
     });
@@ -86,6 +88,7 @@ async function main() {
             maxSkus: 5000,
             premiumAccounting: true,
             premiumInventoryReports: false,
+            premiumCrm: false,
             multiStore: false,
         },
     });
@@ -102,6 +105,7 @@ async function main() {
             maxSkus: 20000,
             premiumAccounting: true,
             premiumInventoryReports: true,
+            premiumCrm: false,
             multiStore: true,
         },
     });
@@ -118,6 +122,7 @@ async function main() {
             maxSkus: -1,
             premiumAccounting: true,
             premiumInventoryReports: true,
+            premiumCrm: true,
             multiStore: true,
             apiAccess: true,
         },

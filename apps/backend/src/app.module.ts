@@ -71,6 +71,8 @@ import { BrandsModule } from './brands/brands.module';
 import { CrmInteractionsModule } from './crm-interactions/crm-interactions.module';
 import { CrmTasksModule } from './crm-tasks/crm-tasks.module';
 import { CrmCampaignsModule } from './crm-campaigns/crm-campaigns.module';
+import { CrmLeadsModule } from './crm-leads/crm-leads.module';
+import { CrmLeadConversationsModule } from './crm-lead-conversations/crm-lead-conversations.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { LoansModule } from './loans/loans.module';
 import { SalaryPaymentsModule } from './salary-payments/salary-payments.module';
@@ -151,6 +153,8 @@ import { SupportModule } from './support/support.module';
         CrmInteractionsModule,
         CrmTasksModule,
         CrmCampaignsModule,
+        CrmLeadsModule,
+        CrmLeadConversationsModule,
         ExpensesModule,
         LoansModule,
         SalaryPaymentsModule,

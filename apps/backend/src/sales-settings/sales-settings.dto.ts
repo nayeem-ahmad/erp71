@@ -2,6 +2,7 @@ import { IsString, IsOptional, IsEnum } from 'class-validator';
 
 export enum PaperSize {
   A4 = 'A4',
+  A5 = 'A5',
   LETTER = 'Letter',
   THERMAL_80 = 'Thermal80',
   THERMAL_58 = 'Thermal58',

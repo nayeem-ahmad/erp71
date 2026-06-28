@@ -1,43 +1,33 @@
 import { Controller, Post, Get, Patch, Delete, Body, Param, Query, UseGuards, UseInterceptors } from '@nestjs/common';
-import { CrmTasksService } from './crm-tasks.service';
-import { CreateCrmTaskDto, UpdateCrmTaskDto } from './crm-tasks.dto';
+import { CrmLeadConversationsService } from './crm-lead-conversations.service';
+import { CreateLeadConversationDto, UpdateLeadConversationDto } from './crm-lead-conversations.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
+import { RequiresFeature } from '../auth/subscription-access.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 
-@Controller('crm/tasks')
-@UseGuards(JwtAuthGuard)
+@Controller('crm/lead-conversations')
+@UseGuards(JwtAuthGuard, SubscriptionAccessGuard)
+@RequiresFeature('premiumCrm')
 @UseInterceptors(TenantInterceptor)
-export class CrmTasksController {
-    constructor(private readonly service: CrmTasksService) {}
-
-    @Get('summary')
-    getTodaySummary(@Tenant() tenant: TenantContext) {
-        return this.service.getTodaySummary(tenant.tenantId);
-    }
+export class CrmLeadConversationsController {
+    constructor(private readonly service: CrmLeadConversationsService) {}
 
     @Post()
-    create(@Tenant() tenant: TenantContext, @Body() dto: CreateCrmTaskDto) {
+    create(@Tenant() tenant: TenantContext, @Body() dto: CreateLeadConversationDto) {
         return this.service.create(tenant.tenantId, tenant.userId, dto);
     }
 
     @Get()
     findAll(
         @Tenant() tenant: TenantContext,
-        @Query('customerId') customerId?: string,
         @Query('leadId') leadId?: string,
-        @Query('target') target?: 'customer' | 'lead',
-        @Query('status') status?: string,
-        @Query('dueToday') dueToday?: string,
         @Query('page') page?: string,
         @Query('limit') limit?: string,
     ) {
         return this.service.findAll(tenant.tenantId, {
-            customerId,
             leadId,
-            target,
-            status,
-            dueToday: dueToday === 'true',
             page: page ? parseInt(page, 10) : undefined,
             limit: limit ? parseInt(limit, 10) : undefined,
         });
@@ -49,7 +39,7 @@ export class CrmTasksController {
     }
 
     @Patch(':id')
-    update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateCrmTaskDto) {
+    update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateLeadConversationDto) {
         return this.service.update(tenant.tenantId, id, dto);
     }
 

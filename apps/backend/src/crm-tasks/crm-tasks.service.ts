@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DatabaseService } from '../database/database.service';
 import { AppLogger } from '../common/app-logger.service';
@@ -15,17 +15,44 @@ export class CrmTasksService {
         private readonly jobTracker: JobTrackerService,
     ) {}
 
-    async create(tenantId: string, userId: string, dto: CreateCrmTaskDto) {
-        const customer = await this.db.customer.findFirst({
-            where: { id: dto.customer_id, tenant_id: tenantId, deleted_at: null },
-            select: { id: true },
+    private async validateTaskTarget(
+        tenantId: string,
+        customerId?: string,
+        leadId?: string,
+    ): Promise<{ customer_id?: string; lead_id?: string }> {
+        const hasCustomer = Boolean(customerId);
+        const hasLead = Boolean(leadId);
+        if (hasCustomer === hasLead) {
+            throw new BadRequestException('Provide exactly one of customer_id or lead_id.');
+        }
+
+        if (customerId) {
+            const customer = await this.db.customer.findFirst({
+                where: { id: customerId, tenant_id: tenantId, deleted_at: null },
+                select: { id: true },
+            });
+            if (!customer) throw new NotFoundException('Customer not found');
+            return { customer_id: customerId };
+        }
+
+        const lead = await this.db.lead.findFirst({
+            where: { id: leadId, tenant_id: tenantId },
+            select: { id: true, status: true },
         });
-        if (!customer) throw new NotFoundException('Customer not found');
+        if (!lead) throw new NotFoundException('Lead not found');
+        if (lead.status === 'LOST' || lead.status === 'CONVERTED') {
+            throw new BadRequestException('Tasks cannot be created for lost or converted leads.');
+        }
+        return { lead_id: leadId };
+    }
+
+    async create(tenantId: string, userId: string, dto: CreateCrmTaskDto) {
+        const target = await this.validateTaskTarget(tenantId, dto.customer_id, dto.lead_id);
 
         return this.db.crmTask.create({
             data: {
                 tenant_id: tenantId,
-                customer_id: dto.customer_id,
+                ...target,
                 type: dto.type,
                 title: dto.title,
                 due_at: new Date(dto.due_at),
@@ -37,6 +64,7 @@ export class CrmTasksService {
             },
             include: {
                 customer: { select: { id: true, name: true, phone: true } },
+                lead: { select: { id: true, name: true, phone: true } },
                 assignee: { select: { id: true, name: true, email: true } },
             },
         });
@@ -44,7 +72,15 @@ export class CrmTasksService {
 
     async findAll(
         tenantId: string,
-        opts: { customerId?: string; status?: string; page?: number; limit?: number; dueToday?: boolean },
+        opts: {
+            customerId?: string;
+            leadId?: string;
+            target?: 'customer' | 'lead';
+            status?: string;
+            page?: number;
+            limit?: number;
+            dueToday?: boolean;
+        },
     ) {
         const page = opts.page ?? 1;
         const limit = Math.min(opts.limit ?? 20, 100);
@@ -52,6 +88,9 @@ export class CrmTasksService {
 
         const where: any = { tenant_id: tenantId };
         if (opts.customerId) where.customer_id = opts.customerId;
+        if (opts.leadId) where.lead_id = opts.leadId;
+        if (opts.target === 'customer') where.customer_id = { not: null };
+        if (opts.target === 'lead') where.lead_id = { not: null };
         if (opts.status) where.status = opts.status;
         if (opts.dueToday) {
             const today = new Date();
@@ -67,6 +106,7 @@ export class CrmTasksService {
                 where,
                 include: {
                     customer: { select: { id: true, name: true, phone: true } },
+                    lead: { select: { id: true, name: true, phone: true } },
                     assignee: { select: { id: true, name: true, email: true } },
                 },
                 orderBy: { due_at: 'asc' },
@@ -84,6 +124,7 @@ export class CrmTasksService {
             where: { id, tenant_id: tenantId },
             include: {
                 customer: { select: { id: true, name: true, phone: true } },
+                lead: { select: { id: true, name: true, phone: true } },
                 assignee: { select: { id: true, name: true, email: true } },
             },
         });
@@ -104,6 +145,7 @@ export class CrmTasksService {
             data,
             include: {
                 customer: { select: { id: true, name: true, phone: true } },
+                lead: { select: { id: true, name: true, phone: true } },
                 assignee: { select: { id: true, name: true, email: true } },
             },
         });

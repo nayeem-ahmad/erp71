@@ -1,4 +1,83 @@
 export const crmHrMessages = {
+    crm: {
+        hub: {
+            moduleLabel: 'Modul CRM',
+            title: 'Hubungan Pelanggan',
+            subtitle: 'Urus prospek, susulan, kempen, dan komunikasi pelanggan.',
+            pipeline: 'Saluran',
+            relationships: 'Hubungan',
+            premiumRequired: 'Pengurusan prospek tersedia pada pelan Premium.',
+            upgradeCta: 'Naik taraf ke Premium',
+            links: {
+                leads: { title: 'Prospek', description: 'Jejaki bakal pelanggan sebelum mereka membeli.' },
+                customers: { title: 'Pelanggan', description: 'Semak pelanggan dan buka profil hubungan.' },
+                crmTasks: { title: 'Tugas & Susulan', description: 'Tugas susulan untuk pelanggan atau prospek.' },
+                crmCampaigns: { title: 'Kempen', description: 'Rancang dan hantar kempen jualan.' },
+            },
+        },
+        leads: {
+            title: 'Prospek',
+            subtitle: 'Bakal pelanggan dan saluran pra-jualan',
+            newLead: 'Prospek Baharu',
+            emptyMessage: 'Tiada prospek lagi',
+            searchPlaceholder: 'Cari mengikut nama atau telefon...',
+            allStatuses: 'Semua status',
+            allSources: 'Semua sumber',
+            convert: 'Tukar kepada Pelanggan',
+            convertConfirm: 'Tukar prospek ini kepada pelanggan?',
+            converted: 'Prospek berjaya ditukar',
+            convertFailed: 'Gagal menukar prospek',
+            customerExists: 'Pelanggan dengan telefon ini sudah wujud.',
+            viewCustomer: 'Lihat Pelanggan',
+            createFailed: 'Gagal mencipta prospek',
+            deleteConfirm: 'Padam prospek ini?',
+            columns: {
+                name: 'Nama',
+                phone: 'Telefon',
+                source: 'Sumber',
+                status: 'Status',
+                lastContact: 'Hubungan Terakhir',
+                assigned: 'Ditugaskan',
+            },
+            statuses: {
+                NEW: 'Baharu',
+                CONTACTED: 'Dihubungi',
+                QUALIFIED: 'Layak',
+                LOST: 'Hilang',
+                CONVERTED: 'Ditukar',
+            },
+            sources: {
+                WALK_IN: 'Datang Sendiri',
+                PHONE: 'Telefon',
+                FACEBOOK: 'Facebook',
+                REFERRAL: 'Rujukan',
+                WEBSITE: 'Laman Web',
+                OTHER: 'Lain-lain',
+            },
+            detail: {
+                conversations: 'Perbualan',
+                logConversation: 'Log Perbualan',
+                createTask: 'Cipta Tugas',
+                notes: 'Nota',
+                noConversations: 'Tiada perbualan lagi',
+            },
+            customers: {
+                title: 'Pelanggan',
+                subtitle: 'Paparan hubungan — urus kredit dan jualan dalam modul Sales',
+                openInSales: 'Buka dalam Sales',
+            },
+        },
+        leadConversations: {
+            types: {
+                CALL: 'Panggilan',
+                SMS: 'SMS',
+                WHATSAPP: 'WhatsApp',
+                EMAIL: 'E-mel',
+                VISIT: 'Lawatan',
+                NOTE: 'Nota',
+            },
+        },
+    },
     hr: {
         hub: {
             moduleLabel: 'Modul HR',
@@ -18,6 +97,11 @@ export const crmHrMessages = {
         },
     },
     crmTasks: {
+        targetFilter: {
+            all: 'Semua',
+            customers: 'Pelanggan',
+            leads: 'Prospek',
+        },
         title: "Tugas CRM",
         subtitle: "Susulan, kutipan, dan peringatan pelanggan dalam satu barisan",
         dueToday: "Tamat Hari Ini",
@@ -33,6 +117,7 @@ export const crmHrMessages = {
         viewCustomer: "Lihat Pelanggan",
         columns: {
             customer: "Pelanggan",
+            lead: "Prospek",
             type: "Jenis",
             title: "Tajuk",
             dueDate: "Tarikh Tamat",

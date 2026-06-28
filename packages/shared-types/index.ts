@@ -55,6 +55,10 @@ export const StorePermission = {
   MANAGE_CRM_TASKS: "MANAGE_CRM_TASKS",
   VIEW_CUSTOMER_CREDIT: "VIEW_CUSTOMER_CREDIT",
   MANAGE_CUSTOMER_CREDIT: "MANAGE_CUSTOMER_CREDIT",
+  VIEW_LEADS: "VIEW_LEADS",
+  MANAGE_LEADS: "MANAGE_LEADS",
+  VIEW_LEAD_CONVERSATIONS: "VIEW_LEAD_CONVERSATIONS",
+  CREATE_LEAD_CONVERSATIONS: "CREATE_LEAD_CONVERSATIONS",
 
   // Loans
   VIEW_LOANS: "VIEW_LOANS",
@@ -90,6 +94,10 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.MANAGE_CRM_TASKS,
     StorePermission.VIEW_CUSTOMER_CREDIT,
     StorePermission.MANAGE_CUSTOMER_CREDIT,
+    StorePermission.VIEW_LEADS,
+    StorePermission.MANAGE_LEADS,
+    StorePermission.VIEW_LEAD_CONVERSATIONS,
+    StorePermission.CREATE_LEAD_CONVERSATIONS,
     StorePermission.VIEW_LOANS,
     StorePermission.MANAGE_LOANS,
   ],
@@ -143,6 +151,10 @@ export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.MANAGE_CRM_TASKS]: "Manage CRM tasks",
   [StorePermission.VIEW_CUSTOMER_CREDIT]: "View customer credit",
   [StorePermission.MANAGE_CUSTOMER_CREDIT]: "Manage customer credit",
+  [StorePermission.VIEW_LEADS]: "View leads",
+  [StorePermission.MANAGE_LEADS]: "Manage leads",
+  [StorePermission.VIEW_LEAD_CONVERSATIONS]: "View lead conversations",
+  [StorePermission.CREATE_LEAD_CONVERSATIONS]: "Log lead conversations",
   [StorePermission.VIEW_LOANS]: "View loans",
   [StorePermission.MANAGE_LOANS]: "Manage loans",
 };
@@ -205,6 +217,10 @@ export const STORE_PERMISSION_GROUPS: { label: string; permissions: StorePermiss
       StorePermission.MANAGE_CRM_TASKS,
       StorePermission.VIEW_CUSTOMER_CREDIT,
       StorePermission.MANAGE_CUSTOMER_CREDIT,
+      StorePermission.VIEW_LEADS,
+      StorePermission.MANAGE_LEADS,
+      StorePermission.VIEW_LEAD_CONVERSATIONS,
+      StorePermission.CREATE_LEAD_CONVERSATIONS,
     ],
   },
   {

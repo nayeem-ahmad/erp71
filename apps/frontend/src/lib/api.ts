@@ -413,10 +413,58 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteCrmInteraction: (id: string) => fetchWithAuth(`/crm/interactions/${id}`, { method: 'DELETE' }),
+    // CRM Leads
+    getLeads: (params?: { status?: string; source?: string; assignedTo?: string; search?: string; page?: number; limit?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.status) query.set('status', params.status);
+        if (params?.source) query.set('source', params.source);
+        if (params?.assignedTo) query.set('assignedTo', params.assignedTo);
+        if (params?.search) query.set('search', params.search);
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.limit) query.set('limit', String(params.limit));
+        return fetchWithAuth(`/crm/leads${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    getLead: (id: string) => fetchWithAuth(`/crm/leads/${id}`),
+    createLead: (data: any) => fetchWithAuth('/crm/leads', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateLead: (id: string, data: any) => fetchWithAuth(`/crm/leads/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    convertLead: (id: string) => fetchWithAuth(`/crm/leads/${id}/convert`, { method: 'POST' }),
+    deleteLead: (id: string) => fetchWithAuth(`/crm/leads/${id}`, { method: 'DELETE' }),
+    // CRM Lead Conversations
+    getLeadConversations: (params?: { leadId?: string; page?: number; limit?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.leadId) query.set('leadId', params.leadId);
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.limit) query.set('limit', String(params.limit));
+        return fetchWithAuth(`/crm/lead-conversations${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    createLeadConversation: (data: any) => fetchWithAuth('/crm/lead-conversations', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteLeadConversation: (id: string) => fetchWithAuth(`/crm/lead-conversations/${id}`, { method: 'DELETE' }),
     // CRM Tasks
-    getCrmTasks: (params?: { customerId?: string; status?: string; dueToday?: boolean; page?: number; limit?: number }) => {
+    getCrmTasks: (params?: {
+        customerId?: string;
+        leadId?: string;
+        target?: 'customer' | 'lead';
+        status?: string;
+        dueToday?: boolean;
+        page?: number;
+        limit?: number;
+    }) => {
         const query = new URLSearchParams();
         if (params?.customerId) query.set('customerId', params.customerId);
+        if (params?.leadId) query.set('leadId', params.leadId);
+        if (params?.target) query.set('target', params.target);
         if (params?.status) query.set('status', params.status);
         if (params?.dueToday) query.set('dueToday', 'true');
         if (params?.page) query.set('page', String(params.page));
