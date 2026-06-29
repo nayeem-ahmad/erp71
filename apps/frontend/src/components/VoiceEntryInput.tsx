@@ -204,6 +204,9 @@ export default function VoiceEntryInput({
     };
 
     if (!supported) {
+        if (inline && children) {
+            return <>{children}</>;
+        }
         return null;
     }
 
