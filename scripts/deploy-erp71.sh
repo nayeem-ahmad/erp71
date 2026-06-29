@@ -81,9 +81,10 @@ docker exec retail-saas-db-1 psql -U "$PG_SUPERUSER" -d postgres -tc \
   "CREATE ROLE ${ERP71_DB_USER} WITH LOGIN PASSWORD '${ERP71_DB_PASSWORD}';"
 
 docker exec retail-saas-db-1 psql -U "$PG_SUPERUSER" -d postgres -tc \
-  "SELECT 1 FROM pg_database WHERE datname = '${ERP71_DB_NAME}'" | grep -q 1 \
+  "SELECT 1 FROM pg_database WHERE datname = '${ERP71_DB_NAME}'" | tr -d '[:space:]' | grep -q '^1$' \
   || docker exec retail-saas-db-1 psql -U "$PG_SUPERUSER" -d postgres -c \
-  "CREATE DATABASE ${ERP71_DB_NAME} OWNER ${ERP71_DB_USER};"
+  "CREATE DATABASE ${ERP71_DB_NAME} OWNER ${ERP71_DB_USER};" 2>/dev/null \
+  || true
 
 echo "==> Building erp71 images"
 docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build
