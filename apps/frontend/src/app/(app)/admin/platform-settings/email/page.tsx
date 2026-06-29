@@ -20,7 +20,7 @@ const DEFAULTS: EmailSettings = {
     smtp_port: '587',
     smtp_user: '',
     smtp_pass: '',
-    email_from: 'noreply@erp71.com',
+    email_from: 'notify@erp71.com',
     frontend_url: 'http://localhost:3000',
 };
 

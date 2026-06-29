@@ -12,23 +12,41 @@ export class EmailService {
         private readonly breakers: CircuitBreakerRegistry,
     ) {}
 
+    /** Prefer an explicit DB value; otherwise fall back to env, then schema default. */
+    private pickEmailSetting(
+        raw: Record<string, string | null>,
+        key: string,
+        envValue: string | undefined,
+        fallback: string | null,
+    ): string | null {
+        if (Object.prototype.hasOwnProperty.call(raw, key) && raw[key] != null) {
+            return raw[key];
+        }
+        return envValue ?? fallback;
+    }
+
     private async getTransportConfig() {
-        const [smtpHost, smtpPort, smtpUser, smtpPass, emailFrom, frontendUrl] = await Promise.all([
-            this.platformSettings.getRawValue('email', 'smtp_host'),
-            this.platformSettings.getRawValue('email', 'smtp_port'),
-            this.platformSettings.getRawValue('email', 'smtp_user'),
-            this.platformSettings.getRawValue('email', 'smtp_pass'),
-            this.platformSettings.getRawValue('email', 'email_from'),
-            this.platformSettings.getRawValue('email', 'frontend_url'),
-        ]);
+        const rawEmail = await this.platformSettings.getRawGroup('email');
+
+        const host = this.pickEmailSetting(rawEmail, 'smtp_host', process.env.SMTP_HOST, 'smtp-relay.brevo.com');
+        const portRaw = this.pickEmailSetting(rawEmail, 'smtp_port', process.env.SMTP_PORT, '587');
+        const user = this.pickEmailSetting(rawEmail, 'smtp_user', process.env.SMTP_USER, null);
+        const pass = this.pickEmailSetting(rawEmail, 'smtp_pass', process.env.SMTP_PASS, null);
+        const from = this.pickEmailSetting(rawEmail, 'email_from', process.env.EMAIL_FROM, 'notify@erp71.com');
+        const frontendUrl = this.pickEmailSetting(
+            rawEmail,
+            'frontend_url',
+            process.env.FRONTEND_URL,
+            'http://localhost:3000',
+        );
 
         return {
-            host: smtpHost ?? process.env.SMTP_HOST ?? 'smtp-relay.brevo.com',
-            port: parseInt(smtpPort ?? process.env.SMTP_PORT ?? '587', 10),
-            user: smtpUser ?? process.env.SMTP_USER ?? null,
-            pass: smtpPass ?? process.env.SMTP_PASS ?? null,
-            from: emailFrom ?? process.env.EMAIL_FROM ?? 'noreply@erp71.com',
-            frontendUrl: frontendUrl ?? process.env.FRONTEND_URL ?? 'http://localhost:3000',
+            host: host!,
+            port: parseInt(portRaw ?? '587', 10),
+            user,
+            pass,
+            from: from!,
+            frontendUrl: frontendUrl!,
         };
     }
 
