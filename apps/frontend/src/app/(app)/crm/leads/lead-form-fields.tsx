@@ -107,7 +107,21 @@ export function leadFormToPayload(form: LeadFormState) {
 const inputClass = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm';
 const labelClass = 'text-xs font-semibold text-gray-600';
 
-type TeamMember = { user_id: string; user: { id: string; name: string; email: string } };
+type TeamMember = {
+    userId?: string;
+    user_id?: string;
+    email?: string;
+    name?: string | null;
+    user?: { id: string; name: string; email: string };
+};
+
+function teamMemberId(member: TeamMember): string | undefined {
+    return member.userId ?? member.user_id ?? member.user?.id;
+}
+
+function teamMemberLabel(member: TeamMember): string {
+    return member.name ?? member.user?.name ?? member.email ?? member.user?.email ?? '';
+}
 
 type LeadFormFieldsProps = {
     form: LeadFormState;
@@ -201,11 +215,15 @@ export function LeadFormFields({ form, onChange, teamMembers = [], showStatus = 
                 <label className={labelClass}>{m.fields.nextStepAssignedTo}</label>
                 <select value={form.next_step_assigned_to} onChange={(e) => set('next_step_assigned_to', e.target.value)} className={inputClass}>
                     <option value="">{m.fields.unassigned}</option>
-                    {teamMembers.map((member) => (
-                        <option key={member.user_id} value={member.user.id}>
-                            {member.user.name || member.user.email}
-                        </option>
-                    ))}
+                    {teamMembers.map((member) => {
+                        const id = teamMemberId(member);
+                        if (!id) return null;
+                        return (
+                            <option key={id} value={id}>
+                                {teamMemberLabel(member)}
+                            </option>
+                        );
+                    })}
                 </select>
             </div>
         </div>
