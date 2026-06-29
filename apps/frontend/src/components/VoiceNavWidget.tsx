@@ -155,14 +155,10 @@ export default function VoiceNavWidget() {
         void startListening();
     };
 
-    if (!supported) {
-        return null;
-    }
-
     const hintTargets = getVoiceNavHintIds();
 
     return (
-        <div className="fixed bottom-5 left-5 z-50 flex flex-col items-start gap-2">
+        <div className="fixed bottom-5 right-28 z-50 flex flex-col items-end gap-2 sm:right-32">
             {hintOpen && (
                 <div className="w-72 rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl animate-slide-up">
                     <style>{`
@@ -228,18 +224,21 @@ export default function VoiceNavWidget() {
                 <button
                     type="button"
                     onClick={handleMicClick}
-                    className={`relative flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all active:scale-95 ${
+                    disabled={!supported}
+                    className={`relative flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 ${
                         listening
                             ? 'border-red-400 bg-red-50 text-red-600'
                             : 'border-purple-300 bg-white text-purple-600 hover:border-purple-400'
                     }`}
                     style={{
-                        animation: listening
-                            ? 'recordRing 1.4s ease-out infinite, voicePulse 1.2s ease-in-out infinite'
-                            : 'voiceGlow 2.4s ease-in-out infinite',
+                        animation: supported && !listening
+                            ? 'voiceGlow 2.4s ease-in-out infinite'
+                            : listening
+                                ? 'recordRing 1.4s ease-out infinite, voicePulse 1.2s ease-in-out infinite'
+                                : undefined,
                     }}
                     aria-label={listening ? m.stopAria : m.startAria}
-                    title={listening ? m.listeningTitle : m.startTitle}
+                    title={!supported ? m.unsupported : listening ? m.listeningTitle : m.startTitle}
                 >
                     {listening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
                     {listening && (
