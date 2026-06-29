@@ -53,8 +53,8 @@ export class PlatformSettingsController {
     @Post('email/test')
     async testEmail(@Body() dto: TestEmailDto, @Request() req: any) {
         const to = dto.email || req.user.email;
-        await this.emailService.sendWelcome(to, 'Platform Admin');
-        return { message: `Test email dispatched to ${to}` };
+        await this.emailService.sendTestEmail(to);
+        return { message: `Test email sent to ${to}` };
     }
 
     @Post('ai/test')

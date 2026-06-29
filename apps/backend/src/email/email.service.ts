@@ -210,10 +210,29 @@ ${page ? `<p><strong>Page:</strong> ${page}</p>` : ''}
         await Promise.all(recipients.map((addr) => this.send({ to: addr, subject, html })));
     }
 
-    private async send(opts: { to: string; subject: string; html: string }): Promise<void> {
+    /** Sends a test message and surfaces SMTP errors to the caller (admin UI). */
+    async sendTestEmail(to: string): Promise<void> {
+        await this.send(
+            {
+                to,
+                subject: 'ERP71 test email',
+                html: '<p>If you received this, SMTP is configured correctly for <strong>notify@erp71.com</strong>.</p>',
+            },
+            { throwOnError: true },
+        );
+    }
+
+    private async send(
+        opts: { to: string; subject: string; html: string },
+        options?: { throwOnError?: boolean },
+    ): Promise<void> {
         const config = await this.getTransportConfig();
 
         if (!config.user || !config.pass) {
+            const msg = 'SMTP is not configured — set SMTP_USER and SMTP_PASS (env or admin settings).';
+            if (options?.throwOnError) {
+                throw new Error(msg);
+            }
             this.logger.log(`[EMAIL] To: ${opts.to} | Subject: ${opts.subject}`);
             return;
         }
@@ -233,6 +252,10 @@ ${page ? `<p><strong>Page:</strong> ${page}</p>` : ''}
                 .execute(() => transporter.sendMail({ from: config.from, ...opts }));
         } catch (err) {
             this.logger.error(`Failed to send email to ${opts.to}: ${err}`);
+            if (options?.throwOnError) {
+                const detail = err instanceof Error ? err.message : String(err);
+                throw new Error(detail);
+            }
         }
     }
 }
