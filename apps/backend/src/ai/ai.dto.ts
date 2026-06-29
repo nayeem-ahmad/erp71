@@ -17,6 +17,18 @@ export class NarrateReportDto {
     locale?: string;
 }
 
+export class ParseVoiceSaleDto {
+    @ApiProperty({ description: 'Speech-to-text transcript of the sale order' })
+    @IsString()
+    @IsNotEmpty()
+    transcript: string;
+
+    @ApiPropertyOptional({ description: 'Optional locale for parsing (en or bn)' })
+    @IsString()
+    @IsOptional()
+    locale?: string;
+}
+
 export class DraftMessageDto {
     @ApiProperty({ description: 'Channel: whatsapp | sms | email' })
     @IsString()

@@ -293,6 +293,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Wire `aiNarrateReport` into the sales summary report page — "AI Narrate" button + insight card — done 2026-06-13
 - [x] Wire `aiDraftMessage` into the CRM interactions tab — "AI Draft" panel with channel/purpose selector, pre-fills interaction form — done 2026-06-13
 - [x] Platform admin AI settings page at `/dashboard/admin/platform-settings/ai` — Anthropic key (encrypted), model selector, "Test connection", pricing table — done 2026-06-13
+- [x] Voice-to-sales entry MVP on New Sale page — Web Speech API mic button, `POST /ai/parse-voice-sale` (LLM extracts items + product search matching), adds matched line items to cart — done 2026-06-29
+- [ ] Fine-tune voice sales entry — better Bangla recognition, customer/payment parsing, unmatched-product UX, server-side audio transcription fallback
 
 ---
 
@@ -318,6 +320,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Voice-to-sales entry MVP — `VoiceSaleInput` on `/sales/new` (browser speech-to-text), backend `POST /ai/parse-voice-sale` parses transcript via LLM and matches inventory products; user reviews cart before checkout — done 2026-06-29
 - [x] Switch AI provider to OpenRouter — `AiService` uses OpenRouter chat completions API; `OPENROUTER_API_KEY` env var; admin settings UI updated; legacy Anthropic model IDs aliased — done 2026-06-29
 - [x] CRM leads full-page UI — detail at `/crm/leads/[id]` and create at `/crm/leads/new` (customer-style layout); removed workspace modal/dialog — done 2026-06-29
 - [x] CRM leads UX polish — lead info always visible in workspace; log conversation + edit in nested dialogs (full-height history); "My today's action list" filter (next step assigned to me today) — done 2026-06-29

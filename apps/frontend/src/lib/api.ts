@@ -1583,6 +1583,12 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    aiParseVoiceSale: (data: { transcript: string; locale?: string }) =>
+        fetchWithAuth('/ai/parse-voice-sale', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     // Payment Methods
     getPaymentMethods: (type?: string) => {
         const q = type ? `?type=${type}` : '';

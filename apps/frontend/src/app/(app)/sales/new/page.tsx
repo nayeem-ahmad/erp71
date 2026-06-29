@@ -8,6 +8,7 @@ import { useI18n } from '@/lib/i18n';
 import { formatBDT } from '@/lib/format';
 import CustomerSelection from './components/CustomerSelection';
 import ProductSearch from './components/ProductSearch';
+import VoiceSaleInput, { type VoiceSaleResult } from './components/VoiceSaleInput';
 import LineItemsTable from './components/LineItemsTable';
 import TotalsFooter from './components/TotalsFooter';
 import PaymentSection from './components/PaymentSection';
@@ -136,7 +137,7 @@ export default function NewSalePage() {
         }));
     };
 
-    const handleAddItem = (product: any) => {
+    const handleAddItem = (product: any, quantity = 1) => {
         addItem({
             productId: product.id,
             name: product.name,
@@ -145,9 +146,34 @@ export default function NewSalePage() {
             price: Number(product.price),
             group: product.group?.name,
             subgroup: product.subgroup?.name,
-            quantity: 1,
+            quantity,
             discount: 0,
         });
+    };
+
+    const handleVoiceSale = (result: VoiceSaleResult) => {
+        let added = 0;
+        for (const item of result.items) {
+            if (item.matched && item.product) {
+                handleAddItem(item.product, item.quantity);
+                added++;
+            }
+        }
+
+        if (result.note && !description) {
+            setDescription(result.note);
+        }
+
+        const messages: string[] = [];
+        if (added > 0) {
+            messages.push(`Added ${added} item${added === 1 ? '' : 's'} from voice.`);
+        }
+        if (result.unmatched.length > 0) {
+            messages.push(`Could not find: ${result.unmatched.join(', ')}`);
+        }
+        if (messages.length > 0) {
+            alert(messages.join('\n'));
+        }
     };
 
     const validateCheckout = (): { valid: boolean; errors: string[] } => {
@@ -258,8 +284,9 @@ export default function NewSalePage() {
                         <div className="sm:w-72 flex-shrink-0">
                             <CustomerSelection customer={customer} setCustomer={setCustomer} />
                         </div>
-                        <div className="flex-1 min-w-0">
-                            <ProductSearch onProductSelect={handleAddItem} />
+                        <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                            <ProductSearch onProductSelect={(product) => handleAddItem(product)} />
+                            <VoiceSaleInput onResult={handleVoiceSale} />
                         </div>
                     </div>
 

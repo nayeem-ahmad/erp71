@@ -1,7 +1,8 @@
-import { ForbiddenException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
-import { NarrateReportDto, DraftMessageDto } from './ai.dto';
+import { ProductsService } from '../products/products.service';
+import { NarrateReportDto, DraftMessageDto, ParseVoiceSaleDto } from './ai.dto';
 import { AI_CREDITS_PER_PLAN, AI_TOKENS_PER_CREDIT, SubscriptionPlanCode } from '@retail-saas/shared-types';
 
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1';
@@ -37,11 +38,22 @@ type OpenRouterChatResponse = {
     error?: { message?: string };
 };
 
+type ParsedVoiceSaleItem = {
+    productName: string;
+    quantity: number;
+};
+
+type ParsedVoiceSale = {
+    items: ParsedVoiceSaleItem[];
+    note?: string;
+};
+
 @Injectable()
 export class AiService {
     constructor(
         private readonly db: DatabaseService,
         private readonly platformSettings: PlatformSettingsService,
+        private readonly productsService: ProductsService,
     ) {}
 
     private normalizeModel(model: string): string {
@@ -139,6 +151,92 @@ export class AiService {
         return { narration: response };
     }
 
+    async parseVoiceSale(tenantId: string, dto: ParseVoiceSaleDto) {
+        await this.enforceCredits(tenantId);
+
+        const transcript = dto.transcript.trim();
+        if (!transcript) {
+            throw new BadRequestException('Transcript is empty.');
+        }
+
+        const model = await this.getDefaultModel();
+        const locale = dto.locale ?? 'en';
+        const langHint = locale === 'bn'
+            ? 'The transcript may be in Bangla (Bengali) or English. Product names may be in either language.'
+            : 'The transcript may be in English or Bangla (Bengali). Product names may be in either language.';
+
+        const systemPrompt = `You are a retail POS assistant for Bangladeshi grocery and retail shops. ${langHint}
+Extract sale line items from spoken orders. Respond with ONLY valid JSON — no markdown, no explanation.
+
+Schema:
+{
+  "items": [{ "productName": "string", "quantity": number }],
+  "note": "optional sale note string or omit"
+}
+
+Rules:
+- quantity must be a positive number (default 1 if not stated)
+- productName should be the product as spoken (e.g. "চাল", "rice", "সয়াবিন তেল")
+- ignore payment method, greetings, and filler words
+- if nothing can be parsed, return {"items": []}`;
+
+        const userMessage = `Transcript:\n${transcript}`;
+
+        const raw = await this.complete(tenantId, 'voice_sale_parser', model, systemPrompt, userMessage, 1024);
+        const parsed = this.extractJson<ParsedVoiceSale>(raw);
+        const parsedItems = Array.isArray(parsed.items) ? parsed.items : [];
+
+        const items: Array<{
+            matched: boolean;
+            productName: string;
+            quantity: number;
+            product?: {
+                id: string;
+                name: string;
+                price: number;
+                group?: { name: string };
+                subgroup?: { name: string };
+            };
+        }> = [];
+        const unmatched: string[] = [];
+
+        for (const entry of parsedItems) {
+            const productName = String(entry.productName ?? '').trim();
+            const quantity = Number(entry.quantity);
+            if (!productName || !Number.isFinite(quantity) || quantity <= 0) {
+                continue;
+            }
+
+            const matches = await this.productsService.searchByQuantitySold(tenantId, productName, 5);
+            const best = this.pickBestProductMatch(productName, matches);
+
+            if (best) {
+                items.push({
+                    matched: true,
+                    productName,
+                    quantity,
+                    product: {
+                        id: best.id,
+                        name: best.name,
+                        price: Number(best.price),
+                        group: best.group ? { name: best.group.name } : undefined,
+                        subgroup: best.subgroup ? { name: best.subgroup.name } : undefined,
+                    },
+                });
+            } else {
+                items.push({ matched: false, productName, quantity });
+                unmatched.push(productName);
+            }
+        }
+
+        return {
+            transcript,
+            items,
+            unmatched,
+            note: typeof parsed.note === 'string' ? parsed.note.trim() || undefined : undefined,
+        };
+    }
+
     async draftMessage(tenantId: string, dto: DraftMessageDto): Promise<{ draft: string }> {
         await this.enforceCredits(tenantId);
 
@@ -156,12 +254,47 @@ export class AiService {
         return { draft: response };
     }
 
+    private extractJson<T>(raw: string): T {
+        const trimmed = raw.trim();
+        const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+        const candidate = (fenced?.[1] ?? trimmed).trim();
+        try {
+            return JSON.parse(candidate) as T;
+        } catch {
+            throw new InternalServerErrorException('AI returned an invalid response. Please try again.');
+        }
+    }
+
+    private pickBestProductMatch(
+        query: string,
+        products: Array<{
+            id: string;
+            name: string;
+            price: unknown;
+            group?: { name: string } | null;
+            subgroup?: { name: string } | null;
+        }>,
+    ) {
+        if (products.length === 0) return null;
+
+        const normalizedQuery = query.toLowerCase().trim();
+        const exact = products.find((p) => p.name.toLowerCase() === normalizedQuery);
+        if (exact) return exact;
+
+        const contains = products.find((p) => {
+            const name = p.name.toLowerCase();
+            return name.includes(normalizedQuery) || normalizedQuery.includes(name);
+        });
+        return contains ?? products[0];
+    }
+
     private async complete(
         tenantId: string,
         feature: string,
         model: string,
         systemPrompt: string,
         userMessage: string,
+        maxTokens = 512,
     ): Promise<string> {
         const apiKey = await this.getApiKey();
         if (!apiKey) {
@@ -169,7 +302,7 @@ export class AiService {
         }
 
         const normalizedModel = this.normalizeModel(model);
-        const { text, usage } = await this.callOpenRouter(apiKey, normalizedModel, systemPrompt, userMessage, 512);
+        const { text, usage } = await this.callOpenRouter(apiKey, normalizedModel, systemPrompt, userMessage, maxTokens);
 
         const inputTokens = usage.prompt_tokens;
         const outputTokens = usage.completion_tokens;
