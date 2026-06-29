@@ -482,14 +482,14 @@ export default function OnboardingPage() {
 
     if (loading || step === null) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="h-full bg-gray-50 flex items-center justify-center">
                 <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 flex items-start justify-center pt-16 px-4">
+        <div className="h-full overflow-y-auto bg-gray-50 flex items-start justify-center pt-8 pb-12 px-4">
             <div className="w-full max-w-lg">
                 <div className="text-center mb-8">
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight">{t.onboarding.title}</h1>
