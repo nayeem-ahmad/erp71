@@ -30,7 +30,12 @@ export const crmHrMessages = {
             customerExists: 'Pelanggan dengan telefon ini sudah wujud.',
             viewCustomer: 'Lihat Pelanggan',
             createFailed: 'Gagal mencipta prospek',
+            deleteFailed: 'Gagal memadam prospek',
+            cannotEditConverted: 'Prospek yang ditukar tidak boleh diedit.',
             deleteConfirm: 'Padam prospek ini?',
+            validation: {
+                invalidEmail: 'Sila masukkan alamat e-mel yang sah.',
+            },
             fields: {
                 mobile: 'Mudah Alih',
                 email: 'E-mel',

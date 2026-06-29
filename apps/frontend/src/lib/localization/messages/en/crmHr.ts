@@ -30,7 +30,12 @@ export const crmHrMessages = {
             customerExists: 'A customer with this phone already exists.',
             viewCustomer: 'View Customer',
             createFailed: 'Failed to create lead',
+            deleteFailed: 'Failed to delete lead',
+            cannotEditConverted: 'Converted leads cannot be edited.',
             deleteConfirm: 'Delete this lead?',
+            validation: {
+                invalidEmail: 'Please enter a valid email address.',
+            },
             fields: {
                 mobile: 'Mobile',
                 email: 'Email',

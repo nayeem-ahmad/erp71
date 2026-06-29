@@ -86,9 +86,16 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit = {})
 
         try {
             const errorBody = await response.json();
-            const apiMessage = Array.isArray(errorBody?.message)
-                ? errorBody.message.join(', ')
-                : errorBody?.message || errorBody?.error;
+            const nested = errorBody?.error;
+            const apiMessage = typeof nested === 'object' && nested !== null && nested.message
+                ? (Array.isArray(nested.message) ? nested.message.join(', ') : nested.message)
+                : Array.isArray(errorBody?.message)
+                    ? errorBody.message.join(', ')
+                    : typeof errorBody?.message === 'string'
+                        ? errorBody.message
+                        : typeof errorBody?.error === 'string'
+                            ? errorBody.error
+                            : undefined;
 
             if (apiMessage) {
                 message = apiMessage;
