@@ -20,13 +20,13 @@
 #   SMTP_PASS=...
 #   EMAIL_FROM=monitoring@yourdomain.com
 #   # optional non-secret overrides (set as repo variables, not secrets):
-#   PROD_BASE_URL=https://retail-saas-frontend.onrender.com
-#   PROD_API_URL=https://retail-saas-backend.onrender.com
+#   PROD_BASE_URL=https://erp71-frontend.onrender.com
+#   PROD_API_URL=https://erp71-backend.onrender.com
 #   REPORT_EMAIL_TO=nayeem.ahmad@gmail.com
 
 set -euo pipefail
 
-REPO="${REPO:-nayeem-ahmad/retail-saas}"
+REPO="${REPO:-nayeem-ahmad/erp71}"
 ENV_FILE="${1:-}"
 
 # Secrets (encrypted, never readable again) and variables (plain, optional).

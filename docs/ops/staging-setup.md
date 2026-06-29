@@ -13,7 +13,7 @@ git push -u origin staging
 
 ## Configure staging secrets (Render dashboard)
 
-Create separate values for each staging service (`retail-saas-backend-staging`, `retail-saas-frontend-staging`):
+Create separate values for each staging service (`erp71-backend-staging`, `erp71-frontend-staging`):
 
 | Variable | Notes |
 |---|---|
@@ -43,5 +43,5 @@ Point sandbox IPN/callback URLs at the staging backend:
 Run automated webhook tests locally:
 
 ```bash
-npm run test --workspace=@retail-saas/backend -- billing.service.spec.ts
+npm run test --workspace=@erp71/backend -- billing.service.spec.ts
 ```

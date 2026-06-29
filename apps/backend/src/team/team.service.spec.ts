@@ -4,7 +4,7 @@ import { TeamService } from './team.service';
 import { DatabaseService } from '../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { InvitationsService } from '../invitations/invitations.service';
-import { StorePermission, UserRole } from '@retail-saas/shared-types';
+import { StorePermission, UserRole } from '@erp71/shared-types';
 import { TenantContext } from '../database/tenant.decorator';
 
 const db = {

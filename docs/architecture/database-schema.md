@@ -1,6 +1,6 @@
 # Database Schema
 
-This document defines the PostgreSQL database schema for the Retail SaaS platform.
+This document defines the PostgreSQL database schema for the ERP71 platform.
 
 ## Overview
 The schema is optimized for multi-tenancy using Row-Level Security (RLS). Every table containing business data MUST include a `tenant_id` column to ensure strict isolation.

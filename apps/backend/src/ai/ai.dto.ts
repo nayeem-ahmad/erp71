@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsObject } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsObject, IsIn } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class NarrateReportDto {
@@ -16,6 +16,54 @@ export class NarrateReportDto {
     @IsOptional()
     locale?: string;
 }
+
+const VOICE_ENTRY_TYPES = [
+    'sale',
+    'purchase',
+    'sales_order',
+    'sales_quote',
+    'purchase_order',
+    'purchase_quote',
+    'sales_return',
+    'purchase_return',
+] as const;
+
+export type VoiceEntryType = (typeof VOICE_ENTRY_TYPES)[number];
+
+export class ParseVoiceEntryDto {
+    @ApiPropertyOptional({
+        description: 'Entry context',
+        enum: VOICE_ENTRY_TYPES,
+        default: 'sale',
+    })
+    @IsString()
+    @IsIn(VOICE_ENTRY_TYPES)
+    @IsOptional()
+    entryType?: VoiceEntryType;
+
+    @ApiPropertyOptional({ description: 'Speech-to-text transcript' })
+    @IsString()
+    @IsOptional()
+    transcript?: string;
+
+    @ApiPropertyOptional({ description: 'Base64-encoded audio recording (no data-URI prefix)' })
+    @IsString()
+    @IsOptional()
+    audioBase64?: string;
+
+    @ApiPropertyOptional({ description: 'Audio format: webm, wav, mp3, ogg, etc.' })
+    @IsString()
+    @IsOptional()
+    audioFormat?: string;
+
+    @ApiPropertyOptional({ description: 'Optional locale for parsing (en or bn)' })
+    @IsString()
+    @IsOptional()
+    locale?: string;
+}
+
+/** @deprecated Use ParseVoiceEntryDto */
+export class ParseVoiceSaleDto extends ParseVoiceEntryDto {}
 
 export class DraftMessageDto {
     @ApiProperty({ description: 'Channel: whatsapp | sms | email' })

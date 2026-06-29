@@ -1,6 +1,6 @@
 # Epic 01: SaaS Foundation & Infrastructure
 
-**Goal:** This epic focuses on establishing the technical and structural foundation of the Retail SaaS platform. By the end of this epic, the development environment will be fully operational, and the application will support basic multi-tenant store and user management. This provides the "blank canvas" upon which all retail modules are built.
+**Goal:** This epic focuses on establishing the technical and structural foundation of the ERP71 platform. By the end of this epic, the development environment will be fully operational, and the application will support basic multi-tenant store and user management. This provides the "blank canvas" upon which all retail modules are built.
 
 ---
 **Story 1.1: Project & Infrastructure Setup**

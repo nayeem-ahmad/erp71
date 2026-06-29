@@ -288,7 +288,7 @@ describe('AuthService', () => {
 
     describe('demoLogin', () => {
         it('returns auth payload with is_demo when demo user exists', async () => {
-            db.user.findUnique.mockResolvedValueOnce({ id: 'demo-user', email: 'demo@retailsaas.app' });
+            db.user.findUnique.mockResolvedValueOnce({ id: 'demo-user', email: 'demo@erp71.com' });
             db.user.findUnique.mockResolvedValueOnce(makeUserWithAccess('store-demo', 'tenant-demo'));
 
             const result = await service.demoLogin();

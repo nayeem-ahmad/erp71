@@ -13,8 +13,8 @@ type GeneralSettings = {
 };
 
 const DEFAULTS: GeneralSettings = {
-    platform_name: 'RetailSaaS',
-    support_email: 'support@retailsaas.app',
+    platform_name: 'ERP71',
+    support_email: 'support@erp71.com',
     maintenance_mode: 'false',
 };
 

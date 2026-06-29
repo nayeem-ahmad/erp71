@@ -14,10 +14,10 @@
   - `VPS_HOST` — VPS IP or hostname
   - `VPS_USER` — SSH user (e.g. `root` or a sudo user)
   - `VPS_IP` — public IPv4 of the VPS (for DNS A-records)
-- **Repo path on VPS:** `/opt/retail-saas`
+- **Repo path on VPS:** `/opt/erp71`
 - **Compose file:** always `-f docker-compose.prod.yml`
 - **Deploy branch on VPS:** `main`
-- **Secrets source:** captured values in session scratchpad `render-prep-SECRETS.env`. Secrets are written only into `/opt/retail-saas/.env.production` on the VPS over SSH — never committed to git.
+- **Secrets source:** captured values in session scratchpad `render-prep-SECRETS.env`. Secrets are written only into `/opt/erp71/.env.production` on the VPS over SSH — never committed to git.
 - **Domain:** `nayeemahmad.com`, `app.nayeemahmad.com`, `api.nayeemahmad.com`
 - **Do not delete the Render services** until VPS verification (Task 7) passes.
 
@@ -69,7 +69,7 @@ docker compose -f "$COMPOSE_FILE" ps
 
 Run:
 ```bash
-cd /Users/bs01621/Projects/nayeem/retail-saas
+cd /Users/bs01621/Projects/nayeem/erp71
 chmod +x scripts/deploy.sh
 bash -n scripts/deploy.sh && echo "SYNTAX OK"
 ```
@@ -86,7 +86,7 @@ Expected: either no shellcheck findings, or the skip message.
 - [ ] **Step 4: Commit**
 
 ```bash
-cd /Users/bs01621/Projects/nayeem/retail-saas
+cd /Users/bs01621/Projects/nayeem/erp71
 git add scripts/deploy.sh
 git commit -m "chore(deploy): add manual VPS deploy script"
 ```
@@ -119,7 +119,7 @@ Expected: each host prints `$VPS_IP`. Do not proceed to Task 6 (TLS) until all t
 **Files:** none (remote host configuration). All commands run **on the VPS** unless noted.
 
 **Interfaces:**
-- Produces: a VPS with Docker Engine + compose plugin, ufw allowing 22/80/443, and the repo cloned at `/opt/retail-saas` on branch `main`.
+- Produces: a VPS with Docker Engine + compose plugin, ufw allowing 22/80/443, and the repo cloned at `/opt/erp71` on branch `main`.
 
 - [ ] **Step 1: Open an SSH session**
 
@@ -174,8 +174,8 @@ Run (VPS):
 ```bash
 mkdir -p /opt
 cd /opt
-[ -d retail-saas ] || git clone https://github.com/nayeem-ahmad/retail-saas.git
-cd /opt/retail-saas
+[ -d erp71 ] || git clone https://github.com/nayeem-ahmad/erp71.git
+cd /opt/erp71
 git checkout main
 git pull --ff-only origin main
 git rev-parse --abbrev-ref HEAD
@@ -187,7 +187,7 @@ Expected: prints `main`.
 ### Task 4: Create `.env.production` on the VPS
 
 **Files:**
-- Create (on VPS, uncommitted): `/opt/retail-saas/.env.production`
+- Create (on VPS, uncommitted): `/opt/erp71/.env.production`
 
 **Interfaces:**
 - Consumes: captured secret values from scratchpad `render-prep-SECRETS.env`.
@@ -203,12 +203,12 @@ echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)"
 ```
 Record these three values for Step 2.
 
-- [ ] **Step 2: Write `/opt/retail-saas/.env.production`** (VPS)
+- [ ] **Step 2: Write `/opt/erp71/.env.production`** (VPS)
 
 Create the file with the following content. Replace the three `__GENERATED__` values with Step 1 output, and the `__FROM_SCRATCHPAD__` values with the matching entries from `render-prep-SECRETS.env`. Keep `POSTGRES_PASSWORD` identical in the credential line and in `DATABASE_URL`/`DIRECT_URL`.
 
 ```bash
-cat > /opt/retail-saas/.env.production <<'EOF'
+cat > /opt/erp71/.env.production <<'EOF'
 NODE_ENV=production
 
 # Public application URLs
@@ -220,9 +220,9 @@ NEXT_PUBLIC_API_URL=https://api.nayeemahmad.com
 # VPS Postgres (self-hosted container)
 POSTGRES_USER=retail
 POSTGRES_PASSWORD=__GENERATED_POSTGRES_PASSWORD__
-POSTGRES_DB=retail_saas
-DATABASE_URL=postgresql://retail:__GENERATED_POSTGRES_PASSWORD__@db:5432/retail_saas
-DIRECT_URL=postgresql://retail:__GENERATED_POSTGRES_PASSWORD__@db:5432/retail_saas
+POSTGRES_DB=erp71
+DATABASE_URL=postgresql://retail:__GENERATED_POSTGRES_PASSWORD__@db:5432/erp71
+DIRECT_URL=postgresql://retail:__GENERATED_POSTGRES_PASSWORD__@db:5432/erp71
 
 # Supabase (storage/auth values carried over from Render)
 NEXT_PUBLIC_SUPABASE_URL=__FROM_SCRATCHPAD__
@@ -251,14 +251,14 @@ SMS_SENDER_ID=__FROM_SCRATCHPAD__
 # Billing (provider set; payment creds were not configured on Render — placeholders)
 BILLING_PROVIDER=SSL_WIRELESS
 EOF
-chmod 600 /opt/retail-saas/.env.production
+chmod 600 /opt/erp71/.env.production
 ```
 
 - [ ] **Step 3: Verify the file is complete and has no unreplaced placeholders** (VPS)
 
 Run:
 ```bash
-cd /opt/retail-saas
+cd /opt/erp71
 grep -c '__GENERATED__\|__FROM_SCRATCHPAD__\|__GENERATED_POSTGRES_PASSWORD__\|__GENERATED_JWT_SECRET__\|__GENERATED_FIELD_ENCRYPTION_KEY__' .env.production
 ```
 Expected: prints `0`. If non-zero, finish replacing placeholders before continuing.
@@ -280,14 +280,14 @@ Expected: every line prints `OK`.
 **Files:** none (uses committed compose + the script from Task 1).
 
 **Interfaces:**
-- Consumes: `/opt/retail-saas/.env.production` (Task 4), `scripts/deploy.sh` (Task 1).
+- Consumes: `/opt/erp71/.env.production` (Task 4), `scripts/deploy.sh` (Task 1).
 - Produces: four running containers; backend self-runs `prisma db push` + seed on startup.
 
 - [ ] **Step 1: Run the deploy script** (VPS)
 
 Run:
 ```bash
-cd /opt/retail-saas
+cd /opt/erp71
 ./scripts/deploy.sh main
 ```
 Expected: images build, then `docker compose ... ps` lists `db`, `backend`, `frontend`, `caddy`.
@@ -312,7 +312,7 @@ Expected: `db`, `backend`, `frontend`, `caddy` all `Up` (db `healthy`).
 
 Run:
 ```bash
-docker compose -f docker-compose.prod.yml exec -T db psql -U retail -d retail_saas -c '\dt' | head
+docker compose -f docker-compose.prod.yml exec -T db psql -U retail -d erp71 -c '\dt' | head
 ```
 Expected: a list of tables (User, Tenant, etc.), not "No relations found".
 
@@ -383,7 +383,7 @@ Expected: each returns `204`.
 ```bash
 render services -o json | python3 -c "import sys,json; [print(e['service']['name']) for e in json.load(sys.stdin) if 'service' in e]"
 ```
-Expected: the two `retail-saas-*` web services no longer listed.
+Expected: the two `erp71-*` web services no longer listed.
 
 - [ ] **Step 4: Update TODO.md** per repo convention — mark the VPS cutover done with today's date; commit on `dev`.
 

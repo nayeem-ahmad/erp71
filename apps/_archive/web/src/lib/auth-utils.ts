@@ -1,5 +1,5 @@
 import { createClient } from "./supabase";
-import { UserRole } from "@retail-saas/shared-types";
+import { UserRole } from "@erp71/shared-types";
 
 /**
  * Role priority for hierarchy checks.

@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Receipt, Search, Undo2, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
+import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { applyVoiceEntryReturnQuantities, buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 
 interface PurchaseReturnItem {
     id: string;
@@ -142,6 +144,36 @@ export default function CreatePurchaseReturnModal({
         const quantity = returnQuantities[item.id] || 0;
         return sum + quantity * Number(item.unit_cost || 0);
     }, 0);
+
+    const handleVoiceReturn = (result: VoiceEntryResult) => {
+        if (!selectedPurchase) return;
+
+        const lines = selectedPurchase.items.map((item) => ({
+            id: item.id,
+            productId: item.product_id,
+            productName: item.product?.name,
+        }));
+
+        const { quantities, unmatched } = applyVoiceEntryReturnQuantities(
+            result,
+            lines,
+            (lineId) => {
+                const item = selectedPurchase.items.find((entry) => entry.id === lineId);
+                return item ? remainingQuantity(item) : 0;
+            },
+        );
+
+        const applied = Object.keys(quantities).length;
+        setReturnQuantities((prev) => ({ ...prev, ...quantities }));
+        if (result.note && !notes) setNotes(result.note);
+
+        const messages = buildVoiceEntryMessages(
+            { ...result, unmatched },
+            applied,
+            'Set return qty for',
+        );
+        if (messages.length > 0) alert(messages.join('\n'));
+    };
 
     const handleQuantityChange = (itemId: string, maxQuantity: number, value: string) => {
         const parsed = Number(value);
@@ -335,9 +367,12 @@ export default function CreatePurchaseReturnModal({
                                     </div>
 
                                     <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                                        <div className="p-4 border-b border-gray-100 flex items-center space-x-2">
-                                            <Undo2 className="w-4 h-4 text-emerald-600" />
-                                            <h3 className="text-sm font-black tracking-tight">Returnable Purchase Lines</h3>
+                                        <div className="p-4 border-b border-gray-100 flex items-center justify-between gap-3">
+                                            <div className="flex items-center space-x-2">
+                                                <Undo2 className="w-4 h-4 text-emerald-600" />
+                                                <h3 className="text-sm font-black tracking-tight">Returnable Purchase Lines</h3>
+                                            </div>
+                                            <VoiceEntryInput entryType="purchase_return" onResult={handleVoiceReturn} />
                                         </div>
                                         <div className="overflow-x-auto">
                                             <table className="w-full">

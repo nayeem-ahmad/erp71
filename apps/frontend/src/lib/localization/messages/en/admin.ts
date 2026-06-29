@@ -173,12 +173,12 @@ export const adminMessages = {
             title: 'General',
             platformName: {
                 label: 'Platform Name',
-                placeholder: 'RetailSaaS',
+                placeholder: 'ERP71',
                 hint: 'Shown in email subjects and notifications.',
             },
             supportEmail: {
                 label: 'Support Email',
-                placeholder: 'support@retailsaas.app',
+                placeholder: 'support@erp71.com',
                 hint: 'Destination for contact form submissions.',
             },
             maintenance: {

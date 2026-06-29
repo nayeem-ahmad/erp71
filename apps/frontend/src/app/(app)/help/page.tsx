@@ -53,7 +53,7 @@ export default function HelpPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <a
-                    href="mailto:support@retailsaas.app"
+                    href="mailto:support@erp71.com"
                     className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 transition-colors"
                 >
                     <MessageCircle className="h-5 w-5 text-blue-600 flex-shrink-0" />
@@ -143,7 +143,7 @@ export default function HelpPage() {
 
             <div className="text-center text-sm text-gray-400 py-4">
                 {h.footerPrefix}{' '}
-                <a href="mailto:support@retailsaas.app" className="text-blue-600 hover:underline">
+                <a href="mailto:support@erp71.com" className="text-blue-600 hover:underline">
                     {h.footerLink}
                 </a>
             </div>

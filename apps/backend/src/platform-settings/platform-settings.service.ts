@@ -16,7 +16,7 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
         smtp_port:    { isSecret: false, default: '587' },
         smtp_user:    { isSecret: false },
         smtp_pass:    { isSecret: true },
-        email_from:   { isSecret: false, default: 'noreply@retailsaas.app' },
+        email_from:   { isSecret: false, default: 'notify@erp71.com' },
         frontend_url: { isSecret: false, default: 'http://localhost:3000' },
     },
     payment_ssl: {
@@ -47,8 +47,8 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
         default_model: { isSecret: false, default: 'anthropic/claude-haiku-4.5' },
     },
     general: {
-        platform_name:    { isSecret: false, default: 'RetailSaaS' },
-        support_email:    { isSecret: false, default: 'support@retailsaas.app' },
+        platform_name:    { isSecret: false, default: 'ERP71' },
+        support_email:    { isSecret: false, default: 'support@erp71.com' },
         maintenance_mode: { isSecret: false, default: 'false' },
     },
 };

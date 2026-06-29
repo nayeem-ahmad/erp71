@@ -1,6 +1,6 @@
 # Shop Owner & Staff User Manual
 
-**Retail SaaS — Complete Guide for Shop Owners, Managers & Staff**
+**ERP71 — Complete Guide for Shop Owners, Managers & Staff**
 
 *Last updated: June 2026*
 

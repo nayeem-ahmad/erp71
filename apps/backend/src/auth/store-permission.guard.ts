@@ -6,7 +6,7 @@ import {
     BadRequestException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { StorePermission } from '@retail-saas/shared-types';
+import { StorePermission } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { STORE_PERMISSIONS_KEY } from './store-permission.decorator';
 

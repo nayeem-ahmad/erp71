@@ -12,7 +12,7 @@ import {
     ROLE_DEFAULT_PERMISSIONS,
     StorePermission,
     UserRole,
-} from '@retail-saas/shared-types';
+} from '@erp71/shared-types';
 import { TenantContext } from '../database/tenant.decorator';
 
 const VALID_PERMISSIONS = new Set<string>(Object.values(StorePermission));

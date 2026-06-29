@@ -19,7 +19,7 @@ import HomePage from './page';
 describe('HomePage', () => {
     it('renders the brand name in the nav', () => {
         render(<HomePage />);
-        expect(screen.getAllByText('RetailSaaS').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('ERP71').length).toBeGreaterThan(0);
     });
 
     it('renders the hero tagline badge', () => {

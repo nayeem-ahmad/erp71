@@ -1,4 +1,4 @@
-import type { CheckResult } from '@retail-saas/shared-types';
+import type { CheckResult } from '@erp71/shared-types';
 import { SystemHealthService, rollupStatus } from './system-health.service';
 
 const check = (overrides: Partial<CheckResult>): CheckResult => ({

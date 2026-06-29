@@ -10,7 +10,7 @@
     "inngest:dev": "inngest dev"
   },
   "dependencies": {
-    "@retail-saas/shared-types": "*",
+    "@erp71/shared-types": "*",
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.99.2",
     "@upstash/ratelimit": "^2.0.8",

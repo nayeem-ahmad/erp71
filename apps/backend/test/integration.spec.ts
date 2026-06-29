@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CallHandler, ExecutionContext, INestApplication, NestInterceptor, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
-import { VoucherType } from '@retail-saas/shared-types';
+import { VoucherType } from '@erp71/shared-types';
 import { AccountingService } from '../src/accounting/accounting.service';
 import { DatabaseService } from '../src/database/database.service';
 import { TransformInterceptor } from '../src/common/transform.interceptor';

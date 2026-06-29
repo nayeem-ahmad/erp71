@@ -6,7 +6,9 @@ import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { isCompoundUnit, CompoundUnitType, formatCompoundQty } from '@/lib/compound-units';
 import CompoundUnitInput from '@/components/CompoundUnitInput';
+import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 
 interface PurchaseProductOption {
     id: string;
@@ -137,13 +139,13 @@ export default function CreatePurchaseModal({
         return null;
     }
 
-    const addItem = (product: PurchaseProductOption) => {
+    const addItem = (product: PurchaseProductOption, quantity = 1) => {
         const existing = items.find((item) => item.productId === product.id);
         if (existing) {
             setItems(
                 items.map((item) =>
                     item.productId === product.id
-                        ? { ...item, quantity: item.quantity + 1 }
+                        ? { ...item, quantity: item.quantity + quantity }
                         : item,
                 ),
             );
@@ -154,7 +156,7 @@ export default function CreatePurchaseModal({
                     productId: product.id,
                     productName: product.name,
                     sku: product.sku || '',
-                    quantity: 1,
+                    quantity,
                     unitCost: Number(product.price || 0),
                     unitType: product.unit_type || 'none',
                 },
@@ -162,6 +164,27 @@ export default function CreatePurchaseModal({
         }
         setProductSearch('');
         setShowProductDropdown(false);
+    };
+
+    const handleVoicePurchase = (result: VoiceEntryResult) => {
+        let added = 0;
+        for (const item of result.items) {
+            if (item.matched && item.product) {
+                addItem({
+                    id: item.product.id,
+                    name: item.product.name,
+                    price: item.product.price,
+                }, item.quantity);
+                added++;
+            }
+        }
+        if (result.note && !notes) {
+            setNotes(result.note);
+        }
+        const messages = buildVoiceEntryMessages(result, added);
+        if (messages.length > 0) {
+            alert(messages.join('\n'));
+        }
     };
 
     const updateItem = (
@@ -254,43 +277,45 @@ export default function CreatePurchaseModal({
                                 <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-2">
                                     Add Products
                                 </label>
-                                <div className="relative">
-                                    <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
-                                        <Search className="w-4 h-4 text-gray-400" />
-                                        <input
-                                            type="text"
-                                            placeholder={t.purchaseShared.searchProducts}
-                                            value={productSearch}
-                                            onChange={(event) => {
-                                                setProductSearch(event.target.value);
-                                                setShowProductDropdown(true);
-                                            }}
-                                            onFocus={() => setShowProductDropdown(true)}
-                                            className="flex-1 bg-transparent text-sm font-medium outline-none"
-                                        />
+                                <VoiceEntryInput entryType="purchase" onResult={handleVoicePurchase} inline>
+                                    <div className="relative">
+                                        <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
+                                            <Search className="w-4 h-4 text-gray-400" />
+                                            <input
+                                                type="text"
+                                                placeholder={t.purchaseShared.searchProducts}
+                                                value={productSearch}
+                                                onChange={(event) => {
+                                                    setProductSearch(event.target.value);
+                                                    setShowProductDropdown(true);
+                                                }}
+                                                onFocus={() => setShowProductDropdown(true)}
+                                                className="flex-1 bg-transparent text-sm font-medium outline-none"
+                                            />
+                                        </div>
+                                        {showProductDropdown &&
+                                            productSearch.length > 0 &&
+                                            filteredProducts.length > 0 && (
+                                                <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                                    {filteredProducts.map((product) => (
+                                                        <button
+                                                            key={product.id}
+                                                            onClick={() => addItem(product)}
+                                                            className="w-full text-left px-4 py-3 hover:bg-emerald-50 flex items-center justify-between transition-colors"
+                                                        >
+                                                            <div>
+                                                                <span className="text-sm font-bold">{product.name}</span>
+                                                                <span className="text-xs text-gray-400 ml-2">{product.sku}</span>
+                                                            </div>
+                                                            <span className="text-sm font-bold text-emerald-600">
+                                                                {formatBDT(Number(product.price || 0), { locale })}
+                                                            </span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
                                     </div>
-                                    {showProductDropdown &&
-                                        productSearch.length > 0 &&
-                                        filteredProducts.length > 0 && (
-                                            <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                                                {filteredProducts.map((product) => (
-                                                    <button
-                                                        key={product.id}
-                                                        onClick={() => addItem(product)}
-                                                        className="w-full text-left px-4 py-3 hover:bg-emerald-50 flex items-center justify-between transition-colors"
-                                                    >
-                                                        <div>
-                                                            <span className="text-sm font-bold">{product.name}</span>
-                                                            <span className="text-xs text-gray-400 ml-2">{product.sku}</span>
-                                                        </div>
-                                                        <span className="text-sm font-bold text-emerald-600">
-                                                            {formatBDT(Number(product.price || 0), { locale })}
-                                                        </span>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                </div>
+                                </VoiceEntryInput>
                             </div>
 
                             {items.length > 0 && (

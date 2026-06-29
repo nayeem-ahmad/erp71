@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase";
 import { redirect } from "next/navigation";
-import { SignupSchema } from "@retail-saas/shared-types";
+import { SignupSchema } from "@erp71/shared-types";
 import { formatError } from "@/lib/api-utils";
 
 export async function signup(formData: FormData) {

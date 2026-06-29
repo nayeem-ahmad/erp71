@@ -178,8 +178,8 @@ describe('PricingPage', () => {
 
     it('renders the footer brand', () => {
         render(<PricingPage />);
-        // RetailSaaS appears in both nav and footer
-        expect(screen.getAllByText('RetailSaaS').length).toBeGreaterThan(0);
+        // ERP71 appears in both nav and footer
+        expect(screen.getAllByText('ERP71').length).toBeGreaterThan(0);
     });
 
     it('renders the 14-day free trial note under plan cards', () => {

@@ -3,7 +3,7 @@
 This section defines the monorepo structure that houses the frontend, backend, and mobile applications, along with shared logic.
 
 ```plaintext
-retail-saas/
+retail/
 ├── .github/                    # CI/CD workflows (e.g., deploy to Render)
 │   └── workflows/
 │       └── main.yaml

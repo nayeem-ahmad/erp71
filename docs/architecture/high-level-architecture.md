@@ -2,7 +2,7 @@
 
 ### Technical Summary
 
-The Retail SaaS platform is architected as a **Containerized Monorepo**. It prioritizes **Type Safety** through an all-TypeScript web/backend core, while leveraging **Flutter** for a high-performance mobile POS. The system is deployed as independent Docker services on **Render.com**, providing a balance between the simplicity of a PaaS and the control of a containerized environment.
+The ERP71 platform is architected as a **Containerized Monorepo**. It prioritizes **Type Safety** through an all-TypeScript web/backend core, while leveraging **Flutter** for a high-performance mobile POS. The system is deployed as independent Docker services on **Render.com**, providing a balance between the simplicity of a PaaS and the control of a containerized environment.
 
 ### Platform and Infrastructure Choice
 

@@ -1,8 +1,8 @@
 import { autoPostFromRules } from '../accounting/posting.utils';
 import { LoansService } from './loans.service';
 
-jest.mock('@retail-saas/database', () => ({
-    ...jest.requireActual('@retail-saas/database'),
+jest.mock('@erp71/database', () => ({
+    ...jest.requireActual('@erp71/database'),
     ensureLoanPostingSetup: jest.fn().mockResolvedValue(undefined),
 }));
 

@@ -12,23 +12,41 @@ export class EmailService {
         private readonly breakers: CircuitBreakerRegistry,
     ) {}
 
+    /** Prefer an explicit DB value; otherwise fall back to env, then schema default. */
+    private pickEmailSetting(
+        raw: Record<string, string | null>,
+        key: string,
+        envValue: string | undefined,
+        fallback: string | null,
+    ): string | null {
+        if (Object.prototype.hasOwnProperty.call(raw, key) && raw[key] != null) {
+            return raw[key];
+        }
+        return envValue ?? fallback;
+    }
+
     private async getTransportConfig() {
-        const [smtpHost, smtpPort, smtpUser, smtpPass, emailFrom, frontendUrl] = await Promise.all([
-            this.platformSettings.getRawValue('email', 'smtp_host'),
-            this.platformSettings.getRawValue('email', 'smtp_port'),
-            this.platformSettings.getRawValue('email', 'smtp_user'),
-            this.platformSettings.getRawValue('email', 'smtp_pass'),
-            this.platformSettings.getRawValue('email', 'email_from'),
-            this.platformSettings.getRawValue('email', 'frontend_url'),
-        ]);
+        const rawEmail = await this.platformSettings.getRawGroup('email');
+
+        const host = this.pickEmailSetting(rawEmail, 'smtp_host', process.env.SMTP_HOST, 'smtp-relay.brevo.com');
+        const portRaw = this.pickEmailSetting(rawEmail, 'smtp_port', process.env.SMTP_PORT, '587');
+        const user = this.pickEmailSetting(rawEmail, 'smtp_user', process.env.SMTP_USER, null);
+        const pass = this.pickEmailSetting(rawEmail, 'smtp_pass', process.env.SMTP_PASS, null);
+        const from = this.pickEmailSetting(rawEmail, 'email_from', process.env.EMAIL_FROM, 'notify@erp71.com');
+        const frontendUrl = this.pickEmailSetting(
+            rawEmail,
+            'frontend_url',
+            process.env.FRONTEND_URL,
+            'http://localhost:3000',
+        );
 
         return {
-            host: smtpHost ?? process.env.SMTP_HOST ?? 'smtp-relay.brevo.com',
-            port: parseInt(smtpPort ?? process.env.SMTP_PORT ?? '587', 10),
-            user: smtpUser ?? process.env.SMTP_USER ?? null,
-            pass: smtpPass ?? process.env.SMTP_PASS ?? null,
-            from: emailFrom ?? process.env.EMAIL_FROM ?? 'noreply@retailsaas.app',
-            frontendUrl: frontendUrl ?? process.env.FRONTEND_URL ?? 'http://localhost:3000',
+            host: host!,
+            port: parseInt(portRaw ?? '587', 10),
+            user,
+            pass,
+            from: from!,
+            frontendUrl: frontendUrl!,
         };
     }
 
@@ -36,7 +54,7 @@ export class EmailService {
         const { frontendUrl } = await this.getTransportConfig();
         await this.send({
             to,
-            subject: 'Welcome to RetailSaaS',
+            subject: 'Welcome to ERP71',
             html: `<h2>Welcome, ${name || to}!</h2>
 <p>Your account is ready. <a href="${frontendUrl}/login">Sign in</a> to get started.</p>`,
         });
@@ -73,9 +91,9 @@ export class EmailService {
         const link = `${frontendUrl}/accept-invitation?token=${token}`;
         await this.send({
             to,
-            subject: `You've been invited to join ${tenantName} on RetailSaaS`,
+            subject: `You've been invited to join ${tenantName} on ERP71`,
             html: `<h2>You're invited!</h2>
-<p><strong>${inviterName}</strong> has invited you to join <strong>${tenantName}</strong> on RetailSaaS.</p>
+<p><strong>${inviterName}</strong> has invited you to join <strong>${tenantName}</strong> on ERP71.</p>
 <p><a href="${link}">Accept Invitation</a></p>
 <p>This invitation expires in 7 days.</p>`,
         });
@@ -85,7 +103,7 @@ export class EmailService {
         const { frontendUrl } = await this.getTransportConfig();
         await this.send({
             to,
-            subject: `Your RetailSaaS subscription expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
+            subject: `Your ERP71 subscription expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
             html: `<h2>Subscription Expiry Notice</h2>
 <p>Your subscription for <strong>${tenantName}</strong> expires on <strong>${expiresAt.toDateString()}</strong> (${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining).</p>
 <p><a href="${frontendUrl}/dashboard/billing">Renew Now</a></p>`,
@@ -113,7 +131,7 @@ export class EmailService {
     async sendBillingInvoice(to: string, tenantName: string, amount: number, currency: string, invoiceUrl?: string): Promise<void> {
         await this.send({
             to,
-            subject: `Invoice for ${tenantName} — RetailSaaS`,
+            subject: `Invoice for ${tenantName} — ERP71`,
             html: `<h2>Invoice</h2>
 <p>A payment of <strong>${currency} ${amount.toFixed(2)}</strong> has been processed for <strong>${tenantName}</strong>.</p>
 ${invoiceUrl ? `<p><a href="${invoiceUrl}">View Invoice</a></p>` : ''}`,
@@ -156,7 +174,7 @@ ${invoiceUrl ? `<p><a href="${invoiceUrl}">View Invoice</a></p>` : ''}`,
     async sendContactForm(from: string, name: string, subject: string, message: string): Promise<void> {
         const supportEmail = await this.platformSettings.getRawValue('general', 'support_email')
             ?? process.env.SUPPORT_EMAIL
-            ?? 'support@retailsaas.app';
+            ?? 'support@erp71.com';
         this.send({
             to: supportEmail,
             subject: `[Contact] ${subject}`,
@@ -192,10 +210,29 @@ ${page ? `<p><strong>Page:</strong> ${page}</p>` : ''}
         await Promise.all(recipients.map((addr) => this.send({ to: addr, subject, html })));
     }
 
-    private async send(opts: { to: string; subject: string; html: string }): Promise<void> {
+    /** Sends a test message and surfaces SMTP errors to the caller (admin UI). */
+    async sendTestEmail(to: string): Promise<void> {
+        await this.send(
+            {
+                to,
+                subject: 'ERP71 test email',
+                html: '<p>If you received this, SMTP is configured correctly for <strong>notify@erp71.com</strong>.</p>',
+            },
+            { throwOnError: true },
+        );
+    }
+
+    private async send(
+        opts: { to: string; subject: string; html: string },
+        options?: { throwOnError?: boolean },
+    ): Promise<void> {
         const config = await this.getTransportConfig();
 
         if (!config.user || !config.pass) {
+            const msg = 'SMTP is not configured — set SMTP_USER and SMTP_PASS (env or admin settings).';
+            if (options?.throwOnError) {
+                throw new Error(msg);
+            }
             this.logger.log(`[EMAIL] To: ${opts.to} | Subject: ${opts.subject}`);
             return;
         }
@@ -215,6 +252,10 @@ ${page ? `<p><strong>Page:</strong> ${page}</p>` : ''}
                 .execute(() => transporter.sendMail({ from: config.from, ...opts }));
         } catch (err) {
             this.logger.error(`Failed to send email to ${opts.to}: ${err}`);
+            if (options?.throwOnError) {
+                const detail = err instanceof Error ? err.message : String(err);
+                throw new Error(detail);
+            }
         }
     }
 }

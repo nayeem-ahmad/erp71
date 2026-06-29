@@ -14,7 +14,7 @@
 
 Render auto-deploys on push to `main`. For a manual deploy:
 
-1. Go to Render Dashboard → `retail-saas-backend` → **Manual Deploy**
+1. Go to Render Dashboard → `erp71-backend` → **Manual Deploy**
 2. Select the commit to deploy and click **Deploy**
 3. Watch the deploy log — it should complete in ~3-5 minutes
 4. Verify `/health` returns `{"status":"ok"}`:
@@ -114,7 +114,7 @@ Production also runs on the VPS at `66.116.236.127` via Caddy + `docker-compose.
 
 ```bash
 ssh root@66.116.236.127
-cd /opt/retail-saas
+cd /opt/erp71
 git pull origin main
 docker compose --env-file .env.production -f docker-compose.prod.yml run --rm backend sh -lc \
   'npx prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate'

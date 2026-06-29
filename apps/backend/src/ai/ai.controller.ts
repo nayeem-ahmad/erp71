@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { AiService } from './ai.service';
-import { NarrateReportDto, DraftMessageDto } from './ai.dto';
+import { NarrateReportDto, DraftMessageDto, ParseVoiceEntryDto, ParseVoiceSaleDto } from './ai.dto';
 
 @ApiTags('ai')
 @ApiBearerAuth()
@@ -31,5 +31,19 @@ export class AiController {
     @UseInterceptors(TenantInterceptor)
     draftMessage(@Tenant() tenant: TenantContext, @Body() dto: DraftMessageDto) {
         return this.aiService.draftMessage(tenant.tenantId, dto);
+    }
+
+    @Post('parse-voice-entry')
+    @UseGuards(JwtAuthGuard)
+    @UseInterceptors(TenantInterceptor)
+    parseVoiceEntry(@Tenant() tenant: TenantContext, @Body() dto: ParseVoiceEntryDto) {
+        return this.aiService.parseVoiceEntry(tenant.tenantId, dto);
+    }
+
+    @Post('parse-voice-sale')
+    @UseGuards(JwtAuthGuard)
+    @UseInterceptors(TenantInterceptor)
+    parseVoiceSale(@Tenant() tenant: TenantContext, @Body() dto: ParseVoiceSaleDto) {
+        return this.aiService.parseVoiceSale(tenant.tenantId, dto);
     }
 }

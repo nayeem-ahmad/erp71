@@ -65,7 +65,7 @@ export const marketingMessages = {
         testimonials: {
             title: 'Trusted by retailers across Bangladesh',
             items: [
-                { name: 'Rahim Uddin', role: 'Owner, Rahim Electronics, Dhaka', quote: 'Switched from paper ledgers to RetailSaaS in a week. Our stock accuracy improved overnight.' },
+                { name: 'Rahim Uddin', role: 'Owner, Rahim Electronics, Dhaka', quote: 'Switched from paper ledgers to ERP71 in a week. Our stock accuracy improved overnight.' },
                 { name: 'Nasrin Begum', role: 'Manager, Fashion House, Chittagong', quote: 'The POS is incredibly fast. During Eid rush we processed hundreds of sales without a single hiccup.' },
                 { name: 'Kamal Hossain', role: 'Director, KH Supermart, Sylhet', quote: 'Multi-location inventory was our biggest headache. Now we can see every branch from one dashboard.' },
             ],
@@ -83,7 +83,7 @@ export const marketingMessages = {
         },
         cta: {
             title: 'Ready to modernise your store?',
-            description: 'Join hundreds of Bangladeshi retailers who have moved their business to RetailSaaS.',
+            description: 'Join hundreds of Bangladeshi retailers who have moved their business to ERP71.',
             button: 'Start your free trial',
         },
     },
@@ -107,7 +107,7 @@ export const marketingMessages = {
         infoDescription: 'Reach out through the form or contact us directly using the details below.',
         info: {
             email: 'Email',
-            emailValue: 'support@retailsaas.app',
+            emailValue: 'support@erp71.com',
             location: 'Location',
             addressValue: 'Dhaka, Bangladesh',
             responseTime: 'Response time',
@@ -138,7 +138,7 @@ export const marketingMessages = {
             status: 'Status',
             signIn: 'Sign in',
             signUp: 'Sign up',
-            copyright: '© {year} RetailSaaS. All rights reserved.',
+            copyright: '© {year} ERP71. All rights reserved.',
         },
         validation: {
             required: 'All fields are required.',
@@ -153,7 +153,7 @@ export const marketingMessages = {
     },
     status: {
         title: 'System Status',
-        description: 'Real-time health of all RetailSaaS services',
+        description: 'Real-time health of all ERP71 services',
         checking: 'Checking services…',
         allOperational: 'All systems operational',
         allSystemsOperational: 'All Systems Operational',
@@ -212,11 +212,11 @@ export const marketingMessages = {
         lastUpdated: 'Last updated: May 2026',
         terms: {
             title: 'Terms of Service',
-            description: 'Terms of Service governing use of the RetailSaaS platform',
+            description: 'Terms of Service governing use of the ERP71 platform',
         },
         privacy: {
             title: 'Privacy Policy',
-            description: 'How RetailSaaS collects, uses, and protects your data',
+            description: 'How ERP71 collects, uses, and protects your data',
         },
         refund: {
             title: 'Refund & Cancellation Policy',

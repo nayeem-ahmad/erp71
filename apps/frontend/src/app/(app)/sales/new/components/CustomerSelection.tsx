@@ -67,71 +67,86 @@ export default function CustomerSelection({ customer, setCustomer }: CustomerSel
         setQuery('');
     };
 
-    // When a customer is selected, show a compact inline chip instead of the search box.
-    if (customer) {
-        return (
-            <div className="flex items-center gap-2 min-w-0 rounded border bg-gray-50 px-2 py-1 text-sm">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Customer</span>
-                <span className="font-medium text-gray-900 truncate">{customer.name}</span>
-                <span className="text-gray-500 truncate">📱 {customer.phone}</span>
-                {customer.credit_limit ? (
-                    <span className="text-gray-500 whitespace-nowrap">💳 ৳{customer.credit_limit}</span>
-                ) : null}
-                {customer.loyalty_points ? (
-                    <span className="text-gray-500 whitespace-nowrap">⭐ {customer.loyalty_points}</span>
-                ) : null}
-                <button
-                    type="button"
-                    onClick={handleClearCustomer}
-                    className="ml-auto text-gray-400 hover:text-gray-700 flex-shrink-0"
-                    title="Remove customer"
-                >
-                    <X className="w-4 h-4" />
-                </button>
-            </div>
-        );
-    }
-
     return (
-        <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-                ref={inputRef}
-                type="text"
-                value={query}
-                onChange={(e) => {
-                    setQuery(e.target.value);
-                    setShowDropdown(true);
-                }}
-                onFocus={() => setShowDropdown(true)}
-                placeholder="Customer — search by name or phone…"
-                className="w-full pl-8 pr-3 py-1.5 border rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-transparent"
-            />
+        <div className="flex flex-col gap-1">
+            <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                    ref={inputRef}
+                    type="text"
+                    value={query}
+                    onChange={(e) => {
+                        setQuery(e.target.value);
+                        setShowDropdown(true);
+                    }}
+                    onFocus={() => setShowDropdown(true)}
+                    placeholder={customer ? customer.name : 'Customer — search by name or phone…'}
+                    className="w-full pl-8 pr-8 py-1.5 border rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                />
+                {customer && (
+                    <button
+                        type="button"
+                        onClick={handleClearCustomer}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                        title="Remove customer"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                )}
 
-            {/* Dropdown */}
-            {showDropdown && (
-                <div
-                    ref={dropdownRef}
-                    className="absolute top-full left-0 right-0 mt-1 border rounded bg-white shadow-lg z-50 max-h-64 overflow-y-auto"
-                >
-                    {loading ? (
-                        <div className="p-3 text-center text-gray-500 text-sm">Loading...</div>
-                    ) : filteredCustomers.length === 0 ? (
-                        <div className="p-3 text-center text-gray-500 text-sm">
-                            {query ? 'No customers found' : 'Start typing to search'}
-                        </div>
-                    ) : (
-                        filteredCustomers.map((cust) => (
-                            <div
-                                key={cust.id}
-                                onClick={() => handleSelectCustomer(cust)}
-                                className="px-3 py-2 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
-                            >
-                                <div className="font-medium text-gray-900 text-sm">{cust.name}</div>
-                                <div className="text-xs text-gray-500">{cust.phone}</div>
+                {showDropdown && (
+                    <div
+                        ref={dropdownRef}
+                        className="absolute top-full left-0 right-0 mt-1 border rounded bg-white shadow-lg z-50 max-h-64 overflow-y-auto"
+                    >
+                        {loading ? (
+                            <div className="p-3 text-center text-gray-500 text-sm">Loading...</div>
+                        ) : filteredCustomers.length === 0 ? (
+                            <div className="p-3 text-center text-gray-500 text-sm">
+                                {query ? 'No customers found' : 'Start typing to search'}
                             </div>
-                        ))
-                    )}
+                        ) : (
+                            filteredCustomers.map((cust) => (
+                                <div
+                                    key={cust.id}
+                                    onClick={() => handleSelectCustomer(cust)}
+                                    className="px-3 py-2 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+                                >
+                                    <div className="font-medium text-gray-900 text-sm">{cust.name}</div>
+                                    <div className="text-xs text-gray-500">
+                                        {cust.phone}
+                                        {cust.address ? ` · ${cust.address}` : ''}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {customer && (
+                <div className="px-1 text-[11px] text-gray-500 leading-snug">
+                    <span className="font-medium text-gray-700">{customer.name}</span>
+                    {customer.phone && <span className="mx-1.5 text-gray-300">·</span>}
+                    {customer.phone && <span>{customer.phone}</span>}
+                    {customer.address ? (
+                        <>
+                            <span className="mx-1.5 text-gray-300">·</span>
+                            <span>{customer.address}</span>
+                        </>
+                    ) : null}
+                    {customer.credit_limit ? (
+                        <>
+                            <span className="mx-1.5 text-gray-300">·</span>
+                            <span>Credit ৳{Number(customer.credit_limit).toLocaleString()}</span>
+                        </>
+                    ) : null}
+                    {customer.loyalty_points ? (
+                        <>
+                            <span className="mx-1.5 text-gray-300">·</span>
+                            <span>{customer.loyalty_points} pts</span>
+                        </>
+                    ) : null}
                 </div>
             )}
         </div>

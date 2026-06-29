@@ -1,6 +1,6 @@
 # Deploying A Second App On The Same VPS
 
-This document is for the developer deploying another application onto the same VPS that already runs Retail SaaS.
+This document is for the developer deploying another application onto the same VPS that already runs ERP71.
 
 The goal is:
 
@@ -13,9 +13,9 @@ The goal is:
 
 The VPS already has these pieces running:
 
-- one PostgreSQL container inside the Retail SaaS stack
+- one PostgreSQL container inside the ERP71 stack
 - one Caddy instance already bound to ports `80` and `443`
-- one Docker network named `retail-saas_default`
+- one Docker network named `erp71_default`
 
 Because of that, the new app must follow these rules:
 
@@ -35,7 +35,7 @@ git clone <new-project-repo-url> new-app
 cd /opt/new-app
 ```
 
-Do not place the new app inside `/opt/retail-saas`.
+Do not place the new app inside `/opt/erp71`.
 
 ## 1. Create a dedicated database and database user
 
@@ -44,7 +44,7 @@ Connect to the existing Postgres container and create a separate role and databa
 Replace `new_app_db`, `new_app_user`, and the password before running this.
 
 ```bash
-docker exec -it retail-saas-db-1 psql -U postgres -d postgres
+docker exec -it erp71-db-1 psql -U postgres -d postgres
 ```
 
 Then run:
@@ -57,8 +57,8 @@ GRANT ALL PRIVILEGES ON DATABASE new_app_db TO new_app_user;
 
 Important:
 
-- never reuse the Retail SaaS application database
-- never point the new app to `retail_saas`
+- never reuse the ERP71 application database
+- never point the new app to `erp71`
 - keep schema ownership with the new app user only
 
 If the password contains special URL characters such as `+`, `@`, `:`, `/`, or `%`, URL-encode it in `DATABASE_URL`.
@@ -83,7 +83,7 @@ In the new app's production compose file, declare the existing network as extern
 networks:
   shared_vps:
     external: true
-    name: retail-saas_default
+    name: erp71_default
 ```
 
 Then attach the app service to that network.
@@ -121,7 +121,7 @@ services:
 networks:
   shared_vps:
     external: true
-    name: retail-saas_default
+    name: erp71_default
 ```
 
 Notes:
@@ -140,8 +140,8 @@ Minimum example:
 NODE_ENV=production
 PORT=3000
 
-DATABASE_URL=postgresql://new_app_user:change-this-password@retail-saas-db-1:5432/new_app_db
-DIRECT_URL=postgresql://new_app_user:change-this-password@retail-saas-db-1:5432/new_app_db
+DATABASE_URL=postgresql://new_app_user:change-this-password@erp71-db-1:5432/new_app_db
+DIRECT_URL=postgresql://new_app_user:change-this-password@erp71-db-1:5432/new_app_db
 
 APP_PUBLIC_URL=https://newapp.example.com
 NEXT_PUBLIC_API_URL=https://api.newapp.example.com
@@ -149,7 +149,7 @@ NEXT_PUBLIC_API_URL=https://api.newapp.example.com
 
 Important:
 
-- the host should be `retail-saas-db-1` on this VPS, because that is the live Postgres container on the shared Docker network
+- the host should be `erp71-db-1` on this VPS, because that is the live Postgres container on the shared Docker network
 - if the app is a Next.js app, any `NEXT_PUBLIC_*` variables needed by the browser must be available at image build time, not only at container runtime
 - always run compose with `--env-file .env.production`
 
@@ -170,17 +170,17 @@ docker compose --env-file .env.production -f docker-compose.prod.yml run --rm ap
 docker compose --env-file .env.production -f docker-compose.prod.yml run --rm app <seed-command>
 ```
 
-Do not run any migration command against the Retail SaaS schema or database.
+Do not run any migration command against the ERP71 schema or database.
 
 ## 6. Reuse the existing Caddy instance
 
-The VPS already has a live Caddy in `/opt/retail-saas/Caddyfile`.
+The VPS already has a live Caddy in `/opt/erp71/Caddyfile`.
 
 To publish the new app publicly:
 
 1. deploy the new app container first
-2. add a new site block to `/opt/retail-saas/Caddyfile`
-3. reload the Retail SaaS Caddy container
+2. add a new site block to `/opt/erp71/Caddyfile`
+3. reload the ERP71 Caddy container
 
 Example site block for a frontend app:
 
@@ -200,19 +200,19 @@ api.newapp.example.com {
 }
 ```
 
-This works only if the new app service is attached to `retail-saas_default`.
+This works only if the new app service is attached to `erp71_default`.
 
 After updating the Caddyfile:
 
 ```bash
-cd /opt/retail-saas
+cd /opt/erp71
 docker compose --env-file .env.production -f docker-compose.prod.yml exec caddy caddy reload --config /etc/caddy/Caddyfile
 ```
 
 If reload fails, use:
 
 ```bash
-cd /opt/retail-saas
+cd /opt/erp71
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d caddy
 ```
 
@@ -241,8 +241,8 @@ curl -I https://api.newapp.example.com
 Database verification:
 
 ```bash
-docker exec -it retail-saas-db-1 psql -U postgres -d postgres -c "\l"
-docker exec -it retail-saas-db-1 psql -U postgres -d new_app_db -c "\dt"
+docker exec -it erp71-db-1 psql -U postgres -d postgres -c "\l"
+docker exec -it erp71-db-1 psql -U postgres -d new_app_db -c "\dt"
 ```
 
 ## 9. Non-negotiable operational rules
@@ -266,4 +266,4 @@ Tell the developer to deliver these artifacts:
 - the exact internal container port the app listens on
 - the exact `DATABASE_URL` format for the app
 
-If they follow the pattern above, the second app can safely share the VPS and the PostgreSQL server without interfering with Retail SaaS.
+If they follow the pattern above, the second app can safely share the VPS and the PostgreSQL server without interfering with ERP71.

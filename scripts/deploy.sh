@@ -25,8 +25,10 @@ git pull --ff-only origin "$BRANCH"
 # (frontend build args like NEXT_PUBLIC_API_URL and the db service's POSTGRES_*),
 # not just for container runtime env. Without it the build fails and the db
 # initializes with default credentials.
-echo "==> Building and starting the stack"
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build
+COMPOSE_PROJECT="${COMPOSE_PROJECT:-erp71}"
+
+echo "==> Building and starting the stack (project: $COMPOSE_PROJECT)"
+docker compose -p "$COMPOSE_PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build
 
 echo "==> Current status"
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps
+docker compose -p "$COMPOSE_PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps

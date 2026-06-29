@@ -14,7 +14,7 @@ export default function PrivacyPage() {
             {/* Nav */}
             <header className="fixed top-0 inset-x-0 z-50 bg-white/90 backdrop-blur border-b border-gray-100">
                 <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-                    <Link href="/" className="text-xl font-black tracking-tight text-blue-600">RetailSaaS</Link>
+                    <Link href="/" className="text-xl font-black tracking-tight text-blue-600">ERP71</Link>
                     <div className="flex items-center gap-3">
                         <Link href="/login" className="text-sm font-semibold text-gray-700 hover:text-gray-900 px-4 py-2">
                             {m.signIn}
@@ -62,7 +62,7 @@ export default function PrivacyPage() {
                             <h2 className="text-xl font-bold text-gray-900 mb-3">2. How We Use Your Information</h2>
                             <ul className="list-disc pl-6 space-y-2 text-sm">
                                 <li>To create and manage your account and workspace.</li>
-                                <li>To provide and operate the RetailSaaS platform and all its features.</li>
+                                <li>To provide and operate the ERP71 platform and all its features.</li>
                                 <li>To send transactional emails: email verification, password resets, invoices, low-stock alerts, and staff invitations.</li>
                                 <li>To calculate, collect, and remit subscription fees in BDT.</li>
                                 <li>To detect, investigate, and prevent fraudulent transactions and abuse of the Service.</li>
@@ -163,7 +163,7 @@ export default function PrivacyPage() {
                                 </li>
                                 <li>
                                     <strong>Restriction of processing:</strong> you may object to certain uses of your data by contacting us at{' '}
-                                    <a href="mailto:privacy@retailsaas.app" className="text-blue-600 hover:underline">privacy@retailsaas.app</a>.
+                                    <a href="mailto:privacy@erp71.com" className="text-blue-600 hover:underline">privacy@erp71.com</a>.
                                 </li>
                             </ul>
                             <p className="mt-3 text-sm">
@@ -187,7 +187,7 @@ export default function PrivacyPage() {
                         <section>
                             <h2 className="text-xl font-bold text-gray-900 mb-3">8. Bangladesh Data Protection</h2>
                             <p className="mb-3">
-                                RetailSaaS is operated by RetailSaaS Ltd., a company registered in Bangladesh. We
+                                ERP71 is operated by ERP71 Ltd., a company registered in Bangladesh. We
                                 comply with applicable Bangladeshi data protection requirements, including:
                             </p>
                             <ul className="list-disc pl-6 space-y-2 text-sm">
@@ -216,10 +216,10 @@ export default function PrivacyPage() {
                                 Protection team:
                             </p>
                             <div className="mt-3 bg-gray-50 rounded-xl p-4 text-sm space-y-1">
-                                <p><strong>RetailSaaS Ltd.</strong></p>
+                                <p><strong>ERP71 Ltd.</strong></p>
                                 <p>Dhaka, Bangladesh</p>
-                                <p>Email: <a href="mailto:privacy@retailsaas.app" className="text-blue-600 hover:underline">privacy@retailsaas.app</a></p>
-                                <p>Support: <a href="mailto:support@retailsaas.app" className="text-blue-600 hover:underline">support@retailsaas.app</a></p>
+                                <p>Email: <a href="mailto:privacy@erp71.com" className="text-blue-600 hover:underline">privacy@erp71.com</a></p>
+                                <p>Support: <a href="mailto:support@erp71.com" className="text-blue-600 hover:underline">support@erp71.com</a></p>
                             </div>
                             <p className="mt-3 text-sm">
                                 For terms of service questions, see our{' '}
@@ -234,14 +234,14 @@ export default function PrivacyPage() {
             {/* Footer */}
             <footer className="py-10 px-6 border-t border-gray-100 bg-white">
                 <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-400">
-                    <span className="font-black text-lg text-blue-600">RetailSaaS</span>
+                    <span className="font-black text-lg text-blue-600">ERP71</span>
                     <div className="flex items-center gap-6">
                         <Link href="/terms" className="hover:text-gray-700 transition-colors">Terms of Service</Link>
                         <Link href="/privacy" className="hover:text-gray-700 transition-colors">Privacy Policy</Link>
                         <Link href="/login" className="hover:text-gray-700 transition-colors">Sign in</Link>
                         <Link href="/signup" className="hover:text-gray-700 transition-colors">Sign up</Link>
                     </div>
-                    <span>&copy; {new Date().getFullYear()} RetailSaaS. All rights reserved.</span>
+                    <span>&copy; {new Date().getFullYear()} ERP71. All rights reserved.</span>
                 </div>
             </footer>
         </div>

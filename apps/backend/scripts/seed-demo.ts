@@ -1,4 +1,4 @@
-import { PrismaClient, DEMO_ACCOUNT_EMAIL, DEMO_ACCOUNT_PASSWORD, seedDemoAccount } from '@retail-saas/database';
+import { PrismaClient, DEMO_ACCOUNT_EMAIL, DEMO_ACCOUNT_PASSWORD, seedDemoAccount } from '@erp71/database';
 
 const prisma = new PrismaClient();
 

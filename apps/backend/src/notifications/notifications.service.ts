@@ -558,7 +558,7 @@ export class NotificationsService {
       <!-- Footer -->
       <tr>
         <td style="padding:28px 32px;text-align:center;border-top:1px solid #e5e7eb;margin-top:24px;">
-          <p style="margin:0;font-size:12px;color:#9ca3af;">Powered by <strong style="color:#6b7280;">RetailSaaS</strong></p>
+          <p style="margin:0;font-size:12px;color:#9ca3af;">Powered by <strong style="color:#6b7280;">ERP71</strong></p>
         </td>
       </tr>
 

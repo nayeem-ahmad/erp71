@@ -3,7 +3,7 @@
 
 ## Project Configuration
 
-- **Project**: retail-saas
+- **Project**: erp71
 - **User**: Nayeem
 - **Communication Language**: English
 - **Document Output Language**: English

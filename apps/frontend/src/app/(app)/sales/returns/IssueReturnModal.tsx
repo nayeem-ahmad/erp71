@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { X, Search, AlertCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
+import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { applyVoiceEntryReturnQuantities, buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 
 interface IssueReturnModalProps {
     isOpen: boolean;
@@ -71,6 +73,36 @@ export default function IssueReturnModal({ isOpen, onClose, onSuccess }: IssueRe
             0,
         );
         return Math.max(0, item.quantity - alreadyReturned);
+    };
+
+    const handleVoiceReturn = (result: VoiceEntryResult) => {
+        if (!sale) return;
+
+        const lines = sale.items.map((item: any) => ({
+            id: item.id,
+            productId: item.product_id,
+            productName: item.product?.name,
+        }));
+
+        const { quantities, unmatched } = applyVoiceEntryReturnQuantities(
+            result,
+            lines,
+            (lineId) => {
+                const item = sale.items.find((entry: any) => entry.id === lineId);
+                return item ? getMaxReturnQty(item) : 0;
+            },
+        );
+
+        const applied = Object.keys(quantities).length;
+        setReturnQuantities((prev) => ({ ...prev, ...quantities }));
+        if (result.note && !reason) setReason(result.note);
+
+        const messages = buildVoiceEntryMessages(
+            { ...result, unmatched },
+            applied,
+            'Set return qty for',
+        );
+        if (messages.length > 0) alert(messages.join('\n'));
     };
 
     const handleQuantityChange = (itemId: string, max: number, val: string) => {
@@ -160,9 +192,12 @@ export default function IssueReturnModal({ isOpen, onClose, onSuccess }: IssueRe
                             </div>
 
                             <div>
-                                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
-                                    {t.shared.form.selectItemsToReturn}
-                                </h3>
+                                <div className="flex items-center justify-between gap-3 mb-3">
+                                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+                                        {t.shared.form.selectItemsToReturn}
+                                    </h3>
+                                    <VoiceEntryInput entryType="sales_return" onResult={handleVoiceReturn} />
+                                </div>
                                 <div className="space-y-3">
                                     {sale.items.map((item: any) => {
                                         const maxQty = getMaxReturnQty(item);

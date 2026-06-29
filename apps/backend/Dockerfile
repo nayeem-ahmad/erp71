@@ -23,11 +23,11 @@ COPY . .
 RUN npm rebuild bcrypt --build-from-source \
  && node -e "require('bcrypt'); console.log('bcrypt native binding OK (builder)')"
 # Build the shared package first
-RUN npm run build --workspace=@retail-saas/shared-types || true
+RUN npm run build --workspace=@erp71/shared-types || true
 # Generate Prisma client
-RUN npm run generate --workspace=@retail-saas/database
+RUN npm run generate --workspace=@erp71/database
 # Build the backend
-RUN npm run build --workspace=@retail-saas/backend
+RUN npm run build --workspace=@erp71/backend
 
 # Runner stage
 FROM base AS runner
@@ -51,4 +51,4 @@ ENV HOSTNAME="0.0.0.0"
 # DIRECT_URL is overridden with DATABASE_URL so prisma db push uses the
 # internal Render hostname, bypassing the IP allowlist that blocks external
 # connections during preDeployCommand.
-CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed --workspace=@retail-saas/database && node apps/backend/dist/src/main.js"]
+CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed --workspace=@erp71/database && node apps/backend/dist/src/main.js"]

@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { createColumnHelper } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
-import type { WarrantyClaim } from '@retail-saas/shared-types';
+import type { WarrantyClaim } from '@erp71/shared-types';
 import { useI18n, formatMessage } from '@/lib/i18n';
 
 const STATUS_STYLES: Record<string, string> = {

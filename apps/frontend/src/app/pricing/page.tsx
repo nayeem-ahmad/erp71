@@ -223,7 +223,7 @@ export default function PricingPage() {
                         Ready to modernise your store?
                     </h2>
                     <p className="text-blue-100 text-lg">
-                        Join hundreds of Bangladeshi retailers who have moved their business to RetailSaaS.
+                        Join hundreds of Bangladeshi retailers who have moved their business to ERP71.
                     </p>
                     <Link
                         href="/signup?plan=standard"
@@ -249,7 +249,7 @@ export default function PricingPage() {
                     <p className="text-center text-gray-500 text-sm mt-10">
                         Still have questions?{' '}
                         <a
-                            href="mailto:support@retailsaas.com.bd"
+                            href="mailto:support@erp71.com.bd"
                             className="text-blue-600 hover:underline font-medium"
                         >
                             Contact support

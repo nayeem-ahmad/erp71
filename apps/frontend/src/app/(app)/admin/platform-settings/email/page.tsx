@@ -20,7 +20,7 @@ const DEFAULTS: EmailSettings = {
     smtp_port: '587',
     smtp_user: '',
     smtp_pass: '',
-    email_from: 'noreply@retailsaas.app',
+    email_from: 'notify@erp71.com',
     frontend_url: 'http://localhost:3000',
 };
 
@@ -123,8 +123,11 @@ export default function PlatformEmailSettingsPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
             });
-            if (!res.ok) throw new Error('Test failed');
-            const json = await res.json();
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                const errMsg = json?.message ?? json?.error ?? (Array.isArray(json?.message) ? json.message.join(', ') : null);
+                throw new Error(errMsg || m.test.failed);
+            }
             const msg = (json?.data ?? json)?.message ?? m.test.success;
             setToast({ type: 'success', message: msg });
         } catch (e: any) {
@@ -201,7 +204,7 @@ export default function PlatformEmailSettingsPage() {
                                 type="email"
                                 value={settings.email_from}
                                 onChange={(e) => set('email_from', e.target.value)}
-                                placeholder="noreply@retailsaas.app"
+                                placeholder="noreply@erp71.com"
                                 className={inputCls}
                             />
                         </Field>
@@ -211,7 +214,7 @@ export default function PlatformEmailSettingsPage() {
                                 type="url"
                                 value={settings.frontend_url}
                                 onChange={(e) => set('frontend_url', e.target.value)}
-                                placeholder="https://app.retailsaas.com"
+                                placeholder="https://app.erp71.com"
                                 className={inputCls}
                             />
                         </Field>

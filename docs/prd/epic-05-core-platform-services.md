@@ -1,6 +1,6 @@
 # Epic 05: Core Platform Services
 
-**Goal:** Provide a unified, scalable infrastructure for cross-cutting services used across the entire Retail SaaS platform. This epic ensures that modules like Sales, HR, and Inventory can seamlessly store files, send communications, and notify users without reinventing these core utilities.
+**Goal:** Provide a unified, scalable infrastructure for cross-cutting services used across the entire ERP71 platform. This epic ensures that modules like Sales, HR, and Inventory can seamlessly store files, send communications, and notify users without reinventing these core utilities.
 
 ---
 

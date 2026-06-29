@@ -140,7 +140,7 @@ export const marketingMessages = {
                     {
                         name: "রহিম উদ্দিন",
                         role: "মালিক, রহিম ইলেকট্রনিক্স, ঢাকা",
-                        quote: "এক সপ্তাহে কাগজের খাতা থেকে RetailSaaS-এ স্থানান্তর করেছি। স্টকের নির্ভুলতা রাতারাতি উন্নত হয়েছে।",
+                        quote: "এক সপ্তাহে কাগজের খাতা থেকে ERP71-এ স্থানান্তর করেছি। স্টকের নির্ভুলতা রাতারাতি উন্নত হয়েছে।",
                     },
                     {
                         name: "নাসরিন বেগম",
@@ -172,7 +172,7 @@ export const marketingMessages = {
             },
             cta: {
                 title: "আপনার দোকান আধুনিক করতে প্রস্তুত?",
-                description: "শত শত বাংলাদেশি খুচরা বিক্রেতা যারা তাদের ব্যবসা RetailSaaS-এ নিয়ে এসেছেন তাদের সাথে যোগ দিন।",
+                description: "শত শত বাংলাদেশি খুচরা বিক্রেতা যারা তাদের ব্যবসা ERP71-এ নিয়ে এসেছেন তাদের সাথে যোগ দিন।",
                 button: "বিনামূল্যে ট্রায়াল শুরু করুন",
             },
         },
@@ -196,7 +196,7 @@ export const marketingMessages = {
             infoDescription: "ফর্মের মাধ্যমে বা নিচের তথ্য ব্যবহার করে সরাসরি যোগাযোগ করুন।",
             info: {
                 email: "ইমেইল",
-                emailValue: "support@retailsaas.app",
+                emailValue: "support@erp71.com",
                 location: "অবস্থান",
                 addressValue: "ঢাকা, বাংলাদেশ",
                 responseTime: "প্রতিক্রিয়ার সময়",
@@ -227,7 +227,7 @@ export const marketingMessages = {
                 status: "স্ট্যাটাস",
                 signIn: "সাইন ইন",
                 signUp: "সাইন আপ",
-                copyright: "© {year} RetailSaaS. সর্বস্বত্ব সংরক্ষিত।",
+                copyright: "© {year} ERP71. সর্বস্বত্ব সংরক্ষিত।",
             },
             validation: {
                 required: "All fields are required.",
@@ -248,7 +248,7 @@ export const marketingMessages = {
         },
         status: {
             title: "System Status",
-            description: "Real-time health of RetailSaaS services.",
+            description: "Real-time health of ERP71 services.",
             checking: "Checking services…",
             allOperational: "All systems operational",
             allSystemsOperational: "All Systems Operational",
@@ -307,11 +307,11 @@ export const marketingMessages = {
             lastUpdated: "Last updated: May 2026",
             terms: {
                 title: "Terms of Service",
-                description: "Terms of Service governing use of the RetailSaaS platform",
+                description: "Terms of Service governing use of the ERP71 platform",
             },
             privacy: {
                 title: "Privacy Policy",
-                description: "How RetailSaaS collects, uses, and protects your data",
+                description: "How ERP71 collects, uses, and protects your data",
             },
             refund: {
                 title: "Refund & Cancellation Policy",

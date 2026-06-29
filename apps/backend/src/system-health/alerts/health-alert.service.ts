@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import type { CheckResult, SystemHealthReport } from '@retail-saas/shared-types';
+import type { CheckResult, SystemHealthReport } from '@erp71/shared-types';
 import { EmailService } from '../../email/email.service';
 import { SmsService } from '../../sms/sms.service';
 import { SystemHealthService } from '../system-health.service';
@@ -84,7 +84,7 @@ export class HealthAlertService {
     private async sendAlert(report: SystemHealthReport): Promise<void> {
         const problems = this.problemChecks(report);
         const summary = problems.map((c) => `${c.label}: ${c.state}${c.message ? ` — ${c.message}` : ''}`);
-        const subject = `[RetailSaaS] System ${report.status.toUpperCase()} — ${problems.length} issue(s)`;
+        const subject = `[ERP71] System ${report.status.toUpperCase()} — ${problems.length} issue(s)`;
 
         if (this.emailRecipients.length === 0 && this.smsRecipients.length === 0) {
             this.logger.warn(`System ${report.status}: ${summary.join('; ')} (no alert recipients configured)`);
@@ -100,14 +100,14 @@ export class HealthAlertService {
             <p>This alert repeats at most every ${this.cooldownMs / 60000} minutes while unhealthy.</p>
         `;
 
-        await this.dispatch(subject, html, `RetailSaaS ${report.status}: ${summary.slice(0, 2).join('; ')}`);
+        await this.dispatch(subject, html, `ERP71 ${report.status}: ${summary.slice(0, 2).join('; ')}`);
     }
 
     private async sendRecovery(report: SystemHealthReport): Promise<void> {
         this.logger.log('System health recovered to ok');
-        const subject = '[RetailSaaS] System recovered — all checks ok';
+        const subject = '[ERP71] System recovered — all checks ok';
         const html = `<h2>System health recovered</h2><p>All checks returned to ok at ${report.generated_at}.</p>`;
-        await this.dispatch(subject, html, 'RetailSaaS recovered: all checks ok');
+        await this.dispatch(subject, html, 'ERP71 recovered: all checks ok');
     }
 
     /** Best-effort delivery — a failing channel never throws out of the cron. */

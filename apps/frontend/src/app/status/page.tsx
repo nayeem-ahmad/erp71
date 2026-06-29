@@ -109,7 +109,7 @@ export default function StatusPage() {
             <header className="fixed top-0 inset-x-0 z-50 bg-white/90 backdrop-blur border-b border-gray-100">
                 <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
                     <Link href="/" className="text-xl font-black tracking-tight text-blue-600">
-                        RetailSaaS
+                        ERP71
                     </Link>
                     <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
                         <Link href="/#features" className="hover:text-gray-900 transition-colors">{nav.features}</Link>
@@ -202,7 +202,7 @@ export default function StatusPage() {
 
             <footer className="py-10 px-6 border-t border-gray-100 bg-white">
                 <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-400">
-                    <span className="font-black text-lg text-blue-600">RetailSaaS</span>
+                    <span className="font-black text-lg text-blue-600">ERP71</span>
                     <div className="flex items-center gap-6">
                         <Link href="/terms" className="hover:text-gray-700 transition-colors">{footer.terms}</Link>
                         <Link href="/privacy" className="hover:text-gray-700 transition-colors">{footer.privacy}</Link>

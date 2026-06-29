@@ -173,12 +173,12 @@ export const adminMessages = {
                 title: 'Am',
                 platformName: {
                     label: 'Nama Platform',
-                    placeholder: 'RetailSaaS',
+                    placeholder: 'ERP71',
                     hint: 'Dipaparkan dalam subjek e-mel dan notifikasi.',
                 },
                 supportEmail: {
                     label: 'E-mel Sokongan',
-                    placeholder: 'support@retailsaas.app',
+                    placeholder: 'support@erp71.com',
                     hint: 'Destinasi untuk penyerahan borang hubungan.',
                 },
                 maintenance: {

@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
-import { ProductSchema } from "@retail-saas/shared-types";
+import { ProductSchema } from "@erp71/shared-types";
 import { formatError } from "@/lib/api-utils";
 
 export async function createProduct(formData: FormData) {

@@ -6,7 +6,7 @@ import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { bootstrapDefaultAccountingForTenant } from './bootstrap-accounting';
 import { seedDemoAccount, DEMO_ACCOUNT_EMAIL } from './seed-demo';
-import { ROLE_DEFAULT_PERMISSIONS, UserRole } from '@retail-saas/shared-types';
+import { ROLE_DEFAULT_PERMISSIONS, UserRole } from '@erp71/shared-types';
 
 const prisma = new PrismaClient();
 
@@ -136,15 +136,15 @@ async function main() {
     });
 
     const managerUser = await prisma.user.upsert({
-        where: { email: 'manager@retailsaas.com' },
+        where: { email: 'manager@erp71.com' },
         update: {},
-        create: { email: 'manager@retailsaas.com', name: 'Rafiq Islam', passwordHash },
+        create: { email: 'manager@erp71.com', name: 'Rafiq Islam', passwordHash },
     });
 
     const cashierUser = await prisma.user.upsert({
-        where: { email: 'cashier@retailsaas.com' },
+        where: { email: 'cashier@erp71.com' },
         update: {},
-        create: { email: 'cashier@retailsaas.com', name: 'Sumaiya Khatun', passwordHash },
+        create: { email: 'cashier@erp71.com', name: 'Sumaiya Khatun', passwordHash },
     });
 
     // ── 2. Tenant ────────────────────────────────────────────────────────────
@@ -1147,8 +1147,8 @@ async function main() {
     }
 
     const empDefs = [
-        { name: 'Rafiq Islam',    phone: '+8801811111101', email: 'manager@retailsaas.com', dept: 'Operations', desg: 'Manager',       doj: '2023-01-15', user_id: managerUser.id },
-        { name: 'Sumaiya Khatun', phone: '+8801811111102', email: 'cashier@retailsaas.com', dept: 'Sales',      desg: 'Cashier',       doj: '2023-03-01', user_id: cashierUser.id },
+        { name: 'Rafiq Islam',    phone: '+8801811111101', email: 'manager@erp71.com', dept: 'Operations', desg: 'Manager',       doj: '2023-01-15', user_id: managerUser.id },
+        { name: 'Sumaiya Khatun', phone: '+8801811111102', email: 'cashier@erp71.com', dept: 'Sales',      desg: 'Cashier',       doj: '2023-03-01', user_id: cashierUser.id },
         { name: 'Karim Ahmed',    phone: '+8801811111103', email: null,                      dept: 'Finance',    desg: 'Accountant',    doj: '2024-06-01', user_id: null },
         { name: 'Fatema Begum',   phone: '+8801811111104', email: null,                      dept: 'Sales',      desg: 'Sales Associate', doj: '2024-09-10', user_id: null },
     ];

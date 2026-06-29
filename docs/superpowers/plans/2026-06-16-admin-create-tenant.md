@@ -100,7 +100,7 @@ git commit -m "feat(admin): add CreateAdminTenantDto"
 At the very top of `apps/backend/src/admin-tenants/admin-tenants.service.spec.ts` (before any `import` statements — Jest hoists `jest.mock` calls automatically), add:
 
 ```ts
-jest.mock('@retail-saas/database', () => ({
+jest.mock('@erp71/database', () => ({
     bootstrapDefaultAccountingForTenant: jest.fn().mockResolvedValue(undefined),
     seedBusinessTypeTemplate: jest.fn().mockResolvedValue(undefined),
 }));
@@ -327,8 +327,8 @@ import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
-import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate } from '@retail-saas/database';
-import { ROLE_DEFAULT_PERMISSIONS, UserRole } from '@retail-saas/shared-types';
+import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate } from '@erp71/database';
+import { ROLE_DEFAULT_PERMISSIONS, UserRole } from '@erp71/shared-types';
 import {
     ListAdminTenantsQueryDto,
     ListAdminUsersQueryDto,

@@ -1,9 +1,9 @@
 import type { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { bootstrapDefaultAccountingForTenant } from './bootstrap-accounting';
-import { ROLE_DEFAULT_PERMISSIONS, UserRole } from '@retail-saas/shared-types';
+import { ROLE_DEFAULT_PERMISSIONS, UserRole } from '@erp71/shared-types';
 
-export const DEMO_ACCOUNT_EMAIL = 'demo@retailsaas.app';
+export const DEMO_ACCOUNT_EMAIL = 'demo@erp71.com';
 export const DEMO_ACCOUNT_PASSWORD = 'demo123456';
 
 const PRODUCTS = [

@@ -6,7 +6,7 @@ import { Mail, ArrowLeft, Loader2, CheckCircle } from 'lucide-react';
 import { useI18n, formatMessage } from '@/lib/i18n';
 
 const API_BASE = ((process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL)
-    || (process.env.NODE_ENV === 'production' ? 'https://retail-saas-backend.onrender.com' : 'http://localhost:4000')) + '/api/v1';
+    || (process.env.NODE_ENV === 'production' ? 'https://erp71-backend.onrender.com' : 'http://localhost:4000')) + '/api/v1';
 
 export default function ForgotPasswordPage() {
     const { t } = useI18n();

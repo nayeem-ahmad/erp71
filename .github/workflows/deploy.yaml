@@ -154,7 +154,7 @@ jobs:
       - run: npx prisma generate --schema=packages/database/prisma/schema.prisma
       - run: npx prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate
       - name: Seed database (subscription plans, base data)
-        run: npm run db:seed --workspace=@retail-saas/database
+        run: npm run db:seed --workspace=@retail/database
       - name: Build frontend for E2E
         run: npm run build
         working-directory: apps/frontend

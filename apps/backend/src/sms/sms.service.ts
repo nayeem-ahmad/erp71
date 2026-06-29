@@ -131,7 +131,7 @@ export class SmsService {
         daysLeft: number,
     ): Promise<void> {
         const message =
-            `Your RetailSaaS subscription for ${tenantName} expires in ${daysLeft} day(s). ` +
+            `Your ERP71 subscription for ${tenantName} expires in ${daysLeft} day(s). ` +
             `Renew now to avoid interruption.`;
         await this.sendSms(phone, message);
     }

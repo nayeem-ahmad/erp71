@@ -5,8 +5,8 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { EncryptionService } from '../common/encryption.service';
 import { CustomerPaymentDirectionDto } from './customer.dto';
 
-jest.mock('@retail-saas/database', () => {
-  const actual = jest.requireActual('@retail-saas/database');
+jest.mock('@erp71/database', () => {
+  const actual = jest.requireActual('@erp71/database');
   return {
     ...actual,
     ensureCustomerPaymentPostingSetup: jest.fn().mockResolvedValue(undefined),

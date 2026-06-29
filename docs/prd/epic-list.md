@@ -1,6 +1,6 @@
 # Epic List
 
-This document provides a master list of all epics for the Retail SaaS platform, organized by module and priority.
+This document provides a master list of all epics for the ERP71 platform, organized by module and priority.
 
 ## 🏗️ Foundation (01-09)
 *   **Epic 01: SaaS Foundation & Infrastructure**

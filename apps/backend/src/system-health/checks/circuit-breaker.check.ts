@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { CheckResult } from '@retail-saas/shared-types';
+import type { CheckResult } from '@erp71/shared-types';
 import { CircuitBreakerRegistry } from '../resilience/circuit-breaker.registry';
 
 /**

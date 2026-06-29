@@ -646,7 +646,7 @@ export default function Sidebar({
                     {!collapsed && (
                         <div className="min-w-0">
                             <span className="text-lg font-bold tracking-tight whitespace-nowrap block">
-                                {businessName || 'RetailSaaS'}
+                                {businessName || 'ERP71'}
                             </span>
                             <div className="flex items-center gap-2 mt-0.5">
                                 <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.sidebar.workspace}</span>

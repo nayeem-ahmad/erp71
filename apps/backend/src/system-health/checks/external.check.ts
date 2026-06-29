@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { CheckResult, DependencyState } from '@retail-saas/shared-types';
+import type { CheckResult, DependencyState } from '@erp71/shared-types';
 
 /** Per-probe timeout. Kept short so a slow provider can't stall the report. */
 const DEP_TIMEOUT_MS = parseInt(process.env.HEALTH_DEP_TIMEOUT_MS ?? '2000', 10);

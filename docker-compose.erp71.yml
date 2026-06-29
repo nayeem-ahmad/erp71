@@ -1,0 +1,46 @@
+# ERP71 instance on a shared VPS (app.erp71.com / api.erp71.com).
+# Reuses the Postgres container from the primary stack (retail-saas-db-1)
+# on the external Docker network. Do not start a second db or edge proxy.
+#
+#   docker compose -p erp71 --env-file .env.erp71 -f docker-compose.erp71.yml up -d --build
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    env_file:
+      - .env.erp71
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+    restart: unless-stopped
+    expose:
+      - "4000"
+    networks:
+      - shared_vps
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL is required}
+    env_file:
+      - .env.erp71
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    depends_on:
+      - backend
+    restart: unless-stopped
+    expose:
+      - "3000"
+    networks:
+      - shared_vps
+
+networks:
+  shared_vps:
+    external: true
+    name: retail-saas_default

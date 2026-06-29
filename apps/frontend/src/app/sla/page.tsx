@@ -14,7 +14,7 @@ export default function SlaPage() {
             {/* Nav */}
             <header className="fixed top-0 inset-x-0 z-50 bg-white/90 backdrop-blur border-b border-gray-100">
                 <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-                    <Link href="/" className="text-xl font-black tracking-tight text-blue-600">RetailSaaS</Link>
+                    <Link href="/" className="text-xl font-black tracking-tight text-blue-600">ERP71</Link>
                     <div className="flex items-center gap-3">
                         <Link href="/login" className="text-sm font-semibold text-gray-700 hover:text-gray-900 px-4 py-2">
                             {m.signIn}
@@ -42,7 +42,7 @@ export default function SlaPage() {
                         <section>
                             <h2 className="text-xl font-bold text-gray-900 mb-3">1. Service Availability</h2>
                             <p className="mb-3">
-                                RetailSaaS commits to a monthly uptime of <strong>99.9%</strong> for all paid subscription
+                                ERP71 commits to a monthly uptime of <strong>99.9%</strong> for all paid subscription
                                 tiers. This corresponds to a maximum of approximately <strong>43.8 minutes of unplanned
                                 downtime per calendar month</strong>.
                             </p>
@@ -68,7 +68,7 @@ export default function SlaPage() {
                             </ul>
                             <div className="mt-4 bg-blue-50 rounded-xl p-4 text-sm text-blue-800">
                                 Real-time and historical uptime data is published at{' '}
-                                <Link href="/status" className="font-semibold underline hover:text-blue-600">status.retailsaas.app</Link>.
+                                <Link href="/status" className="font-semibold underline hover:text-blue-600">status.erp71.com</Link>.
                             </div>
                         </section>
 
@@ -97,7 +97,7 @@ export default function SlaPage() {
                             <h2 className="text-xl font-bold text-gray-900 mb-3">3. Support Response Times</h2>
                             <p className="mb-4">
                                 Our support team is reachable at{' '}
-                                <a href="mailto:support@retailsaas.app" className="text-blue-600 hover:underline">support@retailsaas.app</a>.
+                                <a href="mailto:support@erp71.com" className="text-blue-600 hover:underline">support@erp71.com</a>.
                                 We target the following first-response times based on issue priority:
                             </p>
                             <div className="overflow-x-auto">
@@ -154,7 +154,7 @@ export default function SlaPage() {
                                 </li>
                                 <li>
                                     <strong>Status page update.</strong> An incident notice is published on{' '}
-                                    <Link href="/status" className="text-blue-600 hover:underline">status.retailsaas.app</Link>{' '}
+                                    <Link href="/status" className="text-blue-600 hover:underline">status.erp71.com</Link>{' '}
                                     <strong>within 15 minutes</strong> of confirmation, with a summary of impact and
                                     expected resolution time.
                                 </li>
@@ -237,7 +237,7 @@ export default function SlaPage() {
                                 </li>
                                 <li>
                                     Credit requests must be submitted to{' '}
-                                    <a href="mailto:support@retailsaas.app" className="text-blue-600 hover:underline">support@retailsaas.app</a>{' '}
+                                    <a href="mailto:support@erp71.com" className="text-blue-600 hover:underline">support@erp71.com</a>{' '}
                                     within <strong>30 calendar days</strong> of the end of the affected month.
                                 </li>
                                 <li>
@@ -254,10 +254,10 @@ export default function SlaPage() {
                                 contact our support team:
                             </p>
                             <div className="mt-3 bg-gray-50 rounded-xl p-4 text-sm space-y-1">
-                                <p><strong>RetailSaaS Ltd.</strong></p>
+                                <p><strong>ERP71 Ltd.</strong></p>
                                 <p>Dhaka, Bangladesh</p>
-                                <p>Support: <a href="mailto:support@retailsaas.app" className="text-blue-600 hover:underline">support@retailsaas.app</a></p>
-                                <p>Status: <Link href="/status" className="text-blue-600 hover:underline">status.retailsaas.app</Link></p>
+                                <p>Support: <a href="mailto:support@erp71.com" className="text-blue-600 hover:underline">support@erp71.com</a></p>
+                                <p>Status: <Link href="/status" className="text-blue-600 hover:underline">status.erp71.com</Link></p>
                             </div>
                         </section>
 
@@ -268,7 +268,7 @@ export default function SlaPage() {
             {/* Footer */}
             <footer className="py-10 px-6 border-t border-gray-100 bg-white">
                 <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-400">
-                    <span className="font-black text-lg text-blue-600">RetailSaaS</span>
+                    <span className="font-black text-lg text-blue-600">ERP71</span>
                     <div className="flex items-center gap-6">
                         <Link href="/terms" className="hover:text-gray-700 transition-colors">Terms of Service</Link>
                         <Link href="/privacy" className="hover:text-gray-700 transition-colors">Privacy Policy</Link>
@@ -277,7 +277,7 @@ export default function SlaPage() {
                         <Link href="/login" className="hover:text-gray-700 transition-colors">Sign in</Link>
                         <Link href="/signup" className="hover:text-gray-700 transition-colors">Sign up</Link>
                     </div>
-                    <span>&copy; {new Date().getFullYear()} RetailSaaS. All rights reserved.</span>
+                    <span>&copy; {new Date().getFullYear()} ERP71. All rights reserved.</span>
                 </div>
             </footer>
         </div>

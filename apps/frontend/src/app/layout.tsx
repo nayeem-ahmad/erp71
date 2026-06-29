@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { cookies } from 'next/headers';
 
 import './globals.css';
+import { BRAND_NAME } from '../lib/brand';
 import { I18nProvider } from '../lib/i18n';
 import { DEFAULT_LOCALE, LOCALE_COOKIE_NAME, getLocaleConfig, resolveLocale } from '../lib/localization/config';
 
@@ -14,13 +15,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-    title: 'RetailSaaS — Retail management for Bangladeshi businesses',
+    title: 'ERP71 — Retail management for Bangladeshi businesses',
     description: 'All-in-one retail management platform with POS, inventory, sales analytics, and integrated BDT payments.',
     manifest: '/manifest.json',
     appleWebApp: {
         capable: true,
         statusBarStyle: 'default',
-        title: 'RetailSaaS',
+        title: BRAND_NAME,
     },
 };
 

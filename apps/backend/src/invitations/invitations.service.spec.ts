@@ -3,7 +3,7 @@ import { Test } from '@nestjs/testing';
 import { InvitationsService } from './invitations.service';
 import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
-import { UserRole } from '@retail-saas/shared-types';
+import { UserRole } from '@erp71/shared-types';
 import * as crypto from 'crypto';
 
 const db = {

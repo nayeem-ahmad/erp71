@@ -9,7 +9,7 @@ import { useI18n } from '@/lib/i18n';
 const API_BASE =
     ((process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL) ||
         (process.env.NODE_ENV === 'production'
-            ? 'https://retail-saas-backend.onrender.com'
+            ? 'https://erp71-backend.onrender.com'
             : 'http://localhost:4000')) + '/api/v1';
 
 export default function StorefrontSignInPage() {

@@ -1,4 +1,4 @@
-jest.mock('@retail-saas/database', () => ({
+jest.mock('@erp71/database', () => ({
     bootstrapDefaultAccountingForTenant: jest.fn().mockResolvedValue(undefined),
     seedBusinessTypeTemplate: jest.fn().mockResolvedValue(undefined),
     PrismaClient: class MockPrismaClient {},

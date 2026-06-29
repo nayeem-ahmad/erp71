@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { CheckResult } from '@retail-saas/shared-types';
+import type { CheckResult } from '@erp71/shared-types';
 import { DatabaseService } from '../../database/database.service';
 
 /** Latency (ms) above which the database is considered degraded. */

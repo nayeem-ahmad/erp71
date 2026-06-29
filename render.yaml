@@ -4,7 +4,7 @@
 # - Free web services spin down after 15 min idle; 750 instance-hours/month shared across all free services.
 
 databases:
-  - name: retail-saas-db
+  - name: erp71-db
     plan: free
     region: oregon
 
@@ -12,7 +12,7 @@ services:
   # ─── PRODUCTION ────────────────────────────────────────────────────────────
 
   - type: web
-    name: retail-saas-backend
+    name: erp71-backend
     rootDir: .
     runtime: docker
     dockerContext: .
@@ -83,7 +83,7 @@ services:
         sync: false
 
   - type: web
-    name: retail-saas-frontend
+    name: erp71-frontend
     rootDir: .
     runtime: docker
     dockerContext: .
@@ -108,8 +108,8 @@ services:
   # Deploy from the `staging` branch. Uses sandbox payment credentials.
 
   - type: web
-    name: retail-saas-backend-staging
-    repo: https://github.com/nayeem-ahmad/retail-saas
+    name: erp71-backend-staging
+    repo: https://github.com/nayeem-ahmad/erp71
     rootDir: .
     runtime: docker
     dockerContext: .
@@ -161,8 +161,8 @@ services:
         value: https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php
 
   - type: web
-    name: retail-saas-frontend-staging
-    repo: https://github.com/nayeem-ahmad/retail-saas
+    name: erp71-frontend-staging
+    repo: https://github.com/nayeem-ahmad/erp71
     rootDir: .
     runtime: docker
     dockerContext: .

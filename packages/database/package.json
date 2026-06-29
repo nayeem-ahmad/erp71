@@ -1,5 +1,5 @@
 {
-    "name": "@retail-saas/database",
+    "name": "@erp71/database",
     "version": "0.1.0",
     "private": true,
     "main": "./index.js",

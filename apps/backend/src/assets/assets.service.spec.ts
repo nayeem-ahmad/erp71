@@ -140,14 +140,14 @@ describe('AssetsService', () => {
         describe('uploadFile', () => {
             it('should upload a file and return the secure URL', async () => {
                 const folder = 'tenant-xyz';
-                const expectedUrl = 'https://res.cloudinary.com/my-cloud/image/upload/v1/retail-saas/tenant-xyz/test.jpg';
+                const expectedUrl = 'https://res.cloudinary.com/my-cloud/image/upload/v1/retail/tenant-xyz/test.jpg';
                 simulateSuccessfulUpload(expectedUrl);
 
                 const result = await service.uploadFile(fakeFile(), folder);
 
                 expect(mockUploadStream).toHaveBeenCalledWith(
                     expect.objectContaining({
-                        folder: `retail-saas/${folder}`,
+                        folder: `retail/${folder}`,
                         resource_type: 'auto',
                         use_filename: true,
                         unique_filename: true,
@@ -196,9 +196,9 @@ describe('AssetsService', () => {
             it('should call cloudinary destroy with the publicId', async () => {
                 mockDestroy.mockResolvedValue({ result: 'ok' } as any);
 
-                await service.deleteFile('retail-saas/tenant-1/image123');
+                await service.deleteFile('retail/tenant-1/image123');
 
-                expect(mockDestroy).toHaveBeenCalledWith('retail-saas/tenant-1/image123');
+                expect(mockDestroy).toHaveBeenCalledWith('retail/tenant-1/image123');
             });
 
             it('should not throw when cloudinary destroy fails (logs error)', async () => {

@@ -2,7 +2,7 @@
 # Regenerated from PRD epics (docs/prd/epic-list.md), codebase audit, TODO.md, and session-status.md
 # Previous snapshot: 2026-05-08 (Mary) — superseded by this file
 
-project_name: retail-saas
+project_name: erp71
 sprint_goal: >-
   Core retail platform is live (POS, purchases, inventory, accounting, CRM, HR basics).
   Next focus: payroll, CRM dashboard, purchase RFQ comparison, delivery analytics.

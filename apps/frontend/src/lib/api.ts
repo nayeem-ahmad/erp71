@@ -1,4 +1,4 @@
-const DEFAULT_PROD_API_BASE = 'https://retail-saas-backend.onrender.com';
+const DEFAULT_PROD_API_BASE = 'https://erp71-backend.onrender.com';
 // In dev (remote container) use a relative path so browser calls go to the
 // Next.js dev server which proxies them to the backend via next.config rewrites.
 // In production keep the explicit backend URL.
@@ -1579,6 +1579,24 @@ export const api = {
         }),
     aiDraftMessage: (data: { channel: string; purpose: string; customerContext: Record<string, unknown>; locale?: string }) =>
         fetchWithAuth('/ai/draft-message', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    aiParseVoiceEntry: (data: {
+        entryType: string;
+        transcript?: string;
+        audioBase64?: string;
+        audioFormat?: string;
+        locale?: string;
+    }) =>
+        fetchWithAuth('/ai/parse-voice-entry', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    aiParseVoiceSale: (data: { transcript?: string; audioBase64?: string; audioFormat?: string; locale?: string }) =>
+        fetchWithAuth('/ai/parse-voice-sale', {
             method: 'POST',
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },

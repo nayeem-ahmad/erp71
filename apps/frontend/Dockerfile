@@ -21,9 +21,9 @@ COPY . .
 # Some deployments don't include a public directory; ensure it exists for runner COPY.
 RUN mkdir -p /app/apps/frontend/public
 # Build the shared package first
-RUN npm run build --workspace=@retail-saas/shared-types || true
+RUN npm run build --workspace=@erp71/shared-types || true
 # Generate Prisma client
-RUN npm run generate --workspace=@retail-saas/database
+RUN npm run generate --workspace=@erp71/database
 # Build the frontend with debug info
 ARG NEXT_PUBLIC_API_BASE
 ARG NEXT_PUBLIC_API_URL
@@ -31,7 +31,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_OPTIONS="--max-old-space-size=1536"
 ENV NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE}
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
-RUN npm run build --workspace=@retail-saas/frontend
+RUN npm run build --workspace=@erp71/frontend
 
 # Runner stage
 FROM base AS runner

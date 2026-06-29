@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ensureLoanPostingSetup } from '@retail-saas/database';
+import { ensureLoanPostingSetup } from '@erp71/database';
 import { DatabaseService } from '../database/database.service';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { autoPostFromRules } from '../accounting/posting.utils';

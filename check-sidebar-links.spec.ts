@@ -88,7 +88,7 @@ async function checkLinks() {
     const token: string = body.data.access_token;
     const tenantId: string = body.data.tenants?.[0]?.id ?? '';
     const storeId: string = body.data.tenants?.[0]?.stores?.[0]?.id ?? '';
-    console.log(`Logged in as demo@retailsaas.app, tenant=${tenantId}, store=${storeId}\n`);
+    console.log(`Logged in as demo@erp71.com, tenant=${tenantId}, store=${storeId}\n`);
 
     // Inject auth into browser localStorage
     await page.goto(`${BASE}/login`);

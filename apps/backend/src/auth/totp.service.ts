@@ -3,7 +3,7 @@ import * as crypto from 'crypto';
 import * as qrcode from 'qrcode';
 import { DatabaseService } from '../database/database.service';
 
-const APP_NAME = 'RetailSaaS';
+const APP_NAME = 'ERP71';
 const DIGITS = 6;
 const PERIOD = 30;
 const WINDOW = 1; // allow 1 step drift on each side

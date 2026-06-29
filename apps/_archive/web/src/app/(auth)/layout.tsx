@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Auth - Retail SaaS",
+  title: "Auth - ERP71",
 };
 
 export default function AuthLayout({

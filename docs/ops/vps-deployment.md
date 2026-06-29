@@ -36,8 +36,8 @@ systemctl start docker
 
 ```bash
 cd /opt
-git clone https://github.com/nayeem-ahmad/retail-saas.git
-cd /opt/retail-saas
+git clone https://github.com/nayeem-ahmad/erp71.git
+cd /opt/erp71
 cp .env.production.example .env.production
 # edit .env.production with real secrets
 docker compose -f docker-compose.prod.yml up -d --build db
@@ -64,17 +64,17 @@ is gated behind the `standalone-edge` Compose profile and skipped by default.
 Instead:
 
 1. Deploy without the edge proxy: `docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build` (starts `db`, `backend`, `frontend` only).
-2. Ensure the existing proxy shares a Docker network with these containers so it can resolve them by name (`retail-saas-frontend-1`, `retail-saas-backend-1`).
+2. Ensure the existing proxy shares a Docker network with these containers so it can resolve them by name (`erp71-frontend-1`, `erp71-backend-1`).
 3. Add site blocks to the existing proxy's Caddyfile (back it up first, `caddy validate`, then `caddy reload`):
 
    ```
    app.nayeemahmad.com {
    	encode zstd gzip
-   	reverse_proxy retail-saas-frontend-1:3000
+   	reverse_proxy erp71-frontend-1:3000
    }
    api.nayeemahmad.com {
    	encode zstd gzip
-   	reverse_proxy retail-saas-backend-1:4000
+   	reverse_proxy erp71-backend-1:4000
    }
    ```
 
@@ -87,6 +87,6 @@ For a dedicated host, enable this stack's own proxy instead:
 curl https://api.nayeemahmad.com/api/v1/health
 curl -I https://app.nayeemahmad.com
 docker compose -f docker-compose.prod.yml ps
-docker volume inspect retail-saas_postgres_data
+docker volume inspect erp71_postgres_data
 docker compose -f docker-compose.prod.yml logs --tail=50 backend
 ```

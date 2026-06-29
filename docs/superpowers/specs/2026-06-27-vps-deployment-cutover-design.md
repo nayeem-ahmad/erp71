@@ -9,7 +9,7 @@
 ## Context
 
 Production currently runs (suspended for billing) on Render as two web services:
-`retail-saas-backend` and `retail-saas-frontend`, with the database on Supabase.
+`erp71-backend` and `erp71-frontend`, with the database on Supabase.
 
 The repository already contains a complete VPS deployment path:
 
@@ -57,7 +57,7 @@ Add A-records pointing to the VPS IP: `nayeemahmad.com`, `app.nayeemahmad.com`,
 ### 2. `.env.production` (created on the VPS, never committed)
 Populate from secrets captured off Render, adjusted for the new topology:
 
-- `DATABASE_URL` / `DIRECT_URL` → local container: `postgresql://<user>:<pass>@db:5432/retail_saas`
+- `DATABASE_URL` / `DIRECT_URL` → local container: `postgresql://<user>:<pass>@db:5432/erp71`
 - `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` → new strong credentials
 - `JWT_SECRET` → generate fresh (none existed on Render)
 - `FIELD_ENCRYPTION_KEY` → fresh (clean DB, nothing to decrypt)

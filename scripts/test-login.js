@@ -27,19 +27,19 @@ async function runTest() {
     });
   };
 
-  // --- PART 1: Login using demo@retailsaas.app / demo123456 ---
+  // --- PART 1: Login using demo@erp71.com / demo123456 ---
   console.log('\n--- PART 1: Testing Manual Login ---');
   const page1 = await context.newPage();
   setupPageLogging(page1);
 
-  console.log('Navigating to https://retail-saas-frontend.onrender.com/login ...');
-  await page1.goto('https://retail-saas-frontend.onrender.com/login', { 
+  console.log('Navigating to https://erp71-frontend.onrender.com/login ...');
+  await page1.goto('https://erp71-frontend.onrender.com/login', { 
     waitUntil: 'networkidle',
     timeout: 60000 
   });
 
-  console.log('Filling demo credentials (demo@retailsaas.app / demo123456)...');
-  await page1.locator('input[type="email"], input[name="email"], #email').first().fill('demo@retailsaas.app');
+  console.log('Filling demo credentials (demo@erp71.com / demo123456)...');
+  await page1.locator('input[type="email"], input[name="email"], #email').first().fill('demo@erp71.com');
   await page1.locator('input[type="password"], input[name="password"], #password').first().fill('demo123456');
 
   const screenshotManualPath1 = path.join(__dirname, 'manual_login_input.png');
@@ -63,8 +63,8 @@ async function runTest() {
   const page2 = await context.newPage();
   setupPageLogging(page2);
 
-  console.log('Navigating to https://retail-saas-frontend.onrender.com/login ...');
-  await page2.goto('https://retail-saas-frontend.onrender.com/login', { 
+  console.log('Navigating to https://erp71-frontend.onrender.com/login ...');
+  await page2.goto('https://erp71-frontend.onrender.com/login', { 
     waitUntil: 'networkidle',
     timeout: 60000 
   });

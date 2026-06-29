@@ -56,7 +56,7 @@ describe('ContactPage', () => {
         });
 
         it('renders contact email address', () => {
-            expect(screen.getAllByText(/support@retailsaas\.app/i).length).toBeGreaterThan(0);
+            expect(screen.getAllByText(/support@erp71\.com/i).length).toBeGreaterThan(0);
         });
 
         it('renders Location info', () => {
@@ -302,8 +302,8 @@ describe('ContactPage', () => {
             render(<ContactPage />);
         });
 
-        it('renders RetailSaaS brand link', () => {
-            expect(screen.getAllByText('RetailSaaS').length).toBeGreaterThan(0);
+        it('renders ERP71 brand link', () => {
+            expect(screen.getAllByText('ERP71').length).toBeGreaterThan(0);
         });
 
         it('renders Sign in nav link', () => {
@@ -323,7 +323,7 @@ describe('ContactPage', () => {
         });
 
         it('renders copyright notice', () => {
-            expect(screen.getByText(/retailsaas\. all rights reserved/i)).toBeInTheDocument();
+            expect(screen.getByText(/erp71\. all rights reserved/i)).toBeInTheDocument();
         });
     });
 });

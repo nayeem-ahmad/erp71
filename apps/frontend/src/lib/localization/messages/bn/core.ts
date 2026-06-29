@@ -119,7 +119,7 @@ export const coreMessages = {
             profit: "মুনাফা",
         },
         onboarding: {
-            title: "RetailSaaS-এ স্বাগতম",
+            title: "ERP71-এ স্বাগতম",
             subtitle: "৪টি সহজ ধাপে আপনার স্টোর চালু করুন।",
             skipSetup: "সেটআপ এড়িয়ে যান",
             steps: {
@@ -359,7 +359,7 @@ export const coreMessages = {
                 demoFailed: "ডেমো লগইন ব্যর্থ হয়েছে। আবার চেষ্টা করুন।",
             },
             signup: {
-                title: "আপনার Retail SaaS ওয়ার্কস্পেস তৈরি করুন",
+                title: "আপনার ERP71 ওয়ার্কস্পেস তৈরি করুন",
                 description: "এক ধাপে আপনার প্রতিষ্ঠান, প্রথম স্টোর এবং প্ল্যান সেট করুন",
                 nameLabel: "আপনার নাম",
                 emailLabel: "ইমেইল ঠিকানা",
@@ -406,14 +406,14 @@ export const coreMessages = {
                 defaultError: "রিসেট ব্যর্থ। লিংকের মেয়াদ শেষ হতে পারে।",
             },
             verifyEmail: {
-                brand: "RetailSaaS",
+                brand: "ERP71",
                 loadingTitle: "আপনার ইমেইল যাচাই হচ্ছে…",
                 loadingDescription: "এক মুহূর্ত লাগবে।",
                 pendingTitle: "আপনার ইনবক্স দেখুন",
                 pendingDescription: "আমরা একটি যাচাই লিংক পাঠিয়েছি{emailSuffix}। অ্যাকাউন্ট সক্রিয় করতে খুলুন, তারপর ড্যাশবোর্ডে এগিয়ে যান।",
                 pendingEmailSuffix: " {email}-এ",
                 successTitle: "ইমেইল যাচাই হয়েছে!",
-                successDescription: "আপনার অ্যাকাউন্ট এখন সক্রিয়। সাইন ইন করে RetailSaaS ব্যবহার শুরু করুন।",
+                successDescription: "আপনার অ্যাকাউন্ট এখন সক্রিয়। সাইন ইন করে ERP71 ব্যবহার শুরু করুন।",
                 errorTitle: "যাচাই ব্যর্থ",
                 errorDescription: "এই যাচাই লিংক অবৈধ বা মেয়াদোত্তীর্ণ। সাইন ইন করে অ্যাকাউন্ট সেটিংস থেকে নতুন যাচাই ইমেইল অনুরোধ করুন।",
                 continueSetup: "সেটআপে এগিয়ে যান",
@@ -421,7 +421,7 @@ export const coreMessages = {
                 version: "রিটেইল SaaS প্ল্যাটফর্ম v0.1",
             },
             acceptInvitation: {
-                brand: "RetailSaaS",
+                brand: "ERP71",
                 loading: "আমন্ত্রণ লোড হচ্ছে…",
                 title: "আপনাকে আমন্ত্রণ জানানো হয়েছে!",
                 joinDescription: "{tenant}-এ {role} হিসেবে যোগ দিন।",

@@ -110,19 +110,19 @@ describe('SlaPage', () => {
 
     it('renders contact details', () => {
         render(<SlaPage />);
-        expect(screen.getByText('RetailSaaS Ltd.')).toBeInTheDocument();
+        expect(screen.getByText('ERP71 Ltd.')).toBeInTheDocument();
         expect(screen.getByText('Dhaka, Bangladesh')).toBeInTheDocument();
     });
 
     it('renders support email links', () => {
         render(<SlaPage />);
-        const emailLinks = screen.getAllByText('support@retailsaas.app');
+        const emailLinks = screen.getAllByText('support@erp71.com');
         expect(emailLinks.length).toBeGreaterThan(0);
     });
 
     it('renders status page links', () => {
         render(<SlaPage />);
-        const statusLinks = screen.getAllByText('status.retailsaas.app');
+        const statusLinks = screen.getAllByText('status.erp71.com');
         expect(statusLinks.length).toBeGreaterThan(0);
     });
 
@@ -147,7 +147,7 @@ describe('SlaPage', () => {
 
     it('renders the copyright notice', () => {
         render(<SlaPage />);
-        expect(screen.getByText(/RetailSaaS\. All rights reserved\./)).toBeInTheDocument();
+        expect(screen.getByText(/ERP71\. All rights reserved\./)).toBeInTheDocument();
     });
 
     it('renders the 24 hours advance notice text for maintenance', () => {

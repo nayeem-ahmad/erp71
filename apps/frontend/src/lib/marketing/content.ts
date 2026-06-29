@@ -104,7 +104,7 @@ export const TESTIMONIALS = [
     {
         name: 'Rahim Uddin',
         role: 'Owner, Rahim Electronics, Dhaka',
-        quote: 'Switched from paper ledgers to RetailSaaS in a week. Our stock accuracy improved overnight.',
+        quote: 'Switched from paper ledgers to ERP71 in a week. Our stock accuracy improved overnight.',
         stars: 5,
     },
     {

@@ -1,10 +1,12 @@
 import type { MetadataRoute } from 'next';
 
+import { BRAND_NAME, BRAND_TAGLINE } from '../lib/brand';
+
 export default function manifest(): MetadataRoute.Manifest {
     return {
-        name: 'RetailSaaS — বাংলাদেশ রিটেইল ম্যানেজমেন্ট',
-        short_name: 'RetailSaaS',
-        description: 'Complete retail management platform for Bangladeshi businesses',
+        name: `${BRAND_NAME} — বাংলাদেশ রিটেইল ম্যানেজমেন্ট`,
+        short_name: BRAND_NAME,
+        description: BRAND_TAGLINE,
         start_url: '/dashboard',
         display: 'standalone',
         background_color: '#ffffff',

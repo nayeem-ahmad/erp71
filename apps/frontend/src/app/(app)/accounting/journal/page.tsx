@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ChevronLeft, ChevronRight, ClipboardList, Filter } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { VoucherType } from '@retail-saas/shared-types';
+import { VoucherType } from '@erp71/shared-types';
 import { DataTable } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';

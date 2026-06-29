@@ -14,7 +14,7 @@ export default function RefundPage() {
             {/* Nav */}
             <header className="fixed top-0 inset-x-0 z-50 bg-white/90 backdrop-blur border-b border-gray-100">
                 <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-                    <Link href="/" className="text-xl font-black tracking-tight text-blue-600">RetailSaaS</Link>
+                    <Link href="/" className="text-xl font-black tracking-tight text-blue-600">ERP71</Link>
                     <div className="flex items-center gap-3">
                         <Link href="/login" className="text-sm font-semibold text-gray-700 hover:text-gray-900 px-4 py-2">
                             {m.signIn}
@@ -42,7 +42,7 @@ export default function RefundPage() {
                         <section>
                             <h2 className="text-xl font-bold text-gray-900 mb-3">1. Overview</h2>
                             <p>
-                                All RetailSaaS subscriptions are prepaid on a monthly basis in Bangladeshi Taka (BDT).
+                                All ERP71 subscriptions are prepaid on a monthly basis in Bangladeshi Taka (BDT).
                                 When you subscribe or renew, you pay in advance for the upcoming billing period.
                                 If a refund is approved, it will be prorated to the number of unused days remaining
                                 in your current billing period at the time the refund is processed.
@@ -56,7 +56,7 @@ export default function RefundPage() {
                                 You may cancel your subscription at any time with no cancellation fee. To cancel:
                             </p>
                             <ol className="list-decimal pl-6 space-y-2 text-sm">
-                                <li>Log in to your RetailSaaS account.</li>
+                                <li>Log in to your ERP71 account.</li>
                                 <li>Go to <strong>Dashboard &rarr; Billing &rarr; Cancel Subscription</strong>.</li>
                                 <li>Confirm the cancellation when prompted.</li>
                             </ol>
@@ -123,7 +123,7 @@ export default function RefundPage() {
                             <h2 className="text-xl font-bold text-gray-900 mb-3">5. How to Request a Refund</h2>
                             <p className="mb-3">
                                 To request a refund, email our billing team at{' '}
-                                <a href="mailto:billing@retailsaas.app" className="text-blue-600 hover:underline">billing@retailsaas.app</a>{' '}
+                                <a href="mailto:billing@erp71.com" className="text-blue-600 hover:underline">billing@erp71.com</a>{' '}
                                 with the following information:
                             </p>
                             <ul className="list-disc pl-6 space-y-2 text-sm">
@@ -166,10 +166,10 @@ export default function RefundPage() {
                                 our billing team:
                             </p>
                             <div className="mt-3 bg-gray-50 rounded-xl p-4 text-sm space-y-1">
-                                <p><strong>RetailSaaS Ltd.</strong></p>
+                                <p><strong>ERP71 Ltd.</strong></p>
                                 <p>Dhaka, Bangladesh</p>
-                                <p>Billing: <a href="mailto:billing@retailsaas.app" className="text-blue-600 hover:underline">billing@retailsaas.app</a></p>
-                                <p>Support: <a href="mailto:support@retailsaas.app" className="text-blue-600 hover:underline">support@retailsaas.app</a></p>
+                                <p>Billing: <a href="mailto:billing@erp71.com" className="text-blue-600 hover:underline">billing@erp71.com</a></p>
+                                <p>Support: <a href="mailto:support@erp71.com" className="text-blue-600 hover:underline">support@erp71.com</a></p>
                             </div>
                         </section>
 
@@ -180,7 +180,7 @@ export default function RefundPage() {
             {/* Footer */}
             <footer className="py-10 px-6 border-t border-gray-100 bg-white">
                 <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-400">
-                    <span className="font-black text-lg text-blue-600">RetailSaaS</span>
+                    <span className="font-black text-lg text-blue-600">ERP71</span>
                     <div className="flex items-center gap-6">
                         <Link href="/terms" className="hover:text-gray-700 transition-colors">Terms of Service</Link>
                         <Link href="/privacy" className="hover:text-gray-700 transition-colors">Privacy Policy</Link>
@@ -189,7 +189,7 @@ export default function RefundPage() {
                         <Link href="/login" className="hover:text-gray-700 transition-colors">Sign in</Link>
                         <Link href="/signup" className="hover:text-gray-700 transition-colors">Sign up</Link>
                     </div>
-                    <span>&copy; {new Date().getFullYear()} RetailSaaS. All rights reserved.</span>
+                    <span>&copy; {new Date().getFullYear()} ERP71. All rights reserved.</span>
                 </div>
             </footer>
         </div>

@@ -1,6 +1,6 @@
 # API Specification
 
-This section defines the contract for the REST API of the Retail SaaS Platform.
+This section defines the contract for the REST API of the ERP71 Platform.
 
 ## Standard Headers
 All requests must include the following headers for authentication and multi-tenant scoping:

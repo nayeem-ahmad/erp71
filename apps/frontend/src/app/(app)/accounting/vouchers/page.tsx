@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, CircleCheck, FileText, Plus, Scale, Trash2 } from 'lucide-react';
 import { HelpTooltip } from '@/components/HelpTooltip';
-import { AccountCategory, VoucherType } from '@retail-saas/shared-types';
+import { AccountCategory, VoucherType } from '@erp71/shared-types';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';

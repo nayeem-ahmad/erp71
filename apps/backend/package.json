@@ -1,5 +1,5 @@
 {
-  "name": "@retail-saas/backend",
+  "name": "@erp71/backend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -22,8 +22,8 @@
     "@nestjs/swagger": "^11.4.4",
     "@nestjs/throttler": "^6.5.0",
     "@prisma/client": "^5.22.0",
-    "@retail-saas/database": "*",
-    "@retail-saas/shared-types": "*",
+    "@erp71/database": "*",
+    "@erp71/shared-types": "*",
     "@sentry/nestjs": "^10.53.1",
     "@sentry/profiling-node": "^10.53.1",
     "@supabase/supabase-js": "^2.98.0",

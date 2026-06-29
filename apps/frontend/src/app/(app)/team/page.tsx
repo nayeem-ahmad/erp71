@@ -9,7 +9,7 @@ import {
     STORE_PERMISSION_GROUPS,
     STORE_PERMISSION_LABELS,
     UserRole,
-} from '@retail-saas/shared-types';
+} from '@erp71/shared-types';
 import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
 

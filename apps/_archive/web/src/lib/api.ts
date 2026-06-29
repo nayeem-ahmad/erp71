@@ -1,5 +1,5 @@
 import { createClient } from "./supabase";
-import { ApiError } from "@retail-saas/shared-types";
+import { ApiError } from "@erp71/shared-types";
 
 /**
  * Custom error class for API errors

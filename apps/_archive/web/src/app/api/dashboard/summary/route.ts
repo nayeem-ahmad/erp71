@@ -2,7 +2,7 @@ import { createReadClient } from "@/lib/supabase";
 import { NextResponse } from "next/server";
 import { withErrorHandler } from "@/lib/api-utils";
 import { requireRole } from "@/lib/auth-utils";
-import { UserRole } from "@retail-saas/shared-types";
+import { UserRole } from "@erp71/shared-types";
 
 async function handler(req: Request) {
   // Try to extract tenantId from query params or headers for this example

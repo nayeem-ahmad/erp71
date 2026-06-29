@@ -1,4 +1,4 @@
-import type { SystemHealthReport } from '@retail-saas/shared-types';
+import type { SystemHealthReport } from '@erp71/shared-types';
 import { HealthAlertService } from './health-alert.service';
 
 const report = (status: 'ok' | 'degraded' | 'down'): SystemHealthReport => ({

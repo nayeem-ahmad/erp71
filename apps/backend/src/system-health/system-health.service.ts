@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { CheckResult, DependencyState, SystemHealthReport } from '@retail-saas/shared-types';
+import type { CheckResult, DependencyState, SystemHealthReport } from '@erp71/shared-types';
 import { DatabaseCheck } from './checks/database.check';
 import { RedisCheck } from './checks/redis.check';
 import { ExternalCheck } from './checks/external.check';

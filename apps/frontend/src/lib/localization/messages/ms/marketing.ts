@@ -140,7 +140,7 @@ export const marketingMessages = {
                     {
                         name: "Rahim Uddin",
                         role: "Pemilik, Rahim Electronics, Dhaka",
-                        quote: "Beralih dari lejar kertas ke RetailSaaS dalam masa seminggu. Ketepatan stok kami bertambah baik dalam sekelip mata.",
+                        quote: "Beralih dari lejar kertas ke ERP71 dalam masa seminggu. Ketepatan stok kami bertambah baik dalam sekelip mata.",
                     },
                     {
                         name: "Nasrin Begum",
@@ -172,7 +172,7 @@ export const marketingMessages = {
             },
             cta: {
                 title: "Bersedia untuk memodenkan kedai anda?",
-                description: "Sertai ratusan peruncit Bangladesh yang telah memindahkan perniagaan mereka ke RetailSaaS.",
+                description: "Sertai ratusan peruncit Bangladesh yang telah memindahkan perniagaan mereka ke ERP71.",
                 button: "Mulakan percubaan percuma anda",
             },
         },
@@ -196,7 +196,7 @@ export const marketingMessages = {
             infoDescription: "Hubungi melalui borang atau terus hubungi kami menggunakan butiran di bawah.",
             info: {
                 email: "E-mel",
-                emailValue: "support@retailsaas.app",
+                emailValue: "support@erp71.com",
                 location: "Lokasi",
                 addressValue: "Dhaka, Bangladesh",
                 responseTime: "Masa tindak balas",
@@ -227,7 +227,7 @@ export const marketingMessages = {
                 status: "Status",
                 signIn: "Log masuk",
                 signUp: "Daftar",
-                copyright: "© {year} RetailSaaS. Hak cipta terpelihara.",
+                copyright: "© {year} ERP71. Hak cipta terpelihara.",
             },
             validation: {
                 required: "Semua medan diperlukan.",
@@ -248,7 +248,7 @@ export const marketingMessages = {
         },
         status: {
             title: "Status Sistem",
-            description: "Kesihatan masa nyata semua perkhidmatan RetailSaaS",
+            description: "Kesihatan masa nyata semua perkhidmatan ERP71",
             checking: "Memeriksa perkhidmatan…",
             allOperational: "Semua sistem beroperasi",
             allSystemsOperational: "Semua Sistem Beroperasi",
@@ -307,11 +307,11 @@ export const marketingMessages = {
             lastUpdated: "Dikemas kini: Mei 2026",
             terms: {
                 title: "Terma Perkhidmatan",
-                description: "Terma Perkhidmatan yang mengawal penggunaan platform RetailSaaS",
+                description: "Terma Perkhidmatan yang mengawal penggunaan platform ERP71",
             },
             privacy: {
                 title: "Dasar Privasi",
-                description: "Cara RetailSaaS mengumpul, menggunakan, dan melindungi data anda",
+                description: "Cara ERP71 mengumpul, menggunakan, dan melindungi data anda",
             },
             refund: {
                 title: "Dasar Bayaran Balik & Pembatalan",

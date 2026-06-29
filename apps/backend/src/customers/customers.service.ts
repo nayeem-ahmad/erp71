@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
-import { ensureCustomerPaymentPostingSetup } from '@retail-saas/database';
+import { ensureCustomerPaymentPostingSetup } from '@erp71/database';
 import { DatabaseService } from '../database/database.service';
 import { EncryptionService } from '../common/encryption.service';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';

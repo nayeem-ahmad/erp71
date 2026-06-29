@@ -19,7 +19,7 @@ This applies to every session, every change, every fix — even small ones.
 
 ## Project Overview
 
-Retail SaaS platform targeting Bangladeshi small/medium retailers. Monorepo:
+ERP71 platform targeting Bangladeshi small/medium retailers. Monorepo:
 
 - `apps/backend` — NestJS REST API
 - `apps/frontend` — Next.js 15 app

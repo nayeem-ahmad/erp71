@@ -1,5 +1,5 @@
 import { IsArray, IsBoolean, IsEmail, IsEnum, IsIn, IsOptional, IsString } from 'class-validator';
-import { StorePermission, UserRole } from '@retail-saas/shared-types';
+import { StorePermission, UserRole } from '@erp71/shared-types';
 
 const STORE_PERMISSION_VALUES = Object.values(StorePermission) as string[];
 

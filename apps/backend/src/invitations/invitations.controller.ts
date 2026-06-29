@@ -4,7 +4,7 @@ import { InvitationsService } from './invitations.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { IsEmail, IsEnum, IsString } from 'class-validator';
-import { UserRole } from '@retail-saas/shared-types';
+import { UserRole } from '@erp71/shared-types';
 
 class InviteDto {
     @IsEmail()

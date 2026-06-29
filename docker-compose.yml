@@ -5,7 +5,7 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=password123
-      - POSTGRES_DB=retail_saas
+      - POSTGRES_DB=erp71
     ports:
       - "5433:5432"
     volumes:
@@ -24,7 +24,7 @@ services:
       - .env
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=postgresql://postgres:password123@db:5432/retail_saas
+      - DATABASE_URL=postgresql://postgres:password123@db:5432/erp71
     depends_on:
       - db
     restart: always
@@ -43,7 +43,7 @@ services:
       - .env
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=postgresql://postgres:password123@db:5432/retail_saas
+      - DATABASE_URL=postgresql://postgres:password123@db:5432/erp71
       # Relaxed for local E2E (sidebar route sweep hits many /auth/me calls per IP).
       - THROTTLE_LIMIT=100000
     depends_on:

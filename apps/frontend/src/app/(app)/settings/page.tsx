@@ -64,7 +64,7 @@ function PrivacyTab({ onToast }: { onToast: (t: ToastState) => void }) {
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `retail-saas-export-${new Date().toISOString().slice(0, 10)}.json`;
+            link.download = `erp71-export-${new Date().toISOString().slice(0, 10)}.json`;
             link.click();
             URL.revokeObjectURL(url);
             onToast({ type: 'success', message: t.settings.privacy.exportSuccess });

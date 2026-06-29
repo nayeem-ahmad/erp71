@@ -12,6 +12,10 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 
+jest.mock('next/navigation', () => ({
+    useSearchParams: () => ({ get: jest.fn(() => null) }),
+}));
+
 describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
     beforeEach(() => {
         const { api } = require('@/lib/api');

@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { StorePermissionGuard } from './store-permission.guard';
-import { StorePermission } from '@retail-saas/shared-types';
+import { StorePermission } from '@erp71/shared-types';
 import { STORE_PERMISSIONS_KEY } from './store-permission.decorator';
 
 const makeContext = (overrides: Partial<{

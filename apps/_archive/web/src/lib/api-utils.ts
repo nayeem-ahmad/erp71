@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { ApiError } from "@retail-saas/shared-types";
+import { ApiError } from "@erp71/shared-types";
 
 /**
  * Standard error codes used across the system

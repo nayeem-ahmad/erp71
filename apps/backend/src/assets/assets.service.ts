@@ -21,7 +21,7 @@ export class AssetsService implements OnModuleInit {
 
     /**
      * Upload a file buffer to Cloudinary.
-     * Files are stored under retail-saas/<folder>/ — pass tenantId as folder.
+     * Files are stored under retail/<folder>/ — pass tenantId as folder.
      * Returns the secure CDN URL.
      */
     async uploadFile(file: Express.Multer.File, folder: string): Promise<string> {
@@ -32,7 +32,7 @@ export class AssetsService implements OnModuleInit {
         return new Promise((resolve, reject) => {
             const stream = cloudinary.uploader.upload_stream(
                 {
-                    folder: `retail-saas/${folder}`,
+                    folder: `retail/${folder}`,
                     resource_type: 'auto',      // handles images, PDFs, videos, etc.
                     use_filename: true,
                     unique_filename: true,

@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
-import { UserRole, ROLE_DEFAULT_PERMISSIONS } from '@retail-saas/shared-types';
+import { UserRole, ROLE_DEFAULT_PERMISSIONS } from '@erp71/shared-types';
 import * as crypto from 'crypto';
 
 const CAN_INVITE_ROLES: string[] = [UserRole.OWNER, UserRole.MANAGER];

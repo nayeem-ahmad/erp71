@@ -4,7 +4,7 @@ export const helpMessages = {
     quickLinks: {
         emailSupport: {
             title: 'Email Support',
-            subtitle: 'support@retailsaas.app',
+            subtitle: 'support@erp71.com',
         },
         contact: {
             title: 'Contact Us',

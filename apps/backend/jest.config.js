@@ -21,8 +21,8 @@ module.exports = {
     coverageReporters: ['text-summary', 'lcov', 'html'],
     testEnvironment: 'node',
     moduleNameMapper: {
-        '^@retail-saas/database(|/.*)$': '<rootDir>/../../packages/database/$1',
-        '^@retail-saas/shared-types(|/.*)$': '<rootDir>/../../packages/shared-types/$1',
+        '^@erp71/database(|/.*)$': '<rootDir>/../../packages/database/$1',
+        '^@erp71/shared-types(|/.*)$': '<rootDir>/../../packages/shared-types/$1',
     },
     // Coverage threshold removed: actual source coverage is ~37% (spec files were
     // previously counted as "covered" by the old collectCoverageFrom: ['**/*.(t|j)s']).

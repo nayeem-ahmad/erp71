@@ -1,6 +1,6 @@
 # Epic 01: SaaS Foundation & Infrastructure (Multi-Store Ready)
 
-**Goal:** This epic focuses on establishing the technical and structural foundation of the Retail SaaS platform with full multi-store/multi-branch support. By the end of this epic, the development environment will be fully operational, and the application will support multi-tenant, multi-store architectures with granular permission-based access control.
+**Goal:** This epic focuses on establishing the technical and structural foundation of the ERP71 platform with full multi-store/multi-branch support. By the end of this epic, the development environment will be fully operational, and the application will support multi-tenant, multi-store architectures with granular permission-based access control.
 
 ## Stories
 

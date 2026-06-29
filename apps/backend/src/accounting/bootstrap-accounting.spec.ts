@@ -1,4 +1,4 @@
-import { bootstrapDefaultAccountingForTenant } from '@retail-saas/database';
+import { bootstrapDefaultAccountingForTenant } from '@erp71/database';
 
 describe('bootstrapDefaultAccountingForTenant — Story 30.2', () => {
     it('upserts the default account skeleton without failing on rerun', async () => {

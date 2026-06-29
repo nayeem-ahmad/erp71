@@ -134,16 +134,16 @@ function replaceAll(content, pairs) {
     let c = read('app/verify-email/page.tsx');
     c = injectHook(c, 'const { t, formatMessage: fmt } = useI18n();\n    const m = t.auth.verifyEmail;', 'VerifyEmailContent');
     c = replaceAll(c, [
-        ['RetailSaaS', '{m.brand}'],
+        ['ERP71', '{m.brand}'],
         ['Verifying your email…', '{m.loadingTitle}'],
         ['This will only take a moment.', '{m.loadingDescription}'],
         ['Check your inbox', '{m.pendingTitle}'],
         ['Email verified!', '{m.successTitle}'],
-        ['Your account is now active. You can sign in and start using RetailSaaS.', '{m.successDescription}'],
+        ['Your account is now active. You can sign in and start using ERP71.', '{m.successDescription}'],
         ['Verification failed', '{m.errorTitle}'],
         ['Continue to setup', '{m.continueSetup}'],
         ['Back to sign in', '{m.backToSignIn}'],
-        ['Retail SaaS Platform v0.1', '{m.version}'],
+        ['ERP71 Platform v0.1', '{m.version}'],
     ]);
     write('app/verify-email/page.tsx', c);
 }
@@ -162,7 +162,7 @@ function replaceAll(content, pairs) {
         ['>Contact Us<', '>{m.title}<'],
         ["Have a question or need help? We'd love to hear from you.", '{m.description}'],
         ['>Email<', '>{m.info.email}<'],
-        ['support@retailsaas.app', '{m.info.emailValue}'],
+        ['support@erp71.com', '{m.info.emailValue}'],
         ['>Office<', '>{m.info.address}<'],
         ['Dhaka, Bangladesh', '{m.info.addressValue}'],
         ['>Support hours<', '>{m.info.hours}<'],
@@ -213,7 +213,7 @@ function replaceAll(content, pairs) {
         ["name: 'API'", "name: m.services.api"],
         ["name: 'Database'", "name: m.services.database"],
         ['>System Status<', '>{m.title}<'],
-        ['Real-time health of RetailSaaS services.', '{m.description}'],
+        ['Real-time health of ERP71 services.', '{m.description}'],
         ['All systems operational', '{m.allOperational}'],
         ['Some systems experiencing issues', '{m.someIssues}'],
         ['Major service disruption', '{m.majorOutage}'],
@@ -240,11 +240,11 @@ function migrateLegal(rel, key) {
         return `export default function ${name}() {\n    const { t } = useI18n();\n    const m = t.marketing.legal;\n    const p = m.${key};`;
     });
     c = replaceAll(c, [
-        ['>RetailSaaS<', '>{m.signIn ? t.marketing.legal.signIn && "RetailSaaS" : "RetailSaaS"}<'],
+        ['>ERP71<', '>{m.signIn ? t.marketing.legal.signIn && "ERP71" : "ERP71"}<'],
     ]);
     // Simpler replacements
-    c = c.replace(/<Link href="\/" className="text-xl font-black[^>]*>RetailSaaS<\/Link>/,
-        '<Link href="/" className="text-xl font-black tracking-tight text-blue-600">RetailSaaS</Link>');
+    c = c.replace(/<Link href="\/" className="text-xl font-black[^>]*>ERP71<\/Link>/,
+        '<Link href="/" className="text-xl font-black tracking-tight text-blue-600">ERP71</Link>');
     c = c.replace('>Sign in<', '>{m.signIn}<');
     c = c.replace('>Start free trial<', '>{m.startFreeTrial}<');
     c = c.replace(/<h1[^>]*>[^<]+<\/h1>/, `<h1 className="text-4xl font-black tracking-tight text-gray-900 mb-2">{p.title}</h1>`);

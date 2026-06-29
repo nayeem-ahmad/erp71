@@ -5,13 +5,13 @@ import { JwtService } from '@nestjs/jwt';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { AssetsService } from '../assets/assets.service';
-import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate } from '@retail-saas/database';
+import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate } from '@erp71/database';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
 import { SignupDto, LoginDto, UpdateProfileDto, ChangePasswordDto } from './auth.dto';
 import { isPlatformAdminEmail } from './platform-admin.util';
-import { DEMO_ACCOUNT_EMAIL } from '@retail-saas/database';
-import { ROLE_DEFAULT_PERMISSIONS, UserRole } from '@retail-saas/shared-types';
+import { DEMO_ACCOUNT_EMAIL } from '@erp71/database';
+import { ROLE_DEFAULT_PERMISSIONS, UserRole } from '@erp71/shared-types';
 
 type TenantProvisionDto = {
     tenantName: string;

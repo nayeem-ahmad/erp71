@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { getUserRole, hasRole } from "./auth-utils";
-import { UserRole } from "@retail-saas/shared-types";
+import { UserRole } from "@erp71/shared-types";
 
 // Mock the supabase client
 vi.mock("./supabase", () => ({

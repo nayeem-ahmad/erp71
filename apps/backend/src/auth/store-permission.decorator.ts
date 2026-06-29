@@ -1,5 +1,5 @@
 import { SetMetadata } from '@nestjs/common';
-import { StorePermission } from '@retail-saas/shared-types';
+import { StorePermission } from '@erp71/shared-types';
 
 export const STORE_PERMISSIONS_KEY = 'store_permissions';
 

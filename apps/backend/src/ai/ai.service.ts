@@ -1,11 +1,14 @@
-import { ForbiddenException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
-import { NarrateReportDto, DraftMessageDto } from './ai.dto';
-import { AI_CREDITS_PER_PLAN, AI_TOKENS_PER_CREDIT, SubscriptionPlanCode } from '@retail-saas/shared-types';
+import { ProductsService } from '../products/products.service';
+import { NarrateReportDto, DraftMessageDto, ParseVoiceEntryDto, VoiceEntryType } from './ai.dto';
+import { AI_CREDITS_PER_PLAN, AI_TOKENS_PER_CREDIT, SubscriptionPlanCode } from '@erp71/shared-types';
 
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1';
 const DEFAULT_MODEL = 'anthropic/claude-haiku-4.5';
+const WHISPER_MODEL = 'openai/whisper-large-v3';
+const MAX_AUDIO_BASE64_LENGTH = 4 * 1024 * 1024;
 
 /** Legacy Anthropic direct model IDs stored before OpenRouter migration */
 const MODEL_ALIASES: Record<string, string> = {
@@ -37,11 +40,22 @@ type OpenRouterChatResponse = {
     error?: { message?: string };
 };
 
+type ParsedVoiceSaleItem = {
+    productName: string;
+    quantity: number;
+};
+
+type ParsedVoiceSale = {
+    items: ParsedVoiceSaleItem[];
+    note?: string;
+};
+
 @Injectable()
 export class AiService {
     constructor(
         private readonly db: DatabaseService,
         private readonly platformSettings: PlatformSettingsService,
+        private readonly productsService: ProductsService,
     ) {}
 
     private normalizeModel(model: string): string {
@@ -139,6 +153,129 @@ export class AiService {
         return { narration: response };
     }
 
+    async parseVoiceEntry(tenantId: string, dto: ParseVoiceEntryDto) {
+        const entryType: VoiceEntryType = dto.entryType ?? 'sale';
+        await this.enforceCredits(tenantId);
+
+        let transcript = dto.transcript?.trim() ?? '';
+        if (!transcript && dto.audioBase64) {
+            transcript = await this.transcribeAudio(
+                tenantId,
+                dto.audioBase64,
+                dto.audioFormat ?? 'webm',
+                dto.locale,
+                entryType,
+            );
+        }
+        if (!transcript) {
+            throw new BadRequestException('Provide a transcript or audio recording.');
+        }
+
+        const model = await this.getDefaultModel();
+        const locale = dto.locale ?? 'en';
+        const systemPrompt = this.buildVoiceEntryPrompt(entryType, locale);
+        const userMessage = `Transcript:\n${transcript}`;
+
+        const raw = await this.complete(
+            tenantId,
+            `voice_${entryType}_parser`,
+            model,
+            systemPrompt,
+            userMessage,
+            1024,
+        );
+        const parsed = this.extractJson<ParsedVoiceSale>(raw);
+        const parsedItems = Array.isArray(parsed.items) ? parsed.items : [];
+
+        const items: Array<{
+            matched: boolean;
+            productName: string;
+            quantity: number;
+            product?: {
+                id: string;
+                name: string;
+                price: number;
+                group?: { name: string };
+                subgroup?: { name: string };
+            };
+        }> = [];
+        const unmatched: string[] = [];
+
+        for (const entry of parsedItems) {
+            const productName = String(entry.productName ?? '').trim();
+            const quantity = Number(entry.quantity);
+            if (!productName || !Number.isFinite(quantity) || quantity <= 0) {
+                continue;
+            }
+
+            const matches = await this.productsService.searchByQuantitySold(tenantId, productName, 5);
+            const best = this.pickBestProductMatch(productName, matches);
+
+            if (best) {
+                items.push({
+                    matched: true,
+                    productName,
+                    quantity,
+                    product: {
+                        id: best.id,
+                        name: best.name,
+                        price: Number(best.price),
+                        group: best.group ? { name: best.group.name } : undefined,
+                        subgroup: best.subgroup ? { name: best.subgroup.name } : undefined,
+                    },
+                });
+            } else {
+                items.push({ matched: false, productName, quantity });
+                unmatched.push(productName);
+            }
+        }
+
+        return {
+            transcript,
+            entryType,
+            items,
+            unmatched,
+            note: typeof parsed.note === 'string' ? parsed.note.trim() || undefined : undefined,
+        };
+    }
+
+    async parseVoiceSale(tenantId: string, dto: ParseVoiceEntryDto) {
+        return this.parseVoiceEntry(tenantId, { ...dto, entryType: dto.entryType ?? 'sale' });
+    }
+
+    private buildVoiceEntryPrompt(entryType: VoiceEntryType, locale: string): string {
+        const langHint = locale === 'bn'
+            ? 'The transcript may be in Bangla (Bengali) or English. Product names may be in either language.'
+            : 'The transcript may be in English or Bangla (Bengali). Product names may be in either language.';
+
+        const contextHints: Record<VoiceEntryType, string> = {
+            sale: 'Extract products being sold to a customer.',
+            purchase: 'Extract products being purchased from a supplier.',
+            sales_order: 'Extract products for a customer sales order.',
+            sales_quote: 'Extract products for a sales quotation.',
+            purchase_order: 'Extract products for a purchase order to a supplier.',
+            purchase_quote: 'Extract products for a purchase quotation.',
+            sales_return: 'Extract products and quantities being returned by a customer. Ignore receipt numbers.',
+            purchase_return: 'Extract products and quantities being returned to a supplier. Ignore purchase numbers.',
+        };
+
+        return `You are a retail assistant for Bangladeshi grocery and retail shops. ${langHint}
+${contextHints[entryType]}
+Respond with ONLY valid JSON — no markdown, no explanation.
+
+Schema:
+{
+  "items": [{ "productName": "string", "quantity": number }],
+  "note": "optional note string or omit"
+}
+
+Rules:
+- quantity must be a positive number (default 1 if not stated)
+- productName should be the product as spoken (e.g. "চাল", "rice", "সয়াবিন তেল")
+- ignore payment method, greetings, receipt numbers, and filler words
+- if nothing can be parsed, return {"items": []}`;
+    }
+
     async draftMessage(tenantId: string, dto: DraftMessageDto): Promise<{ draft: string }> {
         await this.enforceCredits(tenantId);
 
@@ -156,12 +293,133 @@ export class AiService {
         return { draft: response };
     }
 
+    private async transcribeAudio(
+        tenantId: string,
+        audioBase64: string,
+        format: string,
+        locale?: string,
+        entryType: VoiceEntryType = 'sale',
+    ): Promise<string> {
+        if (audioBase64.length > MAX_AUDIO_BASE64_LENGTH) {
+            throw new BadRequestException('Audio recording is too long. Keep it under 30 seconds.');
+        }
+
+        const apiKey = await this.getApiKey();
+        if (!apiKey) {
+            throw new InternalServerErrorException('AI service is not configured. Set an OpenRouter API key.');
+        }
+
+        const referer = process.env.FRONTEND_URL ?? 'https://erp71.com';
+        const title = process.env.OPENROUTER_APP_NAME ?? 'ERP71';
+
+        const body: Record<string, unknown> = {
+            model: WHISPER_MODEL,
+            input_audio: { data: audioBase64, format },
+        };
+        if (locale === 'bn') body.language = 'bn';
+        else if (locale === 'en') body.language = 'en';
+
+        let response: Response;
+        try {
+            response = await fetch(`${OPENROUTER_BASE_URL}/audio/transcriptions`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                    'HTTP-Referer': referer,
+                    'X-OpenRouter-Title': title,
+                },
+                body: JSON.stringify(body),
+            });
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            throw new InternalServerErrorException(`Transcription error: ${msg}`);
+        }
+
+        const result = (await response.json()) as {
+            text?: string;
+            error?: { message?: string };
+            usage?: {
+                seconds?: number;
+                total_tokens?: number;
+                input_tokens?: number;
+                output_tokens?: number;
+                cost?: number;
+            };
+        };
+
+        if (!response.ok) {
+            const msg = result.error?.message ?? `Transcription failed (${response.status})`;
+            throw new InternalServerErrorException(msg);
+        }
+
+        const text = result.text?.trim() ?? '';
+        if (!text) {
+            throw new BadRequestException('Could not transcribe audio. Please speak clearly and try again.');
+        }
+
+        const usage = result.usage ?? {};
+        const totalTokens = usage.total_tokens ?? 0;
+        const creditsUsed = totalTokens > 0
+            ? totalTokens / AI_TOKENS_PER_CREDIT
+            : Math.max((usage.seconds ?? 5) / 60, 0.05);
+
+        await this.db.aiUsageLog.create({
+            data: {
+                tenant_id: tenantId,
+                feature: `voice_${entryType}_transcription`,
+                model: WHISPER_MODEL,
+                input_tokens: usage.input_tokens ?? 0,
+                output_tokens: usage.output_tokens ?? 0,
+                cost_usd: usage.cost ?? 0,
+                credits_used: creditsUsed,
+            },
+        });
+
+        return text;
+    }
+
+    private extractJson<T>(raw: string): T {
+        const trimmed = raw.trim();
+        const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+        const candidate = (fenced?.[1] ?? trimmed).trim();
+        try {
+            return JSON.parse(candidate) as T;
+        } catch {
+            throw new InternalServerErrorException('AI returned an invalid response. Please try again.');
+        }
+    }
+
+    private pickBestProductMatch(
+        query: string,
+        products: Array<{
+            id: string;
+            name: string;
+            price: unknown;
+            group?: { name: string } | null;
+            subgroup?: { name: string } | null;
+        }>,
+    ) {
+        if (products.length === 0) return null;
+
+        const normalizedQuery = query.toLowerCase().trim();
+        const exact = products.find((p) => p.name.toLowerCase() === normalizedQuery);
+        if (exact) return exact;
+
+        const contains = products.find((p) => {
+            const name = p.name.toLowerCase();
+            return name.includes(normalizedQuery) || normalizedQuery.includes(name);
+        });
+        return contains ?? products[0];
+    }
+
     private async complete(
         tenantId: string,
         feature: string,
         model: string,
         systemPrompt: string,
         userMessage: string,
+        maxTokens = 512,
     ): Promise<string> {
         const apiKey = await this.getApiKey();
         if (!apiKey) {
@@ -169,7 +427,7 @@ export class AiService {
         }
 
         const normalizedModel = this.normalizeModel(model);
-        const { text, usage } = await this.callOpenRouter(apiKey, normalizedModel, systemPrompt, userMessage, 512);
+        const { text, usage } = await this.callOpenRouter(apiKey, normalizedModel, systemPrompt, userMessage, maxTokens);
 
         const inputTokens = usage.prompt_tokens;
         const outputTokens = usage.completion_tokens;
@@ -209,8 +467,8 @@ export class AiService {
         userMessage: string,
         maxTokens: number,
     ): Promise<{ text: string; usage: OpenRouterUsage }> {
-        const referer = process.env.FRONTEND_URL ?? 'https://retailsaas.app';
-        const title = process.env.OPENROUTER_APP_NAME ?? 'RetailSaaS';
+        const referer = process.env.FRONTEND_URL ?? 'https://erp71.com';
+        const title = process.env.OPENROUTER_APP_NAME ?? 'ERP71';
 
         let response: Response;
         try {
