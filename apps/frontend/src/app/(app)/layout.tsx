@@ -8,8 +8,7 @@ import AvatarDropdown from '@/components/AvatarDropdown';
 import Sidebar from '@/components/Sidebar';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import DemoSandboxBanner from '@/components/DemoSandboxBanner';
-import FeedbackWidget from '@/components/FeedbackWidget';
-import VoiceNavWidget from '@/components/VoiceNavWidget';
+import FloatingAssistDock from '@/components/FloatingAssistDock';
 import Toaster from '@/components/Toaster';
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
 import { BrandingProvider } from '@/lib/branding';
@@ -340,8 +339,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
 
             <Toaster />
-            <VoiceNavWidget />
-            <FeedbackWidget />
+            <FloatingAssistDock />
             <ServiceWorkerRegistrar />
         </div>
         </BrandingProvider>
