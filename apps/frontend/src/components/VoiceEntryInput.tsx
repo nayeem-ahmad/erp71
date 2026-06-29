@@ -4,33 +4,14 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Loader2, Mic, MicOff } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import type { VoiceEntryResult, VoiceEntryType } from '@/lib/voice-entry';
 
-export interface VoiceSaleProduct {
-    id: string;
-    name: string;
-    price: number;
-    group?: { name: string };
-    subgroup?: { name: string };
-}
-
-export interface VoiceSaleParsedItem {
-    matched: boolean;
-    productName: string;
-    quantity: number;
-    product?: VoiceSaleProduct;
-}
-
-export interface VoiceSaleResult {
-    transcript: string;
-    items: VoiceSaleParsedItem[];
-    unmatched: string[];
-    note?: string;
-}
-
-interface VoiceSaleInputProps {
-    onResult: (result: VoiceSaleResult) => void;
+interface VoiceEntryInputProps {
+    entryType: VoiceEntryType;
+    onResult: (result: VoiceEntryResult) => void;
     inline?: boolean;
     children?: ReactNode;
+    disabled?: boolean;
 }
 
 const MAX_RECORDING_MS = 30_000;
@@ -74,7 +55,13 @@ function blobToBase64(blob: Blob): Promise<string> {
     });
 }
 
-export default function VoiceSaleInput({ onResult, inline, children }: VoiceSaleInputProps) {
+export default function VoiceEntryInput({
+    entryType,
+    onResult,
+    inline,
+    children,
+    disabled = false,
+}: VoiceEntryInputProps) {
     const { locale } = useI18n();
     const [supported, setSupported] = useState(false);
     const [recording, setRecording] = useState(false);
@@ -119,11 +106,12 @@ export default function VoiceSaleInput({ onResult, inline, children }: VoiceSale
 
         try {
             const audioBase64 = await blobToBase64(blob);
-            const result = (await api.aiParseVoiceSale({
+            const result = (await api.aiParseVoiceEntry({
+                entryType,
                 audioBase64,
                 audioFormat: mimeToFormat(mimeTypeRef.current),
                 locale: locale === 'bn' ? 'bn' : 'en',
-            })) as VoiceSaleResult;
+            })) as VoiceEntryResult;
 
             if (result.transcript) {
                 setStatus(`"${result.transcript}"`);
@@ -137,13 +125,13 @@ export default function VoiceSaleInput({ onResult, inline, children }: VoiceSale
             onResult(result);
             setStatus(null);
         } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Failed to parse voice sale';
+            const message = err instanceof Error ? err.message : 'Failed to parse voice entry';
             setError(message);
             setStatus(null);
         } finally {
             setProcessing(false);
         }
-    }, [locale, onResult]);
+    }, [entryType, locale, onResult]);
 
     const stopRecording = useCallback(() => {
         const recorder = recorderRef.current;
@@ -207,7 +195,7 @@ export default function VoiceSaleInput({ onResult, inline, children }: VoiceSale
     }, [cleanupStream, processAudio, stopRecording]);
 
     const handleToggle = () => {
-        if (processing) return;
+        if (processing || disabled) return;
         if (recording) {
             stopRecording();
             return;
@@ -223,8 +211,8 @@ export default function VoiceSaleInput({ onResult, inline, children }: VoiceSale
         <button
             type="button"
             onClick={handleToggle}
-            disabled={processing}
-            title={recording ? 'Stop and add items' : 'Record sale items by voice'}
+            disabled={processing || disabled}
+            title={recording ? 'Stop and add items' : 'Record items by voice'}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border text-sm font-medium transition-colors disabled:opacity-50 flex-shrink-0 ${
                 recording
                     ? 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100'

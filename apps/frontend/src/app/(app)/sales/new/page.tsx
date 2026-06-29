@@ -8,7 +8,8 @@ import { useI18n } from '@/lib/i18n';
 import { formatBDT } from '@/lib/format';
 import CustomerSelection from './components/CustomerSelection';
 import ProductSearch from './components/ProductSearch';
-import VoiceSaleInput, { type VoiceSaleResult } from './components/VoiceSaleInput';
+import VoiceEntryInput from '@/components/VoiceEntryInput';
+import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 import LineItemsTable from './components/LineItemsTable';
 import TotalsFooter from './components/TotalsFooter';
 import PaymentSection from './components/PaymentSection';
@@ -151,7 +152,7 @@ export default function NewSalePage() {
         });
     };
 
-    const handleVoiceSale = (result: VoiceSaleResult) => {
+    const handleVoiceSale = (result: VoiceEntryResult) => {
         let added = 0;
         for (const item of result.items) {
             if (item.matched && item.product) {
@@ -164,13 +165,7 @@ export default function NewSalePage() {
             setDescription(result.note);
         }
 
-        const messages: string[] = [];
-        if (added > 0) {
-            messages.push(`Added ${added} item${added === 1 ? '' : 's'} from voice.`);
-        }
-        if (result.unmatched.length > 0) {
-            messages.push(`Could not find: ${result.unmatched.join(', ')}`);
-        }
+        const messages = buildVoiceEntryMessages(result, added);
         if (messages.length > 0) {
             alert(messages.join('\n'));
         }
@@ -285,9 +280,9 @@ export default function NewSalePage() {
                             <CustomerSelection customer={customer} setCustomer={setCustomer} />
                         </div>
                         <div className="flex-1 min-w-0">
-                            <VoiceSaleInput onResult={handleVoiceSale} inline>
+                            <VoiceEntryInput entryType="sale" onResult={handleVoiceSale} inline>
                                 <ProductSearch onProductSelect={(product) => handleAddItem(product)} />
-                            </VoiceSaleInput>
+                            </VoiceEntryInput>
                         </div>
                     </div>
 

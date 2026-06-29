@@ -6,7 +6,9 @@ import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { isCompoundUnit, CompoundUnitType } from '@/lib/compound-units';
 import CompoundUnitInput from '@/components/CompoundUnitInput';
+import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { useI18n } from '@/lib/i18n';
+import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 
 interface CreateQuotationModalProps {
     isOpen: boolean;
@@ -53,11 +55,11 @@ export default function CreateQuotationModal({ isOpen, onClose, onSuccess }: Cre
         )
         .slice(0, 8);
 
-    const addItem = (product: any) => {
+    const addItem = (product: any, quantity = 1) => {
         const existing = items.find((item) => item.productId === product.id);
         if (existing) {
             setItems(items.map((item) => (
-                item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item
+                item.productId === product.id ? { ...item, quantity: item.quantity + quantity } : item
             )));
         } else {
             setItems([
@@ -66,7 +68,7 @@ export default function CreateQuotationModal({ isOpen, onClose, onSuccess }: Cre
                     productId: product.id,
                     productName: product.name,
                     sku: product.sku || '',
-                    quantity: 1,
+                    quantity,
                     unitPrice: parseFloat(product.price),
                     unitType: product.unit_type || 'none',
                 },
@@ -80,6 +82,24 @@ export default function CreateQuotationModal({ isOpen, onClose, onSuccess }: Cre
         setItems(items.map((item, itemIndex) => (
             itemIndex === index ? { ...item, [field]: value } : item
         )));
+    };
+
+    const handleVoiceQuote = (result: VoiceEntryResult) => {
+        let added = 0;
+        for (const item of result.items) {
+            if (item.matched && item.product) {
+                addItem({
+                    id: item.product.id,
+                    name: item.product.name,
+                    price: item.product.price,
+                    unit_type: 'none',
+                }, item.quantity);
+                added++;
+            }
+        }
+        if (result.note && !notes) setNotes(result.note);
+        const messages = buildVoiceEntryMessages(result, added);
+        if (messages.length > 0) alert(messages.join('\n'));
     };
 
     const removeItem = (index: number) => {
@@ -193,39 +213,41 @@ export default function CreateQuotationModal({ isOpen, onClose, onSuccess }: Cre
 
                     <div>
                         <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-2">{t.shared.form.addProducts}</label>
-                        <div className="relative">
-                            <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
-                                <Search className="w-4 h-4 text-gray-400" />
-                                <input
-                                    type="text"
-                                    placeholder={t.shared.form.searchProducts}
-                                    value={productSearch}
-                                    onChange={(e) => {
-                                        setProductSearch(e.target.value);
-                                        setShowProductDropdown(true);
-                                    }}
-                                    onFocus={() => setShowProductDropdown(true)}
-                                    className="flex-1 bg-transparent text-sm font-medium outline-none"
-                                />
-                            </div>
-                            {showProductDropdown && productSearch.length > 0 && filteredProducts.length > 0 && (
-                                <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                                    {filteredProducts.map((product) => (
-                                        <button
-                                            key={product.id}
-                                            onClick={() => addItem(product)}
-                                            className="w-full text-left px-4 py-3 hover:bg-blue-50 flex items-center justify-between transition-colors"
-                                        >
-                                            <div>
-                                                <span className="text-sm font-bold">{product.name}</span>
-                                                <span className="text-xs text-gray-400 ml-2">{product.sku}</span>
-                                            </div>
-                                            <span className="text-sm font-bold text-blue-600">{formatBDT(parseFloat(product.price))}</span>
-                                        </button>
-                                    ))}
+                        <VoiceEntryInput entryType="sales_quote" onResult={handleVoiceQuote} inline>
+                            <div className="relative">
+                                <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
+                                    <Search className="w-4 h-4 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        placeholder={t.shared.form.searchProducts}
+                                        value={productSearch}
+                                        onChange={(e) => {
+                                            setProductSearch(e.target.value);
+                                            setShowProductDropdown(true);
+                                        }}
+                                        onFocus={() => setShowProductDropdown(true)}
+                                        className="flex-1 bg-transparent text-sm font-medium outline-none"
+                                    />
                                 </div>
-                            )}
-                        </div>
+                                {showProductDropdown && productSearch.length > 0 && filteredProducts.length > 0 && (
+                                    <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                        {filteredProducts.map((product) => (
+                                            <button
+                                                key={product.id}
+                                                onClick={() => addItem(product)}
+                                                className="w-full text-left px-4 py-3 hover:bg-blue-50 flex items-center justify-between transition-colors"
+                                            >
+                                                <div>
+                                                    <span className="text-sm font-bold">{product.name}</span>
+                                                    <span className="text-xs text-gray-400 ml-2">{product.sku}</span>
+                                                </div>
+                                                <span className="text-sm font-bold text-blue-600">{formatBDT(parseFloat(product.price))}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </VoiceEntryInput>
                     </div>
 
                     {items.length > 0 && (

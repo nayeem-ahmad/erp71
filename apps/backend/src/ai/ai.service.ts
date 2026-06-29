@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, InternalServerErro
 import { DatabaseService } from '../database/database.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ProductsService } from '../products/products.service';
-import { NarrateReportDto, DraftMessageDto, ParseVoiceSaleDto } from './ai.dto';
+import { NarrateReportDto, DraftMessageDto, ParseVoiceEntryDto, VoiceEntryType } from './ai.dto';
 import { AI_CREDITS_PER_PLAN, AI_TOKENS_PER_CREDIT, SubscriptionPlanCode } from '@retail-saas/shared-types';
 
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1';
@@ -153,7 +153,8 @@ export class AiService {
         return { narration: response };
     }
 
-    async parseVoiceSale(tenantId: string, dto: ParseVoiceSaleDto) {
+    async parseVoiceEntry(tenantId: string, dto: ParseVoiceEntryDto) {
+        const entryType: VoiceEntryType = dto.entryType ?? 'sale';
         await this.enforceCredits(tenantId);
 
         let transcript = dto.transcript?.trim() ?? '';
@@ -163,6 +164,7 @@ export class AiService {
                 dto.audioBase64,
                 dto.audioFormat ?? 'webm',
                 dto.locale,
+                entryType,
             );
         }
         if (!transcript) {
@@ -171,28 +173,17 @@ export class AiService {
 
         const model = await this.getDefaultModel();
         const locale = dto.locale ?? 'en';
-        const langHint = locale === 'bn'
-            ? 'The transcript may be in Bangla (Bengali) or English. Product names may be in either language.'
-            : 'The transcript may be in English or Bangla (Bengali). Product names may be in either language.';
-
-        const systemPrompt = `You are a retail POS assistant for Bangladeshi grocery and retail shops. ${langHint}
-Extract sale line items from spoken orders. Respond with ONLY valid JSON — no markdown, no explanation.
-
-Schema:
-{
-  "items": [{ "productName": "string", "quantity": number }],
-  "note": "optional sale note string or omit"
-}
-
-Rules:
-- quantity must be a positive number (default 1 if not stated)
-- productName should be the product as spoken (e.g. "চাল", "rice", "সয়াবিন তেল")
-- ignore payment method, greetings, and filler words
-- if nothing can be parsed, return {"items": []}`;
-
+        const systemPrompt = this.buildVoiceEntryPrompt(entryType, locale);
         const userMessage = `Transcript:\n${transcript}`;
 
-        const raw = await this.complete(tenantId, 'voice_sale_parser', model, systemPrompt, userMessage, 1024);
+        const raw = await this.complete(
+            tenantId,
+            `voice_${entryType}_parser`,
+            model,
+            systemPrompt,
+            userMessage,
+            1024,
+        );
         const parsed = this.extractJson<ParsedVoiceSale>(raw);
         const parsedItems = Array.isArray(parsed.items) ? parsed.items : [];
 
@@ -241,10 +232,48 @@ Rules:
 
         return {
             transcript,
+            entryType,
             items,
             unmatched,
             note: typeof parsed.note === 'string' ? parsed.note.trim() || undefined : undefined,
         };
+    }
+
+    async parseVoiceSale(tenantId: string, dto: ParseVoiceEntryDto) {
+        return this.parseVoiceEntry(tenantId, { ...dto, entryType: dto.entryType ?? 'sale' });
+    }
+
+    private buildVoiceEntryPrompt(entryType: VoiceEntryType, locale: string): string {
+        const langHint = locale === 'bn'
+            ? 'The transcript may be in Bangla (Bengali) or English. Product names may be in either language.'
+            : 'The transcript may be in English or Bangla (Bengali). Product names may be in either language.';
+
+        const contextHints: Record<VoiceEntryType, string> = {
+            sale: 'Extract products being sold to a customer.',
+            purchase: 'Extract products being purchased from a supplier.',
+            sales_order: 'Extract products for a customer sales order.',
+            sales_quote: 'Extract products for a sales quotation.',
+            purchase_order: 'Extract products for a purchase order to a supplier.',
+            purchase_quote: 'Extract products for a purchase quotation.',
+            sales_return: 'Extract products and quantities being returned by a customer. Ignore receipt numbers.',
+            purchase_return: 'Extract products and quantities being returned to a supplier. Ignore purchase numbers.',
+        };
+
+        return `You are a retail assistant for Bangladeshi grocery and retail shops. ${langHint}
+${contextHints[entryType]}
+Respond with ONLY valid JSON — no markdown, no explanation.
+
+Schema:
+{
+  "items": [{ "productName": "string", "quantity": number }],
+  "note": "optional note string or omit"
+}
+
+Rules:
+- quantity must be a positive number (default 1 if not stated)
+- productName should be the product as spoken (e.g. "চাল", "rice", "সয়াবিন তেল")
+- ignore payment method, greetings, receipt numbers, and filler words
+- if nothing can be parsed, return {"items": []}`;
     }
 
     async draftMessage(tenantId: string, dto: DraftMessageDto): Promise<{ draft: string }> {
@@ -269,6 +298,7 @@ Rules:
         audioBase64: string,
         format: string,
         locale?: string,
+        entryType: VoiceEntryType = 'sale',
     ): Promise<string> {
         if (audioBase64.length > MAX_AUDIO_BASE64_LENGTH) {
             throw new BadRequestException('Audio recording is too long. Keep it under 30 seconds.');
@@ -337,7 +367,7 @@ Rules:
         await this.db.aiUsageLog.create({
             data: {
                 tenant_id: tenantId,
-                feature: 'voice_sale_transcription',
+                feature: `voice_${entryType}_transcription`,
                 model: WHISPER_MODEL,
                 input_tokens: usage.input_tokens ?? 0,
                 output_tokens: usage.output_tokens ?? 0,

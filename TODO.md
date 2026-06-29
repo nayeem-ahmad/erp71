@@ -293,7 +293,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Wire `aiNarrateReport` into the sales summary report page — "AI Narrate" button + insight card — done 2026-06-13
 - [x] Wire `aiDraftMessage` into the CRM interactions tab — "AI Draft" panel with channel/purpose selector, pre-fills interaction form — done 2026-06-13
 - [x] Platform admin AI settings page at `/dashboard/admin/platform-settings/ai` — Anthropic key (encrypted), model selector, "Test connection", pricing table — done 2026-06-13
-- [x] Voice-to-sales entry MVP on New Sale page — MediaRecorder + server-side Whisper STT via OpenRouter (replaces unreliable browser Web Speech API), `POST /ai/parse-voice-sale` (LLM extracts items + product search matching), adds matched line items to cart — done 2026-06-29
+- [x] Voice entry across modules — shared `VoiceEntryInput` + `POST /ai/parse-voice-entry` wired into New Sale, purchases, sales/purchase orders & quotes, sales return, purchase return — done 2026-06-29
 - [ ] Fine-tune voice sales entry — better Bangla recognition, customer/payment parsing, unmatched-product UX
 
 ---

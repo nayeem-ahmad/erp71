@@ -1583,6 +1583,18 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    aiParseVoiceEntry: (data: {
+        entryType: string;
+        transcript?: string;
+        audioBase64?: string;
+        audioFormat?: string;
+        locale?: string;
+    }) =>
+        fetchWithAuth('/ai/parse-voice-entry', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     aiParseVoiceSale: (data: { transcript?: string; audioBase64?: string; audioFormat?: string; locale?: string }) =>
         fetchWithAuth('/ai/parse-voice-sale', {
             method: 'POST',
