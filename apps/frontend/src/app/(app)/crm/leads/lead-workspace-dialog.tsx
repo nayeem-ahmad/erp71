@@ -55,7 +55,6 @@ type LeadWorkspaceDialogProps = {
     onChanged: () => void;
     onDeleted: () => void;
     teamMembers: any[];
-    startInEditMode?: boolean;
 };
 
 export function LeadWorkspaceDialog({
@@ -64,7 +63,6 @@ export function LeadWorkspaceDialog({
     onChanged,
     onDeleted,
     teamMembers,
-    startInEditMode = false,
 }: LeadWorkspaceDialogProps) {
     const { t } = useI18n();
     const m = t.crm.leads;
@@ -75,14 +73,14 @@ export function LeadWorkspaceDialog({
     const [loading, setLoading] = useState(true);
     const [conversations, setConversations] = useState<any[]>([]);
     const [conversationsLoading, setConversationsLoading] = useState(false);
-    const [showConvForm, setShowConvForm] = useState(false);
+    const [showConvDialog, setShowConvDialog] = useState(false);
+    const [showEditDialog, setShowEditDialog] = useState(false);
     const [newConv, setNewConv] = useState<NewConversationState>(emptyConversation);
     const [savingConv, setSavingConv] = useState(false);
     const [converting, setConverting] = useState(false);
     const [draftingMessage, setDraftingMessage] = useState(false);
     const [draftPurpose, setDraftPurpose] = useState('follow_up');
     const [draftChannel, setDraftChannel] = useState('WHATSAPP');
-    const [editing, setEditing] = useState(startInEditMode);
     const [editForm, setEditForm] = useState<LeadFormState | null>(null);
     const [savingLead, setSavingLead] = useState(false);
 
@@ -91,14 +89,10 @@ export function LeadWorkspaceDialog({
         try {
             const data = await api.getLead(leadId);
             setLead(data);
-            if (startInEditMode && data.status !== 'CONVERTED') {
-                setEditForm(leadToFormState(data));
-                setEditing(true);
-            }
         } finally {
             setLoading(false);
         }
-    }, [leadId, startInEditMode]);
+    }, [leadId]);
 
     const loadConversations = useCallback(async () => {
         setConversationsLoading(true);
@@ -118,9 +112,9 @@ export function LeadWorkspaceDialog({
         onChanged();
     };
 
-    const openConversationForm = () => {
+    const openConversationDialog = () => {
         setNewConv({ ...emptyConversation(), ...nextStepFromLead(lead ?? {}) });
-        setShowConvForm(true);
+        setShowConvDialog(true);
     };
 
     const saveConversation = async () => {
@@ -137,7 +131,7 @@ export function LeadWorkspaceDialog({
             if (outcome) payload.outcome = outcome;
             await api.createLeadConversation(payload);
             setNewConv(emptyConversation());
-            setShowConvForm(false);
+            setShowConvDialog(false);
             await refreshAll();
         } catch (err: unknown) {
             alert(err instanceof Error ? err.message : m.detail.logConversation);
@@ -174,20 +168,20 @@ export function LeadWorkspaceDialog({
                 purpose: draftPurpose,
                 customerContext: { name: lead.name, phone: lead.mobile ?? lead.phone, type: 'lead' },
             });
-            setNewConv((prev) => ({
-                ...prev,
+            setNewConv({
+                ...emptyConversation(),
                 summary: draft?.message ?? draft?.text ?? draft?.draft ?? '',
                 ...nextStepFromLead(lead),
-            }));
-            setShowConvForm(true);
+            });
+            setShowConvDialog(true);
         } finally {
             setDraftingMessage(false);
         }
     };
 
-    const startEditing = () => {
+    const openEditDialog = () => {
         setEditForm(leadToFormState(lead));
-        setEditing(true);
+        setShowEditDialog(true);
     };
 
     const saveLead = async () => {
@@ -202,7 +196,7 @@ export function LeadWorkspaceDialog({
         try {
             const updated = await api.updateLead(leadId, leadFormToPayload(editForm));
             setLead(updated);
-            setEditing(false);
+            setShowEditDialog(false);
             setEditForm(null);
             onChanged();
         } catch (err: unknown) {
@@ -226,136 +220,169 @@ export function LeadWorkspaceDialog({
     const isConverted = lead?.status === 'CONVERTED';
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden">
-                <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-gray-200 shrink-0">
-                    <h2 className="text-lg font-bold text-gray-900 truncate">
-                        {loading ? m.workspace.loading : (lead?.name ?? m.title)}
-                    </h2>
-                    <div className="flex items-center gap-2 shrink-0">
-                        {!loading && lead && !isConverted && (
-                            <>
-                                <button
-                                    type="button"
-                                    onClick={draftMessage}
-                                    disabled={draftingMessage}
-                                    className="hidden sm:flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg hover:bg-gray-50"
-                                >
-                                    {draftingMessage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                                    AI Draft
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => (showConvForm ? setShowConvForm(false) : openConversationForm())}
-                                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-violet-600 text-white rounded-lg font-semibold"
-                                >
-                                    <Plus className="w-3.5 h-3.5" /> {m.detail.logConversation}
-                                </button>
-                            </>
-                        )}
-                        <button type="button" onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg">
-                            <X className="w-5 h-5" />
-                        </button>
+        <>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden">
+                    <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-gray-200 shrink-0">
+                        <h2 className="text-lg font-bold text-gray-900 truncate">
+                            {loading ? m.workspace.loading : (lead?.name ?? m.title)}
+                        </h2>
+                        <div className="flex items-center gap-2 shrink-0">
+                            {!loading && lead && !isConverted && (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={draftMessage}
+                                        disabled={draftingMessage}
+                                        className="hidden sm:flex items-center gap-1 px-3 py-1.5 text-xs border rounded-lg hover:bg-gray-50"
+                                    >
+                                        {draftingMessage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                                        AI Draft
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={openConversationDialog}
+                                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-violet-600 text-white rounded-lg font-semibold"
+                                    >
+                                        <Plus className="w-3.5 h-3.5" /> {m.detail.logConversation}
+                                    </button>
+                                </>
+                            )}
+                            <button type="button" onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
                     </div>
-                </div>
 
-                {loading ? (
-                    <div className="flex-1 flex items-center justify-center text-gray-400">{t.common.loading}</div>
-                ) : !lead ? (
-                    <div className="flex-1 flex items-center justify-center text-gray-500">{m.workspace.notFound}</div>
-                ) : (
-                    <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
-                        {/* Left: lead info */}
-                        <div className="lg:w-[42%] border-b lg:border-b-0 lg:border-r border-gray-200 overflow-y-auto p-5">
-                            {editing && editForm && !isConverted ? (
-                                <div className="space-y-4">
-                                    <LeadFormFields form={editForm} onChange={setEditForm} teamMembers={teamMembers} />
-                                    <div className="flex gap-2">
-                                        <button onClick={saveLead} disabled={savingLead} className="px-4 py-2 bg-violet-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
-                                            {savingLead ? <Loader2 className="w-4 h-4 animate-spin" /> : m.detail.saveLead}
-                                        </button>
-                                        <button onClick={() => { setEditing(false); setEditForm(null); }} className="px-4 py-2 border text-sm rounded-lg">
-                                            {t.common.cancel}
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : (
+                    {loading ? (
+                        <div className="flex-1 flex items-center justify-center text-gray-400">{t.common.loading}</div>
+                    ) : !lead ? (
+                        <div className="flex-1 flex items-center justify-center text-gray-500">{m.workspace.notFound}</div>
+                    ) : (
+                        <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
+                            <div className="lg:w-[42%] border-b lg:border-b-0 lg:border-r border-gray-200 overflow-y-auto p-5">
                                 <LeadInfoPanel
                                     lead={lead}
                                     m={m}
                                     t={t}
                                     isConverted={isConverted}
-                                    onEdit={startEditing}
+                                    onEdit={openEditDialog}
                                     onDelete={removeLead}
                                     onConvert={convertLead}
                                     converting={converting}
                                 />
-                            )}
-                        </div>
-
-                        {/* Right: conversations */}
-                        <div className="lg:w-[58%] flex flex-col min-h-0 flex-1">
-                            <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2 shrink-0">
-                                <MessageSquare className="w-4 h-4 text-gray-500" />
-                                <span className="text-sm font-semibold text-gray-800">{m.detail.conversations}</span>
                             </div>
 
-                            {showConvForm && !isConverted && (
-                                <div className="px-5 py-4 border-b border-gray-100 bg-violet-50/40 space-y-3 shrink-0 max-h-[50%] overflow-y-auto">
-                                    <div className="flex gap-2">
-                                        <select value={draftChannel} onChange={(e) => setDraftChannel(e.target.value)} className="border rounded-lg px-2 py-1 text-xs bg-white">
-                                            {LEAD_CONVERSATION_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
-                                        </select>
-                                        <select value={draftPurpose} onChange={(e) => setDraftPurpose(e.target.value)} className="border rounded-lg px-2 py-1 text-xs bg-white">
-                                            <option value="follow_up">Follow up</option>
-                                            <option value="collection">Collection</option>
-                                        </select>
-                                    </div>
-                                    <select value={newConv.type} onChange={(e) => setNewConv({ ...newConv, type: e.target.value })} className="w-full border rounded-lg px-3 py-2 text-sm bg-white">
-                                        {LEAD_CONVERSATION_TYPES.map((type) => (
-                                            <option key={type} value={type}>{(convTypes as Record<string, string>)[type] ?? type}</option>
-                                        ))}
-                                    </select>
-                                    <textarea value={newConv.summary} onChange={(e) => setNewConv({ ...newConv, summary: e.target.value })} placeholder={m.detail.summaryPlaceholder} className="w-full border rounded-lg px-3 py-2 text-sm bg-white" rows={3} />
-                                    <input value={newConv.outcome} onChange={(e) => setNewConv({ ...newConv, outcome: e.target.value })} placeholder={m.detail.outcomePlaceholder} className="w-full border rounded-lg px-3 py-2 text-sm bg-white" />
-                                    <div className="grid gap-3 sm:grid-cols-2">
-                                        <NextStepFields state={newConv} onChange={(next) => setNewConv({ ...newConv, ...next })} teamMembers={teamMembers} />
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button onClick={saveConversation} disabled={savingConv} className="px-4 py-2 bg-violet-600 text-white text-sm rounded-lg disabled:opacity-50">
-                                            {m.detail.logConversation}
-                                        </button>
-                                        <button onClick={() => setShowConvForm(false)} className="px-4 py-2 border text-sm rounded-lg bg-white">
-                                            {t.common.cancel}
-                                        </button>
-                                    </div>
+                            <div className="lg:w-[58%] flex flex-col min-h-0 flex-1">
+                                <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2 shrink-0">
+                                    <MessageSquare className="w-4 h-4 text-gray-500" />
+                                    <span className="text-sm font-semibold text-gray-800">{m.detail.conversations}</span>
                                 </div>
-                            )}
 
-                            <div className="flex-1 overflow-y-auto p-5 space-y-3">
-                                {conversationsLoading ? (
-                                    <div className="text-gray-400 text-sm text-center py-8">{t.common.loading}</div>
-                                ) : conversations.length === 0 ? (
-                                    <div className="text-gray-500 text-sm text-center py-8">{m.detail.noConversations}</div>
-                                ) : (
-                                    conversations.map((conv) => (
-                                        <div key={conv.id} className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <span>{typeIcons[conv.type] ?? '💬'}</span>
-                                                <span className="text-xs font-semibold text-gray-700">{(convTypes as Record<string, string>)[conv.type] ?? conv.type}</span>
-                                                <span className="text-xs text-gray-400">{formatDate(conv.created_at)}</span>
+                                <div className="flex-1 overflow-y-auto p-5 space-y-3">
+                                    {conversationsLoading ? (
+                                        <div className="text-gray-400 text-sm text-center py-8">{t.common.loading}</div>
+                                    ) : conversations.length === 0 ? (
+                                        <div className="text-gray-500 text-sm text-center py-8">{m.detail.noConversations}</div>
+                                    ) : (
+                                        conversations.map((conv) => (
+                                            <div key={conv.id} className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span>{typeIcons[conv.type] ?? '💬'}</span>
+                                                    <span className="text-xs font-semibold text-gray-700">{(convTypes as Record<string, string>)[conv.type] ?? conv.type}</span>
+                                                    <span className="text-xs text-gray-400">{formatDate(conv.created_at)}</span>
+                                                </div>
+                                                <p className="text-sm text-gray-800">{conv.summary}</p>
+                                                {conv.outcome && <p className="text-xs text-gray-500 mt-1">{m.workspace.outcome}: {conv.outcome}</p>}
                                             </div>
-                                            <p className="text-sm text-gray-800">{conv.summary}</p>
-                                            {conv.outcome && <p className="text-xs text-gray-500 mt-1">{m.workspace.outcome}: {conv.outcome}</p>}
-                                        </div>
-                                    ))
-                                )}
+                                        ))
+                                    )}
+                                </div>
                             </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {showConvDialog && !isConverted && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+                        <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-gray-200 shrink-0">
+                            <h3 className="text-base font-bold text-gray-900">{m.detail.logConversation}</h3>
+                            <button
+                                type="button"
+                                onClick={() => setShowConvDialog(false)}
+                                className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="overflow-y-auto p-5 space-y-3">
+                            <div className="flex gap-2">
+                                <select value={draftChannel} onChange={(e) => setDraftChannel(e.target.value)} className="border rounded-lg px-2 py-1 text-xs bg-white">
+                                    {LEAD_CONVERSATION_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+                                </select>
+                                <select value={draftPurpose} onChange={(e) => setDraftPurpose(e.target.value)} className="border rounded-lg px-2 py-1 text-xs bg-white">
+                                    <option value="follow_up">Follow up</option>
+                                    <option value="collection">Collection</option>
+                                </select>
+                                <button
+                                    type="button"
+                                    onClick={draftMessage}
+                                    disabled={draftingMessage}
+                                    className="flex items-center gap-1 px-2 py-1 text-xs border rounded-lg hover:bg-gray-50 ml-auto"
+                                >
+                                    {draftingMessage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                                    AI Draft
+                                </button>
+                            </div>
+                            <select value={newConv.type} onChange={(e) => setNewConv({ ...newConv, type: e.target.value })} className="w-full border rounded-lg px-3 py-2 text-sm bg-white">
+                                {LEAD_CONVERSATION_TYPES.map((type) => (
+                                    <option key={type} value={type}>{(convTypes as Record<string, string>)[type] ?? type}</option>
+                                ))}
+                            </select>
+                            <textarea value={newConv.summary} onChange={(e) => setNewConv({ ...newConv, summary: e.target.value })} placeholder={m.detail.summaryPlaceholder} className="w-full border rounded-lg px-3 py-2 text-sm bg-white" rows={4} />
+                            <input value={newConv.outcome} onChange={(e) => setNewConv({ ...newConv, outcome: e.target.value })} placeholder={m.detail.outcomePlaceholder} className="w-full border rounded-lg px-3 py-2 text-sm bg-white" />
+                            <NextStepFields state={newConv} onChange={(next) => setNewConv({ ...newConv, ...next })} teamMembers={teamMembers} />
+                        </div>
+                        <div className="flex gap-2 px-5 py-4 border-t border-gray-100 shrink-0">
+                            <button onClick={saveConversation} disabled={savingConv} className="px-4 py-2 bg-violet-600 text-white text-sm rounded-lg disabled:opacity-50">
+                                {m.detail.logConversation}
+                            </button>
+                            <button onClick={() => setShowConvDialog(false)} className="px-4 py-2 border text-sm rounded-lg bg-white">
+                                {t.common.cancel}
+                            </button>
                         </div>
                     </div>
-                )}
-            </div>
-        </div>
+                </div>
+            )}
+
+            {showEditDialog && editForm && !isConverted && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 space-y-4 my-8">
+                        <div className="flex items-center justify-between gap-4">
+                            <h3 className="text-base font-bold text-gray-900">{m.fields.editLead}</h3>
+                            <button
+                                type="button"
+                                onClick={() => { setShowEditDialog(false); setEditForm(null); }}
+                                className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <LeadFormFields form={editForm} onChange={setEditForm} teamMembers={teamMembers} />
+                        <div className="flex gap-2 pt-2">
+                            <button onClick={saveLead} disabled={savingLead} className="px-4 py-2 bg-violet-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+                                {savingLead ? <Loader2 className="w-4 h-4 animate-spin" /> : m.detail.saveLead}
+                            </button>
+                            <button onClick={() => { setShowEditDialog(false); setEditForm(null); }} className="px-4 py-2 border text-sm rounded-lg">
+                                {t.common.cancel}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
     );
 }
 

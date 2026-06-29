@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { UserPlus, Plus, RefreshCw, Search, Eye, Trash2 } from 'lucide-react';
+import { UserPlus, Plus, RefreshCw, Search, Eye, Trash2, ListChecks } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -55,6 +55,7 @@ export default function LeadsPage() {
     const [statusFilter, setStatusFilter] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('');
+    const [myTodaysActions, setMyTodaysActions] = useState(false);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [workspaceLeadId, setWorkspaceLeadId] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
@@ -88,6 +89,7 @@ export default function LeadsPage() {
                 status: statusFilter || undefined,
                 category: categoryFilter || undefined,
                 priority: priorityFilter || undefined,
+                myActionsToday: myTodaysActions || undefined,
                 limit: 100,
             });
             setLeads(data?.items ?? data ?? []);
@@ -96,7 +98,7 @@ export default function LeadsPage() {
         } finally {
             setLoading(false);
         }
-    }, [search, statusFilter, categoryFilter, priorityFilter]);
+    }, [search, statusFilter, categoryFilter, priorityFilter, myTodaysActions]);
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
 
@@ -245,7 +247,19 @@ export default function LeadsPage() {
                 </div>
             </div>
 
-            <div className="flex flex-wrap gap-3 mb-4">
+            <div className="flex flex-wrap gap-3 mb-4 items-center">
+                <button
+                    type="button"
+                    onClick={() => setMyTodaysActions((v) => !v)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+                        myTodaysActions
+                            ? 'bg-violet-600 text-white border-violet-600'
+                            : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                    }`}
+                >
+                    <ListChecks className="w-4 h-4" />
+                    {m.myTodaysActions}
+                </button>
                 <div className="relative flex-1 min-w-[200px] max-w-sm">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
@@ -275,7 +289,7 @@ export default function LeadsPage() {
                 data={leads}
                 columns={columns}
                 isLoading={loading}
-                emptyMessage={m.emptyMessage}
+                emptyMessage={myTodaysActions ? m.myTodaysActionsEmpty : m.emptyMessage}
             />
 
             {showCreateModal && (

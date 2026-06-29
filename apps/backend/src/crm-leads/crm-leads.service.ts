@@ -78,6 +78,8 @@ export class CrmLeadsService {
             category?: string;
             priority?: string;
             assignedTo?: string;
+            myActionsToday?: boolean;
+            userId?: string;
             search?: string;
             page?: number;
             limit?: number;
@@ -93,6 +95,14 @@ export class CrmLeadsService {
         if (opts.category) where.category = opts.category;
         if (opts.priority) where.priority = opts.priority;
         if (opts.assignedTo) where.assigned_to = opts.assignedTo;
+        if (opts.myActionsToday && opts.userId) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            where.next_step_assigned_to = opts.userId;
+            where.next_step_date = { gte: today, lt: tomorrow };
+        }
         if (opts.search) {
             where.OR = [
                 { name: { contains: opts.search, mode: 'insensitive' } },

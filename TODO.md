@@ -318,6 +318,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] CRM leads UX polish — lead info always visible in workspace; log conversation + edit in nested dialogs (full-height history); "My today's action list" filter (next step assigned to me today) — done 2026-06-29
 - [x] CRM leads workspace dialog — split view (lead info left, conversation history right); log conversation top-right; removed Tasks/Campaigns from nav (redirect to leads/CRM hub) — done 2026-06-29
 - [x] Lead conversation log — ONLINE_MEETING type + next-step fields on log (updates lead next_step/date/assignee); shared NextStepFields component — done 2026-06-29
 - [x] Fix lead form crash on new/edit — team members API returns `userId` flat, not `member.user.id` — done 2026-06-29

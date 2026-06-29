@@ -89,6 +89,8 @@ export const crmHrMessages = {
             },
             allCategories: "সব বিভাগ",
             allPriorities: "সব অগ্রাধিকার",
+            myTodaysActions: "আজকের আমার কাজের তালিকা",
+            myTodaysActionsEmpty: "আজ আপনার জন্য নির্ধারিত পরবর্তী পদক্ষেপ সহ কোনো লিড নেই।",
             statuses: {
                 NEW: "নতুন",
                 CONTACTED: "যোগাযোগ করা",
