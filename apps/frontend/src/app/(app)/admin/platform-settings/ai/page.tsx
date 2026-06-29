@@ -12,13 +12,15 @@ type AiSettings = {
 
 const DEFAULTS: AiSettings = {
     api_key: '',
-    default_model: 'claude-haiku-4-5-20251001',
+    default_model: 'anthropic/claude-haiku-4.5',
 };
 
 const MODEL_OPTIONS = [
-    { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5 — fastest, lowest cost ($1/$5 per M tokens)' },
-    { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6 — balanced ($3/$15 per M tokens)' },
-    { value: 'claude-opus-4-8', label: 'Opus 4.8 — most capable ($5/$25 per M tokens)' },
+    { value: 'anthropic/claude-haiku-4.5', label: 'Claude Haiku 4.5 — fastest, lowest cost' },
+    { value: 'anthropic/claude-sonnet-4.6', label: 'Claude Sonnet 4.6 — balanced quality' },
+    { value: 'anthropic/claude-opus-4.5', label: 'Claude Opus 4.5 — most capable' },
+    { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash — very low cost' },
+    { value: 'openai/gpt-4o-mini', label: 'GPT-4o Mini — fast OpenAI model' },
 ];
 
 type Toast = { type: 'success' | 'error'; message: string } | null;
@@ -126,8 +128,8 @@ export default function PlatformAiSettingsPage() {
                 </div>
 
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                    <strong>Platform-wide secret.</strong> This API key is used by all tenants for AI features. Keep it confidential. Get your key from{' '}
-                    <a href="https://console.anthropic.com" target="_blank" rel="noopener noreferrer" className="underline">console.anthropic.com</a>.
+                    <strong>Platform-wide secret.</strong> This OpenRouter API key is used by all tenants for AI features. Keep it confidential. Get your key from{' '}
+                    <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="underline">openrouter.ai/keys</a>.
                 </div>
 
                 {loading ? (
@@ -137,22 +139,22 @@ export default function PlatformAiSettingsPage() {
                 ) : (
                     <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
                         <Field
-                            label="Anthropic API Key"
-                            hint="Leave blank to keep existing value. Stored encrypted. Falls back to ANTHROPIC_API_KEY env var if unset."
+                            label="OpenRouter API Key"
+                            hint="Leave blank to keep existing value. Stored encrypted. Falls back to OPENROUTER_API_KEY env var if unset."
                         >
                             <input
                                 type="password"
                                 autoComplete="new-password"
                                 value={settings.api_key}
                                 onChange={(e) => setSettings((s) => ({ ...s, api_key: e.target.value }))}
-                                placeholder="sk-ant-••••••••"
+                                placeholder="sk-or-••••••••"
                                 className={inputCls}
                             />
                         </Field>
 
                         <Field
                             label="Default model"
-                            hint="Used for report narration and message drafting. Haiku is recommended for cost efficiency."
+                            hint="OpenRouter model slug used for report narration and message drafting. Haiku is recommended for cost efficiency."
                         >
                             <select
                                 value={settings.default_model}
@@ -178,11 +180,10 @@ export default function PlatformAiSettingsPage() {
                     </div>
                 )}
 
-                {/* Test panel */}
                 <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
                     <h2 className="text-sm font-black uppercase tracking-widest text-gray-400">Connection test</h2>
                     <p className="text-sm text-gray-500">
-                        Sends a single short message to Claude Haiku to verify the API key works. Uses ~10 tokens (negligible cost).
+                        Sends a single short message through OpenRouter to verify the API key works. Uses ~10 tokens (negligible cost).
                     </p>
                     <button
                         onClick={handleTest}
@@ -194,24 +195,28 @@ export default function PlatformAiSettingsPage() {
                     </button>
                 </div>
 
-                {/* Pricing reference */}
                 <div className="bg-white rounded-2xl border border-gray-200 p-6">
                     <h2 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-3">Pricing reference</h2>
+                    <p className="text-sm text-gray-500 mb-3">
+                        OpenRouter bills per model. Actual cost is recorded from each API response. See{' '}
+                        <a href="https://openrouter.ai/models" target="_blank" rel="noopener noreferrer" className="text-purple-600 underline">openrouter.ai/models</a>{' '}
+                        for live rates.
+                    </p>
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100">
                                 <th className="text-left pb-2">Model</th>
-                                <th className="text-right pb-2">Input /M tokens</th>
-                                <th className="text-right pb-2">Output /M tokens</th>
+                                <th className="text-right pb-2">Typical input /M</th>
+                                <th className="text-right pb-2">Typical output /M</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            <tr><td className="py-2 font-medium">Haiku 4.5</td><td className="text-right text-gray-600">$1.00</td><td className="text-right text-gray-600">$5.00</td></tr>
-                            <tr><td className="py-2 font-medium">Sonnet 4.6</td><td className="text-right text-gray-600">$3.00</td><td className="text-right text-gray-600">$15.00</td></tr>
-                            <tr><td className="py-2 font-medium">Opus 4.8</td><td className="text-right text-gray-600">$5.00</td><td className="text-right text-gray-600">$25.00</td></tr>
+                            <tr><td className="py-2 font-medium">Claude Haiku 4.5</td><td className="text-right text-gray-600">~$1.00</td><td className="text-right text-gray-600">~$5.00</td></tr>
+                            <tr><td className="py-2 font-medium">Claude Sonnet 4.6</td><td className="text-right text-gray-600">~$3.00</td><td className="text-right text-gray-600">~$15.00</td></tr>
+                            <tr><td className="py-2 font-medium">Claude Opus 4.5</td><td className="text-right text-gray-600">~$5.00</td><td className="text-right text-gray-600">~$25.00</td></tr>
                         </tbody>
                     </table>
-                    <p className="text-xs text-gray-400 mt-3">1 credit = 1,000 tokens. You charge tenants per credit; the cost above is what Anthropic charges you.</p>
+                    <p className="text-xs text-gray-400 mt-3">1 credit = 1,000 tokens. You charge tenants per credit; OpenRouter charges you per model usage.</p>
                 </div>
             </div>
 

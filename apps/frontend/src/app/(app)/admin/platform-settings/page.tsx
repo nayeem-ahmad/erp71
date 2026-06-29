@@ -44,8 +44,8 @@ export default function PlatformSettingsIndexPage() {
         {
             href: '/admin/platform-settings/ai',
             icon: Sparkles,
-            label: 'AI (Anthropic)',
-            description: 'Anthropic API key and default model for AI-powered features across all tenants.',
+            label: 'AI (OpenRouter)',
+            description: 'OpenRouter API key and default model for AI-powered features across all tenants.',
             color: 'text-purple-600',
             bg: 'bg-purple-50',
         },

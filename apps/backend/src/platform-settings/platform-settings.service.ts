@@ -44,7 +44,7 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
     },
     ai: {
         api_key: { isSecret: true },
-        default_model: { isSecret: false, default: 'claude-haiku-4-5-20251001' },
+        default_model: { isSecret: false, default: 'anthropic/claude-haiku-4.5' },
     },
     general: {
         platform_name:    { isSecret: false, default: 'RetailSaaS' },

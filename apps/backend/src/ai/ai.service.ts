@@ -1,16 +1,40 @@
 import { ForbiddenException, Injectable, InternalServerErrorException } from '@nestjs/common';
-import Anthropic from '@anthropic-ai/sdk';
 import { DatabaseService } from '../database/database.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { NarrateReportDto, DraftMessageDto } from './ai.dto';
 import { AI_CREDITS_PER_PLAN, AI_TOKENS_PER_CREDIT, SubscriptionPlanCode } from '@retail-saas/shared-types';
 
-type ModelId = 'claude-haiku-4-5-20251001' | 'claude-sonnet-4-6' | 'claude-opus-4-8';
+const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1';
+const DEFAULT_MODEL = 'anthropic/claude-haiku-4.5';
 
-const MODEL_RATES: Record<ModelId, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
-    'claude-haiku-4-5-20251001': { input: 1.00, output: 5.00, cacheRead: 0.10, cacheWrite: 1.25 },
-    'claude-sonnet-4-6':        { input: 3.00, output: 15.00, cacheRead: 0.30, cacheWrite: 3.75 },
-    'claude-opus-4-8':          { input: 5.00, output: 25.00, cacheRead: 0.50, cacheWrite: 6.25 },
+/** Legacy Anthropic direct model IDs stored before OpenRouter migration */
+const MODEL_ALIASES: Record<string, string> = {
+    'claude-haiku-4-5-20251001': DEFAULT_MODEL,
+    'claude-sonnet-4-6': 'anthropic/claude-sonnet-4.6',
+    'claude-opus-4-8': 'anthropic/claude-opus-4.5',
+};
+
+/** Fallback $/M token rates when OpenRouter does not return usage.cost */
+const MODEL_RATES: Record<string, { input: number; output: number }> = {
+    [DEFAULT_MODEL]: { input: 1.0, output: 5.0 },
+    'anthropic/claude-sonnet-4.6': { input: 3.0, output: 15.0 },
+    'anthropic/claude-opus-4.5': { input: 5.0, output: 25.0 },
+    'google/gemini-2.5-flash': { input: 0.15, output: 0.6 },
+    'openai/gpt-4o-mini': { input: 0.15, output: 0.6 },
+};
+
+type OpenRouterUsage = {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    cost?: number;
+    prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
+};
+
+type OpenRouterChatResponse = {
+    choices?: Array<{ message?: { content?: string | null } }>;
+    usage?: OpenRouterUsage;
+    error?: { message?: string };
 };
 
 @Injectable()
@@ -20,26 +44,30 @@ export class AiService {
         private readonly platformSettings: PlatformSettingsService,
     ) {}
 
-    private async getClient(): Promise<Anthropic> {
+    private normalizeModel(model: string): string {
+        return MODEL_ALIASES[model] ?? model;
+    }
+
+    private async getApiKey(): Promise<string> {
         const dbKey = await this.platformSettings.getRawValue('ai', 'api_key');
-        const apiKey = dbKey ?? process.env.ANTHROPIC_API_KEY ?? '';
-        return new Anthropic({ apiKey });
+        return dbKey ?? process.env.OPENROUTER_API_KEY ?? process.env.ANTHROPIC_API_KEY ?? '';
+    }
+
+    private async getDefaultModel(): Promise<string> {
+        const dbModel = await this.platformSettings.getRawValue('ai', 'default_model');
+        const model = dbModel ?? process.env.OPENROUTER_DEFAULT_MODEL ?? DEFAULT_MODEL;
+        return this.normalizeModel(model);
     }
 
     async testConnection(): Promise<{ success: boolean; model: string; message: string }> {
-        const anthropic = await this.getClient();
-        if (!anthropic.apiKey) {
+        const apiKey = await this.getApiKey();
+        if (!apiKey) {
             return { success: false, model: '', message: 'No API key configured.' };
         }
         try {
-            const model: ModelId = 'claude-haiku-4-5-20251001';
-            const response = await anthropic.messages.create({
-                model,
-                max_tokens: 16,
-                messages: [{ role: 'user', content: 'Reply with just: ok' }],
-            });
-            const text = response.content.find((b) => b.type === 'text');
-            return { success: true, model, message: text?.type === 'text' ? text.text : 'ok' };
+            const model = await this.getDefaultModel();
+            const { text } = await this.callOpenRouter(apiKey, model, 'You are a test assistant.', 'Reply with just: ok', 16);
+            return { success: true, model, message: text || 'ok' };
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             return { success: false, model: '', message: msg };
@@ -97,7 +125,7 @@ export class AiService {
     async narrateReport(tenantId: string, dto: NarrateReportDto): Promise<{ narration: string }> {
         await this.enforceCredits(tenantId);
 
-        const model: ModelId = 'claude-haiku-4-5-20251001';
+        const model = await this.getDefaultModel();
         const locale = dto.locale ?? 'en';
         const langInstruction = locale === 'bn'
             ? 'Respond in Bangla (Bengali). Use ৳ for currency.'
@@ -107,14 +135,14 @@ export class AiService {
 
         const userMessage = `Report type: ${dto.reportType}\n\nData:\n${JSON.stringify(dto.reportData, null, 2)}\n\nProvide a brief business narrative summarizing performance, key trends, and one actionable recommendation.`;
 
-        const response = await this.callClaude(tenantId, 'report_narration', model, systemPrompt, userMessage);
+        const response = await this.complete(tenantId, 'report_narration', model, systemPrompt, userMessage);
         return { narration: response };
     }
 
     async draftMessage(tenantId: string, dto: DraftMessageDto): Promise<{ draft: string }> {
         await this.enforceCredits(tenantId);
 
-        const model: ModelId = 'claude-haiku-4-5-20251001';
+        const model = await this.getDefaultModel();
         const locale = dto.locale ?? 'en';
         const langInstruction = locale === 'bn'
             ? 'Write the message in Bangla (Bengali). Keep it natural and warm.'
@@ -124,65 +152,104 @@ export class AiService {
 
         const userMessage = `Purpose: ${dto.purpose}\nChannel: ${dto.channel}\nCustomer context: ${JSON.stringify(dto.customerContext)}\n\nWrite the message now.`;
 
-        const response = await this.callClaude(tenantId, 'message_drafter', model, systemPrompt, userMessage);
+        const response = await this.complete(tenantId, 'message_drafter', model, systemPrompt, userMessage);
         return { draft: response };
     }
 
-    private async callClaude(
+    private async complete(
         tenantId: string,
         feature: string,
-        model: ModelId,
+        model: string,
         systemPrompt: string,
         userMessage: string,
     ): Promise<string> {
-        const anthropic = await this.getClient();
-        let response: Awaited<ReturnType<typeof anthropic.messages.create>>;
-
-        try {
-            response = await anthropic.messages.create({
-                model,
-                max_tokens: 512,
-                system: systemPrompt,
-                messages: [{ role: 'user', content: userMessage }],
-            });
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
-            throw new InternalServerErrorException(`AI service error: ${msg}`);
+        const apiKey = await this.getApiKey();
+        if (!apiKey) {
+            throw new InternalServerErrorException('AI service is not configured. Set an OpenRouter API key.');
         }
 
-        const usage = response.usage;
-        const rates = MODEL_RATES[model];
-        const totalTokens =
-            usage.input_tokens +
-            usage.output_tokens +
-            (usage.cache_read_input_tokens ?? 0) +
-            (usage.cache_creation_input_tokens ?? 0);
+        const normalizedModel = this.normalizeModel(model);
+        const { text, usage } = await this.callOpenRouter(apiKey, normalizedModel, systemPrompt, userMessage, 512);
 
-        const costUsd =
-            (usage.input_tokens * rates.input +
-             usage.output_tokens * rates.output +
-             (usage.cache_read_input_tokens ?? 0) * rates.cacheRead +
-             (usage.cache_creation_input_tokens ?? 0) * rates.cacheWrite) /
-            1_000_000;
+        const inputTokens = usage.prompt_tokens;
+        const outputTokens = usage.completion_tokens;
+        const cacheRead = usage.prompt_tokens_details?.cached_tokens ?? 0;
+        const cacheWrite = usage.prompt_tokens_details?.cache_write_tokens ?? 0;
+        const totalTokens = usage.total_tokens || inputTokens + outputTokens + cacheRead + cacheWrite;
 
+        const costUsd = usage.cost ?? this.estimateCost(normalizedModel, inputTokens, outputTokens);
         const creditsUsed = totalTokens / AI_TOKENS_PER_CREDIT;
 
         await this.db.aiUsageLog.create({
             data: {
                 tenant_id: tenantId,
                 feature,
-                model,
-                input_tokens: usage.input_tokens,
-                output_tokens: usage.output_tokens,
-                cache_read_tokens: usage.cache_read_input_tokens ?? 0,
-                cache_creation_tokens: usage.cache_creation_input_tokens ?? 0,
+                model: normalizedModel,
+                input_tokens: inputTokens,
+                output_tokens: outputTokens,
+                cache_read_tokens: cacheRead,
+                cache_creation_tokens: cacheWrite,
                 cost_usd: costUsd,
                 credits_used: creditsUsed,
             },
         });
 
-        const textBlock = response.content.find((b) => b.type === 'text');
-        return textBlock?.type === 'text' ? textBlock.text : '';
+        return text;
+    }
+
+    private estimateCost(model: string, inputTokens: number, outputTokens: number): number {
+        const rates = MODEL_RATES[model] ?? MODEL_RATES[DEFAULT_MODEL];
+        return (inputTokens * rates.input + outputTokens * rates.output) / 1_000_000;
+    }
+
+    private async callOpenRouter(
+        apiKey: string,
+        model: string,
+        systemPrompt: string,
+        userMessage: string,
+        maxTokens: number,
+    ): Promise<{ text: string; usage: OpenRouterUsage }> {
+        const referer = process.env.FRONTEND_URL ?? 'https://retailsaas.app';
+        const title = process.env.OPENROUTER_APP_NAME ?? 'RetailSaaS';
+
+        let response: Response;
+        try {
+            response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                    'HTTP-Referer': referer,
+                    'X-OpenRouter-Title': title,
+                },
+                body: JSON.stringify({
+                    model,
+                    max_tokens: maxTokens,
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userMessage },
+                    ],
+                }),
+            });
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            throw new InternalServerErrorException(`AI service error: ${msg}`);
+        }
+
+        const body = (await response.json()) as OpenRouterChatResponse;
+        if (!response.ok) {
+            const msg = body.error?.message ?? `OpenRouter request failed (${response.status})`;
+            throw new InternalServerErrorException(`AI service error: ${msg}`);
+        }
+
+        const text = body.choices?.[0]?.message?.content?.trim() ?? '';
+        const usage = body.usage ?? {
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            total_tokens: 0,
+        };
+
+        return { text, usage };
     }
 
     private async enforceCredits(tenantId: string): Promise<void> {

@@ -1,3 +1,13 @@
+# Free-tier notes (https://render.com/docs/free):
+# - Only one free Postgres per workspace (shared by prod + staging backends).
+# - Free Postgres expires 30 days after creation; renew or upgrade before expiry.
+# - Free web services spin down after 15 min idle; 750 instance-hours/month shared across all free services.
+
+databases:
+  - name: retail-saas-db
+    plan: free
+    region: oregon
+
 services:
   # ─── PRODUCTION ────────────────────────────────────────────────────────────
 
@@ -7,10 +17,9 @@ services:
     runtime: docker
     dockerContext: .
     dockerfilePath: ./apps/backend/Dockerfile
-    plan: standard
+    plan: free
     autoDeploy: true
     healthCheckPath: /api/v1/health
-    preDeployCommand: DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma
     envVars:
       - key: NODE_ENV
         value: production
@@ -70,7 +79,7 @@ services:
         sync: false
       - key: NAGAD_API_URL
         sync: false
-      - key: ANTHROPIC_API_KEY
+      - key: OPENROUTER_API_KEY
         sync: false
 
   - type: web
@@ -79,7 +88,7 @@ services:
     runtime: docker
     dockerContext: .
     dockerfilePath: ./apps/frontend/Dockerfile
-    plan: standard
+    plan: free
     autoDeploy: true
     envVars:
       - key: NODE_ENV
@@ -100,11 +109,12 @@ services:
 
   - type: web
     name: retail-saas-backend-staging
+    repo: https://github.com/nayeem-ahmad/retail-saas
     rootDir: .
     runtime: docker
     dockerContext: .
     dockerfilePath: ./apps/backend/Dockerfile
-    plan: starter
+    plan: free
     autoDeploy: true
     branch: staging
     healthCheckPath: /api/v1/health
@@ -152,11 +162,12 @@ services:
 
   - type: web
     name: retail-saas-frontend-staging
+    repo: https://github.com/nayeem-ahmad/retail-saas
     rootDir: .
     runtime: docker
     dockerContext: .
     dockerfilePath: ./apps/frontend/Dockerfile
-    plan: starter
+    plan: free
     autoDeploy: true
     branch: staging
     envVars:

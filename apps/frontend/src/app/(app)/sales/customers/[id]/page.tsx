@@ -417,7 +417,7 @@ export default function CustomerProfile() {
                                     </div>
                                 </div>
                                 <p className="text-xs text-gray-500">
-                                    Claude will draft a ready-to-send message using {customer?.name}&apos;s profile. The draft will pre-fill the interaction form below.
+                                    AI will draft a ready-to-send message using {customer?.name}&apos;s profile. The draft will pre-fill the interaction form below.
                                 </p>
                                 <div className="flex gap-2">
                                     <button

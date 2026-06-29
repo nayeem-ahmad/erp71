@@ -318,6 +318,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Switch AI provider to OpenRouter — `AiService` uses OpenRouter chat completions API; `OPENROUTER_API_KEY` env var; admin settings UI updated; legacy Anthropic model IDs aliased — done 2026-06-29
 - [x] CRM leads full-page UI — detail at `/crm/leads/[id]` and create at `/crm/leads/new` (customer-style layout); removed workspace modal/dialog — done 2026-06-29
 - [x] CRM leads UX polish — lead info always visible in workspace; log conversation + edit in nested dialogs (full-height history); "My today's action list" filter (next step assigned to me today) — done 2026-06-29
 - [x] CRM leads workspace dialog — split view (lead info left, conversation history right); log conversation top-right; removed Tasks/Campaigns from nav (redirect to leads/CRM hub) — done 2026-06-29
