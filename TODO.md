@@ -320,6 +320,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Fix onboarding store setup scroll — `/dashboard/onboarding` uses `h-full overflow-y-auto` inside app layout so create-store form and skip link are reachable on short/mobile viewports — done 2026-06-29
 - [x] Rename platform retail-saas → erp71 — npm scope `@erp71/*`, branding (UI/emails/seed), `render.yaml` + ops scripts, consolidated duplicate erp71 stack (`docker-compose.erp71.yml`/`deploy-erp71.sh` removed), `scripts/migrate-vps-rename.sh` for VPS cutover — done 2026-06-29
 - [x] erp71.com VPS deployment — `docker-compose.erp71.yml` + `scripts/deploy-erp71.sh` for a second isolated instance (own DB `erp71`, `erp71` compose project, shared Postgres + hermes Caddy blocks for `app.`/`api.erp71.com`) — superseded by full platform rename — done 2026-06-29
 - [x] Shared toast notifications — `lib/toast.ts` + global `Toaster` in app layout (auto-dismiss, optional ✕, no blocking OK); New Sale `alert()` calls replaced with success/error/info toasts — done 2026-06-29
