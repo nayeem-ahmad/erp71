@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { ClipboardList, Plus, Printer } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import Link from 'next/link';
@@ -39,6 +40,7 @@ const columnHelper = createColumnHelper<Purchase>();
 
 export default function PurchasesPage() {
     const { t, locale } = useI18n();
+    const searchParams = useSearchParams();
     const [purchases, setPurchases] = useState<Purchase[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -46,6 +48,12 @@ export default function PurchasesPage() {
     useEffect(() => {
         loadPurchases();
     }, []);
+
+    useEffect(() => {
+        if (searchParams.get('new') === '1') {
+            setIsModalOpen(true);
+        }
+    }, [searchParams]);
 
     const loadPurchases = async () => {
         try {
