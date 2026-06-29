@@ -320,6 +320,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] New Sale payment + customer UI — `PaymentSection` shows each visible payment method as one row (name left, amount input right); inactive/generic methods remain under "Other methods"; `CustomerSelection` shows customer address alongside name and phone when selected — done 2026-06-29
 - [x] Voice-to-sales entry MVP — `VoiceSaleInput` on `/sales/new` (browser speech-to-text), backend `POST /ai/parse-voice-sale` parses transcript via LLM and matches inventory products; user reviews cart before checkout — done 2026-06-29
 - [x] Switch AI provider to OpenRouter — `AiService` uses OpenRouter chat completions API; `OPENROUTER_API_KEY` env var; admin settings UI updated; legacy Anthropic model IDs aliased — done 2026-06-29
 - [x] CRM leads full-page UI — detail at `/crm/leads/[id]` and create at `/crm/leads/new` (customer-style layout); removed workspace modal/dialog — done 2026-06-29

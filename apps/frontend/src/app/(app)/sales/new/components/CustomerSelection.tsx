@@ -113,7 +113,10 @@ export default function CustomerSelection({ customer, setCustomer }: CustomerSel
                                     className="px-3 py-2 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
                                 >
                                     <div className="font-medium text-gray-900 text-sm">{cust.name}</div>
-                                    <div className="text-xs text-gray-500">{cust.phone}</div>
+                                    <div className="text-xs text-gray-500">
+                                        {cust.phone}
+                                        {cust.address ? ` · ${cust.address}` : ''}
+                                    </div>
                                 </div>
                             ))
                         )}
@@ -126,6 +129,12 @@ export default function CustomerSelection({ customer, setCustomer }: CustomerSel
                     <span className="font-medium text-gray-700">{customer.name}</span>
                     {customer.phone && <span className="mx-1.5 text-gray-300">·</span>}
                     {customer.phone && <span>{customer.phone}</span>}
+                    {customer.address ? (
+                        <>
+                            <span className="mx-1.5 text-gray-300">·</span>
+                            <span>{customer.address}</span>
+                        </>
+                    ) : null}
                     {customer.credit_limit ? (
                         <>
                             <span className="mx-1.5 text-gray-300">·</span>
