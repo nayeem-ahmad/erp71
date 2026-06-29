@@ -188,6 +188,7 @@ model User {
   assignedCrmTasks          CrmTask[]     @relation("CrmTaskAssignee")
   createdCrmTasks           CrmTask[]     @relation("CrmTaskCreator")
   assignedLeads             Lead[]        @relation("LeadAssignee")
+  nextStepAssignedLeads     Lead[]        @relation("LeadNextStepAssignee")
   createdLeads              Lead[]        @relation("LeadCreator")
   createdLeadConversations  LeadConversation[] @relation("LeadConversationCreator")
   createdCreditTransactions CustomerCreditTransaction[] @relation("CreditTransactionCreator")
@@ -1232,33 +1233,46 @@ model CustomerInteraction {
 }
 
 model Lead {
-  id                    String    @id @default(uuid())
-  tenant_id             String
-  store_id              String?
-  name                  String
-  phone                 String
-  email                 String?
-  address               String?
-  source                String    @default("OTHER") // WALK_IN | PHONE | FACEBOOK | REFERRAL | WEBSITE | OTHER
-  status                String    @default("NEW")     // NEW | CONTACTED | QUALIFIED | LOST | CONVERTED
-  assigned_to           String?
-  notes                 String?
-  last_contacted_at     DateTime?
-  converted_customer_id String?
-  created_by            String?
-  created_at            DateTime  @default(now())
-  updated_at            DateTime  @updatedAt
+  id                      String    @id @default(uuid())
+  tenant_id               String
+  store_id                String?
+  name                    String
+  mobile                  String
+  email                   String?
+  address                 String?
+  category                String?
+  priority                String    @default("MEDIUM") // LOW | MEDIUM | HIGH | URGENT
+  remarks                 String?
+  source                  String    @default("OTHER") // WALK_IN | PHONE | FACEBOOK | REFERRAL | WEBSITE | OTHER
+  status                  String    @default("NEW")     // NEW | CONTACTED | QUALIFIED | LOST | CONVERTED
+  linkedin_url            String?
+  fb_url                  String?
+  x_url                   String?
+  website_url             String?
+  next_step               String?
+  next_step_date          DateTime?
+  next_step_assigned_to   String?
+  assigned_to             String?
+  last_contacted_at       DateTime?
+  converted_customer_id   String?
+  created_by              String?
+  created_at              DateTime  @default(now())
+  updated_at              DateTime  @updatedAt
 
-  tenant             Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  assignee           User?     @relation("LeadAssignee", fields: [assigned_to], references: [id])
-  creator            User?     @relation("LeadCreator", fields: [created_by], references: [id])
-  convertedCustomer  Customer? @relation("LeadConvertedCustomer", fields: [converted_customer_id], references: [id])
-  conversations      LeadConversation[]
-  crmTasks           CrmTask[]
+  tenant               Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  assignee             User?     @relation("LeadAssignee", fields: [assigned_to], references: [id])
+  nextStepAssignee     User?     @relation("LeadNextStepAssignee", fields: [next_step_assigned_to], references: [id])
+  creator              User?     @relation("LeadCreator", fields: [created_by], references: [id])
+  convertedCustomer    Customer? @relation("LeadConvertedCustomer", fields: [converted_customer_id], references: [id])
+  conversations        LeadConversation[]
+  crmTasks             CrmTask[]
 
-  @@unique([tenant_id, phone])
+  @@unique([tenant_id, mobile])
   @@index([tenant_id, status])
+  @@index([tenant_id, category])
+  @@index([tenant_id, priority])
   @@index([tenant_id, assigned_to])
+  @@index([tenant_id, next_step_date])
 }
 
 model LeadConversation {

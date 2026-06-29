@@ -52,7 +52,7 @@ export class CrmLeadConversationsService {
             this.db.leadConversation.findMany({
                 where,
                 include: {
-                    lead: { select: { id: true, name: true, phone: true } },
+                    lead: { select: { id: true, name: true, mobile: true } },
                     creator: { select: { id: true, name: true, email: true } },
                 },
                 orderBy: { created_at: 'desc' },
@@ -69,7 +69,7 @@ export class CrmLeadConversationsService {
         const item = await this.db.leadConversation.findFirst({
             where: { id, tenant_id: tenantId },
             include: {
-                lead: { select: { id: true, name: true, phone: true } },
+                lead: { select: { id: true, name: true, mobile: true } },
                 creator: { select: { id: true, name: true, email: true } },
             },
         });
@@ -85,7 +85,7 @@ export class CrmLeadConversationsService {
             where: { id },
             data: dto,
             include: {
-                lead: { select: { id: true, name: true, phone: true } },
+                lead: { select: { id: true, name: true, mobile: true } },
                 creator: { select: { id: true, name: true, email: true } },
             },
         });

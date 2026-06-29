@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsUUID, IsEmail } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsUUID, IsEmail, IsDateString } from 'class-validator';
 
 export enum LeadSource {
     WALK_IN = 'WALK_IN',
@@ -17,12 +17,28 @@ export enum LeadStatus {
     CONVERTED = 'CONVERTED',
 }
 
+export enum LeadCategory {
+    RETAIL = 'RETAIL',
+    WHOLESALE = 'WHOLESALE',
+    CORPORATE = 'CORPORATE',
+    INDIVIDUAL = 'INDIVIDUAL',
+    PARTNER = 'PARTNER',
+    OTHER = 'OTHER',
+}
+
+export enum LeadPriority {
+    LOW = 'LOW',
+    MEDIUM = 'MEDIUM',
+    HIGH = 'HIGH',
+    URGENT = 'URGENT',
+}
+
 export class CreateLeadDto {
     @IsString()
     name: string;
 
     @IsString()
-    phone: string;
+    mobile: string;
 
     @IsOptional()
     @IsEmail()
@@ -33,6 +49,18 @@ export class CreateLeadDto {
     address?: string;
 
     @IsOptional()
+    @IsEnum(LeadCategory)
+    category?: LeadCategory;
+
+    @IsOptional()
+    @IsEnum(LeadPriority)
+    priority?: LeadPriority;
+
+    @IsOptional()
+    @IsString()
+    remarks?: string;
+
+    @IsOptional()
     @IsEnum(LeadSource)
     source?: LeadSource;
 
@@ -41,12 +69,36 @@ export class CreateLeadDto {
     status?: LeadStatus;
 
     @IsOptional()
-    @IsUUID()
-    assigned_to?: string;
+    @IsString()
+    linkedin_url?: string;
 
     @IsOptional()
     @IsString()
-    notes?: string;
+    fb_url?: string;
+
+    @IsOptional()
+    @IsString()
+    x_url?: string;
+
+    @IsOptional()
+    @IsString()
+    website_url?: string;
+
+    @IsOptional()
+    @IsString()
+    next_step?: string;
+
+    @IsOptional()
+    @IsDateString()
+    next_step_date?: string;
+
+    @IsOptional()
+    @IsUUID()
+    next_step_assigned_to?: string;
+
+    @IsOptional()
+    @IsUUID()
+    assigned_to?: string;
 
     @IsOptional()
     @IsString()
@@ -60,7 +112,7 @@ export class UpdateLeadDto {
 
     @IsOptional()
     @IsString()
-    phone?: string;
+    mobile?: string;
 
     @IsOptional()
     @IsEmail()
@@ -71,6 +123,18 @@ export class UpdateLeadDto {
     address?: string;
 
     @IsOptional()
+    @IsEnum(LeadCategory)
+    category?: LeadCategory;
+
+    @IsOptional()
+    @IsEnum(LeadPriority)
+    priority?: LeadPriority;
+
+    @IsOptional()
+    @IsString()
+    remarks?: string;
+
+    @IsOptional()
     @IsEnum(LeadSource)
     source?: LeadSource;
 
@@ -79,10 +143,34 @@ export class UpdateLeadDto {
     status?: LeadStatus;
 
     @IsOptional()
-    @IsUUID()
-    assigned_to?: string;
+    @IsString()
+    linkedin_url?: string;
 
     @IsOptional()
     @IsString()
-    notes?: string;
+    fb_url?: string;
+
+    @IsOptional()
+    @IsString()
+    x_url?: string;
+
+    @IsOptional()
+    @IsString()
+    website_url?: string;
+
+    @IsOptional()
+    @IsString()
+    next_step?: string;
+
+    @IsOptional()
+    @IsDateString()
+    next_step_date?: string;
+
+    @IsOptional()
+    @IsUUID()
+    next_step_assigned_to?: string;
+
+    @IsOptional()
+    @IsUUID()
+    assigned_to?: string;
 }

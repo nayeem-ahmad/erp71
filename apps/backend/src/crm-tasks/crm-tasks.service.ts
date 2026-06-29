@@ -64,7 +64,7 @@ export class CrmTasksService {
             },
             include: {
                 customer: { select: { id: true, name: true, phone: true } },
-                lead: { select: { id: true, name: true, phone: true } },
+                lead: { select: { id: true, name: true, mobile: true } },
                 assignee: { select: { id: true, name: true, email: true } },
             },
         });
@@ -106,7 +106,7 @@ export class CrmTasksService {
                 where,
                 include: {
                     customer: { select: { id: true, name: true, phone: true } },
-                    lead: { select: { id: true, name: true, phone: true } },
+                    lead: { select: { id: true, name: true, mobile: true } },
                     assignee: { select: { id: true, name: true, email: true } },
                 },
                 orderBy: { due_at: 'asc' },
@@ -124,7 +124,7 @@ export class CrmTasksService {
             where: { id, tenant_id: tenantId },
             include: {
                 customer: { select: { id: true, name: true, phone: true } },
-                lead: { select: { id: true, name: true, phone: true } },
+                lead: { select: { id: true, name: true, mobile: true } },
                 assignee: { select: { id: true, name: true, email: true } },
             },
         });
@@ -145,7 +145,7 @@ export class CrmTasksService {
             data,
             include: {
                 customer: { select: { id: true, name: true, phone: true } },
-                lead: { select: { id: true, name: true, phone: true } },
+                lead: { select: { id: true, name: true, mobile: true } },
                 assignee: { select: { id: true, name: true, email: true } },
             },
         });

@@ -414,10 +414,12 @@ export const api = {
     }),
     deleteCrmInteraction: (id: string) => fetchWithAuth(`/crm/interactions/${id}`, { method: 'DELETE' }),
     // CRM Leads
-    getLeads: (params?: { status?: string; source?: string; assignedTo?: string; search?: string; page?: number; limit?: number }) => {
+    getLeads: (params?: { status?: string; source?: string; category?: string; priority?: string; assignedTo?: string; search?: string; page?: number; limit?: number }) => {
         const query = new URLSearchParams();
         if (params?.status) query.set('status', params.status);
         if (params?.source) query.set('source', params.source);
+        if (params?.category) query.set('category', params.category);
+        if (params?.priority) query.set('priority', params.priority);
         if (params?.assignedTo) query.set('assignedTo', params.assignedTo);
         if (params?.search) query.set('search', params.search);
         if (params?.page) query.set('page', String(params.page));

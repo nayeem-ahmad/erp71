@@ -9,6 +9,13 @@ import { CustomersService } from '../customers/customers.service';
 import { CreateLeadDto, LeadStatus, UpdateLeadDto } from './crm-leads.dto';
 import { paginate } from '../common/pagination.dto';
 
+const leadIncludes = {
+    assignee: { select: { id: true, name: true, email: true } },
+    nextStepAssignee: { select: { id: true, name: true, email: true } },
+    creator: { select: { id: true, name: true, email: true } },
+    convertedCustomer: { select: { id: true, name: true, phone: true } },
+} as const;
+
 @Injectable()
 export class CrmLeadsService {
     constructor(
@@ -16,33 +23,50 @@ export class CrmLeadsService {
         private customersService: CustomersService,
     ) {}
 
+    private mapLeadData(dto: CreateLeadDto | UpdateLeadDto) {
+        const data: Record<string, unknown> = { ...dto };
+        if ('next_step_date' in dto && dto.next_step_date) {
+            data.next_step_date = new Date(dto.next_step_date);
+        }
+        if ('next_step_date' in dto && dto.next_step_date === null) {
+            data.next_step_date = null;
+        }
+        return data;
+    }
+
     async create(tenantId: string, userId: string, dto: CreateLeadDto) {
         const existing = await this.db.lead.findUnique({
-            where: { tenant_id_phone: { tenant_id: tenantId, phone: dto.phone } },
+            where: { tenant_id_mobile: { tenant_id: tenantId, mobile: dto.mobile } },
             select: { id: true },
         });
         if (existing) {
-            throw new BadRequestException('A lead with this phone number already exists.');
+            throw new BadRequestException('A lead with this mobile number already exists.');
         }
 
         return this.db.lead.create({
             data: {
                 tenant_id: tenantId,
                 name: dto.name,
-                phone: dto.phone,
+                mobile: dto.mobile,
                 email: dto.email,
                 address: dto.address,
+                category: dto.category,
+                priority: dto.priority ?? 'MEDIUM',
+                remarks: dto.remarks,
                 source: dto.source ?? 'OTHER',
                 status: dto.status ?? 'NEW',
+                linkedin_url: dto.linkedin_url,
+                fb_url: dto.fb_url,
+                x_url: dto.x_url,
+                website_url: dto.website_url,
+                next_step: dto.next_step,
+                next_step_date: dto.next_step_date ? new Date(dto.next_step_date) : undefined,
+                next_step_assigned_to: dto.next_step_assigned_to,
                 assigned_to: dto.assigned_to,
-                notes: dto.notes,
                 store_id: dto.store_id,
                 created_by: userId,
             },
-            include: {
-                assignee: { select: { id: true, name: true, email: true } },
-                creator: { select: { id: true, name: true, email: true } },
-            },
+            include: leadIncludes,
         });
     }
 
@@ -51,6 +75,8 @@ export class CrmLeadsService {
         opts: {
             status?: string;
             source?: string;
+            category?: string;
+            priority?: string;
             assignedTo?: string;
             search?: string;
             page?: number;
@@ -64,23 +90,23 @@ export class CrmLeadsService {
         const where: any = { tenant_id: tenantId };
         if (opts.status) where.status = opts.status;
         if (opts.source) where.source = opts.source;
+        if (opts.category) where.category = opts.category;
+        if (opts.priority) where.priority = opts.priority;
         if (opts.assignedTo) where.assigned_to = opts.assignedTo;
         if (opts.search) {
             where.OR = [
                 { name: { contains: opts.search, mode: 'insensitive' } },
-                { phone: { contains: opts.search, mode: 'insensitive' } },
+                { mobile: { contains: opts.search, mode: 'insensitive' } },
                 { email: { contains: opts.search, mode: 'insensitive' } },
+                { remarks: { contains: opts.search, mode: 'insensitive' } },
             ];
         }
 
         const [items, total] = await Promise.all([
             this.db.lead.findMany({
                 where,
-                include: {
-                    assignee: { select: { id: true, name: true, email: true } },
-                    convertedCustomer: { select: { id: true, name: true, phone: true } },
-                },
-                orderBy: { updated_at: 'desc' },
+                include: leadIncludes,
+                orderBy: [{ next_step_date: 'asc' }, { updated_at: 'desc' }],
                 skip,
                 take: limit,
             }),
@@ -93,11 +119,7 @@ export class CrmLeadsService {
     async findOne(tenantId: string, id: string) {
         const lead = await this.db.lead.findFirst({
             where: { id, tenant_id: tenantId },
-            include: {
-                assignee: { select: { id: true, name: true, email: true } },
-                creator: { select: { id: true, name: true, email: true } },
-                convertedCustomer: { select: { id: true, name: true, phone: true } },
-            },
+            include: leadIncludes,
         });
         if (!lead) throw new NotFoundException('Lead not found');
         return lead;
@@ -110,23 +132,22 @@ export class CrmLeadsService {
             throw new BadRequestException('Converted leads cannot be edited.');
         }
 
-        if (dto.phone && dto.phone !== existing.phone) {
-            const phoneTaken = await this.db.lead.findUnique({
-                where: { tenant_id_phone: { tenant_id: tenantId, phone: dto.phone } },
+        if (dto.mobile && dto.mobile !== existing.mobile) {
+            const mobileTaken = await this.db.lead.findUnique({
+                where: { tenant_id_mobile: { tenant_id: tenantId, mobile: dto.mobile } },
                 select: { id: true },
             });
-            if (phoneTaken) {
-                throw new BadRequestException('A lead with this phone number already exists.');
+            if (mobileTaken) {
+                throw new BadRequestException('A lead with this mobile number already exists.');
             }
         }
 
+        const data = this.mapLeadData(dto);
+
         return this.db.lead.update({
             where: { id },
-            data: dto,
-            include: {
-                assignee: { select: { id: true, name: true, email: true } },
-                convertedCustomer: { select: { id: true, name: true, phone: true } },
-            },
+            data,
+            include: leadIncludes,
         });
     }
 
@@ -145,19 +166,19 @@ export class CrmLeadsService {
         }
 
         const existingCustomer = await this.db.customer.findFirst({
-            where: { tenant_id: tenantId, phone: lead.phone, deleted_at: null },
+            where: { tenant_id: tenantId, phone: lead.mobile, deleted_at: null },
             select: { id: true, name: true, phone: true },
         });
         if (existingCustomer) {
             throw new ConflictException({
-                message: 'A customer with this phone number already exists.',
+                message: 'A customer with this mobile number already exists.',
                 customerId: existingCustomer.id,
             });
         }
 
         const customer = await this.customersService.create(tenantId, {
             name: lead.name,
-            phone: lead.phone,
+            phone: lead.mobile,
             email: lead.email ?? undefined,
             address: lead.address ?? undefined,
         });
@@ -168,10 +189,7 @@ export class CrmLeadsService {
                 status: LeadStatus.CONVERTED,
                 converted_customer_id: customer.id,
             },
-            include: {
-                assignee: { select: { id: true, name: true, email: true } },
-                convertedCustomer: { select: { id: true, name: true, phone: true } },
-            },
+            include: leadIncludes,
         });
 
         return { lead: updatedLead, customer };

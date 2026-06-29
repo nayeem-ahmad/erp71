@@ -9,22 +9,37 @@ import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
+import {
+    LEAD_CATEGORIES,
+    LEAD_PRIORITIES,
+    LEAD_STATUSES,
+    LeadFormFields,
+    emptyLeadForm,
+    leadFormToPayload,
+} from './lead-form-fields';
 
 interface Lead {
     id: string;
     name: string;
-    phone: string;
+    mobile: string;
     email: string | null;
-    source: string;
+    category: string | null;
+    priority: string;
     status: string;
+    next_step: string | null;
+    next_step_date: string | null;
     last_contacted_at: string | null;
-    assignee: { id: string; name: string } | null;
+    nextStepAssignee: { id: string; name: string } | null;
 }
 
-const LEAD_STATUSES = ['NEW', 'CONTACTED', 'QUALIFIED', 'LOST', 'CONVERTED'] as const;
-const LEAD_SOURCES = ['WALK_IN', 'PHONE', 'FACEBOOK', 'REFERRAL', 'WEBSITE', 'OTHER'] as const;
-
 const columnHelper = createColumnHelper<Lead>();
+
+const priorityColors: Record<string, string> = {
+    LOW: 'bg-slate-50 text-slate-600',
+    MEDIUM: 'bg-blue-50 text-blue-700',
+    HIGH: 'bg-amber-50 text-amber-700',
+    URGENT: 'bg-rose-50 text-rose-700',
+};
 
 export default function LeadsPage() {
     const { t } = useI18n();
@@ -33,10 +48,16 @@ export default function LeadsPage() {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
-    const [sourceFilter, setSourceFilter] = useState('');
+    const [categoryFilter, setCategoryFilter] = useState('');
+    const [priorityFilter, setPriorityFilter] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [form, setForm] = useState({ name: '', phone: '', email: '', source: 'OTHER', notes: '' });
+    const [form, setForm] = useState(emptyLeadForm());
+    const [teamMembers, setTeamMembers] = useState<any[]>([]);
+
+    useEffect(() => {
+        api.getTeamMembers().then((data) => setTeamMembers(Array.isArray(data) ? data : [])).catch(() => null);
+    }, []);
 
     const loadLeads = useCallback(async () => {
         setLoading(true);
@@ -44,7 +65,8 @@ export default function LeadsPage() {
             const data = await api.getLeads({
                 search: search || undefined,
                 status: statusFilter || undefined,
-                source: sourceFilter || undefined,
+                category: categoryFilter || undefined,
+                priority: priorityFilter || undefined,
                 limit: 100,
             });
             setLeads(data?.items ?? data ?? []);
@@ -53,23 +75,17 @@ export default function LeadsPage() {
         } finally {
             setLoading(false);
         }
-    }, [search, statusFilter, sourceFilter]);
+    }, [search, statusFilter, categoryFilter, priorityFilter]);
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
 
     const createLead = async () => {
-        if (!form.name.trim() || !form.phone.trim()) return;
+        if (!form.name.trim() || !form.mobile.trim()) return;
         setSaving(true);
         try {
-            await api.createLead({
-                name: form.name.trim(),
-                phone: form.phone.trim(),
-                email: form.email.trim() || undefined,
-                source: form.source,
-                notes: form.notes.trim() || undefined,
-            });
+            await api.createLead(leadFormToPayload(form));
             setShowModal(false);
-            setForm({ name: '', phone: '', email: '', source: 'OTHER', notes: '' });
+            setForm(emptyLeadForm());
             await loadLeads();
         } catch {
             alert(m.createFailed);
@@ -79,7 +95,8 @@ export default function LeadsPage() {
     };
 
     const statusLabel = (status: string) => (m.statuses as Record<string, string>)[status] ?? status;
-    const sourceLabel = (source: string) => (m.sources as Record<string, string>)[source] ?? source;
+    const categoryLabel = (category: string) => (m.categories as Record<string, string>)[category] ?? category;
+    const priorityLabel = (priority: string) => (m.priorities as Record<string, string>)[priority] ?? priority;
 
     const columns: ColumnDef<Lead, any>[] = useMemo(() => [
         columnHelper.accessor('name', {
@@ -90,10 +107,18 @@ export default function LeadsPage() {
                 </Link>
             ),
         }),
-        columnHelper.accessor('phone', { header: m.columns.phone }),
-        columnHelper.accessor('source', {
-            header: m.columns.source,
-            cell: (info) => sourceLabel(info.getValue()),
+        columnHelper.accessor('mobile', { header: m.fields.mobile }),
+        columnHelper.accessor('category', {
+            header: m.fields.category,
+            cell: (info) => info.getValue() ? categoryLabel(info.getValue() as string) : '—',
+        }),
+        columnHelper.accessor('priority', {
+            header: m.fields.priority,
+            cell: (info) => (
+                <span className={`text-xs font-semibold px-2 py-1 rounded-full ${priorityColors[info.getValue()] ?? 'bg-gray-100 text-gray-700'}`}>
+                    {priorityLabel(info.getValue())}
+                </span>
+            ),
         }),
         columnHelper.accessor('status', {
             header: m.columns.status,
@@ -103,15 +128,19 @@ export default function LeadsPage() {
                 </span>
             ),
         }),
-        columnHelper.accessor('last_contacted_at', {
-            header: m.columns.lastContact,
+        columnHelper.accessor('next_step', {
+            header: m.fields.nextStep,
+            cell: (info) => info.getValue() ?? '—',
+        }),
+        columnHelper.accessor('next_step_date', {
+            header: m.fields.nextStepDate,
             cell: (info) => info.getValue() ? formatDate(info.getValue() as string) : '—',
         }),
-        columnHelper.accessor('assignee', {
-            header: m.columns.assigned,
+        columnHelper.accessor('nextStepAssignee', {
+            header: m.fields.nextStepAssignedTo,
             cell: (info) => info.getValue()?.name ?? '—',
         }),
-    ], [m, statusLabel, sourceLabel]);
+    ], [m, statusLabel, categoryLabel, priorityLabel]);
 
     return (
         <div className="p-6 w-full">
@@ -150,9 +179,13 @@ export default function LeadsPage() {
                     <option value="">{m.allStatuses}</option>
                     {LEAD_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
                 </select>
-                <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm">
-                    <option value="">{m.allSources}</option>
-                    {LEAD_SOURCES.map((s) => <option key={s} value={s}>{sourceLabel(s)}</option>)}
+                <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                    <option value="">{m.allCategories}</option>
+                    {LEAD_CATEGORIES.map((c) => <option key={c} value={c}>{categoryLabel(c)}</option>)}
+                </select>
+                <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                    <option value="">{m.allPriorities}</option>
+                    {LEAD_PRIORITIES.map((p) => <option key={p} value={p}>{priorityLabel(p)}</option>)}
                 </select>
             </div>
 
@@ -166,17 +199,11 @@ export default function LeadsPage() {
             />
 
             {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 space-y-4 my-8">
                         <h2 className="text-lg font-bold">{m.newLead}</h2>
-                        <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={m.columns.name} className="w-full border rounded-lg px-3 py-2 text-sm" />
-                        <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder={m.columns.phone} className="w-full border rounded-lg px-3 py-2 text-sm" />
-                        <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Email" className="w-full border rounded-lg px-3 py-2 text-sm" />
-                        <select value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })} className="w-full border rounded-lg px-3 py-2 text-sm">
-                            {LEAD_SOURCES.map((s) => <option key={s} value={s}>{sourceLabel(s)}</option>)}
-                        </select>
-                        <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={m.detail.notes} className="w-full border rounded-lg px-3 py-2 text-sm" rows={3} />
-                        <div className="flex justify-end gap-2">
+                        <LeadFormFields form={form} onChange={setForm} teamMembers={teamMembers} showStatus={false} />
+                        <div className="flex justify-end gap-2 pt-2">
                             <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border rounded-lg">Cancel</button>
                             <button onClick={createLead} disabled={saving} className="px-4 py-2 text-sm bg-violet-600 text-white rounded-lg disabled:opacity-50">
                                 {saving ? '...' : m.newLead}

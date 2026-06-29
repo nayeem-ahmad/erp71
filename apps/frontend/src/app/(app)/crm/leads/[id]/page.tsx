@@ -4,17 +4,30 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-    ArrowLeft, Phone, Mail, MessageSquare, Plus, Trash2, UserCheck,
-    Sparkles, Loader2, CheckCircle2,
+    ArrowLeft, Phone, Mail, MessageSquare, Plus, UserCheck,
+    Sparkles, Loader2, Pencil, X, ExternalLink, Calendar,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
+import {
+    LeadFormFields,
+    leadFormToPayload,
+    leadToFormState,
+    type LeadFormState,
+} from '../lead-form-fields';
 
 const CONVERSATION_TYPES = ['CALL', 'SMS', 'WHATSAPP', 'EMAIL', 'VISIT', 'NOTE'] as const;
 const typeIcons: Record<string, string> = {
     CALL: '📞', SMS: '💬', WHATSAPP: '🟢', EMAIL: '📧', VISIT: '🏪', NOTE: '📝',
+};
+
+const priorityColors: Record<string, string> = {
+    LOW: 'bg-slate-50 text-slate-600',
+    MEDIUM: 'bg-blue-50 text-blue-700',
+    HIGH: 'bg-amber-50 text-amber-700',
+    URGENT: 'bg-rose-50 text-rose-700',
 };
 
 export default function LeadDetailPage() {
@@ -37,6 +50,10 @@ export default function LeadDetailPage() {
     const [draftingMessage, setDraftingMessage] = useState(false);
     const [draftPurpose, setDraftPurpose] = useState('follow_up');
     const [draftChannel, setDraftChannel] = useState('WHATSAPP');
+    const [editing, setEditing] = useState(false);
+    const [editForm, setEditForm] = useState<LeadFormState | null>(null);
+    const [savingLead, setSavingLead] = useState(false);
+    const [teamMembers, setTeamMembers] = useState<any[]>([]);
 
     const loadLead = useCallback(async () => {
         try {
@@ -59,6 +76,9 @@ export default function LeadDetailPage() {
 
     useEffect(() => { if (id) void loadLead(); }, [id, loadLead]);
     useEffect(() => { if (id) void loadConversations(); }, [id, loadConversations]);
+    useEffect(() => {
+        api.getTeamMembers().then((data) => setTeamMembers(Array.isArray(data) ? data : [])).catch(() => null);
+    }, []);
 
     const saveConversation = async () => {
         if (!newConv.summary.trim()) return;
@@ -111,12 +131,37 @@ export default function LeadDetailPage() {
             const draft = await api.aiDraftMessage({
                 channel: draftChannel,
                 purpose: draftPurpose,
-                customerContext: { name: lead.name, phone: lead.phone, type: 'lead' },
+                customerContext: { name: lead.name, phone: lead.mobile ?? lead.phone, type: 'lead' },
             });
             setNewConv((prev) => ({ ...prev, summary: draft?.message ?? draft?.text ?? draft?.draft ?? '' }));
             setShowConvForm(true);
         } finally {
             setDraftingMessage(false);
+        }
+    };
+
+    const startEditing = () => {
+        setEditForm(leadToFormState(lead));
+        setEditing(true);
+    };
+
+    const cancelEditing = () => {
+        setEditing(false);
+        setEditForm(null);
+    };
+
+    const saveLead = async () => {
+        if (!editForm || !editForm.name.trim() || !editForm.mobile.trim()) return;
+        setSavingLead(true);
+        try {
+            const updated = await api.updateLead(id as string, leadFormToPayload(editForm));
+            setLead(updated);
+            setEditing(false);
+            setEditForm(null);
+        } catch {
+            alert(m.detail.saveFailed);
+        } finally {
+            setSavingLead(false);
         }
     };
 
@@ -129,7 +174,16 @@ export default function LeadDetailPage() {
 
     const statusLabel = (m.statuses as Record<string, string>)[lead.status] ?? lead.status;
     const sourceLabel = (m.sources as Record<string, string>)[lead.source] ?? lead.source;
+    const categoryLabel = lead.category ? ((m.categories as Record<string, string>)[lead.category] ?? lead.category) : null;
+    const priorityLabel = (m.priorities as Record<string, string>)[lead.priority] ?? lead.priority;
     const isConverted = lead.status === 'CONVERTED';
+
+    const socialLinks = [
+        { label: m.fields.linkedinUrl, url: lead.linkedin_url },
+        { label: m.fields.fbUrl, url: lead.fb_url },
+        { label: m.fields.xUrl, url: lead.x_url },
+        { label: m.fields.websiteUrl, url: lead.website_url },
+    ].filter((l) => l.url);
 
     return (
         <div className="p-6 w-full max-w-4xl">
@@ -138,31 +192,107 @@ export default function LeadDetailPage() {
             </Link>
 
             <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-6">
-                <div className="flex items-start justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-900">{lead.name}</h1>
-                        <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-gray-600">
-                            <span className="flex items-center gap-1"><Phone className="w-4 h-4" />{lead.phone}</span>
-                            {lead.email && <span className="flex items-center gap-1"><Mail className="w-4 h-4" />{lead.email}</span>}
-                        </div>
-                        <div className="flex flex-wrap gap-2 mt-3">
-                            <span className="text-xs font-semibold px-2 py-1 rounded-full bg-violet-50 text-violet-700">{statusLabel}</span>
-                            <span className="text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 text-gray-700">{sourceLabel}</span>
-                        </div>
-                        {lead.notes && <p className="text-sm text-gray-500 mt-3">{lead.notes}</p>}
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        {isConverted && lead.convertedCustomer ? (
-                            <Link href={routes.sales.customerDetail(lead.convertedCustomer.id)} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-semibold">
-                                <UserCheck className="w-4 h-4" /> {m.viewCustomer}
-                            </Link>
-                        ) : (
-                            <button onClick={convertLead} disabled={converting} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50">
-                                <UserCheck className="w-4 h-4" /> {m.convert}
+                {editing && editForm ? (
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-lg font-bold text-gray-900">{m.detail.editLead}</h2>
+                            <button onClick={cancelEditing} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg">
+                                <X className="w-5 h-5" />
                             </button>
-                        )}
+                        </div>
+                        <LeadFormFields form={editForm} onChange={setEditForm} teamMembers={teamMembers} />
+                        <div className="flex gap-2 pt-2">
+                            <button
+                                onClick={saveLead}
+                                disabled={savingLead}
+                                className="px-4 py-2 bg-violet-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50"
+                            >
+                                {savingLead ? <Loader2 className="w-4 h-4 animate-spin" /> : m.detail.saveLead}
+                            </button>
+                            <button onClick={cancelEditing} className="px-4 py-2 border border-gray-200 text-sm rounded-lg hover:bg-gray-50">
+                                Cancel
+                            </button>
+                        </div>
                     </div>
-                </div>
+                ) : (
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                            <h1 className="text-2xl font-bold text-gray-900">{lead.name}</h1>
+                            <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-gray-600">
+                                <span className="flex items-center gap-1">
+                                    <Phone className="w-4 h-4" />{lead.mobile ?? lead.phone}
+                                </span>
+                                {lead.email && (
+                                    <span className="flex items-center gap-1">
+                                        <Mail className="w-4 h-4" />{lead.email}
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex flex-wrap gap-2 mt-3">
+                                <span className="text-xs font-semibold px-2 py-1 rounded-full bg-violet-50 text-violet-700">{statusLabel}</span>
+                                <span className="text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 text-gray-700">{sourceLabel}</span>
+                                {categoryLabel && (
+                                    <span className="text-xs font-semibold px-2 py-1 rounded-full bg-indigo-50 text-indigo-700">{categoryLabel}</span>
+                                )}
+                                {lead.priority && (
+                                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${priorityColors[lead.priority] ?? 'bg-gray-100 text-gray-700'}`}>
+                                        {priorityLabel}
+                                    </span>
+                                )}
+                            </div>
+                            {(lead.remarks ?? lead.notes) && (
+                                <p className="text-sm text-gray-500 mt-3">{lead.remarks ?? lead.notes}</p>
+                            )}
+                            {socialLinks.length > 0 && (
+                                <div className="flex flex-wrap gap-3 mt-3">
+                                    {socialLinks.map((link) => (
+                                        <a
+                                            key={link.label}
+                                            href={link.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+                                        >
+                                            <ExternalLink className="w-3 h-3" /> {link.label}
+                                        </a>
+                                    ))}
+                                </div>
+                            )}
+                            {(lead.next_step || lead.next_step_date || lead.nextStepAssignee) && (
+                                <div className="mt-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">{m.fields.nextStepSection}</p>
+                                    {lead.next_step && <p className="text-sm text-gray-800">{lead.next_step}</p>}
+                                    <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-500">
+                                        {lead.next_step_date && (
+                                            <span className="flex items-center gap-1">
+                                                <Calendar className="w-3 h-3" /> {formatDate(lead.next_step_date)}
+                                            </span>
+                                        )}
+                                        {lead.nextStepAssignee && (
+                                            <span>{m.fields.nextStepAssignedTo}: {lead.nextStepAssignee.name}</span>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex flex-col gap-2 flex-shrink-0">
+                            {!isConverted && (
+                                <button onClick={startEditing} className="inline-flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm font-semibold hover:bg-gray-50">
+                                    <Pencil className="w-4 h-4" /> {m.fields.editLead}
+                                </button>
+                            )}
+                            {isConverted && lead.convertedCustomer ? (
+                                <Link href={routes.sales.customerDetail(lead.convertedCustomer.id)} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-semibold">
+                                    <UserCheck className="w-4 h-4" /> {m.viewCustomer}
+                                </Link>
+                            ) : (
+                                <button onClick={convertLead} disabled={converting} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50">
+                                    <UserCheck className="w-4 h-4" /> {m.convert}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="flex items-center justify-between mb-4">

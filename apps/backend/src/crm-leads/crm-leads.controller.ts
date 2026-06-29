@@ -24,6 +24,8 @@ export class CrmLeadsController {
         @Tenant() tenant: TenantContext,
         @Query('status') status?: string,
         @Query('source') source?: string,
+        @Query('category') category?: string,
+        @Query('priority') priority?: string,
         @Query('assignedTo') assignedTo?: string,
         @Query('search') search?: string,
         @Query('page') page?: string,
@@ -32,6 +34,8 @@ export class CrmLeadsController {
         return this.service.findAll(tenant.tenantId, {
             status,
             source,
+            category,
+            priority,
             assignedTo,
             search,
             page: page ? parseInt(page, 10) : undefined,

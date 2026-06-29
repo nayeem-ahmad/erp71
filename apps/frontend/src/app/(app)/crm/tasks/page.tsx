@@ -19,7 +19,7 @@ interface CrmTask {
     status: string;
     notes: string | null;
     customer: { id: string; name: string; phone: string } | null;
-    lead: { id: string; name: string; phone: string } | null;
+    lead: { id: string; name: string; mobile: string } | null;
     assignee: { id: string; name: string; email: string } | null;
 }
 
@@ -224,7 +224,7 @@ export default function CrmTasksPage() {
                                         <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
                                             <Link href={targetHref} className="flex items-center gap-1 hover:text-blue-600">
                                                 <Phone className="w-3 h-3" />
-                                                {target.name} · {target.phone}
+                                                {target.name} · {'mobile' in target ? target.mobile : target.phone}
                                             </Link>
                                             <span>Due {formatDate(task.due_at)}</span>
                                         </div>
