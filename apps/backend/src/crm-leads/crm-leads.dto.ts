@@ -1,4 +1,8 @@
+import { Transform } from 'class-transformer';
 import { IsString, IsOptional, IsEnum, IsUUID, IsEmail, IsDateString } from 'class-validator';
+
+const emptyToUndefined = ({ value }: { value: unknown }) =>
+    value === '' || value === null ? undefined : value;
 
 export enum LeadSource {
     WALK_IN = 'WALK_IN',
@@ -41,6 +45,7 @@ export class CreateLeadDto {
     mobile: string;
 
     @IsOptional()
+    @Transform(emptyToUndefined)
     @IsEmail()
     email?: string;
 
@@ -89,18 +94,22 @@ export class CreateLeadDto {
     next_step?: string;
 
     @IsOptional()
+    @Transform(emptyToUndefined)
     @IsDateString()
     next_step_date?: string;
 
     @IsOptional()
+    @Transform(emptyToUndefined)
     @IsUUID()
     next_step_assigned_to?: string;
 
     @IsOptional()
+    @Transform(emptyToUndefined)
     @IsUUID()
     assigned_to?: string;
 
     @IsOptional()
+    @Transform(emptyToUndefined)
     @IsString()
     store_id?: string;
 }
@@ -115,6 +124,7 @@ export class UpdateLeadDto {
     mobile?: string;
 
     @IsOptional()
+    @Transform(emptyToUndefined)
     @IsEmail()
     email?: string;
 
@@ -163,14 +173,17 @@ export class UpdateLeadDto {
     next_step?: string;
 
     @IsOptional()
+    @Transform(emptyToUndefined)
     @IsDateString()
     next_step_date?: string;
 
     @IsOptional()
+    @Transform(emptyToUndefined)
     @IsUUID()
     next_step_assigned_to?: string;
 
     @IsOptional()
+    @Transform(emptyToUndefined)
     @IsUUID()
     assigned_to?: string;
 }

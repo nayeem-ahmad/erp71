@@ -30,7 +30,12 @@ export const crmHrMessages = {
             customerExists: "এই ফোনে ইতিমধ্যে একজন গ্রাহক আছে।",
             viewCustomer: "গ্রাহক দেখুন",
             createFailed: "লিড তৈরি ব্যর্থ",
+            deleteFailed: "লিড মুছতে ব্যর্থ",
+            cannotEditConverted: "রূপান্তরিত লিড সম্পাদনা করা যায় না।",
             deleteConfirm: "এই লিড মুছবেন?",
+            validation: {
+                invalidEmail: "সঠিক ইমেইল ঠিকানা দিন।",
+            },
             fields: {
                 mobile: "মোবাইল",
                 email: "ইমেইল",

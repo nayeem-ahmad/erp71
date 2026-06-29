@@ -318,6 +318,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Fix CRM lead create errors + list actions — `fetchWithAuth` parses `error.message` envelope; DTO empty-string transforms; client email validation; leads list View/Edit/Delete actions + edit modal; delete on detail page — done 2026-06-29
 - [x] Expand Lead fields — `phone`→`mobile`, `notes`→`remarks`; added category, priority, social URLs, next-step fields + assignee; migration `20260628140000_expand_lead_fields`; backend DTOs/filters; leads list + detail edit form (`LeadFormFields`); CRM tasks `lead.mobile`; i18n en/bn/ms — done 2026-06-29
 - [x] Phase 6–8 — Standalone CRM module at `/crm` (hub, sidebar, tasks/campaigns moved with redirects, duplicate `/crm/customers`); PREMIUM lead management (`Lead`, `LeadConversation`, `premiumCrm` gate); `CrmTask.lead_id` + tasks UI target filter — done 2026-06-28
 - [x] Add A5 paper size to sales invoice printing — backend `PaperSize` enum, `sales-invoice-printer.ts` @page CSS, Settings default paper size dropdown, New Sale print menu — done 2026-06-28

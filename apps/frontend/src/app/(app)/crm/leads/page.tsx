@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { UserPlus, Plus, RefreshCw, Search } from 'lucide-react';
+import { UserPlus, Plus, RefreshCw, Search, Eye, Pencil, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
@@ -16,6 +16,9 @@ import {
     LeadFormFields,
     emptyLeadForm,
     leadFormToPayload,
+    leadToFormState,
+    validateLeadForm,
+    type LeadFormState,
 } from './lead-form-fields';
 
 interface Lead {
@@ -41,16 +44,20 @@ const priorityColors: Record<string, string> = {
     URGENT: 'bg-rose-50 text-rose-700',
 };
 
+type ModalMode = 'create' | 'edit' | null;
+
 export default function LeadsPage() {
     const { t } = useI18n();
     const m = t.crm.leads;
+    const c = t.common;
     const [leads, setLeads] = useState<Lead[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('');
-    const [showModal, setShowModal] = useState(false);
+    const [modalMode, setModalMode] = useState<ModalMode>(null);
+    const [editingId, setEditingId] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState(emptyLeadForm());
     const [teamMembers, setTeamMembers] = useState<any[]>([]);
@@ -79,20 +86,73 @@ export default function LeadsPage() {
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
 
-    const createLead = async () => {
-        if (!form.name.trim() || !form.mobile.trim()) return;
+    const closeModal = () => {
+        setModalMode(null);
+        setEditingId(null);
+        setForm(emptyLeadForm());
+    };
+
+    const openCreate = () => {
+        setForm(emptyLeadForm());
+        setEditingId(null);
+        setModalMode('create');
+    };
+
+    const openEdit = useCallback(async (lead: Lead) => {
+        if (lead.status === 'CONVERTED') {
+            alert(m.cannotEditConverted);
+            return;
+        }
+        try {
+            const full = await api.getLead(lead.id);
+            setForm(leadToFormState(full));
+            setEditingId(lead.id);
+            setModalMode('edit');
+        } catch (err: unknown) {
+            alert(err instanceof Error ? err.message : m.detail.saveFailed);
+        }
+    }, [m]);
+
+    const formErrorMessage = (code: string | null) => {
+        if (!code) return null;
+        if (code === 'INVALID_EMAIL') return m.validation?.invalidEmail ?? 'Please enter a valid email address.';
+        if (code === 'NAME_REQUIRED') return `${m.columns.name} is required.`;
+        if (code === 'MOBILE_REQUIRED') return `${m.fields.mobile} is required.`;
+        return m.createFailed;
+    };
+
+    const saveLead = async () => {
+        const validationError = validateLeadForm(form);
+        if (validationError) {
+            alert(formErrorMessage(validationError));
+            return;
+        }
         setSaving(true);
         try {
-            await api.createLead(leadFormToPayload(form));
-            setShowModal(false);
-            setForm(emptyLeadForm());
+            const payload = leadFormToPayload(form);
+            if (modalMode === 'edit' && editingId) {
+                await api.updateLead(editingId, payload);
+            } else {
+                await api.createLead(payload);
+            }
+            closeModal();
             await loadLeads();
-        } catch {
-            alert(m.createFailed);
+        } catch (err: unknown) {
+            alert(err instanceof Error ? err.message : (modalMode === 'edit' ? m.detail.saveFailed : m.createFailed));
         } finally {
             setSaving(false);
         }
     };
+
+    const deleteLead = useCallback(async (lead: Lead) => {
+        if (!confirm(m.deleteConfirm)) return;
+        try {
+            await api.deleteLead(lead.id);
+            await loadLeads();
+        } catch (err: unknown) {
+            alert(err instanceof Error ? err.message : m.deleteFailed);
+        }
+    }, [m, loadLeads]);
 
     const statusLabel = (status: string) => (m.statuses as Record<string, string>)[status] ?? status;
     const categoryLabel = (category: string) => (m.categories as Record<string, string>)[category] ?? category;
@@ -140,7 +200,48 @@ export default function LeadsPage() {
             header: m.fields.nextStepAssignedTo,
             cell: (info) => info.getValue()?.name ?? '—',
         }),
-    ], [m, statusLabel, categoryLabel, priorityLabel]);
+        columnHelper.display({
+            id: 'actions',
+            header: c.actions,
+            cell: (info) => {
+                const lead = info.row.original;
+                const isConverted = lead.status === 'CONVERTED';
+                return (
+                    <div className="flex items-center justify-end gap-1">
+                        <Link
+                            href={routes.crm.leadDetail(lead.id)}
+                            className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
+                            title={c.view}
+                        >
+                            <Eye className="w-4 h-4" />
+                        </Link>
+                        {!isConverted && (
+                            <button
+                                type="button"
+                                onClick={() => void openEdit(lead)}
+                                className="p-1.5 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+                                title={c.edit}
+                            >
+                                <Pencil className="w-4 h-4" />
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => void deleteLead(lead)}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                            title={c.delete}
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    </div>
+                );
+            },
+            enableSorting: false,
+            enableColumnFilter: false,
+            enableResizing: false,
+            size: 110,
+        }),
+    ], [m, c, statusLabel, categoryLabel, priorityLabel, openEdit, deleteLead]);
 
     return (
         <div className="p-6 w-full">
@@ -157,7 +258,7 @@ export default function LeadsPage() {
                         <RefreshCw className="w-4 h-4" />
                     </button>
                     <button
-                        onClick={() => setShowModal(true)}
+                        onClick={openCreate}
                         className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-semibold hover:bg-violet-700"
                     >
                         <Plus className="w-4 h-4" /> {m.newLead}
@@ -198,15 +299,22 @@ export default function LeadsPage() {
                 emptyMessage={m.emptyMessage}
             />
 
-            {showModal && (
+            {modalMode && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 space-y-4 my-8">
-                        <h2 className="text-lg font-bold">{m.newLead}</h2>
-                        <LeadFormFields form={form} onChange={setForm} teamMembers={teamMembers} showStatus={false} />
+                        <h2 className="text-lg font-bold">
+                            {modalMode === 'edit' ? m.detail.editLead : m.newLead}
+                        </h2>
+                        <LeadFormFields
+                            form={form}
+                            onChange={setForm}
+                            teamMembers={teamMembers}
+                            showStatus={modalMode === 'edit'}
+                        />
                         <div className="flex justify-end gap-2 pt-2">
-                            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border rounded-lg">Cancel</button>
-                            <button onClick={createLead} disabled={saving} className="px-4 py-2 text-sm bg-violet-600 text-white rounded-lg disabled:opacity-50">
-                                {saving ? '...' : m.newLead}
+                            <button onClick={closeModal} className="px-4 py-2 text-sm border rounded-lg">{c.cancel}</button>
+                            <button onClick={saveLead} disabled={saving} className="px-4 py-2 text-sm bg-violet-600 text-white rounded-lg disabled:opacity-50">
+                                {saving ? '...' : (modalMode === 'edit' ? m.detail.saveLead : m.newLead)}
                             </button>
                         </div>
                     </div>

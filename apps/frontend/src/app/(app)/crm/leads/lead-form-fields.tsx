@@ -64,24 +64,44 @@ export function leadToFormState(lead: Record<string, unknown>): LeadFormState {
     };
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function validateLeadForm(form: LeadFormState): string | null {
+    if (!form.name.trim()) return 'NAME_REQUIRED';
+    if (!form.mobile.trim()) return 'MOBILE_REQUIRED';
+    const email = form.email.trim();
+    if (email && !EMAIL_RE.test(email)) return 'INVALID_EMAIL';
+    return null;
+}
+
 export function leadFormToPayload(form: LeadFormState) {
-    return {
+    const payload: Record<string, string> = {
         name: form.name.trim(),
         mobile: form.mobile.trim(),
-        email: form.email.trim() || undefined,
-        category: form.category || undefined,
-        priority: form.priority || undefined,
-        remarks: form.remarks.trim() || undefined,
-        status: form.status || undefined,
-        source: form.source || undefined,
-        linkedin_url: form.linkedin_url.trim() || undefined,
-        fb_url: form.fb_url.trim() || undefined,
-        x_url: form.x_url.trim() || undefined,
-        website_url: form.website_url.trim() || undefined,
-        next_step: form.next_step.trim() || undefined,
-        next_step_date: form.next_step_date || undefined,
-        next_step_assigned_to: form.next_step_assigned_to || undefined,
     };
+    const email = form.email.trim();
+    if (email) payload.email = email;
+    if (form.category) payload.category = form.category;
+    if (form.priority) payload.priority = form.priority;
+    const remarks = form.remarks.trim();
+    if (remarks) payload.remarks = remarks;
+    if (form.status) payload.status = form.status;
+    if (form.source) payload.source = form.source;
+    const linkedin = form.linkedin_url.trim();
+    if (linkedin) payload.linkedin_url = linkedin;
+    const fb = form.fb_url.trim();
+    if (fb) payload.fb_url = fb;
+    const x = form.x_url.trim();
+    if (x) payload.x_url = x;
+    const website = form.website_url.trim();
+    if (website) payload.website_url = website;
+    const nextStep = form.next_step.trim();
+    if (nextStep) payload.next_step = nextStep;
+    if (form.next_step_date) {
+        payload.next_step_date = new Date(form.next_step_date).toISOString();
+    }
+    if (form.next_step_assigned_to) payload.next_step_assigned_to = form.next_step_assigned_to;
+    return payload;
 }
 
 const inputClass = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm';

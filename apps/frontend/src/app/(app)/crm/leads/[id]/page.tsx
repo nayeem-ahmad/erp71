@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
     ArrowLeft, Phone, Mail, MessageSquare, Plus, UserCheck,
-    Sparkles, Loader2, Pencil, X, ExternalLink, Calendar,
+    Sparkles, Loader2, Pencil, X, ExternalLink, Calendar, Trash2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
@@ -15,6 +15,7 @@ import {
     LeadFormFields,
     leadFormToPayload,
     leadToFormState,
+    validateLeadForm,
     type LeadFormState,
 } from '../lead-form-fields';
 
@@ -151,17 +152,33 @@ export default function LeadDetailPage() {
     };
 
     const saveLead = async () => {
-        if (!editForm || !editForm.name.trim() || !editForm.mobile.trim()) return;
+        if (!editForm) return;
+        const validationError = validateLeadForm(editForm);
+        if (validationError === 'INVALID_EMAIL') {
+            alert(m.validation?.invalidEmail ?? 'Please enter a valid email address.');
+            return;
+        }
+        if (validationError) return;
         setSavingLead(true);
         try {
             const updated = await api.updateLead(id as string, leadFormToPayload(editForm));
             setLead(updated);
             setEditing(false);
             setEditForm(null);
-        } catch {
-            alert(m.detail.saveFailed);
+        } catch (err: unknown) {
+            alert(err instanceof Error ? err.message : m.detail.saveFailed);
         } finally {
             setSavingLead(false);
+        }
+    };
+
+    const removeLead = async () => {
+        if (!confirm(m.deleteConfirm)) return;
+        try {
+            await api.deleteLead(id as string);
+            router.push(routes.crm.leads);
+        } catch (err: unknown) {
+            alert(err instanceof Error ? err.message : m.deleteFailed);
         }
     };
 
@@ -281,6 +298,9 @@ export default function LeadDetailPage() {
                                     <Pencil className="w-4 h-4" /> {m.fields.editLead}
                                 </button>
                             )}
+                            <button onClick={removeLead} className="inline-flex items-center gap-2 px-4 py-2 border border-rose-200 text-rose-700 rounded-lg text-sm font-semibold hover:bg-rose-50">
+                                <Trash2 className="w-4 h-4" /> {t.common.delete}
+                            </button>
                             {isConverted && lead.convertedCustomer ? (
                                 <Link href={routes.sales.customerDetail(lead.convertedCustomer.id)} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-semibold">
                                     <UserCheck className="w-4 h-4" /> {m.viewCustomer}
