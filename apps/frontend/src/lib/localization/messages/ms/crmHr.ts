@@ -22,6 +22,7 @@ export const crmHrMessages = {
                 loading: 'Memuatkan prospek...',
                 notFound: 'Prospek tidak dijumpai',
                 outcome: 'Hasil',
+                back: 'Kembali ke Senarai Prospek',
             },
             newLead: 'Prospek Baharu',
             emptyMessage: 'Tiada prospek lagi',

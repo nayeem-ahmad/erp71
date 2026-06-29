@@ -22,6 +22,7 @@ export const crmHrMessages = {
                 loading: "লিড লোড হচ্ছে...",
                 notFound: "লিড পাওয়া যায়নি",
                 outcome: "ফলাফল",
+                back: "লিড তালিকায় ফিরে যান",
             },
             newLead: "নতুন লিড",
             emptyMessage: "কোনো লিড নেই",

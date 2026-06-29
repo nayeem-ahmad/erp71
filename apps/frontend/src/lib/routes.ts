@@ -130,6 +130,7 @@ export const routes = {
         root: '/crm',
         customers: '/crm/customers',
         leads: '/crm/leads',
+        leadNew: '/crm/leads/new' as const,
         leadDetail: (id: string) => `/crm/leads/${id}` as const,
         tasks: '/crm/tasks',
         campaigns: '/crm/campaigns',

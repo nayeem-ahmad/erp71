@@ -1,23 +1,19 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { UserPlus, Plus, RefreshCw, Search, Eye, Trash2, ListChecks } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { routes } from '@/lib/routes';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
 import {
     LEAD_CATEGORIES,
     LEAD_PRIORITIES,
     LEAD_STATUSES,
-    LeadFormFields,
-    emptyLeadForm,
-    leadFormToPayload,
-    validateLeadForm,
 } from './lead-form-fields';
-import { LeadWorkspaceDialog } from './lead-workspace-dialog';
 
 interface Lead {
     id: string;
@@ -46,8 +42,6 @@ export default function LeadsPage() {
     const { t } = useI18n();
     const m = t.crm.leads;
     const c = t.common;
-    const searchParams = useSearchParams();
-    const router = useRouter();
 
     const [leads, setLeads] = useState<Lead[]>([]);
     const [loading, setLoading] = useState(true);
@@ -56,30 +50,6 @@ export default function LeadsPage() {
     const [categoryFilter, setCategoryFilter] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('');
     const [myTodaysActions, setMyTodaysActions] = useState(false);
-    const [showCreateModal, setShowCreateModal] = useState(false);
-    const [workspaceLeadId, setWorkspaceLeadId] = useState<string | null>(null);
-    const [saving, setSaving] = useState(false);
-    const [form, setForm] = useState(emptyLeadForm());
-    const [teamMembers, setTeamMembers] = useState<any[]>([]);
-
-    useEffect(() => {
-        api.getTeamMembers().then((data) => setTeamMembers(Array.isArray(data) ? data : [])).catch(() => null);
-    }, []);
-
-    const openWorkspace = useCallback((leadId: string) => {
-        setWorkspaceLeadId(leadId);
-        router.replace(`/crm/leads?lead=${leadId}`, { scroll: false });
-    }, [router]);
-
-    const closeWorkspace = useCallback(() => {
-        setWorkspaceLeadId(null);
-        router.replace('/crm/leads', { scroll: false });
-    }, [router]);
-
-    useEffect(() => {
-        const leadParam = searchParams.get('lead');
-        if (leadParam) setWorkspaceLeadId(leadParam);
-    }, [searchParams]);
 
     const loadLeads = useCallback(async () => {
         setLoading(true);
@@ -102,44 +72,15 @@ export default function LeadsPage() {
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
 
-    const formErrorMessage = (code: string | null) => {
-        if (!code) return null;
-        if (code === 'INVALID_EMAIL') return m.validation?.invalidEmail ?? 'Please enter a valid email address.';
-        if (code === 'NAME_REQUIRED') return `${m.columns.name} is required.`;
-        if (code === 'MOBILE_REQUIRED') return `${m.fields.mobile} is required.`;
-        return m.createFailed;
-    };
-
-    const createLead = async () => {
-        const validationError = validateLeadForm(form);
-        if (validationError) {
-            alert(formErrorMessage(validationError));
-            return;
-        }
-        setSaving(true);
-        try {
-            const created = await api.createLead(leadFormToPayload(form));
-            setShowCreateModal(false);
-            setForm(emptyLeadForm());
-            await loadLeads();
-            if (created?.id) openWorkspace(created.id);
-        } catch (err: unknown) {
-            alert(err instanceof Error ? err.message : m.createFailed);
-        } finally {
-            setSaving(false);
-        }
-    };
-
     const deleteLead = useCallback(async (lead: Lead) => {
         if (!confirm(m.deleteConfirm)) return;
         try {
             await api.deleteLead(lead.id);
-            if (workspaceLeadId === lead.id) closeWorkspace();
             await loadLeads();
         } catch (err: unknown) {
             alert(err instanceof Error ? err.message : m.deleteFailed);
         }
-    }, [m, loadLeads, workspaceLeadId, closeWorkspace]);
+    }, [m, loadLeads]);
 
     const statusLabel = (status: string) => (m.statuses as Record<string, string>)[status] ?? status;
     const categoryLabel = (category: string) => (m.categories as Record<string, string>)[category] ?? category;
@@ -149,13 +90,12 @@ export default function LeadsPage() {
         columnHelper.accessor('name', {
             header: m.columns.name,
             cell: (info) => (
-                <button
-                    type="button"
-                    onClick={() => openWorkspace(info.row.original.id)}
-                    className="font-semibold text-gray-900 hover:text-violet-600 text-left"
+                <Link
+                    href={routes.crm.leadDetail(info.row.original.id)}
+                    className="font-semibold text-gray-900 hover:text-violet-600"
                 >
                     {info.getValue()}
-                </button>
+                </Link>
             ),
         }),
         columnHelper.accessor('mobile', { header: m.fields.mobile }),
@@ -198,14 +138,13 @@ export default function LeadsPage() {
                 const lead = info.row.original;
                 return (
                     <div className="flex items-center justify-end gap-1">
-                        <button
-                            type="button"
-                            onClick={() => openWorkspace(lead.id)}
+                        <Link
+                            href={routes.crm.leadDetail(lead.id)}
                             className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
                             title={c.view}
                         >
                             <Eye className="w-4 h-4" />
-                        </button>
+                        </Link>
                         <button
                             type="button"
                             onClick={() => void deleteLead(lead)}
@@ -222,7 +161,7 @@ export default function LeadsPage() {
             enableResizing: false,
             size: 90,
         }),
-    ], [m, c, statusLabel, categoryLabel, priorityLabel, openWorkspace, deleteLead]);
+    ], [m, c, statusLabel, categoryLabel, priorityLabel, deleteLead]);
 
     return (
         <div className="p-6 w-full">
@@ -238,12 +177,12 @@ export default function LeadsPage() {
                     <button onClick={loadLeads} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
                         <RefreshCw className="w-4 h-4" />
                     </button>
-                    <button
-                        onClick={() => setShowCreateModal(true)}
+                    <Link
+                        href={routes.crm.leadNew}
                         className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-semibold hover:bg-violet-700"
                     >
                         <Plus className="w-4 h-4" /> {m.newLead}
-                    </button>
+                    </Link>
                 </div>
             </div>
 
@@ -291,31 +230,6 @@ export default function LeadsPage() {
                 isLoading={loading}
                 emptyMessage={myTodaysActions ? m.myTodaysActionsEmpty : m.emptyMessage}
             />
-
-            {showCreateModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 space-y-4 my-8">
-                        <h2 className="text-lg font-bold">{m.newLead}</h2>
-                        <LeadFormFields form={form} onChange={setForm} teamMembers={teamMembers} showStatus={false} />
-                        <div className="flex justify-end gap-2 pt-2">
-                            <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm border rounded-lg">{c.cancel}</button>
-                            <button onClick={createLead} disabled={saving} className="px-4 py-2 text-sm bg-violet-600 text-white rounded-lg disabled:opacity-50">
-                                {saving ? '...' : m.newLead}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {workspaceLeadId && (
-                <LeadWorkspaceDialog
-                    leadId={workspaceLeadId}
-                    onClose={closeWorkspace}
-                    onChanged={loadLeads}
-                    onDeleted={loadLeads}
-                    teamMembers={teamMembers}
-                />
-            )}
         </div>
     );
 }

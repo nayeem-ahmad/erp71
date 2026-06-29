@@ -22,6 +22,7 @@ export const crmHrMessages = {
                 loading: 'Loading lead...',
                 notFound: 'Lead not found',
                 outcome: 'Outcome',
+                back: 'Back to Leads',
             },
             newLead: 'New Lead',
             emptyMessage: 'No leads yet',
