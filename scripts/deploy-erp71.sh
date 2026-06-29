@@ -86,16 +86,17 @@ docker exec retail-saas-db-1 psql -U "$PG_SUPERUSER" -d postgres -tc \
   || docker exec retail-saas-db-1 psql -U "$PG_SUPERUSER" -d postgres -c \
   "CREATE DATABASE ${ERP71_DB_NAME} OWNER ${ERP71_DB_USER};"
 
-echo "==> Building and starting erp71 stack"
-docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build
+echo "==> Building erp71 images"
+docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build
 
-echo "==> Syncing database schema"
+# Run schema sync before `up -d` so we do not race the backend container's
+# startup CMD (which also runs prisma db push + seed).
+echo "==> Syncing database schema and seeding"
 docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" run --rm backend sh -lc \
-  'npx prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate --accept-data-loss'
+  'npx prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate --accept-data-loss && npx tsx packages/database/prisma/seed.ts'
 
-echo "==> Seeding (idempotent)"
-docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" run --rm backend sh -lc \
-  'npx tsx packages/database/prisma/seed.ts' || true
+echo "==> Starting erp71 stack"
+docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d
 
 if [ -f "$CADDY_FILE" ]; then
   if ! grep -q 'app.erp71.com' "$CADDY_FILE"; then
