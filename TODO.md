@@ -340,6 +340,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Accounting overview cleanup — removed subtitle, Epic 30 badge, and top-bar export; hub sections match sidebar (daily, transactions, reconciliation, reports, setup); ledger export moved under Accounting Setup — done 2026-07-01
 - [x] Compact UI trial — accounting module only: `CompactUiProvider` layout, `AccountingPageShell`/`CompactSection`/`CompactStat`/`CompactLinkGrid`, DataTable `density` via context (tighter cells/toolbar/pagination), compact sidebar (w-52) + header (h-11) on `/accounting/*`; all 30+ accounting pages migrated; 62 accounting tests green — done 2026-07-01
 - [x] Global voice navigation — header mic + help icons in app top bar; say phrases like "sales entry" to navigate to entry UIs — done 2026-06-30
 - [x] Fix onboarding store setup scroll — `/dashboard/onboarding` uses `h-full overflow-y-auto` inside app layout so create-store form and skip link are reachable on short/mobile viewports — done 2026-06-29

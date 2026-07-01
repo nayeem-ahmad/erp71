@@ -107,6 +107,7 @@ export const accountingMessages = {
         exportModalTitle: 'Export {format}',
         exportModalDescription: 'Select the date range for vouchers to include. Leave blank to export all.',
         hub: {
+            dailyOperations: 'Daily Operations',
             transactions: 'Transactions & Funds',
             reconciliation: 'Reconciliation',
         },

@@ -107,6 +107,7 @@ export const accountingMessages = {
         exportModalTitle: 'Eksport {format}',
         exportModalDescription: 'Pilih julat tarikh untuk baucar yang hendak disertakan. Biarkan kosong untuk mengeksport semua.',
         hub: {
+            dailyOperations: 'Operasi Harian',
             transactions: 'Transaksi & Dana',
             reconciliation: 'Penyesuaian',
         },
