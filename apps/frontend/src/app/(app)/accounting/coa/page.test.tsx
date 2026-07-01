@@ -1,7 +1,16 @@
 'use client';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { PlatformFeaturesProvider } from '@/contexts/PlatformFeaturesContext';
 import ChartOfAccountsPage from './page';
+
+function renderPage() {
+    return render(
+        <PlatformFeaturesProvider features={{ feedback: false, support: false, help: true, voice: false }}>
+            <ChartOfAccountsPage />
+        </PlatformFeaturesProvider>,
+    );
+}
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -44,7 +53,7 @@ describe('ChartOfAccountsPage — Story 30.2', () => {
     });
 
     it('renders loaded account hierarchy and account list', async () => {
-        render(<ChartOfAccountsPage />);
+        renderPage();
 
         await waitFor(() => {
             expect(screen.getByText('Account Directory')).toBeInTheDocument();
@@ -58,7 +67,7 @@ describe('ChartOfAccountsPage — Story 30.2', () => {
 
     it('applies account type filters through the API loader', async () => {
         const { api } = require('@/lib/api');
-        render(<ChartOfAccountsPage />);
+        renderPage();
 
         await waitFor(() => expect(api.getAccounts).toHaveBeenCalled());
 
@@ -71,7 +80,7 @@ describe('ChartOfAccountsPage — Story 30.2', () => {
 
     it('creates an account group from the inline form', async () => {
         const { api } = require('@/lib/api');
-        render(<ChartOfAccountsPage />);
+        renderPage();
 
         await waitFor(() => screen.getByText('Cash in Hand'));
 

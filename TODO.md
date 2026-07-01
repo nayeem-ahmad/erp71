@@ -557,5 +557,6 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Deploy tenant soft-delete — pushed `fac246d` to dev/main; VPS `/opt/retail-saas` `scripts/deploy.sh main` rebuilt erp71 stack; `prisma db push` confirmed schema in sync; smoke checks green at `api.erp71.com` / `app.erp71.com` — done 2026-07-02
 - [x] Platform admin feature toggles — Feedback, Support, Help, and Voice On/Off switches in General platform settings (all off by default); `platform_features` on `/auth/me`; frontend hides nav/widgets/panels and backend gates feedback/support/voice APIs — done 2026-07-02
 - [x] Fix CI E2E job seed step — `.github/workflows/deploy.yaml` still referenced renamed workspace `@retail/database`; updated to `@erp71/database` so subscription plans seed before Playwright global-setup signup — done 2026-07-02
+- [x] Fix CI frontend failures after platform feature toggles — Sidebar resizable width state typed as `number` (fixes Next.js build type error); COA page test wraps `PlatformFeaturesProvider` with `help: true` — done 2026-07-02
 
 

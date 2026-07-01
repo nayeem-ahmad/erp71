@@ -452,7 +452,7 @@ export default function Sidebar({
     const { t } = useI18n();
     const defaultWidth = compactNav ? SIDEBAR_DEFAULT_WIDTH.compact : SIDEBAR_DEFAULT_WIDTH.normal;
     const [collapsed, setCollapsed] = useState(false);
-    const [width, setWidth] = useState(defaultWidth);
+    const [width, setWidth] = useState<number>(defaultWidth);
     const [isResizing, setIsResizing] = useState(false);
     const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
     const modules = useMemo(() => buildModules(t)
