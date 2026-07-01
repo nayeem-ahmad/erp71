@@ -23,7 +23,7 @@ COPY . .
 RUN npm rebuild bcrypt --build-from-source \
  && node -e "require('bcrypt'); console.log('bcrypt native binding OK (builder)')"
 # Build the shared package first
-RUN npm run build --workspace=@erp71/shared-types || true
+RUN npm run build --workspace=@erp71/shared-types
 # Generate Prisma client
 RUN npm run generate --workspace=@erp71/database
 # Build the backend

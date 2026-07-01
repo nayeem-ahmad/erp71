@@ -19,6 +19,7 @@ out/
 # Production
 build
 apps/backend/dist/
+packages/shared-types/dist/
 
 # Misc
 .DS_Store
