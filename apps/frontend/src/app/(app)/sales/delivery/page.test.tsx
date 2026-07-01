@@ -63,7 +63,7 @@ describe('DeliveryPage', () => {
     it('renders the Delivery Orders heading', async () => {
         render(<DeliveryPage />);
         await waitFor(() => {
-            expect(screen.getByText('Delivery Orders')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: /Delivery Orders/ })).toBeInTheDocument();
         });
     });
 

@@ -45,7 +45,7 @@ describe('LoyaltyPage', () => {
         fetchWithAuth.mockResolvedValue([]);
         render(<LoyaltyPage />);
         await waitFor(() => {
-            expect(screen.getByText('Loyalty Points')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Loyalty Points' })).toBeInTheDocument();
         });
     });
 
