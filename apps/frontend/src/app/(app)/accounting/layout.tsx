@@ -1,10 +1,6 @@
-'use client';
-
-import { CompactUiProvider } from '@/contexts/CompactUiContext';
-
 type AccountingLayoutProps = Readonly<{ children: React.ReactNode }>;
 
-/** Enables compact density for all accounting module screens. */
+/** Accounting routes inherit compact density from the app layout. */
 export default function AccountingLayout({ children }: AccountingLayoutProps) {
-    return <CompactUiProvider density="compact">{children}</CompactUiProvider>;
+    return children;
 }

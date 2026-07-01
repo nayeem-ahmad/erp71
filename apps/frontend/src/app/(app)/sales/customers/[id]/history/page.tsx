@@ -115,7 +115,7 @@ export default function PurchaseHistoryPage() {
             </div>
 
             <div>
-                <h1 className="text-3xl font-black tracking-tight">{customer.name}</h1>
+                <h1 className="text-lg font-bold tracking-tight text-gray-950">{customer.name}</h1>
                 <p className="text-sm text-gray-500 font-medium mt-1">{t.customers.history.title}</p>
             </div>
 
@@ -151,7 +151,7 @@ export default function PurchaseHistoryPage() {
                 <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm flex items-center space-x-6">
                     <Calendar className="w-5 h-5 text-gray-400 flex-shrink-0" />
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.customers.history.purchaseTimeline}</p>
+                        <p className="text-xs font-medium text-gray-500">{t.customers.history.purchaseTimeline}</p>
                         <p className="text-sm font-bold text-gray-700 mt-0.5">
                             {formatDate(summary.firstPurchase)} — {formatDate(summary.lastPurchase)}
                         </p>
@@ -289,7 +289,7 @@ function SummaryCard({ label, value, icon, accent }: {
             <div className={`w-10 h-10 ${bg[accent]} rounded-xl flex items-center justify-center mb-3`}>
                 {icon}
             </div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">{label}</p>
+            <p className="text-xs font-medium text-gray-500 mb-1">{label}</p>
             <p className="text-xl font-black tracking-tight">{value}</p>
         </div>
     );

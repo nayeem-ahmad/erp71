@@ -245,7 +245,7 @@ export default function LeadDetailPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                            <h1 className="text-3xl font-black tracking-tight">{lead.name}</h1>
+                            <h1 className="text-lg font-bold tracking-tight text-gray-950">{lead.name}</h1>
                             <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-50 text-violet-700">{statusLabel}</span>
                             <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-700">{sourceLabel}</span>
                             {categoryLabel && (

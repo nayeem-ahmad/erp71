@@ -102,23 +102,23 @@ export default function InventoryLedgerPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+            <div className="w-full space-y-4">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-black tracking-tight">{t.inventoryLedger.title}</h1>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
+                        <h1 className="text-lg font-bold tracking-tight text-gray-950">{t.inventoryLedger.title}</h1>
+                        <p className="text-xs text-gray-500 mt-0.5">
                             {t.inventoryLedger.subtitle}
                         </p>
                     </div>
-                    <button onClick={() => void loadLedger()} className="bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center">
+                    <button onClick={() => void loadLedger()} className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center">
                         <RefreshCw className="w-4 h-4 mr-2" /> {t.common.refresh}
                     </button>
                 </div>
 
                 <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap gap-3 items-end">
                     <div className="min-w-[220px]">
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5 ml-1">{t.inventoryLedger.warehouseLabel}</label>
+                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.inventoryLedger.warehouseLabel}</label>
                         <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                             <option value="">{t.inventoryLedger.allWarehouses}</option>
                             {warehouses.map((warehouse) => (
@@ -127,7 +127,7 @@ export default function InventoryLedgerPage() {
                         </select>
                     </div>
                     <div className="min-w-[220px]">
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5 ml-1">{t.inventoryLedger.movementType}</label>
+                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.inventoryLedger.movementType}</label>
                         <input value={movementType} onChange={(e) => setMovementType(e.target.value)} placeholder={t.inventoryLedger.movementPlaceholder} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" />
                     </div>
                 </div>

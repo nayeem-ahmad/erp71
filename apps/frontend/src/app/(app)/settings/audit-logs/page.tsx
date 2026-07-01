@@ -169,7 +169,7 @@ export default function AuditLogsPage() {
 
     return (
         <div className="h-full overflow-y-auto bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
+            <div className="w-full space-y-4">
                 <div className="flex items-start justify-between gap-4">
                     <div>
                         <Link
@@ -179,8 +179,8 @@ export default function AuditLogsPage() {
                             <ArrowLeft className="w-3.5 h-3.5" />
                             {t.common.back}
                         </Link>
-                        <h1 className="text-2xl font-black tracking-tight">{t.settings.audit.title}</h1>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
+                        <h1 className="text-lg font-bold tracking-tight text-gray-950">{t.settings.audit.title}</h1>
+                        <p className="text-xs text-gray-500 mt-0.5">
                             {t.settings.audit.description}
                         </p>
                     </div>
@@ -188,7 +188,7 @@ export default function AuditLogsPage() {
 
                 <div className="rounded-2xl border border-gray-200 bg-white p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <label className="space-y-1">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.settings.audit.filters.entity}</span>
+                        <span className="text-xs font-medium text-gray-500">{t.settings.audit.filters.entity}</span>
                         <input
                             type="text"
                             value={entity}
@@ -198,7 +198,7 @@ export default function AuditLogsPage() {
                         />
                     </label>
                     <label className="space-y-1">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.settings.audit.filters.action}</span>
+                        <span className="text-xs font-medium text-gray-500">{t.settings.audit.filters.action}</span>
                         <input
                             type="text"
                             value={action}
@@ -208,7 +208,7 @@ export default function AuditLogsPage() {
                         />
                     </label>
                     <label className="space-y-1">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.common.date} (from)</span>
+                        <span className="text-xs font-medium text-gray-500">{t.common.date} (from)</span>
                         <input
                             type="date"
                             value={fromDate}
@@ -217,7 +217,7 @@ export default function AuditLogsPage() {
                         />
                     </label>
                     <label className="space-y-1">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.common.date} (to)</span>
+                        <span className="text-xs font-medium text-gray-500">{t.common.date} (to)</span>
                         <input
                             type="date"
                             value={toDate}

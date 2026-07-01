@@ -245,7 +245,7 @@ function QuoteDetailsPageContent() {
                             <div className="flex items-center space-x-3">
                                 <FileText className="w-8 h-8 text-purple-600" />
                                 <div>
-                                    <h1 className="text-3xl font-black tracking-tight">{quote.quote_number} <span className="text-lg bg-gray-100 text-gray-500 px-2 rounded-lg font-black ml-1">v{quote.version}</span></h1>
+                                    <h1 className="text-lg font-bold tracking-tight text-gray-950">{quote.quote_number} <span className="text-lg bg-gray-100 text-gray-500 px-2 rounded-lg font-black ml-1">v{quote.version}</span></h1>
                                 </div>
                             </div>
                             <div className="flex items-center space-x-3 mt-3">
@@ -263,13 +263,13 @@ function QuoteDetailsPageContent() {
                         </div>
                         
                         <div className="flex flex-wrap gap-3 justify-end">
-                            <button onClick={() => window.print()} className="bg-white border border-gray-200 text-gray-900 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center hover:bg-gray-50 shadow-sm transition-all">
+                            <button onClick={() => window.print()} className="bg-white border border-gray-200 text-gray-900 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center hover:bg-gray-50 shadow-sm transition-all">
                                 <Printer className="w-4 h-4 mr-2 text-gray-400" />
                                 {t.quotes.detail.printPdf}
                             </button>
                             <button
                                 onClick={() => router.push(`/sales/quotes/${quote.id}?edit=true`)}
-                                className="bg-white border border-gray-200 text-gray-900 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center hover:bg-gray-50 shadow-sm transition-all"
+                                className="bg-white border border-gray-200 text-gray-900 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center hover:bg-gray-50 shadow-sm transition-all"
                             >
                                 <Pencil className="w-4 h-4 mr-2 text-gray-400" />
                                 {t.quotes.detail.edit}
@@ -277,31 +277,31 @@ function QuoteDetailsPageContent() {
                             <button
                                 onClick={handleDelete}
                                 disabled={actionLoading}
-                                className="bg-red-50 border border-red-100 text-red-600 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center hover:bg-red-100 transition-all disabled:opacity-50"
+                                className="bg-red-50 border border-red-100 text-red-600 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center hover:bg-red-100 transition-all disabled:opacity-50"
                             >
                                 <Trash2 className="w-4 h-4 mr-2" />
                                 {t.quotes.detail.delete}
                             </button>
                             {quote.status === 'DRAFT' && (
-                                <button onClick={() => handleUpdateStatus('SENT')} disabled={actionLoading} className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center hover:bg-blue-100 transition-all disabled:opacity-50">
+                                <button onClick={() => handleUpdateStatus('SENT')} disabled={actionLoading} className="bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center hover:bg-blue-100 transition-all disabled:opacity-50">
                                     {t.quotes.detail.markSent}
                                 </button>
                             )}
                             {quote.status === 'SENT' && (
                                 <>
-                                    <button onClick={() => handleUpdateStatus('ACCEPTED')} disabled={actionLoading} className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center hover:bg-emerald-100 transition-all disabled:opacity-50">
+                                    <button onClick={() => handleUpdateStatus('ACCEPTED')} disabled={actionLoading} className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center hover:bg-emerald-100 transition-all disabled:opacity-50">
                                         {t.quotes.detail.accept}
                                     </button>
-                                    <button onClick={() => handleUpdateStatus('REJECTED')} disabled={actionLoading} className="bg-red-50 border border-red-200 text-red-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center hover:bg-red-100 transition-all disabled:opacity-50">
+                                    <button onClick={() => handleUpdateStatus('REJECTED')} disabled={actionLoading} className="bg-red-50 border border-red-200 text-red-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center hover:bg-red-100 transition-all disabled:opacity-50">
                                         {t.quotes.detail.reject}
                                     </button>
-                                    <button onClick={() => handleUpdateStatus('EXPIRED')} disabled={actionLoading} className="bg-gray-100 border border-gray-200 text-gray-600 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center hover:bg-gray-200 transition-all disabled:opacity-50">
+                                    <button onClick={() => handleUpdateStatus('EXPIRED')} disabled={actionLoading} className="bg-gray-100 border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center hover:bg-gray-200 transition-all disabled:opacity-50">
                                         {t.quotes.detail.markExpired}
                                     </button>
                                 </>
                             )}
                             {quote.status !== 'REVISED' && quote.status !== 'CONVERTED' && (
-                                <button onClick={handleRevise} disabled={actionLoading} className="bg-amber-100 text-amber-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center hover:bg-amber-200 transition-all">
+                                <button onClick={handleRevise} disabled={actionLoading} className="bg-amber-100 text-amber-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center hover:bg-amber-200 transition-all">
                                     <PlusCircle className="w-4 h-4 mr-2" />
                                     {t.quotes.detail.revise}
                                 </button>
@@ -366,10 +366,10 @@ function QuoteDetailsPageContent() {
                                     <table className="w-full">
                                         <thead>
                                             <tr className="border-b border-gray-100">
-                                                <th className="text-left pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.shared.columns.product}</th>
-                                                <th className="text-center pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-24">{t.shared.columns.qty}</th>
-                                                <th className="text-right pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-32">{t.shared.columns.unitPrice}</th>
-                                                <th className="text-right pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-28">{t.shared.columns.subtotal}</th>
+                                                <th className="text-left pb-2 text-xs font-medium text-gray-500">{t.shared.columns.product}</th>
+                                                <th className="text-center pb-2 text-xs font-medium text-gray-500 w-24">{t.shared.columns.qty}</th>
+                                                <th className="text-right pb-2 text-xs font-medium text-gray-500 w-32">{t.shared.columns.unitPrice}</th>
+                                                <th className="text-right pb-2 text-xs font-medium text-gray-500 w-28">{t.shared.columns.subtotal}</th>
                                                 <th className="w-10"></th>
                                             </tr>
                                         </thead>

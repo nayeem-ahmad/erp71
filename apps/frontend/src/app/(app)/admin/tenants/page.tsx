@@ -268,11 +268,11 @@ export default function AdminTenantsPage() {
     };
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="max-w-7xl mx-auto space-y-6">
                 <div className="flex items-start justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-black tracking-tight">{m.title}</h1>
+                        <h1 className="text-lg font-bold tracking-tight text-gray-950">{m.title}</h1>
                         <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mt-1">
                             {m.subtitle}
                         </p>
@@ -374,12 +374,12 @@ export default function AdminTenantsPage() {
                             <>
                                 <div className="flex flex-wrap items-start justify-between gap-4">
                                     <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{m.selectedTenant}</p>
-                                        <h2 className="mt-2 text-3xl font-black tracking-tight">{selectedTenant.name}</h2>
+                                        <p className="text-xs font-medium text-gray-500">{m.selectedTenant}</p>
+                                        <h2 className="mt-2 text-lg font-bold tracking-tight text-gray-950">{selectedTenant.name}</h2>
                                         <p className="mt-2 text-sm text-gray-500">{formatMessage(m.created, { date: formatDate(selectedTenant.created_at) })}</p>
                                     </div>
                                     <div className="rounded-2xl bg-gray-50 px-4 py-3 text-right">
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{m.owner}</p>
+                                        <p className="text-xs font-medium text-gray-500">{m.owner}</p>
                                         <p className="mt-1 text-sm font-black text-gray-900">{selectedTenant.owner?.name || m.unknownOwner}</p>
                                         <p className="text-xs text-gray-500">{selectedTenant.owner?.email || m.noOwnerEmail}</p>
                                     </div>
@@ -456,7 +456,7 @@ export default function AdminTenantsPage() {
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="rounded-2xl border border-gray-100 p-4">
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{m.storesSection}</p>
+                                        <p className="text-xs font-medium text-gray-500">{m.storesSection}</p>
                                         <div className="mt-3 space-y-3">
                                             {selectedTenant.stores.map((store) => (
                                                 <div key={store.id} className="rounded-2xl bg-gray-50 px-4 py-3">
@@ -468,7 +468,7 @@ export default function AdminTenantsPage() {
                                     </div>
 
                                     <div className="rounded-2xl border border-gray-100 p-4">
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{m.usersSection}</p>
+                                        <p className="text-xs font-medium text-gray-500">{m.usersSection}</p>
                                         <div className="mt-3 space-y-3">
                                             {selectedTenant.users.map((user) => (
                                                 <div key={user.id} className="rounded-2xl bg-gray-50 px-4 py-3">
@@ -518,7 +518,7 @@ export default function AdminTenantsPage() {
 
                             {/* Owner */}
                             <div className="space-y-3">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{mc.ownerSection}</p>
+                                <p className="text-xs font-medium text-gray-500">{mc.ownerSection}</p>
                                 <div className="flex rounded-2xl border border-gray-100 overflow-hidden">
                                     <button
                                         type="button"
@@ -585,7 +585,7 @@ export default function AdminTenantsPage() {
 
                             {/* Tenant & Store */}
                             <div className="space-y-3">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{mc.tenantSection}</p>
+                                <p className="text-xs font-medium text-gray-500">{mc.tenantSection}</p>
                                 <input
                                     value={createDraft.tenantName}
                                     onChange={(e) => setCreateDraft((d) => ({ ...d, tenantName: e.target.value }))}
@@ -619,7 +619,7 @@ export default function AdminTenantsPage() {
 
                             {/* Plan */}
                             <div className="space-y-3">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{mc.plan}</p>
+                                <p className="text-xs font-medium text-gray-500">{mc.plan}</p>
                                 <select
                                     value={createDraft.planCode}
                                     onChange={(e) => setCreateDraft((d) => ({ ...d, planCode: e.target.value as PlanCode }))}
@@ -667,7 +667,7 @@ function InfoCard({ icon: Icon, label, value }: { icon: any; label: string; valu
         <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
             <div className="flex items-center justify-between gap-3">
                 <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{label}</p>
+                    <p className="text-xs font-medium text-gray-500">{label}</p>
                     <p className="mt-2 text-lg font-black text-gray-900">{value}</p>
                 </div>
                 <Icon className="w-5 h-5 text-gray-400" />

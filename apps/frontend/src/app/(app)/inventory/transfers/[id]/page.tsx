@@ -73,14 +73,14 @@ export default function InventoryTransferDetailPage() {
     ].filter(Boolean) as Array<{ label: string; at: string; tone: string }>;
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="max-w-[1100px] mx-auto space-y-6">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-black tracking-tight">
+                        <h1 className="text-lg font-bold tracking-tight text-gray-950">
                             {formatMessage(t.inventoryTransferDetail.transferTitle, { number: transfer.transfer_number })}
                         </h1>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
+                        <p className="text-xs text-gray-500 mt-0.5">
                             {formatMessage(t.inventoryTransferDetail.routeSubtitle, {
                                 source: transfer.sourceWarehouse?.name ?? '-',
                                 destination: transfer.destinationWarehouse?.name ?? '-',
@@ -90,12 +90,12 @@ export default function InventoryTransferDetailPage() {
                     </div>
                     <div className="flex items-center gap-3">
                         {transfer.status === 'DRAFT' ? (
-                            <button onClick={() => void handleSend()} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center shadow-lg shadow-blue-200">
+                            <button onClick={() => void handleSend()} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200">
                                 <ArrowRightLeft className="w-4 h-4 mr-2" /> {t.inventoryTransferDetail.sendTransfer}
                             </button>
                         ) : null}
                         {canReceive ? (
-                            <button onClick={() => void handleReceive()} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center shadow-lg shadow-emerald-200">
+                            <button onClick={() => void handleReceive()} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-emerald-200">
                                 <CheckCircle2 className="w-4 h-4 mr-2" /> {t.inventoryTransferDetail.receiveStock}
                             </button>
                         ) : null}

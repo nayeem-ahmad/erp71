@@ -145,7 +145,7 @@ export default function PriceListsPage() {
                         <h1 className="text-2xl font-black text-gray-900 tracking-tight">{t.priceLists.title}</h1>
                         <p className="text-sm text-gray-500 font-medium mt-1">{t.priceLists.subtitle}</p>
                     </div>
-                    <button onClick={() => { setEditingList(null); setIsFormOpen(true); }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0">
+                    <button onClick={() => { setEditingList(null); setIsFormOpen(true); }} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0">
                         <Plus className="w-4 h-4 mr-2" /> {t.priceLists.newList}
                     </button>
                 </div>

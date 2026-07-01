@@ -270,14 +270,14 @@ function CustomerLedgerContent() {
 
     return (
         <div className="h-full overflow-y-auto bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
+            <div className="w-full space-y-4">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-black tracking-tight inline-flex items-center gap-2">
+                        <h1 className="text-lg font-bold tracking-tight text-gray-950 inline-flex items-center gap-2">
                             <BookOpen className="w-7 h-7 text-indigo-600" />
                             {copy.title}
                         </h1>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
+                        <p className="text-xs text-gray-500 mt-0.5">
                             {copy.subtitle}
                         </p>
                     </div>
@@ -291,10 +291,10 @@ function CustomerLedgerContent() {
                     ) : null}
                 </div>
 
-                <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <label className="space-y-1">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{copy.pickCustomer}</span>
+                            <span className="text-xs font-medium text-gray-500">{copy.pickCustomer}</span>
                             <select
                                 value={customerId}
                                 onChange={(e) => setCustomerId(e.target.value)}
@@ -310,7 +310,7 @@ function CustomerLedgerContent() {
                             </select>
                         </label>
                         <label className="space-y-1">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{copy.dateFrom}</span>
+                            <span className="text-xs font-medium text-gray-500">{copy.dateFrom}</span>
                             <input
                                 type="date"
                                 value={fromDate}
@@ -319,7 +319,7 @@ function CustomerLedgerContent() {
                             />
                         </label>
                         <label className="space-y-1">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{copy.dateTo}</span>
+                            <span className="text-xs font-medium text-gray-500">{copy.dateTo}</span>
                             <input
                                 type="date"
                                 value={toDate}
@@ -332,20 +332,20 @@ function CustomerLedgerContent() {
 
                 {customerId ? (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{copy.openingBalance}</p>
+                        <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
+                            <p className="text-xs font-medium text-gray-500">{copy.openingBalance}</p>
                             <p className={`text-2xl font-black mt-1 ${openingBalance > 0 ? 'text-rose-600' : openingBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
                                 {formatBDT(openingBalance)}
                             </p>
                         </div>
-                        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{copy.closingBalance}</p>
+                        <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
+                            <p className="text-xs font-medium text-gray-500">{copy.closingBalance}</p>
                             <p className={`text-2xl font-black mt-1 ${closingBalance > 0 ? 'text-rose-600' : closingBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
                                 {formatBDT(closingBalance)}
                             </p>
                         </div>
-                        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{copy.currentDue}</p>
+                        <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
+                            <p className="text-xs font-medium text-gray-500">{copy.currentDue}</p>
                             <p className={`text-2xl font-black mt-1 ${dueBalance > 0 ? 'text-rose-600' : dueBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
                                 {formatBDT(dueBalance)}
                             </p>

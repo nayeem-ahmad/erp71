@@ -167,7 +167,7 @@ function ReturnDetailPageContent() {
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="max-w-4xl mx-auto space-y-6">
                 {/* Edit Mode Banner */}
                 {isEditMode && (
@@ -208,8 +208,8 @@ function ReturnDetailPageContent() {
                             <ArrowLeft className="w-5 h-5" />
                         </button>
                         <div>
-                            <h1 className="text-2xl font-black tracking-tight">{ret.return_number}</h1>
-                            <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
+                            <h1 className="text-lg font-bold tracking-tight text-gray-950">{ret.return_number}</h1>
+                            <p className="text-xs text-gray-500 mt-0.5">
                                 {new Date(ret.created_at).toLocaleString()}
                             </p>
                         </div>
@@ -240,11 +240,11 @@ function ReturnDetailPageContent() {
                 {isEditMode ? (
                     <div className="grid grid-cols-3 gap-4">
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{t.returns.columns.originalReceipt}</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">{t.returns.columns.originalReceipt}</span>
                             <span className="text-sm font-black text-gray-900">{ret.sale?.serial_number || '-'}</span>
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{t.returns.detail.newTotalRefund}</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">{t.returns.detail.newTotalRefund}</span>
                             <span className="text-xl font-black text-rose-600">{formatBDT(editTotal, { locale })}</span>
                             {editTotal !== parseFloat(ret.total_refund) && (
                                 <span className="block text-xs font-bold mt-1 text-gray-400">
@@ -253,26 +253,26 @@ function ReturnDetailPageContent() {
                             )}
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{t.returns.columns.items}</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">{t.returns.columns.items}</span>
                             <span className="text-xl font-black text-gray-900">{editItems.filter((i) => i.quantity > 0).length}</span>
                         </div>
                     </div>
                 ) : (
                     <div className="grid grid-cols-4 gap-4">
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{t.returns.columns.originalReceipt}</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">{t.returns.columns.originalReceipt}</span>
                             <span className="text-sm font-black text-gray-900">{ret.sale?.serial_number || '-'}</span>
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{t.returns.detail.totalRefund}</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">{t.returns.detail.totalRefund}</span>
                             <span className="text-xl font-black text-rose-600">{formatBDT(parseFloat(ret.total_refund), { locale })}</span>
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{t.returns.detail.itemsReturned}</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">{t.returns.detail.itemsReturned}</span>
                             <span className="text-xl font-black text-gray-900">{ret.items?.length || 0}</span>
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{t.common.status}</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">{t.common.status}</span>
                             <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border bg-emerald-50 text-emerald-700 border-emerald-200">
                                 {t.shared.statuses.return[(ret.status || 'COMPLETED') as keyof typeof t.shared.statuses.return] ?? ret.status}
                             </span>
@@ -333,11 +333,11 @@ function ReturnDetailPageContent() {
                                 <table className="w-full">
                                     <thead>
                                         <tr className="border-b border-gray-100">
-                                            <th className="text-left pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.shared.columns.product}</th>
-                                            <th className="text-center pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-24">{t.shared.columns.qty}</th>
-                                            <th className="text-center pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-20">{t.shared.max}</th>
-                                            <th className="text-right pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-28">{t.shared.columns.unitPrice}</th>
-                                            <th className="text-right pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-28">{t.shared.refund}</th>
+                                            <th className="text-left pb-2 text-xs font-medium text-gray-500">{t.shared.columns.product}</th>
+                                            <th className="text-center pb-2 text-xs font-medium text-gray-500 w-24">{t.shared.columns.qty}</th>
+                                            <th className="text-center pb-2 text-xs font-medium text-gray-500 w-20">{t.shared.max}</th>
+                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-28">{t.shared.columns.unitPrice}</th>
+                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-28">{t.shared.refund}</th>
                                             <th className="w-10"></th>
                                         </tr>
                                     </thead>
@@ -391,9 +391,9 @@ function ReturnDetailPageContent() {
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-gray-100">
-                                    <th className="text-left p-4 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.shared.columns.product}</th>
-                                    <th className="text-center p-4 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.returns.detail.qtyReturned}</th>
-                                    <th className="text-right p-4 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.shared.columns.refundAmount}</th>
+                                    <th className="text-left p-4 text-xs font-medium text-gray-500">{t.shared.columns.product}</th>
+                                    <th className="text-center p-4 text-xs font-medium text-gray-500">{t.returns.detail.qtyReturned}</th>
+                                    <th className="text-right p-4 text-xs font-medium text-gray-500">{t.shared.columns.refundAmount}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">

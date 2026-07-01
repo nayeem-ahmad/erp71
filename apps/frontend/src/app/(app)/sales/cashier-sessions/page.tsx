@@ -121,13 +121,13 @@ export default function CashierSessionsPage() {
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+            <div className="w-full space-y-4">
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-black tracking-tight">{t.cashierSessions.title}</h1>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">{t.cashierSessions.subtitle}</p>
+                        <h1 className="text-lg font-bold tracking-tight text-gray-950">{t.cashierSessions.title}</h1>
+                        <p className="text-xs text-gray-500 mt-0.5">{t.cashierSessions.subtitle}</p>
                     </div>
                     {!session ? (
                         <button
@@ -176,7 +176,7 @@ export default function CashierSessionsPage() {
                             </div>
                             <div className="grid grid-cols-3 gap-4">
                                 <div className="bg-gray-50 p-4 rounded-2xl">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{t.cashierSessions.openingCash}</span>
+                                    <span className="text-xs font-medium text-gray-500 block mb-1">{t.cashierSessions.openingCash}</span>
                                     <span className="text-xl font-black text-gray-900">{formatBDT(parseFloat(session.opening_cash), { locale })}</span>
                                 </div>
                                 <div className="bg-green-50 p-4 rounded-2xl">

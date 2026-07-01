@@ -259,11 +259,11 @@ export default function CustomersPage() {
 
     return (
         <div className="overflow-y-auto h-full bg-[#f3f4f6] p-4 md:p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
+            <div className="w-full space-y-4">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                        <h1 className="text-2xl font-black tracking-tight">{t.customers.title}</h1>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
+                        <h1 className="text-lg font-bold tracking-tight text-gray-950">{t.customers.title}</h1>
+                        <p className="text-xs text-gray-500 mt-0.5">
                             {t.customers.subtitle}
                         </p>
                     </div>
@@ -271,7 +271,7 @@ export default function CustomersPage() {
                         <button
                             onClick={handleRunSegmentation}
                             disabled={runningSegmentation}
-                            className="flex items-center px-4 py-2.5 rounded-xl font-bold text-sm border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-50"
+                            className="flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-50"
                             title={t.customers.runSegmentationTitle}
                         >
                             <RefreshCw className={`w-4 h-4 mr-2 ${runningSegmentation ? 'animate-spin' : ''}`} />
@@ -279,7 +279,7 @@ export default function CustomersPage() {
                         </button>
                         <button
                             onClick={() => setIsModalOpen(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
                         >
                             <Plus className="w-4 h-4 mr-2" />
                             {t.customers.newCustomer}
@@ -290,7 +290,7 @@ export default function CustomersPage() {
                 {segmentStats && segmentStats.total > 0 && (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">{t.customers.totalCustomers}</p>
+                            <p className="text-xs font-medium text-gray-500 mb-1">{t.customers.totalCustomers}</p>
                             <p className="text-3xl font-black text-gray-900">{segmentStats.total}</p>
                         </div>
                         {segmentStats.breakdown.map((seg) => {

@@ -173,10 +173,10 @@ function BillingPageContent() {
     };
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="max-w-6xl mx-auto space-y-6">
                 <div className="flex flex-col gap-2">
-                    <h1 className="text-2xl font-black tracking-tight">{copy.title}</h1>
+                    <h1 className="text-lg font-bold tracking-tight text-gray-950">{copy.title}</h1>
                     <p className="text-xs font-bold uppercase tracking-widest text-gray-500">
                         {formatMessage(copy.subtitle, { tenant: tenantLabel })}
                     </p>
@@ -203,9 +203,9 @@ function BillingPageContent() {
                         <section className="rounded-3xl border border-gray-100 bg-white p-6 space-y-6">
                             <div className="flex flex-wrap items-start justify-between gap-4">
                                 <div>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{copy.currentSubscription}</p>
+                                    <p className="text-xs font-medium text-gray-500">{copy.currentSubscription}</p>
                                     <div className="mt-2 flex items-center gap-3">
-                                        <h2 className="text-3xl font-black tracking-tight">{summary.subscription?.plan?.name || copy.noActivePlan}</h2>
+                                        <h2 className="text-lg font-bold tracking-tight text-gray-950">{summary.subscription?.plan?.name || copy.noActivePlan}</h2>
                                         {summary.subscription?.plan?.code && (
                                             <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${summary.subscription.plan.code === 'PREMIUM' ? 'bg-amber-100 text-amber-700' : summary.subscription.plan.code === 'STANDARD' ? 'bg-indigo-100 text-indigo-700' : summary.subscription.plan.code === 'BASIC' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                                                 {summary.subscription.plan.code}
@@ -217,7 +217,7 @@ function BillingPageContent() {
                                     </p>
                                 </div>
                                 <div className="rounded-2xl bg-gray-50 px-4 py-3 min-w-[220px]">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{copy.status}</p>
+                                    <p className="text-xs font-medium text-gray-500">{copy.status}</p>
                                     <p className="mt-1 text-lg font-black text-gray-900">{summary.subscription?.status || copy.unassigned}</p>
                                     <p className="mt-1 text-xs text-gray-500">
                                         {summary.subscription
@@ -332,7 +332,7 @@ function BillingPageContent() {
 
                         <aside className="rounded-3xl border border-gray-100 bg-white p-6 space-y-4 h-fit">
                             <div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{copy.checkoutContext}</p>
+                                <p className="text-xs font-medium text-gray-500">{copy.checkoutContext}</p>
                                 <h3 className="mt-2 text-lg font-black tracking-tight">{isSslProvider ? copy.hostedProvider : copy.manualSandbox}</h3>
                                 <p className="mt-2 text-sm text-gray-500">
                                     {isSslProvider ? copy.hostedProviderDescription : copy.manualSandboxDescription}
@@ -356,7 +356,7 @@ function BillingPageContent() {
 
                             {summary.billing_history && summary.billing_history.length > 0 && (
                                 <div className="rounded-2xl border border-gray-100 p-4 space-y-3">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{copy.recentBillingEvents}</p>
+                                    <p className="text-xs font-medium text-gray-500">{copy.recentBillingEvents}</p>
                                     <div className="space-y-2">
                                         {summary.billing_history.map((event: any) => (
                                             <div key={event.id} className="rounded-xl bg-gray-50 px-3 py-2">
@@ -393,7 +393,7 @@ function BillingPageFallback() {
     const copy = t.billing;
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="max-w-6xl mx-auto">
                 <div className="rounded-3xl border border-gray-100 bg-white p-8 flex items-center justify-center text-gray-500">
                     <Loader2 className="w-5 h-5 animate-spin mr-2" /> {copy.loadingWorkspace}
@@ -406,7 +406,7 @@ function BillingPageFallback() {
 function MetricCard({ label, value }: { label: string; value: string }) {
     return (
         <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{label}</p>
+            <p className="text-xs font-medium text-gray-500">{label}</p>
             <p className="mt-2 text-lg font-black text-gray-900">{value}</p>
         </div>
     );

@@ -129,14 +129,14 @@ export default function ProfilePage() {
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="max-w-2xl mx-auto space-y-6">
                 <div>
-                    <h1 className="text-2xl font-black tracking-tight text-gray-900">{t.profile.pageTitle}</h1>
+                    <h1 className="text-lg font-bold tracking-tight text-gray-950 text-gray-900">{t.profile.pageTitle}</h1>
                     <p className="text-sm text-gray-500 mt-1">{t.profile.pageDescription}</p>
                 </div>
 
-                <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm space-y-6">
+                <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4 shadow-sm space-y-4">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-5">
                         <div className="relative flex-shrink-0">
                             {avatarUrl ? (

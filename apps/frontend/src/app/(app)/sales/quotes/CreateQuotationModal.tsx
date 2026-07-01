@@ -255,10 +255,10 @@ export default function CreateQuotationModal({ isOpen, onClose, onSuccess }: Cre
                         <table className="w-full min-w-[480px]">
                             <thead>
                                 <tr className="border-b border-gray-100">
-                                    <th className="text-left pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.shared.columns.product}</th>
-                                    <th className="text-center pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-24">{t.shared.columns.qty}</th>
-                                    <th className="text-right pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-32">{t.shared.columns.unitPrice}</th>
-                                    <th className="text-right pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-28">{t.shared.columns.subtotal}</th>
+                                    <th className="text-left pb-2 text-xs font-medium text-gray-500">{t.shared.columns.product}</th>
+                                    <th className="text-center pb-2 text-xs font-medium text-gray-500 w-24">{t.shared.columns.qty}</th>
+                                    <th className="text-right pb-2 text-xs font-medium text-gray-500 w-32">{t.shared.columns.unitPrice}</th>
+                                    <th className="text-right pb-2 text-xs font-medium text-gray-500 w-28">{t.shared.columns.subtotal}</th>
                                     <th className="w-10"></th>
                                 </tr>
                             </thead>

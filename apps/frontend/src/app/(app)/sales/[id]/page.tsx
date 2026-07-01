@@ -259,7 +259,7 @@ function SaleDetailPageContent() {
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="max-w-4xl mx-auto space-y-6">
                 {/* Edit Mode Banner */}
                 {isEditMode && (
@@ -300,8 +300,8 @@ function SaleDetailPageContent() {
                             <ArrowLeft className="w-5 h-5" />
                         </button>
                         <div>
-                            <h1 className="text-2xl font-black tracking-tight">{sale.serial_number}</h1>
-                            <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
+                            <h1 className="text-lg font-bold tracking-tight text-gray-950">{sale.serial_number}</h1>
+                            <p className="text-xs text-gray-500 mt-0.5">
                                 {new Date(sale.created_at).toLocaleString()}
                             </p>
                         </div>
@@ -346,7 +346,7 @@ function SaleDetailPageContent() {
                 {isEditMode ? (
                     <div className="grid grid-cols-3 gap-4">
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-2">{t.common.status}</label>
+                            <label className="text-xs font-medium text-gray-500 block mb-2">{t.common.status}</label>
                             <select
                                 value={editStatus}
                                 onChange={e => setEditStatus(e.target.value)}
@@ -360,7 +360,7 @@ function SaleDetailPageContent() {
                             </select>
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-2">{t.common.customer}</label>
+                            <label className="text-xs font-medium text-gray-500 block mb-2">{t.common.customer}</label>
                             <select
                                 value={editCustomerId || ''}
                                 onChange={e => setEditCustomerId(e.target.value || null)}
@@ -373,7 +373,7 @@ function SaleDetailPageContent() {
                             </select>
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{t.sales.detail.newTotal}</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">{t.sales.detail.newTotal}</span>
                             <span className="text-xl font-black text-blue-600">{formatBDT(editTotal, { locale })}</span>
                             {Math.abs(editPaid - editTotal) > 0.01 && (
                                 <span className={`block text-xs font-bold mt-1 ${editPaid >= editTotal ? 'text-green-600' : 'text-red-500'}`}>
@@ -385,7 +385,7 @@ function SaleDetailPageContent() {
                 ) : (
                     <div className="grid grid-cols-4 gap-4">
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{t.common.status}</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">{t.common.status}</span>
                             <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${
                                 sale.status === 'COMPLETED' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-700 border-gray-200'
                             }`}>
@@ -393,15 +393,15 @@ function SaleDetailPageContent() {
                             </span>
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{t.common.total}</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">{t.common.total}</span>
                             <span className="text-xl font-black text-blue-600">{formatBDT(parseFloat(sale.total_amount), { locale })}</span>
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{t.sales.columns.paid}</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">{t.sales.columns.paid}</span>
                             <span className="text-xl font-black text-gray-900">{formatBDT(parseFloat(sale.amount_paid), { locale })}</span>
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{t.sales.columns.items}</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">{t.sales.columns.items}</span>
                             <span className="text-xl font-black text-gray-900">{sale.items?.length || 0}</span>
                         </div>
                     </div>
@@ -510,10 +510,10 @@ function SaleDetailPageContent() {
                                 <table className="w-full">
                                     <thead>
                                         <tr className="border-b border-gray-100">
-                                            <th className="text-left pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.shared.columns.product}</th>
-                                            <th className="text-center pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-24">{t.shared.columns.qty}</th>
-                                            <th className="text-right pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-32">{t.shared.columns.price}</th>
-                                            <th className="text-right pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-28">{t.shared.columns.subtotal}</th>
+                                            <th className="text-left pb-2 text-xs font-medium text-gray-500">{t.shared.columns.product}</th>
+                                            <th className="text-center pb-2 text-xs font-medium text-gray-500 w-24">{t.shared.columns.qty}</th>
+                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-32">{t.shared.columns.price}</th>
+                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-28">{t.shared.columns.subtotal}</th>
                                             <th className="w-10"></th>
                                         </tr>
                                     </thead>
@@ -572,11 +572,11 @@ function SaleDetailPageContent() {
                             <table className="w-full">
                                 <thead>
                                     <tr className="border-b border-gray-100">
-                                        <th className="text-left p-4 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.shared.columns.product}</th>
-                                        <th className="text-left p-4 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.shared.columns.sku}</th>
-                                        <th className="text-center p-4 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.shared.columns.qty}</th>
-                                        <th className="text-right p-4 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.shared.columns.unitPrice}</th>
-                                        <th className="text-right p-4 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.shared.columns.subtotal}</th>
+                                        <th className="text-left p-4 text-xs font-medium text-gray-500">{t.shared.columns.product}</th>
+                                        <th className="text-left p-4 text-xs font-medium text-gray-500">{t.shared.columns.sku}</th>
+                                        <th className="text-center p-4 text-xs font-medium text-gray-500">{t.shared.columns.qty}</th>
+                                        <th className="text-right p-4 text-xs font-medium text-gray-500">{t.shared.columns.unitPrice}</th>
+                                        <th className="text-right p-4 text-xs font-medium text-gray-500">{t.shared.columns.subtotal}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">

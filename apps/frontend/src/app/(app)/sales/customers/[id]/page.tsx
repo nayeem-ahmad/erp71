@@ -244,7 +244,7 @@ export default function CustomerProfile() {
                 </div>
                 <div className="flex-1">
                     <div className="flex items-center flex-wrap gap-2">
-                        <h1 className="text-3xl font-black tracking-tight">{customer.name}</h1>
+                        <h1 className="text-lg font-bold tracking-tight text-gray-950">{customer.name}</h1>
                         <span className="font-mono text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded">{customer.customer_code}</span>
                         <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-tighter ${customer.customer_type === 'ORGANIZATION' ? 'bg-purple-50 text-purple-600' : 'bg-gray-100 text-gray-600'}`}>
                             {customer.customer_type || t.customers.profile.individual}
@@ -263,7 +263,7 @@ export default function CustomerProfile() {
                 </div>
                 <div className="text-right shrink-0 space-y-2">
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">{t.customers.profile.lifetimeValue}</p>
+                        <p className="text-xs font-medium text-gray-500 mb-1">{t.customers.profile.lifetimeValue}</p>
                         <p className="text-4xl font-black text-blue-600">{formatBDT(Number(customer.total_spent))}</p>
                         {history && (
                             <p className="text-xs text-gray-400 font-bold mt-1">{formatMessage(history.total !== 1 ? t.customers.profile.transactionsPlural : t.customers.profile.transactions, { count: history.total })}</p>

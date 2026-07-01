@@ -296,20 +296,20 @@ export default function LeavesPage() {
     ], [t]);
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+            <div className="w-full space-y-4">
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-black tracking-tight">{t.leaves.title}</h1>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
+                        <h1 className="text-lg font-bold tracking-tight text-gray-950">{t.leaves.title}</h1>
+                        <p className="text-xs text-gray-500 mt-0.5">
                             {t.leaves.subtitle}
                         </p>
                     </div>
                     {tab === 'requests' && (
                         <button
                             onClick={() => setShowRequestModal(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
                         >
                             <Plus className="w-4 h-4 mr-2" />
                             {t.leaves.newRequest}
@@ -341,7 +341,7 @@ export default function LeavesPage() {
                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
                             <div className="flex flex-wrap gap-3 items-end">
                                 <div className="space-y-1">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block">{t.leaves.columns.status}</label>
+                                    <label className="text-xs font-medium text-gray-500 block">{t.leaves.columns.status}</label>
                                     <select
                                         value={statusFilter}
                                         onChange={(e) => setStatusFilter(e.target.value)}
@@ -355,7 +355,7 @@ export default function LeavesPage() {
                                     </select>
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block">{t.leaves.columns.employee}</label>
+                                    <label className="text-xs font-medium text-gray-500 block">{t.leaves.columns.employee}</label>
                                     <select
                                         value={employeeFilter}
                                         onChange={(e) => setEmployeeFilter(e.target.value)}
@@ -446,8 +446,8 @@ export default function LeavesPage() {
                                 <table className="w-full">
                                     <thead>
                                         <tr className="border-b border-gray-100">
-                                            <th className="text-left text-[10px] font-black uppercase tracking-widest text-gray-400 px-6 py-3">{t.leaves.name}</th>
-                                            <th className="text-left text-[10px] font-black uppercase tracking-widest text-gray-400 px-6 py-3">{t.leaves.columns.daysPerYear}</th>
+                                            <th className="text-left text-xs font-medium text-gray-500 px-6 py-3">{t.leaves.name}</th>
+                                            <th className="text-left text-xs font-medium text-gray-500 px-6 py-3">{t.leaves.columns.daysPerYear}</th>
                                             <th className="text-right px-6 py-3"></th>
                                         </tr>
                                     </thead>
@@ -578,7 +578,7 @@ export default function LeavesPage() {
                                 <button
                                     type="button"
                                     onClick={() => { setShowRequestModal(false); setRequestForm(EMPTY_REQUEST_FORM); setReqError(''); }}
-                                    className="px-4 py-2.5 rounded-xl font-bold text-sm text-gray-600 hover:bg-gray-100 transition-all"
+                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-100 transition-all"
                                 >
                                     {t.common.cancel}
                                 </button>

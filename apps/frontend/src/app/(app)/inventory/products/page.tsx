@@ -393,11 +393,11 @@ export default function InventoryPage() {
 
     return (
         <div className="overflow-y-auto h-full bg-[#f3f4f6] p-4 md:p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
+            <div className="w-full space-y-4">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                        <h1 className="text-2xl font-black tracking-tight">{t.inventory.title}</h1>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
+                        <h1 className="text-lg font-bold tracking-tight text-gray-950">{t.inventory.title}</h1>
+                        <p className="text-xs text-gray-500 mt-0.5">
                             {t.inventory.subtitle}
                         </p>
                     </div>
@@ -413,7 +413,7 @@ export default function InventoryPage() {
                     <div className="flex items-center gap-2 md:hidden">
                         <button
                             onClick={() => setIsModalOpen(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center shadow-lg shadow-blue-200 transition-all"
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all"
                         >
                             <Plus className="w-4 h-4 mr-2" />
                             {t.inventory.addProduct}
@@ -486,42 +486,42 @@ export default function InventoryPage() {
                     <div className="hidden md:flex flex-wrap items-center justify-end gap-3">
                         <Link
                             href="/inventory/ledger"
-                            className="bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
+                            className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
                         >
                             <BookOpen className="w-4 h-4 mr-2" />
                             {t.inventory.stockLedger}
                         </Link>
                         <Link
                             href="/inventory/settings"
-                            className="bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
+                            className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
                         >
                             <Settings2 className="w-4 h-4 mr-2" />
                             {t.inventory.settings}
                         </Link>
                         <Link
                             href="/inventory/categories"
-                            className="bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
+                            className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
                         >
                             <Tag className="w-4 h-4 mr-2" />
                             {t.inventory.manageCategories}
                         </Link>
                         <Link
                             href="/inventory/transfers"
-                            className="bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
+                            className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
                         >
                             <Truck className="w-4 h-4 mr-2" />
                             {t.inventory.transfers}
                         </Link>
                         <Link
                             href="/inventory/shrinkage"
-                            className="bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
+                            className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
                         >
                             <AlertTriangle className="w-4 h-4 mr-2" />
                             {t.inventory.shrinkage}
                         </Link>
                         <Link
                             href="/inventory/stock-takes"
-                            className="bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
+                            className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
                         >
                             <ClipboardCheck className="w-4 h-4 mr-2" />
                             {t.inventory.stockTakes}
@@ -530,14 +530,14 @@ export default function InventoryPage() {
                             <>
                                 <Link
                                     href="/inventory/reports/reorder"
-                                    className="bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
+                                    className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
                                 >
                                     <TrendingUp className="w-4 h-4 mr-2" />
                                     {t.inventory.reorderReport}
                                 </Link>
                                 <Link
                                     href="/inventory/reports/shrinkage"
-                                    className="bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
+                                    className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
                                 >
                                     <AlertTriangle className="w-4 h-4 mr-2" />
                                     {t.inventory.shrinkageReport}
@@ -546,7 +546,7 @@ export default function InventoryPage() {
                         ) : (
                             <Link
                                 href="/billing"
-                                className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center transition-all hover:border-amber-300 hover:bg-amber-100"
+                                className="bg-amber-50 border border-amber-200 text-amber-800 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-amber-300 hover:bg-amber-100"
                             >
                                 <TrendingUp className="w-4 h-4 mr-2" />
                                 {t.inventory.upgradeReports}
@@ -555,14 +555,14 @@ export default function InventoryPage() {
                         <button
                             onClick={() => csvInputRef.current?.click()}
                             disabled={isImporting}
-                            className="bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center transition-all hover:border-emerald-300 hover:text-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                            className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-emerald-300 hover:text-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                             <Upload className="w-4 h-4 mr-2" />
                             {isImporting ? t.inventory.importing : t.inventory.importCsv}
                         </button>
                         <button
                             onClick={() => setIsModalOpen(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
                         >
                             <Plus className="w-4 h-4 mr-2" />
                             {t.inventory.addProduct}
@@ -591,7 +591,7 @@ export default function InventoryPage() {
 
                 <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap gap-3 items-end">
                     <div className="min-w-[220px] flex-1">
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5 ml-1">{t.inventory.filters.groupFilter}</label>
+                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.inventory.filters.groupFilter}</label>
                         <select
                             value={selectedGroupId}
                             onChange={(e) => {
@@ -610,7 +610,7 @@ export default function InventoryPage() {
                         </select>
                     </div>
                     <div className="min-w-[220px] flex-1">
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5 ml-1">{t.inventory.filters.subgroupFilter}</label>
+                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.inventory.filters.subgroupFilter}</label>
                         <select
                             value={selectedSubgroupId}
                             onChange={(e) => {

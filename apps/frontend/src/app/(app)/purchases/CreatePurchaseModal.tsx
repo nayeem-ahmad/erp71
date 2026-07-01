@@ -323,16 +323,16 @@ export default function CreatePurchaseModal({
                                 <table className="w-full min-w-[480px]">
                                     <thead>
                                         <tr className="border-b border-gray-100">
-                                            <th className="text-left pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                            <th className="text-left pb-2 text-xs font-medium text-gray-500">
                                                 Product
                                             </th>
-                                            <th className="text-center pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-24">
+                                            <th className="text-center pb-2 text-xs font-medium text-gray-500 w-24">
                                                 Qty
                                             </th>
-                                            <th className="text-right pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-32">
+                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-32">
                                                 Unit Cost
                                             </th>
-                                            <th className="text-right pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-28">
+                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-28">
                                                 Line Total
                                             </th>
                                             <th className="w-10"></th>
@@ -476,7 +476,7 @@ export default function CreatePurchaseModal({
                                 <h3 className="text-sm font-black tracking-tight">{t.purchaseShared.costAdjustments}</h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     <div>
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">
+                                        <label className="text-xs font-medium text-gray-500 block mb-1">
                                             Tax
                                         </label>
                                         <input
@@ -489,7 +489,7 @@ export default function CreatePurchaseModal({
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">
+                                        <label className="text-xs font-medium text-gray-500 block mb-1">
                                             Discount
                                         </label>
                                         <input
@@ -502,7 +502,7 @@ export default function CreatePurchaseModal({
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">
+                                        <label className="text-xs font-medium text-gray-500 block mb-1">
                                             Freight
                                         </label>
                                         <input

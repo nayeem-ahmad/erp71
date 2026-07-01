@@ -94,30 +94,30 @@ export default function InventoryValuationPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+            <div className="w-full space-y-4">
                 <div>
-                    <h1 className="text-2xl font-black tracking-tight">{t.inventoryReports.valuation.title}</h1>
-                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
+                    <h1 className="text-lg font-bold tracking-tight text-gray-950">{t.inventoryReports.valuation.title}</h1>
+                    <p className="text-xs text-gray-500 mt-0.5">
                         {t.inventoryReports.valuation.subtitleMeasure}
                     </p>
                 </div>
 
                 <div className="grid md:grid-cols-4 gap-4">
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.inventoryReports.valuation.totalValue}</div>
+                        <div className="text-xs font-medium text-gray-500">{t.inventoryReports.valuation.totalValue}</div>
                         <div className="text-2xl font-black text-blue-700 mt-2">{formatBDT(Number(summary?.totalStockValue || 0))}</div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.inventoryReports.valuation.totalQuantity}</div>
+                        <div className="text-xs font-medium text-gray-500">{t.inventoryReports.valuation.totalQuantity}</div>
                         <div className="text-2xl font-black text-gray-900 mt-2">{summary?.totalQuantity ?? 0}</div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.inventoryReports.valuation.productsWithStock}</div>
+                        <div className="text-xs font-medium text-gray-500">{t.inventoryReports.valuation.productsWithStock}</div>
                         <div className="text-2xl font-black text-gray-900 mt-2">{summary?.productCount ?? 0}</div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.inventoryReports.valuation.averageUnitValue}</div>
+                        <div className="text-xs font-medium text-gray-500">{t.inventoryReports.valuation.averageUnitValue}</div>
                         <div className="text-2xl font-black text-gray-900 mt-2">{formatBDT(Number(summary?.averageUnitValue || 0))}</div>
                     </div>
                 </div>

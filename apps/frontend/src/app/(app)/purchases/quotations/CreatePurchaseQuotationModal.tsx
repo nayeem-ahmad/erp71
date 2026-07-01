@@ -193,10 +193,10 @@ export default function CreatePurchaseQuotationModal({ isOpen, onClose, onSucces
                                 <table className="w-full">
                                     <thead>
                                         <tr className="border-b border-gray-100">
-                                            <th className="text-left pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.common.product}</th>
-                                            <th className="text-center pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-24">{t.purchaseShared.qty}</th>
-                                            <th className="text-right pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-32">{t.purchaseShared.unitCost}</th>
-                                            <th className="text-right pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-28">{t.common.total}</th>
+                                            <th className="text-left pb-2 text-xs font-medium text-gray-500">{t.common.product}</th>
+                                            <th className="text-center pb-2 text-xs font-medium text-gray-500 w-24">{t.purchaseShared.qty}</th>
+                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-32">{t.purchaseShared.unitCost}</th>
+                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-28">{t.common.total}</th>
                                             <th className="w-10"></th>
                                         </tr>
                                     </thead>
@@ -244,12 +244,12 @@ export default function CreatePurchaseQuotationModal({ isOpen, onClose, onSucces
                                     ))}
                                 </select>
                                 <div>
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Valid Until</label>
+                                    <label className="text-xs font-medium text-gray-500 block mb-1">Valid Until</label>
                                     <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)}
                                         className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500/20" />
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Notes</label>
+                                    <label className="text-xs font-medium text-gray-500 block mb-1">Notes</label>
                                     <textarea placeholder={t.purchaseShared.notesRequirementsPlaceholder} value={notes} onChange={(e) => setNotes(e.target.value)}
                                         rows={3} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500/20" />
                                 </div>

@@ -108,15 +108,15 @@ export default function StockTakeDetailPage() {
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="max-w-[1300px] mx-auto space-y-6">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-black tracking-tight inline-flex items-center gap-2">
+                        <h1 className="text-lg font-bold tracking-tight text-gray-950 inline-flex items-center gap-2">
                             {formatMessage(t.inventoryStockTakeDetail.title, { number: session.session_number })}
                             <HelpTooltip text={STOCK_TAKES_FIELD_HELP.page} wide />
                         </h1>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
+                        <p className="text-xs text-gray-500 mt-0.5">
                             {formatMessage(t.inventoryStockTakeDetail.subtitle, {
                                 warehouse: session.warehouse?.name ?? '-',
                                 status: session.status,
@@ -125,18 +125,18 @@ export default function StockTakeDetailPage() {
                         </p>
                     </div>
                     <div className="flex items-center gap-3">
-                        <button onClick={() => void handleSave()} className="bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center">
+                        <button onClick={() => void handleSave()} className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center">
                             <Save className="w-4 h-4 mr-2" /> {t.inventoryStockTakeDetail.saveCounts}
                         </button>
                         {canMoveToReview ? (
-                            <button onClick={() => void handleMoveToReview()} className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm">{t.inventoryStockTakeDetail.moveToReview}</button>
+                            <button onClick={() => void handleMoveToReview()} className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">{t.inventoryStockTakeDetail.moveToReview}</button>
                         ) : null}
                         {canReturnToCounting ? (
-                            <button onClick={() => void api.updateStockTakeStatus(String(id), { status: 'COUNTING' }).then(loadSession).catch((error: any) => setMessage(error.message || t.inventoryStockTakeDetail.returnFailed))} className="bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm">
+                            <button onClick={() => void api.updateStockTakeStatus(String(id), { status: 'COUNTING' }).then(loadSession).catch((error: any) => setMessage(error.message || t.inventoryStockTakeDetail.returnFailed))} className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold">
                                 {t.inventoryStockTakeDetail.returnToCounting}
                             </button>
                         ) : null}
-                        <button disabled={!canPost} onClick={() => void handlePost()} className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center shadow-lg shadow-emerald-200 disabled:shadow-none">
+                        <button disabled={!canPost} onClick={() => void handlePost()} className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-emerald-200 disabled:shadow-none">
                             <CheckCircle2 className="w-4 h-4 mr-2" />
                             <span className="inline-flex items-center gap-1.5">
                                 {t.inventoryStockTakeDetail.postSession}
@@ -152,19 +152,19 @@ export default function StockTakeDetailPage() {
 
                 <div className="grid md:grid-cols-4 gap-4">
                     <div className="bg-white border border-gray-100 rounded-2xl p-4">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.inventoryStockTakeDetail.approvalThreshold}</div>
+                        <div className="text-xs font-medium text-gray-500">{t.inventoryStockTakeDetail.approvalThreshold}</div>
                         <div className="mt-2 text-2xl font-black text-gray-900">{session.summary?.approvalThreshold ?? 0}</div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-4">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.inventoryStockTakeDetail.maxVariance}</div>
+                        <div className="text-xs font-medium text-gray-500">{t.inventoryStockTakeDetail.maxVariance}</div>
                         <div className="mt-2 text-2xl font-black text-gray-900">{session.summary?.maxVariance ?? 0}</div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-4">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.inventoryStockTakeDetail.netQuantityImpact}</div>
+                        <div className="text-xs font-medium text-gray-500">{t.inventoryStockTakeDetail.netQuantityImpact}</div>
                         <div className={`mt-2 text-2xl font-black ${(session.summary?.netQuantityImpact ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{session.summary?.netQuantityImpact ?? 0}</div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-4">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.inventoryStockTakeDetail.estimatedValueImpact}</div>
+                        <div className="text-xs font-medium text-gray-500">{t.inventoryStockTakeDetail.estimatedValueImpact}</div>
                         <div className={`mt-2 text-2xl font-black ${(session.summary?.netValueImpact ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatBDT(Number(session.summary?.netValueImpact ?? 0))}</div>
                     </div>
                 </div>

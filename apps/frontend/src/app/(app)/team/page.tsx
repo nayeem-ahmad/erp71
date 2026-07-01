@@ -223,7 +223,7 @@ function MemberPanel({
             </div>
 
             {/* Role */}
-            <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-3">
+            <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4 space-y-3">
                 <p className="text-sm font-black text-gray-800">{tm.role}</p>
                 <div className="flex flex-wrap items-center gap-3">
                     <select
@@ -416,7 +416,7 @@ export default function TeamPage() {
                 </div>
 
                 {/* Invite */}
-                <form onSubmit={sendInvite} className="rounded-2xl border border-gray-200 bg-white p-5">
+                <form onSubmit={sendInvite} className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
                     <div className="flex flex-col sm:flex-row sm:items-end gap-3">
                         <div className="flex-1">
                             <label className="block text-xs font-bold uppercase tracking-widest text-gray-500 mb-1.5">{tm.inviteEmail}</label>

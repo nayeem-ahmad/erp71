@@ -98,7 +98,7 @@ export default function PurchaseOrderDetailPage() {
     const actions = nextActions[po.status] ?? [];
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="max-w-[1000px] mx-auto space-y-6">
                 {/* Header */}
                 <div className="flex items-center justify-between">
@@ -118,7 +118,7 @@ export default function PurchaseOrderDetailPage() {
                 <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-4">
                     <div className="flex items-start justify-between">
                         <div>
-                            <h1 className="text-2xl font-black tracking-tight">{po.po_number}</h1>
+                            <h1 className="text-lg font-bold tracking-tight text-gray-950">{po.po_number}</h1>
                             <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-0.5">
                                 Created {formatDate(po.created_at, locale)}
                                 {po.expected_date ? ` · Expected ${formatDate(po.expected_date, locale)}` : ''}
@@ -132,7 +132,7 @@ export default function PurchaseOrderDetailPage() {
 
                     <div className="grid grid-cols-2 gap-6 pt-2 border-t border-gray-100">
                         <div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">{t.common.supplier}</p>
+                            <p className="text-xs font-medium text-gray-500 mb-1">{t.common.supplier}</p>
                             {po.supplier ? (
                                 <div>
                                     <p className="text-sm font-bold text-gray-900">{po.supplier.name}</p>
@@ -142,7 +142,7 @@ export default function PurchaseOrderDetailPage() {
                             ) : <p className="text-sm text-gray-400 italic">{t.purchaseQuotations.detail.noSupplierLinked}</p>}
                         </div>
                         <div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">{t.common.branch}</p>
+                            <p className="text-xs font-medium text-gray-500 mb-1">{t.common.branch}</p>
                             <p className="text-sm font-bold text-gray-900">{po.store?.name ?? '—'}</p>
                         </div>
                     </div>
@@ -154,11 +154,11 @@ export default function PurchaseOrderDetailPage() {
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-gray-100">
-                                <th className="text-left pb-3 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.common.product}</th>
-                                <th className="text-left pb-3 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.purchases.invoice.sku}</th>
-                                <th className="text-center pb-3 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.purchaseShared.qty}</th>
-                                <th className="text-right pb-3 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.purchaseShared.unitCost}</th>
-                                <th className="text-right pb-3 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.purchaseShared.lineTotal}</th>
+                                <th className="text-left pb-3 text-xs font-medium text-gray-500">{t.common.product}</th>
+                                <th className="text-left pb-3 text-xs font-medium text-gray-500">{t.purchases.invoice.sku}</th>
+                                <th className="text-center pb-3 text-xs font-medium text-gray-500">{t.purchaseShared.qty}</th>
+                                <th className="text-right pb-3 text-xs font-medium text-gray-500">{t.purchaseShared.unitCost}</th>
+                                <th className="text-right pb-3 text-xs font-medium text-gray-500">{t.purchaseShared.lineTotal}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">

@@ -216,14 +216,14 @@ export default function SalaryPaymentsPage() {
 
     return (
         <div className="h-full overflow-y-auto bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
+            <div className="w-full space-y-4">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-black tracking-tight inline-flex items-center gap-2">
+                        <h1 className="text-lg font-bold tracking-tight text-gray-950 inline-flex items-center gap-2">
                             <Banknote className="w-7 h-7 text-emerald-600" />
                             {t.sidebar.items.salaryPayments}
                         </h1>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
+                        <p className="text-xs text-gray-500 mt-0.5">
                             Record and track staff salary disbursements
                         </p>
                     </div>
@@ -244,23 +244,23 @@ export default function SalaryPaymentsPage() {
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="rounded-2xl border border-gray-200 bg-white p-5">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Period Total</p>
+                    <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
+                        <p className="text-xs font-medium text-gray-500">Period Total</p>
                         <p className="text-2xl font-black text-emerald-600 mt-1">{formatBDT(totalAmount)}</p>
                         <p className="text-xs text-gray-400 mt-1">{payments.length} payment(s)</p>
                     </div>
-                    <div className="rounded-2xl border border-gray-200 bg-white p-5 sm:col-span-2">
+                    <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4 sm:col-span-2">
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <label className="space-y-1">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.common.date} (from)</span>
+                                <span className="text-xs font-medium text-gray-500">{t.common.date} (from)</span>
                                 <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm" />
                             </label>
                             <label className="space-y-1">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.common.date} (to)</span>
+                                <span className="text-xs font-medium text-gray-500">{t.common.date} (to)</span>
                                 <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm" />
                             </label>
                             <label className="space-y-1">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Employee</span>
+                                <span className="text-xs font-medium text-gray-500">Employee</span>
                                 <select value={employeeFilter} onChange={(e) => setEmployeeFilter(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
                                     <option value="">All employees</option>
                                     {employees.map((emp) => (

@@ -221,7 +221,7 @@ export default function PriceListDetailPage() {
                         <h1 className="text-2xl font-black text-gray-900 tracking-tight">{listName || t.priceLists.detailTitle}</h1>
                         <p className="text-sm text-gray-500 font-medium mt-1">{t.priceLists.subtitle}</p>
                     </div>
-                    <button onClick={handleSync} disabled={syncing} className="bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2">
+                    <button onClick={handleSync} disabled={syncing} className="bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2">
                         <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
                         {syncing ? t.priceLists.syncing : t.priceLists.syncProducts}
                     </button>

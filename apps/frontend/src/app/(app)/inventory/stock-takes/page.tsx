@@ -90,14 +90,14 @@ export default function StockTakesPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+            <div className="w-full space-y-4">
                 <div>
-                    <h1 className="text-2xl font-black tracking-tight inline-flex items-center gap-2">
+                    <h1 className="text-lg font-bold tracking-tight text-gray-950 inline-flex items-center gap-2">
                         {t.inventoryStockTakes.title}
                         <HelpTooltip text={STOCK_TAKES_FIELD_HELP.page} wide />
                     </h1>
-                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
+                    <p className="text-xs text-gray-500 mt-0.5">
                         {t.inventoryStockTakes.subtitle}
                     </p>
                 </div>
@@ -130,7 +130,7 @@ export default function StockTakesPage() {
                             </span>
                         </label>
                     </div>
-                    <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center shadow-lg shadow-blue-200">
+                    <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200">
                         <Plus className="w-4 h-4 mr-2" /> {t.inventoryStockTakes.createSession}
                     </button>
                 </form>

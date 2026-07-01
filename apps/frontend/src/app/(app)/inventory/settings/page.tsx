@@ -145,16 +145,16 @@ export default function InventorySettingsPage() {
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="max-w-[1100px] mx-auto space-y-6">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-black tracking-tight">{t.inventorySettings.title}</h1>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
+                        <h1 className="text-lg font-bold tracking-tight text-gray-950">{t.inventorySettings.title}</h1>
+                        <p className="text-xs text-gray-500 mt-0.5">
                             {t.inventorySettings.subtitle}
                         </p>
                     </div>
-                    <button onClick={() => void handleSave()} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center shadow-lg shadow-blue-200">
+                    <button onClick={() => void handleSave()} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200">
                         <Save className="w-4 h-4 mr-2" /> {t.common.saveChanges}
                     </button>
                 </div>
@@ -169,7 +169,7 @@ export default function InventorySettingsPage() {
                     <div className="grid md:grid-cols-2 gap-4">
                         {Object.entries(warehouseDefaultLabels).map(([key, label]) => (
                             <div key={key}>
-                                <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5 ml-1">{label}</label>
+                                <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{label}</label>
                                 <select value={form[key]} onChange={(e) => setForm((current: any) => ({ ...current, [key]: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                                     <option value="">{t.inventorySettings.selectWarehouse}</option>
                                     {warehouses.map((warehouse) => (
@@ -190,7 +190,7 @@ export default function InventorySettingsPage() {
                         <input value={warehouseForm.storeId} onChange={(e) => setWarehouseForm((current: any) => ({ ...current, storeId: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" placeholder={t.inventorySettings.storeId} />
                         <input value={warehouseForm.name} onChange={(e) => setWarehouseForm((current: any) => ({ ...current, name: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" placeholder={t.inventorySettings.warehouseName} />
                         <input value={warehouseForm.code} onChange={(e) => setWarehouseForm((current: any) => ({ ...current, code: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" placeholder={t.inventorySettings.optionalCode} />
-                        <button onClick={() => void handleCreateWarehouse()} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center shadow-lg shadow-blue-200">
+                        <button onClick={() => void handleCreateWarehouse()} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center shadow-lg shadow-blue-200">
                             <Plus className="w-4 h-4 mr-2" /> {t.inventorySettings.addWarehouse}
                         </button>
                     </div>
@@ -215,7 +215,7 @@ export default function InventorySettingsPage() {
                     <div className="grid md:grid-cols-4 gap-4">
                         {Object.entries(alertRuleLabels).map(([key, label]) => (
                             <div key={key}>
-                                <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5 ml-1">{label}</label>
+                                <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{label}</label>
                                 <input type="number" value={form[key]} onChange={(e) => setForm((current: any) => ({ ...current, [key]: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" />
                             </div>
                         ))}
@@ -231,7 +231,7 @@ export default function InventorySettingsPage() {
                         </select>
                         <input value={reasonForm.code} onChange={(e) => setReasonForm((current: any) => ({ ...current, code: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" placeholder={t.inventorySettings.reasonCode} />
                         <input value={reasonForm.label} onChange={(e) => setReasonForm((current: any) => ({ ...current, label: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" placeholder={t.inventorySettings.reasonLabel} />
-                        <button onClick={() => void handleCreateReason()} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center shadow-lg shadow-blue-200">
+                        <button onClick={() => void handleCreateReason()} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center shadow-lg shadow-blue-200">
                             <Plus className="w-4 h-4 mr-2" /> {t.inventorySettings.addReason}
                         </button>
                     </div>

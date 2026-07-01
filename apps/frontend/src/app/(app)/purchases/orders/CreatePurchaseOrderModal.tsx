@@ -206,10 +206,10 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                                 <table className="w-full">
                                     <thead>
                                         <tr className="border-b border-gray-100">
-                                            <th className="text-left pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.common.product}</th>
-                                            <th className="text-center pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-24">{t.purchaseShared.qty}</th>
-                                            <th className="text-right pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-32">{t.purchaseShared.unitCost}</th>
-                                            <th className="text-right pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-28">{t.common.total}</th>
+                                            <th className="text-left pb-2 text-xs font-medium text-gray-500">{t.common.product}</th>
+                                            <th className="text-center pb-2 text-xs font-medium text-gray-500 w-24">{t.purchaseShared.qty}</th>
+                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-32">{t.purchaseShared.unitCost}</th>
+                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-28">{t.common.total}</th>
                                             <th className="w-10"></th>
                                         </tr>
                                     </thead>
@@ -257,7 +257,7 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                                     ))}
                                 </select>
                                 <div>
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{t.purchaseShared.expectedDeliveryDate}</label>
+                                    <label className="text-xs font-medium text-gray-500 block mb-1">{t.purchaseShared.expectedDeliveryDate}</label>
                                     <input type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)}
                                         className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500/20" />
                                 </div>
@@ -268,7 +268,7 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     {[ [t.common.tax, taxAmount, setTaxAmount], [t.common.discount, discountAmount, setDiscountAmount], [t.purchaseShared.freight, freightAmount, setFreightAmount] ].map(([label, val, setter]) => (
                                         <div key={label as string}>
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{label as string}</label>
+                                            <label className="text-xs font-medium text-gray-500 block mb-1">{label as string}</label>
                                             <input type="number" min={0} step={0.01} value={val as string}
                                                 onChange={(e) => (setter as any)(e.target.value)}
                                                 className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20" />

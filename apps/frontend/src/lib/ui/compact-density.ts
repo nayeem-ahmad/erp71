@@ -1,4 +1,4 @@
-/** Shared class maps for the accounting compact UI trial. */
+/** Shared class maps for compact UI density across app modules. */
 
 export type UiDensity = 'comfortable' | 'compact';
 

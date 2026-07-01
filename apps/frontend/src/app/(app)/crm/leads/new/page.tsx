@@ -68,7 +68,7 @@ export default function NewLeadPage() {
                     <div className="w-12 h-12 bg-violet-600 rounded-xl flex items-center justify-center text-white">
                         <UserPlus className="w-6 h-6" />
                     </div>
-                    <h1 className="text-2xl font-black tracking-tight text-gray-900">{m.newLead}</h1>
+                    <h1 className="text-lg font-bold tracking-tight text-gray-950 text-gray-900">{m.newLead}</h1>
                 </div>
 
                 <LeadFormFields form={form} onChange={setForm} teamMembers={teamMembers} showStatus={false} />

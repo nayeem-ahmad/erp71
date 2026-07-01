@@ -380,14 +380,14 @@ function SupplierPaymentsContent() {
 
     return (
         <div className="h-full overflow-y-auto bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
+            <div className="w-full space-y-4">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-black tracking-tight inline-flex items-center gap-2">
+                        <h1 className="text-lg font-bold tracking-tight text-gray-950 inline-flex items-center gap-2">
                             <Wallet className="w-7 h-7 text-orange-600" />
                             {copy.title}
                         </h1>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
+                        <p className="text-xs text-gray-500 mt-0.5">
                             {copy.subtitle}
                         </p>
                     </div>
@@ -408,23 +408,23 @@ function SupplierPaymentsContent() {
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="rounded-2xl border border-gray-200 bg-white p-5">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{copy.periodTotal}</p>
+                    <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
+                        <p className="text-xs font-medium text-gray-500">{copy.periodTotal}</p>
                         <p className="text-2xl font-black text-emerald-600 mt-1">{formatBDT(totalAmount)}</p>
                         <p className="text-xs text-gray-400 mt-1">{formatMessage(copy.paymentCount, { count: payments.length })}</p>
                     </div>
-                    <div className="rounded-2xl border border-gray-200 bg-white p-5 sm:col-span-2">
+                    <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4 sm:col-span-2">
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <label className="space-y-1">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{copy.dateFrom}</span>
+                                <span className="text-xs font-medium text-gray-500">{copy.dateFrom}</span>
                                 <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm" />
                             </label>
                             <label className="space-y-1">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{copy.dateTo}</span>
+                                <span className="text-xs font-medium text-gray-500">{copy.dateTo}</span>
                                 <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm" />
                             </label>
                             <label className="space-y-1">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{copy.filterSupplier}</span>
+                                <span className="text-xs font-medium text-gray-500">{copy.filterSupplier}</span>
                                 <select value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
                                     <option value="">{copy.allSuppliers}</option>
                                     {suppliers.map((supplier) => (

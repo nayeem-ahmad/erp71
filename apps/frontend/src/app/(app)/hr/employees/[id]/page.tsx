@@ -155,7 +155,7 @@ export default function EmployeeDetailPage() {
 
     if (loading) {
         return (
-            <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 flex items-center justify-center">
+            <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px] flex items-center justify-center">
                 <p className="text-gray-400 font-bold">{t.employees.detail.loading}</p>
             </div>
         );
@@ -163,14 +163,14 @@ export default function EmployeeDetailPage() {
 
     if (!employee) {
         return (
-            <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 flex items-center justify-center">
+            <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px] flex items-center justify-center">
                 <p className="text-red-500 font-bold">{t.employees.detail.notFound}</p>
             </div>
         );
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="max-w-3xl mx-auto space-y-6">
                 {/* Breadcrumb */}
                 <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -183,7 +183,7 @@ export default function EmployeeDetailPage() {
                 <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
                     <div className="flex items-start justify-between">
                         <div>
-                            <h1 className="text-2xl font-black tracking-tight">{employee.name}</h1>
+                            <h1 className="text-lg font-bold tracking-tight text-gray-950">{employee.name}</h1>
                             <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1">{employee.employee_code}</p>
                         </div>
                         <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${employee.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
@@ -192,19 +192,19 @@ export default function EmployeeDetailPage() {
                     </div>
                     <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         <div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.employees.detail.department}</p>
+                            <p className="text-xs font-medium text-gray-500">{t.employees.detail.department}</p>
                             <p className="font-bold mt-0.5">{employee.department?.name ?? '—'}</p>
                         </div>
                         <div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.employees.detail.designation}</p>
+                            <p className="text-xs font-medium text-gray-500">{t.employees.detail.designation}</p>
                             <p className="font-bold mt-0.5">{employee.designation?.name ?? '—'}</p>
                         </div>
                         <div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.employees.detail.joined}</p>
+                            <p className="text-xs font-medium text-gray-500">{t.employees.detail.joined}</p>
                             <p className="font-bold mt-0.5">{employee.date_of_joining ? formatDate(employee.date_of_joining) : '—'}</p>
                         </div>
                         <div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.employees.detail.added}</p>
+                            <p className="text-xs font-medium text-gray-500">{t.employees.detail.added}</p>
                             <p className="font-bold mt-0.5">{formatDate(employee.created_at)}</p>
                         </div>
                     </div>

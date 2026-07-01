@@ -346,6 +346,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Platform-admin `/status` page — moved from public marketing page to authenticated `(app)/status`; route guard (login redirect + platform-admin check); rich health panel (dependencies, cron jobs, probe latency, last errors); help/admin links updated; SLA copy no longer promises public status — done 2026-07-01
 - [x] Accounting overview cleanup — removed subtitle, Epic 30 badge, and top-bar export; hub sections match sidebar (daily, transactions, reconciliation, reports, setup); ledger export moved under Accounting Setup — done 2026-07-01
 - [x] Compact UI trial — accounting module only: `CompactUiProvider` layout, `AccountingPageShell`/`CompactSection`/`CompactStat`/`CompactLinkGrid`, DataTable `density` via context (tighter cells/toolbar/pagination), compact sidebar (w-52) + header (h-11) on `/accounting/*`; all 30+ accounting pages migrated; 62 accounting tests green — done 2026-07-01
+- [x] Roll out compact UI to all modules — global `CompactUiProvider` + compact sidebar/header (except POS); shared `components/ui/compact` (`PageShell`, `PageToolbar`, etc.); `ModuleHub` compact link grids; Sales hub refactored to `ModuleHub`; 83 module pages migrated via density class script — done 2026-07-01
 - [x] Global voice navigation — header mic + help icons in app top bar; say phrases like "sales entry" to navigate to entry UIs — done 2026-06-30
 - [x] Fix onboarding store setup scroll — `/dashboard/onboarding` uses `h-full overflow-y-auto` inside app layout so create-store form and skip link are reachable on short/mobile viewports — done 2026-06-29
 - [x] Rename platform retail-saas → erp71 — npm scope `@erp71/*`, branding (UI/emails/seed), `render.yaml` + ops scripts, consolidated duplicate erp71 stack (`docker-compose.erp71.yml`/`deploy-erp71.sh` removed), `scripts/migrate-vps-rename.sh` for VPS cutover — done 2026-06-29
@@ -539,5 +540,5 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Mobile responsiveness P2 fixes — ModalShell, DataTable scroll affordance, list header wrap, pricing mobile compare, shop filter drawer — done 2026-07-01
 - [x] Mobile responsiveness P3 fixes — Playwright mobile viewports, safe-area/touch tokens, sidebar drawer a11y (focus trap, swipe, aria-modal), body scroll lock, mobile E2E spec, header touch targets — done 2026-07-01
 - [x] Storefront mobile E2E — `nayeem-store` slug wired for hamburger nav, shop filter drawer, and add-to-cart checks in `mobile-responsive.spec.ts` — done 2026-07-01
-- [ ] Roll out compact UI density to other modules (Sales, Purchase, Inventory, HR) after accounting trial feedback
+
 

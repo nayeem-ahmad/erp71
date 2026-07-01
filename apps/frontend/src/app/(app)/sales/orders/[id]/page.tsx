@@ -235,7 +235,7 @@ function OrderDetailsPageContent() {
     const canEdit = order.status === 'DRAFT' || order.status === 'CONFIRMED';
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="max-w-5xl mx-auto space-y-6">
                 {/* Edit Mode Banner */}
                 {isEditMode && (
@@ -271,7 +271,7 @@ function OrderDetailsPageContent() {
                             <ArrowLeft className="w-5 h-5" />
                         </button>
                         <div>
-                            <h1 className="text-2xl font-black tracking-tight">{order.order_number}</h1>
+                            <h1 className="text-lg font-bold tracking-tight text-gray-950">{order.order_number}</h1>
                             <div className="flex items-center space-x-3 mt-1">
                                 <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-gray-100 text-gray-800">
                                     {t.shared.statuses.order[order.status as keyof typeof t.shared.statuses.order] ?? order.status}
@@ -325,23 +325,23 @@ function OrderDetailsPageContent() {
                 {/* Summary cards */}
                 <div className="grid grid-cols-4 gap-4">
                     <div className="bg-white p-4 rounded-2xl shadow-sm">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{t.common.status}</span>
+                        <span className="text-xs font-medium text-gray-500 block mb-1">{t.common.status}</span>
                         <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-gray-100 text-gray-800">
                             {t.shared.statuses.order[order.status as keyof typeof t.shared.statuses.order] ?? order.status}
                         </span>
                     </div>
                     <div className="bg-white p-4 rounded-2xl shadow-sm">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{t.orders.detail.totalAmount}</span>
+                        <span className="text-xs font-medium text-gray-500 block mb-1">{t.orders.detail.totalAmount}</span>
                         <span className="text-xl font-black text-blue-600">{formatBDT(totalAmount, { locale })}</span>
                     </div>
                     <div className="bg-white p-4 rounded-2xl shadow-sm">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{t.shared.columns.payment}</span>
+                        <span className="text-xs font-medium text-gray-500 block mb-1">{t.shared.columns.payment}</span>
                         <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-gray-100 text-gray-800">
                             {t.shared.statuses.payment[order.payment_status as keyof typeof t.shared.statuses.payment] ?? order.payment_status}
                         </span>
                     </div>
                     <div className="bg-white p-4 rounded-2xl shadow-sm">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{t.orders.detail.amountDue}</span>
+                        <span className="text-xs font-medium text-gray-500 block mb-1">{t.orders.detail.amountDue}</span>
                         <span className={`text-xl font-black ${amountDue > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
                             {amountDue > 0 ? formatBDT(amountDue, { locale }) : formatBDT(0, { locale })}
                         </span>
@@ -481,10 +481,10 @@ function OrderDetailsPageContent() {
                                 <table className="w-full">
                                     <thead>
                                         <tr className="border-b border-gray-100">
-                                            <th className="text-left pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.shared.columns.product}</th>
-                                            <th className="text-center pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-24">{t.shared.columns.qty}</th>
-                                            <th className="text-right pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-32">{t.shared.columns.price}</th>
-                                            <th className="text-right pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-28">{t.shared.columns.subtotal}</th>
+                                            <th className="text-left pb-2 text-xs font-medium text-gray-500">{t.shared.columns.product}</th>
+                                            <th className="text-center pb-2 text-xs font-medium text-gray-500 w-24">{t.shared.columns.qty}</th>
+                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-32">{t.shared.columns.price}</th>
+                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-28">{t.shared.columns.subtotal}</th>
                                             <th className="w-10"></th>
                                         </tr>
                                     </thead>
@@ -539,10 +539,10 @@ function OrderDetailsPageContent() {
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-gray-100">
-                                    <th className="text-left p-4 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.shared.columns.product}</th>
-                                    <th className="text-center p-4 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.shared.columns.qty}</th>
-                                    <th className="text-right p-4 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.shared.columns.unitPrice}</th>
-                                    <th className="text-right p-4 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.common.total}</th>
+                                    <th className="text-left p-4 text-xs font-medium text-gray-500">{t.shared.columns.product}</th>
+                                    <th className="text-center p-4 text-xs font-medium text-gray-500">{t.shared.columns.qty}</th>
+                                    <th className="text-right p-4 text-xs font-medium text-gray-500">{t.shared.columns.unitPrice}</th>
+                                    <th className="text-right p-4 text-xs font-medium text-gray-500">{t.common.total}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
@@ -588,7 +588,7 @@ function OrderDetailsPageContent() {
                         )}
                         {order.delivery_date && (
                             <div className="mt-4 pt-4 border-t border-gray-100">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.shared.form.deliveryDate}</span>
+                                <span className="text-xs font-medium text-gray-500">{t.shared.form.deliveryDate}</span>
                                 <p className="text-sm font-black mt-1">{formatDate(order.delivery_date, locale)}</p>
                             </div>
                         )}

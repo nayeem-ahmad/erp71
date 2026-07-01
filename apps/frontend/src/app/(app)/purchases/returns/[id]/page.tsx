@@ -263,7 +263,7 @@ function PurchaseReturnDetailPageContent() {
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="max-w-4xl mx-auto space-y-6">
                 {isEditMode && (
                     <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-center justify-between">
@@ -302,8 +302,8 @@ function PurchaseReturnDetailPageContent() {
                             <ArrowLeft className="w-5 h-5" />
                         </button>
                         <div>
-                            <h1 className="text-2xl font-black tracking-tight">{purchaseReturn.return_number}</h1>
-                            <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
+                            <h1 className="text-lg font-bold tracking-tight text-gray-950">{purchaseReturn.return_number}</h1>
+                            <p className="text-xs text-gray-500 mt-0.5">
                                 {new Date(purchaseReturn.created_at).toLocaleString()}
                             </p>
                         </div>
@@ -341,19 +341,19 @@ function PurchaseReturnDetailPageContent() {
                 {isEditMode ? (
                     <div className="grid grid-cols-4 gap-4">
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Source Purchase</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">Source Purchase</span>
                             <span className="text-sm font-black text-gray-900">{purchaseReturn.purchase?.purchase_number || '-'}</span>
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Supplier</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">Supplier</span>
                             <span className="text-sm font-bold text-gray-700">{purchaseReturn.supplier?.name || 'Unlinked supplier'}</span>
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Editable Items</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">Editable Items</span>
                             <span className="text-xl font-black text-gray-900">{editItems.filter((item) => item.quantity > 0).length}</span>
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">New Total</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">New Total</span>
                             <span className="text-xl font-black text-emerald-600">{formatBDT(editTotal, { locale })}</span>
                             {editTotal !== Number(purchaseReturn.total_amount || 0) && (
                                 <span className="block text-xs font-bold mt-1 text-gray-400">
@@ -365,25 +365,25 @@ function PurchaseReturnDetailPageContent() {
                 ) : (
                     <div className="grid grid-cols-5 gap-4">
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Source Purchase</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">Source Purchase</span>
                             <span className="text-sm font-black text-gray-900">{purchaseReturn.purchase?.purchase_number || '-'}</span>
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Supplier</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">Supplier</span>
                             <span className="text-sm font-bold text-gray-700">{purchaseReturn.supplier?.name || 'Unlinked supplier'}</span>
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Status</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">Status</span>
                             <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border bg-emerald-50 text-emerald-700 border-emerald-200">
                                 {purchaseReturn.status || 'RECORDED'}
                             </span>
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Items</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">Items</span>
                             <span className="text-xl font-black text-gray-900">{purchaseReturn.items?.length || 0}</span>
                         </div>
                         <div className="bg-white p-4 rounded-2xl shadow-sm">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{t.purchases.invoice.total}</span>
+                            <span className="text-xs font-medium text-gray-500 block mb-1">{t.purchases.invoice.total}</span>
                             <span className="text-xl font-black text-emerald-600">{formatBDT(Number(purchaseReturn.total_amount || 0), { locale })}</span>
                         </div>
                     </div>
@@ -407,11 +407,11 @@ function PurchaseReturnDetailPageContent() {
                                 <table className="w-full">
                                     <thead>
                                         <tr className="border-b border-gray-100">
-                                            <th className="text-left pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.common.product}</th>
-                                            <th className="text-center pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-24">{t.purchaseShared.qty}</th>
-                                            <th className="text-center pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-20">{t.purchaseReturns.modal.returnQty}</th>
-                                            <th className="text-right pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-28">{t.purchaseShared.unitCost}</th>
-                                            <th className="text-right pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-28">{t.purchaseShared.lineTotal}</th>
+                                            <th className="text-left pb-2 text-xs font-medium text-gray-500">{t.common.product}</th>
+                                            <th className="text-center pb-2 text-xs font-medium text-gray-500 w-24">{t.purchaseShared.qty}</th>
+                                            <th className="text-center pb-2 text-xs font-medium text-gray-500 w-20">{t.purchaseReturns.modal.returnQty}</th>
+                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-28">{t.purchaseShared.unitCost}</th>
+                                            <th className="text-right pb-2 text-xs font-medium text-gray-500 w-28">{t.purchaseShared.lineTotal}</th>
                                             <th className="w-10"></th>
                                         </tr>
                                     </thead>
@@ -460,10 +460,10 @@ function PurchaseReturnDetailPageContent() {
                             <table className="w-full">
                                 <thead>
                                     <tr className="border-b border-gray-100 bg-gray-50/80">
-                                        <th className="text-left p-3 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.common.product}</th>
-                                        <th className="text-center p-3 text-[10px] font-black uppercase tracking-widest text-gray-400 w-28">{t.purchaseShared.qty}</th>
-                                        <th className="text-right p-3 text-[10px] font-black uppercase tracking-widest text-gray-400 w-32">{t.purchaseShared.unitCost}</th>
-                                        <th className="text-right p-3 text-[10px] font-black uppercase tracking-widest text-gray-400 w-32">{t.purchaseShared.lineTotal}</th>
+                                        <th className="text-left p-3 text-xs font-medium text-gray-500">{t.common.product}</th>
+                                        <th className="text-center p-3 text-xs font-medium text-gray-500 w-28">{t.purchaseShared.qty}</th>
+                                        <th className="text-right p-3 text-xs font-medium text-gray-500 w-32">{t.purchaseShared.unitCost}</th>
+                                        <th className="text-right p-3 text-xs font-medium text-gray-500 w-32">{t.purchaseShared.lineTotal}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">

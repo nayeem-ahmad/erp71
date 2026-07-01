@@ -322,21 +322,21 @@ export default function CreatePurchaseReturnModal({
                                 <>
                                     <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div>
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Purchase #</span>
+                                            <span className="text-xs font-medium text-gray-500 block mb-1">Purchase #</span>
                                             <span className="text-sm font-black text-gray-900">{selectedPurchase.purchase_number}</span>
                                         </div>
                                         <div>
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Supplier</span>
+                                            <span className="text-xs font-medium text-gray-500 block mb-1">Supplier</span>
                                             <span className="text-sm font-bold text-gray-700">{selectedPurchase.supplier?.name || 'Unlinked supplier'}</span>
                                         </div>
                                         <div>
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Purchase Date</span>
+                                            <span className="text-xs font-medium text-gray-500 block mb-1">Purchase Date</span>
                                             <span className="text-sm font-bold text-gray-700">
                                                 {formatDate(selectedPurchase.created_at, locale)}
                                             </span>
                                         </div>
                                         <div>
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Original Total</span>
+                                            <span className="text-xs font-medium text-gray-500 block mb-1">Original Total</span>
                                             <span className="text-sm font-black text-emerald-600">
                                                 {formatBDT(Number(selectedPurchase.total_amount || 0), { locale })}
                                             </span>
@@ -378,12 +378,12 @@ export default function CreatePurchaseReturnModal({
                                             <table className="w-full">
                                                 <thead>
                                                     <tr className="border-b border-gray-100 bg-gray-50/80">
-                                                        <th className="text-left p-3 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.common.product}</th>
-                                                        <th className="text-center p-3 text-[10px] font-black uppercase tracking-widest text-gray-400 w-24">{t.purchaseReturns.modal.purchased}</th>
-                                                        <th className="text-center p-3 text-[10px] font-black uppercase tracking-widest text-gray-400 w-24">{t.purchaseReturns.modal.remaining}</th>
-                                                        <th className="text-right p-3 text-[10px] font-black uppercase tracking-widest text-gray-400 w-32">{t.purchaseShared.unitCost}</th>
-                                                        <th className="text-center p-3 text-[10px] font-black uppercase tracking-widest text-gray-400 w-28">Return Qty</th>
-                                                        <th className="text-right p-3 text-[10px] font-black uppercase tracking-widest text-gray-400 w-28">{t.purchaseShared.lineTotal}</th>
+                                                        <th className="text-left p-3 text-xs font-medium text-gray-500">{t.common.product}</th>
+                                                        <th className="text-center p-3 text-xs font-medium text-gray-500 w-24">{t.purchaseReturns.modal.purchased}</th>
+                                                        <th className="text-center p-3 text-xs font-medium text-gray-500 w-24">{t.purchaseReturns.modal.remaining}</th>
+                                                        <th className="text-right p-3 text-xs font-medium text-gray-500 w-32">{t.purchaseShared.unitCost}</th>
+                                                        <th className="text-center p-3 text-xs font-medium text-gray-500 w-28">Return Qty</th>
+                                                        <th className="text-right p-3 text-xs font-medium text-gray-500 w-28">{t.purchaseShared.lineTotal}</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-50">

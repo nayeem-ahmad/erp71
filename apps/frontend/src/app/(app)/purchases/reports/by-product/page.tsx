@@ -143,30 +143,30 @@ export default function PurchasesByProductPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+            <div className="w-full space-y-4">
                 <div>
-                    <h1 className="text-2xl font-black tracking-tight">{t.purchaseReports.byProduct.title}</h1>
-                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
+                    <h1 className="text-lg font-bold tracking-tight text-gray-950">{t.purchaseReports.byProduct.title}</h1>
+                    <p className="text-xs text-gray-500 mt-0.5">
                         {t.purchaseReports.byProduct.subtitle}
                     </p>
                 </div>
 
                 <div className="grid md:grid-cols-3 gap-4">
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.purchaseReports.byProduct.totalSpend}</div>
+                        <div className="text-xs font-medium text-gray-500">{t.purchaseReports.byProduct.totalSpend}</div>
                         <div className="text-2xl font-black text-blue-700 mt-2">
                             {formatBDT(Number(summary?.totalSpend ?? 0), { locale })}
                         </div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.purchaseReports.byProduct.totalUnits}</div>
+                        <div className="text-xs font-medium text-gray-500">{t.purchaseReports.byProduct.totalUnits}</div>
                         <div className="text-2xl font-black text-gray-900 mt-2">
                             {summary?.totalUnits ?? 0}
                         </div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.purchaseReports.byProduct.products}</div>
+                        <div className="text-xs font-medium text-gray-500">{t.purchaseReports.byProduct.products}</div>
                         <div className="text-2xl font-black text-gray-900 mt-2">
                             {summary?.productCount ?? 0}
                         </div>
@@ -195,7 +195,7 @@ export default function PurchasesByProductPage() {
                         ))}
                     </select>
                     <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.accountingShared.from}</span>
+                        <span className="text-xs font-medium text-gray-500">{t.accountingShared.from}</span>
                         <input
                             type="date"
                             value={fromDate}
@@ -204,7 +204,7 @@ export default function PurchasesByProductPage() {
                         />
                     </div>
                     <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.accountingShared.to}</span>
+                        <span className="text-xs font-medium text-gray-500">{t.accountingShared.to}</span>
                         <input
                             type="date"
                             value={toDate}

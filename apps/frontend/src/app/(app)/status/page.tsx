@@ -12,7 +12,7 @@ export default function StatusPage() {
     const admin = t.admin.systemHealth;
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="w-full max-w-5xl mx-auto space-y-8">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
@@ -20,7 +20,7 @@ export default function StatusPage() {
                             <ShieldCheck className="w-5 h-5 text-indigo-600" />
                             <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">{admin.badge}</p>
                         </div>
-                        <h1 className="text-3xl font-black tracking-tight">{m.title}</h1>
+                        <h1 className="text-lg font-bold tracking-tight text-gray-950">{m.title}</h1>
                         <p className="mt-1 text-sm text-gray-500">{m.description}</p>
                         <p className="mt-2 text-xs font-semibold text-indigo-600">{m.adminOnly}</p>
                     </div>

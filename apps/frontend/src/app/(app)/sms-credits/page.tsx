@@ -87,10 +87,10 @@ export default function SmsCreditsPage() {
     }, [balance, summary?.low_balance]);
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="max-w-6xl mx-auto space-y-6">
                 <div className="flex flex-col gap-2">
-                    <h1 className="text-2xl font-black tracking-tight">SMS Credits</h1>
+                    <h1 className="text-lg font-bold tracking-tight text-gray-950">SMS Credits</h1>
                     <p className="text-xs font-bold uppercase tracking-widest text-gray-500">
                         Prepaid SMS balance for {summary?.tenant.name || 'your shop'} — credits are spent whenever an SMS is sent
                     </p>
@@ -118,7 +118,7 @@ export default function SmsCreditsPage() {
                             <div className="rounded-3xl border border-gray-100 bg-white p-6">
                                 <div className="flex items-start justify-between gap-4">
                                     <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Current Balance</p>
+                                        <p className="text-xs font-medium text-gray-500">Current Balance</p>
                                         <div className="mt-2 flex items-end gap-2">
                                             <span className={`text-5xl font-black tracking-tight ${balanceTone}`}>{formatNumber(balance)}</span>
                                             <span className="mb-1 text-sm font-bold text-gray-500">SMS credits</span>
@@ -193,7 +193,7 @@ export default function SmsCreditsPage() {
 
                         {/* Transaction history */}
                         <aside className="rounded-3xl border border-gray-100 bg-white p-6 space-y-4 h-fit">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Recent Activity</p>
+                            <p className="text-xs font-medium text-gray-500">Recent Activity</p>
                             {summary.transactions.length === 0 ? (
                                 <p className="text-sm text-gray-500">No SMS credit activity yet.</p>
                             ) : (

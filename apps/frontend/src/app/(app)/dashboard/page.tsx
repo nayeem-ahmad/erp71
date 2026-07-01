@@ -217,7 +217,7 @@ export default function DashboardPage() {
             <div className="mb-4 space-y-4">
                 <DashboardBreadcrumb />
                 <div>
-                    <h1 className="text-2xl font-black tracking-tight text-gray-900">{copy.businessMonitor}</h1>
+                    <h1 className="text-lg font-bold tracking-tight text-gray-950 text-gray-900">{copy.businessMonitor}</h1>
                     <p className="text-gray-500 text-sm mt-1 font-medium">
                         {formatMessage(copy.tenantSubtitle, { tenant: tenantName })}
                     </p>
@@ -259,7 +259,7 @@ export default function DashboardPage() {
             <section className="mb-8 rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-5">
                     <div>
-                        <p className="text-xs font-black uppercase tracking-[0.24em] text-gray-400">{copy.financialSnapshot}</p>
+                        <p className="text-xs font-medium text-gray-500">{copy.financialSnapshot}</p>
                         <h2 className="mt-1 text-xl font-black tracking-tight text-gray-900">{copy.accountingKpis}</h2>
                         <p className="mt-2 text-sm text-gray-500">{financialDateRange}</p>
                     </div>
@@ -304,7 +304,7 @@ export default function DashboardPage() {
                         <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                             <div className="flex flex-wrap items-start justify-between gap-3">
                                 <div>
-                                    <p className="text-xs font-black uppercase tracking-[0.24em] text-gray-400">{copy.cashFlowMovement}</p>
+                                    <p className="text-xs font-medium text-gray-500">{copy.cashFlowMovement}</p>
                                     <h3 className="mt-2 text-xl font-black tracking-tight text-gray-950">{copy.inflowVsOutflow}</h3>
                                 </div>
                                 {financialTrendError ? (

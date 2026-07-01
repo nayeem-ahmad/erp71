@@ -213,19 +213,19 @@ export default function AttendancePage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+            <div className="w-full space-y-4">
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-black tracking-tight">{t.attendance.title}</h1>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
+                        <h1 className="text-lg font-bold tracking-tight text-gray-950">{t.attendance.title}</h1>
+                        <p className="text-xs text-gray-500 mt-0.5">
                             {t.attendance.pageSubtitle}
                         </p>
                     </div>
                     <button
                         onClick={() => setShowModal(true)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
                     >
                         <Plus className="w-4 h-4 mr-2" />
                         {t.attendance.logAttendance}
@@ -236,7 +236,7 @@ export default function AttendancePage() {
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
                     <div className="flex flex-wrap gap-3 items-end">
                         <div className="space-y-1">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block">{t.attendance.filters.from}</label>
+                            <label className="text-xs font-medium text-gray-500 block">{t.attendance.filters.from}</label>
                             <input
                                 type="date"
                                 value={startDate}
@@ -245,7 +245,7 @@ export default function AttendancePage() {
                             />
                         </div>
                         <div className="space-y-1">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block">{t.attendance.filters.to}</label>
+                            <label className="text-xs font-medium text-gray-500 block">{t.attendance.filters.to}</label>
                             <input
                                 type="date"
                                 value={endDate}
@@ -254,7 +254,7 @@ export default function AttendancePage() {
                             />
                         </div>
                         <div className="space-y-1">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block">{t.attendance.columns.employee}</label>
+                            <label className="text-xs font-medium text-gray-500 block">{t.attendance.columns.employee}</label>
                             <select
                                 value={filterEmployee}
                                 onChange={(e) => setFilterEmployee(e.target.value)}
@@ -383,7 +383,7 @@ export default function AttendancePage() {
                                 <button
                                     type="button"
                                     onClick={() => { setShowModal(false); setForm(EMPTY_FORM); setError(''); }}
-                                    className="px-4 py-2.5 rounded-xl font-bold text-sm text-gray-600 hover:bg-gray-100 transition-colors"
+                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-100 transition-colors"
                                 >
                                     {t.common.cancel}
                                 </button>
