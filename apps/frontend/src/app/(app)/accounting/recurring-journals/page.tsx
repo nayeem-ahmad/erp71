@@ -2,9 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { Plus, Play, Trash2 } from 'lucide-react';
+import {
+    AccountingPageShell,
+    AccountingToolbar,
+    CompactSection,
+} from '@/components/accounting/compact';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { compactDensity } from '@/lib/ui/compact-density';
 
 interface RJLine { accountId: string; debitAmount: string; creditAmount: string; comment: string; }
 interface RJTemplate {
@@ -101,47 +107,38 @@ export default function RecurringJournalsPage() {
     };
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
-                <div className="flex items-start justify-between">
-                    <div>
-                        <h1 className="text-2xl font-black tracking-tight">Recurring Journal Templates</h1>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
-                            Schedule repeating entries — rent, salaries, subscriptions
-                        </p>
-                    </div>
-                    <button onClick={() => setShowCreate(true)}
-                        className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2 text-sm font-bold text-white hover:bg-gray-700 transition">
-                        <Plus className="w-4 h-4" /> New Template
+        <AccountingPageShell>
+            <AccountingToolbar
+                subtitle="Schedule repeating entries — rent, salaries, subscriptions"
+                actions={(
+                    <button onClick={() => setShowCreate(true)} className={`${compactDensity.btnPrimary} bg-gray-900 text-white hover:bg-gray-700`}>
+                        <Plus className="w-3.5 h-3.5" /> New Template
                     </button>
-                </div>
+                )}
+            />
 
-                {error && <div className="rounded-2xl bg-red-50 border border-red-100 p-4 text-sm text-red-700">{error}</div>}
+            {error && <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-sm text-red-700">{error}</div>}
 
-                {showCreate && (
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5 space-y-4">
-                        <h2 className="font-black text-gray-900">New Recurring Journal</h2>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="col-span-2">
-                                <span className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Template Name</span>
-                                <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                                    placeholder="e.g. Monthly Rent" className="w-full rounded-xl bg-gray-50 border-none py-2.5 px-4 text-sm" />
-                            </div>
-                            <div>
-                                <span className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Frequency</span>
-                                <select value={form.frequency} onChange={(e) => setForm((f) => ({ ...f, frequency: e.target.value }))}
-                                    className="w-full rounded-xl bg-gray-50 border-none py-2.5 px-4 text-sm">
-                                    <option value="MONTHLY">Monthly</option>
-                                    <option value="WEEKLY">Weekly</option>
-                                    <option value="DAILY">Daily</option>
-                                </select>
-                            </div>
-                            <div>
-                                <span className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Next Due Date</span>
-                                <input type="date" value={form.nextDueDate} onChange={(e) => setForm((f) => ({ ...f, nextDueDate: e.target.value }))}
-                                    className="w-full rounded-xl bg-gray-50 border-none py-2.5 px-4 text-sm" />
-                            </div>
-                        </div>
+            {showCreate && (
+                <CompactSection title="New Recurring Journal">
+                    <div className="grid grid-cols-2 gap-3">
+                        <label className="col-span-2 block">
+                            <span className={`${compactDensity.formLabel} block mb-1`}>Template Name</span>
+                            <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Monthly Rent" className={compactDensity.formField} />
+                        </label>
+                        <label className="block">
+                            <span className={`${compactDensity.formLabel} block mb-1`}>Frequency</span>
+                            <select value={form.frequency} onChange={(e) => setForm((f) => ({ ...f, frequency: e.target.value }))} className={compactDensity.formField}>
+                                <option value="MONTHLY">Monthly</option>
+                                <option value="WEEKLY">Weekly</option>
+                                <option value="DAILY">Daily</option>
+                            </select>
+                        </label>
+                        <label className="block">
+                            <span className={`${compactDensity.formLabel} block mb-1`}>Next Due Date</span>
+                            <input type="date" value={form.nextDueDate} onChange={(e) => setForm((f) => ({ ...f, nextDueDate: e.target.value }))} className={compactDensity.formField} />
+                        </label>
+                    </div>
 
                         <table className="w-full text-sm border border-gray-100 rounded-xl overflow-hidden">
                             <thead>
@@ -157,7 +154,7 @@ export default function RecurringJournalsPage() {
                                     <tr key={i} className="border-t border-gray-100">
                                         <td className="px-3 py-1.5">
                                             <select value={l.accountId} onChange={(e) => setLine(i, 'accountId', e.target.value)}
-                                                className="w-full rounded-lg bg-gray-50 border-none py-1.5 px-2 text-sm">
+                                                className={compactDensity.formField}>
                                                 <option value="">Select…</option>
                                                 {accounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)}
                                             </select>
@@ -165,12 +162,12 @@ export default function RecurringJournalsPage() {
                                         <td className="px-3 py-1.5">
                                             <input type="number" min="0" step="0.01" value={l.debitAmount}
                                                 onChange={(e) => { setLine(i, 'debitAmount', e.target.value); if (e.target.value) setLine(i, 'creditAmount', ''); }}
-                                                className="w-full rounded-lg bg-gray-50 border-none py-1.5 px-2 text-sm text-right" placeholder="0.00" />
+                                                className={`${compactDensity.formField} text-right`} placeholder="0.00" />
                                         </td>
                                         <td className="px-3 py-1.5">
                                             <input type="number" min="0" step="0.01" value={l.creditAmount}
                                                 onChange={(e) => { setLine(i, 'creditAmount', e.target.value); if (e.target.value) setLine(i, 'debitAmount', ''); }}
-                                                className="w-full rounded-lg bg-gray-50 border-none py-1.5 px-2 text-sm text-right" placeholder="0.00" />
+                                                className={`${compactDensity.formField} text-right`} placeholder="0.00" />
                                         </td>
                                         <td className="px-2 py-1.5 text-center">
                                             {lines.length > 2 && (
@@ -193,25 +190,24 @@ export default function RecurringJournalsPage() {
                             </span>
                         </div>
 
-                        <div className="flex gap-3">
-                            <button onClick={() => setShowCreate(false)}
-                                className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 transition">Cancel</button>
-                            <button onClick={handleCreate} disabled={creating || !form.name || !form.nextDueDate || !isBalanced || totalDebit === 0}
-                                className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-bold text-white hover:bg-gray-700 disabled:opacity-50 transition">
-                                {creating ? 'Saving…' : 'Save Template'}
-                            </button>
-                        </div>
+                    <div className="flex gap-2 mt-3">
+                        <button onClick={() => setShowCreate(false)} className={compactDensity.btnSecondary}>Cancel</button>
+                        <button onClick={handleCreate} disabled={creating || !form.name || !form.nextDueDate || !isBalanced || totalDebit === 0}
+                            className={`${compactDensity.btnPrimary} bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-50`}>
+                            {creating ? 'Saving…' : 'Save Template'}
+                        </button>
                     </div>
-                )}
+                </CompactSection>
+            )}
 
-                {loading ? (
-                    <div className="bg-white border border-gray-100 rounded-2xl p-12 text-center text-gray-400 text-sm">Loading…</div>
-                ) : templates.length === 0 ? (
-                    <div className="bg-white border border-gray-100 rounded-2xl p-8 text-center text-gray-400 text-sm">No recurring journals yet.</div>
-                ) : (
-                    <div className="space-y-3">
-                        {templates.map((t) => (
-                            <div key={t.id} className="bg-white border border-gray-100 rounded-2xl p-5">
+            {loading ? (
+                <CompactSection className="text-center text-gray-400 text-sm py-8">Loading…</CompactSection>
+            ) : templates.length === 0 ? (
+                <CompactSection className="text-center text-gray-400 text-sm py-6">No recurring journals yet.</CompactSection>
+            ) : (
+                <div className="space-y-2">
+                    {templates.map((t) => (
+                        <CompactSection key={t.id}>
                                 <div className="flex items-start justify-between gap-4">
                                     <div>
                                         <div className="font-black text-gray-900">{t.name}</div>
@@ -242,11 +238,10 @@ export default function RecurringJournalsPage() {
                                         </div>
                                     ))}
                                 </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-        </div>
+                        </CompactSection>
+                    ))}
+                </div>
+            )}
+        </AccountingPageShell>
     );
 }

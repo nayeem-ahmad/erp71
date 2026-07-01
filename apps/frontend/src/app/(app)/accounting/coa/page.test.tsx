@@ -47,7 +47,7 @@ describe('ChartOfAccountsPage — Story 30.2', () => {
         render(<ChartOfAccountsPage />);
 
         await waitFor(() => {
-            expect(screen.getByText('Chart of Accounts')).toBeInTheDocument();
+            expect(screen.getByText('Account Directory')).toBeInTheDocument();
             expect(screen.getByText('Cash in Hand')).toBeInTheDocument();
             expect(screen.getByText('Chart of Accounts quick guide')).toBeInTheDocument();
         });

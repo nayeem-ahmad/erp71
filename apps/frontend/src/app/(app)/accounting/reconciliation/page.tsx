@@ -5,8 +5,13 @@ import { AlertTriangle, ArrowLeft, CheckCircle, RefreshCw, XCircle } from 'lucid
 import Link from 'next/link';
 import { createColumnHelper } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
+import {
+    AccountingPageShell,
+    AccountingToolbar,
+} from '@/components/accounting/compact';
 import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { compactDensity } from '@/lib/ui/compact-density';
 
 const STATUS_STYLES: Record<string, string> = {
     posted: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -227,109 +232,77 @@ export default function PostingExceptionsPage() {
     const totalPages = Math.max(1, Math.ceil(pagination.total / pagination.limit));
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="max-w-[1200px] mx-auto space-y-6">
-                {/* Header */}
-                <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm text-gray-400">
-                        <Link href="/accounting" className="hover:text-gray-600 transition-colors">
-                            <ArrowLeft className="w-4 h-4 inline mr-1" />
-                            Accounting
-                        </Link>
-                        <span>/</span>
-                        <span className="text-gray-600 font-medium">Posting Exceptions</span>
-                    </div>
-                    <div className="flex items-end justify-between gap-6 flex-wrap">
-                        <div className="flex items-center gap-3">
-                            <div className="inline-flex rounded-2xl border border-rose-100 bg-rose-50 px-3 py-3 text-rose-700">
-                                <AlertTriangle className="h-5 w-5" />
-                            </div>
-                            <div>
-                                <h1 className="text-2xl font-black tracking-tight text-gray-950">Posting Exceptions</h1>
-                                <p className="text-sm text-gray-500 mt-0.5">
-                                    Monitor and replay failed or skipped accounting posting events.
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-500">
-                                {pagination.total} event{pagination.total !== 1 ? 's' : ''}
-                            </span>
-                            <button
-                                onClick={() => loadEvents(pagination.page)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg bg-white hover:bg-gray-50 transition-colors"
-                            >
-                                <RefreshCw className="w-3.5 h-3.5" />
-                                Refresh
-                            </button>
-                        </div>
-                    </div>
-                </div>
+        <AccountingPageShell maxWidth="wide">
+            <Link href="/accounting" className="inline-flex items-center text-xs font-medium text-gray-400 hover:text-gray-700">
+                <ArrowLeft className="w-3.5 h-3.5 mr-1" />
+                Accounting
+            </Link>
 
-                {/* Filters */}
-                <div className="flex flex-wrap gap-3">
-                    <select
-                        value={filterStatus}
-                        onChange={(e) => setFilterStatus(e.target.value)}
-                        className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                        <option value="">All statuses</option>
-                        <option value="pending">Pending</option>
-                        <option value="failed">Failed</option>
-                        <option value="posted">Posted</option>
-                        <option value="skipped">Skipped</option>
-                    </select>
-                    {uniqueModules.length > 1 && (
-                        <select
-                            value={filterModule}
-                            onChange={(e) => setFilterModule(e.target.value)}
-                            className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        >
-                            <option value="">All modules</option>
-                            {uniqueModules.map((m) => (
-                                <option key={m} value={m}>{m}</option>
-                            ))}
-                        </select>
-                    )}
-                </div>
-
-                {/* Table */}
-                {loading ? (
-                    <div className="text-center py-16 text-gray-400">{t.postingExceptions.title}...</div>
-                ) : (
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                        <DataTable
-                            tableId="posting-exceptions"
-                            title={t.accountingShared.postingEvents}
-                            columns={columns}
-                            data={events}
-                        />
-                    </div>
-                )}
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                    <div className="flex justify-center items-center gap-2">
-                        <button
-                            disabled={pagination.page <= 1}
-                            onClick={() => loadEvents(pagination.page - 1)}
-                            className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-40 transition-colors"
-                        >
-                            Previous
-                        </button>
-                        <span className="text-sm text-gray-500">
-                            Page {pagination.page} of {totalPages}
+            <AccountingToolbar
+                subtitle="Monitor and replay failed or skipped accounting posting events."
+                actions={(
+                    <>
+                        <span className="text-xs text-gray-500">
+                            {pagination.total} event{pagination.total !== 1 ? 's' : ''}
                         </span>
-                        <button
-                            disabled={pagination.page >= totalPages}
-                            onClick={() => loadEvents(pagination.page + 1)}
-                            className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-40 transition-colors"
-                        >
-                            Next
+                        <button onClick={() => loadEvents(pagination.page)} className={compactDensity.btnSecondary}>
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            Refresh
                         </button>
-                    </div>
+                    </>
+                )}
+            />
+
+            <div className={compactDensity.filterBar}>
+                <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={compactDensity.formField}>
+                    <option value="">All statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="failed">Failed</option>
+                    <option value="posted">Posted</option>
+                    <option value="skipped">Skipped</option>
+                </select>
+                {uniqueModules.length > 1 && (
+                    <select value={filterModule} onChange={(e) => setFilterModule(e.target.value)} className={compactDensity.formField}>
+                        <option value="">All modules</option>
+                        {uniqueModules.map((m) => (
+                            <option key={m} value={m}>{m}</option>
+                        ))}
+                    </select>
                 )}
             </div>
-        </div>
+
+            {loading ? (
+                <div className="text-center py-12 text-gray-400 text-sm">{t.postingExceptions.title}...</div>
+            ) : (
+                <DataTable
+                    tableId="posting-exceptions"
+                    title={t.accountingShared.postingEvents}
+                    columns={columns}
+                    data={events}
+                />
+            )}
+
+            {totalPages > 1 && (
+                <div className="flex justify-center items-center gap-2">
+                    <button
+                        disabled={pagination.page <= 1}
+                        onClick={() => loadEvents(pagination.page - 1)}
+                        className={`${compactDensity.btnSecondary} disabled:opacity-40`}
+                    >
+                        Previous
+                    </button>
+                    <span className="text-xs text-gray-500">
+                        Page {pagination.page} of {totalPages}
+                    </span>
+                    <button
+                        disabled={pagination.page >= totalPages}
+                        onClick={() => loadEvents(pagination.page + 1)}
+                        className={`${compactDensity.btnSecondary} disabled:opacity-40`}
+                    >
+                        Next
+                    </button>
+                </div>
+            )}
+        </AccountingPageShell>
     );
 }

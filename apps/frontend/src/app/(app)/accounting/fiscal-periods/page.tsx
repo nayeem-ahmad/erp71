@@ -2,11 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { Lock, Unlock, AlertTriangle } from 'lucide-react';
+import {
+    AccountingPageShell,
+    AccountingToolbar,
+    CompactSection,
+} from '@/components/accounting/compact';
 import { api } from '@/lib/api';
-import { useI18n, formatMessage } from '@/lib/i18n';
 
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'];
+import { compactDensity } from '@/lib/ui/compact-density';
 
 interface FiscalPeriod {
     id: string;
@@ -18,7 +21,6 @@ interface FiscalPeriod {
 }
 
 export default function FiscalPeriodsPage() {
-    const { t, locale } = useI18n();
     const currentYear = new Date().getFullYear();
     const [year, setYear] = useState(currentYear);
     const [periods, setPeriods] = useState<FiscalPeriod[]>([]);
@@ -59,88 +61,83 @@ export default function FiscalPeriodsPage() {
     };
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="max-w-[900px] mx-auto space-y-6">
-                <div>
-                    <h1 className="text-2xl font-black tracking-tight">Fiscal Period Locking</h1>
-                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
-                        Lock closed periods to prevent backdated voucher entry
-                    </p>
-                </div>
+        <AccountingPageShell maxWidth="narrow">
+            <AccountingToolbar subtitle="Lock closed periods to prevent backdated voucher entry" />
 
-                <div className="bg-white border border-amber-100 rounded-2xl p-4 flex items-start gap-3">
+            <CompactSection className="border-amber-100 bg-amber-50/50">
+                <div className="flex items-start gap-2">
                     <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-                    <p className="text-sm text-amber-800">
+                    <p className="text-xs text-amber-800">
                         Locking a period prevents any new vouchers from being posted with dates in that period. Only OWNER can unlock a period.
                     </p>
                 </div>
+            </CompactSection>
 
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center gap-4">
-                    <span className="text-xs font-black uppercase tracking-widest text-gray-400">Fiscal Year</span>
+            <CompactSection>
+                <div className="flex items-center gap-3">
+                    <span className={compactDensity.formLabel}>Fiscal Year</span>
                     <div className="flex items-center gap-2">
-                        <button onClick={() => setYear((y) => y - 1)}
-                            className="w-8 h-8 rounded-xl bg-gray-100 font-bold text-gray-600 hover:bg-gray-200 transition">−</button>
-                        <span className="text-lg font-black w-16 text-center">{year}</span>
-                        <button onClick={() => setYear((y) => y + 1)}
-                            className="w-8 h-8 rounded-xl bg-gray-100 font-bold text-gray-600 hover:bg-gray-200 transition">+</button>
+                        <button onClick={() => setYear((y) => y - 1)} className="w-7 h-7 rounded-lg bg-gray-100 font-semibold text-gray-600 hover:bg-gray-200 transition text-sm">−</button>
+                        <span className="text-base font-bold w-14 text-center">{year}</span>
+                        <button onClick={() => setYear((y) => y + 1)} className="w-7 h-7 rounded-lg bg-gray-100 font-semibold text-gray-600 hover:bg-gray-200 transition text-sm">+</button>
                     </div>
                 </div>
+            </CompactSection>
 
-                {error && <div className="rounded-2xl bg-red-50 border border-red-100 p-4 text-sm text-red-700">{error}</div>}
+            {error && <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-sm text-red-700">{error}</div>}
 
-                {loading ? (
-                    <div className="bg-white border border-gray-100 rounded-2xl p-12 text-center text-gray-400 text-sm font-medium">Loading…</div>
-                ) : (
-                    <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-gray-100">
-                                    <th className="text-left px-5 py-3 text-xs font-black uppercase tracking-widest text-gray-400">Period</th>
-                                    <th className="text-center px-5 py-3 text-xs font-black uppercase tracking-widest text-gray-400">Status</th>
-                                    <th className="text-right px-5 py-3 text-xs font-black uppercase tracking-widest text-gray-400">Locked At</th>
-                                    <th className="px-5 py-3" />
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {periods.map((p) => {
-                                    const key = `${p.year}-${p.month}`;
-                                    const isBusy = working === key;
-                                    return (
-                                        <tr key={p.id} className="border-b border-gray-50 last:border-0">
-                                            <td className="px-5 py-3.5 font-bold text-gray-800">{p.period_label}</td>
-                                            <td className="px-5 py-3.5 text-center">
-                                                {p.is_locked ? (
-                                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-black text-rose-700 border border-rose-100">
-                                                        <Lock className="w-3 h-3" /> Locked
-                                                    </span>
-                                                ) : (
-                                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700 border border-emerald-100">
-                                                        <Unlock className="w-3 h-3" /> Open
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td className="px-5 py-3.5 text-right text-gray-400 text-xs">
-                                                {p.locked_at ? new Date(p.locked_at).toLocaleDateString() : '—'}
-                                            </td>
-                                            <td className="px-5 py-3.5 text-right">
-                                                <button
-                                                    onClick={() => toggle(p)}
-                                                    disabled={isBusy}
-                                                    className={`rounded-xl px-3 py-1.5 text-xs font-bold transition disabled:opacity-50 ${p.is_locked
-                                                        ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                                        : 'bg-rose-50 text-rose-700 border border-rose-100 hover:bg-rose-100'}`}
-                                                >
-                                                    {isBusy ? '…' : p.is_locked ? 'Unlock' : 'Lock Period'}
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </div>
-        </div>
+            {loading ? (
+                <CompactSection className="text-center text-gray-400 text-sm py-8">Loading…</CompactSection>
+            ) : (
+                <CompactSection className="!p-0 overflow-hidden">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="border-b border-gray-100">
+                                <th className={`text-left px-3 py-2 ${compactDensity.formLabel}`}>Period</th>
+                                <th className={`text-center px-3 py-2 ${compactDensity.formLabel}`}>Status</th>
+                                <th className={`text-right px-3 py-2 ${compactDensity.formLabel}`}>Locked At</th>
+                                <th className="px-3 py-2" />
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {periods.map((p) => {
+                                const key = `${p.year}-${p.month}`;
+                                const isBusy = working === key;
+                                return (
+                                    <tr key={p.id} className="border-b border-gray-50 last:border-0">
+                                        <td className="px-3 py-2 font-semibold text-gray-800">{p.period_label}</td>
+                                        <td className="px-3 py-2 text-center">
+                                            {p.is_locked ? (
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700 border border-rose-100">
+                                                    <Lock className="w-3 h-3" /> Locked
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-100">
+                                                    <Unlock className="w-3 h-3" /> Open
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="px-3 py-2 text-right text-gray-400 text-xs">
+                                            {p.locked_at ? new Date(p.locked_at).toLocaleDateString() : '—'}
+                                        </td>
+                                        <td className="px-3 py-2 text-right">
+                                            <button
+                                                onClick={() => toggle(p)}
+                                                disabled={isBusy}
+                                                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition disabled:opacity-50 ${p.is_locked
+                                                    ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                                    : 'bg-rose-50 text-rose-700 border border-rose-100 hover:bg-rose-100'}`}
+                                            >
+                                                {isBusy ? '…' : p.is_locked ? 'Unlock' : 'Lock Period'}
+                                            </button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </CompactSection>
+            )}
+        </AccountingPageShell>
     );
 }

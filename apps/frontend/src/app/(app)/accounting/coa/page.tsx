@@ -7,9 +7,15 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
 import { ContextualHelpPanel } from '@/components/ContextualHelpPanel';
 import { HelpTooltip } from '@/components/HelpTooltip';
+import {
+    AccountingPageShell,
+    AccountingToolbar,
+    CompactSection,
+} from '@/components/accounting/compact';
 import { COA_FIELD_HELP, COA_HELP } from '@/lib/help/contextual-help';
 import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { compactDensity } from '@/lib/ui/compact-density';
 
 type AccountType = 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
 type AccountCategory = 'cash' | 'bank' | 'general';
@@ -134,33 +140,26 @@ export default function ChartOfAccountsPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
-                <Link href="/accounting" className="inline-flex items-center text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
-                    <ArrowLeft className="w-4 h-4 mr-2" />
-                    {t.accountingShared.backToAccounting}
-                </Link>
+        <AccountingPageShell>
+            <Link href="/accounting" className="inline-flex items-center text-xs font-medium text-gray-500 hover:text-gray-900 transition-colors">
+                <ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
+                {t.accountingShared.backToAccounting}
+            </Link>
 
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                    <div>
-                        <p className="text-xs font-black uppercase tracking-[0.24em] text-gray-400">{t.coa.story}</p>
-                        <h1 className="text-3xl font-black tracking-tight inline-flex items-center gap-2">
-                            {t.coa.title}
-                            <HelpTooltip text={COA_FIELD_HELP.page} wide />
-                        </h1>
-                        <p className="text-sm text-gray-500 mt-2 max-w-3xl">
-                            {t.coa.pageSubtitle}
-                        </p>
+            <AccountingToolbar
+                help={COA_FIELD_HELP.page}
+                subtitle={t.coa.pageSubtitle}
+                actions={(
+                    <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-1.5 text-right">
+                        <p className="text-[10px] font-medium text-amber-600">{t.coa.bootstrapActive}</p>
+                        <p className="text-xs font-semibold text-amber-900">{t.coa.bootstrapHint}</p>
                     </div>
-                    <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
-                        <p className="text-[11px] font-black uppercase tracking-[0.24em] text-amber-700">{t.coa.bootstrapActive}</p>
-                        <p className="text-sm font-bold text-amber-900">{t.coa.bootstrapHint}</p>
-                    </div>
-                </div>
+                )}
+            />
 
-                <ContextualHelpPanel {...COA_HELP} />
+            <ContextualHelpPanel {...COA_HELP} />
 
-                <div className="grid gap-4 xl:grid-cols-3">
+            <div className="grid gap-3 xl:grid-cols-3">
                     <InlineFormCard icon={<FolderTree className="w-5 h-5" />} title={t.coa.newGroup} subtitle={t.coa.createGroupHint} helpText={COA_FIELD_HELP.group}>
                         <AccountGroupForm onSuccess={refreshAll} />
                     </InlineFormCard>
@@ -174,18 +173,12 @@ export default function ChartOfAccountsPage() {
                     </InlineFormCard>
                 </div>
 
-                <div className="grid gap-4 lg:grid-cols-[1.2fr,1fr]">
-                    <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
-                        <div className="flex items-center justify-between gap-4 flex-wrap">
-                            <div>
-                                <h2 className="text-xl font-black tracking-tight">{t.coa.accountDirectory}</h2>
-                                <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mt-1">{t.coa.directorySubtitle}</p>
-                            </div>
-                            <div className="flex gap-3 flex-wrap">
-                                <FilterSelect label={t.coa.filterByGroup} value={groupFilter} onChange={setGroupFilter} options={groups.map((group) => ({ value: group.id, label: group.name }))} />
-                                <FilterSelect label={t.coa.filterByType} value={typeFilter} onChange={setTypeFilter} options={ACCOUNT_TYPES.map((type) => ({ value: type, label: type }))} helpText={COA_FIELD_HELP.accountType} />
-                                <FilterSelect label={t.coa.filterByCategory} value={categoryFilter} onChange={setCategoryFilter} options={ACCOUNT_CATEGORIES.map((category) => ({ value: category, label: category }))} helpText={COA_FIELD_HELP.accountCategory} />
-                            </div>
+                <div className="grid gap-3 lg:grid-cols-[1.2fr,1fr]">
+                    <CompactSection title={t.coa.accountDirectory}>
+                        <div className={`${compactDensity.filterBar} mb-3`}>
+                            <FilterSelect label={t.coa.filterByGroup} value={groupFilter} onChange={setGroupFilter} options={groups.map((group) => ({ value: group.id, label: group.name }))} />
+                            <FilterSelect label={t.coa.filterByType} value={typeFilter} onChange={setTypeFilter} options={ACCOUNT_TYPES.map((type) => ({ value: type, label: type }))} helpText={COA_FIELD_HELP.accountType} />
+                            <FilterSelect label={t.coa.filterByCategory} value={categoryFilter} onChange={setCategoryFilter} options={ACCOUNT_CATEGORIES.map((category) => ({ value: category, label: category }))} helpText={COA_FIELD_HELP.accountCategory} />
                         </div>
 
                         <DataTable<Account>
@@ -195,10 +188,10 @@ export default function ChartOfAccountsPage() {
                             title={t.coa.title}
                             isLoading={loading}
                             emptyMessage={t.coa.emptyMessage}
-                            emptyIcon={<BookOpen className="w-16 h-16 text-gray-200" />}
+                            emptyIcon={<BookOpen className="w-10 h-10 text-gray-200" />}
                             searchPlaceholder={t.coa.searchPlaceholder}
                         />
-                    </section>
+                    </CompactSection>
 
                     <section className="space-y-4">
                         <HierarchySummaryCard
@@ -223,37 +216,36 @@ export default function ChartOfAccountsPage() {
                         />
                     </section>
                 </div>
-            </div>
-        </div>
+        </AccountingPageShell>
     );
 }
 
 function InlineFormCard({ icon, title, subtitle, helpText, children }: { icon: React.ReactNode; title: string; subtitle: string; helpText?: string; children: React.ReactNode }) {
     return (
-        <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="flex items-start gap-3 mb-5">
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-700">{icon}</div>
+        <CompactSection>
+            <div className="flex items-start gap-2 mb-3">
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-2 text-gray-700">{icon}</div>
                 <div>
-                    <h2 className="text-lg font-black tracking-tight inline-flex items-center gap-2">
+                    <p className={`${compactDensity.sectionLabel} inline-flex items-center gap-1.5`}>
                         {title}
                         {helpText ? <HelpTooltip text={helpText} side="right" /> : null}
-                    </h2>
-                    <p className="text-sm text-gray-500">{subtitle}</p>
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>
                 </div>
             </div>
             {children}
-        </section>
+        </CompactSection>
     );
 }
 
 function FilterSelect({ label, value, onChange, options, helpText }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[]; helpText?: string }) {
     return (
-        <div className="text-xs font-bold uppercase tracking-widest text-gray-400 space-y-1">
-            <span className="inline-flex items-center gap-1.5">
+        <div className="space-y-1">
+            <span className={`${compactDensity.formLabel} inline-flex items-center gap-1.5`}>
                 {label}
                 {helpText ? <HelpTooltip text={helpText} side="top" /> : null}
             </span>
-            <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} className="block min-w-[180px] rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700">
+            <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} className={`${compactDensity.formField} min-w-[160px]`}>
                 <option value="">All</option>
                 {options.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
@@ -265,27 +257,24 @@ function FilterSelect({ label, value, onChange, options, helpText }: { label: st
 
 function HierarchySummaryCard({ title, subtitle, items, icon }: { title: string; subtitle: string; items: { id: string; title: string; meta: string }[]; icon: React.ReactNode }) {
     return (
-        <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="flex items-start gap-3 mb-4">
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-700">{icon}</div>
-                <div>
-                    <h2 className="text-lg font-black tracking-tight">{title}</h2>
-                    <p className="text-sm text-gray-500">{subtitle}</p>
-                </div>
+        <CompactSection title={title}>
+            <div className="flex items-start gap-2 mb-2">
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-2 text-gray-700">{icon}</div>
+                <p className="text-xs text-gray-500">{subtitle}</p>
             </div>
-            <div className="space-y-3 max-h-[320px] overflow-auto pr-1">
+            <div className="space-y-2 max-h-[280px] overflow-auto pr-1">
                 {items.length === 0 ? (
-                    <p className="text-sm text-gray-400">Nothing created yet.</p>
+                    <p className="text-xs text-gray-400">Nothing created yet.</p>
                 ) : (
                     items.map((item) => (
-                        <div key={item.id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
-                            <p className="text-sm font-black text-gray-900">{item.title}</p>
-                            <p className="text-xs text-gray-500 mt-1">{item.meta}</p>
+                        <div key={item.id} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                            <p className="text-sm font-semibold text-gray-900">{item.title}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{item.meta}</p>
                         </div>
                     ))
                 )}
             </div>
-        </section>
+        </CompactSection>
     );
 }
 
@@ -321,20 +310,20 @@ function AccountGroupForm({ onSuccess }: { onSuccess: () => Promise<void> }) {
     };
 
     return (
-        <form className="space-y-4" onSubmit={handleSubmit}>
-            {error ? <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-600">{error}</div> : null}
-            <label className="block text-xs font-bold uppercase tracking-widest text-gray-400">
-                <span>{t.coa.groupName}</span>
-                <input aria-label={t.coa.groupName} value={name} onChange={(event) => setName(event.target.value)} required className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-800" placeholder={t.coa.currentAssets} />
+        <form className={compactDensity.formStack} onSubmit={handleSubmit}>
+            {error ? <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div> : null}
+            <label className="block">
+                <span className={`${compactDensity.formLabel} block mb-1`}>{t.coa.groupName}</span>
+                <input aria-label={t.coa.groupName} value={name} onChange={(event) => setName(event.target.value)} required className={compactDensity.formField} placeholder={t.coa.currentAssets} />
             </label>
-            <label className="block text-xs font-bold uppercase tracking-widest text-gray-400">
-                <span>{t.coa.groupType}</span>
-                <select aria-label={t.coa.groupType} value={type} onChange={(event) => setType(event.target.value as AccountType)} className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-800">
+            <label className="block">
+                <span className={`${compactDensity.formLabel} block mb-1`}>{t.coa.groupType}</span>
+                <select aria-label={t.coa.groupType} value={type} onChange={(event) => setType(event.target.value as AccountType)} className={compactDensity.formField}>
                     {ACCOUNT_TYPES.map((option) => <option key={option} value={option}>{t.accountingShared.accountTypes[option]}</option>)}
                 </select>
             </label>
-            <button type="submit" disabled={saving} className="inline-flex items-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-200 disabled:opacity-60">
-                <Plus className="w-4 h-4 mr-2" />
+            <button type="submit" disabled={saving} className={`${compactDensity.btnPrimary} bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60`}>
+                <Plus className="w-3.5 h-3.5" />
                 {saving ? t.coa.creating : t.coa.createGroup}
             </button>
         </form>
@@ -365,21 +354,21 @@ function AccountSubgroupForm({ groups, onSuccess }: { groups: AccountGroup[]; on
     };
 
     return (
-        <form className="space-y-4" onSubmit={handleSubmit}>
-            {error ? <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-600">{error}</div> : null}
-            <label className="block text-xs font-bold uppercase tracking-widest text-gray-400">
-                <span>{t.coa.parentGroup}</span>
-                <select value={groupId} onChange={(event) => setGroupId(event.target.value)} required className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-800">
+        <form className={compactDensity.formStack} onSubmit={handleSubmit}>
+            {error ? <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div> : null}
+            <label className="block">
+                <span className={`${compactDensity.formLabel} block mb-1`}>{t.coa.parentGroup}</span>
+                <select value={groupId} onChange={(event) => setGroupId(event.target.value)} required className={compactDensity.formField}>
                     <option value="">{t.coa.selectGroup}</option>
                     {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
                 </select>
             </label>
-            <label className="block text-xs font-bold uppercase tracking-widest text-gray-400">
-                <span>{t.coa.subgroupName}</span>
-                <input value={name} onChange={(event) => setName(event.target.value)} required className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-800" placeholder={t.coa.cashAndBank} />
+            <label className="block">
+                <span className={`${compactDensity.formLabel} block mb-1`}>{t.coa.subgroupName}</span>
+                <input value={name} onChange={(event) => setName(event.target.value)} required className={compactDensity.formField} placeholder={t.coa.cashAndBank} />
             </label>
-            <button type="submit" disabled={saving} className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-emerald-200 disabled:opacity-60">
-                <Plus className="w-4 h-4 mr-2" />
+            <button type="submit" disabled={saving} className={`${compactDensity.btnPrimary} bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60`}>
+                <Plus className="w-3.5 h-3.5" />
                 {saving ? t.coa.creating : t.coa.createSubgroup}
             </button>
         </form>
@@ -435,46 +424,46 @@ function AccountForm({ groups, subgroups, onSuccess }: { groups: AccountGroup[];
     };
 
     return (
-        <form className="space-y-4" onSubmit={handleSubmit}>
-            {error ? <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-600">{error}</div> : null}
-            <label className="block text-xs font-bold uppercase tracking-widest text-gray-400">
-                <span>{t.coa.accountGroup}</span>
-                <select value={groupId} onChange={(event) => setGroupId(event.target.value)} required className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-800">
+        <form className={compactDensity.formStack} onSubmit={handleSubmit}>
+            {error ? <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div> : null}
+            <label className="block">
+                <span className={`${compactDensity.formLabel} block mb-1`}>{t.coa.accountGroup}</span>
+                <select value={groupId} onChange={(event) => setGroupId(event.target.value)} required className={compactDensity.formField}>
                     <option value="">{t.coa.selectGroup}</option>
                     {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
                 </select>
             </label>
-            <label className="block text-xs font-bold uppercase tracking-widest text-gray-400">
-                <span>{t.coa.accountSubgroup}</span>
-                <select value={subgroupId} onChange={(event) => setSubgroupId(event.target.value)} className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-800">
+            <label className="block">
+                <span className={`${compactDensity.formLabel} block mb-1`}>{t.coa.accountSubgroup}</span>
+                <select value={subgroupId} onChange={(event) => setSubgroupId(event.target.value)} className={compactDensity.formField}>
                     <option value="">{t.accountingShared.optional}</option>
                     {filteredSubgroups.map((subgroup) => <option key={subgroup.id} value={subgroup.id}>{subgroup.name}</option>)}
                 </select>
             </label>
-            <label className="block text-xs font-bold uppercase tracking-widest text-gray-400">
-                <span>{t.coa.accountName}</span>
-                <input value={name} onChange={(event) => setName(event.target.value)} required className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-800" placeholder={t.coa.cashInHand} />
+            <label className="block">
+                <span className={`${compactDensity.formLabel} block mb-1`}>{t.coa.accountName}</span>
+                <input value={name} onChange={(event) => setName(event.target.value)} required className={compactDensity.formField} placeholder={t.coa.cashInHand} />
             </label>
-            <label className="block text-xs font-bold uppercase tracking-widest text-gray-400">
-                <span>{t.coa.accountCode}</span>
-                <input value={code} onChange={(event) => setCode(event.target.value)} className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-800" placeholder="1010" />
+            <label className="block">
+                <span className={`${compactDensity.formLabel} block mb-1`}>{t.coa.accountCode}</span>
+                <input value={code} onChange={(event) => setCode(event.target.value)} className={compactDensity.formField} placeholder="1010" />
             </label>
-            <div className="grid grid-cols-2 gap-3">
-                <label className="block text-xs font-bold uppercase tracking-widest text-gray-400">
-                    <span>{t.coa.accountType}</span>
-                    <select value={type} onChange={(event) => setType(event.target.value as AccountType)} className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-800">
+            <div className="grid grid-cols-2 gap-2">
+                <label className="block">
+                    <span className={`${compactDensity.formLabel} block mb-1`}>{t.coa.accountType}</span>
+                    <select value={type} onChange={(event) => setType(event.target.value as AccountType)} className={compactDensity.formField}>
                         {ACCOUNT_TYPES.map((option) => <option key={option} value={option}>{t.accountingShared.accountTypes[option]}</option>)}
                     </select>
                 </label>
-                <label className="block text-xs font-bold uppercase tracking-widest text-gray-400">
-                    <span>{t.accountingShared.category}</span>
-                    <select value={category} onChange={(event) => setCategory(event.target.value as AccountCategory)} className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-800">
+                <label className="block">
+                    <span className={`${compactDensity.formLabel} block mb-1`}>{t.accountingShared.category}</span>
+                    <select value={category} onChange={(event) => setCategory(event.target.value as AccountCategory)} className={compactDensity.formField}>
                         {ACCOUNT_CATEGORIES.map((option) => <option key={option} value={option}>{t.accountingShared.accountCategories[option]}</option>)}
                     </select>
                 </label>
             </div>
-            <button type="submit" disabled={saving} className="inline-flex items-center rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-violet-200 disabled:opacity-60">
-                <Plus className="w-4 h-4 mr-2" />
+            <button type="submit" disabled={saving} className={`${compactDensity.btnPrimary} bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-60`}>
+                <Plus className="w-3.5 h-3.5" />
                 {saving ? t.coa.creating : t.coa.createAccount}
             </button>
         </form>
