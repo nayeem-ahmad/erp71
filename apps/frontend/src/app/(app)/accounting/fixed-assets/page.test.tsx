@@ -56,7 +56,7 @@ describe('FixedAssetsPage', () => {
     it('renders the page subtitle', async () => {
         render(<FixedAssetsPage />);
         await waitFor(() => {
-            expect(screen.getByText(/Track assets, useful life/i)).toBeInTheDocument();
+            expect(screen.getByText(/Asset register with depreciation schedules/i)).toBeInTheDocument();
         });
     });
 
