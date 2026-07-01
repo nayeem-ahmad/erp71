@@ -119,8 +119,6 @@ describe('Sidebar — Story 30.1', () => {
 
         expect(screen.getByText('Platform Admin')).toBeInTheDocument();
         expect(screen.getByText('Settings')).toBeInTheDocument();
-        expect(screen.getByText('STANDARD')).toBeInTheDocument();
-
         fireEvent.click(screen.getByText('Settings'));
         expect(screen.getByText('Billing')).toBeInTheDocument();
 

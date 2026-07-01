@@ -982,6 +982,7 @@ export const coreMessages = {
             title: "ড্যাশবোর্ড ওভারভিউ",
             businessMonitor: "বিজনেস মনিটর",
             breadcrumbHome: "হোম",
+            quickActions: "দ্রুত কাজ",
             quickLinks: {
                 salesEntry: "সেলস এন্ট্রি",
                 sales: "বিক্রয়",

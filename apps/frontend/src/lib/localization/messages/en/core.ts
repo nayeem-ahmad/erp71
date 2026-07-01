@@ -982,6 +982,7 @@ export const coreMessages = {
         title: 'Dashboard Overview',
         businessMonitor: 'Business Monitor',
         breadcrumbHome: 'Home',
+        quickActions: 'Quick actions',
         quickLinks: {
             salesEntry: 'Sales Entry',
             sales: 'Sales',

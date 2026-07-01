@@ -699,14 +699,9 @@ export default function Sidebar({
                                 <span className="text-lg font-bold tracking-tight whitespace-nowrap block">
                                     {businessName || 'ERP71'}
                                 </span>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.sidebar.workspace}</span>
-                                    {activePlanCode && (
-                                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ${activePlanCode === 'PREMIUM' ? 'bg-amber-100 text-amber-700' : activePlanCode === 'STANDARD' ? 'bg-indigo-100 text-indigo-700' : activePlanCode === 'BASIC' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                                            {activePlanCode}
-                                        </span>
-                                    )}
-                                </div>
+                                <span className="text-[10px] font-medium text-gray-400 mt-0.5 block">
+                                    {t.sidebar.workspace}
+                                </span>
                             </div>
                         )}
                     </div>

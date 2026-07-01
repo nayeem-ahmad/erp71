@@ -38,12 +38,12 @@ export function StatKpiTile({
     tone?: KpiTone;
 }) {
     return (
-        <div className={`rounded-2xl border p-5 shadow-sm transition-all hover:shadow-md ${surfaceClasses[tone]}`}>
-            <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-1">{title}</p>
-            <h3 className="text-3xl font-black tracking-tight text-gray-950 mb-3">{value}</h3>
-            <div className={`flex items-center gap-1 text-xs font-bold ${isPositive ? 'text-emerald-700' : 'text-rose-700'}`}>
-                {isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                <span className="uppercase tracking-tight">{trend}</span>
+        <div className={`rounded-lg border p-3 shadow-sm transition-all hover:shadow-md ${surfaceClasses[tone]}`}>
+            <p className="text-xs font-medium text-gray-500 mb-0.5">{title}</p>
+            <h3 className="text-xl font-bold tracking-tight text-gray-950 mb-1.5">{value}</h3>
+            <div className={`flex items-center gap-1 text-[11px] font-semibold ${isPositive ? 'text-emerald-700' : 'text-rose-700'}`}>
+                {isPositive ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                <span>{trend}</span>
             </div>
         </div>
     );
@@ -64,17 +64,17 @@ export function FinancialKpiTile({
 }) {
     const surface = tone === 'positive' ? 'green' : tone === 'negative' ? 'peach' : 'neutral';
     return (
-        <div className={`rounded-2xl border p-5 shadow-sm ${surfaceClasses[surface as KpiTone]}`}>
-            <div className="flex items-start justify-between gap-4">
-                <div>
-                    <p className="text-xs font-black uppercase tracking-[0.24em] text-gray-500">{title}</p>
-                    <h3 className="mt-3 text-3xl font-black tracking-tight text-gray-950">{value}</h3>
+        <div className={`rounded-lg border p-3 shadow-sm ${surfaceClasses[surface as KpiTone]}`}>
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <p className="text-xs font-medium text-gray-500">{title}</p>
+                    <h3 className="mt-1 text-xl font-bold tracking-tight text-gray-950">{value}</h3>
                 </div>
-                <div className={`rounded-2xl border border-white/60 px-3 py-3 ${iconClasses[surface as KpiTone]}`}>
-                    <Icon className="h-5 w-5" />
+                <div className={`shrink-0 rounded-lg border border-white/60 p-1.5 ${iconClasses[surface as KpiTone]}`}>
+                    <Icon className="h-4 w-4" />
                 </div>
             </div>
-            <p className="mt-4 text-sm font-medium text-gray-600">{helper}</p>
+            <p className="mt-2 text-xs text-gray-600 leading-snug">{helper}</p>
         </div>
     );
 }

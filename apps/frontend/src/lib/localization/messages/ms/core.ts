@@ -982,6 +982,7 @@ export const coreMessages = {
             title: "Gambaran Papan Pemuka",
             businessMonitor: "Pemantau Perniagaan",
             breadcrumbHome: "Laman Utama",
+            quickActions: "Tindakan pantas",
             quickLinks: {
                 salesEntry: "Entri Jualan",
                 sales: "Jualan",

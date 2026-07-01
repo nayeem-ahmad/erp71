@@ -16,6 +16,8 @@ import { formatMessage, useI18n } from '@/lib/i18n';
 import DashboardBreadcrumb from '@/components/dashboard/DashboardBreadcrumb';
 import FrequentQuickLinks from '@/components/dashboard/FrequentQuickLinks';
 import { FinancialKpiTile, StatKpiTile } from '@/components/dashboard/KpiTile';
+import PageShell from '@/components/ui/compact/PageShell';
+import { compactDensity } from '@/lib/ui/compact-density';
 
 type FinancialKpis = {
     cash_inflow: number;
@@ -213,19 +215,19 @@ export default function DashboardPage() {
     ] as const, [copy, financialKpis, financialComparison]);
 
     return (
-        <div className="overflow-y-auto h-full bg-[#F0F2F5] p-4 md:p-8">
-            <div className="mb-4 space-y-4">
+        <PageShell maxWidth="wide">
+            <div className="space-y-3">
                 <DashboardBreadcrumb />
                 <div>
-                    <h1 className="text-lg font-bold tracking-tight text-gray-950 text-gray-900">{copy.businessMonitor}</h1>
-                    <p className="text-gray-500 text-sm mt-1 font-medium">
+                    <h1 className={compactDensity.pageTitle}>{copy.businessMonitor}</h1>
+                    <p className={`${compactDensity.pageSubtitle} mt-0.5`}>
                         {formatMessage(copy.tenantSubtitle, { tenant: tenantName })}
                     </p>
                 </div>
                 <FrequentQuickLinks />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                 <StatKpiTile
                     title={copy.totalSales}
                     value={`${totalSalesAmount.toLocaleString()}`}
@@ -256,39 +258,39 @@ export default function DashboardPage() {
                 />
             </div>
 
-            <section className="mb-8 rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-                <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-5">
+            <section className={`${compactDensity.card}`}>
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 pb-3 mb-3">
                     <div>
-                        <p className="text-xs font-medium text-gray-500">{copy.financialSnapshot}</p>
-                        <h2 className="mt-1 text-xl font-black tracking-tight text-gray-900">{copy.accountingKpis}</h2>
-                        <p className="mt-2 text-sm text-gray-500">{financialDateRange}</p>
+                        <p className={compactDensity.sectionLabel}>{copy.financialSnapshot}</p>
+                        <h2 className="mt-0.5 text-base font-bold tracking-tight text-gray-900">{copy.accountingKpis}</h2>
+                        <p className={`${compactDensity.pageSubtitle} mt-0.5`}>{financialDateRange}</p>
                     </div>
                     {financialError ? (
-                        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
                             {financialError}
                         </div>
                     ) : null}
                 </div>
 
                 {isFinancialLoading ? (
-                    <div className="space-y-6 pt-6">
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                             {Array.from({ length: 6 }).map((_, index) => (
-                                <div key={index} className="rounded-2xl border border-gray-100 bg-gray-50 p-5 animate-pulse">
+                                <div key={index} className="rounded-lg border border-gray-100 bg-gray-50 p-3 animate-pulse">
                                     <div className="h-3 w-24 rounded bg-gray-200" />
-                                    <div className="mt-4 h-8 w-32 rounded bg-gray-200" />
-                                    <div className="mt-4 h-3 w-40 rounded bg-gray-200" />
+                                    <div className="mt-3 h-6 w-28 rounded bg-gray-200" />
+                                    <div className="mt-2 h-3 w-36 rounded bg-gray-200" />
                                 </div>
                             ))}
                         </div>
-                        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5 animate-pulse">
-                            <div className="h-4 w-40 rounded bg-gray-200" />
-                            <div className="mt-6 h-48 rounded-2xl bg-gray-200" />
+                        <div className="rounded-lg border border-gray-100 bg-gray-50 p-3 animate-pulse">
+                            <div className="h-3 w-32 rounded bg-gray-200" />
+                            <div className="mt-4 h-36 rounded-lg bg-gray-200" />
                         </div>
                     </div>
                 ) : (
-                    <div className="space-y-6 pt-6">
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                             {financialTiles.map((tile) => (
                                 <FinancialKpiTile
                                     key={tile.title}
@@ -301,35 +303,33 @@ export default function DashboardPage() {
                             ))}
                         </div>
 
-                        <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
+                        <section className={`${compactDensity.cardFlat} space-y-3`}>
+                            <div className="flex flex-wrap items-start justify-between gap-2">
                                 <div>
-                                    <p className="text-xs font-medium text-gray-500">{copy.cashFlowMovement}</p>
-                                    <h3 className="mt-2 text-xl font-black tracking-tight text-gray-950">{copy.inflowVsOutflow}</h3>
+                                    <p className={compactDensity.sectionLabel}>{copy.cashFlowMovement}</p>
+                                    <h3 className="mt-0.5 text-base font-bold tracking-tight text-gray-950">{copy.inflowVsOutflow}</h3>
                                 </div>
                                 {financialTrendError ? (
-                                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
+                                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
                                         {financialTrendError}
                                     </div>
                                 ) : null}
                             </div>
-                            <div className="mt-6">
-                                <CashFlowChart points={financialTrends} locale={locale} />
-                            </div>
+                            <CashFlowChart points={financialTrends} locale={locale} />
                         </section>
                     </div>
                 )}
             </section>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                        <h2 className="font-bold text-gray-900 tracking-tight">{copy.recentActivity}</h2>
-                        <button className="text-gray-400 hover:text-gray-600 font-medium text-sm">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <div className={`${compactDensity.card} overflow-hidden !p-0`}>
+                    <div className="px-3 py-2.5 border-b border-gray-100 flex items-center justify-between">
+                        <h2 className="text-sm font-bold text-gray-900 tracking-tight">{copy.recentActivity}</h2>
+                        <button className="text-gray-400 hover:text-gray-600 font-medium text-xs">
                             {copy.viewAll}
                         </button>
                     </div>
-                    <div className="p-0">
+                    <div>
                         {sales.length > 0 ? (
                             sales.slice(0, 5).map((sale) => (
                                 <ActivityItem
@@ -340,17 +340,17 @@ export default function DashboardPage() {
                                 />
                             ))
                         ) : (
-                            <div className="p-8 text-center text-gray-400 text-sm">{isLoading ? copy.loadingRecentActivity : copy.noRecentActivity}</div>
+                            <div className="p-6 text-center text-gray-400 text-xs">{isLoading ? copy.loadingRecentActivity : copy.noRecentActivity}</div>
                         )}
                     </div>
                 </div>
 
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                    <div className="flex items-center justify-between mb-6">
-                        <h2 className="font-bold text-gray-900 tracking-tight">{copy.inventoryOverview}</h2>
-                        <MoreVertical className="w-5 h-5 text-gray-400 cursor-pointer" />
+                <div className={compactDensity.card}>
+                    <div className="flex items-center justify-between mb-3">
+                        <h2 className="text-sm font-bold text-gray-900 tracking-tight">{copy.inventoryOverview}</h2>
+                        <MoreVertical className="w-4 h-4 text-gray-400 cursor-pointer" />
                     </div>
-                    <div className="space-y-6">
+                    <div className="space-y-2">
                         {displayedProducts.length > 0 ? (
                             displayedProducts.map((product) => (
                                 <ProductRow
@@ -362,12 +362,12 @@ export default function DashboardPage() {
                                 />
                             ))
                         ) : (
-                            <div className="text-center text-gray-400 text-sm py-4">{isLoading ? copy.loadingProducts : copy.noProductsFound}</div>
+                            <div className="text-center text-gray-400 text-xs py-3">{isLoading ? copy.loadingProducts : copy.noProductsFound}</div>
                         )}
                     </div>
                 </div>
             </div>
-        </div>
+        </PageShell>
     );
 }
 
@@ -377,9 +377,9 @@ function CashFlowChart({ points, locale }: { points: FinancialTrendPoint[]; loca
 
     if (points.length === 0 || !points.some((point) => point.cash_inflow !== 0 || point.cash_outflow !== 0)) {
         return (
-            <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-12 text-center">
-                <p className="text-sm font-bold uppercase tracking-[0.2em] text-gray-400">{copy.noAccountingMovement}</p>
-                <p className="mt-2 text-sm text-gray-500">{copy.noCashMovementPeriod}</p>
+            <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center">
+                <p className="text-xs font-medium text-gray-400">{copy.noAccountingMovement}</p>
+                <p className="mt-1 text-xs text-gray-500">{copy.noCashMovementPeriod}</p>
             </div>
         );
     }
@@ -389,12 +389,12 @@ function CashFlowChart({ points, locale }: { points: FinancialTrendPoint[]; loca
 
     return (
         <div>
-            <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-[0.2em] text-gray-500">
+            <div className="flex items-center gap-3 text-xs font-medium text-gray-500">
                 <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />{copy.inflow}</span>
                 <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-rose-500" />{copy.outflow}</span>
             </div>
-            <div className="mt-6 w-full rounded-xl border border-gray-100 bg-gray-50/60 p-4">
-                <div className="flex h-52 w-full items-end gap-px sm:gap-1">
+            <div className="w-full rounded-lg border border-gray-100 bg-gray-50/60 p-3">
+                <div className="flex h-40 w-full items-end gap-px sm:gap-1">
                     {points.map((point, index) => {
                         const showLabel = index === 0
                             || index === points.length - 1
@@ -449,13 +449,13 @@ function formatOptionalCurrency(value: number | null, notConfiguredLabel: string
 
 function ActivityItem({ title, description, time }: { title: string, description: string, time: string }) {
     return (
-        <div className="px-6 py-4 flex items-start space-x-4 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 cursor-pointer group">
-            <div className="mt-1 h-3 w-3 rounded-full flex-shrink-0 animate-pulse bg-blue-400" />
-            <div className="flex-1">
-                <p className="text-sm font-bold text-gray-900 tracking-tight">{title}</p>
-                <p className="text-xs text-gray-500 font-medium mt-0.5">{description}</p>
+        <div className="px-3 py-2.5 flex items-start space-x-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 cursor-pointer group">
+            <div className="mt-1 h-2 w-2 rounded-full flex-shrink-0 bg-blue-400" />
+            <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-gray-900 tracking-tight truncate">{title}</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">{description}</p>
             </div>
-            <div className="flex items-center space-x-1 text-[10px] font-bold text-gray-400 uppercase tracking-tighter self-center whitespace-nowrap group-hover:text-gray-600 transition-colors">
+            <div className="flex items-center space-x-1 text-[10px] font-medium text-gray-400 self-center whitespace-nowrap group-hover:text-gray-600 transition-colors">
                 <Clock className="w-3 h-3" />
                 <span>{time}</span>
             </div>
@@ -465,17 +465,17 @@ function ActivityItem({ title, description, time }: { title: string, description
 
 function ProductRow({ name, price, sales, salesLabel }: { name: string, price: string, sales: string, salesLabel: string }) {
     return (
-        <div className="flex items-center justify-between group cursor-pointer hover:bg-gray-50 p-2 -mx-2 rounded-xl transition-colors">
-            <div className="flex items-center space-x-4">
-                <div className="w-10 h-10 bg-gray-100 rounded-lg group-hover:scale-110 transition-transform" />
-                <div>
-                    <p className="text-sm font-bold text-gray-900 tracking-tight">{name}</p>
-                    <p className="text-xs text-gray-500 font-medium uppercase tracking-tight">{price}</p>
+        <div className="flex items-center justify-between group cursor-pointer hover:bg-gray-50 px-2 py-1.5 -mx-2 rounded-lg transition-colors">
+            <div className="flex items-center space-x-2.5 min-w-0">
+                <div className="w-8 h-8 bg-gray-100 rounded-md flex-shrink-0" />
+                <div className="min-w-0">
+                    <p className="text-xs font-semibold text-gray-900 tracking-tight truncate">{name}</p>
+                    <p className="text-[11px] text-gray-500">{price}</p>
                 </div>
             </div>
-            <div className="text-right">
-                <p className="text-sm font-bold tracking-tight">{sales}</p>
-                <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">{salesLabel}</p>
+            <div className="text-right flex-shrink-0 ml-2">
+                <p className="text-xs font-semibold tracking-tight">{sales}</p>
+                <p className="text-[10px] text-gray-400">{salesLabel}</p>
             </div>
         </div>
     );

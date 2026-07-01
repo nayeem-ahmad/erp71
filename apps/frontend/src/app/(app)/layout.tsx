@@ -15,6 +15,7 @@ import Toaster from '@/components/Toaster';
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
 import { CompactUiProvider } from '@/contexts/CompactUiContext';
 import { BrandingProvider } from '@/lib/branding';
+import { formatPlanDisplayName } from '@/lib/plan-display';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { applyTenantContext, isShopWorkspacePath } from '@/lib/auth-session';
@@ -104,7 +105,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     const tenantStores = activeTenant?.stores || [];
     const primaryRole = activeTenant?.role;
-    const activePlanCode = activeTenant?.subscription?.plan?.code || null;
+    const activePlan = activeTenant?.subscription?.plan ?? null;
+    const activePlanCode = activePlan?.code || null;
+    const activePlanLabel = formatPlanDisplayName(activePlan);
     const planFeatures = (activeTenant?.subscription?.plan?.features_json || {}) as Record<string, unknown>;
     const hasPaidPlan = activePlanCode && activePlanCode !== 'FREE';
     const hasAccountingEntitlement =
@@ -222,7 +225,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Top header */}
-                <header className={`${useCompactChrome ? 'h-11 md:px-4' : 'h-14 md:px-6'} bg-white border-b border-gray-100 flex items-center justify-between px-3 flex-shrink-0`}>
+                <header className={`${useCompactChrome ? 'min-h-[3.25rem] py-1.5 md:px-4' : 'h-14 md:px-6'} bg-white border-b border-gray-100 flex items-center justify-between px-3 flex-shrink-0`}>
                     <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                         <button
                             type="button"
@@ -232,24 +235,31 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                         >
                             <Menu className="w-5 h-5" />
                         </button>
-                        {tenantStores.length > 1 && !inPlatformAdminMode ? (
-                            <select
-                                value={activeStoreId}
-                                onChange={(e) => handleStoreChange(e.target.value)}
-                                className="min-w-0 max-w-full truncate bg-transparent text-sm font-bold text-gray-900 tracking-tight outline-none"
-                                aria-label={t.dashboardLayout.branchLabel}
-                            >
-                                {tenantStores.map((store: { id: string; name: string }) => (
-                                    <option key={store.id} value={store.id}>
-                                        {store.name}
-                                    </option>
-                                ))}
-                            </select>
-                        ) : (
-                            <span className="min-w-0 truncate text-sm font-bold text-gray-900 tracking-tight">
-                                {headerStoreLabel}
-                            </span>
-                        )}
+                        <div className="flex min-w-0 flex-col justify-center gap-0.5">
+                            {tenantStores.length > 1 && !inPlatformAdminMode ? (
+                                <select
+                                    value={activeStoreId}
+                                    onChange={(e) => handleStoreChange(e.target.value)}
+                                    className="min-w-0 max-w-full truncate bg-transparent text-[15px] font-extrabold text-gray-950 tracking-tight outline-none leading-tight"
+                                    aria-label={t.dashboardLayout.branchLabel}
+                                >
+                                    {tenantStores.map((store: { id: string; name: string }) => (
+                                        <option key={store.id} value={store.id}>
+                                            {store.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <span className="min-w-0 truncate text-[15px] font-extrabold text-gray-950 tracking-tight leading-tight">
+                                    {headerStoreLabel}
+                                </span>
+                            )}
+                            {!inPlatformAdminMode && activePlanLabel ? (
+                                <span className="min-w-0 truncate text-[11px] font-medium text-gray-500 leading-tight">
+                                    {activePlanLabel}
+                                </span>
+                            ) : null}
+                        </div>
                     </div>
 
                     <div className="flex items-center gap-1.5 md:gap-4 flex-shrink-0">
