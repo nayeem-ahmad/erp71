@@ -44,7 +44,7 @@ describe('StatusPage', () => {
     it('renders the platform-admin status heading and health details', async () => {
         render(<StatusPage />);
 
-        expect(screen.getByText('System Status')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'System Status' })).toBeInTheDocument();
         expect(screen.getByText('Restricted to platform administrators.')).toBeInTheDocument();
         expect(screen.getByText('Open full system health dashboard')).toBeInTheDocument();
 

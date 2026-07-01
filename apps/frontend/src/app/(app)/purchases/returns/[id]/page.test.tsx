@@ -68,7 +68,7 @@ describe('PurchaseReturnDetailPage — Epic 21.4', () => {
         render(<PurchaseReturnDetailPage />);
 
         await waitFor(() => {
-            expect(screen.getByText('PRET-00001')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'PRET-00001' })).toBeInTheDocument();
             expect(screen.getByText('PUR-00001')).toBeInTheDocument();
             expect(screen.getByText('Fresh Farms')).toBeInTheDocument();
             expect(screen.getByText('Initial note')).toBeInTheDocument();

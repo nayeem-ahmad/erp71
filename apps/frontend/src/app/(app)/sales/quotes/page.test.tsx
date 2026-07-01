@@ -215,7 +215,7 @@ describe('QuotesPage', () => {
     it('shows page heading', async () => {
         render(<QuotesPage />);
         await waitFor(() => {
-            expect(screen.getByText(/quotations/i) || screen.getByText(/quotes/i)).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Sales Quotations' })).toBeInTheDocument();
         });
     });
 

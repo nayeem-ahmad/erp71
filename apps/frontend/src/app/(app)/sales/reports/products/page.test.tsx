@@ -60,7 +60,7 @@ describe('SalesByProductPage', () => {
         await waitFor(() => {
             expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
         });
-        expect(screen.getByText('Sales by Product')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Sales by Product' })).toBeInTheDocument();
     });
 
     it('renders the DataTable with correct title', async () => {
@@ -125,7 +125,7 @@ describe('SalesByProductPage', () => {
         api.getSalesByProduct.mockRejectedValue(new Error('Server error'));
         render(<SalesByProductPage />);
         await waitFor(() => {
-            expect(screen.getByText('Sales by Product')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Sales by Product' })).toBeInTheDocument();
         });
     });
 });

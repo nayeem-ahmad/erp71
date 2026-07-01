@@ -59,7 +59,7 @@ describe('CustomerGroupsPage', () => {
     it('renders the Customer Groups heading', async () => {
         render(<CustomerGroupsPage />);
         await waitFor(() => {
-            expect(screen.getByText('Customer Groups')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Customer Groups' })).toBeInTheDocument();
         });
     });
 

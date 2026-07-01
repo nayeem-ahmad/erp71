@@ -34,7 +34,7 @@ describe('DiscountCodesPage', () => {
         api.getDiscountCodes.mockResolvedValue([]);
         render(<DiscountCodesPage />);
         await waitFor(() => {
-            expect(screen.getByText('Discount Codes')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Discount Codes' })).toBeInTheDocument();
         });
     });
 

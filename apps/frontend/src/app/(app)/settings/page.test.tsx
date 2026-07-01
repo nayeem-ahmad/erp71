@@ -42,6 +42,7 @@ jest.mock('lucide-react', () => ({
     ScrollText: () => <span data-testid="icon-scroll-text" />,
     ShoppingBag: () => <span data-testid="icon-shopping-bag" />,
     CreditCard: () => <span data-testid="icon-credit-card" />,
+    ChevronRight: () => <span data-testid="icon-chevron-right" />,
 }));
 
 describe('AccountSettingsPage', () => {

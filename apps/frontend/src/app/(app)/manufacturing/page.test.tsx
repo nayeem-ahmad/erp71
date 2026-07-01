@@ -106,7 +106,7 @@ describe('ManufacturingPage', () => {
 
     it('renders the Manufacturing heading', async () => {
         render(<ManufacturingPage />);
-        expect(screen.getByText('Manufacturing')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Manufacturing' })).toBeInTheDocument();
     });
 
     it('shows BOM and Production Jobs tabs', async () => {

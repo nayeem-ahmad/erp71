@@ -188,7 +188,7 @@ describe('InvoicePage', () => {
     it('shows Back to Sale button', async () => {
         render(<InvoicePage />);
         await waitFor(() => {
-            expect(screen.getByRole('button', { name: /back to sale/i })).toBeInTheDocument();
+            expect(screen.getByRole('link', { name: 'SALE-INV-001' })).toBeInTheDocument();
         });
     });
 

@@ -72,7 +72,7 @@ describe('ConsolidatedReportPage', () => {
         await waitFor(() => {
             expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
         });
-        expect(screen.getByText('Consolidated Report')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Consolidated Report' })).toBeInTheDocument();
     });
 
     it('renders the page description', async () => {
