@@ -19,10 +19,20 @@ export class EmailService {
         envValue: string | undefined,
         fallback: string | null,
     ): string | null {
-        if (Object.prototype.hasOwnProperty.call(raw, key) && raw[key] != null) {
-            return raw[key];
+        if (Object.prototype.hasOwnProperty.call(raw, key)) {
+            const value = raw[key];
+            if (value != null && value !== '') {
+                return value;
+            }
         }
         return envValue ?? fallback;
+    }
+
+    private resolveBrevoApiKey(smtpPass: string | null): string | null {
+        const explicit = process.env.BREVO_API_KEY?.trim();
+        if (explicit) return explicit;
+        if (smtpPass?.startsWith('xkeysib-')) return smtpPass;
+        return null;
     }
 
     private async getTransportConfig() {
@@ -60,7 +70,7 @@ export class EmailService {
         });
     }
 
-    async sendEmailVerification(to: string, token: string): Promise<void> {
+    async sendEmailVerification(to: string, token: string, options?: { throwOnError?: boolean }): Promise<void> {
         const { frontendUrl } = await this.getTransportConfig();
         const link = `${frontendUrl}/verify-email?token=${token}`;
         await this.send({
@@ -70,7 +80,7 @@ export class EmailService {
 <p>Click the link below to verify your email address. This link expires in 24 hours.</p>
 <p><a href="${link}">Verify Email</a></p>
 <p>If you did not create an account, you can ignore this email.</p>`,
-        });
+        }, options);
     }
 
     async sendPasswordReset(to: string, token: string): Promise<void> {
@@ -222,14 +232,71 @@ ${page ? `<p><strong>Page:</strong> ${page}</p>` : ''}
         );
     }
 
+    private async sendViaResend(
+        config: { from: string },
+        opts: { to: string; subject: string; html: string },
+    ): Promise<void> {
+        const apiKey = process.env.RESEND_API_KEY?.trim();
+        if (!apiKey) {
+            throw new Error('RESEND_API_KEY is not set');
+        }
+
+        const response = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                from: config.from,
+                to: [opts.to],
+                subject: opts.subject,
+                html: opts.html,
+            }),
+        });
+
+        if (!response.ok) {
+            const detail = await response.text();
+            throw new Error(`Resend API ${response.status}: ${detail}`);
+        }
+    }
+
+    private async sendViaBrevoApi(
+        config: { from: string },
+        opts: { to: string; subject: string; html: string },
+        apiKey: string,
+    ): Promise<void> {
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+                'api-key': apiKey,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                sender: { email: config.from, name: 'ERP71' },
+                to: [{ email: opts.to }],
+                subject: opts.subject,
+                htmlContent: opts.html,
+            }),
+        });
+
+        if (!response.ok) {
+            const detail = await response.text();
+            throw new Error(`Brevo API ${response.status}: ${detail}`);
+        }
+    }
+
     private async send(
         opts: { to: string; subject: string; html: string },
         options?: { throwOnError?: boolean },
     ): Promise<void> {
         const config = await this.getTransportConfig();
+        const resendKey = process.env.RESEND_API_KEY?.trim();
+        const brevoKey = this.resolveBrevoApiKey(config.pass);
+        const hasSmtpCredentials = Boolean(config.user && config.pass && !brevoKey);
 
-        if (!config.user || !config.pass) {
-            const msg = 'SMTP is not configured — set SMTP_USER and SMTP_PASS (env or admin settings).';
+        if (!resendKey && !brevoKey && !hasSmtpCredentials) {
+            const msg = 'Email is not configured — set RESEND_API_KEY, BREVO_API_KEY, or SMTP_USER and SMTP_PASS.';
             if (options?.throwOnError) {
                 throw new Error(msg);
             }
@@ -238,11 +305,25 @@ ${page ? `<p><strong>Page:</strong> ${page}</p>` : ''}
         }
 
         try {
+            if (resendKey) {
+                await this.breakers
+                    .get('email-resend', { timeoutMs: 20_000 })
+                    .execute(() => this.sendViaResend(config, opts));
+                return;
+            }
+
+            if (brevoKey) {
+                await this.breakers
+                    .get('email-brevo-api', { timeoutMs: 20_000 })
+                    .execute(() => this.sendViaBrevoApi(config, opts, brevoKey));
+                return;
+            }
+
             const transporter = nodemailer.createTransport({
                 host: config.host,
                 port: config.port,
                 secure: false,
-                auth: { user: config.user, pass: config.pass },
+                auth: { user: config.user!, pass: config.pass! },
                 connectionTimeout: 10_000,
                 greetingTimeout: 10_000,
                 socketTimeout: 30_000,

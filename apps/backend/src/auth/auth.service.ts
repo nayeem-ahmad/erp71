@@ -153,9 +153,12 @@ export class AuthService {
             data: { user_id: userId, token_hash: tokenHash, expires_at: expiresAt },
         });
 
-        this.email.sendEmailVerification(user.email, rawToken).catch((err) => {
-            console.warn(`[AuthService] Verification email failed for ${user.email}:`, err?.message);
-        });
+        try {
+            await this.email.sendEmailVerification(user.email, rawToken, { throwOnError: true });
+        } catch (err) {
+            const detail = err instanceof Error ? err.message : 'Failed to send verification email';
+            throw new ServiceUnavailableException(detail);
+        }
     }
 
     async verifyEmail(rawToken: string): Promise<void> {
