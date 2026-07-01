@@ -45,7 +45,7 @@ describe('PurchaseQuotationsPage', () => {
         api.getPurchaseQuotations.mockResolvedValue([]);
         render(<PurchaseQuotationsPage />);
         await waitFor(() => {
-            expect(screen.getByText('Purchase Quotations (RFQ)')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Purchase Quotations (RFQ)' })).toBeInTheDocument();
         });
     });
 

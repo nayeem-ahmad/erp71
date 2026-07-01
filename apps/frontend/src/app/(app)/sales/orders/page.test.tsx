@@ -228,8 +228,7 @@ describe('OrdersPage', () => {
         render(<OrdersPage />);
         await waitFor(() => {
             // The page should have some heading with "Order" in it
-            const heading = screen.queryByText(/orders/i) || screen.queryByText(/order/i);
-            expect(heading).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Sales Orders' })).toBeInTheDocument();
         });
     });
 });

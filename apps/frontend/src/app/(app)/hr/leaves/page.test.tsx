@@ -43,7 +43,7 @@ describe('LeavesPage', () => {
         api.getEmployees.mockResolvedValue([]);
         render(<LeavesPage />);
         await waitFor(() => {
-            expect(screen.getByText('Leaves')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Leaves' })).toBeInTheDocument();
         });
     });
 
@@ -81,7 +81,7 @@ describe('LeavesPage', () => {
         api.getEmployees.mockResolvedValue([]);
         render(<LeavesPage />);
         await waitFor(() => {
-            expect(screen.getByText('Leaves')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Leaves' })).toBeInTheDocument();
         });
     });
 

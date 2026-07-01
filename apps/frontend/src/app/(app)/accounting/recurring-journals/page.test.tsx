@@ -70,7 +70,7 @@ describe('RecurringJournalsPage', () => {
     it('renders the page heading', async () => {
         render(<RecurringJournalsPage />);
         await waitFor(() => {
-            expect(screen.getByText(/recurring journals/i)).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: /recurring journals/i })).toBeInTheDocument();
         });
     });
 

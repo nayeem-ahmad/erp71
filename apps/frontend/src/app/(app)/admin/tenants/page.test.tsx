@@ -76,7 +76,7 @@ describe('AdminTenantsPage', () => {
     it('renders the page heading', async () => {
         render(<AdminTenantsPage />);
         await waitFor(() => {
-            expect(screen.getByText('Tenant Management')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Tenant Management' })).toBeInTheDocument();
         });
     });
 

@@ -59,7 +59,7 @@ describe('PrintLabelsPage', () => {
         await act(async () => {
             render(React.createElement(require('./page').default));
         });
-        await waitFor(() => expect(screen.getByText('Print Labels')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole('heading', { name: 'Print Labels' })).toBeInTheDocument());
         expect(screen.getByText('Rice 5kg')).toBeInTheDocument();
         expect(screen.getByText('Oil 1L')).toBeInTheDocument();
         expect(screen.getByText('Sugar 1kg')).toBeInTheDocument();

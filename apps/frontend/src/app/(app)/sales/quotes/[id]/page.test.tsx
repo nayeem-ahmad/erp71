@@ -122,7 +122,7 @@ describe('QuoteDetailsPage', () => {
     it('renders quote details after loading', async () => {
         render(<QuoteDetailsPage />);
         await waitFor(() => {
-            expect(screen.getByText('QUO-00001')).toBeInTheDocument();
+            expect(screen.getAllByText('QUO-00001').length).toBeGreaterThan(0);
         });
         expect(screen.getByText('Test Customer')).toBeInTheDocument();
         expect(screen.getByText('Product Alpha')).toBeInTheDocument();

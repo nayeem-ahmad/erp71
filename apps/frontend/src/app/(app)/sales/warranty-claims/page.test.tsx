@@ -50,7 +50,7 @@ describe('WarrantyClaimsPage', () => {
         api.getWarrantyClaims.mockResolvedValue([]);
         render(<WarrantyClaimsPage />);
         await waitFor(() => {
-            expect(screen.getByText('Warranty Claims')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Warranty Claims' })).toBeInTheDocument();
         });
     });
 

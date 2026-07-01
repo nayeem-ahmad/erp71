@@ -91,7 +91,7 @@ describe('InventoryTransfersPage', () => {
     it('renders the page heading', async () => {
         render(<InventoryTransfersPage />);
         await waitFor(() => {
-            expect(screen.getByText('Warehouse Transfers')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Warehouse Transfers' })).toBeInTheDocument();
         });
     });
 

@@ -106,7 +106,7 @@ describe('PurchaseQuotationDetailPage', () => {
             render(React.createElement(require('./page').default));
         });
 
-        await waitFor(() => expect(screen.getByText('RFQ-0001')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole('heading', { name: 'RFQ-0001' })).toBeInTheDocument());
 
         expect(screen.getByText('DRAFT')).toBeInTheDocument();
         expect(screen.getByText('ABC Supplies')).toBeInTheDocument();
@@ -158,7 +158,7 @@ describe('PurchaseQuotationDetailPage', () => {
             render(React.createElement(require('./page').default));
         });
 
-        await waitFor(() => expect(screen.getByText('RFQ-0001')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole('heading', { name: 'RFQ-0001' })).toBeInTheDocument());
 
         fireEvent.click(screen.getByText(/Back to RFQs/i));
         expect(mockPush).toHaveBeenCalledWith('/purchases/quotations');

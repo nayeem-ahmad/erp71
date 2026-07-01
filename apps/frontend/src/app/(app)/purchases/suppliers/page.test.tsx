@@ -34,7 +34,7 @@ describe('SuppliersPage', () => {
         api.getSuppliers.mockResolvedValue([]);
         render(<SuppliersPage />);
         await waitFor(() => {
-            expect(screen.getByText('Suppliers')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Suppliers' })).toBeInTheDocument();
         });
     });
 

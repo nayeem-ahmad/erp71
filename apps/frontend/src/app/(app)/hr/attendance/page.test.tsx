@@ -70,7 +70,7 @@ describe('AttendancePage', () => {
     it('renders the Attendance heading', async () => {
         render(<AttendancePage />);
         await waitFor(() => {
-            expect(screen.getByText('Attendance')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Attendance' })).toBeInTheDocument();
         });
     });
 

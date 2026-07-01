@@ -61,7 +61,7 @@ describe('BrandsPage', () => {
     it('renders the Brands heading', async () => {
         render(<BrandsPage />);
         await waitFor(() => {
-            expect(screen.getByText('Brands')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Brands' })).toBeInTheDocument();
         });
     });
 

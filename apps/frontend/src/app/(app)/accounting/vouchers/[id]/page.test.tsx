@@ -13,6 +13,7 @@ jest.mock('next/navigation', () => ({
 jest.mock('lucide-react', () => ({
     ArrowLeft: () => <span data-testid="icon-arrow-left" />,
     BookText: () => <span data-testid="icon-book-text" />,
+    ChevronRight: () => <span data-testid="icon-chevron-right" />,
 }));
 
 jest.mock('@/lib/api', () => ({
