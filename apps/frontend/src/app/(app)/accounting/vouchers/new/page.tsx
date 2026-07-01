@@ -96,6 +96,7 @@ function AccountingVouchersPageContent() {
 
     const editVoucherId = searchParams.get('edit');
     const isEditMode = Boolean(editVoucherId);
+    const templateId = searchParams.get('templateId');
 
     useEffect(() => {
         if (!editVoucherId) {
@@ -151,6 +152,53 @@ function AccountingVouchersPageContent() {
             active = false;
         };
     }, [editVoucherId]);
+
+    useEffect(() => {
+        if (!templateId || editVoucherId) {
+            return;
+        }
+
+        let active = true;
+
+        const loadVoucherTemplate = async () => {
+            setIsLoadingPreview(true);
+            setLoadError('');
+
+            try {
+                const template = await api.getVoucherTemplate(templateId);
+                if (!active) {
+                    return;
+                }
+
+                setVoucherType(template.voucher_type as VoucherType);
+                setDescription(template.description ?? template.name ?? '');
+                setRows(
+                    template.lines.map((line: any, index: number) => ({
+                        id: `voucher-row-template-${index}`,
+                        accountId: line.account_id ?? line.account?.id ?? '',
+                        debitAmount: Number(line.debit_amount) > 0 ? String(line.debit_amount) : '',
+                        creditAmount: Number(line.credit_amount) > 0 ? String(line.credit_amount) : '',
+                        comment: line.comment ?? '',
+                    })),
+                );
+            } catch (error) {
+                if (!active) {
+                    return;
+                }
+                setLoadError(error instanceof Error ? error.message : 'Failed to load voucher template.');
+            } finally {
+                if (active) {
+                    setIsLoadingPreview(false);
+                }
+            }
+        };
+
+        void loadVoucherTemplate();
+
+        return () => {
+            active = false;
+        };
+    }, [templateId, editVoucherId]);
 
     useEffect(() => {
         let active = true;

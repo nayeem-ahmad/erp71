@@ -54,6 +54,7 @@ jest.mock('lucide-react', () => ({
     Trash2: () => <span data-testid="icon-trash" />,
     Search: () => <span data-testid="icon-search" />,
     PackageCheck: () => <span data-testid="icon-package-check" />,
+    ChevronRight: () => <span data-testid="icon-chevron-right" />,
 }));
 
 const mockOrder = {

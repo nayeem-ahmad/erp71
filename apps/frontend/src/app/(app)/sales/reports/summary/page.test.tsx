@@ -62,7 +62,7 @@ describe('SalesSummaryPage', () => {
         await waitFor(() => {
             expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
         });
-        expect(screen.getByText('Sales Summary')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Sales Summary' })).toBeInTheDocument();
     });
 
     it('renders the DataTable with correct title', async () => {
@@ -131,7 +131,7 @@ describe('SalesSummaryPage', () => {
         render(<SalesSummaryPage />);
         // Page should not crash
         await waitFor(() => {
-            expect(screen.getByText('Sales Summary')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Sales Summary' })).toBeInTheDocument();
         });
     });
 });

@@ -18,7 +18,7 @@ jest.mock('next/navigation', () => ({
 describe('HelpPage', () => {
     it('renders the Help Center heading', () => {
         render(<HelpPage />);
-        expect(screen.getByText('Help Center')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Help Center' })).toBeInTheDocument();
         expect(screen.getByText('Frequently asked questions and guides')).toBeInTheDocument();
     });
 

@@ -1426,6 +1426,29 @@ export const api = {
         fetchWithAuth('/accounting/recurring-journals', { method: 'POST', body: JSON.stringify(data) }),
     postRecurringJournal: (id: string) =>
         fetchWithAuth(`/accounting/recurring-journals/${id}/post`, { method: 'POST' }),
+    // Recurring Vouchers (any voucher type)
+    listRecurringVouchers: (params?: { voucherType?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.voucherType) query.set('voucherType', params.voucherType);
+        return fetchWithAuth(`/accounting/recurring-vouchers${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    createRecurringVoucher: (data: any) =>
+        fetchWithAuth('/accounting/recurring-vouchers', { method: 'POST', body: JSON.stringify(data) }),
+    postRecurringVoucher: (id: string) =>
+        fetchWithAuth(`/accounting/recurring-vouchers/${id}/post`, { method: 'POST' }),
+    deleteRecurringVoucher: (id: string) =>
+        fetchWithAuth(`/accounting/recurring-vouchers/${id}`, { method: 'DELETE' }),
+    // Voucher Templates
+    listVoucherTemplates: (params?: { voucherType?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.voucherType) query.set('voucherType', params.voucherType);
+        return fetchWithAuth(`/accounting/voucher-templates${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    getVoucherTemplate: (id: string) => fetchWithAuth(`/accounting/voucher-templates/${id}`),
+    createVoucherTemplate: (data: any) =>
+        fetchWithAuth('/accounting/voucher-templates', { method: 'POST', body: JSON.stringify(data) }),
+    deleteVoucherTemplate: (id: string) =>
+        fetchWithAuth(`/accounting/voucher-templates/${id}`, { method: 'DELETE' }),
     // Bank Reconciliation
     createBankReconciliation: (data: any) =>
         fetchWithAuth('/accounting/bank-reconciliations', { method: 'POST', body: JSON.stringify(data) }),

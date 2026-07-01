@@ -106,7 +106,7 @@ describe('PurchaseQuotationDetailPage', () => {
             render(React.createElement(require('./page').default));
         });
 
-        await waitFor(() => expect(screen.getByText('RFQ-0001')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getAllByText('RFQ-0001').length).toBeGreaterThan(0));
 
         expect(screen.getByText('DRAFT')).toBeInTheDocument();
         expect(screen.getByText('ABC Supplies')).toBeInTheDocument();
@@ -158,10 +158,10 @@ describe('PurchaseQuotationDetailPage', () => {
             render(React.createElement(require('./page').default));
         });
 
-        await waitFor(() => expect(screen.getByText('RFQ-0001')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getAllByText('RFQ-0001').length).toBeGreaterThan(0));
 
-        fireEvent.click(screen.getByText(/Back to RFQs/i));
-        expect(mockPush).toHaveBeenCalledWith('/purchases/quotations');
+        const backLink = screen.getByText('Purchase Quotations (RFQ)').closest('a');
+        expect(backLink).toHaveAttribute('href', '/purchases/quotations');
     });
 
     it('shows DRAFT action buttons: Mark as Sent and Cancel RFQ', async () => {

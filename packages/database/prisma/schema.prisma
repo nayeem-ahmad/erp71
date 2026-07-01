@@ -381,6 +381,8 @@ model Tenant {
   costCenters      CostCenter[]
   fixedAssets      FixedAsset[]
   recurringJournals RecurringJournal[]
+  recurringVouchers RecurringVoucher[]
+  voucherTemplates  VoucherTemplate[]
   bankReconciliations BankReconciliation[]
   customerInteractions CustomerInteraction[]
   crmTasks            CrmTask[]
@@ -1450,6 +1452,8 @@ model Account {
   creditPostingRules PostingRule[] @relation("PostingRuleCreditAccount")
   budgets        AccountBudget[]
   recurringJournalLines RecurringJournalLine[]
+  recurringVoucherLines RecurringVoucherLine[]
+  voucherTemplateLines  VoucherTemplateLine[]
   paymentRecords PaymentRecord[]
 
   @@unique([tenant_id, name])
@@ -2444,6 +2448,75 @@ model RecurringJournalLine {
 
   @@index([recurring_journal_id])
   @@map("recurring_journal_lines")
+}
+
+model RecurringVoucher {
+  id               String    @id @default(uuid())
+  tenant_id        String
+  name             String
+  description      String?
+  voucher_type     String    @default("journal")
+  frequency        String
+  next_due_date    DateTime
+  last_run_date    DateTime?
+  is_active        Boolean   @default(true)
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  tenant           Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  lines            RecurringVoucherLine[]
+
+  @@index([tenant_id])
+  @@index([tenant_id, next_due_date, is_active])
+  @@map("recurring_vouchers")
+}
+
+model RecurringVoucherLine {
+  id                    String  @id @default(uuid())
+  recurring_voucher_id  String
+  account_id            String
+  debit_amount          Decimal @db.Decimal(12, 2) @default(0)
+  credit_amount         Decimal @db.Decimal(12, 2) @default(0)
+  comment               String?
+
+  recurringVoucher RecurringVoucher @relation(fields: [recurring_voucher_id], references: [id], onDelete: Cascade)
+  account          Account          @relation(fields: [account_id], references: [id])
+
+  @@index([recurring_voucher_id])
+  @@map("recurring_voucher_lines")
+}
+
+model VoucherTemplate {
+  id            String   @id @default(uuid())
+  tenant_id     String
+  name          String
+  description   String?
+  voucher_type  String   @default("journal")
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  lines         VoucherTemplateLine[]
+
+  @@unique([tenant_id, name])
+  @@index([tenant_id])
+  @@index([tenant_id, voucher_type])
+  @@map("voucher_templates")
+}
+
+model VoucherTemplateLine {
+  id                   String  @id @default(uuid())
+  voucher_template_id  String
+  account_id           String
+  debit_amount         Decimal @db.Decimal(12, 2) @default(0)
+  credit_amount        Decimal @db.Decimal(12, 2) @default(0)
+  comment              String?
+
+  voucherTemplate VoucherTemplate @relation(fields: [voucher_template_id], references: [id], onDelete: Cascade)
+  account         Account         @relation(fields: [account_id], references: [id])
+
+  @@index([voucher_template_id])
+  @@map("voucher_template_lines")
 }
 
 model BankReconciliation {

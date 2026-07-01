@@ -612,6 +612,101 @@ export class CreateRecurringJournalDto {
     lines: CreateRecurringJournalLineDto[];
 }
 
+// Recurring Vouchers: like recurring journals, but any voucher type
+export class CreateRecurringVoucherLineDto {
+    @IsUUID()
+    accountId: string;
+
+    @Type(() => Number)
+    @IsNumber()
+    debitAmount: number;
+
+    @Type(() => Number)
+    @IsNumber()
+    creditAmount: number;
+
+    @IsOptional()
+    @IsString()
+    comment?: string;
+}
+
+export class CreateRecurringVoucherDto {
+    @IsString()
+    @IsNotEmpty()
+    name: string;
+
+    @IsOptional()
+    @IsString()
+    description?: string;
+
+    @IsOptional()
+    @IsString()
+    @IsIn(Object.values(VoucherType))
+    voucherType?: VoucherType;
+
+    @IsIn(['MONTHLY', 'WEEKLY', 'DAILY'])
+    frequency: string;
+
+    @IsDateString()
+    nextDueDate: string;
+
+    @ArrayMinSize(2)
+    @ValidateNested({ each: true })
+    @Type(() => CreateRecurringVoucherLineDto)
+    lines: CreateRecurringVoucherLineDto[];
+}
+
+export class ListRecurringVouchersQueryDto {
+    @IsOptional()
+    @IsString()
+    @IsIn(Object.values(VoucherType))
+    voucherType?: VoucherType;
+}
+
+// Voucher Templates: reusable named line templates for quick voucher entry
+export class CreateVoucherTemplateLineDto {
+    @IsUUID()
+    accountId: string;
+
+    @Type(() => Number)
+    @IsNumber()
+    debitAmount: number;
+
+    @Type(() => Number)
+    @IsNumber()
+    creditAmount: number;
+
+    @IsOptional()
+    @IsString()
+    comment?: string;
+}
+
+export class CreateVoucherTemplateDto {
+    @IsString()
+    @IsNotEmpty()
+    name: string;
+
+    @IsOptional()
+    @IsString()
+    description?: string;
+
+    @IsString()
+    @IsIn(Object.values(VoucherType))
+    voucherType: VoucherType;
+
+    @ArrayMinSize(2)
+    @ValidateNested({ each: true })
+    @Type(() => CreateVoucherTemplateLineDto)
+    lines: CreateVoucherTemplateLineDto[];
+}
+
+export class ListVoucherTemplatesQueryDto {
+    @IsOptional()
+    @IsString()
+    @IsIn(Object.values(VoucherType))
+    voucherType?: VoucherType;
+}
+
 // Feature 14: Bank Reconciliation
 export class CreateBankReconciliationDto {
     @IsUUID()

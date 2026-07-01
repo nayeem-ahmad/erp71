@@ -55,7 +55,7 @@ describe('CashierSessionsPage', () => {
         api.getActiveCounters.mockResolvedValue([]);
         render(<CashierSessionsPage />);
         await waitFor(() => {
-            expect(screen.getByText('Cashier Session')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Cashier Session' })).toBeInTheDocument();
         });
     });
 

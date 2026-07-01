@@ -124,6 +124,8 @@ export const accountingMessages = {
             costCenters: { title: 'Pusat Kos', description: 'Tag baris baucar mengikut jabatan atau cawangan untuk pelaporan P&L peringkat segmen.' },
             fixedAssets: { title: 'Aset Tetap', description: 'Daftar aset dengan jadual susutnilai dikira secara automatik dan catatan jurnal.' },
             recurringJournals: { title: 'Jurnal Berulang', description: 'Jadualkan catatan jurnal berulang — sewa, gaji, langganan.' },
+            recurringVouchers: { title: 'Baucar Berulang', description: 'Jadualkan sebarang jenis baucar — tunai, bank, atau jurnal — untuk dijana secara automatik berulang kali.' },
+            voucherTemplates: { title: 'Templat Baucar', description: 'Simpan templat baris akaun boleh guna semula untuk kemasukan baucar pantas.' },
             bankReconciliation: { title: 'Penyesuaian Bank', description: 'Import penyata bank dan padankan entri dengan rekod perakaunan.' },
             pl: { title: 'Untung & Rugi', description: 'Penyata pendapatan — hasil berbanding perbelanjaan dan untung bersih bagi sebarang julat tarikh.' },
             balanceSheet: { title: 'Kunci Kira-Kira', description: 'Gambaran aset, liabiliti, dan ekuiti sehingga sebarang tarikh.' },

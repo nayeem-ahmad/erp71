@@ -124,6 +124,8 @@ export const accountingMessages = {
             costCenters: { title: 'Cost Centers', description: 'Tag voucher lines by department or branch for segment-level P&L reporting.' },
             fixedAssets: { title: 'Fixed Assets', description: 'Asset register with auto-calculated depreciation schedules and journal postings.' },
             recurringJournals: { title: 'Recurring Journals', description: 'Schedule repeating journal entries — rent, salaries, subscriptions.' },
+            recurringVouchers: { title: 'Recurring Vouchers', description: 'Schedule any voucher type — cash, bank, or journal — to auto-generate on a recurring basis.' },
+            voucherTemplates: { title: 'Voucher Templates', description: 'Save reusable account line templates for quick voucher entry.' },
             bankReconciliation: { title: 'Bank Reconciliation', description: 'Import bank statements and match entries against bookkeeping records.' },
             pl: { title: 'Profit & Loss', description: 'Income statement — revenue vs expenses and net profit for any date range.' },
             balanceSheet: { title: 'Balance Sheet', description: 'Assets, liabilities, and equity snapshot as of any date.' },

@@ -3,6 +3,7 @@ import AccountingVouchersPage from './page';
 import { api } from '@/lib/api';
 
 const replace = jest.fn();
+let mockSearchParams: Record<string, string | null> = {};
 
 jest.mock('next/link', () => {
     return ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>;
@@ -13,7 +14,7 @@ jest.mock('next/navigation', () => ({
         replace,
     }),
     useSearchParams: () => ({
-        get: () => null,
+        get: (key: string) => mockSearchParams[key] ?? null,
     }),
 }));
 
@@ -29,12 +30,14 @@ jest.mock('@/lib/api', () => ({
         getAccounts: jest.fn(),
         getVoucherNumberPreview: jest.fn(),
         createVoucher: jest.fn(),
+        getVoucherTemplate: jest.fn(),
     },
 }));
 
 describe('AccountingVouchersPage — Story 30.5', () => {
     beforeEach(() => {
         replace.mockReset();
+        mockSearchParams = {};
         (api.getAccounts as jest.Mock).mockResolvedValue([
             { id: 'cash-1', name: 'Cash in Hand', category: 'cash', type: 'asset' },
             { id: 'bank-1', name: 'Main Bank Account', category: 'bank', type: 'asset' },
@@ -122,6 +125,35 @@ describe('AccountingVouchersPage — Story 30.5', () => {
                 description: 'Paid office rent',
             }));
             expect(replace).toHaveBeenCalledWith('/accounting/vouchers?voucher=CP-00001');
+        });
+    });
+
+    it('prefills voucher type and lines from a voucher template', async () => {
+        mockSearchParams = { templateId: 'vt-1' };
+        (api.getVoucherNumberPreview as jest.Mock).mockResolvedValue({ voucherNumber: 'JV-00001' });
+        (api.getVoucherTemplate as jest.Mock).mockResolvedValue({
+            id: 'vt-1',
+            name: 'Office Rent',
+            description: 'Monthly office rent',
+            voucher_type: 'journal',
+            lines: [
+                { account_id: 'expense-1', debit_amount: 100, credit_amount: 0, comment: null },
+                { account_id: 'cash-1', debit_amount: 0, credit_amount: 100, comment: null },
+            ],
+        });
+
+        render(<AccountingVouchersPage />);
+
+        await waitFor(() => {
+            expect(api.getVoucherTemplate).toHaveBeenCalledWith('vt-1');
+        });
+
+        await waitFor(() => {
+            expect(screen.getByLabelText('Description')).toHaveValue('Monthly office rent');
+            expect(screen.getByLabelText('Account row 1')).toHaveValue('expense-1');
+            expect(screen.getByLabelText('Debit row 1')).toHaveValue(100);
+            expect(screen.getByLabelText('Account row 2')).toHaveValue('cash-1');
+            expect(screen.getByLabelText('Credit row 2')).toHaveValue(100);
         });
     });
 });

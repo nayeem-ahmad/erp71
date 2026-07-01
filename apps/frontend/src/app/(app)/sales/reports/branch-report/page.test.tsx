@@ -84,7 +84,7 @@ describe('BranchReportPage', () => {
         await waitFor(() => {
             expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
         });
-        expect(screen.getByText('Branch Report')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Branch Report' })).toBeInTheDocument();
     });
 
     it('renders the page description', async () => {

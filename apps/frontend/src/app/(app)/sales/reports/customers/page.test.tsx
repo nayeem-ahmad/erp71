@@ -56,7 +56,7 @@ describe('SalesByCustomerPage', () => {
         await waitFor(() => {
             expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
         });
-        expect(screen.getByText('Customer-wise Sales Summary')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Customer-wise Sales Summary' })).toBeInTheDocument();
     });
 
     it('renders the DataTable with correct title', async () => {
@@ -116,7 +116,7 @@ describe('SalesByCustomerPage', () => {
         api.getSalesByCustomer.mockRejectedValue(new Error('Unauthorized'));
         render(<SalesByCustomerPage />);
         await waitFor(() => {
-            expect(screen.getByText('Customer-wise Sales Summary')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Customer-wise Sales Summary' })).toBeInTheDocument();
         });
     });
 });

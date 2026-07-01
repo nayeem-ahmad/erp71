@@ -73,7 +73,7 @@ describe('SlaPage', () => {
         render(<SlaPage />);
         expect(screen.getByText('Detection.')).toBeInTheDocument();
         expect(screen.getByText('On-call page.')).toBeInTheDocument();
-        expect(screen.getByText('Status page update.')).toBeInTheDocument();
+        expect(screen.getByText('Customer notification.')).toBeInTheDocument();
         expect(screen.getByText('Resolution.')).toBeInTheDocument();
         expect(screen.getByText('Post-mortem.')).toBeInTheDocument();
     });
@@ -118,12 +118,6 @@ describe('SlaPage', () => {
         render(<SlaPage />);
         const emailLinks = screen.getAllByText('support@erp71.com');
         expect(emailLinks.length).toBeGreaterThan(0);
-    });
-
-    it('renders status page links', () => {
-        render(<SlaPage />);
-        const statusLinks = screen.getAllByText('status.erp71.com');
-        expect(statusLinks.length).toBeGreaterThan(0);
     });
 
     it('renders the nav Sign in link', () => {

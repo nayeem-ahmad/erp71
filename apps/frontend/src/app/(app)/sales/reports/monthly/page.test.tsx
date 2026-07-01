@@ -67,7 +67,7 @@ describe('MonthlySalesPage', () => {
         await waitFor(() => {
             expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
         });
-        expect(screen.getByText('Monthly Sales by Customer')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Monthly Sales by Customer' })).toBeInTheDocument();
     });
 
     it('renders the subtitle', async () => {

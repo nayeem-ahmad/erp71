@@ -6,6 +6,7 @@ import {
     Building2,
     Calculator,
     ClipboardList,
+    Copy,
     Cpu,
     FileText,
     FolderTree,
@@ -39,6 +40,8 @@ export type AccountingLinkKey =
     | 'costCenters'
     | 'fixedAssets'
     | 'recurringJournals'
+    | 'recurringVouchers'
+    | 'voucherTemplates'
     | 'bankReconciliation'
     | 'expenses'
     | 'expenseCategories'
@@ -78,6 +81,8 @@ export const ACCOUNTING_CORE_LINKS: AccountingNavItem[] = [
     { key: 'costCenters', href: routes.accounting.costCenters, icon: Building2, accent: 'bg-cyan-50 text-cyan-700 border-cyan-100' },
     { key: 'fixedAssets', href: routes.accounting.fixedAssets, icon: Cpu, accent: 'bg-orange-50 text-orange-700 border-orange-100' },
     { key: 'recurringJournals', href: routes.accounting.recurringJournals, icon: RefreshCw, accent: 'bg-purple-50 text-purple-700 border-purple-100' },
+    { key: 'recurringVouchers', href: routes.accounting.recurringVouchers, icon: RefreshCw, accent: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-100' },
+    { key: 'voucherTemplates', href: routes.accounting.voucherTemplates, icon: Copy, accent: 'bg-lime-50 text-lime-700 border-lime-100' },
     { key: 'bankReconciliation', href: routes.accounting.reconciliationBank, icon: GitMerge, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
 ];
 
@@ -111,6 +116,8 @@ export const ACCOUNTING_SETUP_LINKS: AccountingNavItem[] = [
     { key: 'costCenters', href: routes.accounting.costCenters, icon: Building2, accent: 'bg-cyan-50 text-cyan-700 border-cyan-100' },
     { key: 'fixedAssets', href: routes.accounting.fixedAssets, icon: Cpu, accent: 'bg-orange-50 text-orange-700 border-orange-100' },
     { key: 'recurringJournals', href: routes.accounting.recurringJournals, icon: RefreshCw, accent: 'bg-purple-50 text-purple-700 border-purple-100' },
+    { key: 'recurringVouchers', href: routes.accounting.recurringVouchers, icon: RefreshCw, accent: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-100' },
+    { key: 'voucherTemplates', href: routes.accounting.voucherTemplates, icon: Copy, accent: 'bg-lime-50 text-lime-700 border-lime-100' },
 ];
 
 export const ACCOUNTING_RECONCILIATION_LINKS: AccountingNavItem[] = [

@@ -1,8 +1,11 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { AccountCategory, AccountType, VoucherType } from './accounting.constants';
 import { AuditService } from '../audit/audit.service';
+import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
+import { JOB_NAMES } from '../system-health/jobs/job-names';
 import {
     CreateVoucherDto,
     CreateAccountDto,
@@ -38,6 +41,8 @@ import {
     CreateFixedAssetDto,
     RunDepreciationDto,
     CreateRecurringJournalDto,
+    CreateRecurringVoucherDto,
+    CreateVoucherTemplateDto,
     CreateBankReconciliationDto,
     ImportBankStatementDto,
     MatchBankEntryDto,
@@ -66,7 +71,13 @@ const TAX_LIABILITY_ACCOUNT_PATTERN = /(tax|vat|gst|sales\s+tax|withholding)/i;
 
 @Injectable()
 export class AccountingService {
-    constructor(private readonly db: DatabaseService, private readonly auditService: AuditService) {}
+    private readonly logger = new Logger(AccountingService.name);
+
+    constructor(
+        private readonly db: DatabaseService,
+        private readonly auditService: AuditService,
+        private readonly jobTracker: JobTrackerService,
+    ) {}
 
     getModuleOverview(tenantId: string) {
         return {
@@ -2377,6 +2388,166 @@ export class AccountingService {
         });
 
         return { voucher, next_due_date: nextDue };
+    }
+
+    // ============ Recurring Vouchers (any voucher type) ============
+
+    async createRecurringVoucher(tenantId: string, dto: CreateRecurringVoucherDto) {
+        const accountIds = [...new Set(dto.lines.map((l) => l.accountId))];
+        const accounts = await this.db.account.findMany({ where: { tenant_id: tenantId, id: { in: accountIds } } });
+        if (accounts.length !== accountIds.length) {
+            throw new BadRequestException('One or more accounts do not belong to this tenant.');
+        }
+
+        return this.db.recurringVoucher.create({
+            data: {
+                tenant_id: tenantId,
+                name: dto.name,
+                description: dto.description,
+                voucher_type: dto.voucherType ?? VoucherType.JOURNAL,
+                frequency: dto.frequency,
+                next_due_date: new Date(dto.nextDueDate),
+                lines: {
+                    create: dto.lines.map((l) => ({
+                        account_id: l.accountId,
+                        debit_amount: l.debitAmount,
+                        credit_amount: l.creditAmount,
+                        comment: l.comment,
+                    })),
+                },
+            },
+            include: { lines: { include: { account: true } } },
+        });
+    }
+
+    async listRecurringVouchers(tenantId: string, voucherType?: VoucherType) {
+        return this.db.recurringVoucher.findMany({
+            where: { tenant_id: tenantId, ...(voucherType ? { voucher_type: voucherType } : {}) },
+            include: { lines: { include: { account: { select: { id: true, name: true, code: true } } } } },
+            orderBy: { next_due_date: 'asc' },
+        });
+    }
+
+    async postRecurringVoucher(tenantId: string, id: string) {
+        const template = await this.db.recurringVoucher.findFirst({
+            where: { id, tenant_id: tenantId },
+            include: { lines: true },
+        });
+        if (!template) throw new NotFoundException('Recurring voucher not found.');
+        if (!template.is_active) throw new BadRequestException('Recurring voucher is not active.');
+
+        const voucherDto: CreateVoucherDto = {
+            voucherType: template.voucher_type as VoucherType,
+            description: template.description ?? template.name,
+            details: template.lines.map((l) => ({
+                accountId: l.account_id,
+                debitAmount: Number(l.debit_amount),
+                creditAmount: Number(l.credit_amount),
+                comment: l.comment ?? undefined,
+            })),
+        };
+
+        const voucher = await this.createVoucher(tenantId, voucherDto);
+
+        // Advance next_due_date
+        const nextDue = new Date(template.next_due_date);
+        if (template.frequency === 'DAILY') nextDue.setUTCDate(nextDue.getUTCDate() + 1);
+        else if (template.frequency === 'WEEKLY') nextDue.setUTCDate(nextDue.getUTCDate() + 7);
+        else nextDue.setUTCMonth(nextDue.getUTCMonth() + 1);
+
+        await this.db.recurringVoucher.update({
+            where: { id },
+            data: { last_run_date: new Date(), next_due_date: nextDue },
+        });
+
+        return { voucher, next_due_date: nextDue };
+    }
+
+    async deleteRecurringVoucher(tenantId: string, id: string) {
+        const existing = await this.db.recurringVoucher.findFirst({ where: { id, tenant_id: tenantId } });
+        if (!existing) throw new NotFoundException('Recurring voucher not found.');
+        await this.db.recurringVoucher.delete({ where: { id } });
+        return { success: true };
+    }
+
+    /** Auto-posts every active recurring voucher whose next_due_date has arrived. */
+    async postAllDueRecurringVouchers(): Promise<{ posted: number; failed: number }> {
+        const due = await this.db.recurringVoucher.findMany({
+            where: { is_active: true, next_due_date: { lte: new Date() } },
+        });
+
+        let posted = 0;
+        let failed = 0;
+        for (const recurringVoucher of due) {
+            try {
+                await this.postRecurringVoucher(recurringVoucher.tenant_id, recurringVoucher.id);
+                posted++;
+            } catch (err) {
+                failed++;
+                this.logger.error(
+                    `Failed to auto-post recurring voucher ${recurringVoucher.id}: ${err instanceof Error ? err.message : err}`,
+                );
+            }
+        }
+
+        return { posted, failed };
+    }
+
+    @Cron('0 6 * * *')
+    async runDueRecurringVouchers(): Promise<void> {
+        await this.jobTracker.track(JOB_NAMES.ACCOUNTING_RECURRING_VOUCHERS, () => this.postAllDueRecurringVouchers());
+    }
+
+    // ============ Voucher Templates ============
+
+    async createVoucherTemplate(tenantId: string, dto: CreateVoucherTemplateDto) {
+        const accountIds = [...new Set(dto.lines.map((l) => l.accountId))];
+        const accounts = await this.db.account.findMany({ where: { tenant_id: tenantId, id: { in: accountIds } } });
+        if (accounts.length !== accountIds.length) {
+            throw new BadRequestException('One or more accounts do not belong to this tenant.');
+        }
+
+        return this.db.voucherTemplate.create({
+            data: {
+                tenant_id: tenantId,
+                name: dto.name,
+                description: dto.description,
+                voucher_type: dto.voucherType,
+                lines: {
+                    create: dto.lines.map((l) => ({
+                        account_id: l.accountId,
+                        debit_amount: l.debitAmount,
+                        credit_amount: l.creditAmount,
+                        comment: l.comment,
+                    })),
+                },
+            },
+            include: { lines: { include: { account: true } } },
+        });
+    }
+
+    async listVoucherTemplates(tenantId: string, voucherType?: VoucherType) {
+        return this.db.voucherTemplate.findMany({
+            where: { tenant_id: tenantId, ...(voucherType ? { voucher_type: voucherType } : {}) },
+            include: { lines: { include: { account: { select: { id: true, name: true, code: true } } } } },
+            orderBy: { name: 'asc' },
+        });
+    }
+
+    async getVoucherTemplate(tenantId: string, id: string) {
+        const template = await this.db.voucherTemplate.findFirst({
+            where: { id, tenant_id: tenantId },
+            include: { lines: { include: { account: { select: { id: true, name: true, code: true } } } } },
+        });
+        if (!template) throw new NotFoundException('Voucher template not found.');
+        return template;
+    }
+
+    async deleteVoucherTemplate(tenantId: string, id: string) {
+        const existing = await this.db.voucherTemplate.findFirst({ where: { id, tenant_id: tenantId } });
+        if (!existing) throw new NotFoundException('Voucher template not found.');
+        await this.db.voucherTemplate.delete({ where: { id } });
+        return { success: true };
     }
 
     // ============ FEATURE 14: Bank Reconciliation ============

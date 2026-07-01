@@ -62,7 +62,7 @@ describe('InventoryCategoriesPage', () => {
     it('renders the page heading', async () => {
         render(<InventoryCategoriesPage />);
         await waitFor(() => {
-            expect(screen.getByText('Product Categories')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Product Categories' })).toBeInTheDocument();
         });
     });
 

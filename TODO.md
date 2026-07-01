@@ -195,6 +195,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Cost Center / Department Tagging — optional costCenterId dimension on voucher lines; per-branch or per-department P&L — done 2026-06-11
 - [x] Fixed Asset Register & Depreciation — asset master with purchase date/cost/useful life/method; auto-generate monthly depreciation journals — done 2026-06-11
 - [x] Recurring Journal Templates — define a journal entry with a schedule; system auto-creates or prompts on due date — done 2026-06-11
+- [x] Recurring Vouchers & Voucher Templates — generalized recurring journals to any voucher type (cash/bank/journal); `RecurringVoucher`/`RecurringVoucherLine` + `VoucherTemplate`/`VoucherTemplateLine` Prisma models; `/accounting/recurring-vouchers` (CRUD + manual "Post Now") and `/accounting/voucher-templates` (CRUD, no scheduling) endpoints; daily cron (`AccountingService.runDueRecurringVouchers`, tracked via `JobTrackerService`/`JOB_NAMES.ACCOUNTING_RECURRING_VOUCHERS`) auto-posts due recurring vouchers; frontend pages for both plus a "Load from template" flow on `/accounting/vouchers/new?templateId=`; i18n en/bn/ms — done 2026-07-01
 - [x] VAT / Tax Ledger Report — output VAT collected, input VAT paid, net payable; structured for Bangladesh NBR monthly VAT return — done 2026-06-11
 
 ### Accounting — Mid-Size Features (Tier 3: Stickiness & Depth)

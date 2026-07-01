@@ -61,7 +61,7 @@ describe('TerritoriesPage', () => {
     it('renders the Territories heading', async () => {
         render(<TerritoriesPage />);
         await waitFor(() => {
-            expect(screen.getByText('Territories')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Territories' })).toBeInTheDocument();
         });
     });
 

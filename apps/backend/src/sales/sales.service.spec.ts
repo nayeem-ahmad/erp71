@@ -341,10 +341,12 @@ describe('SalesService', () => {
 
   describe('generateReferenceNumber()', () => {
     it('increments the max sequence for the YYMM prefix across all dates', async () => {
+      const now = new Date();
+      const yymm = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}`;
       tx.salesSettings.findUnique.mockResolvedValue({ reference_number_format: 'YYMM-#' });
       tx.sale.findMany.mockResolvedValue([
-        { reference_number: '2606-001' },
-        { reference_number: '2606-005' },
+        { reference_number: `${yymm}-001` },
+        { reference_number: `${yymm}-005` },
       ]);
 
       const result = await service.generateReferenceNumber('tenant-1', tx);
@@ -352,11 +354,11 @@ describe('SalesService', () => {
       expect(tx.sale.findMany).toHaveBeenCalledWith({
         where: {
           tenant_id: 'tenant-1',
-          reference_number: { startsWith: '2606-' },
+          reference_number: { startsWith: `${yymm}-` },
         },
         select: { reference_number: true },
       });
-      expect(result).toBe('2606-006');
+      expect(result).toBe(`${yymm}-006`);
     });
   });
 

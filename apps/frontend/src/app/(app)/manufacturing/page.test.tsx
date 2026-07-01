@@ -18,6 +18,7 @@ jest.mock('lucide-react', () => ({
     RefreshCw: () => <span data-testid="icon-refresh" />,
     Cog: () => <span data-testid="icon-cog" />,
     Trash2: () => <span data-testid="icon-trash" />,
+    ChevronRight: () => <span data-testid="icon-chevron-right" />,
 }));
 
 const mockFetchWithAuth = require('@/lib/api').fetchWithAuth as jest.Mock;
@@ -105,7 +106,7 @@ describe('ManufacturingPage', () => {
 
     it('renders the Manufacturing heading', async () => {
         render(<ManufacturingPage />);
-        expect(screen.getByText('Manufacturing')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Manufacturing' })).toBeInTheDocument();
     });
 
     it('shows BOM and Production Jobs tabs', async () => {

@@ -31,6 +31,7 @@ jest.mock('@/components/data-table', () => ({
 jest.mock('lucide-react', () => ({
     ArrowLeft: () => <span data-testid="icon-arrow-left" />,
     Calculator: () => <span data-testid="icon-calculator" />,
+    ChevronRight: () => <span data-testid="icon-chevron-right" />,
     Filter: () => <span data-testid="icon-filter" />,
     ReceiptText: () => <span data-testid="icon-receipt-text" />,
     Wallet: () => <span data-testid="icon-wallet" />,

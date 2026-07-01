@@ -88,6 +88,8 @@ export const routes = {
         fixedAssets: '/accounting/fixed-assets',
         openingBalances: '/accounting/opening-balances',
         recurringJournals: '/accounting/recurring-journals',
+        recurringVouchers: '/accounting/recurring-vouchers',
+        voucherTemplates: '/accounting/voucher-templates',
         expenses: '/accounting/expenses',
         expenseCategories: '/accounting/expenses/categories',
         expenseReports: '/accounting/expenses/reports',

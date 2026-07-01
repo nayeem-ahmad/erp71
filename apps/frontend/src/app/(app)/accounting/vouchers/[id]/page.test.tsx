@@ -13,6 +13,7 @@ jest.mock('next/navigation', () => ({
 jest.mock('lucide-react', () => ({
     ArrowLeft: () => <span data-testid="icon-arrow-left" />,
     BookText: () => <span data-testid="icon-book-text" />,
+    ChevronRight: () => <span data-testid="icon-chevron-right" />,
 }));
 
 jest.mock('@/lib/api', () => ({
@@ -52,7 +53,7 @@ describe('VoucherDetailPage — Story 30.6', () => {
         render(<VoucherDetailPage />);
 
         await waitFor(() => {
-            expect(screen.getByText('CP-00001')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'CP-00001' })).toBeInTheDocument();
             expect(screen.getByText('Office expense settlement')).toBeInTheDocument();
             expect(screen.getByText('Cash in Hand')).toBeInTheDocument();
             expect(screen.getByText('General Operating Expense')).toBeInTheDocument();

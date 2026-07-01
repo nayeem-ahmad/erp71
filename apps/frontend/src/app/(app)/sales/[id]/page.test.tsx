@@ -63,6 +63,7 @@ jest.mock('lucide-react', () => ({
     Search: () => <span data-testid="icon-search" />,
     User: () => <span data-testid="icon-user" />,
     Download: () => <span data-testid="icon-download" />,
+    ChevronRight: () => <span data-testid="icon-chevron-right" />,
 }));
 
 const mockSale = {

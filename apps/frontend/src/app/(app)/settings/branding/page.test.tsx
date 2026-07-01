@@ -44,7 +44,7 @@ describe('BrandingSettingsPage', () => {
     it('renders the Branding heading after load', async () => {
         render(<BrandingSettingsPage />);
         await waitFor(() => {
-            expect(screen.getByText('Branding')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Branding' })).toBeInTheDocument();
         });
     });
 

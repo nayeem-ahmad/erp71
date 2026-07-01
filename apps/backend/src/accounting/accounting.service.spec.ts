@@ -1,9 +1,10 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AccountingService, VOUCHER_NUMBER_PREFIXES } from './accounting.service';
 import { AccountCategory, AccountType, VoucherType } from './accounting.constants';
 import { DatabaseService } from '../database/database.service';
 import { AuditService } from '../audit/audit.service';
+import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 
 describe('AccountingService — Story 30.2', () => {
     let service: AccountingService;
@@ -53,6 +54,19 @@ describe('AccountingService — Story 30.2', () => {
             findFirst: jest.fn(),
             update: jest.fn(),
         },
+        recurringVoucher: {
+            findMany: jest.fn(),
+            findFirst: jest.fn(),
+            create: jest.fn(),
+            update: jest.fn(),
+            delete: jest.fn(),
+        },
+        voucherTemplate: {
+            findMany: jest.fn(),
+            findFirst: jest.fn(),
+            create: jest.fn(),
+            delete: jest.fn(),
+        },
         $transaction: jest.fn(),
     };
 
@@ -70,6 +84,10 @@ describe('AccountingService — Story 30.2', () => {
                 {
                     provide: AuditService,
                     useValue: { log: jest.fn().mockResolvedValue(undefined) },
+                },
+                {
+                    provide: JobTrackerService,
+                    useValue: { track: (_n: string, fn: () => any) => fn() },
                 },
             ],
         }).compile();
@@ -743,5 +761,205 @@ describe('AccountingService — Story 30.2', () => {
                 ],
             }),
         ).rejects.toThrow(BadRequestException);
+    });
+
+    describe('Recurring Vouchers', () => {
+        it('rejects accounts that do not belong to the tenant', async () => {
+            db.account.findMany.mockResolvedValue([{ id: 'account-cash', category: 'cash' }]);
+
+            await expect(
+                service.createRecurringVoucher('tenant-1', {
+                    name: 'Monthly Rent',
+                    frequency: 'MONTHLY',
+                    nextDueDate: '2026-08-01',
+                    lines: [
+                        { accountId: 'account-cash', debitAmount: 0, creditAmount: 100 },
+                        { accountId: 'account-missing', debitAmount: 100, creditAmount: 0 },
+                    ],
+                }),
+            ).rejects.toThrow(BadRequestException);
+
+            expect(db.recurringVoucher.create).not.toHaveBeenCalled();
+        });
+
+        it('defaults to a journal voucher type when none is specified', async () => {
+            db.account.findMany.mockResolvedValue([
+                { id: 'account-a', category: 'general' },
+                { id: 'account-b', category: 'general' },
+            ]);
+            db.recurringVoucher.create.mockResolvedValue({ id: 'rv-1', voucher_type: VoucherType.JOURNAL });
+
+            await service.createRecurringVoucher('tenant-1', {
+                name: 'Monthly Depreciation',
+                frequency: 'MONTHLY',
+                nextDueDate: '2026-08-01',
+                lines: [
+                    { accountId: 'account-a', debitAmount: 100, creditAmount: 0 },
+                    { accountId: 'account-b', debitAmount: 0, creditAmount: 100 },
+                ],
+            });
+
+            expect(db.recurringVoucher.create).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ voucher_type: VoucherType.JOURNAL }) }),
+            );
+        });
+
+        it('lists recurring vouchers scoped to tenant and optional voucher type', async () => {
+            db.recurringVoucher.findMany.mockResolvedValue([]);
+
+            await service.listRecurringVouchers('tenant-1', VoucherType.CASH_PAYMENT);
+
+            expect(db.recurringVoucher.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { tenant_id: 'tenant-1', voucher_type: VoucherType.CASH_PAYMENT },
+                }),
+            );
+        });
+
+        it('throws when posting a recurring voucher that does not exist', async () => {
+            db.recurringVoucher.findFirst.mockResolvedValue(null);
+
+            await expect(service.postRecurringVoucher('tenant-1', 'missing')).rejects.toThrow(NotFoundException);
+        });
+
+        it('refuses to post an inactive recurring voucher', async () => {
+            db.recurringVoucher.findFirst.mockResolvedValue({ id: 'rv-1', is_active: false, lines: [] });
+
+            await expect(service.postRecurringVoucher('tenant-1', 'rv-1')).rejects.toThrow(BadRequestException);
+        });
+
+        it('posts a due recurring voucher and advances the next due date daily', async () => {
+            db.recurringVoucher.findFirst.mockResolvedValue({
+                id: 'rv-1',
+                tenant_id: 'tenant-1',
+                is_active: true,
+                voucher_type: VoucherType.JOURNAL,
+                description: 'Daily accrual',
+                name: 'Daily accrual',
+                frequency: 'DAILY',
+                next_due_date: new Date('2026-07-01T00:00:00Z'),
+                lines: [
+                    { account_id: 'account-a', debit_amount: 100, credit_amount: 0, comment: null },
+                    { account_id: 'account-b', debit_amount: 0, credit_amount: 100, comment: null },
+                ],
+            });
+            db.account.findMany.mockResolvedValue([
+                { id: 'account-a', category: 'general' },
+                { id: 'account-b', category: 'general' },
+            ]);
+            db.voucherSequence.upsert.mockResolvedValue({ prefix: 'JV', next_number: 1 });
+            db.voucherSequence.update.mockResolvedValue({ prefix: 'JV', next_number: 2 });
+            db.voucher.create.mockResolvedValue({ id: 'voucher-1', voucher_number: 'JV-00001', details: [] });
+            db.recurringVoucher.update.mockResolvedValue({});
+
+            const result = await service.postRecurringVoucher('tenant-1', 'rv-1');
+
+            expect(result.voucher.voucher_number).toBe('JV-00001');
+            expect(db.recurringVoucher.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { id: 'rv-1' },
+                    data: expect.objectContaining({ next_due_date: new Date('2026-07-02T00:00:00Z') }),
+                }),
+            );
+        });
+
+        it('deletes a recurring voucher belonging to the tenant', async () => {
+            db.recurringVoucher.findFirst.mockResolvedValue({ id: 'rv-1' });
+            db.recurringVoucher.delete.mockResolvedValue({});
+
+            const result = await service.deleteRecurringVoucher('tenant-1', 'rv-1');
+
+            expect(result).toEqual({ success: true });
+            expect(db.recurringVoucher.delete).toHaveBeenCalledWith({ where: { id: 'rv-1' } });
+        });
+
+        it('auto-posts every due recurring voucher and tallies failures without throwing', async () => {
+            db.recurringVoucher.findMany.mockResolvedValue([
+                { id: 'rv-ok', tenant_id: 'tenant-1', is_active: true },
+                { id: 'rv-fail', tenant_id: 'tenant-1', is_active: true },
+            ]);
+
+            const spy = jest
+                .spyOn(service, 'postRecurringVoucher')
+                .mockResolvedValueOnce({ voucher: { voucher_number: 'JV-00001' } } as any)
+                .mockRejectedValueOnce(new Error('boom'));
+
+            const result = await service.postAllDueRecurringVouchers();
+
+            expect(result).toEqual({ posted: 1, failed: 1 });
+            expect(spy).toHaveBeenCalledTimes(2);
+        });
+    });
+
+    describe('Voucher Templates', () => {
+        it('rejects accounts that do not belong to the tenant', async () => {
+            db.account.findMany.mockResolvedValue([{ id: 'account-a', category: 'general' }]);
+
+            await expect(
+                service.createVoucherTemplate('tenant-1', {
+                    name: 'Office Rent',
+                    voucherType: VoucherType.JOURNAL,
+                    lines: [
+                        { accountId: 'account-a', debitAmount: 100, creditAmount: 0 },
+                        { accountId: 'account-missing', debitAmount: 0, creditAmount: 100 },
+                    ],
+                }),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it('creates a voucher template with nested lines', async () => {
+            db.account.findMany.mockResolvedValue([
+                { id: 'account-a', category: 'general' },
+                { id: 'account-b', category: 'general' },
+            ]);
+            db.voucherTemplate.create.mockResolvedValue({ id: 'vt-1' });
+
+            await service.createVoucherTemplate('tenant-1', {
+                name: 'Office Rent',
+                voucherType: VoucherType.BANK_PAYMENT,
+                lines: [
+                    { accountId: 'account-a', debitAmount: 100, creditAmount: 0 },
+                    { accountId: 'account-b', debitAmount: 0, creditAmount: 100 },
+                ],
+            });
+
+            expect(db.voucherTemplate.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ tenant_id: 'tenant-1', voucher_type: VoucherType.BANK_PAYMENT }),
+                }),
+            );
+        });
+
+        it('lists voucher templates scoped to tenant and optional voucher type', async () => {
+            db.voucherTemplate.findMany.mockResolvedValue([]);
+
+            await service.listVoucherTemplates('tenant-1', VoucherType.JOURNAL);
+
+            expect(db.voucherTemplate.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { tenant_id: 'tenant-1', voucher_type: VoucherType.JOURNAL } }),
+            );
+        });
+
+        it('throws when a requested voucher template does not exist', async () => {
+            db.voucherTemplate.findFirst.mockResolvedValue(null);
+
+            await expect(service.getVoucherTemplate('tenant-1', 'missing')).rejects.toThrow(NotFoundException);
+        });
+
+        it('throws when deleting a voucher template that does not exist', async () => {
+            db.voucherTemplate.findFirst.mockResolvedValue(null);
+
+            await expect(service.deleteVoucherTemplate('tenant-1', 'missing')).rejects.toThrow(NotFoundException);
+        });
+
+        it('deletes a voucher template belonging to the tenant', async () => {
+            db.voucherTemplate.findFirst.mockResolvedValue({ id: 'vt-1' });
+            db.voucherTemplate.delete.mockResolvedValue({});
+
+            const result = await service.deleteVoucherTemplate('tenant-1', 'vt-1');
+
+            expect(result).toEqual({ success: true });
+            expect(db.voucherTemplate.delete).toHaveBeenCalledWith({ where: { id: 'vt-1' } });
+        });
     });
 });

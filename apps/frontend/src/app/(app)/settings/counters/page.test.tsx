@@ -66,7 +66,7 @@ describe('CountersPage — with store selected', () => {
         mockApi.getCounters.mockResolvedValue([]);
         render(<CountersPage />);
         await waitFor(() => {
-            expect(screen.getByText('POS Counters')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'POS Counters' })).toBeInTheDocument();
         });
     });
 

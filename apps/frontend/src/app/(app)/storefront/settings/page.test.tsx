@@ -42,7 +42,7 @@ describe('StorefrontSettingsPage', () => {
     it('renders the page heading', async () => {
         render(<StorefrontSettingsPage />);
         await waitFor(() => {
-            expect(screen.getByText('Storefront Settings')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Storefront Settings' })).toBeInTheDocument();
         });
     });
 

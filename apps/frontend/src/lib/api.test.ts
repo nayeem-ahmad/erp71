@@ -1495,6 +1495,89 @@ describe('api.postRecurringJournal', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Recurring Vouchers
+// ---------------------------------------------------------------------------
+
+describe('api.listRecurringVouchers', () => {
+    it('fetches /accounting/recurring-vouchers', async () => {
+        mockOk({ data: [] });
+        await api.listRecurringVouchers();
+        expect(lastUrl()).toContain('/accounting/recurring-vouchers');
+    });
+
+    it('adds a voucherType filter when provided', async () => {
+        mockOk({ data: [] });
+        await api.listRecurringVouchers({ voucherType: 'journal' });
+        expect(lastUrl()).toContain('voucherType=journal');
+    });
+});
+
+describe('api.createRecurringVoucher', () => {
+    it('posts to /accounting/recurring-vouchers', async () => {
+        mockOk({ data: {} });
+        await api.createRecurringVoucher({ lines: [] });
+        expect(lastOpts().method).toBe('POST');
+        expect(lastUrl()).toContain('/accounting/recurring-vouchers');
+    });
+});
+
+describe('api.postRecurringVoucher', () => {
+    it('posts to /accounting/recurring-vouchers/:id/post', async () => {
+        mockOk({ data: {} });
+        await api.postRecurringVoucher('rv1');
+        expect(lastOpts().method).toBe('POST');
+        expect(lastUrl()).toContain('/recurring-vouchers/rv1/post');
+    });
+});
+
+describe('api.deleteRecurringVoucher', () => {
+    it('deletes /accounting/recurring-vouchers/:id', async () => {
+        mockOk({ data: {} });
+        await api.deleteRecurringVoucher('rv1');
+        expect(lastOpts().method).toBe('DELETE');
+        expect(lastUrl()).toContain('/recurring-vouchers/rv1');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Voucher Templates
+// ---------------------------------------------------------------------------
+
+describe('api.listVoucherTemplates', () => {
+    it('fetches /accounting/voucher-templates', async () => {
+        mockOk({ data: [] });
+        await api.listVoucherTemplates();
+        expect(lastUrl()).toContain('/accounting/voucher-templates');
+    });
+});
+
+describe('api.getVoucherTemplate', () => {
+    it('fetches /accounting/voucher-templates/:id', async () => {
+        mockOk({ data: {} });
+        await api.getVoucherTemplate('vt1');
+        expect(lastUrl()).toContain('/accounting/voucher-templates/vt1');
+    });
+});
+
+describe('api.createVoucherTemplate', () => {
+    it('posts to /accounting/voucher-templates', async () => {
+        mockOk({ data: {} });
+        await api.createVoucherTemplate({ lines: [] });
+        expect(lastOpts().method).toBe('POST');
+        expect(lastUrl()).toContain('/accounting/voucher-templates');
+    });
+});
+
+describe('api.deleteVoucherTemplate', () => {
+    it('deletes /accounting/voucher-templates/:id', async () => {
+        mockOk({ data: {} });
+        await api.deleteVoucherTemplate('vt1');
+        expect(lastOpts().method).toBe('DELETE');
+        expect(lastUrl()).toContain('/voucher-templates/vt1');
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Bank Reconciliation
 // ---------------------------------------------------------------------------
 

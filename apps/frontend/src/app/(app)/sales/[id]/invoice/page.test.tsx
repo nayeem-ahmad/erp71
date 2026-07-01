@@ -34,6 +34,7 @@ jest.mock('lucide-react', () => ({
     ArrowLeft: () => <span data-testid="icon-arrow-left" />,
     Download: () => <span data-testid="icon-download" />,
     Printer: () => <span data-testid="icon-printer" />,
+    ChevronRight: () => <span data-testid="icon-chevron-right" />,
 }));
 
 // Mock window.print
@@ -187,7 +188,7 @@ describe('InvoicePage', () => {
     it('shows Back to Sale button', async () => {
         render(<InvoicePage />);
         await waitFor(() => {
-            expect(screen.getByRole('button', { name: /back to sale/i })).toBeInTheDocument();
+            expect(screen.getByRole('link', { name: 'SALE-INV-001' })).toBeInTheDocument();
         });
     });
 
@@ -245,7 +246,7 @@ describe('InvoicePage', () => {
         render(<InvoicePage />);
         await waitFor(() => {
             expect(screen.queryByText('VAT Invoice (Mushak 6.3)')).not.toBeInTheDocument();
-            expect(screen.getByText('Invoice')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Invoice' })).toBeInTheDocument();
         });
     });
 

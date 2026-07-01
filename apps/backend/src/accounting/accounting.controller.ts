@@ -45,6 +45,10 @@ import {
     CreateFixedAssetDto,
     RunDepreciationDto,
     CreateRecurringJournalDto,
+    CreateRecurringVoucherDto,
+    ListRecurringVouchersQueryDto,
+    CreateVoucherTemplateDto,
+    ListVoucherTemplatesQueryDto,
     CreateBankReconciliationDto,
     ImportBankStatementDto,
     MatchBankEntryDto,
@@ -358,6 +362,53 @@ export class AccountingController {
     @TenantRoles('OWNER', 'ACCOUNTANT')
     postRecurringJournal(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.accountingService.postRecurringJournal(tenant.tenantId, id);
+    }
+
+    // Recurring Vouchers: schedule any voucher type (cash/bank/journal) to auto-generate
+    @Get('recurring-vouchers')
+    listRecurringVouchers(@Tenant() tenant: TenantContext, @Query() query: ListRecurringVouchersQueryDto) {
+        return this.accountingService.listRecurringVouchers(tenant.tenantId, query.voucherType);
+    }
+
+    @Post('recurring-vouchers')
+    @TenantRoles('OWNER', 'ACCOUNTANT')
+    createRecurringVoucher(@Tenant() tenant: TenantContext, @Body() dto: CreateRecurringVoucherDto) {
+        return this.accountingService.createRecurringVoucher(tenant.tenantId, dto);
+    }
+
+    @Post('recurring-vouchers/:id/post')
+    @TenantRoles('OWNER', 'ACCOUNTANT')
+    postRecurringVoucher(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.accountingService.postRecurringVoucher(tenant.tenantId, id);
+    }
+
+    @Delete('recurring-vouchers/:id')
+    @TenantRoles('OWNER', 'ACCOUNTANT')
+    deleteRecurringVoucher(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.accountingService.deleteRecurringVoucher(tenant.tenantId, id);
+    }
+
+    // Voucher Templates: reusable named line templates for quick voucher entry
+    @Get('voucher-templates')
+    listVoucherTemplates(@Tenant() tenant: TenantContext, @Query() query: ListVoucherTemplatesQueryDto) {
+        return this.accountingService.listVoucherTemplates(tenant.tenantId, query.voucherType);
+    }
+
+    @Get('voucher-templates/:id')
+    getVoucherTemplate(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.accountingService.getVoucherTemplate(tenant.tenantId, id);
+    }
+
+    @Post('voucher-templates')
+    @TenantRoles('OWNER', 'ACCOUNTANT')
+    createVoucherTemplate(@Tenant() tenant: TenantContext, @Body() dto: CreateVoucherTemplateDto) {
+        return this.accountingService.createVoucherTemplate(tenant.tenantId, dto);
+    }
+
+    @Delete('voucher-templates/:id')
+    @TenantRoles('OWNER', 'ACCOUNTANT')
+    deleteVoucherTemplate(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.accountingService.deleteVoucherTemplate(tenant.tenantId, id);
     }
 
     // Feature 14: Bank Reconciliation
