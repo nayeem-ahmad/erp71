@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import MarketingFooter from '@/components/marketing/MarketingFooter';
 import MarketingNav from '@/components/marketing/MarketingNav';
+import { INFO_EMAIL } from '@/lib/brand';
 import { useI18n } from '@/lib/i18n';
 
 export default function TermsPage() {
@@ -57,7 +58,7 @@ export default function TermsPage() {
                             <ul className="list-disc pl-6 space-y-2 text-sm">
                                 <li>Maintaining the confidentiality of your account credentials.</li>
                                 <li>All activity that occurs under your account.</li>
-                                <li>Notifying us immediately at <a href="mailto:support@erp71.com" className="text-blue-600 hover:underline">support@erp71.com</a> of any unauthorised access.</li>
+                                <li>Notifying us immediately at <a href={`mailto:${INFO_EMAIL}`} className="text-blue-600 hover:underline">{INFO_EMAIL}</a> of any unauthorised access.</li>
                                 <li>Ensuring that all staff accounts you create comply with these Terms.</li>
                             </ul>
                             <p className="mt-3">
@@ -209,8 +210,7 @@ export default function TermsPage() {
                             <div className="mt-3 bg-gray-50 rounded-xl p-4 text-sm space-y-1">
                                 <p><strong>ERP71 Ltd.</strong></p>
                                 <p>Dhaka, Bangladesh</p>
-                                <p>Email: <a href="mailto:legal@erp71.com" className="text-blue-600 hover:underline">legal@erp71.com</a></p>
-                                <p>Support: <a href="mailto:support@erp71.com" className="text-blue-600 hover:underline">support@erp71.com</a></p>
+                                <p>Email: <a href={`mailto:${INFO_EMAIL}`} className="text-blue-600 hover:underline">{INFO_EMAIL}</a></p>
                             </div>
                         </section>
 

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import MarketingFooter from '@/components/marketing/MarketingFooter';
 import MarketingNav from '@/components/marketing/MarketingNav';
+import { INFO_EMAIL } from '@/lib/brand';
 import { useI18n } from '@/lib/i18n';
 
 export default function PrivacyPage() {
@@ -149,7 +150,7 @@ export default function PrivacyPage() {
                                 </li>
                                 <li>
                                     <strong>Restriction of processing:</strong> you may object to certain uses of your data by contacting us at{' '}
-                                    <a href="mailto:privacy@erp71.com" className="text-blue-600 hover:underline">privacy@erp71.com</a>.
+                                    <a href={`mailto:${INFO_EMAIL}`} className="text-blue-600 hover:underline">{INFO_EMAIL}</a>.
                                 </li>
                             </ul>
                             <p className="mt-3 text-sm">
@@ -204,8 +205,7 @@ export default function PrivacyPage() {
                             <div className="mt-3 bg-gray-50 rounded-xl p-4 text-sm space-y-1">
                                 <p><strong>ERP71 Ltd.</strong></p>
                                 <p>Dhaka, Bangladesh</p>
-                                <p>Email: <a href="mailto:privacy@erp71.com" className="text-blue-600 hover:underline">privacy@erp71.com</a></p>
-                                <p>Support: <a href="mailto:support@erp71.com" className="text-blue-600 hover:underline">support@erp71.com</a></p>
+                                <p>Email: <a href={`mailto:${INFO_EMAIL}`} className="text-blue-600 hover:underline">{INFO_EMAIL}</a></p>
                             </div>
                             <p className="mt-3 text-sm">
                                 For terms of service questions, see our{' '}

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { INFO_EMAIL } from '@/lib/brand';
 import { useI18n } from '@/lib/i18n';
 
 export default function RefundPage() {
@@ -122,8 +123,8 @@ export default function RefundPage() {
                         <section>
                             <h2 className="text-xl font-bold text-gray-900 mb-3">5. How to Request a Refund</h2>
                             <p className="mb-3">
-                                To request a refund, email our billing team at{' '}
-                                <a href="mailto:billing@erp71.com" className="text-blue-600 hover:underline">billing@erp71.com</a>{' '}
+                                To request a refund, email us at{' '}
+                                <a href={`mailto:${INFO_EMAIL}`} className="text-blue-600 hover:underline">{INFO_EMAIL}</a>{' '}
                                 with the following information:
                             </p>
                             <ul className="list-disc pl-6 space-y-2 text-sm">
@@ -162,14 +163,12 @@ export default function RefundPage() {
                         <section>
                             <h2 className="text-xl font-bold text-gray-900 mb-3">7. Contact</h2>
                             <p>
-                                For any questions about this policy or your specific situation, please reach out to
-                                our billing team:
+                                For any questions about this policy or your specific situation, please contact us:
                             </p>
                             <div className="mt-3 bg-gray-50 rounded-xl p-4 text-sm space-y-1">
                                 <p><strong>ERP71 Ltd.</strong></p>
                                 <p>Dhaka, Bangladesh</p>
-                                <p>Billing: <a href="mailto:billing@erp71.com" className="text-blue-600 hover:underline">billing@erp71.com</a></p>
-                                <p>Support: <a href="mailto:support@erp71.com" className="text-blue-600 hover:underline">support@erp71.com</a></p>
+                                <p>Email: <a href={`mailto:${INFO_EMAIL}`} className="text-blue-600 hover:underline">{INFO_EMAIL}</a></p>
                             </div>
                         </section>
 
