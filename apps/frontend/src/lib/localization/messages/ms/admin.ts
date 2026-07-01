@@ -169,7 +169,25 @@ export const adminMessages = {
                         label: 'Am',
                         description: 'Nama platform, e-mel sokongan, dan mod penyelenggaraan.',
                     },
+                    navigation: {
+                        label: 'Navigasi',
+                        description: 'Susun semula modul, submenu, dan pautan untuk semua penyewa.',
+                    },
                 },
+            },
+            navigation: {
+                title: 'Susun Atur Navigasi',
+                description: 'Kawal organisasi bar sisi untuk seluruh platform. Sembunyikan item atau ubah susunan — laluan dan kebenaran kekal dikuatkuasakan dalam kod.',
+                notice: 'Anda hanya boleh menyusun semula dan menyembunyikan item menu berdaftar. Halaman baharu masih perlu ditambah oleh pembangun dalam registri navigasi.',
+                scopes: {
+                    tenant: 'Bar Sisi Penyewa',
+                    platformAdmin: 'Konsol Pentadbir Platform',
+                },
+                usingDefaults: 'Menggunakan susun atur lalai terbina dalam',
+                usingCustom: 'Menggunakan susun atur tersuai yang disimpan',
+                resetToDefaults: 'Set semula kepada lalai',
+                resetSuccess: 'Susun atur navigasi diset semula kepada lalai.',
+                resetFailed: 'Gagal menetapkan semula susun atur navigasi.',
             },
             common: {
                 loading: 'Sedang dimuatkan…',

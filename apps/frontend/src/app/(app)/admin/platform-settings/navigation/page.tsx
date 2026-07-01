@@ -109,8 +109,8 @@ export default function PlatformNavigationSettingsPage() {
                     breadcrumbs={nestedPageBreadcrumbs(
                         t.dashboardHome.breadcrumbHome,
                         t.sidebar.modules.admin,
-                        t.admin.platformSettings.index.title,
-                        routes.admin.platformSettings.root,
+                        'admin',
+                        [{ label: t.admin.platformSettings.index.title, href: routes.admin.platformSettings.root }],
                         m.title,
                     )}
                 />

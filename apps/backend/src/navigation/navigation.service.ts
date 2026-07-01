@@ -37,7 +37,7 @@ export class NavigationService {
         if (!validation.valid) {
             throw new BadRequestException({
                 message: 'Invalid navigation layout',
-                errors: validation.valid ? [] : validation.errors,
+                errors: validation.errors,
             });
         }
 

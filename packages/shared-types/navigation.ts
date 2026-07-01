@@ -434,7 +434,7 @@ export function validateNavLayout(
 export function parseNavLayoutJson(raw: string | null | undefined, scope: NavScope): NavLayoutNode[] {
   if (!raw?.trim()) return getDefaultNavLayout(scope);
   try {
-    const parsed = navLayoutSchema.parse(JSON.parse(raw));
+    const parsed = navLayoutSchema.parse(JSON.parse(raw)) as NavLayoutNode[];
     const result = validateNavLayout(parsed);
     if (!result.valid) return getDefaultNavLayout(scope);
     return parsed;
