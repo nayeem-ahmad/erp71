@@ -106,7 +106,7 @@ describe('PricingPage', () => {
 
     it('renders feature comparison rows', () => {
         render(<PricingPage />);
-        expect(screen.getByText('POS terminal')).toBeInTheDocument();
+        expect(screen.getAllByText('POS terminal').length).toBeGreaterThan(0);
         expect(screen.getAllByText('Inventory management').length).toBeGreaterThan(0);
         expect(screen.getAllByText('Accounting module').length).toBeGreaterThan(0);
         expect(screen.getAllByText('Manufacturing / BOM').length).toBeGreaterThan(0);

@@ -154,7 +154,7 @@ describe('InventoryPage', () => {
     it('renders Add Product button', async () => {
         render(<InventoryPage />);
         await waitFor(() => {
-            expect(screen.getByRole('button', { name: /add product/i })).toBeInTheDocument();
+            expect(screen.getAllByRole('button', { name: /add product/i }).length).toBeGreaterThan(0);
         });
     });
 
@@ -168,9 +168,9 @@ describe('InventoryPage', () => {
     it('opens add product modal when Add Product is clicked', async () => {
         render(<InventoryPage />);
         await waitFor(() => {
-            expect(screen.getByRole('button', { name: /add product/i })).toBeInTheDocument();
+            expect(screen.getAllByRole('button', { name: /add product/i }).length).toBeGreaterThan(0);
         });
-        fireEvent.click(screen.getByRole('button', { name: /add product/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /add product/i })[0]);
         expect(screen.getByTestId('add-product-modal-create')).toBeInTheDocument();
     });
 
