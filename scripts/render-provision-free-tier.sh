@@ -144,8 +144,6 @@ for name, branch, dockerfile, health, predeploy in services:
 backend_common = [
     ("DATABASE_URL", db_url),
     ("DIRECT_URL", direct_url),
-    ("NEXT_PUBLIC_SUPABASE_URL", vps.get("NEXT_PUBLIC_SUPABASE_URL", "")),
-    ("SUPABASE_SERVICE_ROLE_KEY", vps.get("SUPABASE_SERVICE_ROLE_KEY", "")),
     ("BILLING_PROVIDER", vps.get("BILLING_PROVIDER", "SSL_WIRELESS")),
     ("PLATFORM_ADMIN_EMAILS", vps.get("PLATFORM_ADMIN_EMAILS", "nayeem.ahmad@gmail.com")),
     ("SMTP_HOST", vps.get("SMTP_HOST", "")),

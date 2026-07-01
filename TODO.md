@@ -340,6 +340,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Drop Supabase from active stack — removed health probe, env vars (`render.yaml`, `.env.example`, `.env.production.example`), unused `@supabase/supabase-js` backend dep, and Next.js image host allowlist — done 2026-07-01
+- [x] App header — removed Back button and page title; active store name (or branch selector when multi-store) shown on the left — done 2026-07-01
 - [x] Platform-admin `/status` page — moved from public marketing page to authenticated `(app)/status`; route guard (login redirect + platform-admin check); rich health panel (dependencies, cron jobs, probe latency, last errors); help/admin links updated; SLA copy no longer promises public status — done 2026-07-01
 - [x] Accounting overview cleanup — removed subtitle, Epic 30 badge, and top-bar export; hub sections match sidebar (daily, transactions, reconciliation, reports, setup); ledger export moved under Accounting Setup — done 2026-07-01
 - [x] Compact UI trial — accounting module only: `CompactUiProvider` layout, `AccountingPageShell`/`CompactSection`/`CompactStat`/`CompactLinkGrid`, DataTable `density` via context (tighter cells/toolbar/pagination), compact sidebar (w-52) + header (h-11) on `/accounting/*`; all 30+ accounting pages migrated; 62 accounting tests green — done 2026-07-01

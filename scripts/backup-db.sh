@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Manual DB backup script using pg_dump.
-# For automated daily backups, use Supabase's built-in PITR (Point-in-Time Recovery)
-# in the Supabase dashboard under Project Settings → Database → Backups.
+# For automated daily backups on the VPS, see docs/ops/vps-backups.md.
 #
 # Usage: DIRECT_URL="postgres://..." ./scripts/backup-db.sh
 # Or:    ./scripts/backup-db.sh --restore backups/backup-2026-05-20.dump

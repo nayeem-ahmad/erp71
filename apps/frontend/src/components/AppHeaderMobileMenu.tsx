@@ -6,22 +6,7 @@ import VoiceNavWidget from '@/components/VoiceNavWidget';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { useI18n } from '@/lib/i18n';
 
-type StoreOption = {
-    id: string;
-    name: string;
-};
-
-type AppHeaderMobileMenuProps = {
-    tenantStores: StoreOption[];
-    activeStoreId: string;
-    onStoreChange: (storeId: string) => void;
-};
-
-export default function AppHeaderMobileMenu({
-    tenantStores,
-    activeStoreId,
-    onStoreChange,
-}: AppHeaderMobileMenuProps) {
+export default function AppHeaderMobileMenu() {
     const { t } = useI18n();
     const [open, setOpen] = useState(false);
     const rootRef = useRef<HTMLDivElement>(null);
@@ -75,28 +60,6 @@ export default function AppHeaderMobileMenu({
                             </p>
                             <LanguageSwitcher />
                         </div>
-                        {tenantStores.length > 0 ? (
-                            <div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
-                                    {t.dashboardLayout.branchLabel}
-                                </p>
-                                <select
-                                    value={activeStoreId}
-                                    onChange={(event) => {
-                                        onStoreChange(event.target.value);
-                                        setOpen(false);
-                                    }}
-                                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-700 outline-none"
-                                    aria-label="Select branch"
-                                >
-                                    {tenantStores.map((store) => (
-                                        <option key={store.id} value={store.id}>
-                                            {store.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        ) : null}
                     </div>
                 </div>
             ) : null}

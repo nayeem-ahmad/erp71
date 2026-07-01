@@ -39,10 +39,6 @@ services:
         sync: false
       - key: BACKEND_PUBLIC_URL
         sync: false
-      - key: NEXT_PUBLIC_SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
       - key: BILLING_PROVIDER
         sync: false
       - key: PLATFORM_ADMIN_EMAILS
@@ -136,10 +132,6 @@ services:
       - key: FRONTEND_URL
         sync: false
       - key: BACKEND_PUBLIC_URL
-        sync: false
-      - key: NEXT_PUBLIC_SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: BILLING_PROVIDER
         value: SSL_WIRELESS

@@ -181,7 +181,7 @@ export default function SlaPage() {
                                     other payment gateway. Their availability is governed by their own service agreements.
                                 </li>
                                 <li>
-                                    <strong>Infrastructure providers</strong> — Supabase (database), cloud hosting
+                                    <strong>Infrastructure providers</strong> — cloud hosting
                                     providers, or CDN services.
                                 </li>
                                 <li>

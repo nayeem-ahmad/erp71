@@ -31,7 +31,6 @@ export class ExternalCheck {
 
     private describeProviders(): ProviderDescriptor[] {
         const env = process.env;
-        const supabaseUrl = env.SUPABASE_URL ?? env.NEXT_PUBLIC_SUPABASE_URL;
 
         return [
             {
@@ -69,12 +68,6 @@ export class ExternalCheck {
                 label: 'Cloudinary',
                 url: 'https://api.cloudinary.com',
                 enabled: !!env.CLOUDINARY_API_KEY,
-            },
-            {
-                name: 'supabase',
-                label: 'Supabase',
-                url: supabaseUrl ?? '',
-                enabled: !!supabaseUrl,
             },
         ];
     }

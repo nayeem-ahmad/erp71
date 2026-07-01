@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { ArrowLeft, Menu, Zap, X } from 'lucide-react';
+import { Menu, Zap, X } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import Sidebar from '@/components/Sidebar';
@@ -52,7 +52,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             .finally(() => setHasResolvedUser(true));
     }, []);
 
-    const isDashboardHome = pathname === routes.home;
     const isAccountingModule = pathname.startsWith(routes.accounting.root);
     // workspaceEpoch bumps after we restore a shop context from localStorage.
     void workspaceEpoch;
@@ -190,20 +189,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         }
     }, [canAccessAccounting, canAccessInventoryReports, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, router, user]);
 
-    // Build a human-readable page title from the path
-    const pageTitle = (() => {
-        const segments = pathname.split('/').filter(Boolean);
-        if (segments.length <= 1) return t.dashboardLayout.defaultPageTitle;
-        const last = segments.at(-1);
-        if (!last) return t.dashboardLayout.defaultPageTitle;
-        // If it looks like a UUID / id segment, step up one
-        const isId = /^[0-9a-f-]{8,}$/i.test(last);
-        const label = isId ? (segments.at(-2) ?? last) : last;
-        return label
-            .split('-')
-            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-            .join(' ');
-    })();
+    const activeStore =
+        tenantStores.find((store: { id: string }) => store.id === activeStoreId) ?? tenantStores[0];
+    const headerStoreLabel = inPlatformAdminMode
+        ? 'Platform Admin'
+        : activeStore?.name ?? activeTenant?.name ?? t.dashboardLayout.defaultPageTitle;
 
     const handleStoreChange = (storeId: string) => {
         setActiveStoreId(storeId);
@@ -231,8 +221,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Top header */}
                 <header className={`${isAccountingModule ? 'h-11 md:px-4' : 'h-14 md:px-6'} bg-white border-b border-gray-100 flex items-center justify-between px-3 flex-shrink-0`}>
-                    <div className="flex items-center space-x-2 md:space-x-3 min-w-0">
-                        {/* Hamburger — mobile only */}
+                    <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                         <button
                             type="button"
                             className="md:hidden min-h-touch min-w-touch flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors flex-shrink-0"
@@ -241,19 +230,24 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                         >
                             <Menu className="w-5 h-5" />
                         </button>
-                        {isDashboardHome ? null : (
-                            <button
-                                onClick={() => router.back()}
-                                className="flex items-center space-x-1.5 text-gray-500 hover:text-gray-900 transition-colors group flex-shrink-0"
+                        {tenantStores.length > 1 && !inPlatformAdminMode ? (
+                            <select
+                                value={activeStoreId}
+                                onChange={(e) => handleStoreChange(e.target.value)}
+                                className="min-w-0 max-w-full truncate bg-transparent text-sm font-bold text-gray-900 tracking-tight outline-none"
+                                aria-label={t.dashboardLayout.branchLabel}
                             >
-                                <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-                                <span className="text-sm font-semibold hidden sm:block">{t.common.back}</span>
-                            </button>
+                                {tenantStores.map((store: { id: string; name: string }) => (
+                                    <option key={store.id} value={store.id}>
+                                        {store.name}
+                                    </option>
+                                ))}
+                            </select>
+                        ) : (
+                            <span className="min-w-0 truncate text-sm font-bold text-gray-900 tracking-tight">
+                                {headerStoreLabel}
+                            </span>
                         )}
-                        {!isDashboardHome && (
-                            <span className="text-gray-300 text-sm select-none hidden sm:block">·</span>
-                        )}
-                        <span className="text-sm font-bold text-gray-700 tracking-tight truncate">{pageTitle}</span>
                     </div>
 
                     <div className="flex items-center gap-1.5 md:gap-4 flex-shrink-0">
@@ -261,29 +255,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                             <VoiceNavWidget />
                             <div className="h-8 w-px bg-gray-200 hidden sm:block" />
                             <LanguageSwitcher />
-                            {tenantStores.length > 0 ? (
-                                <div className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-2 py-1">
-                                    <span className="hidden sm:inline text-[10px] font-black uppercase tracking-widest text-gray-500">{t.dashboardLayout.branchLabel}</span>
-                                    <select
-                                        value={activeStoreId}
-                                        onChange={(e) => handleStoreChange(e.target.value)}
-                                        className="bg-transparent text-xs font-semibold text-gray-700 outline-none max-w-[140px] lg:max-w-none"
-                                        aria-label="Select branch"
-                                    >
-                                        {tenantStores.map((store: any) => (
-                                            <option key={store.id} value={store.id}>
-                                                {store.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            ) : null}
                         </div>
-                        <AppHeaderMobileMenu
-                            tenantStores={tenantStores}
-                            activeStoreId={activeStoreId}
-                            onStoreChange={handleStoreChange}
-                        />
+                        <AppHeaderMobileMenu />
                         <NotificationBell />
                         <div className="h-8 w-px bg-gray-200 hidden sm:block" />
                         <AvatarDropdown
