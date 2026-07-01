@@ -598,6 +598,7 @@ export const coreMessages = {
                 loading: "Sedang memuatkan tetapan penyetempatan...",
                 tenantSaved: "Bahasa lalai tenant berjaya disimpan.",
                 tenantSaveFailed: "Gagal menyimpan bahasa lalai tenant.",
+                disabledByAdmin: "Pertukaran bahasa tidak didayakan untuk ruang kerja ini. Hubungi pentadbir platform untuk menambah bahasa kedua.",
                 profileSaved: "Bahasa pilihan berjaya disimpan.",
                 profileSaveFailed: "Gagal menyimpan bahasa pilihan.",
             },

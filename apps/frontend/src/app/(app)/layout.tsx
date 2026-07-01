@@ -14,12 +14,15 @@ import AppHeaderMobileMenu from '@/components/AppHeaderMobileMenu';
 import Toaster from '@/components/Toaster';
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
 import { CompactUiProvider } from '@/contexts/CompactUiContext';
+import { TenantLocaleProvider } from '@/contexts/TenantLocaleContext';
+import TenantLocaleSync from '@/components/TenantLocaleSync';
 import { BrandingProvider } from '@/lib/branding';
 import { formatPlanDisplayName } from '@/lib/plan-display';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { applyTenantContext, isShopWorkspacePath } from '@/lib/auth-session';
 import { syncLocalePreferenceFromSession } from '@/lib/localization/preference';
+import { clampLocaleToTenant } from '@/lib/tenant-locales';
 import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
 
@@ -43,7 +46,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     useEffect(() => {
         api.getMe().then((me) => {
+            const tenantId = globalThis.window === undefined ? null : localStorage.getItem('tenant_id');
+            const sessionTenant = me?.tenants?.find((t: { id: string }) => t.id === tenantId) || me?.tenants?.[0];
             syncLocalePreferenceFromSession(me, { overwrite: false });
+            if (sessionTenant) {
+                const stored = localStorage.getItem('locale');
+                const preferred = stored || me?.preferred_locale || 'en';
+                const clamped = clampLocaleToTenant(preferred, sessionTenant);
+                if (clamped !== preferred) {
+                    localStorage.setItem('locale', clamped);
+                }
+            }
             setUser(me);
             setShowEmailVerificationBanner(!me?.email_verified);
             const isDemo = Boolean(me?.is_demo) || localStorage.getItem('demo_session') === '1';
@@ -206,8 +219,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         router.refresh();
     };
 
+    const tenantLocaleConfig = inPlatformAdminMode ? null : activeTenant;
+
     return (
         <BrandingProvider>
+        <TenantLocaleProvider tenant={tenantLocaleConfig}>
+        <TenantLocaleSync tenant={tenantLocaleConfig} />
         <div className="flex h-dvh min-h-dvh bg-[#f9fafb] font-sans text-[#111827]">
             <Sidebar
                 canAccessAccounting={canAccessAccounting}
@@ -365,6 +382,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <FloatingAssistDock />
             <ServiceWorkerRegistrar />
         </div>
+        </TenantLocaleProvider>
         </BrandingProvider>
     );
 }

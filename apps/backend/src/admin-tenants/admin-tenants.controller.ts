@@ -5,6 +5,7 @@ import { AdminTenantsService } from './admin-tenants.service';
 import {
     ListAdminTenantsQueryDto,
     UpdateAdminTenantSubscriptionDto,
+    UpdateAdminTenantLocalizationDto,
     SuspendTenantDto,
     CreateAdminTenantDto,
 } from './admin-tenants.dto';
@@ -38,6 +39,15 @@ export class AdminTenantsController {
         @Body() dto: UpdateAdminTenantSubscriptionDto,
     ) {
         return this.adminTenantsService.updateSubscription(tenantId, dto);
+    }
+
+    @Patch(':tenantId/localization')
+    updateLocalization(
+        @Param('tenantId') tenantId: string,
+        @Body() dto: UpdateAdminTenantLocalizationDto,
+        @Request() req: any,
+    ) {
+        return this.adminTenantsService.updateLocalization(tenantId, dto, req.user.userId);
     }
 
     @Patch(':tenantId/suspend')

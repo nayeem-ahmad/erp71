@@ -598,6 +598,7 @@ export const coreMessages = {
             loading: 'Loading localization settings...',
             tenantSaved: 'Tenant default language saved successfully.',
             tenantSaveFailed: 'Failed to save tenant default language.',
+            disabledByAdmin: 'Language switching is not enabled for this workspace. Contact your platform administrator to add a second language.',
             profileSaved: 'Preferred language saved successfully.',
             profileSaveFailed: 'Failed to save preferred language.',
         },

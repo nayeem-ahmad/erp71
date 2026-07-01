@@ -4,10 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import VoiceNavWidget from '@/components/VoiceNavWidget';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { useTenantLocales } from '@/contexts/TenantLocaleContext';
 import { useI18n } from '@/lib/i18n';
 
 export default function AppHeaderMobileMenu() {
     const { t } = useI18n();
+    const { showLanguageSwitcher } = useTenantLocales();
     const [open, setOpen] = useState(false);
     const rootRef = useRef<HTMLDivElement>(null);
 
@@ -54,12 +56,14 @@ export default function AppHeaderMobileMenu() {
                             </p>
                             <VoiceNavWidget />
                         </div>
-                        <div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
-                                {t.common.language}
-                            </p>
-                            <LanguageSwitcher />
-                        </div>
+                        {showLanguageSwitcher ? (
+                            <div>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
+                                    {t.common.language}
+                                </p>
+                                <LanguageSwitcher />
+                            </div>
+                        ) : null}
                     </div>
                 </div>
             ) : null}

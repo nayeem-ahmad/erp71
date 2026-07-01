@@ -489,6 +489,8 @@ export class AuthService {
             id: membership.tenant.id,
             name: membership.tenant.name,
             default_locale: membership.tenant.default_locale,
+            localization_enabled: membership.tenant.localization_enabled,
+            secondary_locale: membership.tenant.secondary_locale,
             role: membership.role,
             stores: accessibleStores,
             subscription: subscription

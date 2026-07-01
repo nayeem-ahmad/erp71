@@ -2,11 +2,17 @@
 
 import type { ChangeEvent } from 'react';
 
+import { useTenantLocales } from '@/contexts/TenantLocaleContext';
+import { localeRegistry } from '@/lib/localization/config';
 import { api } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 
 export default function LanguageSwitcher() {
-    const { locale, locales, setLocale, t } = useI18n();
+    const { locale, setLocale, t } = useI18n();
+    const { allowedLocales, showLanguageSwitcher } = useTenantLocales();
+    const locales = allowedLocales.map((code) => localeRegistry[code]);
+
+    if (!showLanguageSwitcher) return null;
 
     const handleChange = (event: ChangeEvent<HTMLSelectElement>) => {
         const selectedLocale = locales.find((entry) => entry.code === event.target.value);
