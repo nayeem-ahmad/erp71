@@ -53,6 +53,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }, []);
 
     const isDashboardHome = pathname === routes.home;
+    const isAccountingModule = pathname.startsWith(routes.accounting.root);
     // workspaceEpoch bumps after we restore a shop context from localStorage.
     void workspaceEpoch;
     const activeContext = globalThis.window === undefined ? null : localStorage.getItem('active_context');
@@ -215,13 +216,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 canManageTeam={canManageTeam}
                 platformAdminMode={inPlatformAdminMode}
                 activePlanCode={activePlanCode}
+                compactNav={isAccountingModule}
                 isOpen={mobileNavOpen}
                 onClose={() => setMobileNavOpen(false)}
             />
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Top header */}
-                <header className="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-3 md:px-6 flex-shrink-0">
+                <header className={`${isAccountingModule ? 'h-11 md:px-4' : 'h-14 md:px-6'} bg-white border-b border-gray-100 flex items-center justify-between px-3 flex-shrink-0`}>
                     <div className="flex items-center space-x-2 md:space-x-3 min-w-0">
                         {/* Hamburger — mobile only */}
                         <button

@@ -3,10 +3,17 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, BookText } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
+import {
+    AccountingPageShell,
+    AccountingToolbar,
+    CompactSection,
+    CompactStat,
+} from '@/components/accounting/compact';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { compactDensity } from '@/lib/ui/compact-density';
 
 type VoucherDetail = {
     id: string;
@@ -75,47 +82,30 @@ export default function VoucherDetailPage() {
     const creditTotal = voucher?.details.reduce((sum, row) => sum + Number(row.credit_amount || 0), 0) ?? 0;
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="max-w-5xl mx-auto space-y-6">
-                <Link href="/accounting/vouchers" className="inline-flex items-center text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
-                    <ArrowLeft className="w-4 h-4 mr-2" />
-                    Back to Vouchers
-                </Link>
+        <AccountingPageShell maxWidth="wide">
+            <Link href="/accounting/vouchers" className="inline-flex items-center text-xs font-medium text-gray-500 hover:text-gray-900 transition-colors">
+                <ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
+                Back to Vouchers
+            </Link>
 
-                <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-                    <div className="flex items-start gap-4">
-                        <div className="rounded-2xl border border-sky-100 bg-sky-50 p-3 text-sky-700">
-                            <BookText className="h-6 w-6" />
-                        </div>
-                        <div>
-                            <p className="text-xs font-black uppercase tracking-[0.24em] text-gray-400">{t.journal.detail.story}</p>
-                            <h1 className="text-2xl font-black tracking-tight">Voucher Detail</h1>
-                            <p className="mt-2 max-w-3xl text-sm text-gray-500">
-                                Inspect the full debit and credit composition of a single posted voucher.
-                            </p>
-                        </div>
+            <AccountingToolbar subtitle="Inspect the full debit and credit composition of a single posted voucher." />
+
+            {loading ? <CompactSection className="text-sm text-gray-500">{t.journal.detail.loading}</CompactSection> : null}
+            {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">{error}</div> : null}
+
+            {voucher ? (
+                <>
+                    <div className="grid gap-3 md:grid-cols-4">
+                        <CompactStat label={t.journal.columns.voucherNumber} value={voucher.voucher_number} />
+                        <CompactStat label={t.accountingShared.type} value={voucher.voucher_type.replaceAll('_', ' ')} />
+                        <CompactStat label={t.accountingShared.date} value={formatDate(voucher.date, locale)} />
+                        <CompactStat label={t.accountingShared.reference} value={voucher.reference_number || t.accountingShared.notProvided} />
                     </div>
-                </section>
 
-                {loading ? <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm text-sm font-bold text-gray-500">{t.journal.detail.loading}</div> : null}
-                {error ? <div className="rounded-3xl border border-red-200 bg-red-50 p-6 shadow-sm text-sm font-bold text-red-600">{error}</div> : null}
+                    <CompactSection title={t.accountingShared.narration}>
+                        <p className="text-sm text-gray-700">{voucher.description || t.journal.detail.noNarrationCaptured}</p>
 
-                {voucher ? (
-                    <>
-                        <section className="grid gap-4 md:grid-cols-4">
-                            <DetailStat label={t.journal.columns.voucherNumber} value={voucher.voucher_number} />
-                            <DetailStat label={t.accountingShared.type} value={voucher.voucher_type.replaceAll('_', ' ')} />
-                            <DetailStat label={t.accountingShared.date} value={formatDate(voucher.date, locale)} />
-                            <DetailStat label={t.accountingShared.reference} value={voucher.reference_number || t.accountingShared.notProvided} />
-                        </section>
-
-                        <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
-                            <div>
-                                <p className="text-xs font-black uppercase tracking-[0.24em] text-gray-400">{t.accountingShared.narration}</p>
-                                <p className="mt-2 text-sm text-gray-700">{voucher.description || t.journal.detail.noNarrationCaptured}</p>
-                            </div>
-
-                            <div className="overflow-hidden rounded-2xl border border-gray-200">
+                        <div className="overflow-hidden rounded-lg border border-gray-200 mt-3">
                                 <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-gray-50">
                                         <tr>
@@ -146,20 +136,10 @@ export default function VoucherDetailPage() {
                                         </tr>
                                     </tfoot>
                                 </table>
-                            </div>
-                        </section>
-                    </>
-                ) : null}
-            </div>
-        </div>
-    );
-}
-
-function DetailStat({ label, value }: { label: string; value: string }) {
-    return (
-        <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-black uppercase tracking-[0.24em] text-gray-400">{label}</p>
-            <p className="mt-2 text-lg font-black tracking-tight text-gray-900">{value}</p>
-        </section>
+                        </div>
+                    </CompactSection>
+                </>
+            ) : null}
+        </AccountingPageShell>
     );
 }

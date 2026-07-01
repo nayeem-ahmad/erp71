@@ -3,12 +3,19 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Calculator, Filter, ReceiptText, Wallet } from 'lucide-react';
+import { ArrowLeft, ReceiptText, Wallet } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
+import {
+    AccountingPageShell,
+    AccountingToolbar,
+    CompactSection,
+    CompactStat,
+} from '@/components/accounting/compact';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { compactDensity } from '@/lib/ui/compact-density';
 
 type LedgerAccount = {
     id: string;
@@ -57,7 +64,7 @@ const columnHelper = createColumnHelper<LedgerRow>();
 
 function LedgerLoadingFallback() {
     const { t } = useI18n();
-    return <div className="p-6 text-sm text-gray-500">{t.ledger.loading}</div>;
+    return <div className="p-4 text-sm text-gray-500">{t.ledger.loading}</div>;
 }
 
 export default function AccountingLedgerPage() {
@@ -250,100 +257,83 @@ function AccountingLedgerPageContent() {
     };
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
-                <Link href="/accounting" className="inline-flex items-center text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
-                    <ArrowLeft className="w-4 h-4 mr-2" />
-                    {t.accountingShared.backToAccounting}
-                </Link>
+        <AccountingPageShell>
+            <Link href="/accounting" className="inline-flex items-center text-xs font-medium text-gray-500 hover:text-gray-900 transition-colors">
+                <ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
+                {t.accountingShared.backToAccounting}
+            </Link>
 
-                <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-                    <div className="flex items-start gap-4">
-                        <div className="rounded-2xl border border-violet-100 bg-violet-50 p-3 text-violet-700">
-                            <Calculator className="h-6 w-6" />
-                        </div>
-                        <div className="space-y-2">
-                            <p className="text-xs font-black uppercase tracking-[0.24em] text-gray-400">{t.ledger.story}</p>
-                            <h1 className="text-2xl font-black tracking-tight">General Ledger</h1>
-                            <p className="text-sm text-gray-500 max-w-3xl">
-                                Review one account at a time with opening balance, period movement, closing position, and voucher drill-down linked directly into journal detail.
-                            </p>
-                        </div>
+            <AccountingToolbar
+                subtitle="Review one account at a time with opening balance, period movement, closing position, and voucher drill-down."
+            />
+
+            <CompactSection title={t.ledger.title}>
+                <div className={`${compactDensity.filterBar} mb-3`}>
+                    <label className="block flex-1 min-w-[200px]">
+                        <span className={`${compactDensity.formLabel} block mb-1`}>{t.accountingShared.account}</span>
+                        <select
+                            aria-label={t.ledger.accountAria}
+                            value={selectedAccountId}
+                            onChange={(event) => setSelectedAccountId(event.target.value)}
+                            className={compactDensity.formField}
+                        >
+                            <option value="">{t.accountingShared.selectAccount}</option>
+                            {accounts.map((account) => (
+                                <option key={account.id} value={account.id}>
+                                    {account.code ? `${account.code} - ` : ''}{account.name}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+
+                    <label className="block">
+                        <span className={`${compactDensity.formLabel} block mb-1`}>{t.accountingShared.from}</span>
+                        <input
+                            aria-label={t.ledger.fromDateAria}
+                            type="date"
+                            value={from}
+                            onChange={(event) => setFrom(event.target.value)}
+                            className={compactDensity.formField}
+                        />
+                    </label>
+
+                    <label className="block">
+                        <span className={`${compactDensity.formLabel} block mb-1`}>{t.accountingShared.to}</span>
+                        <input
+                            aria-label={t.ledger.toDateAria}
+                            type="date"
+                            value={to}
+                            onChange={(event) => setTo(event.target.value)}
+                            className={compactDensity.formField}
+                        />
+                    </label>
+
+                    <div className="flex items-end">
+                        <button type="button" onClick={handleResetFilters} className={compactDensity.btnSecondary}>
+                            Reset filters
+                        </button>
                     </div>
-                </section>
+                </div>
 
-                <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm space-y-5">
-                    <div className="flex items-center gap-3">
-                        <Filter className="h-5 w-5 text-gray-900" />
-                        <h2 className="text-lg font-black tracking-tight">{t.ledger.title}</h2>
-                    </div>
-
-                    <div className="grid gap-4 lg:grid-cols-[1.6fr,1fr,1fr,auto]">
-                        <label className="block text-xs font-black uppercase tracking-[0.24em] text-gray-400">
-                            <span>{t.accountingShared.account}</span>
-                            <select
-                                aria-label={t.ledger.accountAria}
-                                value={selectedAccountId}
-                                onChange={(event) => setSelectedAccountId(event.target.value)}
-                                className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-900"
-                            >
-                                <option value="">{t.accountingShared.selectAccount}</option>
-                                {accounts.map((account) => (
-                                    <option key={account.id} value={account.id}>
-                                        {account.code ? `${account.code} - ` : ''}{account.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-
-                        <label className="block text-xs font-black uppercase tracking-[0.24em] text-gray-400">
-                            <span>{t.accountingShared.from}</span>
-                            <input
-                                aria-label={t.ledger.fromDateAria}
-                                type="date"
-                                value={from}
-                                onChange={(event) => setFrom(event.target.value)}
-                                className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-900"
-                            />
-                        </label>
-
-                        <label className="block text-xs font-black uppercase tracking-[0.24em] text-gray-400">
-                            <span>{t.accountingShared.to}</span>
-                            <input
-                                aria-label={t.ledger.toDateAria}
-                                type="date"
-                                value={to}
-                                onChange={(event) => setTo(event.target.value)}
-                                className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-900"
-                            />
-                        </label>
-
-                        <div className="flex items-end">
-                            <button
-                                type="button"
-                                onClick={handleResetFilters}
-                                className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-black text-gray-700 hover:bg-gray-100"
-                            >
-                                Reset filters
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                            <p className="text-xs font-black uppercase tracking-[0.24em] text-gray-400">Selected account</p>
-                            <p className="mt-2 text-lg font-black tracking-tight text-gray-900">
-                                {selectedAccount ? selectedAccount.name : 'None selected'}
-                            </p>
-                            <p className="mt-1 text-sm text-gray-500">
-                                {selectedAccount ? `${selectedAccount.code || t.accountingShared.noCode} • ${selectedAccount.type}` : 'Choose an account to load the ledger.'}
-                            </p>
-                        </div>
-                        <LedgerStatCard label={t.ledger.openingBalance} value={ledger ? formatBalance(ledger.opening_balance, ledger.opening_balance_side, locale) : t.accountingShared.awaitingSelection} accent="text-amber-700" />
-                        <LedgerStatCard label={t.ledger.periodMovement} value={ledger ? formatBalance(periodMovement.amount, periodMovement.side, locale) : t.accountingShared.awaitingSelection} accent="text-violet-700" />
-                        <LedgerStatCard label={t.accountingShared.closingBalance} value={ledger ? formatBalance(ledger.closing_balance, ledger.closing_balance_side, locale) : t.accountingShared.awaitingSelection} accent="text-emerald-700" />
-                    </div>
-                </section>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <CompactStat
+                        label="Selected account"
+                        value={(
+                            <>
+                                <span className="block text-base">{selectedAccount ? selectedAccount.name : 'None selected'}</span>
+                                {selectedAccount ? (
+                                    <span className="block text-xs font-normal text-gray-500 mt-0.5">
+                                        {selectedAccount.code || t.accountingShared.noCode} • {selectedAccount.type}
+                                    </span>
+                                ) : null}
+                            </>
+                        )}
+                    />
+                    <CompactStat label={t.ledger.openingBalance} value={ledger ? formatBalance(ledger.opening_balance, ledger.opening_balance_side, locale) : t.accountingShared.awaitingSelection} tone="warning" />
+                    <CompactStat label={t.ledger.periodMovement} value={ledger ? formatBalance(periodMovement.amount, periodMovement.side, locale) : t.accountingShared.awaitingSelection} tone="info" />
+                    <CompactStat label={t.accountingShared.closingBalance} value={ledger ? formatBalance(ledger.closing_balance, ledger.closing_balance_side, locale) : t.accountingShared.awaitingSelection} tone="positive" />
+                </div>
+            </CompactSection>
 
                 {isLoadingAccounts ? <InfoPanel tone="neutral" message={t.accountingShared.loadingAccountOptions} /> : null}
                 {accountError ? <InfoPanel tone="error" message={accountError} /> : null}
@@ -351,32 +341,26 @@ function AccountingLedgerPageContent() {
                 {ledgerError ? <InfoPanel tone="error" message={ledgerError} /> : null}
 
                 {!selectedAccountId && !isLoadingAccounts ? (
-                    <section className="rounded-3xl border border-dashed border-gray-300 bg-white p-10 text-center shadow-sm">
+                    <CompactSection className="border-dashed text-center py-8">
                         <Wallet className="mx-auto h-8 w-8 text-gray-300" />
-                        <h2 className="mt-4 text-lg font-black tracking-tight text-gray-900">{t.ledger.selectAccountHint}</h2>
-                        <p className="mt-2 text-sm text-gray-500">
+                        <p className="mt-3 text-sm font-semibold text-gray-900">{t.ledger.selectAccountHint}</p>
+                        <p className="mt-1 text-xs text-gray-500">
                             The screen keeps one account in focus so running balance math stays readable during audit work.
                         </p>
-                    </section>
+                    </CompactSection>
                 ) : null}
 
                 {selectedAccountId && !ledgerError ? (
-                    <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm space-y-5">
-                        <div className="flex flex-wrap items-start justify-between gap-4">
-                            <div>
-                                <p className="text-xs font-black uppercase tracking-[0.24em] text-gray-400">Ledger activity</p>
-                                <h2 className="mt-1 text-lg font-black tracking-tight text-gray-900">
-                                    {selectedAccount ? selectedAccount.name : 'Account ledger'}
-                                </h2>
-                                <p className="mt-1 text-sm text-gray-500">
-                                    {ledger
-                                        ? `Debit movement ${formatBDT(ledger.totals.debit, { locale })} • Credit movement ${formatBDT(ledger.totals.credit, { locale })}`
-                                        : 'Waiting for report data.'}
-                                </p>
-                            </div>
+                    <CompactSection title="Ledger activity">
+                        <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                            <p className="text-xs text-gray-500">
+                                {ledger
+                                    ? `Debit movement ${formatBDT(ledger.totals.debit, { locale })} • Credit movement ${formatBDT(ledger.totals.credit, { locale })}`
+                                    : 'Waiting for report data.'}
+                            </p>
                             {ledger ? (
-                                <Link href={ledger.data[0] ? `/accounting/vouchers/${ledger.data[0].voucher_id}` : '/accounting/vouchers'} className="inline-flex items-center rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-black text-gray-700 hover:bg-gray-100">
-                                    <ReceiptText className="mr-2 h-4 w-4" />
+                                <Link href={ledger.data[0] ? `/accounting/vouchers/${ledger.data[0].voucher_id}` : '/accounting/vouchers'} className={compactDensity.btnSecondary}>
+                                    <ReceiptText className="h-3.5 w-3.5" />
                                     {ledger.data[0] ? 'Open latest voucher detail' : 'Open journal'}
                                 </Link>
                             ) : null}
@@ -389,22 +373,12 @@ function AccountingLedgerPageContent() {
                             title={t.accountingShared.generalLedger}
                             isLoading={isLoadingLedger}
                             emptyMessage={t.ledger.emptyMessage}
-                            emptyIcon={<Wallet className="w-16 h-16 text-gray-200" />}
+                            emptyIcon={<Wallet className="w-10 h-10 text-gray-200" />}
                             searchPlaceholder={t.ledger.searchPlaceholder}
                         />
-                    </section>
+                    </CompactSection>
                 ) : null}
-            </div>
-        </div>
-    );
-}
-
-function LedgerStatCard({ label, value, accent }: { label: string; value: string; accent: string }) {
-    return (
-        <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-black uppercase tracking-[0.24em] text-gray-400">{label}</p>
-            <p className={`mt-2 text-xl font-black tracking-tight ${accent}`}>{value}</p>
-        </section>
+        </AccountingPageShell>
     );
 }
 
@@ -413,7 +387,7 @@ function InfoPanel({ tone, message }: { tone: 'neutral' | 'error'; message: stri
         ? 'border-red-200 bg-red-50 text-red-700'
         : 'border-gray-200 bg-white text-gray-500';
 
-    return <div className={`rounded-3xl border p-6 shadow-sm text-sm font-bold ${classes}`}>{message}</div>;
+    return <div className={`rounded-lg border p-3 text-sm ${classes}`}>{message}</div>;
 }
 
 function formatBalance(amount: number, side: 'debit' | 'credit' | 'neutral', locale: string) {

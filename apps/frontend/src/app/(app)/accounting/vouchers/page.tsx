@@ -297,7 +297,7 @@ function AccountingVouchersListPageContent() {
                     title={t.vouchers.list.title}
                     isLoading={loading}
                     emptyMessage={t.vouchers.list.emptyMessage}
-                    emptyIcon={<FileText className="w-16 h-16 text-gray-200" />}
+                    emptyIcon={<FileText className="w-10 h-10 text-gray-200" />}
                     searchPlaceholder={t.vouchers.list.searchPlaceholder}
                 />
             </div>

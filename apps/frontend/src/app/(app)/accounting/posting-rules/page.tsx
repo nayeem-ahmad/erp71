@@ -1,15 +1,20 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, CheckCircle, Edit2, Settings, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Edit2, XCircle } from 'lucide-react';
 import Link from 'next/link';
 import { createColumnHelper } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
+import {
+    AccountingPageShell,
+    AccountingToolbar,
+} from '@/components/accounting/compact';
 import { ContextualHelpPanel } from '@/components/ContextualHelpPanel';
 import { HelpTooltip } from '@/components/HelpTooltip';
 import { POSTING_RULES_FIELD_HELP, POSTING_RULES_HELP } from '@/lib/help/contextual-help';
 import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { compactDensity } from '@/lib/ui/compact-density';
 
 const EVENT_TYPE_LABELS: Record<string, string> = {
     sale: 'Sale',
@@ -243,83 +248,50 @@ export default function PostingRulesPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="max-w-[1200px] mx-auto space-y-6">
-                {/* Header */}
-                <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm text-gray-400">
-                        <Link href="/accounting" className="hover:text-gray-600 transition-colors">
-                            <ArrowLeft className="w-4 h-4 inline mr-1" />
-                            Accounting
-                        </Link>
-                        <span>/</span>
-                        <span className="text-gray-600 font-medium">Posting Rules</span>
-                    </div>
-                    <div className="flex items-end justify-between gap-6 flex-wrap">
-                        <div className="flex items-center gap-3">
-                            <div className="inline-flex rounded-2xl border border-indigo-100 bg-indigo-50 px-3 py-3 text-indigo-700">
-                                <Settings className="h-5 w-5" />
-                            </div>
-                            <div>
-                                <h1 className="text-2xl font-black tracking-tight text-gray-950 inline-flex items-center gap-2">
-                                    Posting Rules
-                                    <HelpTooltip text={POSTING_RULES_FIELD_HELP.page} wide />
-                                </h1>
-                                <p className="text-sm text-gray-500 mt-0.5">
-                                    Configure how operational events automatically create accounting vouchers.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+        <AccountingPageShell maxWidth="wide">
+            <Link href="/accounting" className="inline-flex items-center text-xs font-medium text-gray-400 hover:text-gray-700">
+                <ArrowLeft className="w-3.5 h-3.5 mr-1" />
+                Accounting
+            </Link>
 
-                <ContextualHelpPanel {...POSTING_RULES_HELP} />
+            <AccountingToolbar
+                help={POSTING_RULES_FIELD_HELP.page}
+                subtitle="Configure how operational events automatically create accounting vouchers."
+            />
 
-                {/* Filters */}
-                <div className="flex flex-wrap gap-3">
-                    <select
-                        value={filterEventType}
-                        onChange={(e) => setFilterEventType(e.target.value)}
-                        className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                        <option value="">All events</option>
-                        {Object.entries(EVENT_TYPE_LABELS).map(([k, v]) => (
-                            <option key={k} value={k}>{v}</option>
-                        ))}
-                    </select>
-                    <select
-                        value={filterActive}
-                        onChange={(e) => setFilterActive(e.target.value)}
-                        className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                        <option value="">All statuses</option>
-                        <option value="active">Active only</option>
-                        <option value="inactive">Inactive only</option>
-                    </select>
-                </div>
+            <ContextualHelpPanel {...POSTING_RULES_HELP} />
 
-                {/* Table */}
-                {loading ? (
-                    <div className="text-center py-16 text-gray-400">Loading posting rules...</div>
-                ) : (
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                        <DataTable
-                            tableId="posting-rules"
-                            title={t.postingRules.title}
-                            columns={columns}
-                            data={filteredRules}
-                        />
-                    </div>
-                )}
+            <div className={compactDensity.filterBar}>
+                <select value={filterEventType} onChange={(e) => setFilterEventType(e.target.value)} className={compactDensity.formField}>
+                    <option value="">All events</option>
+                    {Object.entries(EVENT_TYPE_LABELS).map(([k, v]) => (
+                        <option key={k} value={k}>{v}</option>
+                    ))}
+                </select>
+                <select value={filterActive} onChange={(e) => setFilterActive(e.target.value)} className={compactDensity.formField}>
+                    <option value="">All statuses</option>
+                    <option value="active">Active only</option>
+                    <option value="inactive">Inactive only</option>
+                </select>
             </div>
 
-            {/* Edit Modal */}
+            {loading ? (
+                <div className="text-center py-12 text-gray-400 text-sm">Loading posting rules...</div>
+            ) : (
+                <DataTable
+                    tableId="posting-rules"
+                    title={t.postingRules.title}
+                    columns={columns}
+                    data={filteredRules}
+                />
+            )}
+
             {editingRule && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
-                        <div className="flex items-center justify-between p-5 border-b">
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+                    <div className={`${compactDensity.modal} max-w-lg`}>
+                        <div className={`${compactDensity.modalPadding} flex items-center justify-between border-b border-gray-100`}>
                             <div>
-                                <h2 className="text-lg font-bold text-gray-900">Edit Posting Rule</h2>
+                                <h2 className={compactDensity.modalTitle}>Edit Posting Rule</h2>
                                 <p className="text-sm text-gray-500 mt-0.5">
                                     {EVENT_TYPE_LABELS[editingRule.eventType] ?? editingRule.eventType}
                                     {editingRule.conditionValue && (
@@ -335,10 +307,10 @@ export default function PostingRulesPage() {
                             </button>
                         </div>
 
-                        <div className="p-5 space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
+                        <div className={`${compactDensity.modalPadding} ${compactDensity.formStack}`}>
+                            <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className={`${compactDensity.formLabel} block mb-1`}>
                                         <span className="inline-flex items-center gap-1.5">
                                             Debit Account <span className="text-red-500">*</span>
                                             <HelpTooltip text={POSTING_RULES_FIELD_HELP.debit} side="right" />
@@ -347,7 +319,7 @@ export default function PostingRulesPage() {
                                     <select
                                         value={form.debitAccountId}
                                         onChange={(e) => setForm((f) => ({ ...f, debitAccountId: e.target.value }))}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        className={compactDensity.formField}
                                     >
                                         <option value="">Select account</option>
                                         {accounts.map((a) => (
@@ -358,7 +330,7 @@ export default function PostingRulesPage() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className={`${compactDensity.formLabel} block mb-1`}>
                                         <span className="inline-flex items-center gap-1.5">
                                             Credit Account <span className="text-red-500">*</span>
                                             <HelpTooltip text={POSTING_RULES_FIELD_HELP.credit} side="right" />
@@ -367,7 +339,7 @@ export default function PostingRulesPage() {
                                     <select
                                         value={form.creditAccountId}
                                         onChange={(e) => setForm((f) => ({ ...f, creditAccountId: e.target.value }))}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        className={compactDensity.formField}
                                     >
                                         <option value="">Select account</option>
                                         {accounts.map((a) => (
@@ -379,9 +351,9 @@ export default function PostingRulesPage() {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className={`${compactDensity.formLabel} block mb-1`}>
                                         <span className="inline-flex items-center gap-1.5">
                                             Priority
                                             <HelpTooltip text={POSTING_RULES_FIELD_HELP.priority} side="right" />
@@ -392,7 +364,7 @@ export default function PostingRulesPage() {
                                         min={1}
                                         value={form.priority}
                                         onChange={(e) => setForm((f) => ({ ...f, priority: Number(e.target.value) }))}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        className={compactDensity.formField}
                                     />
                                     <p className="text-xs text-gray-400 mt-1">Lower number = higher priority</p>
                                 </div>
@@ -404,7 +376,7 @@ export default function PostingRulesPage() {
                                             onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
                                             className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                         />
-                                        <span className="text-sm font-medium text-gray-700 inline-flex items-center gap-1.5">
+                                        <span className={`${compactDensity.formLabel} inline-flex items-center gap-1.5`}>
                                             Active
                                             <HelpTooltip text={POSTING_RULES_FIELD_HELP.active} side="right" />
                                         </span>
@@ -420,17 +392,14 @@ export default function PostingRulesPage() {
                             )}
                         </div>
 
-                        <div className="flex justify-end gap-3 p-5 border-t">
-                            <button
-                                onClick={() => setEditingRule(null)}
-                                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
-                            >
+                        <div className={`${compactDensity.modalPadding} flex justify-end gap-2 border-t border-gray-100`}>
+                            <button onClick={() => setEditingRule(null)} className={compactDensity.btnSecondary}>
                                 Cancel
                             </button>
                             <button
                                 onClick={handleSave}
                                 disabled={saving || !form.debitAccountId || !form.creditAccountId}
-                                className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                                className={`${compactDensity.btnPrimary} bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50`}
                             >
                                 {saving ? 'Saving...' : 'Save Rule'}
                             </button>
@@ -438,6 +407,6 @@ export default function PostingRulesPage() {
                     </div>
                 </div>
             )}
-        </div>
+        </AccountingPageShell>
     );
 }

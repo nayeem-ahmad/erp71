@@ -2,9 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { Plus, Trash2, CheckCircle } from 'lucide-react';
+import {
+    AccountingPageShell,
+    AccountingToolbar,
+    CompactSection,
+} from '@/components/accounting/compact';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { compactDensity } from '@/lib/ui/compact-density';
 
 interface Account { id: string; name: string; code?: string | null; type: string; }
 interface EntryRow { accountId: string; debitAmount: string; creditAmount: string; }
@@ -63,44 +69,37 @@ export default function OpeningBalancesPage() {
 
     if (success) {
         return (
-            <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-                <div className="max-w-[900px] mx-auto">
-                    <div className="bg-white border border-emerald-100 rounded-2xl p-8 text-center">
-                        <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
-                        <h2 className="text-xl font-black text-gray-900 mb-2">Opening Balances Imported</h2>
-                        <p className="text-gray-500 text-sm mb-6">A journal voucher has been created with your opening balances.</p>
-                        <button onClick={() => { setSuccess(false); setRows([{ accountId: '', debitAmount: '', creditAmount: '' }, { accountId: '', debitAmount: '', creditAmount: '' }]); }}
-                            className="rounded-xl bg-gray-900 px-5 py-2 text-sm font-bold text-white hover:bg-gray-700 transition">
-                            Import Another
-                        </button>
-                    </div>
-                </div>
-            </div>
+            <AccountingPageShell maxWidth="narrow">
+                <CompactSection className="border-emerald-100 text-center py-8">
+                    <CheckCircle className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
+                    <h2 className={compactDensity.modalTitle}>Opening Balances Imported</h2>
+                    <p className="text-gray-500 text-xs mt-1 mb-4">A journal voucher has been created with your opening balances.</p>
+                    <button onClick={() => { setSuccess(false); setRows([{ accountId: '', debitAmount: '', creditAmount: '' }, { accountId: '', debitAmount: '', creditAmount: '' }]); }}
+                        className={`${compactDensity.btnPrimary} bg-gray-900 text-white hover:bg-gray-700`}>
+                        Import Another
+                    </button>
+                </CompactSection>
+            </AccountingPageShell>
         );
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
-                <div>
-                    <h1 className="text-2xl font-black tracking-tight">Opening Balance Import</h1>
-                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
-                        Import opening account balances when migrating from another system
-                    </p>
-                </div>
+        <AccountingPageShell>
+            <AccountingToolbar subtitle="Import opening account balances when migrating from another system" />
 
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 flex items-end gap-4">
-                    <div>
-                        <span className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">As of Date</span>
-                        <input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)}
-                            className="bg-gray-50 border-none rounded-xl py-2.5 px-4 text-sm font-medium" />
-                    </div>
+            <CompactSection>
+                <div className="flex items-end gap-4 flex-wrap">
+                    <label className="block">
+                        <span className={`${compactDensity.formLabel} block mb-1`}>As of Date</span>
+                        <input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} className={compactDensity.formField} />
+                    </label>
                     <p className="text-xs text-gray-400 pb-1">Balances will be posted as a Journal voucher dated on this date.</p>
                 </div>
+            </CompactSection>
 
-                {error && <div className="rounded-2xl bg-red-50 border border-red-100 p-4 text-sm text-red-700">{error}</div>}
+            {error && <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-sm text-red-700">{error}</div>}
 
-                <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
+            <CompactSection className="!p-0 overflow-hidden">
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-gray-100">
@@ -115,7 +114,7 @@ export default function OpeningBalancesPage() {
                                 <tr key={i} className="border-b border-gray-50">
                                     <td className="px-4 py-2">
                                         <select value={row.accountId} onChange={(e) => setRow(i, 'accountId', e.target.value)}
-                                            className="w-full rounded-xl bg-gray-50 border-none py-2 px-3 text-sm">
+                                            className={compactDensity.formField}>
                                             <option value="">Select account…</option>
                                             {accounts.map((a) => (
                                                 <option key={a.id} value={a.id}>{a.name}{a.code ? ` (${a.code})` : ''}</option>
@@ -126,13 +125,13 @@ export default function OpeningBalancesPage() {
                                         <input type="number" min="0" step="0.01" placeholder="0.00"
                                             value={row.debitAmount}
                                             onChange={(e) => { setRow(i, 'debitAmount', e.target.value); if (e.target.value) setRow(i, 'creditAmount', ''); }}
-                                            className="w-full rounded-xl bg-gray-50 border-none py-2 px-3 text-sm text-right" />
+                                            className={`${compactDensity.formField} text-right`} />
                                     </td>
                                     <td className="px-4 py-2">
                                         <input type="number" min="0" step="0.01" placeholder="0.00"
                                             value={row.creditAmount}
                                             onChange={(e) => { setRow(i, 'creditAmount', e.target.value); if (e.target.value) setRow(i, 'debitAmount', ''); }}
-                                            className="w-full rounded-xl bg-gray-50 border-none py-2 px-3 text-sm text-right" />
+                                            className={`${compactDensity.formField} text-right`} />
                                     </td>
                                     <td className="px-4 py-2 text-center">
                                         {rows.length > 2 && (
@@ -153,29 +152,27 @@ export default function OpeningBalancesPage() {
                             </tr>
                         </tfoot>
                     </table>
-                </div>
+            </CompactSection>
 
-                <div className="flex items-center justify-between">
-                    <button onClick={addRow}
-                        className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 transition">
-                        <Plus className="w-4 h-4" /> Add Row
+            <div className="flex items-center justify-between">
+                <button onClick={addRow} className={compactDensity.btnSecondary}>
+                    <Plus className="w-3.5 h-3.5" /> Add Row
+                </button>
+                <div className="flex items-center gap-3">
+                    {!isBalanced && (totalDebit > 0 || totalCredit > 0) && (
+                        <span className="text-xs font-semibold text-rose-600">
+                            Difference: {formatBDT(Math.abs(totalDebit - totalCredit))}
+                        </span>
+                    )}
+                    {isBalanced && (totalDebit > 0) && (
+                        <span className="text-xs font-semibold text-emerald-600">Balanced ✓</span>
+                    )}
+                    <button onClick={handleSubmit} disabled={submitting || !isBalanced || totalDebit === 0}
+                        className={`${compactDensity.btnPrimary} bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-50`}>
+                        {submitting ? 'Posting…' : 'Post Opening Balances'}
                     </button>
-                    <div className="flex items-center gap-4">
-                        {!isBalanced && (totalDebit > 0 || totalCredit > 0) && (
-                            <span className="text-xs font-bold text-rose-600">
-                                Difference: {formatBDT(Math.abs(totalDebit - totalCredit))}
-                            </span>
-                        )}
-                        {isBalanced && (totalDebit > 0) && (
-                            <span className="text-xs font-bold text-emerald-600">Balanced ✓</span>
-                        )}
-                        <button onClick={handleSubmit} disabled={submitting || !isBalanced || totalDebit === 0}
-                            className="rounded-xl bg-gray-900 px-5 py-2 text-sm font-bold text-white hover:bg-gray-700 disabled:opacity-50 transition">
-                            {submitting ? 'Posting…' : 'Post Opening Balances'}
-                        </button>
-                    </div>
                 </div>
             </div>
-        </div>
+        </AccountingPageShell>
     );
 }

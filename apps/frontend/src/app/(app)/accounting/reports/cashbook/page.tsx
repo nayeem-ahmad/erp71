@@ -4,6 +4,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { BookOpen } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
+import {
+    AccountingPageShell,
+    AccountingToolbar,
+    CompactStat,
+} from '@/components/accounting/compact';
+import { compactDensity } from '@/lib/ui/compact-density';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
@@ -112,73 +118,72 @@ export default function CashbookPage() {
     ], []);
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
-                <div>
-                    <h1 className="text-2xl font-black tracking-tight">Cashbook</h1>
-                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
-                        Cash receipts and payments ledger with running balance
-                    </p>
-                </div>
-
-                {data && (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-white border border-gray-100 rounded-2xl p-5">
-                            <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">Opening Balance</div>
-                            <div className="text-xl font-black text-gray-900 mt-2">{formatBDT(data.opening_balance, { locale })}</div>
-                            <div className="text-xs text-gray-400 mt-0.5">{data.opening_balance_side}</div>
-                        </div>
-                        <div className="bg-white border border-gray-100 rounded-2xl p-5">
-                            <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Receipts</div>
-                            <div className="text-xl font-black text-emerald-700 mt-2">{formatBDT(data.totals.receipts, { locale })}</div>
-                        </div>
-                        <div className="bg-white border border-gray-100 rounded-2xl p-5">
-                            <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Payments</div>
-                            <div className="text-xl font-black text-rose-600 mt-2">{formatBDT(data.totals.payments, { locale })}</div>
-                        </div>
-                        <div className="bg-white border border-gray-100 rounded-2xl p-5">
-                            <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">Closing Balance</div>
-                            <div className="text-xl font-black text-blue-700 mt-2">{formatBDT(data.closing_balance, { locale })}</div>
-                            <div className="text-xs text-gray-400 mt-0.5">{data.closing_balance_side}</div>
-                        </div>
-                    </div>
-                )}
-
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap gap-3 items-end">
+        <AccountingPageShell maxWidth="full">
+            <AccountingToolbar subtitle="Cash receipts and payments ledger with running balance">
+                <div className={compactDensity.filterBar}>
                     {data && data.accounts.length > 1 && (
-                        <select value={accountId} onChange={(e) => setAccountId(e.target.value)}
-                            className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[200px]">
-                            <option value="">All Cash Accounts</option>
-                            {data.accounts.map((a) => (
-                                <option key={a.id} value={a.id}>{a.name}</option>
-                            ))}
-                        </select>
+                        <div className="flex flex-col gap-1">
+                            <span className={compactDensity.formLabel}>{t.accountingShared.account}</span>
+                            <select value={accountId} onChange={(e) => setAccountId(e.target.value)}
+                                className={`${compactDensity.formField} min-w-[200px]`}>
+                                <option value="">All Cash Accounts</option>
+                                {data.accounts.map((a) => (
+                                    <option key={a.id} value={a.id}>{a.name}</option>
+                                ))}
+                            </select>
+                        </div>
                     )}
                     <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.accountingShared.from}</span>
+                        <span className={compactDensity.formLabel}>{t.accountingShared.from}</span>
                         <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
-                            className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" />
+                            className={compactDensity.formField} />
                     </div>
                     <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.accountingShared.to}</span>
+                        <span className={compactDensity.formLabel}>{t.accountingShared.to}</span>
                         <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
-                            className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" />
+                            className={compactDensity.formField} />
                     </div>
                 </div>
+            </AccountingToolbar>
 
-                {error && <div className="rounded-2xl bg-red-50 border border-red-100 p-4 text-sm text-red-700">{error}</div>}
+            {data && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <CompactStat
+                        label="Opening Balance"
+                        value={
+                            <>
+                                {formatBDT(data.opening_balance, { locale })}
+                                <span className="block text-xs font-normal text-gray-400 mt-0.5">{data.opening_balance_side}</span>
+                            </>
+                        }
+                    />
+                    <CompactStat label="Total Receipts" value={formatBDT(data.totals.receipts, { locale })} tone="positive" />
+                    <CompactStat label="Total Payments" value={formatBDT(data.totals.payments, { locale })} tone="negative" />
+                    <CompactStat
+                        label="Closing Balance"
+                        value={
+                            <>
+                                {formatBDT(data.closing_balance, { locale })}
+                                <span className="block text-xs font-normal text-gray-400 mt-0.5">{data.closing_balance_side}</span>
+                            </>
+                        }
+                        tone="info"
+                    />
+                </div>
+            )}
 
-                <DataTable<BookRow>
-                    tableId="cashbook"
-                    columns={columns}
-                    data={data?.rows ?? []}
-                    title={t.accountingShared.cashTransactions}
-                    isLoading={loading}
-                    emptyMessage={t.accountingShared.noCashTransactions}
-                    emptyIcon={<BookOpen className="w-16 h-16 text-gray-200" />}
-                    searchPlaceholder={t.accountingShared.searchTransactions}
-                />
-            </div>
-        </div>
+            {error && <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-sm text-red-700">{error}</div>}
+
+            <DataTable<BookRow>
+                tableId="cashbook"
+                columns={columns}
+                data={data?.rows ?? []}
+                title={t.accountingShared.cashTransactions}
+                isLoading={loading}
+                emptyMessage={t.accountingShared.noCashTransactions}
+                emptyIcon={<BookOpen className="w-16 h-16 text-gray-200" />}
+                searchPlaceholder={t.accountingShared.searchTransactions}
+            />
+        </AccountingPageShell>
     );
 }

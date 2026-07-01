@@ -412,6 +412,7 @@ export default function Sidebar({
     canManageTeam = false,
     platformAdminMode = false,
     activePlanCode,
+    compactNav = false,
     isOpen = false,
     onClose,
 }: {
@@ -424,6 +425,8 @@ export default function Sidebar({
     /** When true, hide all shop modules and show only the admin console. */
     platformAdminMode?: boolean;
     activePlanCode?: string | null;
+    /** Tighter nav when inside the accounting module trial */
+    compactNav?: boolean;
     /** Mobile overlay open state */
     isOpen?: boolean;
     /** Called when mobile overlay should close */
@@ -616,17 +619,24 @@ export default function Sidebar({
         }) ?? false;
 
     /* ---- Shared link styles ---- */
+    const navPad = compactNav ? 'py-1.5' : 'py-2';
+    const navText = compactNav ? 'text-[13px]' : 'text-sm';
+
     const linkCls = (active: boolean) =>
         `flex items-center rounded-xl transition-all duration-150 group ${
-            collapsed ? 'justify-center w-10 h-10 mx-auto' : 'space-x-3 px-3 py-2'
-        } ${
+            collapsed
+                ? `justify-center ${compactNav ? 'w-9 h-9' : 'w-10 h-10'} mx-auto`
+                : `space-x-2.5 px-2.5 ${navPad}`
+        } ${navText} ${
             active
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                ? compactNav
+                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-200'
+                    : 'bg-blue-600 text-white shadow-lg shadow-blue-200'
                 : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
         }`;
 
     const childLinkCls = (active: boolean, nested = false) =>
-        `flex items-center rounded-lg transition-all duration-150 group space-x-3 px-3 py-1.5 ${
+        `flex items-center rounded-lg transition-all duration-150 group space-x-2.5 px-2.5 ${compactNav ? 'py-1' : 'py-1.5'} ${navText} ${
             nested ? 'ml-8' : 'ml-4'
         } ${
             active
@@ -635,7 +645,7 @@ export default function Sidebar({
         }`;
 
     const subgroupBtnCls = (active: boolean) =>
-        `flex items-center w-full rounded-lg transition-all duration-150 space-x-3 px-3 py-1.5 ml-4 ${
+        `flex items-center w-full rounded-lg transition-all duration-150 space-x-2.5 px-2.5 ${compactNav ? 'py-1' : 'py-1.5'} ml-4 ${navText} ${
             active
                 ? 'text-blue-700 bg-blue-50/70'
                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
@@ -657,10 +667,10 @@ export default function Sidebar({
                 aria-modal={onClose && isOpen ? true : undefined}
                 aria-label={onClose ? t.sidebar.navigation : undefined}
                 className={`
-                    fixed inset-y-0 left-0 z-40 w-64 flex flex-col bg-white border-r border-gray-200 transition-all duration-300 flex-shrink-0 pt-safe
+                    fixed inset-y-0 left-0 z-40 ${compactNav ? 'w-52' : 'w-64'} flex flex-col bg-white border-r border-gray-200 transition-all duration-300 flex-shrink-0 pt-safe
                     ${isOpen ? 'translate-x-0' : '-translate-x-full'}
                     md:relative md:inset-y-auto md:left-auto md:z-auto md:translate-x-0
-                    ${collapsed ? 'md:w-16' : 'md:w-64'}
+                    ${collapsed ? 'md:w-16' : compactNav ? 'md:w-52' : 'md:w-64'}
                 `}
                 onTouchStart={(event) => {
                     touchStartXRef.current = event.touches[0]?.clientX ?? 0;
@@ -674,7 +684,7 @@ export default function Sidebar({
                 }}
             >
                 {/* Logo */}
-                <div className={`flex items-center h-14 border-b border-gray-100 flex-shrink-0 ${collapsed ? 'justify-center px-0' : 'px-5 gap-3'}`}>
+                <div className={`flex items-center ${compactNav ? 'h-11' : 'h-14'} border-b border-gray-100 flex-shrink-0 ${collapsed ? 'justify-center px-0' : compactNav ? 'px-3 gap-2' : 'px-5 gap-3'}`}>
                     <div className={`flex items-center min-w-0 ${collapsed ? '' : 'flex-1 space-x-3'}`}>
                         <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ backgroundColor: primaryColor }}>
                             {logoUrl ? (
@@ -713,7 +723,7 @@ export default function Sidebar({
                 </div>
 
                 {/* Navigation */}
-                <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
+                <nav className={`flex-1 overflow-y-auto ${compactNav ? 'py-2' : 'py-4'} px-2 space-y-0.5`}>
                     {modules.map((mod) => {
                         const Icon = mod.icon;
                         const hasChildren = !!mod.children?.length;

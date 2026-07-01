@@ -2,9 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import { CheckCircle, Circle } from 'lucide-react';
+import {
+    AccountingPageShell,
+    AccountingToolbar,
+    CompactSection,
+    CompactStat,
+} from '@/components/accounting/compact';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { compactDensity } from '@/lib/ui/compact-density';
 
 interface BankAccount { id: string; name: string; code?: string | null; }
 interface StatementEntry {
@@ -119,17 +126,10 @@ export default function BankReconciliationPage() {
     };
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
-                <div>
-                    <h1 className="text-2xl font-black tracking-tight">Bank Reconciliation</h1>
-                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
-                        Match bank statement entries against bookkeeping records
-                    </p>
-                </div>
+        <AccountingPageShell>
+            <AccountingToolbar subtitle="Match bank statement entries against bookkeeping records." />
 
-                {/* Steps indicator */}
-                <div className="flex items-center gap-2 text-sm">
+            <div className="flex items-center gap-2 text-xs">
                     {(['setup', 'import', 'match'] as const).map((s, i) => (
                         <div key={s} className="flex items-center gap-2">
                             <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black ${step === s ? 'bg-gray-900 text-white' : ['setup','import','match'].indexOf(step) > i ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
@@ -141,88 +141,74 @@ export default function BankReconciliationPage() {
                     ))}
                 </div>
 
-                {error && <div className="rounded-2xl bg-red-50 border border-red-100 p-4 text-sm text-red-700">{error}</div>}
+                {error && <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-sm text-red-700">{error}</div>}
 
                 {step === 'setup' && (
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5 space-y-4">
-                        <h2 className="font-black text-gray-900">1. Set up reconciliation</h2>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="col-span-2">
-                                <span className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Bank Account</span>
-                                <select value={form.accountId} onChange={(e) => setForm((f) => ({ ...f, accountId: e.target.value }))}
-                                    className="w-full rounded-xl bg-gray-50 border-none py-2.5 px-4 text-sm">
+                    <CompactSection title="1. Set up reconciliation">
+                        <div className={`${compactDensity.formStack} max-w-xl`}>
+                            <label className="block">
+                                <span className={`${compactDensity.formLabel} block mb-1`}>Bank Account</span>
+                                <select value={form.accountId} onChange={(e) => setForm((f) => ({ ...f, accountId: e.target.value }))} className={compactDensity.formField}>
                                     <option value="">Select bank account…</option>
                                     {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                                 </select>
+                            </label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <label className="block">
+                                    <span className={`${compactDensity.formLabel} block mb-1`}>Statement Date</span>
+                                    <input type="date" value={form.statementDate} onChange={(e) => setForm((f) => ({ ...f, statementDate: e.target.value }))} className={compactDensity.formField} />
+                                </label>
+                                <label className="block">
+                                    <span className={`${compactDensity.formLabel} block mb-1`}>Statement Closing Balance</span>
+                                    <input type="number" step="0.01" value={form.statementClosingBalance} onChange={(e) => setForm((f) => ({ ...f, statementClosingBalance: e.target.value }))} placeholder="0.00" className={compactDensity.formField} />
+                                </label>
                             </div>
-                            <div>
-                                <span className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Statement Date</span>
-                                <input type="date" value={form.statementDate} onChange={(e) => setForm((f) => ({ ...f, statementDate: e.target.value }))}
-                                    className="w-full rounded-xl bg-gray-50 border-none py-2.5 px-4 text-sm" />
-                            </div>
-                            <div>
-                                <span className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Statement Closing Balance</span>
-                                <input type="number" step="0.01" value={form.statementClosingBalance}
-                                    onChange={(e) => setForm((f) => ({ ...f, statementClosingBalance: e.target.value }))}
-                                    placeholder="0.00" className="w-full rounded-xl bg-gray-50 border-none py-2.5 px-4 text-sm" />
-                            </div>
+                            <button onClick={handleSetup} disabled={working || !form.accountId || !form.statementClosingBalance} className={`${compactDensity.btnPrimary} bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-50`}>
+                                {working ? 'Creating…' : 'Next: Import Statement'}
+                            </button>
                         </div>
-                        <button onClick={handleSetup} disabled={working || !form.accountId || !form.statementClosingBalance}
-                            className="rounded-xl bg-gray-900 px-5 py-2 text-sm font-bold text-white hover:bg-gray-700 disabled:opacity-50 transition">
-                            {working ? 'Creating…' : 'Next: Import Statement'}
-                        </button>
-                    </div>
+                    </CompactSection>
                 )}
 
                 {step === 'import' && (
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5 space-y-4">
-                        <h2 className="font-black text-gray-900">2. Paste bank statement entries</h2>
-                        <p className="text-sm text-gray-500">One row per line: <code className="bg-gray-100 px-1 rounded text-xs">YYYY-MM-DD, Description, Amount, DEBIT|CREDIT</code></p>
+                    <CompactSection title="2. Paste bank statement entries">
+                        <p className="text-xs text-gray-500 mb-2">One row per line: <code className="bg-gray-100 px-1 rounded text-xs">YYYY-MM-DD, Description, Amount, DEBIT|CREDIT</code></p>
                         <textarea rows={8} value={csvText} onChange={(e) => setCsvText(e.target.value)}
                             placeholder={`2026-06-01, Salary payment, 50000, DEBIT\n2026-06-02, Customer deposit, 30000, CREDIT`}
-                            className="w-full rounded-xl bg-gray-50 border-none py-3 px-4 text-sm font-mono resize-none" />
-                        <div className="flex gap-3">
-                            <button onClick={() => setStep('setup')}
-                                className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 transition">Back</button>
-                            <button onClick={handleImport} disabled={working || !csvText.trim()}
-                                className="rounded-xl bg-gray-900 px-5 py-2 text-sm font-bold text-white hover:bg-gray-700 disabled:opacity-50 transition">
+                            className={`${compactDensity.formField} font-mono resize-none mb-3`} />
+                        <div className="flex gap-2">
+                            <button onClick={() => setStep('setup')} className={compactDensity.btnSecondary}>Back</button>
+                            <button onClick={handleImport} disabled={working || !csvText.trim()} className={`${compactDensity.btnPrimary} bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-50`}>
                                 {working ? 'Importing…' : 'Import & Continue'}
                             </button>
                         </div>
-                    </div>
+                    </CompactSection>
                 )}
 
                 {step === 'match' && report && (
-                    <div className="space-y-4">
-                        {/* Summary */}
-                        <div className="grid grid-cols-3 gap-4">
-                            {[
-                                { label: 'Book Balance', value: formatBDT(report.book_balance, { locale }), color: 'text-gray-900' },
-                                { label: 'Statement Balance', value: formatBDT(report.statement_balance, { locale }), color: 'text-gray-900' },
-                                { label: 'Difference', value: formatBDT(report.difference, { locale }), color: Math.abs(report.difference) < 0.01 ? 'text-emerald-600' : 'text-rose-600' },
-                            ].map(({ label, value, color }) => (
-                                <div key={label} className="bg-white border border-gray-100 rounded-2xl p-4 text-center">
-                                    <div className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1">{label}</div>
-                                    <div className={`text-xl font-black ${color}`}>{value}</div>
+                    <div className="space-y-3">
+                        <div className="grid grid-cols-3 gap-3">
+                            <CompactStat label="Book Balance" value={formatBDT(report.book_balance, { locale })} />
+                            <CompactStat label="Statement Balance" value={formatBDT(report.statement_balance, { locale })} />
+                            <CompactStat label="Difference" value={formatBDT(report.difference, { locale })} tone={Math.abs(report.difference) < 0.01 ? 'positive' : 'negative'} />
+                        </div>
+
+                        <CompactSection>
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="text-xs text-gray-600">
+                                    <span className="font-semibold text-emerald-600">{report.matched_count} matched</span>
+                                    {' · '}
+                                    <span className="font-semibold text-amber-600">{report.unmatched_count} unmatched</span>
                                 </div>
-                            ))}
-                        </div>
-
-                        <div className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center justify-between">
-                            <div className="text-sm text-gray-600">
-                                <span className="font-bold text-emerald-600">{report.matched_count} matched</span>
-                                {' · '}
-                                <span className="font-bold text-amber-600">{report.unmatched_count} unmatched</span>
+                                {!autoMatched && (
+                                    <button onClick={handleAutoMatch} disabled={working} className={`${compactDensity.btnSecondary} text-blue-700 border-blue-100 bg-blue-50 hover:bg-blue-100 disabled:opacity-50`}>
+                                        {working ? 'Matching…' : 'Auto-Match by Date & Amount'}
+                                    </button>
+                                )}
                             </div>
-                            {!autoMatched && (
-                                <button onClick={handleAutoMatch} disabled={working}
-                                    className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition">
-                                    {working ? 'Matching…' : 'Auto-Match by Date & Amount'}
-                                </button>
-                            )}
-                        </div>
+                        </CompactSection>
 
-                        <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
+                        <CompactSection className="!p-0 overflow-hidden">
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b border-gray-100">
@@ -253,10 +239,9 @@ export default function BankReconciliationPage() {
                                     ))}
                                 </tbody>
                             </table>
-                        </div>
+                        </CompactSection>
                     </div>
                 )}
-            </div>
-        </div>
+        </AccountingPageShell>
     );
 }

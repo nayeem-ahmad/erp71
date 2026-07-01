@@ -2,9 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { Plus, Play } from 'lucide-react';
+import {
+    AccountingPageShell,
+    AccountingToolbar,
+    CompactSection,
+} from '@/components/accounting/compact';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { compactDensity } from '@/lib/ui/compact-density';
 
 interface FixedAsset {
     id: string;
@@ -88,109 +94,92 @@ export default function FixedAssetsPage() {
     const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
-                <div className="flex items-start justify-between flex-wrap gap-3">
-                    <div>
-                        <h1 className="text-2xl font-black tracking-tight">Fixed Asset Register</h1>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
-                            Track assets, useful life, and auto-generate depreciation journals
-                        </p>
-                    </div>
-                    <div className="flex gap-2">
-                        <button onClick={() => setShowRunDep(true)}
-                            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 transition">
-                            <Play className="w-4 h-4" /> Run Depreciation
+        <AccountingPageShell>
+            <AccountingToolbar
+                subtitle="Track assets, useful life, and auto-generate depreciation journals"
+                actions={(
+                    <>
+                        <button onClick={() => setShowRunDep(true)} className={compactDensity.btnSecondary}>
+                            <Play className="w-3.5 h-3.5" /> Run Depreciation
                         </button>
-                        <button onClick={() => setShowCreate(true)}
-                            className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2 text-sm font-bold text-white hover:bg-gray-700 transition">
-                            <Plus className="w-4 h-4" /> Add Asset
+                        <button onClick={() => setShowCreate(true)} className={`${compactDensity.btnPrimary} bg-gray-900 text-white hover:bg-gray-700`}>
+                            <Plus className="w-3.5 h-3.5" /> Add Asset
                         </button>
-                    </div>
-                </div>
-
-                {error && <div className="rounded-2xl bg-red-50 border border-red-100 p-4 text-sm text-red-700">{error}</div>}
-
-                {showRunDep && (
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5 space-y-4">
-                        <h2 className="font-black text-gray-900">Run Monthly Depreciation</h2>
-                        <div className="flex gap-4 items-end flex-wrap">
-                            <div>
-                                <span className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Year</span>
-                                <select value={depYear} onChange={(e) => setDepYear(Number(e.target.value))}
-                                    className="bg-gray-50 border-none rounded-xl py-2.5 px-4 text-sm font-medium">
-                                    {[depYear - 1, depYear, depYear + 1].map((y) => <option key={y} value={y}>{y}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <span className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Month</span>
-                                <select value={depMonth} onChange={(e) => setDepMonth(Number(e.target.value))}
-                                    className="bg-gray-50 border-none rounded-xl py-2.5 px-4 text-sm font-medium">
-                                    {MONTHS.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
-                                </select>
-                            </div>
-                            <button onClick={handleRunDepreciation} disabled={runningDep}
-                                className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-bold text-white hover:bg-gray-700 disabled:opacity-50 transition">
-                                {runningDep ? 'Running…' : 'Run Now'}
-                            </button>
-                            <button onClick={() => { setShowRunDep(false); setDepResult(null); }}
-                                className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 transition">
-                                Close
-                            </button>
-                        </div>
-                        {depResult && (
-                            <div className={`rounded-xl p-3 text-sm font-medium ${depResult.startsWith('Error') ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                                {depResult}
-                            </div>
-                        )}
-                    </div>
+                    </>
                 )}
+            />
 
-                {showCreate && (
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5 space-y-4">
-                        <h2 className="font-black text-gray-900">Add Fixed Asset</h2>
-                        <div className="grid grid-cols-2 gap-4">
-                            {[
-                                { label: 'Asset Code', key: 'assetCode', placeholder: 'e.g. FA-001' },
-                                { label: 'Name', key: 'name', placeholder: 'e.g. Office Furniture' },
-                                { label: 'Purchase Date', key: 'purchaseDate', type: 'date', placeholder: '' },
-                                { label: 'Cost', key: 'cost', type: 'number', placeholder: '0.00' },
-                                { label: 'Residual Value', key: 'residualValue', type: 'number', placeholder: '0.00' },
-                                { label: 'Useful Life (months)', key: 'usefulLifeMonths', type: 'number', placeholder: '60' },
-                            ].map(({ label, key, type, placeholder }) => (
-                                <div key={key}>
-                                    <span className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">{label}</span>
-                                    <input type={type ?? 'text'} value={(form as any)[key]} placeholder={placeholder}
-                                        onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-                                        className="w-full rounded-xl bg-gray-50 border-none py-2.5 px-4 text-sm" />
-                                </div>
-                            ))}
-                        </div>
-                        <div>
-                            <span className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Method</span>
-                            <select value={form.depreciationMethod} onChange={(e) => setForm((f) => ({ ...f, depreciationMethod: e.target.value }))}
-                                className="rounded-xl bg-gray-50 border-none py-2.5 px-4 text-sm">
-                                <option value="STRAIGHT_LINE">Straight Line</option>
-                                <option value="DECLINING_BALANCE">Declining Balance</option>
+            {error && <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-sm text-red-700">{error}</div>}
+
+            {showRunDep && (
+                <CompactSection title="Run Monthly Depreciation">
+                    <div className="flex gap-3 items-end flex-wrap">
+                        <label className="block">
+                            <span className={`${compactDensity.formLabel} block mb-1`}>Year</span>
+                            <select value={depYear} onChange={(e) => setDepYear(Number(e.target.value))} className={compactDensity.formField}>
+                                {[depYear - 1, depYear, depYear + 1].map((y) => <option key={y} value={y}>{y}</option>)}
                             </select>
-                        </div>
-                        <div className="flex gap-3">
-                            <button onClick={() => setShowCreate(false)}
-                                className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 transition">Cancel</button>
-                            <button onClick={handleCreate} disabled={creating}
-                                className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-bold text-white hover:bg-gray-700 disabled:opacity-50 transition">
-                                {creating ? 'Saving…' : 'Save Asset'}
-                            </button>
-                        </div>
+                        </label>
+                        <label className="block">
+                            <span className={`${compactDensity.formLabel} block mb-1`}>Month</span>
+                            <select value={depMonth} onChange={(e) => setDepMonth(Number(e.target.value))} className={compactDensity.formField}>
+                                {MONTHS.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
+                            </select>
+                        </label>
+                        <button onClick={handleRunDepreciation} disabled={runningDep} className={`${compactDensity.btnPrimary} bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-50`}>
+                            {runningDep ? 'Running…' : 'Run Now'}
+                        </button>
+                        <button onClick={() => { setShowRunDep(false); setDepResult(null); }} className={compactDensity.btnSecondary}>Close</button>
                     </div>
-                )}
+                    {depResult && (
+                        <div className={`rounded-lg p-2 text-xs mt-2 ${depResult.startsWith('Error') ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                            {depResult}
+                        </div>
+                    )}
+                </CompactSection>
+            )}
 
-                {loading ? (
-                    <div className="bg-white border border-gray-100 rounded-2xl p-12 text-center text-gray-400 text-sm">Loading…</div>
-                ) : assets.length === 0 ? (
-                    <div className="bg-white border border-gray-100 rounded-2xl p-8 text-center text-gray-400 text-sm">No assets yet. Add your first fixed asset.</div>
-                ) : (
-                    <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
+            {showCreate && (
+                <CompactSection title="Add Fixed Asset">
+                    <div className={`grid grid-cols-2 gap-3 ${compactDensity.formStack}`}>
+                        {[
+                            { label: 'Asset Code', key: 'assetCode', placeholder: 'e.g. FA-001' },
+                            { label: 'Name', key: 'name', placeholder: 'e.g. Office Furniture' },
+                            { label: 'Purchase Date', key: 'purchaseDate', type: 'date', placeholder: '' },
+                            { label: 'Cost', key: 'cost', type: 'number', placeholder: '0.00' },
+                            { label: 'Residual Value', key: 'residualValue', type: 'number', placeholder: '0.00' },
+                            { label: 'Useful Life (months)', key: 'usefulLifeMonths', type: 'number', placeholder: '60' },
+                        ].map(({ label, key, type, placeholder }) => (
+                            <label key={key} className="block">
+                                <span className={`${compactDensity.formLabel} block mb-1`}>{label}</span>
+                                <input type={type ?? 'text'} value={(form as any)[key]} placeholder={placeholder}
+                                    onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                                    className={compactDensity.formField} />
+                            </label>
+                        ))}
+                    </div>
+                    <label className="block mt-3">
+                        <span className={`${compactDensity.formLabel} block mb-1`}>Method</span>
+                        <select value={form.depreciationMethod} onChange={(e) => setForm((f) => ({ ...f, depreciationMethod: e.target.value }))} className={compactDensity.formField}>
+                            <option value="STRAIGHT_LINE">Straight Line</option>
+                            <option value="DECLINING_BALANCE">Declining Balance</option>
+                        </select>
+                    </label>
+                    <div className="flex gap-2 mt-3">
+                        <button onClick={() => setShowCreate(false)} className={compactDensity.btnSecondary}>Cancel</button>
+                        <button onClick={handleCreate} disabled={creating} className={`${compactDensity.btnPrimary} bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-50`}>
+                            {creating ? 'Saving…' : 'Save Asset'}
+                        </button>
+                    </div>
+                </CompactSection>
+            )}
+
+            {loading ? (
+                <CompactSection className="text-center text-gray-400 text-sm py-8">Loading…</CompactSection>
+            ) : assets.length === 0 ? (
+                <CompactSection className="text-center text-gray-400 text-sm py-6">No assets yet. Add your first fixed asset.</CompactSection>
+            ) : (
+                <CompactSection className="!p-0 overflow-hidden">
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-gray-100">
@@ -213,9 +202,8 @@ export default function FixedAssetsPage() {
                                 ))}
                             </tbody>
                         </table>
-                    </div>
-                )}
-            </div>
-        </div>
+                </CompactSection>
+            )}
+        </AccountingPageShell>
     );
 }

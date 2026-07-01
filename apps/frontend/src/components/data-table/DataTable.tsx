@@ -52,7 +52,9 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { formatMessage, useI18n } from '@/lib/i18n';
+import { useCompactUi } from '@/contexts/CompactUiContext';
 import { useIsMdUp } from '@/hooks/useMediaQuery';
+import { dataTableDensity, type UiDensity } from '@/lib/ui/compact-density';
 import { useTablePreferences } from './useTablePreferences';
 import { exportToCSV, exportToExcel, exportToPDF, printTable } from './export-utils';
 
@@ -92,6 +94,8 @@ export interface DataTableProps<T> {
     searchPlaceholder?: string;
     /** Predefined filter presets */
     filterPresets?: { label: string; filters: ColumnFiltersState }[];
+    /** Table density — defaults to CompactUiContext when inside accounting module */
+    density?: UiDensity;
 }
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 500];
@@ -103,9 +107,11 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 500];
 function SortableHeader({
     header,
     children,
+    headerClassName,
 }: {
     header: any;
     children: React.ReactNode;
+    headerClassName: string;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
         useSortable({ id: header.id });
@@ -126,7 +132,7 @@ function SortableHeader({
                 width: header.getSize(),
                 minWidth: header.getSize(),
             }}
-            className="text-left p-3 text-[10px] font-black uppercase tracking-widest text-gray-400 select-none group bg-gray-50/80 border-b border-gray-200"
+            className={headerClassName}
         >
             <div className="flex items-center space-x-1">
                 <span {...attributes} {...listeners} className="cursor-grab opacity-0 group-hover:opacity-40 transition-opacity">
@@ -165,8 +171,13 @@ export default function DataTable<T>({
     toolbarActions,
     searchPlaceholder,
     filterPresets,
+    density,
 }: DataTableProps<T>) {
     const { t } = useI18n();
+    const compactUi = useCompactUi();
+    const resolvedDensity = density ?? compactUi.density;
+    const d = dataTableDensity[resolvedDensity];
+    const isCompact = resolvedDensity === 'compact';
     const resolvedEmptyMessage = emptyMessage ?? t.common.noData;
     const resolvedSearchPlaceholder = searchPlaceholder ?? t.common.dataTable.searchPlaceholder;
     const prefs = useTablePreferences();
@@ -187,7 +198,7 @@ export default function DataTable<T>({
         savedPrefs?.columnWidths ?? {},
     );
     const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
-    const [pageSize, setPageSize] = useState(savedPrefs?.pageSize ?? 20);
+    const [pageSize, setPageSize] = useState(savedPrefs?.pageSize ?? d.defaultPageSize);
 
     // UI toggles
     const [showColumnSelector, setShowColumnSelector] = useState(false);
@@ -362,18 +373,20 @@ export default function DataTable<T>({
         [columnOrder, columnVisibility],
     );
 
+    const toolbarBtnBase = `${d.toolbarBtn} ${d.toolbarBtnIdle}`;
+
     return (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className={`bg-white ${d.wrapper} shadow-sm border border-gray-100 overflow-hidden`}>
             {/* ── Toolbar ─────────────────────────────────────────── */}
-            <div className="p-4 border-b border-gray-100 space-y-3">
+            <div className={d.toolbar}>
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                     {/* Search */}
                     <div className="relative flex-1 min-w-[200px] max-w-md">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                        <Search className={`absolute top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 ${isCompact ? 'left-2.5' : 'left-3'}`} />
                         <input
                             type="text"
                             placeholder={resolvedSearchPlaceholder}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all font-medium"
+                            className={d.searchInput}
                             value={globalFilter}
                             onChange={(e) => setGlobalFilter(e.target.value)}
                         />
@@ -392,14 +405,15 @@ export default function DataTable<T>({
                         {/* Advanced Filters */}
                         <button
                             onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                            className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border ${
+                            className={`${d.toolbarBtn} ${
                                 showAdvancedFilters || columnFilters.length > 0
                                     ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                    : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                                    : d.toolbarBtnIdle
                             }`}
+                            title={t.common.dataTable.filters}
                         >
                             <SlidersHorizontal className="w-3.5 h-3.5" />
-                            <span>{t.common.dataTable.filters}</span>
+                            <span className={isCompact ? 'sr-only' : undefined}>{t.common.dataTable.filters}</span>
                             {columnFilters.length > 0 && (
                                 <span className="bg-blue-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px]">
                                     {columnFilters.length}
@@ -411,10 +425,11 @@ export default function DataTable<T>({
                         <div className="relative" ref={columnSelectorRef}>
                             <button
                                 onClick={() => setShowColumnSelector(!showColumnSelector)}
-                                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest bg-white text-gray-500 border border-gray-200 hover:bg-gray-50 transition-all"
+                                className={toolbarBtnBase}
+                                title={t.common.dataTable.columns}
                             >
                                 <Columns3 className="w-3.5 h-3.5" />
-                                <span>{t.common.dataTable.columns}</span>
+                                <span className={isCompact ? 'sr-only' : undefined}>{t.common.dataTable.columns}</span>
                             </button>
                             {showColumnSelector && (
                                 <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 max-h-72 overflow-y-auto">
@@ -453,10 +468,11 @@ export default function DataTable<T>({
                         <div className="relative" ref={exportMenuRef}>
                             <button
                                 onClick={() => setShowExportMenu(!showExportMenu)}
-                                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest bg-white text-gray-500 border border-gray-200 hover:bg-gray-50 transition-all"
+                                className={toolbarBtnBase}
+                                title={t.common.dataTable.export}
                             >
                                 <Download className="w-3.5 h-3.5" />
-                                <span>{t.common.dataTable.export}</span>
+                                <span className={isCompact ? 'sr-only' : undefined}>{t.common.dataTable.export}</span>
                             </button>
                             {showExportMenu && (
                                 <div className="absolute right-0 top-full mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-50">
@@ -488,10 +504,11 @@ export default function DataTable<T>({
                         {/* Print */}
                         <button
                             onClick={() => printTable(table, title)}
-                            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest bg-white text-gray-500 border border-gray-200 hover:bg-gray-50 transition-all"
+                            className={toolbarBtnBase}
+                            title={t.common.dataTable.print}
                         >
                             <Printer className="w-3.5 h-3.5" />
-                            <span>{t.common.dataTable.print}</span>
+                            <span className={isCompact ? 'sr-only' : undefined}>{t.common.dataTable.print}</span>
                         </button>
 
                         {/* Custom toolbar actions */}
@@ -502,7 +519,7 @@ export default function DataTable<T>({
                 {/* Filter Presets */}
                 {filterPresets && filterPresets.length > 0 && (
                     <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.common.dataTable.quick}</span>
+                        <span className={d.filterLabel}>{t.common.dataTable.quick}</span>
                         {filterPresets.map((preset) => (
                             <button
                                 key={preset.label}
@@ -533,7 +550,7 @@ export default function DataTable<T>({
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                             {filterableColumns.map((column) => (
                                 <div key={column.id} className="space-y-1">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                    <label className={d.filterLabel}>
                                         {typeof column.columnDef.header === 'string'
                                             ? column.columnDef.header
                                             : column.id}
@@ -564,13 +581,13 @@ export default function DataTable<T>({
                 ) : null}
                 <div ref={tableScrollRef} className="overflow-x-auto overflow-x-touch [scrollbar-width:thin]">
                 {isLoading ? (
-                    <div className="p-12 text-center text-gray-400 font-bold uppercase tracking-widest text-xs">
+                    <div className={`${d.emptyState} text-center text-gray-400 font-medium text-xs`}>
                         {t.common.dataTable.loading}
                     </div>
                 ) : totalRows === 0 ? (
-                    <div className="p-12 text-center">
-                        {emptyIcon && <div className="mb-4 flex justify-center">{emptyIcon}</div>}
-                        <p className="text-xs font-black uppercase tracking-widest text-gray-300">
+                    <div className={`${d.emptyState} text-center`}>
+                        {emptyIcon && <div className="mb-2 flex justify-center">{emptyIcon}</div>}
+                        <p className="text-xs font-medium text-gray-400">
                             {resolvedEmptyMessage}
                         </p>
                     </div>
@@ -593,7 +610,7 @@ export default function DataTable<T>({
                                                 const sorted = header.column.getIsSorted();
 
                                                 return (
-                                                    <SortableHeader key={header.id} header={header}>
+                                                    <SortableHeader key={header.id} header={header} headerClassName={d.headerCell}>
                                                         <button
                                                             onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
                                                             className={`flex items-center space-x-1 ${canSort ? 'cursor-pointer hover:text-gray-600' : ''}`}
@@ -628,7 +645,7 @@ export default function DataTable<T>({
                                         {row.getVisibleCells().map((cell) => (
                                             <td
                                                 key={cell.id}
-                                                className="p-3"
+                                                className={d.bodyCell}
                                                 style={{ width: cell.column.getSize() }}
                                             >
                                                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -650,7 +667,7 @@ export default function DataTable<T>({
 
             {/* ── Pagination ──────────────────────────────────────── */}
             {totalRows > 0 && (
-                <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between flex-wrap gap-3">
+                <div className={`${d.pagination} border-t border-gray-100 flex items-center justify-between flex-wrap gap-2`}>
                     {/* Row info */}
                     <div className="flex items-center gap-4">
                         <span className="text-xs text-gray-500 font-medium">
@@ -659,7 +676,7 @@ export default function DataTable<T>({
 
                         {/* Page size selector */}
                         <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{t.common.dataTable.rows}</span>
+                            <span className={d.filterLabel}>{t.common.dataTable.rows}</span>
                             <select
                                 value={pageSize}
                                 onChange={(e) => handlePageSizeChange(Number(e.target.value))}

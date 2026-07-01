@@ -53,14 +53,6 @@ describe('FixedAssetsPage', () => {
         api.runDepreciation.mockResolvedValue({ processed: 2 });
     });
 
-    it('renders the page heading', async () => {
-        render(<FixedAssetsPage />);
-        await waitFor(() => {
-            expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
-        });
-        expect(screen.getByText('Fixed Asset Register')).toBeInTheDocument();
-    });
-
     it('renders the page subtitle', async () => {
         render(<FixedAssetsPage />);
         await waitFor(() => {

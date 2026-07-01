@@ -1,6 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import {
+    AccountingPageShell,
+    AccountingToolbar,
+    CompactSection,
+} from '@/components/accounting/compact';
+import { compactDensity } from '@/lib/ui/compact-density';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
@@ -25,6 +31,9 @@ function varianceColor(row: BudgetRow) {
     }
     return row.variance >= 0 ? 'text-emerald-700' : 'text-rose-700';
 }
+
+const thClass = `text-right px-3 py-2 ${compactDensity.formLabel}`;
+const thLeftClass = `text-left px-3 py-2 ${compactDensity.formLabel}`;
 
 export default function BudgetVsActualPage() {
     const { t, locale } = useI18n();
@@ -51,29 +60,22 @@ export default function BudgetVsActualPage() {
     };
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
-            <div className="w-full space-y-6">
-                <div>
-                    <h1 className="text-2xl font-black tracking-tight">Budget vs. Actual</h1>
-                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
-                        Compare planned budget against actual account activity
-                    </p>
-                </div>
-
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap gap-4 items-end">
-                    <div>
-                        <span className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Fiscal Year</span>
+        <AccountingPageShell maxWidth="full">
+            <AccountingToolbar subtitle="Compare planned budget against actual account activity">
+                <div className={compactDensity.filterBar}>
+                    <div className="flex flex-col gap-1">
+                        <span className={compactDensity.formLabel}>Fiscal Year</span>
                         <select value={fiscalYear} onChange={(e) => setFiscalYear(Number(e.target.value))}
-                            className="bg-gray-50 border-none rounded-xl py-2.5 px-4 text-sm font-medium">
+                            className={compactDensity.formField}>
                             {[currentYear - 1, currentYear, currentYear + 1].map((y) => (
                                 <option key={y} value={y}>{y}</option>
                             ))}
                         </select>
                     </div>
-                    <div>
-                        <span className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Month (optional)</span>
+                    <div className="flex flex-col gap-1">
+                        <span className={compactDensity.formLabel}>Month (optional)</span>
                         <select value={month} onChange={(e) => setMonth(e.target.value === '' ? '' : Number(e.target.value))}
-                            className="bg-gray-50 border-none rounded-xl py-2.5 px-4 text-sm font-medium">
+                            className={compactDensity.formField}>
                             <option value="">Full Year</option>
                             {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => (
                                 <option key={i + 1} value={i + 1}>{m}</option>
@@ -81,62 +83,62 @@ export default function BudgetVsActualPage() {
                         </select>
                     </div>
                 </div>
+            </AccountingToolbar>
 
-                {error && <div className="rounded-2xl bg-red-50 border border-red-100 p-4 text-sm text-red-700">{error}</div>}
+            {error && <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-sm text-red-700">{error}</div>}
 
-                {loading ? (
-                    <div className="bg-white border border-gray-100 rounded-2xl p-12 text-center text-gray-400 text-sm font-medium">Loading…</div>
-                ) : data && data.rows.length === 0 ? (
-                    <div className="bg-white border border-gray-100 rounded-2xl p-8 text-center text-gray-400 text-sm">
-                        No budget entries found for this period. Set budgets per account to use this report.
-                    </div>
-                ) : data ? (
-                    <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-gray-100">
-                                    <th className="text-left px-5 py-3 text-xs font-black uppercase tracking-widest text-gray-400">Account</th>
-                                    <th className="text-left px-5 py-3 text-xs font-black uppercase tracking-widest text-gray-400">Type</th>
-                                    <th className="text-right px-5 py-3 text-xs font-black uppercase tracking-widest text-gray-400">Budget</th>
-                                    <th className="text-right px-5 py-3 text-xs font-black uppercase tracking-widest text-gray-400">Actual</th>
-                                    <th className="text-right px-5 py-3 text-xs font-black uppercase tracking-widest text-gray-400">Variance</th>
-                                    <th className="text-right px-5 py-3 text-xs font-black uppercase tracking-widest text-gray-400">Var %</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {data.rows.map((row) => (
-                                    <tr key={row.account.id} className="border-b border-gray-50">
-                                        <td className="px-5 py-3 font-medium text-gray-800">
-                                            {row.account.name}
-                                            {row.account.code && <span className="ml-2 text-xs text-gray-400">{row.account.code}</span>}
-                                        </td>
-                                        <td className="px-5 py-3 text-gray-400 text-xs capitalize">{row.account.type.toLowerCase()}</td>
-                                        <td className="px-5 py-3 text-right">{formatBDT(row.budget, { locale })}</td>
-                                        <td className="px-5 py-3 text-right">{formatBDT(row.actual, { locale })}</td>
-                                        <td className={`px-5 py-3 text-right font-bold ${varianceColor(row)}`}>
-                                            {row.variance >= 0 ? '+' : ''}{formatBDT(row.variance, { locale })}
-                                        </td>
-                                        <td className={`px-5 py-3 text-right font-bold ${varianceColor(row)}`}>
-                                            {row.variance_pct !== null ? `${row.variance_pct >= 0 ? '+' : ''}${row.variance_pct.toFixed(1)}%` : '—'}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                            <tfoot>
-                                <tr className="border-t border-gray-200 bg-gray-50">
-                                    <td className="px-5 py-3 font-black text-sm text-gray-700" colSpan={2}>Totals</td>
-                                    <td className="px-5 py-3 text-right font-black text-sm">{formatBDT(data.totals.budget, { locale })}</td>
-                                    <td className="px-5 py-3 text-right font-black text-sm">{formatBDT(data.totals.actual, { locale })}</td>
-                                    <td className={`px-5 py-3 text-right font-black text-sm ${data.totals.variance >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                                        {data.totals.variance >= 0 ? '+' : ''}{formatBDT(data.totals.variance, { locale })}
+            {loading ? (
+                <CompactSection className="py-8 text-center text-gray-400 text-sm font-medium">Loading…</CompactSection>
+            ) : data && data.rows.length === 0 ? (
+                <CompactSection className="py-6 text-center text-gray-400 text-sm">
+                    No budget entries found for this period. Set budgets per account to use this report.
+                </CompactSection>
+            ) : data ? (
+                <CompactSection className="p-0 overflow-hidden">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="border-b border-gray-100">
+                                <th className={thLeftClass}>Account</th>
+                                <th className={thLeftClass}>Type</th>
+                                <th className={thClass}>Budget</th>
+                                <th className={thClass}>Actual</th>
+                                <th className={thClass}>Variance</th>
+                                <th className={thClass}>Var %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {data.rows.map((row) => (
+                                <tr key={row.account.id} className="border-b border-gray-50">
+                                    <td className="px-3 py-2 font-medium text-gray-800">
+                                        {row.account.name}
+                                        {row.account.code && <span className="ml-2 text-xs text-gray-400">{row.account.code}</span>}
                                     </td>
-                                    <td />
+                                    <td className="px-3 py-2 text-gray-400 text-xs capitalize">{row.account.type.toLowerCase()}</td>
+                                    <td className="px-3 py-2 text-right">{formatBDT(row.budget, { locale })}</td>
+                                    <td className="px-3 py-2 text-right">{formatBDT(row.actual, { locale })}</td>
+                                    <td className={`px-3 py-2 text-right font-semibold ${varianceColor(row)}`}>
+                                        {row.variance >= 0 ? '+' : ''}{formatBDT(row.variance, { locale })}
+                                    </td>
+                                    <td className={`px-3 py-2 text-right font-semibold ${varianceColor(row)}`}>
+                                        {row.variance_pct !== null ? `${row.variance_pct >= 0 ? '+' : ''}${row.variance_pct.toFixed(1)}%` : '—'}
+                                    </td>
                                 </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                ) : null}
-            </div>
-        </div>
+                            ))}
+                        </tbody>
+                        <tfoot>
+                            <tr className="border-t border-gray-200 bg-gray-50">
+                                <td className="px-3 py-2 font-semibold text-sm text-gray-700" colSpan={2}>Totals</td>
+                                <td className="px-3 py-2 text-right font-semibold text-sm">{formatBDT(data.totals.budget, { locale })}</td>
+                                <td className="px-3 py-2 text-right font-semibold text-sm">{formatBDT(data.totals.actual, { locale })}</td>
+                                <td className={`px-3 py-2 text-right font-semibold text-sm ${data.totals.variance >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                    {data.totals.variance >= 0 ? '+' : ''}{formatBDT(data.totals.variance, { locale })}
+                                </td>
+                                <td />
+                            </tr>
+                        </tfoot>
+                    </table>
+                </CompactSection>
+            ) : null}
+        </AccountingPageShell>
     );
 }
