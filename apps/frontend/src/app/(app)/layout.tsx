@@ -19,6 +19,7 @@ import { useI18n } from '@/lib/i18n';
 import { applyTenantContext, isShopWorkspacePath } from '@/lib/auth-session';
 import { syncLocalePreferenceFromSession } from '@/lib/localization/preference';
 import { routes } from '@/lib/routes';
+import { toast } from '@/lib/toast';
 
 const ACCOUNTING_PLAN_CODES = new Set(['ACCOUNTING', 'STANDARD', 'PREMIUM']);
 
@@ -293,6 +294,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                                     setResendingVerification(true);
                                     try {
                                         await api.resendVerificationEmail();
+                                        toast.success('Verification email sent — check your inbox.');
+                                    } catch (err: unknown) {
+                                        const message = err instanceof Error ? err.message : 'Failed to send verification email.';
+                                        toast.error(message);
                                     } finally {
                                         setResendingVerification(false);
                                     }
