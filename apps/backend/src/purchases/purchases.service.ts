@@ -123,6 +123,7 @@ export class PurchasesService {
                 amount: Number(purchase.total_amount),
                 description: `Auto-posted purchase ${purchase.purchase_number}`,
                 referenceNumber: purchase.purchase_number,
+                storeId: dto.storeId,
             });
 
             const purchaseWithItems = await tx.purchase.findFirst({

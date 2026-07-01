@@ -94,6 +94,7 @@ export const routes = {
         expenseCategories: '/accounting/expenses/categories',
         expenseReports: '/accounting/expenses/reports',
         loans: '/accounting/loans',
+        interBranchFundTransfers: '/accounting/inter-branch/fund-transfers',
         reports: {
             pl: '/accounting/reports/pl',
             balanceSheet: '/accounting/reports/balance-sheet',

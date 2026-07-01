@@ -199,6 +199,7 @@ export class StockTakesService {
                 amount: adjustmentAmount,
                 description: `Auto-posted stock take ${session.session_number}`,
                 referenceNumber: session.session_number,
+                storeId: session.warehouse?.store_id,
             });
 
             return {

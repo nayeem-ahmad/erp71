@@ -98,6 +98,7 @@ export class SalesReturnsService {
                 amount: Number(salesReturn.total_refund),
                 description: `Auto-posted sales return ${salesReturn.return_number}`,
                 referenceNumber: salesReturn.return_number,
+                storeId: sale.store_id,
             });
 
             return {

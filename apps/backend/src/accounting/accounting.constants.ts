@@ -26,3 +26,22 @@ export const VoucherType = {
 } as const;
 
 export type VoucherType = (typeof VoucherType)[keyof typeof VoucherType];
+
+export const VoucherAttribution = {
+    BRANCH: 'BRANCH',
+    COMPANY: 'COMPANY',
+    INTER_BRANCH: 'INTER_BRANCH',
+} as const;
+
+export type VoucherAttribution = (typeof VoucherAttribution)[keyof typeof VoucherAttribution];
+
+export const ReportScope = {
+    BRANCH: 'branch',
+    COMPANY: 'company',
+    COMPARE: 'compare',
+} as const;
+
+export type ReportScope = (typeof ReportScope)[keyof typeof ReportScope];
+
+export const COMPANY_SCOPE_KEY = 'company';
+export const TOTAL_SCOPE_KEY = 'total';

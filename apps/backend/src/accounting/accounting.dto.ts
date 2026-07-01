@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
     ArrayMinSize,
     IsDateString,
@@ -15,7 +15,25 @@ import {
     Min,
     Max,
 } from 'class-validator';
-import { AccountCategory, AccountType, VoucherType } from './accounting.constants';
+import { AccountCategory, AccountType, VoucherAttribution, VoucherType } from './accounting.constants';
+
+const REPORT_SCOPES = ['branch', 'company', 'compare'] as const;
+
+function parseBooleanQuery(value: unknown): boolean | undefined {
+    if (value === undefined || value === null || value === '') {
+        return undefined;
+    }
+    if (typeof value === 'boolean') {
+        return value;
+    }
+    if (value === 'true' || value === '1') {
+        return true;
+    }
+    if (value === 'false' || value === '0') {
+        return false;
+    }
+    return undefined;
+}
 
 export class CreateAccountGroupDto {
     @IsString()
@@ -111,6 +129,10 @@ export class CreateVoucherDetailDto {
     @IsOptional()
     @IsString()
     comment?: string;
+
+    @IsOptional()
+    @IsUUID()
+    costCenterId?: string;
 }
 
 export class CreateVoucherDto {
@@ -129,6 +151,19 @@ export class CreateVoucherDto {
     @IsOptional()
     @IsDateString()
     date?: string;
+
+    @IsOptional()
+    @IsUUID()
+    storeId?: string;
+
+    @IsOptional()
+    @IsString()
+    @IsIn(Object.values(VoucherAttribution))
+    attribution?: VoucherAttribution;
+
+    @IsOptional()
+    @IsUUID()
+    counterpartyStoreId?: string;
 
     @ArrayMinSize(2)
     @ValidateNested({ each: true })
@@ -294,12 +329,48 @@ export class ProfitLossQueryDto {
     @IsOptional()
     @IsDateString()
     to?: string;
+
+    @IsOptional()
+    @IsString()
+    @IsIn(REPORT_SCOPES)
+    scope?: string;
+
+    @IsOptional()
+    @IsUUID()
+    storeId?: string;
+
+    @IsOptional()
+    @IsString()
+    storeIds?: string;
+
+    @IsOptional()
+    @Transform(({ value }) => parseBooleanQuery(value))
+    @IsBoolean()
+    includeCompanyBucket?: boolean;
 }
 
 export class BalanceSheetQueryDto {
     @IsOptional()
     @IsDateString()
     asOfDate?: string;
+
+    @IsOptional()
+    @IsString()
+    @IsIn(REPORT_SCOPES)
+    scope?: string;
+
+    @IsOptional()
+    @IsUUID()
+    storeId?: string;
+
+    @IsOptional()
+    @IsString()
+    storeIds?: string;
+
+    @IsOptional()
+    @Transform(({ value }) => parseBooleanQuery(value))
+    @IsBoolean()
+    includeCompanyBucket?: boolean;
 }
 
 export class CashbookQueryDto {
@@ -350,6 +421,24 @@ export class TrialBalanceQueryDto {
     @IsOptional()
     @IsDateString()
     asOfDate?: string;
+
+    @IsOptional()
+    @IsString()
+    @IsIn(REPORT_SCOPES)
+    scope?: string;
+
+    @IsOptional()
+    @IsUUID()
+    storeId?: string;
+
+    @IsOptional()
+    @IsString()
+    storeIds?: string;
+
+    @IsOptional()
+    @Transform(({ value }) => parseBooleanQuery(value))
+    @IsBoolean()
+    includeCompanyBucket?: boolean;
 }
 
 export class ArAgingQueryDto {

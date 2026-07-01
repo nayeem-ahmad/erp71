@@ -60,6 +60,7 @@ export const NAV_ROUTES: { path: string; label: string }[] = [
     { path: '/accounting/expenses/categories', label: 'Expense Categories' },
     { path: '/accounting/expenses/reports', label: 'Expense Reports' },
     { path: '/accounting/loans', label: 'Loans' },
+    { path: '/accounting/inter-branch/fund-transfers', label: 'Fund Transfers' },
     { path: '/accounting/reports/pl', label: 'Profit & Loss' },
     { path: '/accounting/reports/balance-sheet', label: 'Balance Sheet' },
     { path: '/accounting/reports/cashbook', label: 'Cashbook' },

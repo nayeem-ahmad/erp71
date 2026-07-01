@@ -3,6 +3,7 @@ import { DatabaseService } from '../database/database.service';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant } from '../database/inventory.utils';
 import { CreateWarehouseTransferDto, ListWarehouseTransfersQueryDto, ReceiveWarehouseTransferDto } from './warehouse-transfer.dto';
 import { autoPostFromRules } from '../accounting/posting.utils';
+import { VoucherAttribution } from '../accounting/accounting.constants';
 
 @Injectable()
 export class WarehouseTransfersService {
@@ -124,6 +125,9 @@ export class WarehouseTransfersService {
                 0,
             );
 
+            const sourceStoreId = transfer.source_store_id ?? transfer.sourceWarehouse?.store_id;
+            const destinationStoreId = transfer.destination_store_id ?? transfer.destinationWarehouse?.store_id;
+
             const posting = await autoPostFromRules({
                 tx,
                 tenantId,
@@ -136,6 +140,9 @@ export class WarehouseTransfersService {
                 amount: totalTransferAmount,
                 description: `Auto-posted warehouse transfer ${transfer.transfer_number}`,
                 referenceNumber: transfer.transfer_number,
+                storeId: sourceStoreId,
+                attribution: transfer.is_cross_branch ? VoucherAttribution.INTER_BRANCH : VoucherAttribution.BRANCH,
+                counterpartyStoreId: transfer.is_cross_branch ? destinationStoreId : undefined,
             });
 
             await tx.warehouseTransfer.update({

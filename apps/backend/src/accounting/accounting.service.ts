@@ -2,7 +2,21 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { Cron } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
-import { AccountCategory, AccountType, VoucherType } from './accounting.constants';
+import { AccountCategory, AccountType, ReportScope, TOTAL_SCOPE_KEY, VoucherAttribution, VoucherType } from './accounting.constants';
+import {
+    assertConsolidatedScopePermission,
+    assertReportScopeQuery,
+    aggregateDetailsByStore,
+    buildCompareColumns,
+    buildCompareVoucherWhere,
+    buildVoucherWhereForScope,
+    bsSignedBalance,
+    CompareAmounts,
+    finalizeCompareAmounts,
+    initCompareAmounts,
+    parseStoreIdsParam,
+    plBalanceForType,
+} from './report-scope.utils';
 import { AuditService } from '../audit/audit.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 import { JOB_NAMES } from '../system-health/jobs/job-names';
@@ -716,12 +730,16 @@ export class AccountingService {
                         description: dto.description,
                         reference_number: dto.referenceNumber,
                         date: parsedDate,
+                        store_id: dto.storeId ?? null,
+                        attribution: this.resolveManualVoucherAttribution(dto),
+                        counterparty_store_id: dto.counterpartyStoreId ?? null,
                         details: {
                             create: dto.details.map((detail) => ({
                                 account_id: detail.accountId,
                                 debit_amount: detail.debitAmount,
                                 credit_amount: detail.creditAmount,
                                 comment: detail.comment,
+                                cost_center_id: detail.costCenterId ?? null,
                             })),
                         },
                     },
@@ -792,12 +810,16 @@ export class AccountingService {
                     description: dto.description,
                     reference_number: dto.referenceNumber,
                     date: dto.date ? new Date(dto.date) : undefined,
+                    store_id: dto.storeId ?? null,
+                    attribution: this.resolveManualVoucherAttribution(dto),
+                    counterparty_store_id: dto.counterpartyStoreId ?? null,
                     details: {
                         create: dto.details.map((detail) => ({
                             account_id: detail.accountId,
                             debit_amount: detail.debitAmount,
                             credit_amount: detail.creditAmount,
                             comment: detail.comment,
+                            cost_center_id: detail.costCenterId ?? null,
                         })),
                     },
                 },
@@ -1042,8 +1064,21 @@ export class AccountingService {
         };
     }
 
-    async getProfitLoss(tenantId: string, query: ProfitLossQueryDto) {
+    async getProfitLoss(
+        tenantId: string,
+        query: ProfitLossQueryDto,
+        hasConsolidatedAccess = false,
+    ) {
+        const scopeParams = this.parseReportScopeFromQuery(query);
+        assertConsolidatedScopePermission(scopeParams.scope, hasConsolidatedAccess);
+
         const range = this.resolveDateRange(query.from, query.to);
+
+        if (scopeParams.scope === ReportScope.COMPARE) {
+            return this.getProfitLossCompare(tenantId, range, scopeParams);
+        }
+
+        const voucherWhere = buildVoucherWhereForScope(tenantId, scopeParams.scope, scopeParams.storeId);
 
         const accounts = await this.db.account.findMany({
             where: {
@@ -1055,7 +1090,8 @@ export class AccountingService {
 
         if (accounts.length === 0) {
             return {
-                filters: { from: range.from, to: range.to },
+                scope: scopeParams.scope,
+                filters: { from: range.from, to: range.to, storeId: scopeParams.storeId },
                 revenue: { groups: [], total: 0 },
                 expenses: { groups: [], total: 0 },
                 net_profit: 0,
@@ -1066,7 +1102,7 @@ export class AccountingService {
             where: {
                 account_id: { in: accounts.map((a) => a.id) },
                 voucher: {
-                    tenant_id: tenantId,
+                    ...voucherWhere,
                     date: { gte: range.fromDate, lte: range.toDate },
                 },
             },
@@ -1120,16 +1156,30 @@ export class AccountingService {
         const totalExpenses = this.roundAmount(expenseGroups.reduce((sum, g) => sum + g.total, 0));
 
         return {
-            filters: { from: range.from, to: range.to },
+            scope: scopeParams.scope,
+            filters: { from: range.from, to: range.to, storeId: scopeParams.storeId },
             revenue: { groups: revenueGroups, total: totalRevenue },
             expenses: { groups: expenseGroups, total: totalExpenses },
             net_profit: this.roundAmount(totalRevenue - totalExpenses),
         };
     }
 
-    async getBalanceSheet(tenantId: string, query: BalanceSheetQueryDto) {
+    async getBalanceSheet(
+        tenantId: string,
+        query: BalanceSheetQueryDto,
+        hasConsolidatedAccess = false,
+    ) {
+        const scopeParams = this.parseReportScopeFromQuery(query);
+        assertConsolidatedScopePermission(scopeParams.scope, hasConsolidatedAccess);
+
         const asOfDateStr = query.asOfDate ?? this.formatDateValue(new Date());
         const asOfDate = this.toEndOfDay(asOfDateStr);
+
+        if (scopeParams.scope === ReportScope.COMPARE) {
+            return this.getBalanceSheetCompare(tenantId, asOfDateStr, asOfDate, scopeParams);
+        }
+
+        const voucherWhere = buildVoucherWhereForScope(tenantId, scopeParams.scope, scopeParams.storeId);
 
         const bsAccounts = await this.db.account.findMany({
             where: {
@@ -1150,7 +1200,7 @@ export class AccountingService {
             ? await this.db.voucherDetail.findMany({
                 where: {
                     account_id: { in: allIds },
-                    voucher: { tenant_id: tenantId, date: { lte: asOfDate } },
+                    voucher: { ...voucherWhere, date: { lte: asOfDate } },
                 },
                 select: { account_id: true, debit_amount: true, credit_amount: true },
               })
@@ -1210,7 +1260,9 @@ export class AccountingService {
         const totalLiabilitiesAndEquity = this.roundAmount(totalLiabilities + totalEquity);
 
         return {
+            scope: scopeParams.scope,
             as_of: asOfDateStr,
+            storeId: scopeParams.storeId,
             assets: { groups: assetGroups, total: totalAssets },
             liabilities: { groups: liabilityGroups, total: totalLiabilities },
             equity: { groups: equityGroups, net_profit: netProfit, total: totalEquity },
@@ -1219,9 +1271,22 @@ export class AccountingService {
         };
     }
 
-    async getTrialBalance(tenantId: string, query: TrialBalanceQueryDto) {
+    async getTrialBalance(
+        tenantId: string,
+        query: TrialBalanceQueryDto,
+        hasConsolidatedAccess = false,
+    ) {
+        const scopeParams = this.parseReportScopeFromQuery(query);
+        assertConsolidatedScopePermission(scopeParams.scope, hasConsolidatedAccess);
+
         const asOfDateStr = query.asOfDate ?? this.formatDateValue(new Date());
         const asOfDate = this.toEndOfDay(asOfDateStr);
+
+        if (scopeParams.scope === ReportScope.COMPARE) {
+            return this.getTrialBalanceCompare(tenantId, asOfDateStr, asOfDate, scopeParams);
+        }
+
+        const voucherWhere = buildVoucherWhereForScope(tenantId, scopeParams.scope, scopeParams.storeId);
 
         const accounts = await this.db.account.findMany({
             where: { tenant_id: tenantId },
@@ -1230,7 +1295,9 @@ export class AccountingService {
 
         if (accounts.length === 0) {
             return {
+                scope: scopeParams.scope,
                 as_of: asOfDateStr,
+                storeId: scopeParams.storeId,
                 rows: [],
                 totals: { debit: 0, credit: 0 },
                 is_balanced: true,
@@ -1240,7 +1307,7 @@ export class AccountingService {
         const details = await this.db.voucherDetail.findMany({
             where: {
                 account_id: { in: accounts.map((a) => a.id) },
-                voucher: { tenant_id: tenantId, date: { lte: asOfDate } },
+                voucher: { ...voucherWhere, date: { lte: asOfDate } },
             },
             select: { account_id: true, debit_amount: true, credit_amount: true },
         });
@@ -1286,7 +1353,9 @@ export class AccountingService {
         });
 
         return {
+            scope: scopeParams.scope,
             as_of: asOfDateStr,
+            storeId: scopeParams.storeId,
             rows,
             totals: { debit: grandDebitBalance, credit: grandCreditBalance },
             is_balanced: Math.abs(grandDebitBalance - grandCreditBalance) < 0.01,
@@ -3255,6 +3324,436 @@ ${voucherMessages}
 
     private roundAmount(value: number) {
         return Math.round(value * 100) / 100;
+    }
+
+    private parseReportScopeFromQuery(query: {
+        scope?: string;
+        storeId?: string;
+        storeIds?: string;
+        includeCompanyBucket?: boolean;
+    }) {
+        return assertReportScopeQuery({
+            scope: query.scope,
+            storeId: query.storeId,
+            storeIds: parseStoreIdsParam(query.storeIds),
+            includeCompanyBucket: query.includeCompanyBucket,
+        });
+    }
+
+    private resolveManualVoucherAttribution(dto: CreateVoucherDto): string {
+        if (dto.attribution) {
+            return dto.attribution;
+        }
+        return dto.storeId ? VoucherAttribution.BRANCH : VoucherAttribution.COMPANY;
+    }
+
+    private buildCompareAccountAmounts(
+        accountId: string,
+        accountType: AccountType,
+        byStore: Map<string, Map<string, { debit: number; credit: number }>>,
+        columnKeys: string[],
+        balanceFn: (type: AccountType, debit: number, credit: number) => number,
+    ): CompareAmounts {
+        const amounts = initCompareAmounts(columnKeys);
+        for (const colKey of columnKeys.filter((key) => key !== TOTAL_SCOPE_KEY)) {
+            const storeMap = byStore.get(colKey);
+            const totals = storeMap?.get(accountId) ?? { debit: 0, credit: 0 };
+            amounts[colKey] = balanceFn(accountType, totals.debit, totals.credit);
+        }
+        return finalizeCompareAmounts(amounts, columnKeys);
+    }
+
+    private sumCompareAmountsList(amountsList: CompareAmounts[], columnKeys: string[]): CompareAmounts {
+        const summed = initCompareAmounts(columnKeys);
+        for (const colKey of columnKeys.filter((key) => key !== TOTAL_SCOPE_KEY)) {
+            summed[colKey] = this.roundAmount(
+                amountsList.reduce((sum, amounts) => sum + (amounts[colKey] ?? 0), 0),
+            );
+        }
+        return finalizeCompareAmounts(summed, columnKeys);
+    }
+
+    private async loadCompareColumns(tenantId: string, storeIds: string[], includeCompanyBucket: boolean) {
+        const stores = await this.db.store.findMany({
+            where: { tenant_id: tenantId, id: { in: storeIds } },
+            select: { id: true, name: true },
+            orderBy: { name: 'asc' },
+        });
+        const columns = buildCompareColumns(stores, includeCompanyBucket);
+        return { stores, columns, columnKeys: columns.map((column) => column.key) };
+    }
+
+    private async getProfitLossCompare(
+        tenantId: string,
+        range: { from: string; to: string; fromDate: Date; toDate: Date },
+        scopeParams: ReturnType<typeof assertReportScopeQuery>,
+    ) {
+        const { columns, columnKeys } = await this.loadCompareColumns(
+            tenantId,
+            scopeParams.storeIds,
+            scopeParams.includeCompanyBucket,
+        );
+
+        const accounts = await this.db.account.findMany({
+            where: {
+                tenant_id: tenantId,
+                type: { in: [AccountType.REVENUE, AccountType.EXPENSE] },
+            },
+            include: { group: true, subgroup: true },
+        });
+
+        const details = accounts.length > 0
+            ? await this.db.voucherDetail.findMany({
+                where: {
+                    account_id: { in: accounts.map((account) => account.id) },
+                    voucher: {
+                        ...buildCompareVoucherWhere(
+                            tenantId,
+                            scopeParams.storeIds,
+                            scopeParams.includeCompanyBucket,
+                        ),
+                        date: { gte: range.fromDate, lte: range.toDate },
+                    },
+                },
+                select: {
+                    account_id: true,
+                    debit_amount: true,
+                    credit_amount: true,
+                    voucher: { select: { store_id: true } },
+                },
+            })
+            : [];
+
+        const byStore = aggregateDetailsByStore(details);
+
+        const buildSection = (sectionName: string, sectionAccounts: typeof accounts, type: AccountType) => {
+            const groupMap = new Map<string, {
+                name: string;
+                rows: Array<{
+                    account: { id: string; code: string | null; name: string };
+                    amounts: CompareAmounts;
+                }>;
+                subtotals: CompareAmounts;
+            }>();
+
+            for (const account of sectionAccounts) {
+                const amounts = this.buildCompareAccountAmounts(
+                    account.id,
+                    type,
+                    byStore,
+                    columnKeys,
+                    plBalanceForType,
+                );
+                if (amounts[TOTAL_SCOPE_KEY] === 0) {
+                    continue;
+                }
+
+                const groupId = account.group_id;
+                const existing = groupMap.get(groupId) ?? {
+                    name: account.group.name,
+                    rows: [],
+                    subtotals: initCompareAmounts(columnKeys),
+                };
+                existing.rows.push({
+                    account: { id: account.id, code: account.code, name: account.name },
+                    amounts,
+                });
+                for (const colKey of columnKeys.filter((key) => key !== TOTAL_SCOPE_KEY)) {
+                    existing.subtotals[colKey] = this.roundAmount(
+                        (existing.subtotals[colKey] ?? 0) + (amounts[colKey] ?? 0),
+                    );
+                }
+                existing.subtotals = finalizeCompareAmounts(existing.subtotals, columnKeys);
+                groupMap.set(groupId, existing);
+            }
+
+            return {
+                name: sectionName,
+                groups: Array.from(groupMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
+                subtotals: this.sumCompareAmountsList(
+                    Array.from(groupMap.values()).map((group) => group.subtotals),
+                    columnKeys,
+                ),
+            };
+        };
+
+        const revenueSection = buildSection(
+            'Revenue',
+            accounts.filter((account) => account.type === AccountType.REVENUE),
+            AccountType.REVENUE,
+        );
+        const expenseSection = buildSection(
+            'Expenses',
+            accounts.filter((account) => account.type === AccountType.EXPENSE),
+            AccountType.EXPENSE,
+        );
+
+        const netProfit = initCompareAmounts(columnKeys);
+        for (const colKey of columnKeys.filter((key) => key !== TOTAL_SCOPE_KEY)) {
+            netProfit[colKey] = this.roundAmount(
+                (revenueSection.subtotals[colKey] ?? 0) - (expenseSection.subtotals[colKey] ?? 0),
+            );
+        }
+
+        return {
+            scope: ReportScope.COMPARE,
+            period: { from: range.from, to: range.to },
+            columns,
+            sections: [revenueSection, expenseSection],
+            net_profit: finalizeCompareAmounts(netProfit, columnKeys),
+        };
+    }
+
+    private async getBalanceSheetCompare(
+        tenantId: string,
+        asOfDateStr: string,
+        asOfDate: Date,
+        scopeParams: ReturnType<typeof assertReportScopeQuery>,
+    ) {
+        const { columns, columnKeys } = await this.loadCompareColumns(
+            tenantId,
+            scopeParams.storeIds,
+            scopeParams.includeCompanyBucket,
+        );
+
+        const bsAccounts = await this.db.account.findMany({
+            where: {
+                tenant_id: tenantId,
+                type: { in: [AccountType.ASSET, AccountType.LIABILITY, AccountType.EQUITY] },
+            },
+            include: { group: true, subgroup: true },
+        });
+        const plAccounts = await this.db.account.findMany({
+            where: { tenant_id: tenantId, type: { in: [AccountType.REVENUE, AccountType.EXPENSE] } },
+            select: { id: true, type: true },
+        });
+        const allIds = [...bsAccounts.map((account) => account.id), ...plAccounts.map((account) => account.id)];
+
+        const details = allIds.length > 0
+            ? await this.db.voucherDetail.findMany({
+                where: {
+                    account_id: { in: allIds },
+                    voucher: {
+                        ...buildCompareVoucherWhere(
+                            tenantId,
+                            scopeParams.storeIds,
+                            scopeParams.includeCompanyBucket,
+                        ),
+                        date: { lte: asOfDate },
+                    },
+                },
+                select: {
+                    account_id: true,
+                    debit_amount: true,
+                    credit_amount: true,
+                    voucher: { select: { store_id: true } },
+                },
+            })
+            : [];
+
+        const byStore = aggregateDetailsByStore(details);
+
+        const netProfit = initCompareAmounts(columnKeys);
+        for (const colKey of columnKeys.filter((key) => key !== TOTAL_SCOPE_KEY)) {
+            let revenue = 0;
+            let expenses = 0;
+            const storeMap = byStore.get(colKey);
+            for (const plAccount of plAccounts) {
+                const totals = storeMap?.get(plAccount.id) ?? { debit: 0, credit: 0 };
+                if (plAccount.type === AccountType.REVENUE) {
+                    revenue += totals.credit - totals.debit;
+                } else {
+                    expenses += totals.debit - totals.credit;
+                }
+            }
+            netProfit[colKey] = this.roundAmount(revenue - expenses);
+        }
+        const finalizedNetProfit = finalizeCompareAmounts(netProfit, columnKeys);
+
+        const buildSection = (sectionName: string, sectionAccounts: typeof bsAccounts, type: AccountType) => {
+            const groupMap = new Map<string, {
+                name: string;
+                rows: Array<{
+                    account: { id: string; code: string | null; name: string };
+                    amounts: CompareAmounts;
+                }>;
+                subtotals: CompareAmounts;
+            }>();
+
+            for (const account of sectionAccounts) {
+                const amounts = this.buildCompareAccountAmounts(
+                    account.id,
+                    type,
+                    byStore,
+                    columnKeys,
+                    bsSignedBalance,
+                );
+                if (amounts[TOTAL_SCOPE_KEY] === 0) {
+                    continue;
+                }
+
+                const groupId = account.group_id;
+                const existing = groupMap.get(groupId) ?? {
+                    name: account.group.name,
+                    rows: [],
+                    subtotals: initCompareAmounts(columnKeys),
+                };
+                existing.rows.push({
+                    account: { id: account.id, code: account.code, name: account.name },
+                    amounts,
+                });
+                for (const colKey of columnKeys.filter((key) => key !== TOTAL_SCOPE_KEY)) {
+                    existing.subtotals[colKey] = this.roundAmount(
+                        (existing.subtotals[colKey] ?? 0) + (amounts[colKey] ?? 0),
+                    );
+                }
+                existing.subtotals = finalizeCompareAmounts(existing.subtotals, columnKeys);
+                groupMap.set(groupId, existing);
+            }
+
+            return {
+                name: sectionName,
+                groups: Array.from(groupMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
+                subtotals: this.sumCompareAmountsList(
+                    Array.from(groupMap.values()).map((group) => group.subtotals),
+                    columnKeys,
+                ),
+            };
+        };
+
+        const assetsSection = buildSection(
+            'Assets',
+            bsAccounts.filter((account) => account.type === AccountType.ASSET),
+            AccountType.ASSET,
+        );
+        const liabilitiesSection = buildSection(
+            'Liabilities',
+            bsAccounts.filter((account) => account.type === AccountType.LIABILITY),
+            AccountType.LIABILITY,
+        );
+        const equitySection = buildSection(
+            'Equity',
+            bsAccounts.filter((account) => account.type === AccountType.EQUITY),
+            AccountType.EQUITY,
+        );
+
+        const totalLiabilitiesAndEquity = initCompareAmounts(columnKeys);
+        for (const colKey of columnKeys.filter((key) => key !== TOTAL_SCOPE_KEY)) {
+            totalLiabilitiesAndEquity[colKey] = this.roundAmount(
+                (liabilitiesSection.subtotals[colKey] ?? 0)
+                + (equitySection.subtotals[colKey] ?? 0)
+                + (finalizedNetProfit[colKey] ?? 0),
+            );
+        }
+
+        return {
+            scope: ReportScope.COMPARE,
+            as_of: asOfDateStr,
+            columns,
+            sections: [assetsSection, liabilitiesSection, equitySection],
+            net_profit: finalizedNetProfit,
+            total_assets: assetsSection.subtotals,
+            total_liabilities_and_equity: finalizeCompareAmounts(totalLiabilitiesAndEquity, columnKeys),
+        };
+    }
+
+    private async getTrialBalanceCompare(
+        tenantId: string,
+        asOfDateStr: string,
+        asOfDate: Date,
+        scopeParams: ReturnType<typeof assertReportScopeQuery>,
+    ) {
+        const { columns, columnKeys } = await this.loadCompareColumns(
+            tenantId,
+            scopeParams.storeIds,
+            scopeParams.includeCompanyBucket,
+        );
+
+        const accounts = await this.db.account.findMany({
+            where: { tenant_id: tenantId },
+            include: { group: true, subgroup: true },
+        });
+
+        const details = accounts.length > 0
+            ? await this.db.voucherDetail.findMany({
+                where: {
+                    account_id: { in: accounts.map((account) => account.id) },
+                    voucher: {
+                        ...buildCompareVoucherWhere(
+                            tenantId,
+                            scopeParams.storeIds,
+                            scopeParams.includeCompanyBucket,
+                        ),
+                        date: { lte: asOfDate },
+                    },
+                },
+                select: {
+                    account_id: true,
+                    debit_amount: true,
+                    credit_amount: true,
+                    voucher: { select: { store_id: true } },
+                },
+            })
+            : [];
+
+        const byStore = aggregateDetailsByStore(details);
+        const debitTotals = initCompareAmounts(columnKeys);
+        const creditTotals = initCompareAmounts(columnKeys);
+
+        const rows = accounts.map((account) => {
+            const debitAmounts = initCompareAmounts(columnKeys);
+            const creditAmounts = initCompareAmounts(columnKeys);
+
+            for (const colKey of columnKeys.filter((key) => key !== TOTAL_SCOPE_KEY)) {
+                const storeMap = byStore.get(colKey);
+                const totals = storeMap?.get(account.id) ?? { debit: 0, credit: 0 };
+                const signedBalance = this.calculateSignedBalance(
+                    account.type as AccountType,
+                    totals.debit,
+                    totals.credit,
+                );
+                const presented = this.presentBalance(account.type as AccountType, signedBalance);
+                if (presented.side === 'debit') {
+                    debitAmounts[colKey] = presented.amount;
+                } else if (presented.side === 'credit') {
+                    creditAmounts[colKey] = presented.amount;
+                }
+            }
+
+            const finalizedDebit = finalizeCompareAmounts(debitAmounts, columnKeys);
+            const finalizedCredit = finalizeCompareAmounts(creditAmounts, columnKeys);
+
+            for (const colKey of columnKeys.filter((key) => key !== TOTAL_SCOPE_KEY)) {
+                debitTotals[colKey] = this.roundAmount((debitTotals[colKey] ?? 0) + (finalizedDebit[colKey] ?? 0));
+                creditTotals[colKey] = this.roundAmount((creditTotals[colKey] ?? 0) + (finalizedCredit[colKey] ?? 0));
+            }
+
+            return {
+                account: {
+                    id: account.id,
+                    name: account.name,
+                    code: account.code,
+                    type: account.type,
+                    group: { id: account.group.id, name: account.group.name },
+                    subgroup: account.subgroup ? { id: account.subgroup.id, name: account.subgroup.name } : null,
+                },
+                debit_amounts: finalizedDebit,
+                credit_amounts: finalizedCredit,
+            };
+        }).filter((row) => (
+            row.debit_amounts[TOTAL_SCOPE_KEY] !== 0 || row.credit_amounts[TOTAL_SCOPE_KEY] !== 0
+        ));
+
+        return {
+            scope: ReportScope.COMPARE,
+            as_of: asOfDateStr,
+            columns,
+            rows,
+            totals: {
+                debit: finalizeCompareAmounts(debitTotals, columnKeys),
+                credit: finalizeCompareAmounts(creditTotals, columnKeys),
+            },
+        };
     }
 
     private serializeVoucher(voucher: any) {

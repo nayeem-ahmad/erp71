@@ -145,6 +145,7 @@ export class ExpensesService {
                 amount: Number(entry.amount),
                 description: `Auto-posted expense${entry.description ? `: ${entry.description}` : ''}`,
                 date: entry.expense_date,
+                storeId: entry.store_id ?? undefined,
             });
 
             return {

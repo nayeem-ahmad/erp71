@@ -115,6 +115,22 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit = {})
     return 'data' in json ? json.data : json;
 }
 
+export type ReportScope = 'branch' | 'company' | 'compare';
+
+export type ReportScopeParams = {
+    scope?: ReportScope;
+    storeId?: string;
+    storeIds?: string[];
+    includeCompanyBucket?: boolean;
+};
+
+function appendReportScopeParams(query: URLSearchParams, params?: ReportScopeParams) {
+    if (params?.scope) query.set('scope', params.scope);
+    if (params?.storeId) query.set('storeId', params.storeId);
+    if (params?.storeIds?.length) query.set('storeIds', params.storeIds.join(','));
+    if (params?.includeCompanyBucket) query.set('includeCompanyBucket', 'true');
+}
+
 export const api = {
     getProducts: (params?: { groupId?: string; subgroupId?: string; uncategorized?: boolean; page?: number; limit?: number }) => {
         const query = new URLSearchParams();
@@ -681,15 +697,17 @@ export const api = {
     retryPostingException: (id: string) => fetchWithAuth(`/accounting/reconciliation/posting-exceptions/${id}/retry`, {
         method: 'POST',
     }),
-    getProfitLoss: (params?: { from?: string; to?: string }) => {
+    getProfitLoss: (params?: { from?: string; to?: string } & ReportScopeParams) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        appendReportScopeParams(query, params);
         return fetchWithAuth(`/accounting/reports/profit-loss${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getBalanceSheet: (params?: { asOfDate?: string }) => {
+    getBalanceSheet: (params?: { asOfDate?: string } & ReportScopeParams) => {
         const query = new URLSearchParams();
         if (params?.asOfDate) query.set('asOfDate', params.asOfDate);
+        appendReportScopeParams(query, params);
         return fetchWithAuth(`/accounting/reports/balance-sheet${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getCashbook: (params?: { from?: string; to?: string; accountId?: string }) => {
@@ -1345,11 +1363,32 @@ export const api = {
     markNotificationRead: (id: string) => fetchWithAuth(`/notifications/${id}/read`, { method: 'PATCH' }),
     markAllNotificationsRead: () => fetchWithAuth('/notifications/read-all', { method: 'PATCH' }),
     // Accounting — Mid-Size Features
-    getTrialBalance: (params?: { asOfDate?: string }) => {
+    getTrialBalance: (params?: { asOfDate?: string } & ReportScopeParams) => {
         const q = new URLSearchParams();
         if (params?.asOfDate) q.set('asOfDate', params.asOfDate);
+        appendReportScopeParams(q, params);
         return fetchWithAuth(`/accounting/reports/trial-balance${q.toString() ? `?${q}` : ''}`);
     },
+    listFundTransfers: (params?: { status?: string; sourceStoreId?: string; destinationStoreId?: string }) => {
+        const q = new URLSearchParams();
+        if (params?.status) q.set('status', params.status);
+        if (params?.sourceStoreId) q.set('sourceStoreId', params.sourceStoreId);
+        if (params?.destinationStoreId) q.set('destinationStoreId', params.destinationStoreId);
+        return fetchWithAuth(`/fund-transfers${q.toString() ? `?${q}` : ''}`);
+    },
+    getFundTransfer: (id: string) => fetchWithAuth(`/fund-transfers/${id}`),
+    initiateFundTransfer: (data: {
+        sourceStoreId: string;
+        destinationStoreId: string;
+        amount: number;
+        method?: string;
+        description?: string;
+    }) => fetchWithAuth('/fund-transfers', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    receiveFundTransfer: (id: string) => fetchWithAuth(`/fund-transfers/${id}/receive`, { method: 'POST' }),
     getArAging: (params?: { asOfDate?: string }) => {
         const q = new URLSearchParams();
         if (params?.asOfDate) q.set('asOfDate', params.asOfDate);

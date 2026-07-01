@@ -93,6 +93,7 @@ export class LoansService {
                 description: `Loan disbursement — ${created.counterparty}`,
                 referenceNumber: created.reference ?? undefined,
                 date: created.start_date,
+                storeId: created.store_id ?? undefined,
             });
 
             return { loan: created, posting: result };
@@ -184,6 +185,7 @@ export class LoansService {
                 description: `Loan repayment — ${loan.counterparty}`,
                 referenceNumber: loan.reference ?? undefined,
                 date: payment.payment_date,
+                storeId: loan.store_id ?? undefined,
             });
         });
 

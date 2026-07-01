@@ -121,6 +121,7 @@ export const ACCOUNTING_WORKSPACE_ROUTES = [
     { path: '/accounting/expenses/categories', pattern: /categor/i, label: 'Expense Categories' },
     { path: '/accounting/expenses/reports', pattern: /expense|report/i, label: 'Expense Reports' },
     { path: '/accounting/loans', pattern: /loan/i, label: 'Loans' },
+    { path: '/accounting/inter-branch/fund-transfers', pattern: /fund transfer|inter-branch/i, label: 'Fund Transfers' },
 ] as const;
 
 export async function waitForVoucherAccounts(page: Page) {

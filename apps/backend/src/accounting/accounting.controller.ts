@@ -216,12 +216,14 @@ export class AccountingController {
 
     @Get('reports/profit-loss')
     getProfitLoss(@Tenant() tenant: TenantContext, @Query() query: ProfitLossQueryDto) {
-        return this.accountingService.getProfitLoss(tenant.tenantId, query);
+        const hasConsolidatedAccess = tenant.userRole === 'OWNER' || tenant.userRole === 'ACCOUNTANT';
+        return this.accountingService.getProfitLoss(tenant.tenantId, query, hasConsolidatedAccess);
     }
 
     @Get('reports/balance-sheet')
     getBalanceSheet(@Tenant() tenant: TenantContext, @Query() query: BalanceSheetQueryDto) {
-        return this.accountingService.getBalanceSheet(tenant.tenantId, query);
+        const hasConsolidatedAccess = tenant.userRole === 'OWNER' || tenant.userRole === 'ACCOUNTANT';
+        return this.accountingService.getBalanceSheet(tenant.tenantId, query, hasConsolidatedAccess);
     }
 
     @Get('reports/cashbook')
@@ -236,7 +238,8 @@ export class AccountingController {
 
     @Get('reports/trial-balance')
     getTrialBalance(@Tenant() tenant: TenantContext, @Query() query: TrialBalanceQueryDto) {
-        return this.accountingService.getTrialBalance(tenant.tenantId, query);
+        const hasConsolidatedAccess = tenant.userRole === 'OWNER' || tenant.userRole === 'ACCOUNTANT';
+        return this.accountingService.getTrialBalance(tenant.tenantId, query, hasConsolidatedAccess);
     }
 
     @Get('reports/ar-aging')

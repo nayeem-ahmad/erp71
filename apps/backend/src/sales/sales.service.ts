@@ -200,6 +200,7 @@ export class SalesService {
                 amount: Number(sale.total_amount),
                 description: `Auto-posted sale ${sale.serial_number}`,
                 referenceNumber: sale.serial_number,
+                storeId: dto.storeId,
             });
 
             return {

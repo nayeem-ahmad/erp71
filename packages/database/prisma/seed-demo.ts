@@ -91,6 +91,21 @@ export async function seedDemoAccount(prisma: PrismaClient) {
         });
     }
 
+    let secondStore = await prisma.store.findFirst({
+        where: { tenant_id: tenant.id, name: 'Banani Branch' },
+    });
+    if (!secondStore) {
+        secondStore = await prisma.store.create({
+            data: {
+                tenant_id: tenant.id,
+                name: 'Banani Branch',
+                address: 'Banani, Dhaka, Bangladesh',
+            },
+        });
+    }
+
+    const demoStores = [store, secondStore];
+
     const warehouseCode = `WH-DEMO-${store.id.slice(0, 6).toUpperCase()}`;
     let warehouse = await prisma.warehouse.findFirst({
         where: { tenant_id: tenant.id, store_id: store.id, is_default: true },
@@ -129,33 +144,52 @@ export async function seedDemoAccount(prisma: PrismaClient) {
         },
     });
 
-    await prisma.userStoreAccess.upsert({
-        where: { user_id_store_id: { user_id: user.id, store_id: store.id } },
-        update: { access_level: 'MULTI_STORE_CAPABLE' },
-        create: {
-            user_id: user.id,
-            store_id: store.id,
-            tenant_id: tenant.id,
-            access_level: 'MULTI_STORE_CAPABLE',
-        },
-    });
-
-    for (const permission of ROLE_DEFAULT_PERMISSIONS[UserRole.OWNER]) {
-        await prisma.userStorePermission.upsert({
-            where: {
-                user_id_store_id_permission: {
-                    user_id: user.id,
-                    store_id: store.id,
-                    permission,
-                },
-            },
-            update: {},
+    for (const demoStore of demoStores) {
+        await prisma.userStoreAccess.upsert({
+            where: { user_id_store_id: { user_id: user.id, store_id: demoStore.id } },
+            update: { access_level: 'MULTI_STORE_CAPABLE' },
             create: {
                 user_id: user.id,
-                store_id: store.id,
+                store_id: demoStore.id,
                 tenant_id: tenant.id,
-                permission,
-                granted_by: user.id,
+                access_level: 'MULTI_STORE_CAPABLE',
+            },
+        });
+
+        for (const permission of ROLE_DEFAULT_PERMISSIONS[UserRole.OWNER]) {
+            await prisma.userStorePermission.upsert({
+                where: {
+                    user_id_store_id_permission: {
+                        user_id: user.id,
+                        store_id: demoStore.id,
+                        permission,
+                    },
+                },
+                update: {},
+                create: {
+                    user_id: user.id,
+                    store_id: demoStore.id,
+                    tenant_id: tenant.id,
+                    permission,
+                    granted_by: user.id,
+                },
+            });
+        }
+    }
+
+    const secondWarehouseCode = `WH-DEMO-${secondStore.id.slice(0, 6).toUpperCase()}`;
+    let secondWarehouse = await prisma.warehouse.findFirst({
+        where: { tenant_id: tenant.id, store_id: secondStore.id, is_default: true },
+    });
+    if (!secondWarehouse) {
+        secondWarehouse = await prisma.warehouse.create({
+            data: {
+                tenant_id: tenant.id,
+                store_id: secondStore.id,
+                name: 'Banani Branch Warehouse',
+                code: secondWarehouseCode,
+                is_default: true,
+                is_active: true,
             },
         });
     }

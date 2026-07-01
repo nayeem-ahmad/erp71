@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { VoucherType } from './accounting.constants';
+import { VoucherAttribution, VoucherType } from './accounting.constants';
 
 export type PostingEventType =
     | 'sale'
@@ -27,6 +27,9 @@ export interface AutoPostInput {
     description?: string;
     referenceNumber?: string;
     date?: Date;
+    storeId?: string;
+    attribution?: string;
+    counterpartyStoreId?: string;
 }
 
 export interface AutoPostResult {
@@ -111,6 +114,13 @@ async function generateVoucherNumber(tx: Prisma.TransactionClient, tenantId: str
     });
 
     return `${prefix}-${String(nextNumber).padStart(5, '0')}`;
+}
+
+function resolveVoucherAttribution(input: AutoPostInput): string {
+    if (input.attribution) {
+        return input.attribution;
+    }
+    return input.storeId ? VoucherAttribution.BRANCH : VoucherAttribution.COMPANY;
 }
 
 export async function autoPostFromRules(input: AutoPostInput): Promise<AutoPostResult> {
@@ -239,6 +249,9 @@ export async function autoPostFromRules(input: AutoPostInput): Promise<AutoPostR
             description: input.description,
             reference_number: input.referenceNumber,
             date: input.date,
+            store_id: input.storeId ?? null,
+            attribution: resolveVoucherAttribution(input),
+            counterparty_store_id: input.counterpartyStoreId ?? null,
             details: {
                 create: [
                     {

@@ -470,6 +470,8 @@ model Store {
   productPrices   ProductPrice[]
   fundTransfersSource      FundTransfer[] @relation("FundTransferSourceStore")
   fundTransfersDestination FundTransfer[] @relation("FundTransferDestinationStore")
+  vouchers                 Voucher[]      @relation("VoucherStore")
+  vouchersCounterparty     Voucher[]      @relation("VoucherCounterpartyStore")
   warrantyClaims  WarrantyClaim[]
   posCounters     PosCounter[]
   expenseEntries  ExpenseEntry[]
@@ -1520,10 +1522,15 @@ model Voucher {
   description      String?
   reference_number String?
   date             DateTime @default(now())
+  store_id         String?
+  attribution      String   @default("BRANCH")
+  counterparty_store_id String?
   created_at       DateTime @default(now())
   updated_at       DateTime @updatedAt
 
   tenant           Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store            Store?   @relation("VoucherStore", fields: [store_id], references: [id])
+  counterpartyStore Store?  @relation("VoucherCounterpartyStore", fields: [counterparty_store_id], references: [id])
   details          VoucherDetail[]
   postingEvents    PostingEvent[]
   fundTransfersSource      FundTransfer[] @relation("FundTransferSourceVoucher")
@@ -1533,6 +1540,8 @@ model Voucher {
   @@index([tenant_id])
   @@index([tenant_id, voucher_type])
   @@index([tenant_id, source_module, source_type, source_id])
+  @@index([tenant_id, store_id])
+  @@index([tenant_id, attribution])
   @@index([date])
   @@map("vouchers")
 }

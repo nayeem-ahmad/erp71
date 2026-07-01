@@ -47,6 +47,7 @@ export type AccountingLinkKey =
     | 'expenseCategories'
     | 'expenseReports'
     | 'loans'
+    | 'fundTransfers'
     | 'pl'
     | 'balanceSheet'
     | 'cashbook'
@@ -108,6 +109,10 @@ export const ACCOUNTING_TRANSACTION_LINKS: AccountingNavItem[] = [
     { key: 'loans', href: routes.accounting.loans, icon: HandCoins, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
 ];
 
+export const ACCOUNTING_INTER_BRANCH_LINKS: AccountingNavItem[] = [
+    { key: 'fundTransfers', href: routes.accounting.interBranchFundTransfers, icon: GitMerge, accent: 'bg-teal-50 text-teal-700 border-teal-100' },
+];
+
 export const ACCOUNTING_SETUP_LINKS: AccountingNavItem[] = [
     { key: 'coa', href: routes.accounting.coa, icon: FolderTree, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
     { key: 'postingRules', href: routes.accounting.postingRules, icon: Settings, accent: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
@@ -138,6 +143,7 @@ type AccountingNavMessages = {
         hub: {
             transactions: string;
             reconciliation: string;
+            interBranch: string;
         };
     };
     sidebar: {
@@ -196,6 +202,13 @@ export function buildAccountingSidebarChildren(t: AccountingNavMessages): Accoun
             icon: GitMerge,
             label: t.accounting.hub.reconciliation,
             children: ACCOUNTING_RECONCILIATION_LINKS.map((item) => toSidebarLink(t, item)),
+        },
+        {
+            type: 'subgroup',
+            key: 'interBranch',
+            icon: GitMerge,
+            label: t.accounting.hub.interBranch,
+            children: ACCOUNTING_INTER_BRANCH_LINKS.map((item) => toSidebarLink(t, item)),
         },
         {
             type: 'subgroup',

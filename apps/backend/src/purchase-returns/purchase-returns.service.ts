@@ -92,6 +92,7 @@ export class PurchaseReturnsService {
                 amount: Number(purchaseReturn.total_amount),
                 description: `Auto-posted purchase return ${purchaseReturn.return_number}`,
                 referenceNumber: purchaseReturn.return_number,
+                storeId: purchase.store_id,
             });
 
             const purchaseReturnWithDetails = await tx.purchaseReturn.findFirst({

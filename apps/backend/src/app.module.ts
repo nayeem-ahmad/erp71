@@ -75,6 +75,7 @@ import { CrmLeadsModule } from './crm-leads/crm-leads.module';
 import { CrmLeadConversationsModule } from './crm-lead-conversations/crm-lead-conversations.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { LoansModule } from './loans/loans.module';
+import { FundTransfersModule } from './fund-transfers/fund-transfers.module';
 import { SalaryPaymentsModule } from './salary-payments/salary-payments.module';
 import { AiModule } from './ai/ai.module';
 import { SupportModule } from './support/support.module';
@@ -157,6 +158,7 @@ import { SupportModule } from './support/support.module';
         CrmLeadConversationsModule,
         ExpensesModule,
         LoansModule,
+        FundTransfersModule,
         SalaryPaymentsModule,
         AiModule,
         SupportModule,

@@ -24,6 +24,18 @@ type VoucherRow = {
     debitAmount: string;
     creditAmount: string;
     comment: string;
+    costCenterId: string;
+};
+
+type CostCenter = {
+    id: string;
+    name: string;
+    code?: string | null;
+};
+
+type VoucherStore = {
+    id: string;
+    name: string;
 };
 
 type VoucherSummary = {
@@ -59,6 +71,7 @@ function createEmptyRow(): VoucherRow {
         debitAmount: '',
         creditAmount: '',
         comment: '',
+        costCenterId: '',
     };
 }
 
@@ -85,6 +98,10 @@ function AccountingVouchersPageContent() {
     const [description, setDescription] = useState('');
     const [referenceNumber, setReferenceNumber] = useState('');
     const [accounts, setAccounts] = useState<VoucherAccount[]>([]);
+    const [stores, setStores] = useState<VoucherStore[]>([]);
+    const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
+    const [branchSelection, setBranchSelection] = useState('branch');
+    const [voucherStoreId, setVoucherStoreId] = useState('');
     const [rows, setRows] = useState<VoucherRow[]>([createEmptyRow(), createEmptyRow()]);
     const [isLoadingPreview, setIsLoadingPreview] = useState(true);
     const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
@@ -132,6 +149,7 @@ function AccountingVouchersPageContent() {
                         debitAmount: Number(detail.debit_amount) > 0 ? String(detail.debit_amount) : '',
                         creditAmount: Number(detail.credit_amount) > 0 ? String(detail.credit_amount) : '',
                         comment: detail.comment ?? '',
+                        costCenterId: detail.cost_center_id ?? detail.costCenter?.id ?? '',
                     })),
                 );
             } catch (error) {
@@ -179,6 +197,7 @@ function AccountingVouchersPageContent() {
                         debitAmount: Number(line.debit_amount) > 0 ? String(line.debit_amount) : '',
                         creditAmount: Number(line.credit_amount) > 0 ? String(line.credit_amount) : '',
                         comment: line.comment ?? '',
+                        costCenterId: '',
                     })),
                 );
             } catch (error) {
@@ -227,7 +246,42 @@ function AccountingVouchersPageContent() {
             }
         };
 
+        const loadStores = async () => {
+            try {
+                const data = await api.getStores();
+                if (!active) {
+                    return;
+                }
+                setStores(data);
+                const savedStoreId = localStorage.getItem('store_id');
+                const resolvedStoreId = data.some((store: VoucherStore) => store.id === savedStoreId)
+                    ? (savedStoreId as string)
+                    : data[0]?.id ?? '';
+                setVoucherStoreId(resolvedStoreId);
+            } catch {
+                if (active) {
+                    setStores([]);
+                }
+            }
+        };
+
+        const loadCostCenters = async () => {
+            try {
+                const data = await api.listCostCenters();
+                if (!active) {
+                    return;
+                }
+                setCostCenters(Array.isArray(data) ? data : data?.items ?? []);
+            } catch {
+                if (active) {
+                    setCostCenters([]);
+                }
+            }
+        };
+
         loadAccounts();
+        void loadStores();
+        void loadCostCenters();
 
         return () => {
             active = false;
@@ -365,11 +419,15 @@ function AccountingVouchersPageContent() {
                 date: voucherDate,
                 description: description || undefined,
                 referenceNumber: referenceNumber || undefined,
+                ...(branchSelection === 'company'
+                    ? { attribution: 'COMPANY' }
+                    : { storeId: voucherStoreId, attribution: 'BRANCH' }),
                 details: rows.map((row) => ({
                     accountId: row.accountId,
                     debitAmount: parseAmount(row.debitAmount),
                     creditAmount: parseAmount(row.creditAmount),
                     comment: row.comment || undefined,
+                    costCenterId: row.costCenterId || undefined,
                 })),
             };
 
@@ -440,6 +498,29 @@ function AccountingVouchersPageContent() {
                         />
                     </label>
                     <label className="flex items-center gap-1">
+                        <span className="font-semibold uppercase tracking-wide text-[10px] text-gray-400">{t.vouchers.branch}</span>
+                        <select
+                            aria-label={t.vouchers.branch}
+                            value={branchSelection === 'company' ? 'company' : voucherStoreId}
+                            onChange={(event) => {
+                                if (event.target.value === 'company') {
+                                    setBranchSelection('company');
+                                    return;
+                                }
+                                setBranchSelection('branch');
+                                setVoucherStoreId(event.target.value);
+                            }}
+                            className="px-1.5 py-0.5 border rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                        >
+                            {stores.map((store) => (
+                                <option key={store.id} value={store.id}>
+                                    {store.name}
+                                </option>
+                            ))}
+                            <option value="company">{t.vouchers.companyWide}</option>
+                        </select>
+                    </label>
+                    <label className="flex items-center gap-1">
                         <span className="font-semibold uppercase tracking-wide text-[10px] text-gray-400">Ref #</span>
                         <input
                             aria-label={t.vouchers.referenceAria}
@@ -501,6 +582,7 @@ function AccountingVouchersPageContent() {
                                         <th className="px-2 py-1.5 text-right font-semibold w-24">Debit</th>
                                         <th className="px-2 py-1.5 text-right font-semibold w-24">Credit</th>
                                         <th className="px-2 py-1.5 text-left font-semibold hidden md:table-cell">Comment</th>
+                                        <th className="px-2 py-1.5 text-left font-semibold hidden lg:table-cell">{t.vouchers.costCenter}</th>
                                         <th className="px-2 py-1.5 w-8" />
                                     </tr>
                                 </thead>
@@ -560,6 +642,21 @@ function AccountingVouchersPageContent() {
                                                         className={`w-full ${inputClass}`}
                                                         placeholder={t.vouchers.optionalRowNote}
                                                     />
+                                                </td>
+                                                <td className="px-2 py-1 hidden lg:table-cell align-top">
+                                                    <select
+                                                        aria-label={`Cost center row ${index + 1}`}
+                                                        value={row.costCenterId}
+                                                        onChange={(event) => updateRow(row.id, 'costCenterId', event.target.value)}
+                                                        className={`w-full ${inputClass}`}
+                                                    >
+                                                        <option value="">{t.accountingShared.optional}</option>
+                                                        {costCenters.map((center) => (
+                                                            <option key={center.id} value={center.id}>
+                                                                {center.name}{center.code ? ` (${center.code})` : ''}
+                                                            </option>
+                                                        ))}
+                                                    </select>
                                                 </td>
                                                 <td className="px-2 py-1 text-center align-top">
                                                     <button

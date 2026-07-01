@@ -186,3 +186,37 @@ export async function importBankStatementEntries(
 export async function autoMatchBankEntries(session: DemoSession, reconciliationId: string) {
     return apiPost(session, `/accounting/bank-reconciliations/${reconciliationId}/auto-match`, {});
 }
+
+export interface DemoStoreSummary {
+    id: string;
+    name: string;
+}
+
+export async function listDemoStores(session: DemoSession): Promise<DemoStoreSummary[]> {
+    const me = await apiGet<{ tenants?: Array<{ stores?: DemoStoreSummary[] }> }>(session, '/auth/me');
+    return me.tenants?.[0]?.stores ?? [];
+}
+
+export async function getProfitLossReport(
+    session: DemoSession,
+    params: { from?: string; to?: string; scope?: string; storeId?: string; storeIds?: string },
+) {
+    const q = new URLSearchParams();
+    if (params.from) q.set('from', params.from);
+    if (params.to) q.set('to', params.to);
+    if (params.scope) q.set('scope', params.scope);
+    if (params.storeId) q.set('storeId', params.storeId);
+    if (params.storeIds) q.set('storeIds', params.storeIds);
+    return apiGet(session, `/accounting/reports/profit-loss?${q.toString()}`);
+}
+
+export async function initiateFundTransfer(
+    session: DemoSession,
+    payload: { sourceStoreId: string; destinationStoreId: string; amount: number; method?: string; description?: string },
+) {
+    return apiPost(session, '/fund-transfers', payload);
+}
+
+export async function receiveFundTransfer(session: DemoSession, id: string) {
+    return apiPost(session, `/fund-transfers/${id}/receive`, {});
+}

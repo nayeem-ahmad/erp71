@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AccountingService, VOUCHER_NUMBER_PREFIXES } from './accounting.service';
 import { AccountCategory, AccountType, VoucherType } from './accounting.constants';
@@ -41,6 +41,9 @@ describe('AccountingService — Story 30.2', () => {
         },
         voucherDetail: {
             aggregate: jest.fn(),
+            findMany: jest.fn(),
+        },
+        store: {
             findMany: jest.fn(),
         },
         postingRule: {
@@ -960,6 +963,108 @@ describe('AccountingService — Story 30.2', () => {
 
             expect(result).toEqual({ success: true });
             expect(db.voucherTemplate.delete).toHaveBeenCalledWith({ where: { id: 'vt-1' } });
+        });
+    });
+
+    describe('branch-scoped reports', () => {
+        it('getProfitLoss filters vouchers by store_id when scope is branch', async () => {
+            db.account.findMany.mockResolvedValue([
+                {
+                    id: 'rev-1',
+                    type: 'revenue',
+                    group_id: 'g1',
+                    group: { id: 'g1', name: 'Revenue' },
+                    subgroup: null,
+                    name: 'Sales Revenue',
+                    code: '4010',
+                },
+            ]);
+            db.voucherDetail.findMany.mockResolvedValue([
+                { account_id: 'rev-1', debit_amount: 0, credit_amount: 1000 },
+            ]);
+
+            await service.getProfitLoss('tenant-1', {
+                scope: 'branch',
+                storeId: 'store-a',
+            }, true);
+
+            expect(db.voucherDetail.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        voucher: expect.objectContaining({
+                            tenant_id: 'tenant-1',
+                            store_id: 'store-a',
+                        }),
+                    }),
+                }),
+            );
+        });
+
+        it('getProfitLoss blocks company scope without consolidated access', async () => {
+            await expect(
+                service.getProfitLoss('tenant-1', { scope: 'company' }, false),
+            ).rejects.toThrow(ForbiddenException);
+        });
+
+        it('getProfitLoss compare scope returns matrix format', async () => {
+            db.store.findMany.mockResolvedValue([
+                { id: 'store-a', name: 'Gulshan' },
+                { id: 'store-b', name: 'Banani' },
+            ]);
+            db.account.findMany.mockResolvedValue([
+                {
+                    id: 'rev-1',
+                    type: 'revenue',
+                    group_id: 'g1',
+                    group: { id: 'g1', name: 'Revenue' },
+                    subgroup: null,
+                    name: 'Sales Revenue',
+                    code: '4010',
+                },
+                {
+                    id: 'exp-1',
+                    type: 'expense',
+                    group_id: 'g2',
+                    group: { id: 'g2', name: 'Expenses' },
+                    subgroup: null,
+                    name: 'Rent',
+                    code: '5010',
+                },
+            ]);
+            db.voucherDetail.findMany.mockResolvedValue([
+                {
+                    account_id: 'rev-1',
+                    debit_amount: 0,
+                    credit_amount: 100,
+                    voucher: { store_id: 'store-a' },
+                },
+                {
+                    account_id: 'rev-1',
+                    debit_amount: 0,
+                    credit_amount: 50,
+                    voucher: { store_id: 'store-b' },
+                },
+                {
+                    account_id: 'exp-1',
+                    debit_amount: 20,
+                    credit_amount: 0,
+                    voucher: { store_id: 'store-a' },
+                },
+            ]);
+
+            const result = await service.getProfitLoss('tenant-1', {
+                scope: 'compare',
+                storeIds: 'store-a,store-b',
+                includeCompanyBucket: false,
+            }, true);
+
+            expect(result.scope).toBe('compare');
+            expect(result.columns.map((column: { key: string }) => column.key)).toEqual([
+                'store-a',
+                'store-b',
+                'total',
+            ]);
+            expect(result.net_profit.total).toBe(130);
         });
     });
 });

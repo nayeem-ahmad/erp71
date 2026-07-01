@@ -52,6 +52,17 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                     },
                 ],
             },
+            {
+                name: 'Inter-Branch Clearing',
+                accounts: [
+                    {
+                        name: 'Due from Branches',
+                        code: '1040',
+                        type: AccountType.ASSET,
+                        category: AccountCategory.GENERAL,
+                    },
+                ],
+            },
         ],
     },
     {
@@ -75,6 +86,17 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                     {
                         name: 'Loans Payable',
                         code: '2020',
+                        type: AccountType.LIABILITY,
+                        category: AccountCategory.GENERAL,
+                    },
+                ],
+            },
+            {
+                name: 'Inter-Branch Clearing',
+                accounts: [
+                    {
+                        name: 'Due to Branches',
+                        code: '2040',
                         type: AccountType.LIABILITY,
                         category: AccountCategory.GENERAL,
                     },
@@ -375,6 +397,77 @@ export async function bootstrapDefaultAccountingForTenant(
     }
 
     await ensureLoanPostingSetup(db, tenantId);
+    await ensureInterBranchAccounts(db, tenantId);
+}
+
+/**
+ * Idempotently ensure inter-branch clearing accounts exist for a tenant.
+ */
+export async function ensureInterBranchAccounts(
+    db: AccountingBootstrapClient,
+    tenantId: string,
+) {
+    const assetGroup = await db.accountGroup.upsert({
+        where: { tenant_id_name: { tenant_id: tenantId, name: 'Current Assets' } },
+        update: {},
+        create: { tenant_id: tenantId, name: 'Current Assets', type: AccountType.ASSET },
+    });
+    const liabilityGroup = await db.accountGroup.upsert({
+        where: { tenant_id_name: { tenant_id: tenantId, name: 'Current Liabilities' } },
+        update: {},
+        create: { tenant_id: tenantId, name: 'Current Liabilities', type: AccountType.LIABILITY },
+    });
+
+    const dueFromSubgroup = await db.accountSubgroup.upsert({
+        where: { group_id_name: { group_id: assetGroup.id, name: 'Inter-Branch Clearing' } },
+        update: {},
+        create: { tenant_id: tenantId, group_id: assetGroup.id, name: 'Inter-Branch Clearing' },
+    });
+    const dueToSubgroup = await db.accountSubgroup.upsert({
+        where: { group_id_name: { group_id: liabilityGroup.id, name: 'Inter-Branch Clearing' } },
+        update: {},
+        create: { tenant_id: tenantId, group_id: liabilityGroup.id, name: 'Inter-Branch Clearing' },
+    });
+
+    await db.account.upsert({
+        where: { tenant_id_name: { tenant_id: tenantId, name: 'Due from Branches' } },
+        update: {
+            group_id: assetGroup.id,
+            subgroup_id: dueFromSubgroup.id,
+            code: '1040',
+            type: AccountType.ASSET,
+            category: AccountCategory.GENERAL,
+        },
+        create: {
+            tenant_id: tenantId,
+            group_id: assetGroup.id,
+            subgroup_id: dueFromSubgroup.id,
+            name: 'Due from Branches',
+            code: '1040',
+            type: AccountType.ASSET,
+            category: AccountCategory.GENERAL,
+        },
+    });
+
+    await db.account.upsert({
+        where: { tenant_id_name: { tenant_id: tenantId, name: 'Due to Branches' } },
+        update: {
+            group_id: liabilityGroup.id,
+            subgroup_id: dueToSubgroup.id,
+            code: '2040',
+            type: AccountType.LIABILITY,
+            category: AccountCategory.GENERAL,
+        },
+        create: {
+            tenant_id: tenantId,
+            group_id: liabilityGroup.id,
+            subgroup_id: dueToSubgroup.id,
+            name: 'Due to Branches',
+            code: '2040',
+            type: AccountType.LIABILITY,
+            category: AccountCategory.GENERAL,
+        },
+    });
 }
 
 /**

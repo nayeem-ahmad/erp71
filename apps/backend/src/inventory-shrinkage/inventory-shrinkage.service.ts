@@ -78,6 +78,7 @@ export class InventoryShrinkageService {
                 amount: shrinkageAmount || 0,
                 description: `Auto-posted shrinkage ${shrinkage.reference_number}`,
                 referenceNumber: shrinkage.reference_number,
+                storeId: shrinkage.warehouse?.store_id,
             });
 
             return {

@@ -513,7 +513,7 @@ export class CustomersService {
         return enriched;
     }
 
-    async updateCreditPayment(tenantId: string, paymentId: string, dto: UpdateCreditPaymentDto) {
+    async updateCreditPayment(tenantId: string, paymentId: string, dto: UpdateCreditPaymentDto, storeId?: string) {
         const payment = await this.findCreditPaymentOrThrow(tenantId, paymentId);
         const oldType = payment.type as 'PAYMENT' | 'PAYOUT';
         const oldAmount = Number(payment.amount);
@@ -576,6 +576,7 @@ export class CustomersService {
                     ? `Customer payout — ${customer.name}`
                     : `Customer payment — ${customer.name}`,
                 referenceNumber: payment.payment_number ?? paymentId,
+                storeId,
             });
 
             return {
@@ -615,7 +616,13 @@ export class CustomersService {
         });
     }
 
-    async recordCreditPayment(tenantId: string, id: string, userId: string, dto: RecordCreditPaymentDto) {
+    async recordCreditPayment(
+        tenantId: string,
+        id: string,
+        userId: string,
+        dto: RecordCreditPaymentDto,
+        storeId?: string,
+    ) {
         const customer = await this.db.customer.findFirst({
             where: { id, tenant_id: tenantId, deleted_at: null },
             select: { id: true, name: true, due_balance: true },
@@ -672,6 +679,7 @@ export class CustomersService {
                     ? `Customer payout — ${customer.name}`
                     : `Customer payment — ${customer.name}`,
                 referenceNumber: payment_number,
+                storeId,
             });
 
             return {

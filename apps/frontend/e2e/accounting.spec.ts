@@ -27,6 +27,10 @@ import {
     runDepreciation,
     unlockFiscalPeriod,
     upsertBudget,
+    getProfitLossReport,
+    initiateFundTransfer,
+    listDemoStores,
+    receiveFundTransfer,
     type AccountSummary,
 } from './helpers/api-client';
 
@@ -505,6 +509,54 @@ test.describe.serial('Accounting module — full feature coverage', () => {
 
         await page.locator('a[href^="/accounting/vouchers/"]').first().click();
         await expect(page.getByText(createdVoucherRef)).toBeVisible({ timeout: 10_000 });
+    });
+
+    // ── Multi-branch reports ──────────────────────────────────────────────────
+
+    test('AC-Branch-01 — P&L scope bar supports branch and compare views', async ({ page }) => {
+        const stores = await listDemoStores(session);
+        expect(stores.length).toBeGreaterThanOrEqual(2);
+
+        await page.goto('/accounting/reports/pl');
+        await expect(page.getByText(/profit\s*&\s*loss|profit and loss/i).first()).toBeVisible({ timeout: 10_000 });
+
+        await page.getByLabel(/this branch/i).check();
+        await expect(page.getByRole('combobox').first()).toBeVisible();
+
+        await page.getByLabel(/compare branches/i).check();
+        await expect(page.getByText(stores[0].name).first()).toBeVisible();
+        await expect(page.getByText(stores[1].name).first()).toBeVisible();
+
+        const from = '2026-01-01';
+        const to = new Date().toISOString().slice(0, 10);
+        const compare = await getProfitLossReport(session, {
+            scope: 'compare',
+            storeIds: stores.map((s) => s.id).join(','),
+            from,
+            to,
+        });
+        expect(compare.scope).toBe('compare');
+        expect(compare.columns?.length).toBeGreaterThanOrEqual(2);
+    });
+
+    test('AC-Branch-02 — inter-branch fund transfer page loads and API flow works', async ({ page }) => {
+        const stores = await listDemoStores(session);
+        expect(stores.length).toBeGreaterThanOrEqual(2);
+
+        await page.goto('/accounting/inter-branch/fund-transfers');
+        await expect(page.getByText(/fund transfer/i).first()).toBeVisible({ timeout: 10_000 });
+
+        const transfer = await initiateFundTransfer(session, {
+            sourceStoreId: stores[0].id,
+            destinationStoreId: stores[1].id,
+            amount: 500,
+            method: 'CASH',
+            description: `${marker}-fund-transfer`,
+        });
+        expect(transfer.id).toBeTruthy();
+
+        const received = await receiveFundTransfer(session, transfer.id);
+        expect(received.status).toBe('RECEIVED');
     });
 
     // ── Remaining workspace routes smoke ──────────────────────────────────────

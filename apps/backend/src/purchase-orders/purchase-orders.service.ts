@@ -146,6 +146,7 @@ export class PurchaseOrdersService {
                     amount: Number(po.total_amount),
                     description: `Auto-posted PO ${po.po_number}`,
                     referenceNumber: po.po_number,
+                    storeId: po.store_id,
                 });
 
                 return tx.purchaseOrder.update({

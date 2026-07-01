@@ -72,7 +72,7 @@ export class CustomersController {
         @Param('paymentId') paymentId: string,
         @Body() dto: UpdateCreditPaymentDto,
     ) {
-        return this.customersService.updateCreditPayment(tenant.tenantId, paymentId, dto);
+        return this.customersService.updateCreditPayment(tenant.tenantId, paymentId, dto, tenant.storeId);
     }
 
     @Delete('credit/payments/:paymentId')
@@ -138,7 +138,7 @@ export class CustomersController {
         @Param('id') id: string,
         @Body() dto: RecordCreditPaymentDto,
     ) {
-        return this.customersService.recordCreditPayment(tenant.tenantId, id, tenant.userId, dto);
+        return this.customersService.recordCreditPayment(tenant.tenantId, id, tenant.userId, dto, tenant.storeId);
     }
 
     @Get('reports/due-aging')
