@@ -25,7 +25,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           command_timeout: 30m
           script: |
-            cd /opt/retail-saas
+            cd /opt/erp71
             bash scripts/deploy.sh ${{ inputs.branch }}
             curl -sf https://api.erp71.com/api/v1/health
             curl -sf -o /dev/null -w "app HTTP %{http_code}\n" https://app.erp71.com/
