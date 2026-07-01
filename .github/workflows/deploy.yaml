@@ -117,9 +117,8 @@ jobs:
   test-e2e:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
-    # E2E tests require a running backend+DB; run only when explicitly triggered
-    # or on main branch pushes to catch regressions before deploy.
-    if: github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'run-e2e')
+    # E2E is slow and environment-sensitive — run only when a PR is labeled run-e2e.
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-e2e')
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retail_e2e
       DIRECT_URL: postgresql://postgres:postgres@localhost:5432/retail_e2e

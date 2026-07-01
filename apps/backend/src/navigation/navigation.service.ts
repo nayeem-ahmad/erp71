@@ -34,7 +34,7 @@ export class NavigationService {
         this.assertScope(scope);
         const parsed = navLayoutSchema.parse(layout) as NavLayoutNode[];
         const validation = validateNavLayout(parsed);
-        if (!validation.valid) {
+        if (validation.valid === false) {
             throw new BadRequestException({
                 message: 'Invalid navigation layout',
                 errors: validation.errors,
