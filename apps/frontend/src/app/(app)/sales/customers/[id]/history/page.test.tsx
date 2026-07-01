@@ -100,11 +100,11 @@ describe('PurchaseHistoryPage', () => {
             render(React.createElement(require('./page').default));
         });
 
-        await waitFor(() => expect(screen.getByText('Rahim Ahmed')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole('heading', { name: 'Rahim Ahmed' })).toBeInTheDocument());
 
         expect(screen.getByText('CUST-001')).toBeInTheDocument();
         expect(screen.getByText('VIP')).toBeInTheDocument();
-        expect(screen.getByText('Purchase History')).toBeInTheDocument();
+        expect(screen.getAllByText('Purchase History').length).toBeGreaterThan(0);
     });
 
     it('renders summary cards', async () => {
@@ -114,7 +114,7 @@ describe('PurchaseHistoryPage', () => {
             render(React.createElement(require('./page').default));
         });
 
-        await waitFor(() => expect(screen.getByText('Rahim Ahmed')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole('heading', { name: 'Rahim Ahmed' })).toBeInTheDocument());
 
         expect(screen.getByText('Total Orders')).toBeInTheDocument();
         expect(screen.getByText('10')).toBeInTheDocument();
@@ -230,12 +230,10 @@ describe('PurchaseHistoryPage', () => {
             render(React.createElement(require('./page').default));
         });
 
-        await waitFor(() => expect(screen.getByText('Rahim Ahmed')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole('heading', { name: 'Rahim Ahmed' })).toBeInTheDocument());
 
-        const backButton = screen.getByText(/Back to Profile/i);
-        fireEvent.click(backButton);
-
-        expect(mockPush).toHaveBeenCalledWith('/sales/customers/cust-1');
+        const backLink = screen.getByRole('link', { name: 'Rahim Ahmed' });
+        expect(backLink).toHaveAttribute('href', '/sales/customers/cust-1');
     });
 
     it('shows "History not available" when data is null after load', async () => {
@@ -259,7 +257,7 @@ describe('PurchaseHistoryPage', () => {
             render(React.createElement(require('./page').default));
         });
 
-        await waitFor(() => expect(screen.getByText('Rahim Ahmed')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole('heading', { name: 'Rahim Ahmed' })).toBeInTheDocument());
         expect(screen.getByText('—')).toBeInTheDocument();
     });
 

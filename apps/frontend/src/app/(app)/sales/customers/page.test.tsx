@@ -68,7 +68,7 @@ describe('CustomersPage — Customer Management', () => {
 
     it('renders the Customers page heading', async () => {
         render(<CustomersPage />);
-        expect(screen.getByText('Customers')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Customers' })).toBeInTheDocument();
     });
 
     it('loads and displays customers from the API', async () => {
