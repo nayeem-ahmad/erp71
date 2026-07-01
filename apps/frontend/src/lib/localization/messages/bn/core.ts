@@ -227,6 +227,7 @@ export const coreMessages = {
             navigation: "প্রধান নেভিগেশন",
             openNavigation: "নেভিগেশন খুলুন",
             closeNavigation: "নেভিগেশন বন্ধ করুন",
+            resizeNavigation: "নেভিগেশন প্যানেলের প্রস্থ পরিবর্তন করুন",
             modules: {
                 dashboard: "ড্যাশবোর্ড",
                 sales: "বিক্রয়",

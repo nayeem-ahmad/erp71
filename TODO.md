@@ -341,6 +341,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Resizable left sidebar — drag handle on the right edge (desktop, expanded); width persisted in `localStorage` (`sidebar-width`, 176–400px); i18n en/bn/ms — done 2026-07-02
 - [x] Fix verification email resend — await delivery, surface SMTP/API errors to UI toast, add Brevo API + Resend HTTP transports (VPS Brevo key invalid; rotate `BREVO_API_KEY` or SMTP credentials in `.env.production`) — done 2026-07-01
 - [x] Drop Supabase from active stack — removed health probe, env vars (`render.yaml`, `.env.example`, `.env.production.example`), unused `@supabase/supabase-js` backend dep, and Next.js image host allowlist — done 2026-07-01
 - [x] App header — removed Back button and page title; active store name (or branch selector when multi-store) shown on the left — done 2026-07-01

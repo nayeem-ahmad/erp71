@@ -227,6 +227,7 @@ export const coreMessages = {
             navigation: "Navigasi utama",
             openNavigation: "Buka navigasi",
             closeNavigation: "Tutup navigasi",
+            resizeNavigation: "Ubah saiz panel navigasi",
             modules: {
                 dashboard: "Dashboard",
                 sales: "Jualan",

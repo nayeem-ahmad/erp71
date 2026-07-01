@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     LayoutDashboard,
     ShoppingCart,
@@ -66,6 +66,7 @@ import {
     X,
     type LucideIcon,
 } from 'lucide-react';
+import { useIsMdUp } from '@/hooks/useMediaQuery';
 import { buildAccountingSidebarChildren } from '@/lib/accounting-nav';
 import { useBranding } from '@/lib/branding';
 import { useI18n } from '@/lib/i18n';
@@ -403,6 +404,15 @@ function buildModules(t: ReturnType<typeof useI18n>['t']): NavModule[] {
 /** Modules visible when acting as the Platform Admin (no shop/tenant scope). */
 const PLATFORM_ADMIN_MODULES = new Set(['admin', 'help']);
 
+const SIDEBAR_COLLAPSED_WIDTH = 64;
+const SIDEBAR_MIN_WIDTH = 176;
+const SIDEBAR_MAX_WIDTH = 400;
+const SIDEBAR_DEFAULT_WIDTH = { compact: 208, normal: 256 } as const;
+
+function clampSidebarWidth(value: number) {
+    return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, value));
+}
+
 export default function Sidebar({
     canAccessAccounting = true,
     canAccessInventoryReports = false,
@@ -433,9 +443,13 @@ export default function Sidebar({
     onClose?: () => void;
 }) {
     const pathname = usePathname();
+    const isMdUp = useIsMdUp();
     const { logoUrl, businessName, primaryColor } = useBranding();
     const { t } = useI18n();
+    const defaultWidth = compactNav ? SIDEBAR_DEFAULT_WIDTH.compact : SIDEBAR_DEFAULT_WIDTH.normal;
     const [collapsed, setCollapsed] = useState(false);
+    const [width, setWidth] = useState(defaultWidth);
+    const [isResizing, setIsResizing] = useState(false);
     const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
     const modules = useMemo(() => buildModules(t)
         .filter((module) => {
@@ -496,6 +510,14 @@ export default function Sidebar({
     useEffect(() => {
         const saved = localStorage.getItem('sidebar-collapsed');
         if (saved !== null) setCollapsed(saved === 'true');
+
+        const savedWidth = localStorage.getItem('sidebar-width');
+        if (savedWidth !== null) {
+            const parsed = Number(savedWidth);
+            if (!Number.isNaN(parsed)) {
+                setWidth(clampSidebarWidth(parsed));
+            }
+        }
 
         // auto-open the group whose child is currently active
         const groups = localStorage.getItem('sidebar-open-groups');
@@ -601,6 +623,41 @@ export default function Sidebar({
         });
     };
 
+    const startResize = useCallback((event: React.MouseEvent) => {
+        event.preventDefault();
+
+        const startX = event.clientX;
+        const startWidth = width;
+
+        setIsResizing(true);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        const onMove = (moveEvent: MouseEvent) => {
+            const delta = moveEvent.clientX - startX;
+            setWidth(clampSidebarWidth(startWidth + delta));
+        };
+
+        const onUp = () => {
+            setIsResizing(false);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+            setWidth((current) => {
+                localStorage.setItem('sidebar-width', String(current));
+                return current;
+            });
+        };
+
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    }, [width]);
+
+    const sidebarWidth = isMdUp
+        ? (collapsed ? SIDEBAR_COLLAPSED_WIDTH : width)
+        : defaultWidth;
+
     const toggleGroup = (key: string) => {
         setOpenGroups((prev) => {
             const next = { ...prev, [key]: !prev[key] };
@@ -666,11 +723,12 @@ export default function Sidebar({
                 role={onClose ? 'dialog' : undefined}
                 aria-modal={onClose && isOpen ? true : undefined}
                 aria-label={onClose ? t.sidebar.navigation : undefined}
+                style={{ width: sidebarWidth }}
                 className={`
-                    fixed inset-y-0 left-0 z-40 ${compactNav ? 'w-52' : 'w-64'} flex flex-col bg-white border-r border-gray-200 transition-all duration-300 flex-shrink-0 pt-safe
+                    fixed inset-y-0 left-0 z-40 flex flex-col bg-white border-r border-gray-200 flex-shrink-0 pt-safe
+                    ${isResizing ? '' : 'transition-[width] duration-300'}
                     ${isOpen ? 'translate-x-0' : '-translate-x-full'}
                     md:relative md:inset-y-auto md:left-auto md:z-auto md:translate-x-0
-                    ${collapsed ? 'md:w-16' : compactNav ? 'md:w-52' : 'md:w-64'}
                 `}
                 onTouchStart={(event) => {
                     touchStartXRef.current = event.touches[0]?.clientX ?? 0;
@@ -864,6 +922,22 @@ export default function Sidebar({
                         );
                     })}
                 </nav>
+
+                {/* Width resize handle (desktop, expanded only) */}
+                {isMdUp && !collapsed ? (
+                    <div
+                        role="separator"
+                        aria-orientation="vertical"
+                        aria-label={t.sidebar.resizeNavigation}
+                        aria-valuenow={width}
+                        aria-valuemin={SIDEBAR_MIN_WIDTH}
+                        aria-valuemax={SIDEBAR_MAX_WIDTH}
+                        onMouseDown={startResize}
+                        className={`absolute right-0 top-0 bottom-0 z-20 hidden w-1.5 cursor-col-resize select-none touch-none md:block hover:bg-blue-400/60 ${
+                            isResizing ? 'bg-blue-500/70' : 'bg-transparent'
+                        }`}
+                    />
+                ) : null}
 
                 {/* Collapse toggle (desktop only) */}
                 <button

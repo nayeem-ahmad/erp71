@@ -97,6 +97,10 @@ jest.mock('@/lib/i18n', () => {
     };
 }, { virtual: true });
 
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useIsMdUp: () => true,
+}));
+
 describe('Sidebar — Story 30.1', () => {
     beforeEach(() => {
         localStorage.clear();
@@ -195,5 +199,15 @@ describe('Sidebar — Story 30.1', () => {
         const closeButton = screen.getByRole('button', { name: /close navigation/i });
         fireEvent.click(closeButton);
         expect(onClose).toHaveBeenCalled();
+    });
+
+    it('restores and persists custom sidebar width on desktop', () => {
+        localStorage.setItem('sidebar-width', '320');
+
+        const { container } = render(<Sidebar canAccessAccounting />);
+        const aside = container.querySelector('aside');
+
+        expect(aside).toHaveStyle({ width: '320px' });
+        expect(screen.getByRole('separator', { name: /resize navigation panel/i })).toBeInTheDocument();
     });
 });

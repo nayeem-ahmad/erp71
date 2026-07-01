@@ -227,6 +227,7 @@ export const coreMessages = {
         navigation: 'Main navigation',
         openNavigation: 'Open navigation',
         closeNavigation: 'Close navigation',
+        resizeNavigation: 'Resize navigation panel',
         modules: {
             dashboard: 'Dashboard',
             sales: 'Sales',
