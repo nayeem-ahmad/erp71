@@ -74,6 +74,7 @@ jest.mock('lucide-react', () => {
         Target: icon,
         Upload: icon,
         Waves: icon,
+        X: icon,
     };
 });
 
@@ -187,5 +188,14 @@ describe('Sidebar — Story 30.1', () => {
         expect(screen.queryByText('Budget vs. Actual')).not.toBeInTheDocument();
         expect(screen.queryByText('Cash Flow Statement')).not.toBeInTheDocument();
         expect(screen.queryByText('Financial Ratios')).not.toBeInTheDocument();
+    });
+
+    it('shows mobile close button when drawer is open', () => {
+        const onClose = jest.fn();
+        render(<Sidebar canAccessAccounting isOpen onClose={onClose} />);
+
+        const closeButton = screen.getByRole('button', { name: /close navigation/i });
+        fireEvent.click(closeButton);
+        expect(onClose).toHaveBeenCalled();
     });
 });

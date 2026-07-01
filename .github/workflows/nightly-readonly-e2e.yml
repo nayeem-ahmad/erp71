@@ -97,3 +97,29 @@ jobs:
         run: |
           echo "Read-only E2E status: ${{ steps.report.outputs.status }} (${{ steps.report.outputs.failed_count }} failed)"
           exit 1
+
+  mobile-responsive-e2e:
+    name: Mobile viewport smoke against production
+    runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_BASE_URL: ${{ vars.PROD_BASE_URL || 'https://app.erp71.com' }}
+      E2E_API_URL: ${{ vars.PROD_API_URL || 'https://api.erp71.com' }}
+      E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+      E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm install
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium webkit
+        working-directory: apps/frontend
+
+      - name: Run mobile responsiveness suite
+        working-directory: apps/frontend
+        run: npm run test:e2e:mobile

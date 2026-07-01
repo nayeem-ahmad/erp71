@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { isCompoundUnit, CompoundUnitType } from '@/lib/compound-units';
 import CompoundUnitInput from '@/components/CompoundUnitInput';
+import ModalShell from '@/components/ModalShell';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { useI18n } from '@/lib/i18n';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
@@ -158,8 +159,7 @@ export default function CreateQuotationModal({ isOpen, onClose, onSuccess }: Cre
     };
 
     return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-3xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh]">
+        <ModalShell size="lg" onBackdropClick={handleClose}>
                 <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                     <div>
                         <h2 className="text-xl font-black tracking-tight">{t.quotes.createModal.title}</h2>
@@ -251,7 +251,8 @@ export default function CreateQuotationModal({ isOpen, onClose, onSuccess }: Cre
                     </div>
 
                     {items.length > 0 && (
-                        <table className="w-full">
+                        <div className="overflow-x-auto -mx-1 px-1">
+                        <table className="w-full min-w-[480px]">
                             <thead>
                                 <tr className="border-b border-gray-100">
                                     <th className="text-left pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">{t.shared.columns.product}</th>
@@ -315,6 +316,7 @@ export default function CreateQuotationModal({ isOpen, onClose, onSuccess }: Cre
                                 </tr>
                             </tfoot>
                         </table>
+                        </div>
                     )}
                 </div>
 
@@ -333,7 +335,6 @@ export default function CreateQuotationModal({ isOpen, onClose, onSuccess }: Cre
                         {loading ? t.quotes.createModal.creating : t.quotes.createModal.createQuotation}
                     </button>
                 </div>
-            </div>
-        </div>
+        </ModalShell>
     );
 }

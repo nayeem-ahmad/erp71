@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, User, Phone, Mail, MapPin, CreditCard, Percent } from 'lucide-react';
+import ModalShell from '@/components/ModalShell';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 
@@ -64,8 +65,7 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
         setFormData({ ...formData, [field]: e.target.value });
 
     return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <ModalShell size="sm" onBackdropClick={onClose}>
                 <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                     <div>
                         <h2 className="text-xl font-black tracking-tight">{t.customers.modal.title}</h2>
@@ -79,7 +79,7 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
                 <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
                     {error && <div className="p-3 bg-red-50 text-red-600 rounded-xl text-sm font-bold">{error}</div>}
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="col-span-2 space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.fullName}</label>
                             <div className="relative">
@@ -159,7 +159,6 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
+        </ModalShell>
     );
 }

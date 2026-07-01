@@ -18,7 +18,26 @@ export default defineConfig({
         screenshot: 'only-on-failure',
     },
     projects: [
-        { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+        {
+            name: 'chromium',
+            use: { ...devices['Desktop Chrome'] },
+            testIgnore: /mobile-responsive\.spec\.ts/,
+        },
+        {
+            name: 'mobile-iphone',
+            use: { ...devices['iPhone 13'] },
+            testMatch: /mobile-responsive\.spec\.ts/,
+        },
+        {
+            name: 'mobile-pixel',
+            use: { ...devices['Pixel 5'] },
+            testMatch: /mobile-responsive\.spec\.ts/,
+        },
+        {
+            name: 'mobile-ipad',
+            use: { ...devices['iPad (gen 7)'] },
+            testMatch: /mobile-responsive\.spec\.ts/,
+        },
     ],
     webServer: process.env.CI && !process.env.PLAYWRIGHT_BASE_URL ? {
         command: 'npm run start',

@@ -109,6 +109,7 @@ export const coreMessages = {
                 filterPlaceholder: "{column} ফিল্টার...",
                 rows: "সারি:",
                 loading: "লোড হচ্ছে...",
+                scrollHint: "আরও কলাম দেখতে সোয়াইপ করুন",
             },
         },
         dashboard: {
@@ -207,6 +208,7 @@ export const coreMessages = {
         dashboardLayout: {
             defaultPageTitle: "ড্যাশবোর্ড",
             branchLabel: "শাখা",
+            headerMoreMenuAria: "আরও অপশন",
             userFallbackRole: "স্টাফ",
             onboardingMessage: "স্বাগতম! পণ্য যোগ করে এবং প্রথম বিক্রয় করে শুরু করুন।",
             startSetup: "সেটআপ শুরু করুন",
@@ -222,6 +224,9 @@ export const coreMessages = {
         },
         sidebar: {
             workspace: "ওয়ার্কস্পেস",
+            navigation: "প্রধান নেভিগেশন",
+            openNavigation: "নেভিগেশন খুলুন",
+            closeNavigation: "নেভিগেশন বন্ধ করুন",
             modules: {
                 dashboard: "ড্যাশবোর্ড",
                 sales: "বিক্রয়",

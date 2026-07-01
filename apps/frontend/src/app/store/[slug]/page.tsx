@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { AlertCircle, CheckCircle, Minus, Package, Plus, ShoppingCart, User, X } from 'lucide-react';
+import { AlertCircle, CheckCircle, Minus, Package, Plus, ShoppingCart, X } from 'lucide-react';
 import Link from 'next/link';
+import StorefrontHeader from '@/components/storefront/StorefrontHeader';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 
@@ -311,72 +312,17 @@ export default function StorefrontPage() {
                 </div>
             )}
 
-            <header className="border-b border-gray-100 sticky top-0 bg-white/90 backdrop-blur-md z-40">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex items-center justify-between h-20 gap-6">
-                        <Link href={`/store/${slug}`} className="text-2xl font-black tracking-tighter">
-                            {data.tenant.name}
-                        </Link>
-
-                        <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
-                            <a href="#top" className="text-gray-900 hover:text-gray-600 transition-colors">{m.nav.home}</a>
-                            <Link href={`/store/${slug}/shop`} className="text-gray-500 hover:text-gray-900 transition-colors">{m.nav.shop}</Link>
-                            <a href="#contact" className="text-gray-500 hover:text-gray-900 transition-colors">{m.nav.contact}</a>
-                        </nav>
-
-                        <div className="flex items-center gap-2">
-                            {session ? (
-                                <div className="relative">
-                                    <button
-                                        type="button"
-                                        onClick={() => setAccountMenuOpen((v) => !v)}
-                                        className="inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
-                                    >
-                                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-900 text-white text-xs font-bold">
-                                            {session.customer.name.charAt(0).toUpperCase()}
-                                        </span>
-                                        <span className="hidden sm:block">{session.customer.name.split(' ')[0]}</span>
-                                    </button>
-                                    {accountMenuOpen && (
-                                        <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
-                                            <p className="px-4 py-2 text-xs text-gray-400 truncate">{session.customer.email}</p>
-                                            <hr className="border-gray-100" />
-                                            <button
-                                                type="button"
-                                                onClick={handleSignOut}
-                                                className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                                            >
-                                                {m.signOut}
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            ) : (
-                                <Link
-                                    href={`/store/${slug}/auth/signin`}
-                                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
-                                >
-                                    <User className="w-4 h-4" />
-                                    <span className="hidden sm:block">{m.signIn}</span>
-                                </Link>
-                            )}
-
-                            <button
-                                type="button"
-                                onClick={() => setCartOpen(true)}
-                                className="relative inline-flex items-center justify-center p-2 text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
-                            >
-                                <ShoppingCart className="w-6 h-6" />
-                                {cartCount > 0 && (
-                                    <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-5 h-5 px-1 text-[10px] font-bold text-white bg-blue-600 rounded-full">
-                                        {cartCount}
-                                    </span>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </header>
+            <StorefrontHeader
+                slug={slug}
+                storeName={data.tenant.name}
+                activeNav="home"
+                session={session}
+                accountMenuOpen={accountMenuOpen}
+                onAccountMenuToggle={() => setAccountMenuOpen((value) => !value)}
+                onSignOut={handleSignOut}
+                cartCount={cartCount}
+                onCartOpen={() => setCartOpen(true)}
+            />
 
             {orderSuccess && (
                 <div className="max-w-7xl mx-auto mt-6 px-4 sm:px-6 lg:px-8">
@@ -505,7 +451,7 @@ export default function StorefrontPage() {
                                                     </div>
                                                 )}
 
-                                                <div className="absolute bottom-4 left-4 right-4 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
+                                                <div className="absolute bottom-4 left-4 right-4 translate-y-0 opacity-100 md:translate-y-4 md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100 transition-all duration-300">
                                                     <button
                                                         type="button"
                                                         onClick={() => addToCart(product)}

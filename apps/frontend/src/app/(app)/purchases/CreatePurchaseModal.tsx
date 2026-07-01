@@ -8,6 +8,7 @@ import { isCompoundUnit, CompoundUnitType, formatCompoundQty } from '@/lib/compo
 import CompoundUnitInput from '@/components/CompoundUnitInput';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import ModalShell from '@/components/ModalShell';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 
 interface PurchaseProductOption {
@@ -250,8 +251,7 @@ export default function CreatePurchaseModal({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh]">
+        <ModalShell size="xl" onBackdropClick={onClose}>
                 <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                     <div>
                         <h2 className="text-xl font-black tracking-tight">{t.purchases.modal.title}</h2>
@@ -319,7 +319,8 @@ export default function CreatePurchaseModal({
                             </div>
 
                             {items.length > 0 && (
-                                <table className="w-full">
+                                <div className="overflow-x-auto -mx-1 px-1">
+                                <table className="w-full min-w-[480px]">
                                     <thead>
                                         <tr className="border-b border-gray-100">
                                             <th className="text-left pb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">
@@ -394,6 +395,7 @@ export default function CreatePurchaseModal({
                                         ))}
                                     </tbody>
                                 </table>
+                                </div>
                             )}
                         </div>
 
@@ -472,7 +474,7 @@ export default function CreatePurchaseModal({
 
                             <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 space-y-3">
                                 <h3 className="text-sm font-black tracking-tight">{t.purchaseShared.costAdjustments}</h3>
-                                <div className="grid grid-cols-3 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     <div>
                                         <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">
                                             Tax
@@ -565,7 +567,6 @@ export default function CreatePurchaseModal({
                         {loading ? t.purchases.modal.saving : t.purchases.modal.postPurchase}
                     </button>
                 </div>
-            </div>
-        </div>
+        </ModalShell>
     );
 }

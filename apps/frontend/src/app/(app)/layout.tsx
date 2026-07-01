@@ -10,6 +10,7 @@ import LanguageSwitcher from '@/components/LanguageSwitcher';
 import DemoSandboxBanner from '@/components/DemoSandboxBanner';
 import FloatingAssistDock from '@/components/FloatingAssistDock';
 import VoiceNavWidget from '@/components/VoiceNavWidget';
+import AppHeaderMobileMenu from '@/components/AppHeaderMobileMenu';
 import Toaster from '@/components/Toaster';
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
 import { BrandingProvider } from '@/lib/branding';
@@ -72,6 +73,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         const done = localStorage.getItem('onboarding_complete');
         if (!done && pathname === routes.home) setShowOnboardingBanner(true);
     }, [pathname, inPlatformAdminMode]);
+
+    useEffect(() => {
+        if (!mobileNavOpen) return;
+
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+        };
+    }, [mobileNavOpen]);
 
     useEffect(() => {
         if (!hasResolvedUser) return;
@@ -193,7 +205,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     return (
         <BrandingProvider>
-        <div className="flex h-screen bg-[#f9fafb] font-sans text-[#111827]">
+        <div className="flex h-dvh min-h-dvh bg-[#f9fafb] font-sans text-[#111827]">
             <Sidebar
                 canAccessAccounting={canAccessAccounting}
                 canAccessInventoryReports={canAccessInventoryReports}
@@ -213,9 +225,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     <div className="flex items-center space-x-2 md:space-x-3 min-w-0">
                         {/* Hamburger — mobile only */}
                         <button
-                            className="md:hidden p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors flex-shrink-0"
+                            type="button"
+                            className="md:hidden min-h-touch min-w-touch flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors flex-shrink-0"
                             onClick={() => setMobileNavOpen(true)}
-                            aria-label="Open navigation"
+                            aria-label={t.sidebar.openNavigation}
                         >
                             <Menu className="w-5 h-5" />
                         </button>
@@ -234,27 +247,34 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                         <span className="text-sm font-bold text-gray-700 tracking-tight truncate">{pageTitle}</span>
                     </div>
 
-                    <div className="flex items-center space-x-2 md:space-x-4 flex-shrink-0">
-                        <VoiceNavWidget />
-                        <div className="h-8 w-px bg-gray-200 hidden sm:block" />
-                        <LanguageSwitcher />
-                        {tenantStores.length > 0 ? (
-                            <div className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-2 py-1">
-                                <span className="hidden sm:inline text-[10px] font-black uppercase tracking-widest text-gray-500">{t.dashboardLayout.branchLabel}</span>
-                                <select
-                                    value={activeStoreId}
-                                    onChange={(e) => handleStoreChange(e.target.value)}
-                                    className="bg-transparent text-xs font-semibold text-gray-700 outline-none max-w-[100px] sm:max-w-none"
-                                    aria-label="Select branch"
-                                >
-                                    {tenantStores.map((store: any) => (
-                                        <option key={store.id} value={store.id}>
-                                            {store.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        ) : null}
+                    <div className="flex items-center gap-1.5 md:gap-4 flex-shrink-0">
+                        <div className="hidden md:contents">
+                            <VoiceNavWidget />
+                            <div className="h-8 w-px bg-gray-200 hidden sm:block" />
+                            <LanguageSwitcher />
+                            {tenantStores.length > 0 ? (
+                                <div className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-2 py-1">
+                                    <span className="hidden sm:inline text-[10px] font-black uppercase tracking-widest text-gray-500">{t.dashboardLayout.branchLabel}</span>
+                                    <select
+                                        value={activeStoreId}
+                                        onChange={(e) => handleStoreChange(e.target.value)}
+                                        className="bg-transparent text-xs font-semibold text-gray-700 outline-none max-w-[140px] lg:max-w-none"
+                                        aria-label="Select branch"
+                                    >
+                                        {tenantStores.map((store: any) => (
+                                            <option key={store.id} value={store.id}>
+                                                {store.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            ) : null}
+                        </div>
+                        <AppHeaderMobileMenu
+                            tenantStores={tenantStores}
+                            activeStoreId={activeStoreId}
+                            onStoreChange={handleStoreChange}
+                        />
                         <NotificationBell />
                         <div className="h-8 w-px bg-gray-200 hidden sm:block" />
                         <AvatarDropdown

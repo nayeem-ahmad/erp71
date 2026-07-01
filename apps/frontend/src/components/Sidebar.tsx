@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     LayoutDashboard,
     ShoppingCart,
@@ -63,6 +63,7 @@ import {
     Target,
     Upload,
     Waves,
+    X,
     type LucideIcon,
 } from 'lucide-react';
 import { buildAccountingSidebarChildren } from '@/lib/accounting-nav';
@@ -539,11 +540,56 @@ export default function Sidebar({
         });
     }, [canAccessAccounting, pathname, modules]);
 
+    const asideRef = useRef<HTMLElement>(null);
+    const touchStartXRef = useRef(0);
+
     // Close mobile drawer on navigation
     useEffect(() => {
         onClose?.();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pathname]);
+
+    useEffect(() => {
+        if (!isOpen || !onClose) return;
+
+        const aside = asideRef.current;
+        if (!aside) return;
+
+        const focusableSelector = 'a[href], button:not([disabled]), select, textarea, input:not([disabled])';
+        const getFocusable = () =>
+            Array.from(aside.querySelectorAll<HTMLElement>(focusableSelector)).filter(
+                (element) => !element.hasAttribute('disabled') && element.tabIndex !== -1,
+            );
+
+        const focusable = getFocusable();
+        focusable[0]?.focus();
+
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                onClose();
+                return;
+            }
+
+            if (event.key !== 'Tab') return;
+
+            const items = getFocusable();
+            if (items.length === 0) return;
+
+            const first = items[0];
+            const last = items[items.length - 1];
+
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        };
+
+        document.addEventListener('keydown', onKeyDown);
+        return () => document.removeEventListener('keydown', onKeyDown);
+    }, [isOpen, onClose]);
 
     const toggleSidebar = () => {
         setCollapsed((prev) => {
@@ -606,38 +652,64 @@ export default function Sidebar({
             )}
 
             <aside
+                ref={asideRef}
+                role={onClose ? 'dialog' : undefined}
+                aria-modal={onClose && isOpen ? true : undefined}
+                aria-label={onClose ? t.sidebar.navigation : undefined}
                 className={`
-                    fixed inset-y-0 left-0 z-40 w-64 flex flex-col bg-white border-r border-gray-200 transition-all duration-300 flex-shrink-0
+                    fixed inset-y-0 left-0 z-40 w-64 flex flex-col bg-white border-r border-gray-200 transition-all duration-300 flex-shrink-0 pt-safe
                     ${isOpen ? 'translate-x-0' : '-translate-x-full'}
                     md:relative md:inset-y-auto md:left-auto md:z-auto md:translate-x-0
                     ${collapsed ? 'md:w-16' : 'md:w-64'}
                 `}
+                onTouchStart={(event) => {
+                    touchStartXRef.current = event.touches[0]?.clientX ?? 0;
+                }}
+                onTouchEnd={(event) => {
+                    if (!isOpen || !onClose) return;
+                    const endX = event.changedTouches[0]?.clientX ?? 0;
+                    if (touchStartXRef.current - endX > 72) {
+                        onClose();
+                    }
+                }}
             >
                 {/* Logo */}
-                <div className={`flex items-center h-14 border-b border-gray-100 flex-shrink-0 ${collapsed ? 'justify-center px-0' : 'px-5 space-x-3'}`}>
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ backgroundColor: primaryColor }}>
-                        {logoUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
-                        ) : (
-                            <Package className="text-white w-5 h-5" />
+                <div className={`flex items-center h-14 border-b border-gray-100 flex-shrink-0 ${collapsed ? 'justify-center px-0' : 'px-5 gap-3'}`}>
+                    <div className={`flex items-center min-w-0 ${collapsed ? '' : 'flex-1 space-x-3'}`}>
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ backgroundColor: primaryColor }}>
+                            {logoUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                            ) : (
+                                <Package className="text-white w-5 h-5" />
+                            )}
+                        </div>
+                        {!collapsed && (
+                            <div className="min-w-0">
+                                <span className="text-lg font-bold tracking-tight whitespace-nowrap block">
+                                    {businessName || 'ERP71'}
+                                </span>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.sidebar.workspace}</span>
+                                    {activePlanCode && (
+                                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ${activePlanCode === 'PREMIUM' ? 'bg-amber-100 text-amber-700' : activePlanCode === 'STANDARD' ? 'bg-indigo-100 text-indigo-700' : activePlanCode === 'BASIC' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                                            {activePlanCode}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
                         )}
                     </div>
-                    {!collapsed && (
-                        <div className="min-w-0">
-                            <span className="text-lg font-bold tracking-tight whitespace-nowrap block">
-                                {businessName || 'ERP71'}
-                            </span>
-                            <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.sidebar.workspace}</span>
-                                {activePlanCode && (
-                                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ${activePlanCode === 'PREMIUM' ? 'bg-amber-100 text-amber-700' : activePlanCode === 'STANDARD' ? 'bg-indigo-100 text-indigo-700' : activePlanCode === 'BASIC' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                                        {activePlanCode}
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    )}
+                    {onClose && isOpen ? (
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="md:hidden min-h-touch min-w-touch flex items-center justify-center rounded-xl text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors flex-shrink-0"
+                            aria-label={t.sidebar.closeNavigation}
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                    ) : null}
                 </div>
 
                 {/* Navigation */}

@@ -13,7 +13,8 @@
     "test:e2e": "playwright test",
     "test:e2e:core": "playwright test core-modules.spec.ts",
     "test:e2e:accounting": "playwright test -c playwright.accounting.config.ts",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:mobile": "playwright test mobile-responsive.spec.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -92,6 +92,7 @@ export default function PurchasesPage() {
                     </span>
                 ),
                 size: 90,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor((row) => row.items.map((item) => item.product?.name).filter(Boolean).join(', '), {
                 id: 'products',
@@ -100,6 +101,7 @@ export default function PurchasesPage() {
                     <span className="text-sm text-gray-500 line-clamp-2">{info.getValue() || '-'}</span>
                 ),
                 size: 320,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('total_amount', {
                 header: t.purchases.columns.total,
@@ -125,6 +127,7 @@ export default function PurchasesPage() {
                 },
                 sortingFn: 'datetime',
                 size: 150,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.display({
                 id: 'posting',
@@ -136,6 +139,7 @@ export default function PurchasesPage() {
                     />
                 ),
                 size: 120,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.display({
                 id: 'actions',
@@ -158,9 +162,9 @@ export default function PurchasesPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-4 md:p-6 font-sans text-gray-900">
             <div className="w-full space-y-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                         <h1 className="text-2xl font-black tracking-tight">{t.purchases.title}</h1>
                         <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">

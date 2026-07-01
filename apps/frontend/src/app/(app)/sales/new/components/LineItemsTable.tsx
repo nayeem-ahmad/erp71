@@ -24,8 +24,9 @@ export default function LineItemsTable({ items, onUpdateItem, onRemoveItem }: Li
     };
 
     return (
-        <div className="h-full overflow-y-auto rounded border bg-white">
-            <table className="w-full text-sm">
+        <div className="h-full overflow-hidden rounded border bg-white flex flex-col">
+            <div className="flex-1 overflow-y-auto overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
                 <thead className="sticky top-0 z-10 bg-gray-50 border-b">
                     <tr className="text-[11px] uppercase tracking-wide text-gray-500">
                         <th className="px-2 py-1.5 text-left font-semibold w-8">#</th>
@@ -108,6 +109,7 @@ export default function LineItemsTable({ items, onUpdateItem, onRemoveItem }: Li
                     )}
                 </tbody>
             </table>
+            </div>
         </div>
     );
 }

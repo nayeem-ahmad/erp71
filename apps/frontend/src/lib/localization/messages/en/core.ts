@@ -109,6 +109,7 @@ export const coreMessages = {
             filterPlaceholder: 'Filter {column}...',
             rows: 'Rows:',
             loading: 'Loading...',
+            scrollHint: 'Swipe to see more columns',
         },
     },
     dashboard: {
@@ -207,6 +208,7 @@ export const coreMessages = {
     dashboardLayout: {
         defaultPageTitle: 'Dashboard',
         branchLabel: 'Branch',
+        headerMoreMenuAria: 'More options',
         userFallbackRole: 'Staff',
         onboardingMessage: 'Welcome! Get started by adding products and making your first sale.',
         startSetup: 'Start setup',
@@ -222,6 +224,9 @@ export const coreMessages = {
     },
     sidebar: {
         workspace: 'Workspace',
+        navigation: 'Main navigation',
+        openNavigation: 'Open navigation',
+        closeNavigation: 'Close navigation',
         modules: {
             dashboard: 'Dashboard',
             sales: 'Sales',

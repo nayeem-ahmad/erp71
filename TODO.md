@@ -133,8 +133,24 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] POS search bar hardcoded width `w-72` — replaced with `flex-1 min-w-0 sm:flex-none sm:w-64`; header row now `flex-col sm:flex-row` — done 2026-06-13
 - [x] POS product grid breakpoints — `grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5`; POS modals made responsive (`w-full max-w-[N]`, `p-4` container padding) — done 2026-06-13
 - [x] Dashboard header overflow on small screens — `px-3 md:px-6`, `space-x-2 md:space-x-4`, branch label hidden below `sm:`, store select capped at `max-w-[100px]` on mobile, separator hidden below `sm:` — done 2026-06-13
+- [x] App header mobile overflow menu (P0) — VoiceNav, language switcher, and branch select collapsed into `AppHeaderMobileMenu` below `md`; notifications + avatar stay visible — done 2026-07-01
+- [x] Inventory products header overflow (P0) — mobile shows Add Product + Import + ⋯ menu for secondary actions; desktop keeps full `flex-wrap` toolbar — done 2026-07-01
+- [x] Storefront mobile nav + touch add-to-cart (P0) — shared `StorefrontHeader` with hamburger on home/shop; trending products show Add to Cart on mobile (hover-only on `md+`) — done 2026-07-01
+- [x] Mobile P1: table overflow wrappers — `LineItemsTable` + purchase/order/quotation modal item tables wrapped in `overflow-x-auto` — done 2026-07-01
+- [x] Mobile P1: modal form grids — `grid-cols-1 sm:grid-cols-2/3` in AddCustomer, AddProduct, CreateOrder/Purchase modals, etc. — done 2026-07-01
+- [x] Mobile P1: legal/contact marketing nav — contact, terms, privacy use shared `MarketingNav` + `MarketingFooter` with hamburger — done 2026-07-01
+- [x] Mobile P2: `ModalShell` bottom-sheet pattern for all transaction modals — done 2026-07-01
+- [x] Mobile P2: DataTable scroll gradient + swipe hint on mobile — done 2026-07-01
+- [x] Mobile P2: app shell `h-dvh`, list pages `p-4 md:p-6` + flex-wrap headers — done 2026-07-01
+- [x] Mobile P2: pricing plan-selector stacked comparison below `md` — done 2026-07-01
+- [x] Mobile P2: storefront shop collapsible filters below `lg` — done 2026-07-01
+- [x] Mobile P3: Playwright mobile projects (iPhone 13, Pixel 5, iPad gen 7) + `e2e/mobile-responsive.spec.ts` + `npm run test:e2e:mobile` — done 2026-07-01
+- [x] Mobile P3: Tailwind safe-area + touch tokens (`safe-*` spacing, `min-h/w-touch`) + global utilities (`pb-safe`, `bottom-safe`, `overflow-x-touch`) — done 2026-07-01
+- [x] Mobile P3: sidebar drawer UX — close button, focus trap, Escape, swipe-left dismiss, `aria-modal`, body scroll lock — done 2026-07-01
+- [x] Mobile P3: FAB/feedback safe-area positioning + responsive feedback panel width — done 2026-07-01
+- [x] Mobile P3: storefront E2E smoke — `e2e/helpers/storefront.ts` + mobile spec for `nayeem-store` hamburger nav, shop filter drawer, add-to-cart visibility — done 2026-07-01
 - [x] DataTable toolbar doesn't stack on mobile — added `flex-wrap` to buttons container so filter/column/export buttons wrap onto new lines — done 2026-06-13
-- [ ] DataTable: no responsive column hiding — all columns visible on mobile causing horizontal scroll; add ability to hide low-priority columns below `sm:` breakpoint
+- [x] DataTable: responsive column hiding — `meta.hideOnMobile` on columns + `useIsMdUp` merges mobile visibility in `DataTable`; tagged customers/products/purchases list columns — done 2026-07-01
 - [x] Responsive padding audit — dashboard home changed from `p-8` to `p-4 md:p-8` — done 2026-06-13
 - [x] Dashboard home skips `sm:` breakpoint in KPI grid — changed to `grid-cols-1 sm:grid-cols-2 xl:grid-cols-4` — done 2026-06-13
 
@@ -512,4 +528,9 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Fix nightly read-only E2E reporting 0 tests as success — workflow still targeted suspended Render URLs (`erp71-*-onrender.com` → 404); global-setup failed, Playwright wrote empty `suites[]` + `errors[]`, and `format-e2e-report.js` treated 0 failures as pass; updated defaults + GitHub `PROD_BASE_URL`/`PROD_API_URL` vars to `app.erp71.com`/`api.erp71.com`, login-first in `global-setup.ts`, and fail report when no tests run — done 2026-07-01
 - [x] Fix 3 failing nightly read-only E2E specs — signup heading regex (`Create your ERP71 workspace`), UI login waiter (`waitForResponse` + `toHaveURL` for SPA nav), accounting hub skip when smoke account lacks paid accounting plan — done 2026-07-01
 - [x] Full accounting sidebar navigation — all accounting features linked in left menu via collapsible subgroups (Transactions & Funds, Reconciliation, Reports, Setup); shared `accounting-nav.ts` config for sidebar + hub; advanced reports gated by inventory-report entitlement; i18n en/bn/ms — done 2026-07-01
+- [x] Mobile responsiveness P0 fixes — app header overflow menu, inventory products action menu, storefront hamburger nav + always-visible Add to Cart on touch — done 2026-07-01
+- [x] Mobile responsiveness P1 fixes — DataTable `hideOnMobile` columns, modal table scroll, responsive form grids, shared marketing nav on contact/terms/privacy — done 2026-07-01
+- [x] Mobile responsiveness P2 fixes — ModalShell, DataTable scroll affordance, list header wrap, pricing mobile compare, shop filter drawer — done 2026-07-01
+- [x] Mobile responsiveness P3 fixes — Playwright mobile viewports, safe-area/touch tokens, sidebar drawer a11y (focus trap, swipe, aria-modal), body scroll lock, mobile E2E spec, header touch targets — done 2026-07-01
+- [x] Storefront mobile E2E — `nayeem-store` slug wired for hamburger nav, shop filter drawer, and add-to-cart checks in `mobile-responsive.spec.ts` — done 2026-07-01
 

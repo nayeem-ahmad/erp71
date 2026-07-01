@@ -125,6 +125,7 @@ export default function CustomersPage() {
                     <span className="text-sm font-mono text-gray-500">{info.getValue() || '-'}</span>
                 ),
                 size: 120,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('name', {
                 header: t.customers.columns.customer,
@@ -155,6 +156,7 @@ export default function CustomersPage() {
                     );
                 },
                 size: 120,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor((row) => row.customerGroup?.name ?? '', {
                 id: 'group',
@@ -163,6 +165,7 @@ export default function CustomersPage() {
                     <span className="text-sm font-medium text-gray-700">{info.getValue() || '-'}</span>
                 ),
                 size: 150,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor((row) => row.territory?.name ?? '', {
                 id: 'territory',
@@ -171,6 +174,7 @@ export default function CustomersPage() {
                     <span className="text-sm font-medium text-gray-700">{info.getValue() || '-'}</span>
                 ),
                 size: 150,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('total_spent', {
                 header: t.customers.columns.totalSpent,
@@ -195,6 +199,7 @@ export default function CustomersPage() {
                 },
                 sortingFn: (a, b) => Number(a.getValue('loyalty_points') || 0) - Number(b.getValue('loyalty_points') || 0),
                 size: 110,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('segment_category', {
                 header: t.customers.columns.segment,
@@ -207,6 +212,7 @@ export default function CustomersPage() {
                     );
                 },
                 size: 130,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('created_at', {
                 header: t.customers.columns.registered,
@@ -217,6 +223,7 @@ export default function CustomersPage() {
                 ),
                 sortingFn: 'datetime',
                 size: 130,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.display({
                 id: 'actions',
@@ -251,16 +258,16 @@ export default function CustomersPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-4 md:p-6 font-sans text-gray-900">
             <div className="w-full space-y-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                         <h1 className="text-2xl font-black tracking-tight">{t.customers.title}</h1>
                         <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
                             {t.customers.subtitle}
                         </p>
                     </div>
-                    <div className="flex items-center space-x-3">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                         <button
                             onClick={handleRunSegmentation}
                             disabled={runningSegmentation}

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { X, Camera } from 'lucide-react';
+import ModalShell from '@/components/ModalShell';
 import { api } from '@/lib/api';
 import { COMPOUND_UNIT_DEFS, CompoundUnitType } from '@/lib/compound-units';
 import { useI18n } from '@/lib/i18n';
@@ -154,8 +155,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col">
+        <ModalShell size="sm" onBackdropClick={onClose}>
                 <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
                     <h2 className="text-xl font-bold tracking-tight text-gray-900">{mode === 'edit' ? t.addProductModal.editTitle : t.addProductModal.addTitle}</h2>
                     <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-white transition-all">
@@ -205,7 +205,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                             />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5 ml-1">SKU</label>
                                 <input
@@ -279,7 +279,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div>
                                 <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5 ml-1">{t.addProductModal.reorderLevel}</label>
                                 <input
@@ -344,7 +344,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                             </select>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5 ml-1">{t.addProductModal.group}</label>
                                 <select
@@ -409,7 +409,6 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
+        </ModalShell>
     );
 }

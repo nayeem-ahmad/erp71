@@ -12,6 +12,7 @@ import {
     PRICING_FAQS,
     yearlySavingsPercent,
     type ComparisonCell,
+    type PlanId,
 } from '@/lib/marketing/plans';
 
 function Cell({ value }: { value: ComparisonCell }) {
@@ -60,6 +61,7 @@ export default function PricingPage() {
     const { t } = useI18n();
     const m = t.marketing.pricing;
     const [yearly, setYearly] = useState(false);
+    const [comparePlan, setComparePlan] = useState<PlanId>('standard');
 
     return (
         <div className="min-h-screen bg-white font-sans text-gray-900">
@@ -178,7 +180,36 @@ export default function PricingPage() {
                         Compare plans in detail
                     </h2>
 
-                    <div className="overflow-x-auto rounded-2xl border border-gray-200 shadow-sm bg-white">
+                    <div className="md:hidden space-y-4">
+                        <label className="block">
+                            <span className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2 block">
+                                Compare plan
+                            </span>
+                            <select
+                                value={comparePlan}
+                                onChange={(event) => setComparePlan(event.target.value as PlanId)}
+                                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            >
+                                {MARKETING_PLANS.map((plan) => (
+                                    <option key={plan.id} value={plan.id}>
+                                        {plan.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm divide-y divide-gray-100">
+                            {PLAN_COMPARISON_ROWS.map((row) => (
+                                <div key={row.feature} className="flex items-center justify-between gap-4 px-4 py-3.5">
+                                    <span className="text-sm font-medium text-gray-700">{row.feature}</span>
+                                    <div className="flex-shrink-0">
+                                        <Cell value={row[comparePlan]} />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="hidden md:block overflow-x-auto rounded-2xl border border-gray-200 shadow-sm bg-white">
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-gray-100">

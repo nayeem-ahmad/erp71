@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Search, Trash2, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
+import ModalShell from '@/components/ModalShell';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
@@ -149,8 +150,7 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh]">
+        <ModalShell size="xl" onBackdropClick={onClose}>
                 <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                     <div>
                         <h2 className="text-xl font-black tracking-tight">{t.purchaseOrders.modal.title}</h2>
@@ -265,7 +265,7 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
 
                             <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 space-y-3">
                                 <h3 className="text-sm font-black tracking-tight">{t.purchaseShared.costAdjustments}</h3>
-                                <div className="grid grid-cols-3 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     {[ [t.common.tax, taxAmount, setTaxAmount], [t.common.discount, discountAmount, setDiscountAmount], [t.purchaseShared.freight, freightAmount, setFreightAmount] ].map(([label, val, setter]) => (
                                         <div key={label as string}>
                                             <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">{label as string}</label>
@@ -311,7 +311,6 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                         {loading ? t.purchaseOrders.modal.creating : t.purchaseOrders.modal.createPo}
                     </button>
                 </div>
-            </div>
-        </div>
+        </ModalShell>
     );
 }

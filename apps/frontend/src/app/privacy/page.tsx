@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import MarketingFooter from '@/components/marketing/MarketingFooter';
+import MarketingNav from '@/components/marketing/MarketingNav';
 import { useI18n } from '@/lib/i18n';
 
 export default function PrivacyPage() {
@@ -11,26 +13,10 @@ export default function PrivacyPage() {
     return (
         <div className="min-h-screen bg-white font-sans text-gray-900">
 
-            {/* Nav */}
-            <header className="fixed top-0 inset-x-0 z-50 bg-white/90 backdrop-blur border-b border-gray-100">
-                <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-                    <Link href="/" className="text-xl font-black tracking-tight text-blue-600">ERP71</Link>
-                    <div className="flex items-center gap-3">
-                        <Link href="/login" className="text-sm font-semibold text-gray-700 hover:text-gray-900 px-4 py-2">
-                            {m.signIn}
-                        </Link>
-                        <Link
-                            href="/signup"
-                            className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-5 py-2 rounded-xl transition-colors"
-                        >
-                            {m.startFreeTrial}
-                        </Link>
-                    </div>
-                </div>
-            </header>
+            <MarketingNav />
 
             {/* Content */}
-            <main className="pt-28 pb-24 px-6">
+            <main className="pt-32 pb-24 px-6">
                 <div className="max-w-3xl mx-auto">
 
                     <h1 className="text-4xl font-black tracking-tight text-gray-900 mb-2">{p.title}</h1>
@@ -231,19 +217,7 @@ export default function PrivacyPage() {
                 </div>
             </main>
 
-            {/* Footer */}
-            <footer className="py-10 px-6 border-t border-gray-100 bg-white">
-                <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-400">
-                    <span className="font-black text-lg text-blue-600">ERP71</span>
-                    <div className="flex items-center gap-6">
-                        <Link href="/terms" className="hover:text-gray-700 transition-colors">Terms of Service</Link>
-                        <Link href="/privacy" className="hover:text-gray-700 transition-colors">Privacy Policy</Link>
-                        <Link href="/login" className="hover:text-gray-700 transition-colors">Sign in</Link>
-                        <Link href="/signup" className="hover:text-gray-700 transition-colors">Sign up</Link>
-                    </div>
-                    <span>&copy; {new Date().getFullYear()} ERP71. All rights reserved.</span>
-                </div>
-            </footer>
+            <MarketingFooter />
         </div>
     );
 }

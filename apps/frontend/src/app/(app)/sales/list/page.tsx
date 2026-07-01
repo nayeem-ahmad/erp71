@@ -208,16 +208,16 @@ export default function SalesPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-4 md:p-6 font-sans text-gray-900">
             <div className="w-full space-y-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                         <h1 className="text-2xl font-black tracking-tight">{t.sales.list.title}</h1>
                         <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
                             {t.sales.list.subtitle}
                         </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <Link
                             href="/sales/new"
                             className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center transition-all hover:-translate-y-0.5 active:translate-y-0"

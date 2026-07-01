@@ -3,6 +3,7 @@ import { X, Search, AlertCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
+import ModalShell from '@/components/ModalShell';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { applyVoiceEntryReturnQuantities, buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 
@@ -139,8 +140,7 @@ export default function IssueReturnModal({ isOpen, onClose, onSuccess }: IssueRe
     };
 
     return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh]">
+        <ModalShell size="md" onBackdropClick={onClose}>
                 <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                     <h2 className="text-xl font-black tracking-tight">{t.returns.issueModal.title}</h2>
                     <button onClick={handleClose} className="p-2 hover:bg-gray-50 rounded-xl text-gray-400">
@@ -271,7 +271,6 @@ export default function IssueReturnModal({ isOpen, onClose, onSuccess }: IssueRe
                         </div>
                     )}
                 </div>
-            </div>
-        </div>
+        </ModalShell>
     );
 }

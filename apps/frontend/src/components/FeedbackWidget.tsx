@@ -90,7 +90,7 @@ export default function FeedbackWidget() {
             {open && (
                 <div
                     ref={cardRef}
-                    className="w-80 rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden animate-slide-up"
+                    className="w-[calc(100vw-2.5rem)] max-w-80 rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden animate-slide-up"
                     style={{ animation: 'slideUp 0.18s ease-out' }}
                 >
                     <style>{`

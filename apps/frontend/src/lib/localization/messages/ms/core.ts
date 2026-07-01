@@ -109,6 +109,7 @@ export const coreMessages = {
                 filterPlaceholder: "Tapis {column}...",
                 rows: "Baris:",
                 loading: "Memuatkan...",
+                scrollHint: "Leret untuk lihat lebih banyak lajur",
             },
         },
         dashboard: {
@@ -207,6 +208,7 @@ export const coreMessages = {
         dashboardLayout: {
             defaultPageTitle: "Dashboard",
             branchLabel: "Cawangan",
+            headerMoreMenuAria: "Lagi pilihan",
             userFallbackRole: "Kakitangan",
             onboardingMessage: "Selamat datang! Mulakan dengan menambah produk dan membuat jualan pertama anda.",
             startSetup: "Mulakan persediaan",
@@ -222,6 +224,9 @@ export const coreMessages = {
         },
         sidebar: {
             workspace: "Ruang kerja",
+            navigation: "Navigasi utama",
+            openNavigation: "Buka navigasi",
+            closeNavigation: "Tutup navigasi",
             modules: {
                 dashboard: "Dashboard",
                 sales: "Jualan",

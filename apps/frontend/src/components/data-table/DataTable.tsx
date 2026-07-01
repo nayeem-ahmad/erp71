@@ -52,8 +52,16 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { formatMessage, useI18n } from '@/lib/i18n';
+import { useIsMdUp } from '@/hooks/useMediaQuery';
 import { useTablePreferences } from './useTablePreferences';
 import { exportToCSV, exportToExcel, exportToPDF, printTable } from './export-utils';
+
+declare module '@tanstack/react-table' {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    interface ColumnMeta<TData, TValue> {
+        hideOnMobile?: boolean;
+    }
+}
 
 /* --------------------------------------------------------------- */
 /*  Types                                                           */
@@ -163,6 +171,7 @@ export default function DataTable<T>({
     const resolvedSearchPlaceholder = searchPlaceholder ?? t.common.dataTable.searchPlaceholder;
     const prefs = useTablePreferences();
     const savedPrefs = prefs.getPreferences(tableId);
+    const isMdUp = useIsMdUp();
 
     // State
     const [sorting, setSorting] = useState<SortingState>([]);
@@ -189,12 +198,28 @@ export default function DataTable<T>({
     // Refs for click-outside
     const columnSelectorRef = useRef<HTMLDivElement>(null);
     const exportMenuRef = useRef<HTMLDivElement>(null);
+    const tableScrollRef = useRef<HTMLDivElement>(null);
+    const [tableCanScroll, setTableCanScroll] = useState(false);
 
     // DnD sensors
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
         useSensor(KeyboardSensor),
     );
+
+    const effectiveColumnVisibility = useMemo(() => {
+        if (isMdUp) return columnVisibility;
+
+        const mobileOverrides: VisibilityState = {};
+        columns.forEach((column) => {
+            const id = column.id ?? (column as { accessorKey?: string }).accessorKey;
+            if (id && column.meta?.hideOnMobile) {
+                mobileOverrides[id] = false;
+            }
+        });
+
+        return { ...columnVisibility, ...mobileOverrides };
+    }, [columnVisibility, columns, isMdUp]);
 
     // Table instance
     const table = useReactTable({
@@ -204,7 +229,7 @@ export default function DataTable<T>({
             sorting,
             columnFilters,
             globalFilter,
-            columnVisibility,
+            columnVisibility: effectiveColumnVisibility,
             columnOrder,
             columnSizing,
             rowSelection,
@@ -253,6 +278,25 @@ export default function DataTable<T>({
             onRowSelectionChange(selectedRows);
         }
     }, [rowSelection]);
+
+    useEffect(() => {
+        const element = tableScrollRef.current;
+        if (!element) return;
+
+        const updateScrollState = () => {
+            setTableCanScroll(element.scrollWidth > element.clientWidth + 4);
+        };
+
+        updateScrollState();
+        const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateScrollState) : null;
+        observer?.observe(element);
+        window.addEventListener('resize', updateScrollState);
+
+        return () => {
+            observer?.disconnect();
+            window.removeEventListener('resize', updateScrollState);
+        };
+    }, [data, effectiveColumnVisibility, isLoading, columnOrder]);
 
     // Click outside handlers
     useEffect(() => {
@@ -511,7 +555,14 @@ export default function DataTable<T>({
             </div>
 
             {/* ── Table ───────────────────────────────────────────── */}
-            <div className="overflow-x-auto">
+            <div className="relative">
+                {!isMdUp && tableCanScroll ? (
+                    <div
+                        aria-hidden
+                        className="pointer-events-none absolute right-0 top-0 bottom-0 z-10 w-10 bg-gradient-to-l from-white via-white/80 to-transparent md:hidden"
+                    />
+                ) : null}
+                <div ref={tableScrollRef} className="overflow-x-auto overflow-x-touch [scrollbar-width:thin]">
                 {isLoading ? (
                     <div className="p-12 text-center text-gray-400 font-bold uppercase tracking-widest text-xs">
                         {t.common.dataTable.loading}
@@ -589,6 +640,12 @@ export default function DataTable<T>({
                         </table>
                     </DndContext>
                 )}
+                </div>
+                {!isMdUp && tableCanScroll ? (
+                    <p className="px-3 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wider text-gray-400 md:hidden">
+                        {t.common.dataTable.scrollHint} →
+                    </p>
+                ) : null}
             </div>
 
             {/* ── Pagination ──────────────────────────────────────── */}

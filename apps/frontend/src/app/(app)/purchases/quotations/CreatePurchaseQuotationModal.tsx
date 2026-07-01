@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Search, Trash2, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
+import ModalShell from '@/components/ModalShell';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
@@ -136,8 +137,7 @@ export default function CreatePurchaseQuotationModal({ isOpen, onClose, onSucces
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh]">
+        <ModalShell size="xl" onBackdropClick={onClose}>
                 <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                     <div>
                         <h2 className="text-xl font-black tracking-tight">New Purchase Quotation (RFQ)</h2>
@@ -276,7 +276,6 @@ export default function CreatePurchaseQuotationModal({ isOpen, onClose, onSucces
                         {loading ? 'Creating...' : 'Create RFQ'}
                     </button>
                 </div>
-            </div>
-        </div>
+        </ModalShell>
     );
 }

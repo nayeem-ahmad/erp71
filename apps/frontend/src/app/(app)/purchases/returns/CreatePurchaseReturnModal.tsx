@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import ModalShell from '@/components/ModalShell';
 import { applyVoiceEntryReturnQuantities, buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 
 interface PurchaseReturnItem {
@@ -226,8 +227,7 @@ export default function CreatePurchaseReturnModal({
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh]">
+        <ModalShell size="2xl" onBackdropClick={onClose}>
                 <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                     <div>
                         <h2 className="text-xl font-black tracking-tight">New Purchase Return</h2>
@@ -320,7 +320,7 @@ export default function CreatePurchaseReturnModal({
                                 </div>
                             ) : (
                                 <>
-                                    <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 grid grid-cols-2 gap-4">
+                                    <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div>
                                             <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Purchase #</span>
                                             <span className="text-sm font-black text-gray-900">{selectedPurchase.purchase_number}</span>
@@ -343,7 +343,7 @@ export default function CreatePurchaseReturnModal({
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div>
                                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-2">Reference Number</label>
                                             <input
@@ -456,7 +456,6 @@ export default function CreatePurchaseReturnModal({
                         {submitting ? 'Creating...' : 'Create Purchase Return'}
                     </button>
                 </div>
-            </div>
-        </div>
+        </ModalShell>
     );
 }

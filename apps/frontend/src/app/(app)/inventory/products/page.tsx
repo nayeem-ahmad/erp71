@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, BookOpen, ClipboardCheck, Package, Pencil, Plus, Settings2, ShoppingBasket, Tag, Trash2, Truck, TrendingUp, Upload } from 'lucide-react';
+import { AlertTriangle, BookOpen, ClipboardCheck, MoreHorizontal, Package, Pencil, Plus, Settings2, ShoppingBasket, Tag, Trash2, Truck, TrendingUp, Upload } from 'lucide-react';
 import { api, fetchWithAuth } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -43,6 +43,8 @@ export default function InventoryPage() {
     const [importStatus, setImportStatus] = useState<string | null>(null);
     const [isImporting, setIsImporting] = useState(false);
     const csvInputRef = useRef<HTMLInputElement>(null);
+    const mobileActionsRef = useRef<HTMLDivElement>(null);
+    const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -68,6 +70,28 @@ export default function InventoryPage() {
             setHasAdvancedInventoryReports(planCode === 'STANDARD' || planCode === 'PREMIUM');
         }
     }, []);
+
+    useEffect(() => {
+        if (!mobileActionsOpen) return;
+
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setMobileActionsOpen(false);
+        };
+        const onPointer = (event: MouseEvent) => {
+            if (mobileActionsRef.current && !mobileActionsRef.current.contains(event.target as Node)) {
+                setMobileActionsOpen(false);
+            }
+        };
+
+        window.addEventListener('keydown', onKey);
+        const id = window.setTimeout(() => document.addEventListener('mousedown', onPointer), 0);
+
+        return () => {
+            window.removeEventListener('keydown', onKey);
+            window.clearTimeout(id);
+            document.removeEventListener('mousedown', onPointer);
+        };
+    }, [mobileActionsOpen]);
 
     const loadProducts = async () => {
         try {
@@ -213,6 +237,7 @@ export default function InventoryPage() {
                     <span className="text-sm font-mono text-gray-500">{info.getValue() || '-'}</span>
                 ),
                 size: 150,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('price', {
                 header: t.inventory.columns.price,
@@ -234,6 +259,7 @@ export default function InventoryPage() {
                 header: t.inventory.columns.warranty,
                 cell: (info) => <span className="text-sm font-bold text-gray-700">{info.getValue()}</span>,
                 size: 120,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor((row) => Number(row.stocks?.[0]?.quantity || 0), {
                 id: 'stock',
@@ -256,6 +282,7 @@ export default function InventoryPage() {
                     ),
                     sortingFn: (a, b) => Number(a.getValue('stock_value')) - Number(b.getValue('stock_value')),
                     size: 130,
+                    meta: { hideOnMobile: true },
                 },
             ),
             columnHelper.accessor(
@@ -297,12 +324,14 @@ export default function InventoryPage() {
                 header: t.inventory.columns.group,
                 cell: (info) => <span className="text-sm font-bold text-gray-700">{info.getValue()}</span>,
                 size: 140,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor((row) => row.subgroup?.name || '-', {
                 id: 'subgroup',
                 header: t.inventory.columns.subgroup,
                 cell: (info) => <span className="text-sm text-gray-500">{info.getValue()}</span>,
                 size: 150,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.display({
                 id: 'actions',
@@ -363,16 +392,98 @@ export default function InventoryPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-6 font-sans text-gray-900">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-4 md:p-6 font-sans text-gray-900">
             <div className="w-full space-y-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                         <h1 className="text-2xl font-black tracking-tight">{t.inventory.title}</h1>
                         <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-0.5">
                             {t.inventory.subtitle}
                         </p>
                     </div>
-                    <div className="flex items-center gap-3">
+
+                    <input
+                        ref={csvInputRef}
+                        type="file"
+                        accept=".csv"
+                        className="hidden"
+                        onChange={handleCsvFileChange}
+                    />
+
+                    <div className="flex items-center gap-2 md:hidden">
+                        <button
+                            onClick={() => setIsModalOpen(true)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center shadow-lg shadow-blue-200 transition-all"
+                        >
+                            <Plus className="w-4 h-4 mr-2" />
+                            {t.inventory.addProduct}
+                        </button>
+                        <button
+                            onClick={() => csvInputRef.current?.click()}
+                            disabled={isImporting}
+                            className="bg-white border border-gray-200 text-gray-700 px-3 py-2.5 rounded-xl font-bold text-sm flex items-center transition-all hover:border-emerald-300 hover:text-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                            <Upload className="w-4 h-4" />
+                        </button>
+                        <div ref={mobileActionsRef} className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setMobileActionsOpen((open) => !open)}
+                                className="min-h-11 min-w-11 flex items-center justify-center bg-white border border-gray-200 text-gray-700 rounded-xl transition-all hover:border-blue-300 hover:text-blue-700"
+                                aria-label={t.common.actions}
+                                aria-expanded={mobileActionsOpen}
+                            >
+                                <MoreHorizontal className="w-5 h-5" />
+                            </button>
+                            {mobileActionsOpen ? (
+                                <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-2xl border border-gray-200 bg-white py-2 shadow-xl">
+                                    <Link href="/inventory/ledger" onClick={() => setMobileActionsOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                        <BookOpen className="w-4 h-4" />
+                                        {t.inventory.stockLedger}
+                                    </Link>
+                                    <Link href="/inventory/settings" onClick={() => setMobileActionsOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                        <Settings2 className="w-4 h-4" />
+                                        {t.inventory.settings}
+                                    </Link>
+                                    <Link href="/inventory/categories" onClick={() => setMobileActionsOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                        <Tag className="w-4 h-4" />
+                                        {t.inventory.manageCategories}
+                                    </Link>
+                                    <Link href="/inventory/transfers" onClick={() => setMobileActionsOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                        <Truck className="w-4 h-4" />
+                                        {t.inventory.transfers}
+                                    </Link>
+                                    <Link href="/inventory/shrinkage" onClick={() => setMobileActionsOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                        <AlertTriangle className="w-4 h-4" />
+                                        {t.inventory.shrinkage}
+                                    </Link>
+                                    <Link href="/inventory/stock-takes" onClick={() => setMobileActionsOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                        <ClipboardCheck className="w-4 h-4" />
+                                        {t.inventory.stockTakes}
+                                    </Link>
+                                    {hasAdvancedInventoryReports ? (
+                                        <>
+                                            <Link href="/inventory/reports/reorder" onClick={() => setMobileActionsOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                                <TrendingUp className="w-4 h-4" />
+                                                {t.inventory.reorderReport}
+                                            </Link>
+                                            <Link href="/inventory/reports/shrinkage" onClick={() => setMobileActionsOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                                <AlertTriangle className="w-4 h-4" />
+                                                {t.inventory.shrinkageReport}
+                                            </Link>
+                                        </>
+                                    ) : (
+                                        <Link href="/billing" onClick={() => setMobileActionsOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-50">
+                                            <TrendingUp className="w-4 h-4" />
+                                            {t.inventory.upgradeReports}
+                                        </Link>
+                                    )}
+                                </div>
+                            ) : null}
+                        </div>
+                    </div>
+
+                    <div className="hidden md:flex flex-wrap items-center justify-end gap-3">
                         <Link
                             href="/inventory/ledger"
                             className="bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
@@ -441,14 +552,6 @@ export default function InventoryPage() {
                                 {t.inventory.upgradeReports}
                             </Link>
                         )}
-                        {/* Hidden CSV file input */}
-                        <input
-                            ref={csvInputRef}
-                            type="file"
-                            accept=".csv"
-                            className="hidden"
-                            onChange={handleCsvFileChange}
-                        />
                         <button
                             onClick={() => csvInputRef.current?.click()}
                             disabled={isImporting}
