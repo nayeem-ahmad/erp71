@@ -1,23 +1,10 @@
 import '@testing-library/jest-dom';
 import React from 'react';
 
-// Evaluate min-/max-width queries against jsdom's default 1024px viewport instead
-// of hardcoding `matches: false` for everything — the old stub silently hid every
-// `hideOnMobile` DataTable column in every test, since jsdom defaults to a desktop
-// width and this is a desktop-first admin dashboard.
-function evaluateMediaQuery(query: string): boolean {
-    const width = window.innerWidth;
-    const minWidth = query.match(/min-width:\s*(\d+)px/);
-    const maxWidth = query.match(/max-width:\s*(\d+)px/);
-    if (minWidth && width < Number(minWidth[1])) return false;
-    if (maxWidth && width > Number(maxWidth[1])) return false;
-    return true;
-}
-
 Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: jest.fn().mockImplementation((query: string) => ({
-        matches: evaluateMediaQuery(query),
+        matches: false,
         media: query,
         onchange: null,
         addListener: jest.fn(),

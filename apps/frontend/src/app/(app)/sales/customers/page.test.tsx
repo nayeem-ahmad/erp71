@@ -17,6 +17,15 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 
+// DataTable hides `hideOnMobile` columns (customer_code, customer_type,
+// customerGroup, segment_category, ...) when this reports a narrow viewport.
+// The global matchMedia mock always reports non-matching, so without this the
+// desktop-only columns this suite asserts on never render.
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => true,
+    useIsMdUp: () => true,
+}));
+
 const mockCustomers = [
     {
         id: 'cust-1',
