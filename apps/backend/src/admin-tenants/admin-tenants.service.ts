@@ -13,6 +13,7 @@ import {
     ListAdminUsersQueryDto,
     SuspendTenantDto,
     UpdateAdminTenantSubscriptionDto,
+    UpdateAdminTenantLocalizationDto,
     CreateAdminTenantDto,
 } from './admin-tenants.dto';
 
@@ -144,6 +145,54 @@ export class AdminTenantsService {
         });
 
         return result;
+    }
+
+    async updateLocalization(
+        tenantId: string,
+        dto: UpdateAdminTenantLocalizationDto,
+        adminUserId: string,
+    ) {
+        const tenant = await this.db.tenant.findUnique({ where: { id: tenantId } });
+        if (!tenant) {
+            throw new NotFoundException('Tenant not found');
+        }
+
+        const nextEnabled = dto.localization_enabled ?? tenant.localization_enabled;
+        const nextSecondary = dto.secondary_locale !== undefined
+            ? dto.secondary_locale
+            : tenant.secondary_locale;
+
+        if (nextEnabled && !nextSecondary) {
+            throw new BadRequestException('A secondary language is required when localization is enabled.');
+        }
+
+        const updated = await this.db.tenant.update({
+            where: { id: tenantId },
+            data: {
+                localization_enabled: nextEnabled,
+                secondary_locale: nextEnabled ? nextSecondary : null,
+                ...(nextEnabled ? {} : { default_locale: 'en' }),
+            },
+            select: {
+                id: true,
+                default_locale: true,
+                localization_enabled: true,
+                secondary_locale: true,
+            },
+        });
+
+        await this.auditService.log(
+            'tenant.localization.update',
+            'Tenant',
+            { userId: adminUserId },
+            tenantId,
+            {
+                localization_enabled: updated.localization_enabled,
+                secondary_locale: updated.secondary_locale,
+            },
+        );
+
+        return updated;
     }
 
     async suspendTenant(tenantId: string, dto: SuspendTenantDto, adminUserId: string) {
@@ -460,6 +509,9 @@ export class AdminTenantsService {
             id: tenant.id,
             name: tenant.name,
             created_at: tenant.created_at,
+            default_locale: tenant.default_locale,
+            localization_enabled: tenant.localization_enabled,
+            secondary_locale: tenant.secondary_locale,
             owner: tenant.owner
                 ? {
                       id: tenant.owner.id,

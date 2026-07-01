@@ -1,4 +1,4 @@
-import { IsEmail, IsIn, IsInt, IsOptional, IsString, Max, Min, ValidateIf } from 'class-validator';
+import { IsBoolean, IsEmail, IsIn, IsInt, IsOptional, IsString, Max, Min, ValidateIf } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ListAdminTenantsQueryDto {
@@ -12,6 +12,16 @@ export class UpdateAdminTenantSubscriptionDto {
     @IsOptional() @IsString() status?: 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'TRIALING';
     @IsOptional() @IsString() billingCycle?: 'MONTHLY' | 'YEARLY';
     @IsOptional() cancelAtPeriodEnd?: boolean;
+}
+
+export class UpdateAdminTenantLocalizationDto {
+    @IsOptional()
+    @IsBoolean()
+    localization_enabled?: boolean;
+
+    @IsOptional()
+    @IsIn(['bn', 'ms'])
+    secondary_locale?: 'bn' | 'ms' | null;
 }
 
 export class SuspendTenantDto {

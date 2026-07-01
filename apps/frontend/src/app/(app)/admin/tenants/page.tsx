@@ -8,10 +8,14 @@ import { formatDate } from '@/lib/format';
 
 type PlanCode = 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
 
+type SecondaryLocale = 'bn' | 'ms';
+
 type TenantRecord = {
     id: string;
     name: string;
     created_at: string;
+    localization_enabled?: boolean;
+    secondary_locale?: SecondaryLocale | null;
     owner: { id: string; email: string; name?: string | null } | null;
     stores: Array<{ id: string; name: string; address?: string | null; created_at?: string }>;
     users: Array<{ id: string; email: string; name?: string | null; role: string; joined_at?: string }>;
@@ -46,6 +50,7 @@ export default function AdminTenantsPage() {
     const [toast, setToast] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [isSavingLocalization, setIsSavingLocalization] = useState(false);
     const [isSuspending, setIsSuspending] = useState(false);
     const [isImpersonating, setIsImpersonating] = useState(false);
 
@@ -135,9 +140,20 @@ export default function AdminTenantsPage() {
 
     const [draft, setDraft] = useState(subscriptionForm);
 
+    const localizationForm = useMemo(() => ({
+        localization_enabled: Boolean(selectedTenant?.localization_enabled),
+        secondary_locale: (selectedTenant?.secondary_locale || '') as SecondaryLocale | '',
+    }), [selectedTenant]);
+
+    const [localizationDraft, setLocalizationDraft] = useState(localizationForm);
+
     useEffect(() => {
         setDraft(subscriptionForm);
     }, [subscriptionForm]);
+
+    useEffect(() => {
+        setLocalizationDraft(localizationForm);
+    }, [localizationForm]);
 
     const showToast = (msg: string) => {
         setToast(msg);
@@ -207,6 +223,33 @@ export default function AdminTenantsPage() {
             setCreateError(err.message || mc.createFailed);
         } finally {
             setIsCreating(false);
+        }
+    };
+
+    const lc = m.localizationControls;
+
+    const saveLocalization = async () => {
+        if (!selectedTenant) return;
+        if (localizationDraft.localization_enabled && !localizationDraft.secondary_locale) {
+            setError(lc.secondaryRequired);
+            return;
+        }
+
+        setIsSavingLocalization(true);
+        setError('');
+        try {
+            await api.updateAdminTenantLocalization(selectedTenant.id, {
+                localization_enabled: localizationDraft.localization_enabled,
+                secondary_locale: localizationDraft.localization_enabled
+                    ? (localizationDraft.secondary_locale as SecondaryLocale)
+                    : null,
+            });
+            await selectTenant(selectedTenant.id);
+            showToast(lc.saved);
+        } catch (err: any) {
+            setError(err.message || lc.saveFailed);
+        } finally {
+            setIsSavingLocalization(false);
         }
     };
 
@@ -451,6 +494,55 @@ export default function AdminTenantsPage() {
                                     >
                                         {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                                         {m.subscriptionControls.save}
+                                    </button>
+                                </div>
+
+                                <div className="rounded-3xl border border-violet-100 bg-violet-50/70 p-5 space-y-4">
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-violet-400">{lc.badge}</p>
+                                        <h3 className="mt-2 text-lg font-black tracking-tight text-violet-900">{lc.title}</h3>
+                                        <p className="mt-1 text-xs text-violet-700/80">{lc.description}</p>
+                                    </div>
+
+                                    <label className="rounded-2xl border border-violet-100 bg-white px-4 py-3 text-sm font-medium flex items-center justify-between gap-3">
+                                        <span>{lc.enabledLabel}</span>
+                                        <input
+                                            type="checkbox"
+                                            checked={localizationDraft.localization_enabled}
+                                            onChange={(event) => setLocalizationDraft((current) => ({
+                                                ...current,
+                                                localization_enabled: event.target.checked,
+                                                secondary_locale: event.target.checked ? current.secondary_locale : '',
+                                            }))}
+                                            className="h-4 w-4"
+                                        />
+                                    </label>
+
+                                    {localizationDraft.localization_enabled ? (
+                                        <select
+                                            value={localizationDraft.secondary_locale}
+                                            onChange={(event) => setLocalizationDraft((current) => ({
+                                                ...current,
+                                                secondary_locale: event.target.value as SecondaryLocale | '',
+                                            }))}
+                                            className="w-full rounded-2xl border border-violet-100 bg-white px-4 py-3 text-sm font-medium outline-none"
+                                        >
+                                            <option value="">{lc.secondaryPlaceholder}</option>
+                                            <option value="bn">বাংলা (Bangla)</option>
+                                            <option value="ms">Bahasa Melayu (Malay)</option>
+                                        </select>
+                                    ) : (
+                                        <p className="text-xs font-medium text-violet-700">{lc.englishOnly}</p>
+                                    )}
+
+                                    <button
+                                        type="button"
+                                        onClick={saveLocalization}
+                                        disabled={isSavingLocalization}
+                                        className="inline-flex items-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-200 transition hover:bg-violet-700 disabled:opacity-60"
+                                    >
+                                        {isSavingLocalization ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                                        {lc.save}
                                     </button>
                                 </div>
 

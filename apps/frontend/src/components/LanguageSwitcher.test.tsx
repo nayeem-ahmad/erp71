@@ -13,6 +13,10 @@ jest.mock('../lib/i18n', () => ({
     useI18n: jest.fn(),
 }));
 
+jest.mock('@/contexts/TenantLocaleContext', () => ({
+    useTenantLocales: jest.fn(),
+}));
+
 const mockLocales = [
     { code: 'en', nativeLabel: 'English' },
     { code: 'bn', nativeLabel: 'বাংলা' },
@@ -30,11 +34,16 @@ describe('LanguageSwitcher', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         const { useI18n } = require('../lib/i18n');
+        const { useTenantLocales } = require('@/contexts/TenantLocaleContext');
         useI18n.mockReturnValue({
             locale: 'en',
             locales: mockLocales,
             setLocale: mockSetLocale,
             t: mockT,
+        });
+        useTenantLocales.mockReturnValue({
+            allowedLocales: ['en', 'bn', 'ms'],
+            showLanguageSwitcher: true,
         });
         const { api } = require('../lib/api');
         api.updateProfile.mockResolvedValue({});
@@ -44,6 +53,17 @@ describe('LanguageSwitcher', () => {
 
     it('renders without crashing', () => {
         render(<LanguageSwitcher />);
+    });
+
+    it('renders nothing when language switching is disabled for the tenant', () => {
+        const { useTenantLocales } = require('@/contexts/TenantLocaleContext');
+        useTenantLocales.mockReturnValue({
+            allowedLocales: ['en'],
+            showLanguageSwitcher: false,
+        });
+
+        const { container } = render(<LanguageSwitcher />);
+        expect(container).toBeEmptyDOMElement();
     });
 
     it('renders the language select element', () => {

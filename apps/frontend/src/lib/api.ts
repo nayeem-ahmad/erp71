@@ -1069,6 +1069,14 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    updateAdminTenantLocalization: (
+        tenantId: string,
+        data: { localization_enabled?: boolean; secondary_locale?: 'bn' | 'ms' | null },
+    ) => fetchWithAuth(`/admin/tenants/${tenantId}/localization`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     suspendTenant: (tenantId: string, reason?: string) => fetchWithAuth(`/admin/tenants/${tenantId}/suspend`, {
         method: 'PATCH',
         body: JSON.stringify({ reason }),

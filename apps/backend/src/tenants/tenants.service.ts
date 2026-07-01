@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { StorefrontSettingsDto } from '../storefront/storefront.dto';
 import { UpdateBrandingDto } from './update-branding.dto';
@@ -182,11 +182,38 @@ export class TenantsService {
             where: { id: tenantId },
             select: {
                 default_locale: true,
+                localization_enabled: true,
+                secondary_locale: true,
             },
         });
     }
 
     async updateLocalizationSettings(tenantId: string, dto: UpdateLocalizationSettingsDto) {
+        const tenant = await this.db.tenant.findUnique({
+            where: { id: tenantId },
+            select: {
+                localization_enabled: true,
+                secondary_locale: true,
+            },
+        });
+
+        if (!tenant) {
+            throw new NotFoundException('Tenant not found');
+        }
+
+        if (!tenant.localization_enabled) {
+            throw new BadRequestException('Localization is not enabled for this tenant.');
+        }
+
+        const allowedLocales = new Set(['en']);
+        if (tenant.secondary_locale) {
+            allowedLocales.add(tenant.secondary_locale);
+        }
+
+        if (dto.default_locale !== undefined && !allowedLocales.has(dto.default_locale)) {
+            throw new BadRequestException('Default locale is not enabled for this tenant.');
+        }
+
         const data: Record<string, string> = {};
         if (dto.default_locale !== undefined) data.default_locale = dto.default_locale;
 
@@ -195,6 +222,8 @@ export class TenantsService {
             data,
             select: {
                 default_locale: true,
+                localization_enabled: true,
+                secondary_locale: true,
             },
         });
     }

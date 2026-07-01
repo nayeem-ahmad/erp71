@@ -278,6 +278,10 @@ model Tenant {
   name                 String
   owner_id             String
   default_locale       String   @default("en")
+  /// When false the workspace is English-only and the language switcher is hidden.
+  localization_enabled Boolean  @default(false)
+  /// Second language offered alongside English when localization_enabled is true.
+  secondary_locale     String?
   created_at           DateTime @default(now())
   storefront_slug      String?  @unique
   storefront_enabled   Boolean  @default(false)

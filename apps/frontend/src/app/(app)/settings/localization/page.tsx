@@ -1,16 +1,24 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Globe, Loader2 } from 'lucide-react';
 
 import { api } from '@/lib/api';
+import { localeRegistry } from '@/lib/localization/config';
+import { useTenantLocales } from '@/contexts/TenantLocaleContext';
 import { useI18n } from '@/lib/i18n';
 
 type LocaleOption = 'en' | 'bn' | 'ms';
 
 export default function LocalizationSettingsPage() {
-    const { locale, locales, setLocale, t } = useI18n();
+    const { locale, setLocale, t } = useI18n();
+    const { allowedLocales } = useTenantLocales();
+    const locales = useMemo(
+        () => allowedLocales.map((code) => localeRegistry[code]),
+        [allowedLocales],
+    );
     const [tenantLocale, setTenantLocale] = useState<LocaleOption>('en');
+    const [localizationEnabled, setLocalizationEnabled] = useState(false);
     const [loading, setLoading] = useState(true);
     const [savingTenant, setSavingTenant] = useState(false);
     const [savingProfile, setSavingProfile] = useState(false);
@@ -22,7 +30,8 @@ export default function LocalizationSettingsPage() {
         Promise.all([api.getMe(), api.getTenantLocalizationSettings()])
             .then(([me, tenantSettings]) => {
                 if (!active) return;
-                if (me?.preferred_locale && me.preferred_locale !== locale) {
+                setLocalizationEnabled(Boolean(tenantSettings?.localization_enabled));
+                if (me?.preferred_locale && locales.some((entry) => entry.code === me.preferred_locale)) {
                     setLocale(me.preferred_locale);
                 }
                 setTenantLocale((tenantSettings?.default_locale || 'en') as LocaleOption);
@@ -38,7 +47,7 @@ export default function LocalizationSettingsPage() {
         return () => {
             active = false;
         };
-    }, [locale, setLocale, t.settings.localization.tenantSaveFailed]);
+    }, [locales, setLocale, t.settings.localization.tenantSaveFailed]);
 
     const saveTenantLocale = async () => {
         setSavingTenant(true);
@@ -70,6 +79,22 @@ export default function LocalizationSettingsPage() {
                 <div className="max-w-3xl mx-auto flex items-center gap-2 text-sm text-gray-400">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     {t.settings.localization.loading}
+                </div>
+            </div>
+        );
+    }
+
+    if (!localizationEnabled) {
+        return (
+            <div className="h-full overflow-y-auto p-6">
+                <div className="max-w-3xl mx-auto space-y-4">
+                    <div>
+                        <h1 className="text-2xl font-black text-gray-900 tracking-tight">{t.settings.localization.title}</h1>
+                        <p className="mt-1 text-sm text-gray-500">{t.settings.localization.description}</p>
+                    </div>
+                    <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600">
+                        {t.settings.localization.disabledByAdmin}
+                    </div>
                 </div>
             </div>
         );
