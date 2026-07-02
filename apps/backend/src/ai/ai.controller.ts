@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { AiService } from './ai.service';
+import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { NarrateReportDto, DraftMessageDto, ParseVoiceEntryDto, ParseVoiceSaleDto } from './ai.dto';
 
@@ -14,12 +15,14 @@ export class AiController {
     constructor(
         private readonly aiService: AiService,
         private readonly platformSettings: PlatformSettingsService,
+        private readonly planEntitlements: PlanEntitlementsService,
     ) {}
 
-    private async assertVoiceEnabled() {
+    private async assertVoiceEnabled(tenantId: string) {
         if (!await this.platformSettings.isFeatureEnabled('voice')) {
             throw new ServiceUnavailableException('Voice features are not available');
         }
+        await this.planEntitlements.assertEntitlement(tenantId, 'premiumVoice');
     }
 
     @Get('usage')
@@ -47,7 +50,7 @@ export class AiController {
     @UseGuards(JwtAuthGuard)
     @UseInterceptors(TenantInterceptor)
     async parseVoiceEntry(@Tenant() tenant: TenantContext, @Body() dto: ParseVoiceEntryDto) {
-        await this.assertVoiceEnabled();
+        await this.assertVoiceEnabled(tenant.tenantId);
         return this.aiService.parseVoiceEntry(tenant.tenantId, dto);
     }
 
@@ -55,7 +58,7 @@ export class AiController {
     @UseGuards(JwtAuthGuard)
     @UseInterceptors(TenantInterceptor)
     async parseVoiceSale(@Tenant() tenant: TenantContext, @Body() dto: ParseVoiceSaleDto) {
-        await this.assertVoiceEnabled();
+        await this.assertVoiceEnabled(tenant.tenantId);
         return this.aiService.parseVoiceSale(tenant.tenantId, dto);
     }
 }

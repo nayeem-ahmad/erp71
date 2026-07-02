@@ -160,6 +160,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [ ] Phase 4 — Dynamic plan codes (deferred): fixed Prisma enum retained for payment webhooks/DTO safety; use `is_active` + entitlements to create virtual packs instead
 - [x] Enforce `maxUsers` / `maxSkus` quotas from plan `features_json` (invites + product create/import); `maxStores` helper ready for when multi-store create ships — done 2026-07-02
 - [x] Separate marketing bullet copy (`marketing_features_json`) from technical entitlements; pricing page reads live API plans — done 2026-07-02
+- [x] Phase 5 — Granular per-plan feature entitlements (`premiumAccountingAdvanced`, `premiumAi`, `premiumVoice`); module-aware sidebar/hub filtering; backend guards on advanced accounting + AI/voice; grouped plan editor UI — done 2026-07-02
 
 ### Marketing & Onboarding
 - [x] Build real marketing/landing page — `apps/frontend/src/app/page.tsx` with hero preview, how-it-works, modules, 4-tier pricing preview, shared marketing components — done 2026-06-12
@@ -576,5 +577,6 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Platform admin subscription plan catalog editor (Phase 1) — `PLAN_ENTITLEMENT_REGISTRY` + normalize/parse helpers in `@erp71/shared-types`; `GET/PUT /admin/subscription-plans` + registry endpoint with audit logging; platform-admin UI at `/admin/platform-settings/plans` (pricing, active flag, entitlement form per fixed plan code); signup/billing already read live DB plans — done 2026-07-02
 - [x] Subscription plan phases 2–3 + quotas + marketing bullets — DB-driven `planRank`/`aiCreditsMonthly`; accounting-only sidebar/route guards; product + invite quotas; `marketing_features_json` column + admin editor; public pricing page merges `GET /auth/plans` — done 2026-07-02
 - [x] Merge dev → main + deploy subscription plan editor (`85e2a26`) — fast-forwarded `main`; VPS `/opt/erp71` `scripts/deploy.sh main` via SSH (GitHub Actions deploy failed: `VPS_SSH_KEY` auth); smoke checks green at `api.erp71.com` / `app.erp71.com` — done 2026-07-02
+- [x] Phase 5 granular plan entitlements — advanced accounting reports, AI, and voice gated per plan; plan editor grouped by module — done 2026-07-02
 
 

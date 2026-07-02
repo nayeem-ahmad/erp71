@@ -46,6 +46,15 @@ export class PlanFeaturesDto {
     @IsBoolean()
     accountingOnly!: boolean;
 
+    @IsBoolean()
+    premiumAccountingAdvanced!: boolean;
+
+    @IsBoolean()
+    premiumAi!: boolean;
+
+    @IsBoolean()
+    premiumVoice!: boolean;
+
     @IsNumber()
     @Min(0)
     @Max(3)

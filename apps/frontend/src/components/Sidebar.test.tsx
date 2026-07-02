@@ -184,7 +184,7 @@ describe('Sidebar — Story 30.1', () => {
     });
 
     it('shows full accounting navigation with subgroups when access is allowed', async () => {
-        render(<Sidebar canAccessAccounting canAccessInventoryReports />);
+        render(<Sidebar canAccessAccounting canAccessInventoryReports canAccessAccountingAdvanced />);
 
         await waitFor(() => {
             expect(screen.getByText('Transactions & Funds')).toBeInTheDocument();
@@ -202,7 +202,7 @@ describe('Sidebar — Story 30.1', () => {
     });
 
     it('hides advanced accounting reports for tenants without report entitlement', async () => {
-        render(<Sidebar canAccessAccounting canAccessInventoryReports={false} />);
+        render(<Sidebar canAccessAccounting canAccessAccountingAdvanced={false} />);
 
         await waitFor(() => {
             expect(screen.getByText('Accounting Reports')).toBeInTheDocument();

@@ -5,6 +5,7 @@ import { ProductsService } from '../products/products.service';
 import { NarrateReportDto, DraftMessageDto, ParseVoiceEntryDto, VoiceEntryType } from './ai.dto';
 import {
     AI_TOKENS_PER_CREDIT,
+    hasPlanEntitlement,
     normalizePlanFeatures,
     resolveAiCreditsMonthly,
     SubscriptionPlanCode,
@@ -530,10 +531,14 @@ Rules:
             subscription?.plan?.features_json as Record<string, unknown> | undefined,
             planCode,
         );
+        if (!hasPlanEntitlement(features, 'premiumAi')) {
+            throw new ForbiddenException('AI features require the Premium plan. Please upgrade to continue.');
+        }
+
         const limit = resolveAiCreditsMonthly(features, planCode);
 
         if (limit === 0) {
-            throw new ForbiddenException('AI features require a paid plan. Please upgrade to BASIC or higher.');
+            throw new ForbiddenException('AI features are not included in your current plan.');
         }
 
         const [periodStart, periodEnd] = this.getBillingPeriod(subscription);

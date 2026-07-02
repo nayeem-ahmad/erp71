@@ -25,4 +25,15 @@ describe('subscription-plans helpers', () => {
         expect(resolvePlanRank(features, 'STANDARD')).toBe(2);
         expect(resolveAiCreditsMonthly(features, 'STANDARD')).toBe(500);
     });
+
+    it('reads granular entitlements from normalized features', () => {
+        const features = normalizePlanFeatures({
+            premiumAccountingAdvanced: true,
+            premiumAi: false,
+            premiumVoice: true,
+        });
+        expect(features.premiumAccountingAdvanced).toBe(true);
+        expect(features.premiumAi).toBe(false);
+        expect(features.premiumVoice).toBe(true);
+    });
 });

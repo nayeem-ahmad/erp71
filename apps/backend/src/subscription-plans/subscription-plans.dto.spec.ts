@@ -13,6 +13,9 @@ const validFeatures = {
     multiStore: false,
     apiAccess: false,
     accountingOnly: false,
+    premiumAccountingAdvanced: false,
+    premiumAi: false,
+    premiumVoice: false,
     planRank: 1,
     aiCreditsMonthly: 100,
 };

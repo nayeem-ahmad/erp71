@@ -7,8 +7,12 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { DatabaseService } from '../database/database.service';
-import { normalizePlanFeatures, resolvePlanRank } from '@erp71/shared-types';
-import { SUBSCRIPTION_FEATURE_KEY, SUBSCRIPTION_PLAN_KEY } from './subscription-access.decorator';
+import { hasPlanEntitlement, normalizePlanFeatures, resolvePlanRank } from '@erp71/shared-types';
+import {
+    SUBSCRIPTION_EXTRA_FEATURES_KEY,
+    SUBSCRIPTION_FEATURE_KEY,
+    SUBSCRIPTION_PLAN_KEY,
+} from './subscription-access.decorator';
 
 type PlanCode = 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
 
@@ -35,8 +39,16 @@ export class SubscriptionAccessGuard implements CanActivate {
             context.getHandler(),
             context.getClass(),
         ]);
+        const extraFeatures = this.reflector.getAllAndOverride<string[] | undefined>(SUBSCRIPTION_EXTRA_FEATURES_KEY, [
+            context.getHandler(),
+            context.getClass(),
+        ]) ?? [];
+        const requiredFeatures = [
+            ...(requiredFeature ? [requiredFeature] : []),
+            ...extraFeatures,
+        ];
 
-        if ((!requiredPlan || requiredPlan === 'FREE') && !requiredFeature) {
+        if ((!requiredPlan || requiredPlan === 'FREE') && requiredFeatures.length === 0) {
             return true;
         }
 
@@ -87,29 +99,13 @@ export class SubscriptionAccessGuard implements CanActivate {
             throw new ForbiddenException(`This feature requires an active ${requiredPlan} plan or higher.`);
         }
 
-        if (requiredFeature) {
-            const featureValue = (subscription?.plan?.features_json as Record<string, unknown> | undefined)?.[requiredFeature];
-            const hasRequiredFeature = this.isFeatureEnabled(featureValue);
-
-            if (!hasRequiredFeature) {
-                throw new ForbiddenException(`This feature requires the plan entitlement: ${requiredFeature}.`);
+        for (const featureKey of requiredFeatures) {
+            if (!hasPlanEntitlement(features, featureKey)) {
+                throw new ForbiddenException(`This feature requires the plan entitlement: ${featureKey}.`);
             }
         }
 
         request.subscription = subscription;
         return true;
-    }
-
-    private isFeatureEnabled(value: unknown): boolean {
-        if (typeof value === 'boolean') {
-            return value;
-        }
-        if (typeof value === 'number') {
-            return value > 0;
-        }
-        if (typeof value === 'string') {
-            return value.toLowerCase() === 'true' || value === '1';
-        }
-        return false;
     }
 }

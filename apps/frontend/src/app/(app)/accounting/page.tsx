@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AccountingLedgerExport from '@/components/accounting/AccountingLedgerExport';
 import { CompactLinkGrid } from '@/components/accounting/compact';
 import AccountingPageShell from '@/components/accounting/compact/AccountingPageShell';
@@ -14,23 +14,40 @@ import {
     ACCOUNTING_SETUP_LINKS,
     ACCOUNTING_TRANSACTION_LINKS,
 } from '@/lib/accounting-nav';
+import { api } from '@/lib/api';
+import { canAccessAccountingAdvancedReports } from '@/lib/plan-entitlements';
 import { useI18n } from '@/lib/i18n';
 
 export default function AccountingPage() {
     const { t } = useI18n();
+    const [canAccessAdvancedReports, setCanAccessAdvancedReports] = useState(false);
+
+    useEffect(() => {
+        api.getMe()
+            .then((me) => {
+                const tenantId = localStorage.getItem('tenant_id');
+                const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === tenantId) || me?.tenants?.[0];
+                const planCode = tenant?.subscription?.plan?.code || null;
+                const features = (tenant?.subscription?.plan?.features_json || {}) as Record<string, unknown>;
+                setCanAccessAdvancedReports(canAccessAccountingAdvancedReports(planCode, features));
+            })
+            .catch(() => setCanAccessAdvancedReports(false));
+    }, []);
 
     const mapLinks = (items: typeof ACCOUNTING_DAILY_LINKS) =>
-        items.map(({ href, key, icon, accent }) => ({
-            href,
-            title: t.accounting.links[key].title,
-            icon,
-            accent,
-        }));
+        items
+            .filter((item) => !item.advancedOnly || canAccessAdvancedReports)
+            .map(({ href, key, icon, accent }) => ({
+                href,
+                title: t.accounting.links[key].title,
+                icon,
+                accent,
+            }));
 
-    const dailyLinks = useMemo(() => mapLinks(ACCOUNTING_DAILY_LINKS), [t]);
-    const transactionLinks = useMemo(() => mapLinks(ACCOUNTING_TRANSACTION_LINKS), [t]);
-    const reconciliationLinks = useMemo(() => mapLinks(ACCOUNTING_RECONCILIATION_LINKS), [t]);
-    const reportLinks = useMemo(() => mapLinks(ACCOUNTING_REPORT_LINKS), [t]);
+    const dailyLinks = useMemo(() => mapLinks(ACCOUNTING_DAILY_LINKS), [t, canAccessAdvancedReports]);
+    const transactionLinks = useMemo(() => mapLinks(ACCOUNTING_TRANSACTION_LINKS), [t, canAccessAdvancedReports]);
+    const reconciliationLinks = useMemo(() => mapLinks(ACCOUNTING_RECONCILIATION_LINKS), [t, canAccessAdvancedReports]);
+    const reportLinks = useMemo(() => mapLinks(ACCOUNTING_REPORT_LINKS), [t, canAccessAdvancedReports]);
     const setupLinks = useMemo(() => mapLinks(ACCOUNTING_SETUP_LINKS), [t]);
 
     return (

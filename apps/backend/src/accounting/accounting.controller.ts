@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Header, Param, Patch, Post, Query, Res, 
 import { Response } from 'express';
 import { AccountingService } from './accounting.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RequiresFeature } from '../auth/subscription-access.decorator';
+import { RequiresAdditionalFeature, RequiresFeature } from '../auth/subscription-access.decorator';
 import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { TenantRoleGuard } from '../auth/tenant-role.guard';
 import { TenantRoles } from '../auth/tenant-roles.decorator';
@@ -253,6 +253,7 @@ export class AccountingController {
     }
 
     @Get('reports/comparative-pl')
+    @RequiresAdditionalFeature('premiumAccountingAdvanced')
     getComparativePL(@Tenant() tenant: TenantContext, @Query() query: ComparativePLQueryDto) {
         return this.accountingService.getComparativePL(tenant.tenantId, query);
     }
@@ -263,11 +264,13 @@ export class AccountingController {
     }
 
     @Get('reports/financial-ratios')
+    @RequiresAdditionalFeature('premiumAccountingAdvanced')
     getFinancialRatios(@Tenant() tenant: TenantContext, @Query() query: FinancialRatiosQueryDto) {
         return this.accountingService.getFinancialRatios(tenant.tenantId, query);
     }
 
     @Get('reports/cash-flow')
+    @RequiresAdditionalFeature('premiumAccountingAdvanced')
     getCashFlow(@Tenant() tenant: TenantContext, @Query() query: CashFlowQueryDto) {
         return this.accountingService.getCashFlow(tenant.tenantId, query);
     }
@@ -300,11 +303,13 @@ export class AccountingController {
     // Feature 10: Budget vs Actual
     @Post('budgets')
     @TenantRoles('OWNER', 'ACCOUNTANT')
+    @RequiresAdditionalFeature('premiumAccountingAdvanced')
     upsertBudget(@Tenant() tenant: TenantContext, @Body() dto: UpsertBudgetDto) {
         return this.accountingService.upsertBudget(tenant.tenantId, dto);
     }
 
     @Get('reports/budget-vs-actual')
+    @RequiresAdditionalFeature('premiumAccountingAdvanced')
     getBudgetVsActual(@Tenant() tenant: TenantContext, @Query() query: BudgetVsActualQueryDto) {
         return this.accountingService.getBudgetVsActual(tenant.tenantId, query);
     }

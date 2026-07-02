@@ -29,11 +29,29 @@ function isNavSubgroup(child: NavChild): child is Extract<NavChild, { type: 'sub
     return 'type' in child && child.type === 'subgroup';
 }
 
+function canAccessModuleAdvancedReports(
+    moduleKey: string,
+    canAccessInventoryReports: boolean,
+    canAccessAccountingAdvanced: boolean,
+): boolean {
+    if (moduleKey === 'accounting') {
+        return canAccessAccountingAdvanced;
+    }
+    return canAccessInventoryReports;
+}
+
 function filterModuleNavChildren(
     children: NavChild[],
-    canAccessAdvanced: boolean,
+    moduleKey: string,
+    canAccessInventoryReports: boolean,
+    canAccessAccountingAdvanced: boolean,
     canAccessPremiumCrm = false,
 ): NavChild[] {
+    const canAccessAdvanced = canAccessModuleAdvancedReports(
+        moduleKey,
+        canAccessInventoryReports,
+        canAccessAccountingAdvanced,
+    );
     return children
         .map((child) => {
             if (!isNavSubgroup(child)) {
@@ -67,6 +85,7 @@ function clampSidebarWidth(value: number) {
 export default function Sidebar({
     canAccessAccounting = true,
     canAccessInventoryReports = false,
+    canAccessAccountingAdvanced = false,
     canAccessPremiumCrm = false,
     canAccessAdmin = false,
     canManageBilling = false,
@@ -82,6 +101,7 @@ export default function Sidebar({
 }: {
     canAccessAccounting?: boolean;
     canAccessInventoryReports?: boolean;
+    canAccessAccountingAdvanced?: boolean;
     canAccessPremiumCrm?: boolean;
     canAccessAdmin?: boolean;
     canManageBilling?: boolean;
@@ -148,14 +168,26 @@ export default function Sidebar({
                 if (['sales', 'purchase', 'inventory', 'accounting'].includes(module.key)) {
                     return {
                         ...module,
-                        children: filterModuleNavChildren(module.children, canAccessInventoryReports, canAccessPremiumCrm),
+                        children: filterModuleNavChildren(
+                            module.children,
+                            module.key,
+                            canAccessInventoryReports,
+                            canAccessAccountingAdvanced,
+                            canAccessPremiumCrm,
+                        ),
                     };
                 }
 
                 if (module.key === 'crm') {
                     return {
                         ...module,
-                        children: filterModuleNavChildren(module.children, true, canAccessPremiumCrm),
+                        children: filterModuleNavChildren(
+                            module.children,
+                            module.key,
+                            true,
+                            true,
+                            canAccessPremiumCrm,
+                        ),
                     };
                 }
 
@@ -170,6 +202,7 @@ export default function Sidebar({
         accountingOnlyMode,
         canAccessAccounting,
         canAccessInventoryReports,
+        canAccessAccountingAdvanced,
         canAccessPremiumCrm,
         canAccessAdmin,
         canManageBilling,

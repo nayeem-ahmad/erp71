@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import { normalizePlanFeatures } from '@erp71/shared-types';
+import { hasPlanEntitlement, normalizePlanFeatures } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 
 @Injectable()
@@ -58,6 +58,13 @@ export class PlanEntitlementsService {
             throw new ForbiddenException(
                 `Your plan allows up to ${maxUsers} team members. Upgrade your subscription to invite more users.`,
             );
+        }
+    }
+
+    async assertEntitlement(tenantId: string, entitlementKey: string) {
+        const features = await this.getFeaturesForTenant(tenantId);
+        if (!hasPlanEntitlement(features, entitlementKey)) {
+            throw new ForbiddenException(`This feature requires the plan entitlement: ${entitlementKey}.`);
         }
     }
 

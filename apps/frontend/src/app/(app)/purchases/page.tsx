@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import ModuleHub, { type HubSectionConfig } from '@/components/ModuleHub';
 import { api } from '@/lib/api';
+import { canAccessInventoryAdvancedReports } from '@/lib/plan-entitlements';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 
@@ -57,10 +58,6 @@ const PURCHASE_HUB_SECTIONS: HubSectionConfig[] = [
     },
 ];
 
-function hasAdvancedReportsEntitlement(planCode: string | null, features: Record<string, unknown>) {
-    return Boolean(features.premiumInventoryReports) || planCode === 'STANDARD' || planCode === 'PREMIUM';
-}
-
 export default function PurchasesHubPage() {
     const { t } = useI18n();
     const [canAccessAdvancedReports, setCanAccessAdvancedReports] = useState(false);
@@ -72,7 +69,7 @@ export default function PurchasesHubPage() {
                 const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === tenantId) || me?.tenants?.[0];
                 const planCode = tenant?.subscription?.plan?.code || null;
                 const features = (tenant?.subscription?.plan?.features_json || {}) as Record<string, unknown>;
-                setCanAccessAdvancedReports(hasAdvancedReportsEntitlement(planCode, features));
+                setCanAccessAdvancedReports(canAccessInventoryAdvancedReports(planCode, features));
             })
             .catch(() => setCanAccessAdvancedReports(false));
     }, []);

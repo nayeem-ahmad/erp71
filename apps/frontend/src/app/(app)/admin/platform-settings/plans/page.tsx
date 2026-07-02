@@ -11,8 +11,10 @@ import { formatMessage, useI18n } from '@/lib/i18n';
 import {
     defaultPlanFeatures,
     normalizePlanFeatures,
+    PLAN_ENTITLEMENT_GROUP_ORDER,
     type FixedSubscriptionPlanCode,
     type PlanEntitlementDefinition,
+    type PlanEntitlementGroup,
 } from '@erp71/shared-types';
 
 type Toast = { type: 'success' | 'error'; message: string } | null;
@@ -171,6 +173,36 @@ export default function PlatformSubscriptionPlansPage() {
     }, [selectedPlan]);
 
     const isFreePlan = selectedCode === 'FREE';
+
+    const groupedEntitlements = useMemo(() => {
+        const source = entitlements.length
+            ? entitlements
+            : Object.entries(defaultPlanFeatures()).map(([key, defaultValue]) => ({
+                key,
+                type: typeof defaultValue === 'boolean' ? 'boolean' as const : 'number' as const,
+                label: key,
+                defaultValue,
+            }));
+        const groups = new Map<PlanEntitlementGroup | 'other', PlanEntitlementDefinition[]>();
+        for (const definition of source) {
+            const group = definition.group ?? 'other';
+            const bucket = groups.get(group) ?? [];
+            bucket.push(definition);
+            groups.set(group, bucket);
+        }
+        const orderedGroups: Array<{ key: PlanEntitlementGroup | 'other'; items: PlanEntitlementDefinition[] }> = [];
+        for (const group of PLAN_ENTITLEMENT_GROUP_ORDER) {
+            const items = groups.get(group);
+            if (items?.length) {
+                orderedGroups.push({ key: group, items });
+            }
+        }
+        const other = groups.get('other');
+        if (other?.length) {
+            orderedGroups.push({ key: 'other', items: other });
+        }
+        return orderedGroups;
+    }, [entitlements]);
 
     const handleSave = async () => {
         if (!draft) return;
@@ -395,23 +427,25 @@ export default function PlatformSubscriptionPlansPage() {
                                     </div>
                                 </div>
 
-                                <div className="space-y-3">
+                                <div className="space-y-5">
                                     <h3 className="text-sm font-black uppercase tracking-widest text-gray-500">{m.entitlementsTitle}</h3>
-                                    <div className="grid gap-3 md:grid-cols-2">
-                                        {(entitlements.length ? entitlements : Object.entries(defaultPlanFeatures()).map(([key, defaultValue]) => ({
-                                            key,
-                                            type: typeof defaultValue === 'boolean' ? 'boolean' as const : 'number' as const,
-                                            label: key,
-                                            defaultValue,
-                                        }))).map((definition) => (
-                                            <EntitlementField
-                                                key={definition.key}
-                                                definition={definition}
-                                                value={draft.features[definition.key] ?? definition.defaultValue}
-                                                onChange={(next) => updateFeature(definition.key, next)}
-                                            />
-                                        ))}
-                                    </div>
+                                    {groupedEntitlements.map((group) => (
+                                        <div key={group.key} className="space-y-3">
+                                            <h4 className="text-xs font-bold uppercase tracking-widest text-gray-400">
+                                                {m.entitlementGroups[group.key]}
+                                            </h4>
+                                            <div className="grid gap-3 md:grid-cols-2">
+                                                {group.items.map((definition) => (
+                                                    <EntitlementField
+                                                        key={definition.key}
+                                                        definition={definition}
+                                                        value={draft.features[definition.key] ?? definition.defaultValue}
+                                                        onChange={(next) => updateFeature(definition.key, next)}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         ) : null}

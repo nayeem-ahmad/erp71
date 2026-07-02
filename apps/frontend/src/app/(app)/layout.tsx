@@ -20,11 +20,13 @@ import {
     DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT,
     DEFAULT_PLATFORM_FEATURES,
     DEFAULT_TENANT_NAV_LAYOUT,
+    hasPlanEntitlement,
     normalizePlanFeatures,
     type NavLayoutNode,
     type PlatformFeatures,
 } from '@erp71/shared-types';
 import { isAccountingOnlyBlockedPath } from '@/lib/accounting-only-paths';
+import { isAccountingAdvancedReportPath } from '@/lib/plan-gated-paths';
 import { NavLayoutProvider } from '@/contexts/NavLayoutContext';
 import TenantLocaleSync from '@/components/TenantLocaleSync';
 import { BrandingProvider } from '@/lib/branding';
@@ -161,6 +163,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const hasPaidPlan = activePlanCode && activePlanCode !== 'FREE';
     const hasAccountingEntitlement = Boolean(planFeatures.premiumAccounting);
     const hasInventoryReportEntitlement = Boolean(planFeatures.premiumInventoryReports);
+    const hasAccountingAdvancedEntitlement = Boolean(planFeatures.premiumAccountingAdvanced);
     const hasPremiumCrm = Boolean(planFeatures.premiumCrm);
     const accountingOnlyMode = Boolean(planFeatures.accountingOnly);
     const isPlatformAdmin = inPlatformAdminMode;
@@ -172,6 +175,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         && hasPaidPlan
         && hasAccountingEntitlement;
     const canAccessInventoryReports = Boolean(hasInventoryReportEntitlement);
+    const canAccessAccountingAdvanced = Boolean(hasAccountingAdvancedEntitlement);
+    const canAccessVoice = platformFeatures.voice && hasPlanEntitlement(planFeatures, 'premiumVoice');
+    const effectivePlatformFeatures: PlatformFeatures = {
+        ...platformFeatures,
+        voice: canAccessVoice,
+    };
 
     // Platform admins can land on shop URLs after refresh while still in admin-console
     // context (active_context=platform-admin). Restore the last shop workspace automatically.
@@ -215,6 +224,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         if (!canAccessInventoryReports && pathname.startsWith(`${routes.inventory.root}/reports`)) {
             router.replace(routes.inventory.products);
         }
+        if (!canAccessAccountingAdvanced && isAccountingAdvancedReportPath(pathname)) {
+            router.replace(routes.accounting.reports.pl);
+        }
         if (!isPlatformAdmin && pathname.startsWith(routes.admin.root)) {
             router.replace(routes.home);
         }
@@ -249,7 +261,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         if (!platformFeatures.support && pathname === routes.support) {
             router.replace(routes.home);
         }
-    }, [accountingOnlyMode, canAccessAccounting, canAccessInventoryReports, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, platformFeatures.help, platformFeatures.support, router, user]);
+    }, [accountingOnlyMode, canAccessAccounting, canAccessAccountingAdvanced, canAccessInventoryReports, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, platformFeatures.help, platformFeatures.support, router, user]);
 
     const activeStore =
         tenantStores.find((store: { id: string }) => store.id === activeStoreId) ?? tenantStores[0];
@@ -271,13 +283,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             tenantLayout={tenantNavLayout}
             platformAdminLayout={platformAdminNavLayout}
         >
-        <PlatformFeaturesProvider features={platformFeatures}>
+        <PlatformFeaturesProvider features={effectivePlatformFeatures}>
         <TenantLocaleProvider tenant={tenantLocaleConfig}>
         <TenantLocaleSync tenant={tenantLocaleConfig} />
         <div className="flex h-dvh min-h-dvh bg-[#f9fafb] font-sans text-[#111827]">
             <Sidebar
                 canAccessAccounting={canAccessAccounting}
                 canAccessInventoryReports={canAccessInventoryReports}
+                canAccessAccountingAdvanced={canAccessAccountingAdvanced}
                 canAccessPremiumCrm={hasPremiumCrm}
                 canAccessAdmin={isPlatformAdmin}
                 canManageBilling={canManageBilling}
@@ -333,8 +346,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
                     <div className="flex items-center gap-1.5 md:gap-4 flex-shrink-0">
                         <div className="hidden md:contents">
-                            {platformFeatures.voice ? <VoiceNavWidget /> : null}
-                            {platformFeatures.voice ? <div className="h-8 w-px bg-gray-200 hidden sm:block" /> : null}
+                            {canAccessVoice ? <VoiceNavWidget /> : null}
+                            {canAccessVoice ? <div className="h-8 w-px bg-gray-200 hidden sm:block" /> : null}
                             <LanguageSwitcher />
                         </div>
                         <AppHeaderMobileMenu />

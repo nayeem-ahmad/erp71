@@ -13,6 +13,13 @@ export type FixedSubscriptionPlanCode = (typeof SUBSCRIPTION_PLAN_CODES)[number]
 
 export type PlanEntitlementType = 'boolean' | 'number';
 
+export type PlanEntitlementGroup =
+  | 'quotas'
+  | 'modules'
+  | 'accounting'
+  | 'ai'
+  | 'platform';
+
 export interface PlanEntitlementDefinition {
   key: string;
   type: PlanEntitlementType;
@@ -21,7 +28,17 @@ export interface PlanEntitlementDefinition {
   defaultValue: boolean | number;
   min?: number;
   max?: number;
+  /** Groups entitlements in the platform-admin plan editor. */
+  group?: PlanEntitlementGroup;
 }
+
+export const PLAN_ENTITLEMENT_GROUP_ORDER: PlanEntitlementGroup[] = [
+  'quotas',
+  'modules',
+  'accounting',
+  'ai',
+  'platform',
+];
 
 /** Registry of editable plan entitlements for the platform-admin plan editor. */
 export const PLAN_ENTITLEMENT_REGISTRY: PlanEntitlementDefinition[] = [
@@ -33,6 +50,7 @@ export const PLAN_ENTITLEMENT_REGISTRY: PlanEntitlementDefinition[] = [
     defaultValue: 1,
     min: 1,
     max: 100,
+    group: 'quotas',
   },
   {
     key: 'maxUsers',
@@ -42,6 +60,7 @@ export const PLAN_ENTITLEMENT_REGISTRY: PlanEntitlementDefinition[] = [
     defaultValue: 1,
     min: 1,
     max: 500,
+    group: 'quotas',
   },
   {
     key: 'maxSkus',
@@ -51,20 +70,23 @@ export const PLAN_ENTITLEMENT_REGISTRY: PlanEntitlementDefinition[] = [
     defaultValue: 100,
     min: -1,
     max: 1_000_000,
+    group: 'quotas',
   },
   {
     key: 'premiumAccounting',
     type: 'boolean',
     label: 'Accounting module',
-    description: 'Unlocks the full accounting workspace and financial reports.',
+    description: 'Unlocks the accounting workspace and core financial reports.',
     defaultValue: false,
+    group: 'modules',
   },
   {
     key: 'premiumInventoryReports',
     type: 'boolean',
-    label: 'Inventory reports',
-    description: 'Advanced inventory analytics and valuation reports.',
+    label: 'Retail advanced reports',
+    description: 'Advanced sales, purchase, and inventory analytics.',
     defaultValue: false,
+    group: 'modules',
   },
   {
     key: 'premiumCrm',
@@ -72,6 +94,7 @@ export const PLAN_ENTITLEMENT_REGISTRY: PlanEntitlementDefinition[] = [
     label: 'Premium CRM',
     description: 'Lead pipeline and premium CRM features.',
     defaultValue: false,
+    group: 'modules',
   },
   {
     key: 'multiStore',
@@ -79,6 +102,7 @@ export const PLAN_ENTITLEMENT_REGISTRY: PlanEntitlementDefinition[] = [
     label: 'Multi-store',
     description: 'Branch switching and multi-location operations.',
     defaultValue: false,
+    group: 'modules',
   },
   {
     key: 'apiAccess',
@@ -86,6 +110,7 @@ export const PLAN_ENTITLEMENT_REGISTRY: PlanEntitlementDefinition[] = [
     label: 'API access',
     description: 'Tenant API keys and integrations.',
     defaultValue: false,
+    group: 'modules',
   },
   {
     key: 'accountingOnly',
@@ -93,6 +118,41 @@ export const PLAN_ENTITLEMENT_REGISTRY: PlanEntitlementDefinition[] = [
     label: 'Accounting-only pack',
     description: 'Hides retail modules in the sidebar and blocks retail routes.',
     defaultValue: false,
+    group: 'modules',
+  },
+  {
+    key: 'premiumAccountingAdvanced',
+    type: 'boolean',
+    label: 'Advanced accounting reports',
+    description: 'Comparative P&L, budget vs actual, cash flow, and financial ratios.',
+    defaultValue: false,
+    group: 'accounting',
+  },
+  {
+    key: 'premiumAi',
+    type: 'boolean',
+    label: 'AI assistant',
+    description: 'Report narration, draft messages, and other AI features.',
+    defaultValue: false,
+    group: 'ai',
+  },
+  {
+    key: 'premiumVoice',
+    type: 'boolean',
+    label: 'Voice navigation',
+    description: 'Voice commands in the header and voice entry on forms.',
+    defaultValue: false,
+    group: 'ai',
+  },
+  {
+    key: 'aiCreditsMonthly',
+    type: 'number',
+    label: 'AI credits / month',
+    description: 'Monthly AI credit allowance (1 credit = 1,000 tokens). Set to 0 when AI is off.',
+    defaultValue: 0,
+    min: 0,
+    max: 100_000,
+    group: 'ai',
   },
   {
     key: 'planRank',
@@ -102,15 +162,7 @@ export const PLAN_ENTITLEMENT_REGISTRY: PlanEntitlementDefinition[] = [
     defaultValue: 0,
     min: 0,
     max: 3,
-  },
-  {
-    key: 'aiCreditsMonthly',
-    type: 'number',
-    label: 'AI credits / month',
-    description: 'Monthly AI credit allowance (1 credit = 1,000 tokens).',
-    defaultValue: 0,
-    min: 0,
-    max: 100_000,
+    group: 'platform',
   },
 ];
 
@@ -278,6 +330,20 @@ export function parsePlanFeatures(
   );
   planFeaturesSchema.parse(normalized);
   return normalized;
+}
+
+export function hasPlanEntitlement(
+  features: Record<string, boolean | number>,
+  key: string,
+): boolean {
+  const value = features[key];
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    return value > 0;
+  }
+  return false;
 }
 
 export function parseMarketingFeatures(input: unknown): string[] {
