@@ -272,7 +272,7 @@ export class EmployeesService {
             findDuplicate: async (row) => {
                 if (!row.phone) return null;
                 const existing = await this.db.employee.findFirst({
-                    where: { tenant_id: tenantId, phone: row.phone },
+                    where: { tenant_id: tenantId, phone: row.phone, deleted_at: null },
                 });
                 return existing?.id ?? null;
             },
