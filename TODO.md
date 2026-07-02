@@ -350,6 +350,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Shared bulk import utility — `runImport<T>`, `ImportResult`, `ImportConfig<T>`, `ImportRowsDto` in `apps/backend/src/common/import.util.ts` + `import.dto.ts`; 7 Jest tests all passing — done 2026-07-02
 - [x] Platform admin user access control — self-demotion protection (cannot revoke own admin status), last-admin lockout (must keep at least 1 DB-flagged admin), `isAdmin` filter on `GET /admin/users`, admin-only filter toggle + "You" badge + pagination controls on `/admin/users` frontend page — done 2026-07-02
 - [x] Resizable left sidebar — drag handle on the right edge (desktop, expanded); width persisted in `localStorage` (`sidebar-width`, 176–400px); i18n en/bn/ms — done 2026-07-02
 - [x] Fix verification email resend — await delivery, surface SMTP/API errors to UI toast, add Brevo API + Resend HTTP transports (VPS Brevo key invalid; rotate `BREVO_API_KEY` or SMTP credentials in `.env.production`) — done 2026-07-01
