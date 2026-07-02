@@ -3,6 +3,7 @@ import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { DatabaseService } from '../database/database.service';
 import { CreateProductSubgroupDto, UpdateProductSubgroupDto } from './product-subgroup.dto';
+import { runImport, ImportResult } from '../common/import.util';
 
 @Injectable()
 export class ProductSubgroupsService {
@@ -105,6 +106,46 @@ export class ProductSubgroupsService {
         }
 
         return this.db.productSubgroup.delete({ where: { id } });
+    }
+
+    async importRows(
+        tenantId: string,
+        rows: Record<string, unknown>[],
+        mode: 'skip' | 'upsert',
+    ): Promise<ImportResult> {
+        return runImport(rows, mode, tenantId, {
+            requiredFields: ['name', 'group_name'],
+            castRow: (raw) => ({
+                name: String(raw.name ?? '').trim(),
+                group_name: String(raw.group_name ?? '').trim(),
+                description: raw.description ? String(raw.description).trim() || null : null,
+            }),
+            findDuplicate: async (row) => {
+                const group = await this.db.productGroup.findFirst({
+                    where: { tenant_id: tenantId, name: { equals: row.group_name, mode: 'insensitive' } },
+                });
+                if (!group) return null;
+                const existing = await this.db.productSubgroup.findUnique({
+                    where: { group_id_name: { group_id: group.id, name: row.name } },
+                });
+                return existing?.id ?? null;
+            },
+            create: async (row) => {
+                const group = await this.db.productGroup.findFirst({
+                    where: { tenant_id: tenantId, name: { equals: row.group_name, mode: 'insensitive' } },
+                });
+                if (!group) throw new Error(`Product group "${row.group_name}" not found`);
+                await this.db.productSubgroup.create({
+                    data: { tenant_id: tenantId, group_id: group.id, name: row.name, description: row.description },
+                });
+            },
+            update: async (id, row) => {
+                await this.db.productSubgroup.update({
+                    where: { id },
+                    data: { name: row.name, description: row.description },
+                });
+            },
+        });
     }
 
     private async assertGroupExists(tenantId: string, groupId: string) {
