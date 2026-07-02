@@ -137,6 +137,7 @@ export const NAV_ROUTES: { path: string; label: string }[] = [
     { path: '/admin/platform-settings/general', label: 'Platform Settings General' },
     { path: '/admin/platform-settings/email', label: 'Platform Settings Email' },
     { path: '/admin/platform-settings/sms', label: 'Platform Settings SMS' },
+    { path: '/admin/platform-settings/whatsapp', label: 'Platform Settings WhatsApp' },
     { path: '/admin/platform-settings/payments', label: 'Platform Settings Payments' },
     { path: '/admin/platform-settings/ai', label: 'Platform Settings AI' },
     { path: '/admin/system-health', label: 'System Health' },

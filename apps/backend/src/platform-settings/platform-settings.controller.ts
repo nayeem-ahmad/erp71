@@ -15,7 +15,8 @@ import { SmsService } from '../sms/sms.service';
 import { EmailService } from '../email/email.service';
 import { AiService } from '../ai/ai.service';
 import { PlatformSettingsService, VALID_GROUPS } from './platform-settings.service';
-import { UpsertGroupSettingsDto, TestSmsDto, TestEmailDto } from './platform-settings.dto';
+import { UpsertGroupSettingsDto, TestSmsDto, TestEmailDto, TestWhatsAppDto } from './platform-settings.dto';
+import { WhatsAppService } from '../whatsapp/whatsapp.service';
 
 @Controller('admin/platform-settings')
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
@@ -25,6 +26,7 @@ export class PlatformSettingsController {
         private readonly smsService: SmsService,
         private readonly emailService: EmailService,
         private readonly aiService: AiService,
+        private readonly whatsAppService: WhatsAppService,
     ) {}
 
     @Get(':group')
@@ -60,6 +62,12 @@ export class PlatformSettingsController {
     @Post('ai/test')
     async testAi() {
         return this.aiService.testConnection();
+    }
+
+    @Post('whatsapp/test')
+    async testWhatsApp(@Body() dto: TestWhatsAppDto) {
+        await this.whatsAppService.sendTestMessage(dto.phone);
+        return { message: `Test WhatsApp message dispatched to ${dto.phone}` };
     }
 
     private validateGroup(group: string) {
