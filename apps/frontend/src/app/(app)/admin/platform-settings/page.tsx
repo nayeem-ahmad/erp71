@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { MessageSquare, Mail, CreditCard, Settings, ChevronRight, Sparkles, LayoutList, BadgePercent } from 'lucide-react';
+import { MessageSquare, Mail, CreditCard, Settings, ChevronRight, Sparkles, LayoutList, BadgePercent, MessageCircle } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { routes } from '@/lib/routes';
 
 export default function PlatformSettingsIndexPage() {
     const { t } = useI18n();
@@ -26,6 +27,14 @@ export default function PlatformSettingsIndexPage() {
             description: m.sections.email.description,
             color: 'text-blue-600',
             bg: 'bg-blue-50',
+        },
+        {
+            href: routes.admin.platformSettings.whatsapp,
+            icon: MessageCircle,
+            label: m.sections.whatsapp.label,
+            description: m.sections.whatsapp.description,
+            color: 'text-emerald-600',
+            bg: 'bg-emerald-50',
         },
         {
             href: '/admin/platform-settings/payments',

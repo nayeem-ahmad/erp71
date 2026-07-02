@@ -217,6 +217,10 @@ export const adminMessages = {
                     label: 'Email / SMTP',
                     description: 'SMTP host, credentials, and sender address for transactional email.',
                 },
+                whatsapp: {
+                    label: 'WhatsApp',
+                    description: 'Meta Cloud API credentials for CRM campaign messages to customers.',
+                },
                 payments: {
                     label: 'Payment Gateways',
                     description: 'SSL Wireless, bKash, and Nagad API credentials.',
@@ -391,6 +395,30 @@ export const adminMessages = {
                 placeholder: 'Recipient address (leave blank for your account email)',
                 success: 'Test email dispatched.',
                 failed: 'Test email failed.',
+            },
+        },
+        whatsapp: {
+            title: 'WhatsApp',
+            description: 'Configure the Meta WhatsApp Cloud API used for outbound CRM campaign messages. One platform number is shared across all tenants.',
+            accessToken: {
+                label: 'Access Token',
+                placeholder: 'Enter new token (leave blank to keep existing)',
+            },
+            phoneNumberId: {
+                label: 'Phone Number ID',
+                hint: 'From Meta Business Manager → WhatsApp → API Setup.',
+            },
+            apiVersion: {
+                label: 'Graph API Version',
+                hint: 'Usually v18.0 or newer. See Meta developer docs.',
+            },
+            saved: 'WhatsApp settings saved.',
+            loadFailed: 'Failed to load WhatsApp settings.',
+            test: {
+                title: 'Send Test Message',
+                placeholder: 'e.g. 01712345678',
+                success: 'Test WhatsApp message dispatched to {phone}.',
+                failed: 'Test WhatsApp message failed.',
             },
         },
         payments: {

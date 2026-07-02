@@ -15,3 +15,8 @@ export class TestEmailDto {
     @IsEmail()
     email?: string;
 }
+
+export class TestWhatsAppDto {
+    @IsString()
+    phone: string;
+}

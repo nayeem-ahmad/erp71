@@ -185,6 +185,7 @@ export const routes = {
             general: '/admin/platform-settings/general',
             email: '/admin/platform-settings/email',
             sms: '/admin/platform-settings/sms',
+            whatsapp: '/admin/platform-settings/whatsapp',
             payments: '/admin/platform-settings/payments',
             ai: '/admin/platform-settings/ai',
             navigation: '/admin/platform-settings/navigation',
