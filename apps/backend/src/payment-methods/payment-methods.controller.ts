@@ -20,6 +20,7 @@ import {
   PaymentMethodResponseDto,
   PaymentMethodType,
 } from './payment-methods.dto';
+import { ImportRowsDto } from '../common/import.dto';
 
 @Controller('payment-methods')
 @UseGuards(JwtAuthGuard)
@@ -33,6 +34,11 @@ export class PaymentMethodsController {
     @Body() dto: CreatePaymentMethodDto,
   ): Promise<PaymentMethodResponseDto> {
     return this.paymentMethodsService.create(tenant.tenantId, dto);
+  }
+
+  @Post('import')
+  importRows(@Tenant() tenant: TenantContext, @Body() body: ImportRowsDto) {
+    return this.paymentMethodsService.importRows(tenant.tenantId, body.rows, body.mode);
   }
 
   @Get()

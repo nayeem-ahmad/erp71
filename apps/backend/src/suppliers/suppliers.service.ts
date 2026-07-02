@@ -11,6 +11,7 @@ import {
     UpdateSupplierCreditPaymentDto,
     UpdateSupplierDto,
 } from './supplier.dto';
+import { runImport, ImportResult } from '../common/import.util';
 
 @Injectable()
 export class SuppliersService {
@@ -103,6 +104,40 @@ export class SuppliersService {
         });
 
         return { success: true };
+    }
+
+    async importRows(
+        tenantId: string,
+        rows: Record<string, unknown>[],
+        mode: 'skip' | 'upsert',
+    ): Promise<ImportResult> {
+        return runImport(rows, mode, tenantId, {
+            requiredFields: ['name'],
+            castRow: (raw) => ({
+                name: String(raw.name ?? '').trim(),
+                phone: raw.phone ? String(raw.phone).trim() || null : null,
+                email: raw.email ? String(raw.email).trim() || null : null,
+                address: raw.address ? String(raw.address).trim() || null : null,
+                contact_person: raw.contact_person ? String(raw.contact_person).trim() || null : null,
+            }),
+            findDuplicate: async (row) => {
+                const existing = await this.db.supplier.findUnique({
+                    where: { tenant_id_name: { tenant_id: tenantId, name: row.name } },
+                });
+                return existing?.id ?? null;
+            },
+            create: async (row) => {
+                await this.db.supplier.create({
+                    data: { tenant_id: tenantId, name: row.name, phone: row.phone, email: row.email, address: row.address },
+                });
+            },
+            update: async (id, row) => {
+                await this.db.supplier.update({
+                    where: { id },
+                    data: { name: row.name, phone: row.phone, email: row.email, address: row.address },
+                });
+            },
+        });
     }
 
     private dueDelta(type: 'PAYMENT' | 'PAYOUT', amount: number): number {

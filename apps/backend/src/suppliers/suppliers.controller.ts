@@ -12,6 +12,7 @@ import {
     UpdateSupplierDto,
 } from './supplier.dto';
 import { SuppliersService } from './suppliers.service';
+import { ImportRowsDto } from '../common/import.dto';
 
 @Controller('suppliers')
 @UseGuards(JwtAuthGuard)
@@ -22,6 +23,11 @@ export class SuppliersController {
     @Post()
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateSupplierDto) {
         return this.suppliersService.create(tenant.tenantId, dto);
+    }
+
+    @Post('import')
+    importRows(@Tenant() tenant: TenantContext, @Body() body: ImportRowsDto) {
+        return this.suppliersService.importRows(tenant.tenantId, body.rows, body.mode);
     }
 
     @Get()

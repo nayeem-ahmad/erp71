@@ -6,6 +6,7 @@ import {
   PaymentMethodResponseDto,
   PaymentMethodType,
 } from './payment-methods.dto';
+import { runImport, ImportResult } from '../common/import.util';
 
 @Injectable()
 export class PaymentMethodsService {
@@ -148,6 +149,38 @@ export class PaymentMethodsService {
 
     await this.db.paymentMethod.delete({
       where: { id },
+    });
+  }
+
+  async importRows(
+    tenantId: string,
+    rows: Record<string, unknown>[],
+    mode: 'skip' | 'upsert',
+  ): Promise<ImportResult> {
+    return runImport(rows, mode, tenantId, {
+      requiredFields: ['name'],
+      castRow: (raw) => ({
+        name: String(raw.name ?? '').trim(),
+        type: raw.type ? String(raw.type).trim() : 'Cash',
+        is_active: raw.is_active !== undefined ? String(raw.is_active).toLowerCase() !== 'false' : true,
+      }),
+      findDuplicate: async (row) => {
+        const existing = await this.db.paymentMethod.findFirst({
+          where: { tenant_id: tenantId, name: row.name },
+        });
+        return existing?.id ?? null;
+      },
+      create: async (row) => {
+        await this.db.paymentMethod.create({
+          data: { tenant_id: tenantId, name: row.name, type: row.type, is_active: row.is_active },
+        });
+      },
+      update: async (id, row) => {
+        await this.db.paymentMethod.update({
+          where: { id },
+          data: { name: row.name, type: row.type, is_active: row.is_active },
+        });
+      },
     });
   }
 

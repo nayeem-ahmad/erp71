@@ -5,6 +5,7 @@ import { CreateTerritoryDto, UpdateTerritoryDto } from './territory.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { ImportRowsDto } from '../common/import.dto';
 
 @Controller('territories')
 @UseGuards(JwtAuthGuard)
@@ -15,6 +16,11 @@ export class TerritoriesController {
     @Post()
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateTerritoryDto) {
         return this.service.create(tenant.tenantId, dto);
+    }
+
+    @Post('import')
+    importRows(@Tenant() tenant: TenantContext, @Body() body: ImportRowsDto) {
+        return this.service.importRows(tenant.tenantId, body.rows, body.mode);
     }
 
     @Get()
