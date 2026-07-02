@@ -233,6 +233,15 @@ export const STORE_PERMISSION_GROUPS: { label: string; permissions: StorePermiss
   },
 ];
 
+export interface TenantRoleSummary {
+  id: string;
+  name: string;
+  description?: string | null;
+  is_system: boolean;
+  permissions: StorePermission[];
+  member_count?: number;
+}
+
 export interface TenantUser {
   id: string;
   tenant_id: string;
@@ -297,6 +306,8 @@ export interface TenantContextSummary {
   id: string;
   name: string;
   role: UserRole;
+  tenant_role?: { id: string; name: string } | null;
+  permissions?: StorePermission[];
   /** All stores user has UserStoreAccess for (not all tenant stores). */
   stores: Store[];
   subscription?: TenantSubscriptionSummary | null;
