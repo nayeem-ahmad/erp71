@@ -15,8 +15,8 @@ describe('accounting-nav', () => {
         expect(labels).toContain('Overview');
         expect(labels).toContain('Transactions & Funds');
         expect(labels).toContain('Reconciliation');
-        expect(labels).toContain('Accounting Reports');
-        expect(labels).toContain('Accounting Setup');
+        expect(labels).toContain('Reports');
+        expect(labels).toContain('Settings');
         expect(labels).toContain('Expense Categories');
         expect(labels).toContain('Bank Reconciliation');
         expect(labels).toContain('Fiscal Periods');

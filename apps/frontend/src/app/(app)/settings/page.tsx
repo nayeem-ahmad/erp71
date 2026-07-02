@@ -2,10 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle, XCircle, Loader2, ShieldCheck, ShieldOff, Eye, EyeOff, Palette, Receipt, Gift, MessageSquare, BarChart3, Globe, Monitor, UserCog, ScrollText, ShoppingBag, CreditCard } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, ShieldCheck, ShieldOff, Eye, EyeOff } from 'lucide-react';
 import { api, fetchWithAuth } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { routes } from '@/lib/routes';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
@@ -638,75 +637,6 @@ export default function AccountSettingsPage() {
         { key: 'privacy', label: t.settings.tabs.dataPrivacy },
     ];
 
-    const quickLinks = [
-        {
-            href: routes.team,
-            icon: UserCog,
-            label: t.settings.quickLinks.teamLabel,
-            description: t.settings.quickLinks.teamDescription,
-        },
-        {
-            href: routes.settings.auditLogs,
-            icon: ScrollText,
-            label: t.settings.quickLinks.auditLabel,
-            description: t.settings.quickLinks.auditDescription,
-        },
-        {
-            href: routes.settings.localization,
-            icon: Globe,
-            label: t.settings.quickLinks.localizationLabel,
-            description: t.settings.quickLinks.localizationDescription,
-        },
-        {
-            href: routes.settings.branding,
-            icon: Palette,
-            label: t.settings.quickLinks.brandingLabel,
-            description: t.settings.quickLinks.brandingDescription,
-        },
-        {
-            href: routes.settings.tax,
-            icon: Receipt,
-            label: t.settings.quickLinks.taxLabel,
-            description: t.settings.quickLinks.taxDescription,
-        },
-        {
-            href: routes.settings.loyalty,
-            icon: Gift,
-            label: t.settings.quickLinks.loyaltyLabel,
-            description: t.settings.quickLinks.loyaltyDescription,
-        },
-        {
-            href: routes.settings.sms,
-            icon: MessageSquare,
-            label: t.settings.quickLinks.smsLabel,
-            description: t.settings.quickLinks.smsDescription,
-        },
-        {
-            href: routes.settings.reports,
-            icon: BarChart3,
-            label: t.settings.quickLinks.reportsLabel,
-            description: t.settings.quickLinks.reportsDescription,
-        },
-        {
-            href: routes.settings.counters,
-            icon: Monitor,
-            label: t.settings.quickLinks.countersLabel,
-            description: t.settings.quickLinks.countersDescription,
-        },
-        {
-            href: routes.settings.sales,
-            icon: ShoppingBag,
-            label: 'Sales Settings',
-            description: 'Default paper size, reference number format',
-        },
-        {
-            href: routes.settings.paymentMethods,
-            icon: CreditCard,
-            label: 'Payment Methods',
-            description: 'Manage cash, card, mobile wallet methods',
-        },
-    ];
-
     return (
         <div className="h-full overflow-y-auto">
             <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
@@ -720,25 +650,6 @@ export default function AccountSettingsPage() {
                         'settings',
                     )}
                 />
-
-                {/* Quick links to sub-settings */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {quickLinks.map(({ href, icon: Icon, label, description }) => (
-                        <Link
-                            key={href}
-                            href={href}
-                            className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white px-5 py-4 hover:border-blue-300 hover:shadow-sm transition-all group"
-                        >
-                            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-100 transition-colors">
-                                <Icon className="w-5 h-5 text-blue-600" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-bold text-gray-800">{label}</p>
-                                <p className="text-xs text-gray-500 mt-0.5">{description}</p>
-                            </div>
-                        </Link>
-                    ))}
-                </div>
 
                 {/* Card */}
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">

@@ -582,5 +582,6 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Merge dev → main + deploy subscription plan editor (`85e2a26`) — fast-forwarded `main`; VPS `/opt/erp71` `scripts/deploy.sh main` via SSH (GitHub Actions deploy failed: `VPS_SSH_KEY` auth); smoke checks green at `api.erp71.com` / `app.erp71.com` — done 2026-07-02
 - [x] Phase 5 granular plan entitlements — advanced accounting reports, AI, and voice gated per plan; plan editor grouped by module — done 2026-07-02
 - [x] Fix accounting-only dashboard layout — `/dashboard` hides retail quick links (sales/customer/supplier), KPI tiles, recent activity, and inventory panels when `accountingOnly` plan entitlement is set; shows accounting-focused quick links instead — done 2026-07-02
+- [x] Sidebar nav relabel — tenant Settings module renamed to Admin (`Building2`); settings hub quick links moved to Admin submenu; accounting subgroups renamed to Reports and Settings; `/settings` overview is account tabs only — done 2026-07-02
 
 

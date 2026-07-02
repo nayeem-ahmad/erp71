@@ -21,6 +21,7 @@ describe('nav-resolver', () => {
 
         expect(labels).toContain('Overview');
         expect(labels).toContain('Transactions & Funds');
-        expect(labels).toContain('Accounting Reports');
+        expect(labels).toContain('Reports');
+        expect(labels).toContain('Settings');
     });
 });
