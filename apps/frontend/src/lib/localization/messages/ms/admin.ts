@@ -142,8 +142,16 @@ export const adminMessages = {
             tenantCount: '{count} penyewa',
             tenantCountPlural: '{count} penyewa',
             adminBadge: 'Admin',
+            youBadge: 'Anda',
             revokeAdmin: 'Batalkan Admin',
             makeAdmin: 'Jadikan Admin',
+            filterAll: 'Semua Pengguna',
+            filterAdmins: 'Admin Sahaja',
+            selfDemoteError: 'Anda tidak boleh membatalkan akses admin platform anda sendiri.',
+            lastAdminError: 'Tidak dapat membatalkan pentadbir platform terakhir — naikkan taraf pengguna lain dahulu.',
+            pageOf: 'Halaman {page} daripada {total}',
+            prev: 'Sebelum',
+            next: 'Seterusnya',
         },
         platformSettings: {
             index: {

@@ -1128,11 +1128,12 @@ export const api = {
     getAdminMetrics: () => fetchWithAuth('/admin/metrics'),
     getSystemHealth: () => fetchWithAuth('/admin/system-health'),
     getSystemHealthJobs: () => fetchWithAuth('/admin/system-health/jobs'),
-    getAdminUsers: (params?: { search?: string; page?: number; limit?: number }) => {
+    getAdminUsers: (params?: { search?: string; page?: number; limit?: number; isAdmin?: boolean }) => {
         const query = new URLSearchParams();
         if (params?.search) query.set('search', params.search);
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
+        if (params?.isAdmin !== undefined) query.set('isAdmin', String(params.isAdmin));
         return fetchWithAuth(`/admin/users${query.toString() ? `?${query.toString()}` : ''}`);
     },
     promoteUser: (userId: string) => fetchWithAuth(`/admin/users/${userId}/promote`, { method: 'POST' }),

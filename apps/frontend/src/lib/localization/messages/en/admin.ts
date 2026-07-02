@@ -142,8 +142,16 @@ export const adminMessages = {
         tenantCount: '{count} tenant',
         tenantCountPlural: '{count} tenants',
         adminBadge: 'Admin',
+        youBadge: 'You',
         revokeAdmin: 'Revoke Admin',
         makeAdmin: 'Make Admin',
+        filterAll: 'All Users',
+        filterAdmins: 'Admins Only',
+        selfDemoteError: 'You cannot revoke your own platform admin access.',
+        lastAdminError: 'Cannot revoke the last platform admin — promote another user first.',
+        pageOf: 'Page {page} of {total}',
+        prev: 'Prev',
+        next: 'Next',
     },
     platformSettings: {
         index: {

@@ -350,6 +350,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Platform admin user access control — self-demotion protection (cannot revoke own admin status), last-admin lockout (must keep at least 1 DB-flagged admin), `isAdmin` filter on `GET /admin/users`, admin-only filter toggle + "You" badge + pagination controls on `/admin/users` frontend page — done 2026-07-02
 - [x] Resizable left sidebar — drag handle on the right edge (desktop, expanded); width persisted in `localStorage` (`sidebar-width`, 176–400px); i18n en/bn/ms — done 2026-07-02
 - [x] Fix verification email resend — await delivery, surface SMTP/API errors to UI toast, add Brevo API + Resend HTTP transports (VPS Brevo key invalid; rotate `BREVO_API_KEY` or SMTP credentials in `.env.production`) — done 2026-07-01
 - [x] Drop Supabase from active stack — removed health probe, env vars (`render.yaml`, `.env.example`, `.env.production.example`), unused `@supabase/supabase-js` backend dep, and Next.js image host allowlist — done 2026-07-01

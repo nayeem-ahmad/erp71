@@ -498,14 +498,16 @@ export class AdminTenantsService {
         const limit = Math.min(100, Math.max(1, query.limit ?? 20));
         const skip = (page - 1) * limit;
 
-        const where = query.search
-            ? {
-                  OR: [
-                      { email: { contains: query.search, mode: 'insensitive' as const } },
-                      { name: { contains: query.search, mode: 'insensitive' as const } },
-                  ],
-              }
-            : {};
+        const where: any = {};
+        if (query.search) {
+            where.OR = [
+                { email: { contains: query.search, mode: 'insensitive' as const } },
+                { name: { contains: query.search, mode: 'insensitive' as const } },
+            ];
+        }
+        if (query.isAdmin !== undefined) {
+            where.is_platform_admin = query.isAdmin;
+        }
 
         const [users, total] = await Promise.all([
             this.db.user.findMany({
@@ -565,8 +567,25 @@ export class AdminTenantsService {
     }
 
     async demoteUser(userId: string, adminUserId: string) {
+        if (userId === adminUserId) {
+            throw new BadRequestException('You cannot revoke your own platform admin access');
+        }
+
         const user = await this.db.user.findUnique({ where: { id: userId } });
         if (!user) throw new NotFoundException('User not found');
+
+        if (!(user as any).is_platform_admin) {
+            return { success: true, userId, is_platform_admin: false };
+        }
+
+        const remainingAdmins = await this.db.user.count({
+            where: { is_platform_admin: true, id: { not: userId } },
+        });
+        if (remainingAdmins === 0) {
+            throw new BadRequestException(
+                'Cannot revoke the last platform admin — promote another user first',
+            );
+        }
 
         await this.db.user.update({
             where: { id: userId },

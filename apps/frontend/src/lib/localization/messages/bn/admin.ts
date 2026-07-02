@@ -142,8 +142,16 @@ export const adminMessages = {
             tenantCount: "{count} টেন্যান্ট",
             tenantCountPlural: "{count} টেন্যান্ট",
             adminBadge: "অ্যাডমিন",
+            youBadge: "আপনি",
             revokeAdmin: "অ্যাডমিন প্রত্যাহার",
             makeAdmin: "অ্যাডমিন করুন",
+            filterAll: "সব ব্যবহারকারী",
+            filterAdmins: "শুধু অ্যাডমিন",
+            selfDemoteError: "আপনি নিজের প্ল্যাটফর্ম অ্যাডমিন অ্যাক্সেস প্রত্যাহার করতে পারবেন না।",
+            lastAdminError: "শেষ প্ল্যাটফর্ম অ্যাডমিনকে প্রত্যাহার করা যাবে না — প্রথমে অন্য কাউকে প্রমোট করুন।",
+            pageOf: "পৃষ্ঠা {page} / {total}",
+            prev: "আগে",
+            next: "পরে",
         },
         platformSettings: {
             index: {
