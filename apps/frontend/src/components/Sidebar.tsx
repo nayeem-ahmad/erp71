@@ -159,7 +159,9 @@ export default function Sidebar({
                         children: module.children.filter((child) => {
                             if (isNavSubgroup(child)) return true;
                             if (child.href === routes.billing) return canManageBilling;
-                            if (child.href === routes.team) return canManageTeam;
+                            if (child.href === routes.team || child.href === routes.settings.auditLogs) {
+                                return canManageTeam;
+                            }
                             return true;
                         }),
                     };

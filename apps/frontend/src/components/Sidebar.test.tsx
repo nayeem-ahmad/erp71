@@ -136,7 +136,7 @@ describe('Sidebar — Story 30.1', () => {
         render(<Sidebar canAccessAccounting accountingOnlyMode />);
 
         expect(screen.getByText('Accounting')).toBeInTheDocument();
-        expect(screen.getByText('Settings')).toBeInTheDocument();
+        expect(screen.getByText('Admin')).toBeInTheDocument();
         expect(screen.queryByText('Sales')).not.toBeInTheDocument();
         expect(screen.queryByText('Inventory')).not.toBeInTheDocument();
     });
@@ -145,8 +145,8 @@ describe('Sidebar — Story 30.1', () => {
         render(<Sidebar canAccessAccounting canAccessAdmin canManageBilling canAccessInventoryReports activePlanCode="STANDARD" />);
 
         expect(screen.getByText('Platform Admin')).toBeInTheDocument();
-        expect(screen.getByText('Settings')).toBeInTheDocument();
-        fireEvent.click(screen.getByText('Settings'));
+        expect(screen.getByText('Admin')).toBeInTheDocument();
+        fireEvent.click(screen.getByText('Admin'));
         expect(screen.getByText('Billing')).toBeInTheDocument();
 
         // Open Sales group
@@ -190,13 +190,13 @@ describe('Sidebar — Story 30.1', () => {
             expect(screen.getByText('Transactions & Funds')).toBeInTheDocument();
         });
         expect(screen.getByText('Reconciliation')).toBeInTheDocument();
-        expect(screen.getByText('Accounting Reports')).toBeInTheDocument();
-        expect(screen.getByText('Accounting Setup')).toBeInTheDocument();
+        expect(screen.getByText('Reports')).toBeInTheDocument();
+        expect(screen.getByText('Settings')).toBeInTheDocument();
 
         fireEvent.click(screen.getByText('Transactions & Funds'));
         expect(screen.getByText('Expense Categories')).toBeInTheDocument();
 
-        fireEvent.click(screen.getByText('Accounting Reports'));
+        fireEvent.click(screen.getByText('Reports'));
         expect(screen.getByText('Trial Balance')).toBeInTheDocument();
         expect(screen.getByText('Comparative P&L')).toBeInTheDocument();
     });
@@ -205,9 +205,9 @@ describe('Sidebar — Story 30.1', () => {
         render(<Sidebar canAccessAccounting canAccessAccountingAdvanced={false} />);
 
         await waitFor(() => {
-            expect(screen.getByText('Accounting Reports')).toBeInTheDocument();
+            expect(screen.getByText('Reports')).toBeInTheDocument();
         });
-        fireEvent.click(screen.getByText('Accounting Reports'));
+        fireEvent.click(screen.getByText('Reports'));
         expect(screen.getByText('Profit & Loss')).toBeInTheDocument();
         expect(screen.queryByText('Comparative P&L')).not.toBeInTheDocument();
         expect(screen.queryByText('Budget vs. Actual')).not.toBeInTheDocument();

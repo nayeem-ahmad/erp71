@@ -63,14 +63,12 @@ describe('AccountSettingsPage', () => {
         });
     });
 
-    it('renders quick links to sub-settings pages', async () => {
+    it('renders account tabs without sidebar quick-link cards', async () => {
         render(<AccountSettingsPage />);
         await waitFor(() => {
-            expect(screen.getByText('Branding')).toBeInTheDocument();
-            expect(screen.getByText('Tax / VAT')).toBeInTheDocument();
-            expect(screen.getByText('Loyalty Program')).toBeInTheDocument();
-            expect(screen.getByText('SMS Notifications')).toBeInTheDocument();
-            expect(screen.getByText('Localization')).toBeInTheDocument();
+            expect(screen.getByText('Profile')).toBeInTheDocument();
+            expect(screen.getByText('Password')).toBeInTheDocument();
+            expect(screen.queryByText('Branding')).not.toBeInTheDocument();
         });
     });
 
@@ -319,24 +317,4 @@ describe('AccountSettingsPage', () => {
         });
     });
 
-    it('renders all quick link hrefs correctly', async () => {
-        render(<AccountSettingsPage />);
-        await waitFor(() => {
-            expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
-        });
-        await waitFor(() => {
-            expect(screen.getByRole('link', { name: /branding/i })).toHaveAttribute(
-                'href',
-                '/settings/branding',
-            );
-            expect(screen.getByRole('link', { name: /tax \/ vat/i })).toHaveAttribute(
-                'href',
-                '/settings/tax',
-            );
-            expect(screen.getByRole('link', { name: /pos counters/i })).toHaveAttribute(
-                'href',
-                '/settings/counters',
-            );
-        });
-    });
 });
