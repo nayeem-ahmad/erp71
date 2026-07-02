@@ -17,10 +17,12 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { PaginationDto } from '../common/pagination.dto';
 import { TeamService } from './team.service';
 import {
+    CreateTenantRoleDto,
     GrantStoreAccessDto,
     InviteMemberDto,
     SetStorePermissionsDto,
     UpdateRoleDto,
+    UpdateTenantRoleDto,
 } from './team.dto';
 
 @Controller('team')
@@ -37,6 +39,30 @@ export class TeamController {
     @Get('stores')
     listStores(@Tenant() ctx: TenantContext) {
         return this.team.listStores(ctx);
+    }
+
+    @Get('roles')
+    listRoles(@Tenant() ctx: TenantContext) {
+        return this.team.listRoles(ctx);
+    }
+
+    @Post('roles')
+    createRole(@Tenant() ctx: TenantContext, @Body() dto: CreateTenantRoleDto) {
+        return this.team.createRole(ctx, dto);
+    }
+
+    @Patch('roles/:id')
+    updateRoleTemplate(
+        @Tenant() ctx: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: UpdateTenantRoleDto,
+    ) {
+        return this.team.updateRoleTemplate(ctx, id, dto);
+    }
+
+    @Delete('roles/:id')
+    deleteRole(@Tenant() ctx: TenantContext, @Param('id') id: string) {
+        return this.team.deleteRole(ctx, id);
     }
 
     @Get('invitations')

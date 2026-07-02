@@ -39,3 +39,31 @@ export class SetStorePermissionsDto {
     @IsIn(STORE_PERMISSION_VALUES, { each: true })
     permissions: StorePermission[];
 }
+
+export class CreateTenantRoleDto {
+    @IsString()
+    name: string;
+
+    @IsOptional()
+    @IsString()
+    description?: string;
+
+    @IsArray()
+    @IsIn(STORE_PERMISSION_VALUES, { each: true })
+    permissions: StorePermission[];
+}
+
+export class UpdateTenantRoleDto {
+    @IsOptional()
+    @IsString()
+    name?: string;
+
+    @IsOptional()
+    @IsString()
+    description?: string;
+
+    @IsOptional()
+    @IsArray()
+    @IsIn(STORE_PERMISSION_VALUES, { each: true })
+    permissions?: StorePermission[];
+}

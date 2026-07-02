@@ -14,6 +14,8 @@ import {
     UserRole,
 } from '@erp71/shared-types';
 import { TenantContext } from '../database/tenant.decorator';
+import { syncMemberPermissionsFromRole } from './role-sync.util';
+import { CreateTenantRoleDto, UpdateTenantRoleDto } from './team.dto';
 
 const VALID_PERMISSIONS = new Set<string>(Object.values(StorePermission));
 
@@ -66,6 +68,54 @@ export class TeamService {
 
     private auditCtx(ctx: TenantContext) {
         return { userId: ctx.userId, tenantId: ctx.tenantId };
+    }
+
+    private assertOwner(ctx: TenantContext): void {
+        if (ctx.userRole !== UserRole.OWNER) {
+            throw new ForbiddenException('Only the organization owner can manage roles.');
+        }
+    }
+
+    private normalizeRoleName(name: string): string {
+        const trimmed = name.trim();
+        if (!trimmed) {
+            throw new BadRequestException('Role name is required.');
+        }
+        return trimmed;
+    }
+
+    private async validateRoleName(tenantId: string, name: string, excludeId?: string): Promise<string> {
+        const normalized = this.normalizeRoleName(name);
+        if (normalized.toLowerCase() === 'owner') {
+            throw new BadRequestException('Cannot use the name "Owner".');
+        }
+
+        const existing = await this.db.tenantRole.findMany({
+            where: {
+                tenant_id: tenantId,
+                ...(excludeId ? { id: { not: excludeId } } : {}),
+            },
+            select: { name: true },
+        });
+        const lower = normalized.toLowerCase();
+        if (existing.some((role) => role.name.toLowerCase() === lower)) {
+            throw new BadRequestException('A role with this name already exists.');
+        }
+
+        return normalized;
+    }
+
+    private filterPermissions(permissions: StorePermission[]): StorePermission[] {
+        return Array.from(new Set(permissions)).filter((p) => VALID_PERMISSIONS.has(p));
+    }
+
+    private async getTenantRole(tenantId: string, roleId: string) {
+        const role = await this.db.tenantRole.findFirst({
+            where: { id: roleId, tenant_id: tenantId },
+            include: { permissions: { select: { permission: true } } },
+        });
+        if (!role) throw new NotFoundException('Role not found.');
+        return role;
     }
 
     /* -------------------------------- Reads ---------------------------------- */
@@ -122,6 +172,28 @@ export class TeamService {
         return paginate(items, total, pageNum, limitNum);
     }
 
+    async listRoles(ctx: TenantContext) {
+        this.assertOwner(ctx);
+
+        const roles = await this.db.tenantRole.findMany({
+            where: { tenant_id: ctx.tenantId },
+            include: {
+                permissions: { select: { permission: true } },
+                _count: { select: { members: true } },
+            },
+            orderBy: { name: 'asc' },
+        });
+
+        return roles.map((role) => ({
+            id: role.id,
+            name: role.name,
+            description: role.description,
+            is_system: role.is_system,
+            permissions: role.permissions.map((p) => p.permission),
+            member_count: role._count.members,
+        }));
+    }
+
     /** All branches in the tenant — used to render the access/permission matrix. */
     async listStores(ctx: TenantContext) {
         await this.assertPermission(ctx, StorePermission.MANAGE_USERS);
@@ -176,6 +248,126 @@ export class TeamService {
     }
 
     /* ------------------------------- Mutations ------------------------------- */
+
+    async createRole(ctx: TenantContext, dto: CreateTenantRoleDto) {
+        this.assertOwner(ctx);
+
+        const name = await this.validateRoleName(ctx.tenantId, dto.name);
+        const permissions = this.filterPermissions(dto.permissions);
+        if (permissions.length === 0) {
+            throw new BadRequestException('At least one valid permission is required.');
+        }
+
+        const role = await this.db.$transaction(async (tx) => {
+            const created = await tx.tenantRole.create({
+                data: {
+                    tenant_id: ctx.tenantId,
+                    name,
+                    description: dto.description?.trim() || null,
+                    is_system: false,
+                },
+            });
+            await tx.tenantRolePermission.createMany({
+                data: permissions.map((permission) => ({
+                    tenant_role_id: created.id,
+                    permission: permission as any,
+                })),
+            });
+            return created;
+        });
+
+        await this.audit.log('team.role_created', 'TenantRole', this.auditCtx(ctx), role.id, {
+            name,
+            permissions,
+        });
+        return { message: 'Role created.', roleId: role.id };
+    }
+
+    async updateRoleTemplate(ctx: TenantContext, roleId: string, dto: UpdateTenantRoleDto) {
+        this.assertOwner(ctx);
+
+        const existing = await this.getTenantRole(ctx.tenantId, roleId);
+        const currentPermissions = existing.permissions.map((p) => p.permission).sort();
+
+        let name = existing.name;
+        if (dto.name !== undefined) {
+            name = await this.validateRoleName(ctx.tenantId, dto.name, roleId);
+        }
+
+        const nextPermissions =
+            dto.permissions !== undefined ? this.filterPermissions(dto.permissions).sort() : null;
+        if (nextPermissions !== null && nextPermissions.length === 0) {
+            throw new BadRequestException('At least one valid permission is required.');
+        }
+
+        const permissionsChanged =
+            nextPermissions !== null &&
+            (nextPermissions.length !== currentPermissions.length ||
+                nextPermissions.some((p, i) => p !== currentPermissions[i]));
+
+        let syncedCount = 0;
+
+        await this.db.$transaction(async (tx) => {
+            await tx.tenantRole.update({
+                where: { id: roleId },
+                data: {
+                    ...(dto.name !== undefined ? { name } : {}),
+                    ...(dto.description !== undefined ? { description: dto.description?.trim() || null } : {}),
+                },
+            });
+
+            if (permissionsChanged && nextPermissions) {
+                await tx.tenantRolePermission.deleteMany({ where: { tenant_role_id: roleId } });
+                await tx.tenantRolePermission.createMany({
+                    data: nextPermissions.map((permission) => ({
+                        tenant_role_id: roleId,
+                        permission: permission as any,
+                    })),
+                });
+
+                const members = await tx.tenantUser.findMany({
+                    where: { tenant_id: ctx.tenantId, tenant_role_id: roleId },
+                    select: { user_id: true },
+                });
+                const userIds = members.map((m) => m.user_id);
+                syncedCount = await syncMemberPermissionsFromRole(tx, {
+                    tenantId: ctx.tenantId,
+                    userIds,
+                    tenantRoleId: roleId,
+                    grantedBy: ctx.userId,
+                });
+            }
+        });
+
+        await this.audit.log('team.role_updated', 'TenantRole', this.auditCtx(ctx), roleId, {
+            name: dto.name !== undefined ? name : undefined,
+            description: dto.description,
+            permissions: nextPermissions ?? undefined,
+        });
+        if (permissionsChanged) {
+            await this.audit.log('team.role_permissions_synced', 'TenantRole', this.auditCtx(ctx), roleId, {
+                syncedCount,
+            });
+        }
+
+        return { message: 'Role updated.' };
+    }
+
+    async deleteRole(ctx: TenantContext, roleId: string) {
+        this.assertOwner(ctx);
+
+        const role = await this.getTenantRole(ctx.tenantId, roleId);
+        const memberCount = await this.db.tenantUser.count({
+            where: { tenant_id: ctx.tenantId, tenant_role_id: roleId },
+        });
+        if (memberCount > 0) {
+            throw new BadRequestException('Cannot delete a role that still has members assigned.');
+        }
+
+        await this.db.tenantRole.delete({ where: { id: role.id } });
+        await this.audit.log('team.role_deleted', 'TenantRole', this.auditCtx(ctx), roleId, { name: role.name });
+        return { message: 'Role deleted.' };
+    }
 
     async updateRole(ctx: TenantContext, userId: string, role: UserRole, reseed: boolean) {
         await this.assertPermission(ctx, StorePermission.MANAGE_USERS);
