@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
+import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 import { UserRole, ROLE_DEFAULT_PERMISSIONS } from '@erp71/shared-types';
 import * as crypto from 'crypto';
 
@@ -13,6 +14,7 @@ export class InvitationsService {
     constructor(
         private db: DatabaseService,
         private email: EmailService,
+        private planEntitlements: PlanEntitlementsService,
     ) {}
 
     async getInfo(rawToken: string): Promise<{ tenantName: string; email: string; role: string; expiresAt: Date }> {
@@ -219,6 +221,8 @@ export class InvitationsService {
         if (existingUser?.tenantMembers?.length) {
             throw new ConflictException('User is already a member of this tenant');
         }
+
+        await this.planEntitlements.assertUserQuota(tenantId);
 
         // Invalidate pending invitations for same email+tenant
         await this.db.userInvitation.deleteMany({

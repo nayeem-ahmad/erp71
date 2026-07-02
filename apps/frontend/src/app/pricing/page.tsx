@@ -2,13 +2,16 @@
 import { useI18n, formatMessage } from '@/lib/i18n';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { api } from '@/lib/api';
 import { CheckCircle2, Minus, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
 import MarketingFooter from '@/components/marketing/MarketingFooter';
 import MarketingNav from '@/components/marketing/MarketingNav';
 import {
+    buildMarketingPlansFromApi,
     MARKETING_PLANS,
     PLAN_COMPARISON_ROWS,
+    type PublicPlanFromApi,
     PRICING_FAQS,
     yearlySavingsPercent,
     type ComparisonCell,
@@ -62,6 +65,18 @@ export default function PricingPage() {
     const m = t.marketing.pricing;
     const [yearly, setYearly] = useState(false);
     const [comparePlan, setComparePlan] = useState<PlanId>('standard');
+    const [apiPlans, setApiPlans] = useState<PublicPlanFromApi[]>([]);
+
+    useEffect(() => {
+        api.getSubscriptionPlans()
+            .then((plans) => setApiPlans(Array.isArray(plans) ? plans : []))
+            .catch(() => null);
+    }, []);
+
+    const displayPlans = useMemo(
+        () => buildMarketingPlansFromApi(apiPlans),
+        [apiPlans],
+    );
 
     return (
         <div className="min-h-screen bg-white font-sans text-gray-900">
@@ -103,7 +118,7 @@ export default function PricingPage() {
 
             <section className="py-12 px-6 bg-white">
                 <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-                    {MARKETING_PLANS.map((plan) => {
+                    {displayPlans.map((plan) => {
                         const price = yearly ? plan.yearlyPrice : plan.monthlyPrice;
                         const saving = yearly ? yearlySavingsPercent(plan) : 0;
 

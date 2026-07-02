@@ -20,6 +20,7 @@ async function main() {
         monthly_price: number;
         yearly_price: number;
         features_json: Record<string, unknown>;
+        marketing_features_json?: string[];
     }) =>
         prisma.subscriptionPlan.upsert({
             where: { code: data.code },
@@ -30,6 +31,7 @@ async function main() {
                 yearly_price: data.yearly_price,
                 is_active: true,
                 features_json: data.features_json,
+                marketing_features_json: data.marketing_features_json ?? [],
             },
             create: {
                 code: data.code,
@@ -39,6 +41,7 @@ async function main() {
                 yearly_price: data.yearly_price,
                 is_active: true,
                 features_json: data.features_json,
+                marketing_features_json: data.marketing_features_json ?? [],
             },
         });
 
@@ -56,7 +59,18 @@ async function main() {
             premiumInventoryReports: false,
             premiumCrm: false,
             multiStore: false,
+            apiAccess: false,
+            accountingOnly: false,
+            planRank: 0,
+            aiCreditsMonthly: 0,
         },
+        marketing_features_json: [
+            'Basic POS terminal',
+            '1 user account',
+            '1 store location',
+            'Up to 100 products',
+            'Community support',
+        ],
     });
 
     await upsertPlan({
@@ -73,7 +87,20 @@ async function main() {
             premiumInventoryReports: false,
             premiumCrm: false,
             multiStore: false,
+            apiAccess: false,
+            accountingOnly: false,
+            planRank: 1,
+            aiCreditsMonthly: 100,
         },
+        marketing_features_json: [
+            'Full POS terminal',
+            'Inventory management',
+            'Purchase orders',
+            '3 user accounts',
+            '1 store location',
+            'Up to 2,000 products',
+            'Email support',
+        ],
     });
 
     await upsertPlan({
@@ -90,7 +117,20 @@ async function main() {
             premiumInventoryReports: false,
             premiumCrm: false,
             multiStore: false,
+            apiAccess: false,
+            accountingOnly: true,
+            planRank: 0,
+            aiCreditsMonthly: 100,
         },
+        marketing_features_json: [
+            'Full accounting module',
+            'Financial reports (P&L, balance sheet, cashbook)',
+            'Expense & fund management',
+            'Loan tracking',
+            '5 user accounts',
+            '1 store location',
+            'Email support',
+        ],
     });
 
     await upsertPlan({
@@ -107,7 +147,23 @@ async function main() {
             premiumInventoryReports: true,
             premiumCrm: false,
             multiStore: true,
+            apiAccess: false,
+            accountingOnly: false,
+            planRank: 2,
+            aiCreditsMonthly: 500,
         },
+        marketing_features_json: [
+            'Everything in BASIC',
+            'Accounting module',
+            'Financial reports',
+            'Sales orders',
+            'Customer management',
+            'Supplier management',
+            'E-commerce storefront',
+            '3 store locations',
+            '10 user accounts',
+            'Priority email support',
+        ],
     });
 
     const premiumPlan = await upsertPlan({
@@ -125,7 +181,20 @@ async function main() {
             premiumCrm: true,
             multiStore: true,
             apiAccess: true,
+            accountingOnly: false,
+            planRank: 3,
+            aiCreditsMonthly: 2000,
         },
+        marketing_features_json: [
+            'Everything in STANDARD',
+            'Manufacturing / BOM',
+            'White-label branding',
+            'Public API access',
+            '10 store locations',
+            '30 user accounts',
+            'Unlimited products',
+            'Priority phone & chat support',
+        ],
     });
 
     // ── 1. Users ────────────────────────────────────────────────────────────

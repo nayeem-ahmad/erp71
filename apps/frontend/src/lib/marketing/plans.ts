@@ -164,3 +164,35 @@ export function yearlySavingsPercent(plan: MarketingPlan): number {
     if (plan.monthlyPrice <= 0) return 0;
     return Math.round(((plan.monthlyPrice - plan.yearlyPrice) / plan.monthlyPrice) * 100);
 }
+
+export type PublicPlanFromApi = {
+    code: MarketingPlan['code'];
+    name: string;
+    description?: string | null;
+    monthly_price: number;
+    yearly_price?: number | null;
+    marketing_features?: string[];
+};
+
+/** Merge live API plan data onto static marketing defaults (pricing/signup). */
+export function buildMarketingPlansFromApi(apiPlans: PublicPlanFromApi[]): MarketingPlan[] {
+    if (!apiPlans.length) return MARKETING_PLANS;
+
+    return MARKETING_PLANS.map((fallback) => {
+        const live = apiPlans.find((plan) => plan.code === fallback.code);
+        if (!live) return fallback;
+
+        const yearlyMonthlyEquivalent = live.yearly_price && live.yearly_price > 0
+            ? Math.round(live.yearly_price / 12)
+            : fallback.yearlyPrice;
+
+        return {
+            ...fallback,
+            name: live.name || fallback.name,
+            tagline: live.description?.trim() || fallback.tagline,
+            monthlyPrice: live.monthly_price,
+            yearlyPrice: yearlyMonthlyEquivalent,
+            features: live.marketing_features?.length ? live.marketing_features : fallback.features,
+        };
+    });
+}

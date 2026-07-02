@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { InvitationsService } from './invitations.service';
 import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
+import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 import { UserRole } from '@erp71/shared-types';
 import * as crypto from 'crypto';
 
@@ -25,6 +26,7 @@ const db = {
     $transaction: jest.fn(),
 };
 const emailService = { sendInvitation: jest.fn().mockResolvedValue(undefined) };
+const planEntitlements = { assertUserQuota: jest.fn().mockResolvedValue(undefined) };
 
 describe('InvitationsService', () => {
     let service: InvitationsService;
@@ -37,6 +39,7 @@ describe('InvitationsService', () => {
                 InvitationsService,
                 { provide: DatabaseService, useValue: db },
                 { provide: EmailService, useValue: emailService },
+                { provide: PlanEntitlementsService, useValue: planEntitlements },
             ],
         }).compile();
         service = mod.get(InvitationsService);

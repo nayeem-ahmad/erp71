@@ -154,6 +154,13 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Responsive padding audit — dashboard home changed from `p-8` to `p-4 md:p-8` — done 2026-06-13
 - [x] Dashboard home skips `sm:` breakpoint in KPI grid — changed to `grid-cols-1 sm:grid-cols-2 xl:grid-cols-4` — done 2026-06-13
 
+### Subscription Plans (platform admin)
+- [x] Phase 2 — Entitlement registry drives guards: `planRank` + `aiCreditsMonthly` in DB `features_json`; `SubscriptionAccessGuard` + `AiService` read from entitlements; layout sidebar uses `normalizePlanFeatures` not hardcoded plan codes — done 2026-07-02
+- [x] Phase 3 — `accountingOnly` entitlement hides retail modules in sidebar + route guards — done 2026-07-02
+- [ ] Phase 4 — Dynamic plan codes (deferred): fixed Prisma enum retained for payment webhooks/DTO safety; use `is_active` + entitlements to create virtual packs instead
+- [x] Enforce `maxUsers` / `maxSkus` quotas from plan `features_json` (invites + product create/import); `maxStores` helper ready for when multi-store create ships — done 2026-07-02
+- [x] Separate marketing bullet copy (`marketing_features_json`) from technical entitlements; pricing page reads live API plans — done 2026-07-02
+
 ### Marketing & Onboarding
 - [x] Build real marketing/landing page — `apps/frontend/src/app/page.tsx` with hero preview, how-it-works, modules, 4-tier pricing preview, shared marketing components — done 2026-06-12
 - [x] Pricing page with feature comparison table across all 4 tiers — `apps/frontend/src/app/pricing/page.tsx` + `src/lib/marketing/plans.ts` aligned with seed prices — done 2026-06-12
@@ -566,5 +573,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Fix shared-types production build — added `tsc` build to `@erp71/shared-types` so Node can load compiled `navigation` re-exports; required in backend/frontend Dockerfiles — done 2026-07-02
 - [x] Deploy latest main to VPS (`c4307e9`) — dynamic navigation + shared-types build fix; `/opt/erp71` `scripts/deploy.sh main` rebuilt erp71 stack; smoke checks green at `api.erp71.com` / `app.erp71.com` — done 2026-07-02
 - [x] Update manual VPS deploy workflow path — `.github/workflows/deploy-vps.yml` now uses `/opt/erp71` instead of retired `/opt/retail-saas` — done 2026-07-02
+- [x] Platform admin subscription plan catalog editor (Phase 1) — `PLAN_ENTITLEMENT_REGISTRY` + normalize/parse helpers in `@erp71/shared-types`; `GET/PUT /admin/subscription-plans` + registry endpoint with audit logging; platform-admin UI at `/admin/platform-settings/plans` (pricing, active flag, entitlement form per fixed plan code); signup/billing already read live DB plans — done 2026-07-02
+- [x] Subscription plan phases 2–3 + quotas + marketing bullets — DB-driven `planRank`/`aiCreditsMonthly`; accounting-only sidebar/route guards; product + invite quotas; `marketing_features_json` column + admin editor; public pricing page merges `GET /auth/plans` — done 2026-07-02
 
 

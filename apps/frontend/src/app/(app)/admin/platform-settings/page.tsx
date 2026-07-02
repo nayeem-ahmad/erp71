@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { MessageSquare, Mail, CreditCard, Settings, ChevronRight, Sparkles, LayoutList } from 'lucide-react';
+import { MessageSquare, Mail, CreditCard, Settings, ChevronRight, Sparkles, LayoutList, BadgePercent } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -58,6 +58,14 @@ export default function PlatformSettingsIndexPage() {
             description: m.sections.navigation.description,
             color: 'text-sky-600',
             bg: 'bg-sky-50',
+        },
+        {
+            href: '/admin/platform-settings/plans',
+            icon: BadgePercent,
+            label: m.sections.plans.label,
+            description: m.sections.plans.description,
+            color: 'text-rose-600',
+            bg: 'bg-rose-50',
         },
     ];
 

@@ -6,6 +6,7 @@ import { applyInventoryMovement, assertWarehouseBelongsToTenant, ensureDefaultWa
 import { paginate, PaginatedResult, cursorPaginate, CursorPaginatedResult } from '../common/pagination.dto';
 import { RedisService } from '../cache/redis.service';
 import { PriceListsService } from '../price-lists/price-lists.service';
+import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 
 const CACHE_TTL = 60; // seconds
 
@@ -15,9 +16,11 @@ export class ProductsService {
         private db: DatabaseService,
         private redis: RedisService,
         private priceListsService: PriceListsService,
+        private planEntitlements: PlanEntitlementsService,
     ) { }
 
     async create(tenantId: string, dto: CreateProductDto) {
+        await this.planEntitlements.assertProductQuota(tenantId);
         const result = await this.db.$transaction(async (tx) => {
             const categoryIds = await this.validateCategorySelection(tx, tenantId, dto.groupId, dto.subgroupId);
             if (dto.brandId) {
@@ -190,6 +193,10 @@ export class ProductsService {
         let created = 0;
         let skipped = 0;
         const errors: string[] = [];
+
+        if (rows.length > 0) {
+            await this.planEntitlements.assertProductQuota(tenantId, rows.length);
+        }
 
         // Fetch inventory settings once for the whole import
         const settings = await this.db.inventorySettings.findUnique({

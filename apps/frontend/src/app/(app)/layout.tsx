@@ -20,9 +20,11 @@ import {
     DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT,
     DEFAULT_PLATFORM_FEATURES,
     DEFAULT_TENANT_NAV_LAYOUT,
+    normalizePlanFeatures,
     type NavLayoutNode,
     type PlatformFeatures,
 } from '@erp71/shared-types';
+import { isAccountingOnlyBlockedPath } from '@/lib/accounting-only-paths';
 import { NavLayoutProvider } from '@/contexts/NavLayoutContext';
 import TenantLocaleSync from '@/components/TenantLocaleSync';
 import { BrandingProvider } from '@/lib/branding';
@@ -34,8 +36,6 @@ import { syncLocalePreferenceFromSession } from '@/lib/localization/preference';
 import { clampLocaleToTenant } from '@/lib/tenant-locales';
 import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
-
-const ACCOUNTING_PLAN_CODES = new Set(['ACCOUNTING', 'STANDARD', 'PREMIUM']);
 
 type DashboardLayoutProps = Readonly<{ children: React.ReactNode }>;
 
@@ -154,13 +154,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const activePlan = activeTenant?.subscription?.plan ?? null;
     const activePlanCode = activePlan?.code || null;
     const activePlanLabel = formatPlanDisplayName(activePlan);
-    const planFeatures = (activeTenant?.subscription?.plan?.features_json || {}) as Record<string, unknown>;
+    const planFeatures = normalizePlanFeatures(
+        activeTenant?.subscription?.plan?.features_json as Record<string, unknown> | undefined,
+        activePlanCode,
+    );
     const hasPaidPlan = activePlanCode && activePlanCode !== 'FREE';
-    const hasAccountingEntitlement =
-        Boolean(planFeatures.premiumAccounting)
-        || (activePlanCode ? ACCOUNTING_PLAN_CODES.has(activePlanCode) : false);
-    const hasInventoryReportEntitlement = Boolean(planFeatures.premiumInventoryReports) || activePlanCode === 'STANDARD' || activePlanCode === 'PREMIUM';
-    const hasPremiumCrm = activePlanCode === 'PREMIUM' || Boolean(planFeatures.premiumCrm);
+    const hasAccountingEntitlement = Boolean(planFeatures.premiumAccounting);
+    const hasInventoryReportEntitlement = Boolean(planFeatures.premiumInventoryReports);
+    const hasPremiumCrm = Boolean(planFeatures.premiumCrm);
+    const accountingOnlyMode = Boolean(planFeatures.accountingOnly);
     const isPlatformAdmin = inPlatformAdminMode;
     const canManageBilling = primaryRole === 'OWNER' || primaryRole === 'MANAGER';
     const canManageTeam = primaryRole === 'OWNER' || primaryRole === 'MANAGER';
@@ -235,6 +237,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         if (!canAccessAccounting && pathname.startsWith(routes.accounting.expenses)) {
             router.replace(routes.home);
         }
+        if (accountingOnlyMode && isAccountingOnlyBlockedPath(pathname)) {
+            router.replace(canAccessAccounting ? routes.accounting.root : routes.home);
+        }
         if (!hasPremiumCrm && pathname.startsWith(routes.crm.leads)) {
             router.replace(routes.crm.root);
         }
@@ -244,7 +249,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         if (!platformFeatures.support && pathname === routes.support) {
             router.replace(routes.home);
         }
-    }, [canAccessAccounting, canAccessInventoryReports, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, platformFeatures.help, platformFeatures.support, router, user]);
+    }, [accountingOnlyMode, canAccessAccounting, canAccessInventoryReports, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, platformFeatures.help, platformFeatures.support, router, user]);
 
     const activeStore =
         tenantStores.find((store: { id: string }) => store.id === activeStoreId) ?? tenantStores[0];
@@ -281,6 +286,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 helpEnabled={platformFeatures.help}
                 supportEnabled={platformFeatures.support}
                 activePlanCode={activePlanCode}
+                accountingOnlyMode={accountingOnlyMode}
                 compactNav={useCompactChrome}
                 isOpen={mobileNavOpen}
                 onClose={() => setMobileNavOpen(false)}

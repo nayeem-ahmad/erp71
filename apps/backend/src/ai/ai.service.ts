@@ -3,7 +3,12 @@ import { DatabaseService } from '../database/database.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ProductsService } from '../products/products.service';
 import { NarrateReportDto, DraftMessageDto, ParseVoiceEntryDto, VoiceEntryType } from './ai.dto';
-import { AI_CREDITS_PER_PLAN, AI_TOKENS_PER_CREDIT, SubscriptionPlanCode } from '@erp71/shared-types';
+import {
+    AI_TOKENS_PER_CREDIT,
+    normalizePlanFeatures,
+    resolveAiCreditsMonthly,
+    SubscriptionPlanCode,
+} from '@erp71/shared-types';
 
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1';
 const DEFAULT_MODEL = 'anthropic/claude-haiku-4.5';
@@ -105,7 +110,11 @@ export class AiService {
         ]);
 
         const planCode = (subscription?.plan?.code ?? 'FREE') as SubscriptionPlanCode;
-        const creditsLimit = AI_CREDITS_PER_PLAN[planCode];
+        const features = normalizePlanFeatures(
+            subscription?.plan?.features_json as Record<string, unknown> | undefined,
+            planCode,
+        );
+        const creditsLimit = resolveAiCreditsMonthly(features, planCode);
         const [periodStart, periodEnd] = this.getBillingPeriod(subscription);
 
         const periodLogs = await this.db.aiUsageLog.findMany({
@@ -517,7 +526,11 @@ Rules:
         });
 
         const planCode = (subscription?.plan?.code ?? 'FREE') as SubscriptionPlanCode;
-        const limit = AI_CREDITS_PER_PLAN[planCode];
+        const features = normalizePlanFeatures(
+            subscription?.plan?.features_json as Record<string, unknown> | undefined,
+            planCode,
+        );
+        const limit = resolveAiCreditsMonthly(features, planCode);
 
         if (limit === 0) {
             throw new ForbiddenException('AI features require a paid plan. Please upgrade to BASIC or higher.');

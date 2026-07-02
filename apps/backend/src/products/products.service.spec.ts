@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 import { ProductsService } from './products.service';
 import { DatabaseService } from '../database/database.service';
 import { RedisService } from '../cache/redis.service';
@@ -60,6 +61,9 @@ describe('ProductsService', () => {
     const redis = { get: jest.fn().mockResolvedValue(null), set: jest.fn(), invalidatePattern: jest.fn() };
 
     const priceLists = { addProductToAllActiveLists: jest.fn().mockResolvedValue(undefined) };
+    const planEntitlements = {
+      assertProductQuota: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -67,6 +71,7 @@ describe('ProductsService', () => {
         { provide: DatabaseService, useValue: db },
         { provide: RedisService, useValue: redis },
         { provide: PriceListsService, useValue: priceLists },
+        { provide: PlanEntitlementsService, useValue: planEntitlements },
       ],
     }).compile();
 

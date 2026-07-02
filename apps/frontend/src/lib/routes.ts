@@ -188,6 +188,7 @@ export const routes = {
             payments: '/admin/platform-settings/payments',
             ai: '/admin/platform-settings/ai',
             navigation: '/admin/platform-settings/navigation',
+            plans: '/admin/platform-settings/plans',
         },
     },
 

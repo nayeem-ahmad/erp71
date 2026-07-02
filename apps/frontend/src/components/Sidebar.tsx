@@ -75,6 +75,7 @@ export default function Sidebar({
     helpEnabled = false,
     supportEnabled = false,
     activePlanCode,
+    accountingOnlyMode = false,
     compactNav = false,
     isOpen = false,
     onClose,
@@ -90,6 +91,8 @@ export default function Sidebar({
     helpEnabled?: boolean;
     supportEnabled?: boolean;
     activePlanCode?: string | null;
+    /** When true, show only accounting-focused modules. */
+    accountingOnlyMode?: boolean;
     /** Tighter nav when inside the accounting module trial */
     compactNav?: boolean;
     /** Mobile overlay open state */
@@ -114,6 +117,12 @@ export default function Sidebar({
                 if (platformAdminMode) {
                     if (module.key === 'help') return helpEnabled;
                     return module.key === 'admin' || module.key === 'help';
+                }
+                if (accountingOnlyMode) {
+                    if (module.key === 'help') return helpEnabled;
+                    if (module.key === 'support') return supportEnabled;
+                    if (module.key === 'accounting') return canAccessAccounting;
+                    return ['dashboard', 'account-settings'].includes(module.key);
                 }
                 if (module.key === 'accounting') return canAccessAccounting;
                 if (module.key === 'admin') return canAccessAdmin;
@@ -158,6 +167,7 @@ export default function Sidebar({
         platformAdminLayout,
         tenantLayout,
         t,
+        accountingOnlyMode,
         canAccessAccounting,
         canAccessInventoryReports,
         canAccessPremiumCrm,

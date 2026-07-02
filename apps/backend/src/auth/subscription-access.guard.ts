@@ -7,17 +7,13 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { DatabaseService } from '../database/database.service';
+import { normalizePlanFeatures, resolvePlanRank } from '@erp71/shared-types';
 import { SUBSCRIPTION_FEATURE_KEY, SUBSCRIPTION_PLAN_KEY } from './subscription-access.decorator';
 
 type PlanCode = 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
 
-const PLAN_RANK: Record<PlanCode, number> = {
+const REQUIRED_PLAN_RANK: Record<'FREE' | 'BASIC' | 'STANDARD' | 'PREMIUM', number> = {
     FREE: 0,
-    // ACCOUNTING is a specialised pack, not a tier on the FREE→PREMIUM ladder.
-    // It is gated by the `premiumAccounting` feature flag (and ungated funds
-    // modules), so it sits at FREE rank to avoid unlocking any `@RequiresPlan`
-    // (BASIC/STANDARD) routes outside the accounting scope.
-    ACCOUNTING: 0,
     BASIC: 1,
     STANDARD: 2,
     PREMIUM: 3,
@@ -73,7 +69,14 @@ export class SubscriptionAccessGuard implements CanActivate {
 
         const activeStatuses = new Set(['ACTIVE', 'TRIALING']);
         const currentPlan = (subscription?.plan?.code ?? 'FREE') as PlanCode;
-        const hasRequiredPlan = requiredPlan ? PLAN_RANK[currentPlan] >= PLAN_RANK[requiredPlan] : true;
+        const features = normalizePlanFeatures(
+            subscription?.plan?.features_json as Record<string, unknown> | undefined,
+            currentPlan,
+        );
+        const currentRank = resolvePlanRank(features, currentPlan);
+        const hasRequiredPlan = requiredPlan
+            ? currentRank >= REQUIRED_PLAN_RANK[requiredPlan]
+            : true;
         const hasActiveSubscription = activeStatuses.has(subscription?.status);
 
         if (!hasActiveSubscription) {

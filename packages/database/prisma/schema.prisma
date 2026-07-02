@@ -1748,8 +1748,9 @@ model SubscriptionPlan {
   description   String?
   monthly_price Decimal  @db.Decimal(12, 2)
   yearly_price  Decimal? @db.Decimal(12, 2)
-  features_json Json     @default("{}")
-  is_active     Boolean  @default(true)
+  features_json            Json     @default("{}")
+  marketing_features_json  Json     @default("[]")
+  is_active                Boolean  @default(true)
   subscriptions TenantSubscription[]
 }
 

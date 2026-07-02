@@ -210,6 +210,9 @@ export class AuthService {
             monthly_price: Number(plan.monthly_price),
             yearly_price: plan.yearly_price === null ? null : Number(plan.yearly_price),
             features_json: plan.features_json,
+            marketing_features: Array.isArray(plan.marketing_features_json)
+                ? plan.marketing_features_json.filter((item): item is string => typeof item === 'string')
+                : [],
         }));
     }
 

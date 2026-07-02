@@ -62,6 +62,7 @@ import { ManufacturingModule } from './manufacturing/manufacturing.module';
 import { LoyaltyModule } from './loyalty/loyalty.module';
 import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
 import { NavigationModule } from './navigation/navigation.module';
+import { SubscriptionPlansModule } from './subscription-plans/subscription-plans.module';
 import { SmsModule } from './sms/sms.module';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { DiscountCodesModule } from './discount-codes/discount-codes.module';
@@ -94,6 +95,7 @@ import { SupportModule } from './support/support.module';
         DatabaseModule,
         PlatformSettingsModule,
         NavigationModule,
+        SubscriptionPlansModule,
         EmailModule,
         SmsModule,
         WhatsAppModule,

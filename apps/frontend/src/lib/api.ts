@@ -1238,6 +1238,14 @@ export const api = {
         }),
     resetAdminNavLayout: (scope: 'tenant' | 'platform_admin') =>
         fetchWithAuth(`/admin/navigation/layout/${scope}/reset`, { method: 'POST' }),
+    getAdminSubscriptionPlans: () => fetchWithAuth('/admin/subscription-plans'),
+    getAdminSubscriptionPlanRegistry: () => fetchWithAuth('/admin/subscription-plans/registry'),
+    updateAdminSubscriptionPlan: (code: string, payload: unknown) =>
+        fetchWithAuth(`/admin/subscription-plans/${code}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }),
     updateProfile: (data: { name?: string; preferred_locale?: 'en' | 'bn' | 'ms' }) => fetchWithAuth('/auth/me', {
         method: 'PATCH',
         body: JSON.stringify(data),

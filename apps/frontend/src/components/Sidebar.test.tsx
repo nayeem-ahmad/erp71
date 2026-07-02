@@ -132,6 +132,15 @@ describe('Sidebar — Story 30.1', () => {
         expect(screen.queryByText('Accounting')).not.toBeInTheDocument();
     });
 
+    it('hides retail modules in accounting-only mode', () => {
+        render(<Sidebar canAccessAccounting accountingOnlyMode />);
+
+        expect(screen.getByText('Accounting')).toBeInTheDocument();
+        expect(screen.getByText('Settings')).toBeInTheDocument();
+        expect(screen.queryByText('Sales')).not.toBeInTheDocument();
+        expect(screen.queryByText('Inventory')).not.toBeInTheDocument();
+    });
+
     it('shows platform admin and billing items when enabled', () => {
         render(<Sidebar canAccessAccounting canAccessAdmin canManageBilling canAccessInventoryReports activePlanCode="STANDARD" />);
 
