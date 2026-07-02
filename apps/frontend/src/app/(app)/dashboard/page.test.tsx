@@ -31,6 +31,8 @@ jest.mock('lucide-react', () => ({
     BookOpen: () => <span data-testid="icon-book-open" />,
     Receipt: () => <span data-testid="icon-receipt" />,
     FileText: () => <span data-testid="icon-file-text" />,
+    ClipboardList: () => <span data-testid="icon-clipboard-list" />,
+    HandCoins: () => <span data-testid="icon-hand-coins" />,
 }));
 
 jest.mock('@/lib/api', () => ({
@@ -172,5 +174,60 @@ describe('DashboardPage — Story 34.3', () => {
 
         expect(screen.getAllByText('Business Monitor').length).toBeGreaterThan(0);
         expect(screen.getByText('Inventory Overview')).toBeInTheDocument();
+    });
+
+    it('shows accounting quick links and hides retail panels for accounting-only plans', async () => {
+        (api.getMe as jest.Mock).mockResolvedValue({
+            tenants: [{
+                name: 'Ledger Co',
+                subscription: {
+                    plan: {
+                        code: 'ACCOUNTING',
+                        features_json: { accountingOnly: true, premiumAccounting: true },
+                    },
+                },
+            }],
+        });
+        (api.getFinancialKpis as jest.Mock).mockResolvedValue({
+            filters: { from: '2026-03-01', to: '2026-03-31' },
+            kpis: {
+                cash_inflow: 0,
+                cash_outflow: 0,
+                net_cash_movement: 0,
+                gross_revenue: 0,
+                operating_expense: 0,
+                accounts_receivable: null,
+                accounts_payable: null,
+                tax_liability: null,
+            },
+        });
+        (api.getFinancialTrends as jest.Mock).mockResolvedValue({
+            filters: { from: '2026-03-01', to: '2026-03-31' },
+            granularity: 'day',
+            has_activity: false,
+            points: [],
+            comparison: {
+                net_profit: 0,
+                gross_margin: null,
+                gross_margin_status: 'unavailable',
+                gross_margin_reason: 'Sale-time cost basis is not tracked in the current data model.',
+            },
+        });
+
+        render(<DashboardPage />);
+
+        await waitFor(() => {
+            expect(screen.getByText('Voucher Entry')).toBeInTheDocument();
+            expect(screen.getByText('Profit & Loss')).toBeInTheDocument();
+            expect(screen.getByText('Accounting KPIs')).toBeInTheDocument();
+        });
+
+        expect(screen.queryByText('Sales Entry')).not.toBeInTheDocument();
+        expect(screen.queryByText('Customer Payment')).not.toBeInTheDocument();
+        expect(screen.queryByText('Supplier Payment')).not.toBeInTheDocument();
+        expect(screen.queryByText('Total Sales')).not.toBeInTheDocument();
+        expect(screen.queryByText('Inventory Overview')).not.toBeInTheDocument();
+        expect(api.getProducts).not.toHaveBeenCalled();
+        expect(api.getSales).not.toHaveBeenCalled();
     });
 });

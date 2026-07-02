@@ -3,13 +3,16 @@
 import Link from 'next/link';
 import {
     BookOpen,
+    ClipboardList,
     FileText,
+    HandCoins,
     ReceiptText,
     TrendingUp,
     Wallet,
     type LucideIcon,
 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { routes } from '@/lib/routes';
 import { compactDensity } from '@/lib/ui/compact-density';
 
 type QuickLink = {
@@ -20,11 +23,16 @@ type QuickLink = {
     accent: string;
 };
 
-export default function FrequentQuickLinks() {
+type FrequentQuickLinksProps = {
+    accountingOnlyMode?: boolean;
+};
+
+export default function FrequentQuickLinks({ accountingOnlyMode = false }: FrequentQuickLinksProps) {
     const { t } = useI18n();
     const copy = t.dashboardHome;
+    const accountingCopy = t.accounting.links;
 
-    const links: QuickLink[] = [
+    const retailLinks: QuickLink[] = [
         { key: 'sales-entry', href: '/sales/new', label: copy.quickLinks.salesEntry, icon: FileText, accent: 'bg-sky-50 text-sky-700 border-sky-100' },
         { key: 'sales', href: '/sales', label: copy.quickLinks.sales, icon: TrendingUp, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
         { key: 'customer-payment', href: '/sales/customer-payments', label: copy.quickLinks.customerPayment, icon: Wallet, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
@@ -32,6 +40,17 @@ export default function FrequentQuickLinks() {
         { key: 'customer-ledger', href: '/sales/customer-ledger', label: copy.quickLinks.customerLedger, icon: BookOpen, accent: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
         { key: 'expense-entry', href: '/accounting/expenses?new=1', label: copy.quickLinks.expenseEntry, icon: ReceiptText, accent: 'bg-rose-50 text-rose-700 border-rose-100' },
     ];
+
+    const accountingLinks: QuickLink[] = [
+        { key: 'vouchers', href: routes.accounting.voucherEntry, label: accountingCopy.vouchers.title, icon: FileText, accent: 'bg-teal-50 text-teal-700 border-teal-100' },
+        { key: 'expenses', href: `${routes.accounting.expenses}?new=1`, label: accountingCopy.expenses.title, icon: ReceiptText, accent: 'bg-rose-50 text-rose-700 border-rose-100' },
+        { key: 'ledger', href: routes.accounting.ledger, label: accountingCopy.ledger.title, icon: BookOpen, accent: 'bg-violet-50 text-violet-700 border-violet-100' },
+        { key: 'journal', href: routes.accounting.journal, label: accountingCopy.journal.title, icon: ClipboardList, accent: 'bg-sky-50 text-sky-700 border-sky-100' },
+        { key: 'pl', href: routes.accounting.reports.pl, label: accountingCopy.pl.title, icon: TrendingUp, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+        { key: 'loans', href: routes.accounting.loans, label: accountingCopy.loans.title, icon: HandCoins, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
+    ];
+
+    const links = accountingOnlyMode ? accountingLinks : retailLinks;
 
     return (
         <div>

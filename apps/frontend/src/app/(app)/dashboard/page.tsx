@@ -12,6 +12,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
+import { isAccountingOnlyPlan } from '@/lib/plan-entitlements';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import FrequentQuickLinks from '@/components/dashboard/FrequentQuickLinks';
 import { FinancialKpiTile, StatKpiTile } from '@/components/dashboard/KpiTile';
@@ -89,20 +90,32 @@ export default function DashboardPage() {
     const [financialError, setFinancialError] = useState('');
     const [financialTrendError, setFinancialTrendError] = useState('');
     const [lowStockCount, setLowStockCount] = useState<number | null>(null);
+    const [accountingOnlyMode, setAccountingOnlyMode] = useState(false);
 
     useEffect(() => {
         const fetchData = async () => {
-            const [meRes, productsRes, salesRes, financialRes, trendRes] = await Promise.allSettled([
-                api.getMe(),
-                api.getProducts(),
-                api.getSales(),
+            let includeRetailPanels = true;
+
+            try {
+                const me = await api.getMe();
+                setUser(me);
+                const tenantId = localStorage.getItem('tenant_id');
+                const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === tenantId)
+                    || me?.tenants?.[0];
+                const planCode = tenant?.subscription?.plan?.code || null;
+                const features = (tenant?.subscription?.plan?.features_json || {}) as Record<string, unknown>;
+                includeRetailPanels = !isAccountingOnlyPlan(planCode, features);
+                setAccountingOnlyMode(!includeRetailPanels);
+            } catch (reason) {
+                console.error('Failed to fetch dashboard user context:', reason);
+            }
+
+            const [productsRes, salesRes, financialRes, trendRes] = await Promise.allSettled([
+                includeRetailPanels ? api.getProducts() : Promise.resolve([]),
+                includeRetailPanels ? api.getSales() : Promise.resolve([]),
                 api.getFinancialKpis(),
                 api.getFinancialTrends(),
             ]);
-
-            if (meRes.status === 'fulfilled') {
-                setUser(meRes.value);
-            }
 
             if (productsRes.status === 'fulfilled') {
                 const fetchedProducts = productsRes.value;
@@ -128,9 +141,8 @@ export default function DashboardPage() {
                 setFinancialTrendError(trendRes.reason instanceof Error ? trendRes.reason.message : copy.financialTrendsUnavailable);
             }
 
-            if (meRes.status === 'rejected' || productsRes.status === 'rejected' || salesRes.status === 'rejected') {
-                console.error('Failed to fetch dashboard data:', {
-                    me: meRes.status === 'rejected' ? meRes.reason : null,
+            if (includeRetailPanels && (productsRes.status === 'rejected' || salesRes.status === 'rejected')) {
+                console.error('Failed to fetch dashboard retail data:', {
                     products: productsRes.status === 'rejected' ? productsRes.reason : null,
                     sales: salesRes.status === 'rejected' ? salesRes.reason : null,
                 });
@@ -228,39 +240,41 @@ export default function DashboardPage() {
                         'dashboard',
                     )}
                 />
-                <FrequentQuickLinks />
+                <FrequentQuickLinks accountingOnlyMode={accountingOnlyMode} />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-                <StatKpiTile
-                    title={copy.totalSales}
-                    value={`${totalSalesAmount.toLocaleString()}`}
-                    trend={copy.trendFromLastMonth}
-                    isPositive={true}
-                    tone="blue"
-                />
-                <StatKpiTile
-                    title={copy.activeOrders}
-                    value={activeOrdersCount.toString()}
-                    trend={copy.realTimeData}
-                    isPositive={true}
-                    tone="green"
-                />
-                <StatKpiTile
-                    title={copy.products}
-                    value={products.length.toString()}
-                    trend={copy.inInventory}
-                    isPositive={true}
-                    tone="purple"
-                />
-                <StatKpiTile
-                    title={copy.lowStockItems}
-                    value={lowStockCount === null ? '—' : lowStockCount.toString()}
-                    trend={lowStockTrend}
-                    isPositive={lowStockCount !== null && lowStockCount === 0}
-                    tone={lowStockCount !== null && lowStockCount > 0 ? 'peach' : 'green'}
-                />
-            </div>
+            {!accountingOnlyMode ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                    <StatKpiTile
+                        title={copy.totalSales}
+                        value={`${totalSalesAmount.toLocaleString()}`}
+                        trend={copy.trendFromLastMonth}
+                        isPositive={true}
+                        tone="blue"
+                    />
+                    <StatKpiTile
+                        title={copy.activeOrders}
+                        value={activeOrdersCount.toString()}
+                        trend={copy.realTimeData}
+                        isPositive={true}
+                        tone="green"
+                    />
+                    <StatKpiTile
+                        title={copy.products}
+                        value={products.length.toString()}
+                        trend={copy.inInventory}
+                        isPositive={true}
+                        tone="purple"
+                    />
+                    <StatKpiTile
+                        title={copy.lowStockItems}
+                        value={lowStockCount === null ? '—' : lowStockCount.toString()}
+                        trend={lowStockTrend}
+                        isPositive={lowStockCount !== null && lowStockCount === 0}
+                        tone={lowStockCount !== null && lowStockCount > 0 ? 'peach' : 'green'}
+                    />
+                </div>
+            ) : null}
 
             <section className={`${compactDensity.card}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 pb-3 mb-3">
@@ -325,52 +339,54 @@ export default function DashboardPage() {
                 )}
             </section>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                <div className={`${compactDensity.card} overflow-hidden !p-0`}>
-                    <div className="px-3 py-2.5 border-b border-gray-100 flex items-center justify-between">
-                        <h2 className="text-sm font-bold text-gray-900 tracking-tight">{copy.recentActivity}</h2>
-                        <button className="text-gray-400 hover:text-gray-600 font-medium text-xs">
-                            {copy.viewAll}
-                        </button>
+            {!accountingOnlyMode ? (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                    <div className={`${compactDensity.card} overflow-hidden !p-0`}>
+                        <div className="px-3 py-2.5 border-b border-gray-100 flex items-center justify-between">
+                            <h2 className="text-sm font-bold text-gray-900 tracking-tight">{copy.recentActivity}</h2>
+                            <button className="text-gray-400 hover:text-gray-600 font-medium text-xs">
+                                {copy.viewAll}
+                            </button>
+                        </div>
+                        <div>
+                            {sales.length > 0 ? (
+                                sales.slice(0, 5).map((sale) => (
+                                    <ActivityItem
+                                        key={sale.id}
+                                        title={formatMessage(copy.saleTitle, { serial: sale.serial_number })}
+                                        description={formatMessage(copy.amountLabel, { amount: formatBDT(Number(sale.total_amount), { locale }) })}
+                                        time={new Date(sale.created_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
+                                    />
+                                ))
+                            ) : (
+                                <div className="p-6 text-center text-gray-400 text-xs">{isLoading ? copy.loadingRecentActivity : copy.noRecentActivity}</div>
+                            )}
+                        </div>
                     </div>
-                    <div>
-                        {sales.length > 0 ? (
-                            sales.slice(0, 5).map((sale) => (
-                                <ActivityItem
-                                    key={sale.id}
-                                    title={formatMessage(copy.saleTitle, { serial: sale.serial_number })}
-                                    description={formatMessage(copy.amountLabel, { amount: formatBDT(Number(sale.total_amount), { locale }) })}
-                                    time={new Date(sale.created_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
-                                />
-                            ))
-                        ) : (
-                            <div className="p-6 text-center text-gray-400 text-xs">{isLoading ? copy.loadingRecentActivity : copy.noRecentActivity}</div>
-                        )}
-                    </div>
-                </div>
 
-                <div className={compactDensity.card}>
-                    <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-sm font-bold text-gray-900 tracking-tight">{copy.inventoryOverview}</h2>
-                        <MoreVertical className="w-4 h-4 text-gray-400 cursor-pointer" />
-                    </div>
-                    <div className="space-y-2">
-                        {displayedProducts.length > 0 ? (
-                            displayedProducts.map((product) => (
-                                <ProductRow
-                                    key={product.id}
-                                    name={product.name}
-                                    price={formatBDT(Number(product.price), { locale })}
-                                    sales={product.stocks?.[0]?.quantity?.toString() || '0'}
-                                    salesLabel={copy.stock}
-                                />
-                            ))
-                        ) : (
-                            <div className="text-center text-gray-400 text-xs py-3">{isLoading ? copy.loadingProducts : copy.noProductsFound}</div>
-                        )}
+                    <div className={compactDensity.card}>
+                        <div className="flex items-center justify-between mb-3">
+                            <h2 className="text-sm font-bold text-gray-900 tracking-tight">{copy.inventoryOverview}</h2>
+                            <MoreVertical className="w-4 h-4 text-gray-400 cursor-pointer" />
+                        </div>
+                        <div className="space-y-2">
+                            {displayedProducts.length > 0 ? (
+                                displayedProducts.map((product) => (
+                                    <ProductRow
+                                        key={product.id}
+                                        name={product.name}
+                                        price={formatBDT(Number(product.price), { locale })}
+                                        sales={product.stocks?.[0]?.quantity?.toString() || '0'}
+                                        salesLabel={copy.stock}
+                                    />
+                                ))
+                            ) : (
+                                <div className="text-center text-gray-400 text-xs py-3">{isLoading ? copy.loadingProducts : copy.noProductsFound}</div>
+                            )}
+                        </div>
                     </div>
                 </div>
-            </div>
+            ) : null}
         </PageShell>
     );
 }

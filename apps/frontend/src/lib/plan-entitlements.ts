@@ -27,3 +27,10 @@ export function canAccessPlanVoice(
 ) {
     return hasPlanEntitlement(resolveTenantPlanFeatures(planCode, featuresJson), 'premiumVoice');
 }
+
+export function isAccountingOnlyPlan(
+    planCode: string | null | undefined,
+    featuresJson: Record<string, unknown> | null | undefined,
+) {
+    return Boolean(resolveTenantPlanFeatures(planCode, featuresJson).accountingOnly);
+}
