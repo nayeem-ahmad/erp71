@@ -9,45 +9,54 @@ export class SalesReportsService {
     async getSalesSummary(tenantId: string, query: GetSalesSummaryDto) {
         const dateFilter = buildDateWindow(query.from, query.to);
 
-        const sales = await this.db.sale.findMany({
-            where: {
-                tenant_id: tenantId,
-                status: 'COMPLETED',
-                ...(query.storeId ? { store_id: query.storeId } : {}),
-                ...dateFilter,
-            },
-            select: {
-                id: true,
-                total_amount: true,
-                created_at: true,
-            },
-            orderBy: { created_at: 'asc' },
-        });
+        const saleFilter = {
+            tenant_id: tenantId,
+            status: 'COMPLETED',
+            ...(query.storeId ? { store_id: query.storeId } : {}),
+            ...dateFilter,
+        };
 
-        const returns = await this.db.salesReturn.findMany({
-            where: {
-                tenant_id: tenantId,
-                ...(query.storeId ? { store_id: query.storeId } : {}),
-                ...dateFilter,
-            },
-            select: {
-                total_refund: true,
-                created_at: true,
-            },
-        });
+        const [sales, returns, saleItems] = await Promise.all([
+            this.db.sale.findMany({
+                where: saleFilter,
+                select: { id: true, total_amount: true, created_at: true },
+                orderBy: { created_at: 'asc' },
+            }),
+            this.db.salesReturn.findMany({
+                where: {
+                    tenant_id: tenantId,
+                    ...(query.storeId ? { store_id: query.storeId } : {}),
+                    ...dateFilter,
+                },
+                select: { total_refund: true, created_at: true },
+            }),
+            this.db.saleItem.findMany({
+                where: { sale: saleFilter },
+                select: {
+                    quantity: true,
+                    unit_cost_at_sale: true,
+                    sale: { select: { created_at: true } },
+                },
+            }),
+        ]);
 
         const totalRevenue = sales.reduce((sum, s) => sum + Number(s.total_amount), 0);
         const totalReturns = returns.reduce((sum, r) => sum + Number(r.total_refund), 0);
         const transactionCount = sales.length;
         const netRevenue = totalRevenue - totalReturns;
         const avgOrderValue = transactionCount > 0 ? totalRevenue / transactionCount : 0;
+        const totalCogs = saleItems.reduce(
+            (sum, i) => sum + (i.unit_cost_at_sale !== null ? Number(i.unit_cost_at_sale) * i.quantity : 0),
+            0,
+        );
+        const grossProfit = netRevenue - totalCogs;
 
         // Build daily breakdown map
-        const dayMap = new Map<string, { transactions: number; grossRevenue: number; returns: number }>();
+        const dayMap = new Map<string, { transactions: number; grossRevenue: number; returns: number; cogs: number }>();
 
         for (const sale of sales) {
             const day = sale.created_at.toISOString().slice(0, 10);
-            const existing = dayMap.get(day) ?? { transactions: 0, grossRevenue: 0, returns: 0 };
+            const existing = dayMap.get(day) ?? { transactions: 0, grossRevenue: 0, returns: 0, cogs: 0 };
             existing.transactions += 1;
             existing.grossRevenue += Number(sale.total_amount);
             dayMap.set(day, existing);
@@ -55,20 +64,33 @@ export class SalesReportsService {
 
         for (const ret of returns) {
             const day = ret.created_at.toISOString().slice(0, 10);
-            const existing = dayMap.get(day) ?? { transactions: 0, grossRevenue: 0, returns: 0 };
+            const existing = dayMap.get(day) ?? { transactions: 0, grossRevenue: 0, returns: 0, cogs: 0 };
             existing.returns += Number(ret.total_refund);
+            dayMap.set(day, existing);
+        }
+
+        for (const item of saleItems) {
+            const day = item.sale.created_at.toISOString().slice(0, 10);
+            const existing = dayMap.get(day) ?? { transactions: 0, grossRevenue: 0, returns: 0, cogs: 0 };
+            existing.cogs += item.unit_cost_at_sale !== null ? Number(item.unit_cost_at_sale) * item.quantity : 0;
             dayMap.set(day, existing);
         }
 
         const rows = Array.from(dayMap.entries())
             .sort(([a], [b]) => a.localeCompare(b))
-            .map(([date, data]) => ({
-                date,
-                transactions: data.transactions,
-                grossRevenue: data.grossRevenue,
-                returns: data.returns,
-                netRevenue: data.grossRevenue - data.returns,
-            }));
+            .map(([date, data]) => {
+                const dayNetRevenue = data.grossRevenue - data.returns;
+                const dayGrossProfit = dayNetRevenue - data.cogs;
+                return {
+                    date,
+                    transactions: data.transactions,
+                    grossRevenue: data.grossRevenue,
+                    returns: data.returns,
+                    netRevenue: dayNetRevenue,
+                    cogs: data.cogs,
+                    grossProfit: dayGrossProfit,
+                };
+            });
 
         return {
             summary: {
@@ -77,6 +99,9 @@ export class SalesReportsService {
                 netRevenue,
                 transactionCount,
                 avgOrderValue,
+                totalCogs,
+                grossProfit,
+                grossMarginPct: netRevenue > 0 ? (grossProfit / netRevenue) * 100 : 0,
             },
             rows,
         };
@@ -102,7 +127,11 @@ export class SalesReportsService {
                       }
                     : {}),
             },
-            include: {
+            select: {
+                product_id: true,
+                quantity: true,
+                price_at_sale: true,
+                unit_cost_at_sale: true,
                 product: {
                     include: {
                         group: true,
@@ -119,6 +148,7 @@ export class SalesReportsService {
                 product: (typeof saleItems)[0]['product'];
                 unitsSold: number;
                 revenue: number;
+                cogs: number;
             }
         >();
 
@@ -127,9 +157,13 @@ export class SalesReportsService {
                 product: item.product,
                 unitsSold: 0,
                 revenue: 0,
+                cogs: 0,
             };
             existing.unitsSold += item.quantity;
             existing.revenue += item.quantity * Number(item.price_at_sale);
+            existing.cogs += item.unit_cost_at_sale !== null
+                ? item.quantity * Number(item.unit_cost_at_sale)
+                : 0;
             productMap.set(item.product_id, existing);
         }
 
@@ -137,17 +171,27 @@ export class SalesReportsService {
 
         const totalRevenue = rows.reduce((sum, r) => sum + r.revenue, 0);
         const totalUnitsSold = rows.reduce((sum, r) => sum + r.unitsSold, 0);
+        const totalCogs = rows.reduce((sum, r) => sum + r.cogs, 0);
+        const totalGrossProfit = totalRevenue - totalCogs;
 
         return {
             summary: {
                 totalRevenue,
                 totalUnitsSold,
                 productCount: rows.length,
+                totalCogs,
+                grossProfit: totalGrossProfit,
+                grossMarginPct: totalRevenue > 0 ? (totalGrossProfit / totalRevenue) * 100 : 0,
             },
-            rows: rows.map((r) => ({
-                ...r,
-                revenueShare: totalRevenue > 0 ? (r.revenue / totalRevenue) * 100 : 0,
-            })),
+            rows: rows.map((r) => {
+                const grossProfit = r.revenue - r.cogs;
+                return {
+                    ...r,
+                    revenueShare: totalRevenue > 0 ? (r.revenue / totalRevenue) * 100 : 0,
+                    grossProfit,
+                    grossMarginPct: r.revenue > 0 ? (grossProfit / r.revenue) * 100 : 0,
+                };
+            }),
         };
     }
 
@@ -351,6 +395,7 @@ export class SalesReportsService {
                     product_id: true,
                     quantity: true,
                     price_at_sale: true,
+                    unit_cost_at_sale: true,
                     product: { select: { id: true, name: true } },
                 },
             }),
@@ -361,21 +406,32 @@ export class SalesReportsService {
         const branchTransactions = branchSales.length;
         const companyRevenue = Number(companyTotals._sum.total_amount ?? 0);
         const revenueShare = companyRevenue > 0 ? (branchRevenue / companyRevenue) * 100 : 0;
+        const branchNetRevenue = branchRevenue - branchReturnsTotal;
+        const branchCogs = saleItems.reduce(
+            (sum, i) => sum + (i.unit_cost_at_sale !== null ? Number(i.unit_cost_at_sale) * i.quantity : 0),
+            0,
+        );
+        const branchGrossProfit = branchNetRevenue - branchCogs;
 
-        const productMap = new Map<string, { name: string; unitsSold: number; revenue: number }>();
+        const productMap = new Map<string, { name: string; unitsSold: number; revenue: number; cogs: number }>();
         for (const item of saleItems) {
             const existing = productMap.get(item.product_id) ?? {
                 name: item.product.name,
                 unitsSold: 0,
                 revenue: 0,
+                cogs: 0,
             };
             existing.unitsSold += item.quantity;
             existing.revenue += item.quantity * Number(item.price_at_sale);
+            existing.cogs += item.unit_cost_at_sale !== null
+                ? item.quantity * Number(item.unit_cost_at_sale)
+                : 0;
             productMap.set(item.product_id, existing);
         }
         const topProducts = Array.from(productMap.values())
             .sort((a, b) => b.revenue - a.revenue)
-            .slice(0, 5);
+            .slice(0, 5)
+            .map((p) => ({ ...p, grossProfit: p.revenue - p.cogs }));
 
         const dayMap = new Map<string, { transactions: number; grossRevenue: number; returns: number }>();
         for (const sale of branchSales) {
@@ -408,8 +464,11 @@ export class SalesReportsService {
                 revenue: branchRevenue,
                 transactions: branchTransactions,
                 returns: branchReturnsTotal,
-                net_revenue: branchRevenue - branchReturnsTotal,
+                net_revenue: branchNetRevenue,
                 avg_order: branchTransactions > 0 ? branchRevenue / branchTransactions : 0,
+                cogs: branchCogs,
+                gross_profit: branchGrossProfit,
+                gross_margin_pct: branchNetRevenue > 0 ? (branchGrossProfit / branchNetRevenue) * 100 : 0,
             },
             company_comparison: {
                 company_revenue: companyRevenue,

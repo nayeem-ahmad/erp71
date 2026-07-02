@@ -589,3 +589,4 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 
 - [x] Platform admin tenant payment/refund recording + ledger view — `POST /admin/tenants/:id/payments`, `POST /admin/tenants/:id/refunds`, `GET /admin/tenants/:id/ledger`; ledger section on admin tenants page with Record Payment/Refund modals and event table; auto-activates PAST_DUE subscription on payment — done 2026-07-02
+- [x] Record `unit_cost_at_sale` on SaleItem + expose gross profit in sales reports — Prisma migration adds nullable `unit_cost_at_sale` column; sales service snapshots cost from ProductPrice (store-specific → global fallback) at sale creation and on sale edit; fixed InventoryMovement.unit_cost bug (was storing selling price instead of cost); getSalesSummary/getSalesByProduct/getBranchReport now return COGS, grossProfit, and grossMarginPct — done 2026-07-02

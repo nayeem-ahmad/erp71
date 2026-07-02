@@ -1647,16 +1647,17 @@ model PaymentRecord {
 }
 
 model SaleItem {
-  id            String   @id @default(uuid())
-  sale_id       String
-  product_id    String
-  quantity      Int
-  price_at_sale Decimal  @db.Decimal(12, 2)
-  
+  id                  String   @id @default(uuid())
+  sale_id             String
+  product_id          String
+  quantity            Int
+  price_at_sale       Decimal  @db.Decimal(12, 2)
+  unit_cost_at_sale   Decimal? @db.Decimal(12, 2)
+
   // Relations
-  sale          Sale     @relation(fields: [sale_id], references: [id], onDelete: Cascade)
-  product       Product  @relation(fields: [product_id], references: [id])
-  returns       SalesReturnItem[]
+  sale                Sale     @relation(fields: [sale_id], references: [id], onDelete: Cascade)
+  product             Product  @relation(fields: [product_id], references: [id])
+  returns             SalesReturnItem[]
 
   @@index([sale_id])
 }

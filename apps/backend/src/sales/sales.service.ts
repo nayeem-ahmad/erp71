@@ -23,13 +23,32 @@ export class SalesService {
     async create(tenantId: string, userId: string, dto: CreateSaleDto) {
         const result = await this.db.$transaction(async (tx) => {
             const warehouseId = await resolveWarehouseId(tx, tenantId, dto.storeId, dto.warehouseId, 'sale');
-            const saleProducts = await tx.product.findMany({
-                where: {
-                    tenant_id: tenantId,
-                    id: { in: dto.items.map((item) => item.productId) },
-                },
-                select: { id: true, name: true, warranty_enabled: true },
-            });
+            const productIds = dto.items.map((item) => item.productId);
+
+            const [saleProducts, productPrices] = await Promise.all([
+                tx.product.findMany({
+                    where: { tenant_id: tenantId, id: { in: productIds } },
+                    select: { id: true, name: true, warranty_enabled: true },
+                }),
+                tx.productPrice.findMany({
+                    where: {
+                        tenant_id: tenantId,
+                        product_id: { in: productIds },
+                        cost: { not: null },
+                        OR: [{ store_id: dto.storeId }, { store_id: null }],
+                    },
+                    orderBy: { effective_from: 'desc' },
+                    select: { product_id: true, store_id: true, cost: true },
+                }),
+            ]);
+
+            // Build cost map — store-specific price overrides global
+            const costByProductId = new Map<string, number>();
+            for (const pp of productPrices) {
+                if (!costByProductId.has(pp.product_id) || pp.store_id === dto.storeId) {
+                    costByProductId.set(pp.product_id, Number(pp.cost));
+                }
+            }
 
             const productById = new Map(saleProducts.map((product) => [product.id, product]));
             this.validateWarrantySerials(dto.items, productById);
@@ -95,6 +114,8 @@ export class SalesService {
             // 3. Process Items and update stock
             for (const item of dto.items) {
                 const product = productById.get(item.productId);
+                const unitCostAtSale = costByProductId.get(item.productId) ?? null;
+
                 // Create Sale Item
                 await tx.saleItem.create({
                     data: {
@@ -102,6 +123,7 @@ export class SalesService {
                         product_id: item.productId,
                         quantity: item.quantity,
                         price_at_sale: item.priceAtSale,
+                        unit_cost_at_sale: unitCostAtSale,
                     },
                 });
 
@@ -113,7 +135,7 @@ export class SalesService {
                     movementType: 'SALE',
                     referenceType: 'SALE',
                     referenceId: sale.id,
-                    unitCost: item.priceAtSale,
+                    unitCost: unitCostAtSale ?? item.priceAtSale,
                 });
 
                 if (product?.warranty_enabled) {
@@ -386,14 +408,36 @@ export class SalesService {
                 // Delete old items
                 await tx.saleItem.deleteMany({ where: { sale_id: id } });
 
+                // Fetch current cost for new items
+                const editProductIds = dto.items.map((i) => i.productId);
+                const editPrices = await tx.productPrice.findMany({
+                    where: {
+                        tenant_id: tenantId,
+                        product_id: { in: editProductIds },
+                        cost: { not: null },
+                        OR: [{ store_id: sale.store_id }, { store_id: null }],
+                    },
+                    orderBy: { effective_from: 'desc' },
+                    select: { product_id: true, store_id: true, cost: true },
+                });
+                const editCostMap = new Map<string, number>();
+                for (const pp of editPrices) {
+                    if (!editCostMap.has(pp.product_id) || pp.store_id === sale.store_id) {
+                        editCostMap.set(pp.product_id, Number(pp.cost));
+                    }
+                }
+
                 // Create new items and decrement stock
                 for (const item of dto.items) {
+                    const unitCostAtSale = editCostMap.get(item.productId) ?? null;
+
                     await tx.saleItem.create({
                         data: {
                             sale_id: id,
                             product_id: item.productId,
                             quantity: item.quantity,
                             price_at_sale: item.priceAtSale,
+                            unit_cost_at_sale: unitCostAtSale,
                         },
                     });
 
@@ -405,7 +449,7 @@ export class SalesService {
                         movementType: 'SALE_EDIT',
                         referenceType: 'SALE',
                         referenceId: id,
-                        unitCost: item.priceAtSale,
+                        unitCost: unitCostAtSale ?? item.priceAtSale,
                     });
                 }
 
