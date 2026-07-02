@@ -780,7 +780,7 @@ export class CustomersService {
                         tenant_id: tenantId,
                         customer_code,
                         name: row.name,
-                        phone: row.phone ?? '',
+                        phone: row.phone ?? undefined,
                         email: row.email,
                         address: row.address,
                         customer_group_id,
@@ -799,7 +799,7 @@ export class CustomersService {
                     where: { id },
                     data: {
                         name: row.name,
-                        phone: row.phone ?? undefined,
+                        ...(row.phone != null ? { phone: row.phone } : {}),
                         email: row.email ?? undefined,
                         address: row.address ?? undefined,
                         ...(customer_group_id !== undefined ? { customer_group_id } : {}),

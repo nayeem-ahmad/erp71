@@ -104,9 +104,11 @@ export class CustomerGroupsService {
             castRow: (raw) => ({
                 name: String(raw.name ?? '').trim(),
                 description: raw.description ? String(raw.description).trim() || null : null,
-                discount_percent: raw.discount_percent != null && raw.discount_percent !== ''
-                    ? Number(raw.discount_percent)
-                    : null,
+                discount_percent: (() => {
+                    if (raw.discount_percent == null || raw.discount_percent === '') return null;
+                    const n = Number(raw.discount_percent);
+                    return isNaN(n) ? null : n;
+                })(),
             }),
             findDuplicate: async (row) => {
                 const existing = await this.db.customerGroup.findUnique({

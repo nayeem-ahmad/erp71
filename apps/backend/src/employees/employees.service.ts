@@ -267,7 +267,11 @@ export class EmployeesService {
                 phone: raw.phone ? String(raw.phone).trim() || null : null,
                 email: raw.email ? String(raw.email).trim() || null : null,
                 joining_date: raw.joining_date ? String(raw.joining_date).trim() || null : null,
-                salary: raw.salary != null && raw.salary !== '' ? Number(raw.salary) : null,
+                salary: (() => {
+                    if (raw.salary == null || raw.salary === '') return null;
+                    const n = Number(raw.salary);
+                    return isNaN(n) ? null : n;
+                })(),
             }),
             findDuplicate: async (row) => {
                 if (!row.phone) return null;

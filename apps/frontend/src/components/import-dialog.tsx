@@ -31,6 +31,9 @@ type Step = 'upload' | 'map' | 'preview' | 'result';
 
 async function parseFile(file: File): Promise<{ headers: string[]; rows: Record<string, string>[] }> {
   const ext = file.name.split('.').pop()?.toLowerCase();
+  if (!ext || !['csv', 'xlsx', 'xls'].includes(ext)) {
+    throw new Error(`Unsupported file type ".${ext ?? ''}". Please upload a .csv or .xlsx file.`);
+  }
   if (ext === 'csv' || file.type === 'text/csv') {
     return new Promise((resolve, reject) => {
       Papa.parse<Record<string, string>>(file, {

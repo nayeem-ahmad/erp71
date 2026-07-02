@@ -10,7 +10,6 @@ import { ImportDialog, type ImportField } from '@/components/import-dialog';
 
 const WAREHOUSE_IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
-    { key: 'address', label: 'Address', required: false },
 ];
 
 export default function InventorySettingsPage() {
