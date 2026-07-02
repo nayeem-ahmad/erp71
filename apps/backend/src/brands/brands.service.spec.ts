@@ -264,4 +264,53 @@ describe('BrandsService', () => {
             expect(db.brand.update).not.toHaveBeenCalled();
         });
     });
+
+    // ─── importRows ─────────────────────────────────────────────────────────────
+
+    describe('importRows', () => {
+        const tenantId = 'tenant-1';
+
+        it('creates new brands', async () => {
+            db.brand.findUnique.mockResolvedValue(null);
+            db.brand.create.mockResolvedValue({});
+            const result = await service.importRows(tenantId, [{ name: 'Nike', description: 'Sport' }], 'skip');
+            expect(result).toEqual({ created: 1, updated: 0, skipped: 0, errors: [] });
+            expect(db.brand.create).toHaveBeenCalledWith({
+                data: { tenant_id: tenantId, name: 'Nike', description: 'Sport' },
+            });
+        });
+
+        it('skips duplicate when mode is skip', async () => {
+            db.brand.findUnique.mockResolvedValue({ id: 'brand-1' });
+            const result = await service.importRows(tenantId, [{ name: 'Nike' }], 'skip');
+            expect(result).toEqual({ created: 0, updated: 0, skipped: 1, errors: [] });
+            expect(db.brand.create).not.toHaveBeenCalled();
+        });
+
+        it('updates duplicate when mode is upsert', async () => {
+            db.brand.findUnique.mockResolvedValue({ id: 'brand-1' });
+            db.brand.update.mockResolvedValue({});
+            const result = await service.importRows(tenantId, [{ name: 'Nike', description: 'Updated' }], 'upsert');
+            expect(result).toEqual({ created: 0, updated: 1, skipped: 0, errors: [] });
+            expect(db.brand.update).toHaveBeenCalledWith({
+                where: { id: 'brand-1' },
+                data: { name: 'Nike', description: 'Updated' },
+            });
+        });
+
+        it('errors on missing required name field', async () => {
+            const result = await service.importRows(tenantId, [{ description: 'no name' }], 'skip');
+            expect(result.errors).toHaveLength(1);
+            expect(result.errors[0]).toMatch(/Row 2.*name/);
+            expect(db.brand.create).not.toHaveBeenCalled();
+        });
+
+        it('continues on row error and processes remaining rows', async () => {
+            db.brand.findUnique.mockResolvedValue(null);
+            db.brand.create.mockRejectedValueOnce(new Error('DB error')).mockResolvedValueOnce({});
+            const result = await service.importRows(tenantId, [{ name: 'A' }, { name: 'B' }], 'skip');
+            expect(result.created).toBe(1);
+            expect(result.errors).toHaveLength(1);
+        });
+    });
 });

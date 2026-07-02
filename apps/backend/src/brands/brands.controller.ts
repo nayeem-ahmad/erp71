@@ -5,6 +5,7 @@ import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { CreateBrandDto, UpdateBrandDto } from './brand.dto';
 import { BrandsService } from './brands.service';
+import { ImportRowsDto } from '../common/import.dto';
 
 @Controller('brands')
 @UseGuards(JwtAuthGuard)
@@ -15,6 +16,11 @@ export class BrandsController {
     @Post()
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateBrandDto) {
         return this.brandsService.create(tenant.tenantId, dto);
+    }
+
+    @Post('import')
+    importRows(@Tenant() tenant: TenantContext, @Body() body: ImportRowsDto) {
+        return this.brandsService.importRows(tenant.tenantId, body.rows, body.mode);
     }
 
     @Get()

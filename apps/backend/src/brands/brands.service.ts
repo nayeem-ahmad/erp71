@@ -3,6 +3,7 @@ import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { DatabaseService } from '../database/database.service';
 import { CreateBrandDto, UpdateBrandDto } from './brand.dto';
+import { runImport, ImportResult } from '../common/import.util';
 
 @Injectable()
 export class BrandsService {
@@ -95,5 +96,36 @@ export class BrandsService {
         });
 
         return { success: true };
+    }
+
+    async importRows(
+        tenantId: string,
+        rows: Record<string, unknown>[],
+        mode: 'skip' | 'upsert',
+    ): Promise<ImportResult> {
+        return runImport(rows, mode, tenantId, {
+            requiredFields: ['name'],
+            castRow: (raw) => ({
+                name: String(raw.name ?? '').trim(),
+                description: raw.description ? String(raw.description).trim() || null : null,
+            }),
+            findDuplicate: async (row) => {
+                const existing = await this.db.brand.findUnique({
+                    where: { tenant_id_name: { tenant_id: tenantId, name: row.name } },
+                });
+                return existing?.id ?? null;
+            },
+            create: async (row) => {
+                await this.db.brand.create({
+                    data: { tenant_id: tenantId, name: row.name, description: row.description },
+                });
+            },
+            update: async (id, row) => {
+                await this.db.brand.update({
+                    where: { id },
+                    data: { name: row.name, description: row.description },
+                });
+            },
+        });
     }
 }
