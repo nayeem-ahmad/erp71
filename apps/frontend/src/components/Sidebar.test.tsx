@@ -74,6 +74,7 @@ jest.mock('lucide-react', () => {
         Target: icon,
         Upload: icon,
         Waves: icon,
+        Search: icon,
         X: icon,
     };
 });
@@ -232,5 +233,38 @@ describe('Sidebar — Story 30.1', () => {
 
         expect(aside).toHaveStyle({ width: '320px' });
         expect(screen.getByRole('separator', { name: /resize navigation panel/i })).toBeInTheDocument();
+    });
+
+    it('filters navigation items from the search box', () => {
+        render(<Sidebar canAccessAccounting canAccessInventoryReports canAccessAccountingAdvanced />);
+
+        const search = screen.getByRole('searchbox', { name: /search menu/i });
+        fireEvent.change(search, { target: { value: 'trial balance' } });
+
+        expect(screen.getByText('Trial Balance')).toBeInTheDocument();
+        expect(screen.queryByText('Purchase')).not.toBeInTheDocument();
+    });
+
+    it('shows an empty state when search has no matches', () => {
+        render(<Sidebar canAccessAccounting />);
+
+        const search = screen.getByRole('searchbox', { name: /search menu/i });
+        fireEvent.change(search, { target: { value: 'zzzz-no-match' } });
+
+        expect(screen.getByText(/no menu items match your search/i)).toBeInTheDocument();
+    });
+
+    it('expands and collapses all menu groups', () => {
+        render(<Sidebar canAccessAccounting canAccessInventoryReports canAccessAccountingAdvanced />);
+
+        expect(screen.queryByText('All Sales')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /expand all/i }));
+        expect(screen.getByText('All Sales')).toBeInTheDocument();
+        expect(screen.getByText('Trial Balance')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /collapse all/i }));
+        expect(screen.queryByText('All Sales')).not.toBeInTheDocument();
+        expect(screen.queryByText('Trial Balance')).not.toBeInTheDocument();
     });
 });

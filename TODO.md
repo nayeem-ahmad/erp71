@@ -155,6 +155,11 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Responsive padding audit — dashboard home changed from `p-8` to `p-4 md:p-8` — done 2026-06-13
 - [x] Dashboard home skips `sm:` breakpoint in KPI grid — changed to `grid-cols-1 sm:grid-cols-2 xl:grid-cols-4` — done 2026-06-13
 
+### Sidebar UX
+- [ ] Sidebar expand/collapse: respect manual collapse (auto-expand effect currently re-opens the active route's group)
+- [ ] Platform admin menu flash: derive `inPlatformAdminMode` optimistically from `active_context` before `getMe()` resolves
+- [ ] Scope `sidebar-open-groups` localStorage per workspace (tenant vs platform-admin)
+
 ### Subscription Plans (platform admin)
 - [x] Phase 2 — Entitlement registry drives guards: `planRank` + `aiCreditsMonthly` in DB `features_json`; `SubscriptionAccessGuard` + `AiService` read from entitlements; layout sidebar uses `normalizePlanFeatures` not hardcoded plan codes — done 2026-07-02
 - [x] Phase 3 — `accountingOnly` entitlement hides retail modules in sidebar + route guards — done 2026-07-02
@@ -350,6 +355,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Sidebar menu search + expand/collapse all — search box below logo filters modules/links/subgroups by label; auto-expands matches while searching; Expand all / Collapse all controls (scoped to visible/filtered groups); `sidebar-nav-filter.ts` + unit tests; i18n en/bn/ms — done 2026-07-03
+- [x] Sidebar menu typography — uniform normal weight on all nav labels (removed semibold/bold; active state uses color/background only) — done 2026-07-03
 - [x] Master data import endpoint Task 7: Customers — `POST /customers/import` with phone/email dedup, `customer_code` auto-generation, `customer_group_name` → `customer_group_id` lookup (null if not found, no error); `CustomersService.importRows()` + controller endpoint; 6 unit tests (create, skip-duplicate, upsert-duplicate, missing-name error, DB error resilience, group-not-found sets null) all passing — done 2026-07-02
 - [x] Shared bulk import utility — `runImport<T>`, `ImportResult`, `ImportConfig<T>`, `ImportRowsDto` in `apps/backend/src/common/import.util.ts` + `import.dto.ts`; 7 Jest tests all passing — done 2026-07-02
 - [x] Master data import endpoint Task 6: Price Lists — `POST /price-lists/import` with skip/upsert modes, imports `name` and `description` fields; `PriceListsService.importRows()` + controller endpoint; 5 unit tests (create, skip-duplicate, upsert-duplicate, missing-name error, DB error resilience) all passing — done 2026-07-02

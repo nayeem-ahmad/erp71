@@ -8,6 +8,7 @@ import {
     ChevronRight,
     ChevronDown,
     Package,
+    Search,
     X,
     type LucideIcon,
 } from 'lucide-react';
@@ -16,6 +17,12 @@ import { useNavLayouts } from '@/contexts/NavLayoutContext';
 import { useBranding } from '@/lib/branding';
 import { useI18n } from '@/lib/i18n';
 import { buildNavModulesFromLayout, type ResolvedNavChild, type ResolvedNavModule } from '@/lib/nav-resolver';
+import {
+    buildOpenGroupsState,
+    collectNavGroupKeys,
+    filterNavModules,
+    normalizeNavSearchQuery,
+} from '@/lib/sidebar-nav-filter';
 import { routes } from '@/lib/routes';
 
 /* ------------------------------------------------------------------ */
@@ -130,6 +137,8 @@ export default function Sidebar({
     const [width, setWidth] = useState<number>(defaultWidth);
     const [isResizing, setIsResizing] = useState(false);
     const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+    const [searchQuery, setSearchQuery] = useState('');
+    const searchInputRef = useRef<HTMLInputElement>(null);
     const modules = useMemo(() => {
         const sourceLayout = platformAdminMode ? platformAdminLayout : tenantLayout;
         return buildNavModulesFromLayout(sourceLayout, t as Record<string, unknown>)
@@ -212,6 +221,18 @@ export default function Sidebar({
         helpEnabled,
         supportEnabled,
     ]);
+
+    const normalizedSearchQuery = normalizeNavSearchQuery(searchQuery);
+    const isSearching = normalizedSearchQuery.length > 0;
+    const displayModules = useMemo(
+        () => filterNavModules(modules, searchQuery),
+        [modules, searchQuery],
+    );
+    const expandableGroupKeys = useMemo(
+        () => collectNavGroupKeys(displayModules),
+        [displayModules],
+    );
+    const hasExpandableGroups = expandableGroupKeys.length > 0;
 
     const isActive = (href: string, exact = false) => {
         if (href === routes.home) return pathname === routes.home;
@@ -378,6 +399,25 @@ export default function Sidebar({
         });
     };
 
+    const expandAllGroups = () => {
+        setOpenGroups((prev) => {
+            const next = { ...prev, ...buildOpenGroupsState(expandableGroupKeys, true) };
+            localStorage.setItem('sidebar-open-groups', JSON.stringify(next));
+            return next;
+        });
+    };
+
+    const collapseAllGroups = () => {
+        setOpenGroups((prev) => {
+            const next = { ...prev };
+            for (const key of expandableGroupKeys) {
+                next[key] = false;
+            }
+            localStorage.setItem('sidebar-open-groups', JSON.stringify(next));
+            return next;
+        });
+    };
+
     const isGroupActive = (mod: NavModule) =>
         mod.children?.some((child) => {
             if (isNavSubgroup(child)) {
@@ -390,6 +430,7 @@ export default function Sidebar({
     /* ---- Shared link styles ---- */
     const navPad = compactNav ? 'py-1.5' : 'py-2';
     const navText = compactNav ? 'text-[13px]' : 'text-sm';
+    const navLabelCls = `${navText} font-normal tracking-tight whitespace-nowrap`;
 
     const linkCls = (active: boolean) =>
         `flex items-center rounded-xl transition-all duration-150 group ${
@@ -409,7 +450,7 @@ export default function Sidebar({
             nested ? 'ml-8' : 'ml-4'
         } ${
             active
-                ? 'bg-blue-50 text-blue-700 font-bold'
+                ? 'bg-blue-50 text-blue-700'
                 : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
         }`;
 
@@ -482,12 +523,72 @@ export default function Sidebar({
                     ) : null}
                 </div>
 
+                {!collapsed ? (
+                    <div className={`flex-shrink-0 space-y-1.5 border-b border-gray-100 ${compactNav ? 'px-2 py-2' : 'px-2 py-2.5'}`}>
+                        <label className="flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-2.5 py-2">
+                            <Search className="h-4 w-4 flex-shrink-0 text-gray-400" aria-hidden />
+                            <input
+                                ref={searchInputRef}
+                                type="search"
+                                value={searchQuery}
+                                onChange={(event) => setSearchQuery(event.target.value)}
+                                onKeyDown={(event) => {
+                                    if (event.key === 'Escape') {
+                                        setSearchQuery('');
+                                        searchInputRef.current?.blur();
+                                    }
+                                }}
+                                placeholder={t.sidebar.searchPlaceholder}
+                                aria-label={t.sidebar.searchPlaceholder}
+                                className={`min-w-0 flex-1 bg-transparent outline-none ${compactNav ? 'text-[13px]' : 'text-sm'} text-gray-900 placeholder:text-gray-400`}
+                            />
+                            {isSearching ? (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setSearchQuery('');
+                                        searchInputRef.current?.focus();
+                                    }}
+                                    className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                                    aria-label={t.sidebar.clearSearch}
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </button>
+                            ) : null}
+                        </label>
+                        {hasExpandableGroups ? (
+                            <div className="flex items-center justify-end gap-2 px-1">
+                                <button
+                                    type="button"
+                                    onClick={expandAllGroups}
+                                    className={`font-semibold text-gray-500 transition-colors hover:text-blue-600 ${compactNav ? 'text-[11px]' : 'text-xs'}`}
+                                >
+                                    {t.sidebar.expandAll}
+                                </button>
+                                <span className="text-gray-300" aria-hidden>·</span>
+                                <button
+                                    type="button"
+                                    onClick={collapseAllGroups}
+                                    className={`font-semibold text-gray-500 transition-colors hover:text-blue-600 ${compactNav ? 'text-[11px]' : 'text-xs'}`}
+                                >
+                                    {t.sidebar.collapseAll}
+                                </button>
+                            </div>
+                        ) : null}
+                    </div>
+                ) : null}
+
                 {/* Navigation */}
                 <nav className={`flex-1 overflow-y-auto ${compactNav ? 'py-2' : 'py-4'} px-2 space-y-0.5`}>
-                    {modules.map((mod) => {
+                    {isSearching && displayModules.length === 0 ? (
+                        <p className={`px-3 py-6 text-center ${compactNav ? 'text-[13px]' : 'text-sm'} text-gray-400`}>
+                            {t.sidebar.noSearchResults}
+                        </p>
+                    ) : null}
+                    {displayModules.map((mod) => {
                         const Icon = mod.icon;
                         const hasChildren = !!mod.children?.length;
-                        const groupOpen = openGroups[mod.key] ?? false;
+                        const groupOpen = isSearching || (openGroups[mod.key] ?? false);
                         const groupActive = isGroupActive(mod);
 
                         /* --- Direct link (Dashboard, Inventory, Settings) --- */
@@ -501,7 +602,7 @@ export default function Sidebar({
                                     className={linkCls(active)}
                                 >
                                     <Icon className={`flex-shrink-0 w-5 h-5 ${active ? 'text-white' : 'group-hover:scale-110 transition-transform'}`} />
-                                    {!collapsed && <span className="font-semibold text-sm tracking-tight whitespace-nowrap">{mod.label}</span>}
+                                    {!collapsed && <span className={navLabelCls}>{mod.label}</span>}
                                 </Link>
                             );
                         }
@@ -519,7 +620,7 @@ export default function Sidebar({
                                     <Icon className="flex-shrink-0 w-5 h-5" />
                                     {!collapsed && (
                                         <>
-                                            <span className="font-semibold text-sm tracking-tight whitespace-nowrap">{mod.label}</span>
+                                            <span className={navLabelCls}>{mod.label}</span>
                                             <span className="ml-auto text-[9px] font-bold uppercase tracking-widest bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-md">Soon</span>
                                         </>
                                     )}
@@ -546,15 +647,20 @@ export default function Sidebar({
                                     </Link>
                                 ) : (
                                     <button
+                                        type="button"
                                         onClick={() => toggleGroup(mod.key)}
+                                        disabled={isSearching}
+                                        aria-expanded={groupOpen}
                                         className={`flex items-center w-full rounded-xl transition-all duration-150 space-x-3 px-3 py-2 ${
+                                            isSearching ? 'cursor-default' : ''
+                                        } ${
                                             groupActive
                                                 ? 'text-blue-700 bg-blue-50'
                                                 : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
                                         }`}
                                     >
                                         <Icon className={`flex-shrink-0 w-5 h-5 ${groupActive ? 'text-blue-600' : ''}`} />
-                                        <span className="font-semibold text-sm tracking-tight whitespace-nowrap">{mod.label}</span>
+                                        <span className={navLabelCls}>{mod.label}</span>
                                         <ChevronDown
                                             className={`ml-auto w-4 h-4 transition-transform duration-200 ${
                                                 groupOpen ? 'rotate-180' : ''
@@ -569,7 +675,7 @@ export default function Sidebar({
                                         {mod.children!.map((child) => {
                                             if (isNavSubgroup(child)) {
                                                 const subgroupKey = `${mod.key}:${child.key}`;
-                                                const subgroupOpen = openGroups[subgroupKey] ?? false;
+                                                const subgroupOpen = isSearching || (openGroups[subgroupKey] ?? false);
                                                 const SubgroupIcon = child.icon;
                                                 const subgroupActive = child.children.some((link) => isActive(link.href, link.exact));
 
@@ -578,10 +684,12 @@ export default function Sidebar({
                                                         <button
                                                             type="button"
                                                             onClick={() => toggleGroup(subgroupKey)}
-                                                            className={subgroupBtnCls(subgroupActive)}
+                                                            disabled={isSearching}
+                                                            aria-expanded={subgroupOpen}
+                                                            className={`${subgroupBtnCls(subgroupActive)}${isSearching ? ' cursor-default' : ''}`}
                                                         >
                                                             <SubgroupIcon className={`flex-shrink-0 w-4 h-4 ${subgroupActive ? 'text-blue-600' : ''}`} />
-                                                            <span className="text-sm font-semibold tracking-tight whitespace-nowrap">{child.label}</span>
+                                                            <span className={navLabelCls}>{child.label}</span>
                                                             <ChevronDown
                                                                 className={`ml-auto w-3.5 h-3.5 transition-transform duration-200 ${
                                                                     subgroupOpen ? 'rotate-180' : ''
@@ -595,7 +703,7 @@ export default function Sidebar({
                                                                     return (
                                                                         <Link key={href} href={href} className={childLinkCls(active, true)}>
                                                                             <LinkIcon className={`flex-shrink-0 w-3.5 h-3.5 ${active ? 'text-blue-600' : ''}`} />
-                                                                            <span className="text-sm tracking-tight whitespace-nowrap">{label}</span>
+                                                                            <span className={navLabelCls}>{label}</span>
                                                                             {advancedOnly && (
                                                                                 <span className="ml-auto text-[9px] font-black uppercase tracking-widest text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md">Advanced</span>
                                                                             )}
@@ -621,7 +729,7 @@ export default function Sidebar({
                                             return (
                                                 <Link key={href} href={href} className={childLinkCls(active)}>
                                                     <ChildIcon className={`flex-shrink-0 w-4 h-4 ${active ? 'text-blue-600' : ''}`} />
-                                                    <span className="text-sm tracking-tight whitespace-nowrap">{label}</span>
+                                                    <span className={navLabelCls}>{label}</span>
                                                     {mod.key === 'reports' && href.includes('/reports/') && (
                                                         <span className="ml-auto text-[9px] font-black uppercase tracking-widest text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md">Advanced</span>
                                                     )}
@@ -653,8 +761,11 @@ export default function Sidebar({
 
                 {/* Collapse toggle (desktop only) */}
                 <button
+                    type="button"
                     onClick={toggleSidebar}
-                    className="absolute -right-3 top-[3.5rem] mt-4 z-10 w-6 h-6 bg-white border border-gray-200 rounded-full hidden md:flex items-center justify-center shadow-sm hover:shadow-md hover:border-blue-300 hover:text-blue-600 transition-all"
+                    className={`absolute -right-3 z-10 mt-4 hidden h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm transition-all hover:border-blue-300 hover:text-blue-600 hover:shadow-md md:flex ${
+                        collapsed ? 'top-[3.5rem]' : 'top-[6.75rem]'
+                    }`}
                     title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                 >
                     {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}

@@ -228,6 +228,11 @@ export const coreMessages = {
             openNavigation: "Buka navigasi",
             closeNavigation: "Tutup navigasi",
             resizeNavigation: "Ubah saiz panel navigasi",
+            searchPlaceholder: "Cari menu…",
+            clearSearch: "Kosongkan carian",
+            noSearchResults: "Tiada item menu sepadan dengan carian anda.",
+            expandAll: "Kembangkan semua",
+            collapseAll: "Runtuhkan semua",
             modules: {
                 dashboard: "Dashboard",
                 sales: "Jualan",
