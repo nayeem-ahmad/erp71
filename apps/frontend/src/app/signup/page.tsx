@@ -61,8 +61,30 @@ function SignupPageContent() {
 
     const submitSignup = async (e: FormSubmitEvent) => {
         e.preventDefault();
-        setIsLoading(true);
         setError(null);
+
+        if (!form.name.trim()) {
+            setError(t.auth.signup.nameRequired);
+            return;
+        }
+        if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+            setError(t.auth.signup.emailInvalid);
+            return;
+        }
+        if (form.password.length < 8) {
+            setError(t.auth.signup.passwordTooShort);
+            return;
+        }
+        if (!form.tenantName.trim()) {
+            setError(t.auth.signup.orgNameRequired);
+            return;
+        }
+        if (!form.storeName.trim()) {
+            setError(t.auth.signup.storeNameRequired);
+            return;
+        }
+
+        setIsLoading(true);
 
         try {
             const signupRes = await api.signup(form);
@@ -87,7 +109,16 @@ function SignupPageContent() {
 
             router.push(postAuthPath);
         } catch (err: any) {
-            setError(err.message || t.auth.signup.defaultError);
+            const msg: string = err.message || '';
+            if (/email already exists/i.test(msg)) {
+                setError(t.auth.signup.emailTaken);
+            } else if (/email/i.test(msg) && /valid/i.test(msg)) {
+                setError(t.auth.signup.emailInvalid);
+            } else if (/password.*8|8.*character/i.test(msg)) {
+                setError(t.auth.signup.passwordTooShort);
+            } else {
+                setError(msg || t.auth.signup.defaultError);
+            }
         } finally {
             setIsLoading(false);
         }

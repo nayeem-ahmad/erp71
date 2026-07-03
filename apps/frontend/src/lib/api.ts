@@ -1089,7 +1089,10 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }).then(async res => {
         const body = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(body?.message || 'Signup failed');
+        if (!res.ok) {
+            const raw = body?.message;
+            throw new Error(Array.isArray(raw) ? raw[0] : (raw || 'Signup failed'));
+        }
         return body && 'data' in body ? body.data : body;
     }),
     getSubscriptionPlans: () => fetch(`${API_BASE}/auth/plans`).then(async res => {
