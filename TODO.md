@@ -355,7 +355,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
-- [x] Fix sidebar navigation from `/sales/new` — document `mousedown` click-outside handlers on New Sale page aborted Next.js client routing; shared `useDismissOnClickOutside` skips sidebar/nav link targets and only listens while overlays are open; totals derived via `useMemo` (no effect-driven `setState`); ProductSearch aborts stale fetches on close; E2E `S0` in `core-modules.spec.ts` — done 2026-07-03
+- [x] Fix sidebar navigation from `/sales/new` — `PaymentSection` rebuilt `otherMethods` every render, causing ~77k DOM mutations/sec and starving Next.js client routing; memoized `visibleMethods`/`otherMethods`; also hardened click-outside handlers + derived totals; E2E `S0` in `core-modules.spec.ts` — done 2026-07-03
 - [x] Sidebar menu search + expand/collapse all — search box below logo filters modules/links/subgroups by label; auto-expands matches while searching; Expand all / Collapse all controls (scoped to visible/filtered groups); `sidebar-nav-filter.ts` + unit tests; i18n en/bn/ms — done 2026-07-03
 - [x] Sidebar menu typography — uniform normal weight on all nav labels (removed semibold/bold; active state uses color/background only) — done 2026-07-03
 - [x] Master data import endpoint Task 7: Customers — `POST /customers/import` with phone/email dedup, `customer_code` auto-generation, `customer_group_name` → `customer_group_id` lookup (null if not found, no error); `CustomersService.importRows()` + controller endpoint; 6 unit tests (create, skip-duplicate, upsert-duplicate, missing-name error, DB error resilience, group-not-found sets null) all passing — done 2026-07-02
