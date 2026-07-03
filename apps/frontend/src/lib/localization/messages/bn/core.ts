@@ -658,6 +658,20 @@ export const coreMessages = {
             loadingProducts: "পণ্য লোড হচ্ছে...",
             stockLeft: "{count} বাকি",
             notAvailable: "প্রযোজ্য নয়",
+            tabs: {
+                checkout: "চেকআউট",
+                history: "ইতিহাস",
+            },
+            history: {
+                mySales: "আমার সাম্প্রতিক বিক্রয়",
+                loading: "বিক্রয় লোড হচ্ছে…",
+                empty: "এখনও কোনো বিক্রয় নেই",
+                loadFailed: "বিক্রয় লোড করা যায়নি",
+                retry: "আবার চেষ্টা করুন",
+                refresh: "রিফ্রেশ",
+                offline: "অফলাইনে ইতিহাস উপলব্ধ নয়",
+                itemsCount: "{count} আইটেম",
+            },
             cart: {
                 currentCart: "বর্তমান কার্ট",
                 itemsCount: "{count} আইটেম",

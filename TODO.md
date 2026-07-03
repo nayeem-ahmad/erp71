@@ -355,6 +355,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] POS right-panel sale history — Checkout/History tabs on POS cart panel; `GET /sales?mine=true` filters to current user (`created_by`); latest-first list with serial, time, total, item count; refresh after checkout; i18n en/bn/ms + POS test — done 2026-07-03
 - [x] Fix sidebar navigation from `/sales/new` — `PaymentSection` rebuilt `otherMethods` every render, causing ~77k DOM mutations/sec and starving Next.js client routing; memoized `visibleMethods`/`otherMethods`; also hardened click-outside handlers + derived totals; E2E `S0` in `core-modules.spec.ts` — done 2026-07-03
 - [x] Sidebar menu search + expand/collapse all — search box below logo filters modules/links/subgroups by label; auto-expands matches while searching; Expand all / Collapse all controls (scoped to visible/filtered groups); `sidebar-nav-filter.ts` + unit tests; i18n en/bn/ms — done 2026-07-03
 - [x] Sidebar menu typography — uniform normal weight on all nav labels (removed semibold/bold; active state uses color/background only) — done 2026-07-03

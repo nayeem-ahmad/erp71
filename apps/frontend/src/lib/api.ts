@@ -361,7 +361,14 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    getSales: () => fetchWithAuth('/sales').then((r: any) => r?.items ?? r),
+    getSales: (params?: { cursor?: string; limit?: number; mine?: boolean }) => {
+        const query = new URLSearchParams();
+        if (params?.cursor) query.set('cursor', params.cursor);
+        if (params?.limit) query.set('limit', String(params.limit));
+        if (params?.mine) query.set('mine', 'true');
+        const qs = query.toString();
+        return fetchWithAuth(`/sales${qs ? `?${qs}` : ''}`).then((r: any) => r?.items ?? r);
+    },
     getCustomers: (params?: { page?: number; limit?: number; search?: string }) => {
         const query = new URLSearchParams();
         query.set('limit', String(params?.limit ?? 100));

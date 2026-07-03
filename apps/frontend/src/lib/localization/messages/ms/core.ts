@@ -658,6 +658,20 @@ export const coreMessages = {
             loadingProducts: "Memuatkan produk...",
             stockLeft: "{count} baki",
             notAvailable: "T/A",
+            tabs: {
+                checkout: "Checkout",
+                history: "Sejarah",
+            },
+            history: {
+                mySales: "Jualan terkini saya",
+                loading: "Memuatkan jualan…",
+                empty: "Belum ada jualan",
+                loadFailed: "Tidak dapat memuatkan jualan",
+                retry: "Cuba lagi",
+                refresh: "Muat semula",
+                offline: "Sejarah tidak tersedia semasa luar talian",
+                itemsCount: "{count} item",
+            },
             cart: {
                 currentCart: "Troli Semasa",
                 itemsCount: "{count} Item",

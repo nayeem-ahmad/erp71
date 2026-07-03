@@ -39,7 +39,15 @@ jest.mock('lucide-react', () => ({
   List: () => <span data-testid="icon-list" />,
   Gift: () => <span data-testid="icon-gift" />,
   User: () => <span data-testid="icon-user" />,
+  History: () => <span data-testid="icon-history" />,
+  Receipt: () => <span data-testid="icon-receipt" />,
 }));
+
+jest.mock('next/link', () => {
+  const MockLink = ({ children, href }: any) => <a href={href}>{children}</a>;
+  MockLink.displayName = 'Link';
+  return MockLink;
+});
 
 // Mock the API
 jest.mock('@/lib/api', () => ({
@@ -47,6 +55,7 @@ jest.mock('@/lib/api', () => ({
     getProducts: jest.fn(),
     getInventorySettings: jest.fn(),
     createSale: jest.fn(),
+    getSales: jest.fn(),
   },
 }));
 
@@ -58,12 +67,21 @@ const mockProducts = [
 describe('POSPage — Story 10.2: POS Interface UI', () => {
   beforeEach(() => {
     const { api } = require('@/lib/api');
-    api.getProducts.mockResolvedValue(mockProducts);
-    api.getInventorySettings.mockResolvedValue({ default_sales_warehouse_id: 'wh-sales' });
-    api.createSale.mockResolvedValue({ id: 'sale-1' });
     localStorage.setItem('store_id', 'store-test');
     jest.clearAllMocks();
     api.getProducts.mockResolvedValue(mockProducts);
+    api.getInventorySettings.mockResolvedValue({ default_sales_warehouse_id: 'wh-sales' });
+    api.createSale.mockResolvedValue({ id: 'sale-1' });
+    api.getSales.mockResolvedValue([
+      {
+        id: 'sale-1',
+        serial_number: 'SL-00001',
+        created_at: '2026-07-03T10:00:00.000Z',
+        total_amount: '150.00',
+        items: [{ id: 'i1' }, { id: 'i2' }],
+        customer: { name: 'Walk-in Customer' },
+      },
+    ]);
   });
 
   it('renders the POS Terminal heading', async () => {
@@ -259,6 +277,18 @@ describe('POSPage — Story 10.3 & 10.4: Checkout & Advanced Payments', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/remaining/i)).toBeInTheDocument();
+    });
+  });
+
+  it('shows recent sales in the history tab for the current user', async () => {
+    const { api } = require('@/lib/api');
+    render(<POSPage />);
+    fireEvent.click(screen.getByRole('button', { name: /history/i }));
+
+    await waitFor(() => {
+      expect(api.getSales).toHaveBeenCalledWith({ mine: true, limit: 50 });
+      expect(screen.getByText('SL-00001')).toBeInTheDocument();
+      expect(screen.getByText('Walk-in Customer')).toBeInTheDocument();
     });
   });
 });

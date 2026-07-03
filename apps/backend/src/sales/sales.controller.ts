@@ -21,10 +21,13 @@ export class SalesController {
         @Tenant() tenant: TenantContext,
         @Query('cursor') cursor?: string,
         @Query('limit') limit?: string,
+        @Query('mine') mine?: string,
     ) {
+        const mineOnly = mine === 'true' || mine === '1';
         return this.salesService.findAll(tenant.tenantId, {
             cursor: cursor || undefined,
             limit: limit ? parseInt(limit, 10) : undefined,
+            createdBy: mineOnly ? tenant.userId : undefined,
         });
     }
 

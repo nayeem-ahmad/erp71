@@ -321,6 +321,19 @@ describe('SalesService', () => {
       expect(result).toHaveProperty('nextCursor');
       expect(result).toHaveProperty('hasMore');
     });
+
+    it('should filter sales to the requesting user when createdBy is set', async () => {
+      db.sale.findMany.mockResolvedValue([{ id: 's1' }]);
+      db.voucher.findMany.mockResolvedValue([]);
+
+      await service.findAll('tenant-1', { createdBy: 'user-42' });
+
+      expect(db.sale.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { tenant_id: 'tenant-1', created_by: 'user-42' },
+        }),
+      );
+    });
   });
 
   describe('findOne()', () => {

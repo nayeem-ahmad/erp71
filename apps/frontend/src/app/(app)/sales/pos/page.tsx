@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { ShoppingCart, Search, Package, Trash2, Plus, Minus, CreditCard, ChevronRight, Store, X, Banknote, CheckCircle, AlertCircle, XCircle, Printer, WifiOff, RefreshCw, LayoutGrid, List, Gift, User } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
+import { ShoppingCart, Search, Package, Trash2, Plus, Minus, CreditCard, ChevronRight, Store, X, Banknote, CheckCircle, AlertCircle, XCircle, Printer, WifiOff, RefreshCw, LayoutGrid, List, Gift, User, History, Receipt } from 'lucide-react';
 import { HelpTooltip } from '@/components/HelpTooltip';
 import { api } from '@/lib/api';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
@@ -86,8 +87,33 @@ export default function POSPage() {
     const [pointsToRedeem, setPointsToRedeem] = useState(0);
 
     const [showMobileCart, setShowMobileCart] = useState(false);
+    const [rightPanelTab, setRightPanelTab] = useState<'checkout' | 'history'>('checkout');
+    const [recentSales, setRecentSales] = useState<any[]>([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [historyError, setHistoryError] = useState(false);
 
     const { isOnline, pendingCount, isSyncing, syncNow, refreshPendingCount } = useOfflineSync();
+
+    const loadRecentSales = useCallback(async () => {
+        if (!isOnline) return;
+        setHistoryLoading(true);
+        setHistoryError(false);
+        try {
+            const data = await api.getSales({ mine: true, limit: 50 });
+            setRecentSales(Array.isArray(data) ? data : []);
+        } catch (error) {
+            console.error('Failed to load POS sale history', error);
+            setHistoryError(true);
+        } finally {
+            setHistoryLoading(false);
+        }
+    }, [isOnline]);
+
+    useEffect(() => {
+        if (rightPanelTab === 'history') {
+            void loadRecentSales();
+        }
+    }, [rightPanelTab, loadRecentSales]);
 
     const addNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
         const id = Date.now().toString();
@@ -453,6 +479,7 @@ export default function POSPage() {
             setPointsToRedeem(0);
             setShowCheckout(false);
             loadProducts(); // Update stock levels
+            void loadRecentSales();
         } catch (error: any) {
             // Detect network failure and queue offline
             const isNetworkError =
@@ -671,27 +698,129 @@ export default function POSPage() {
                     md:relative md:h-auto md:bottom-auto md:left-auto md:right-auto md:z-auto
                     md:translate-y-0 md:rounded-none md:w-[400px] md:border-l md:border-gray-100 md:shadow-2xl
                 `}>
-                    <div className="p-6 border-b border-gray-50 flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                            <div className="p-2 bg-blue-50 rounded-xl text-blue-600">
-                                <ShoppingCart className="w-6 h-6" />
+                    <div className="p-4 border-b border-gray-50 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                            <div className="flex p-1 bg-gray-100 rounded-xl flex-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setRightPanelTab('checkout')}
+                                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${
+                                        rightPanelTab === 'checkout'
+                                            ? 'bg-white text-gray-900 shadow-sm'
+                                            : 'text-gray-500 hover:text-gray-700'
+                                    }`}
+                                >
+                                    <ShoppingCart className="w-4 h-4" />
+                                    {t.pos.tabs.checkout}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setRightPanelTab('history')}
+                                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${
+                                        rightPanelTab === 'history'
+                                            ? 'bg-white text-gray-900 shadow-sm'
+                                            : 'text-gray-500 hover:text-gray-700'
+                                    }`}
+                                >
+                                    <History className="w-4 h-4" />
+                                    {t.pos.tabs.history}
+                                </button>
                             </div>
-                            <h2 className="text-lg font-black tracking-tight">{t.pos.cart.currentCart}</h2>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className="bg-gray-900 text-white px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
-                                {interpolate(t.pos.cart.itemsCount, { count: cart.length })}
-                            </span>
                             <button
-                                className="md:hidden p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors"
+                                className="md:hidden p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors flex-shrink-0"
                                 onClick={() => setShowMobileCart(false)}
                                 aria-label="Close cart"
                             >
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
+                        {rightPanelTab === 'checkout' && (
+                            <div className="flex items-center justify-between px-1">
+                                <span className="text-sm font-bold text-gray-600">{t.pos.cart.currentCart}</span>
+                                <span className="bg-gray-900 text-white px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
+                                    {interpolate(t.pos.cart.itemsCount, { count: cart.length })}
+                                </span>
+                            </div>
+                        )}
                     </div>
 
+                    {rightPanelTab === 'history' ? (
+                        <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+                            <div className="flex items-center justify-between px-1 pb-1">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                    {t.pos.history.mySales}
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => void loadRecentSales()}
+                                    disabled={historyLoading || !isOnline}
+                                    className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-blue-600 disabled:opacity-40"
+                                >
+                                    <RefreshCw className={`w-3.5 h-3.5 ${historyLoading ? 'animate-spin' : ''}`} />
+                                    {t.pos.history.refresh}
+                                </button>
+                            </div>
+                            {!isOnline ? (
+                                <div className="h-full min-h-[200px] flex flex-col items-center justify-center text-gray-400 text-center px-4">
+                                    <WifiOff className="w-10 h-10 opacity-30 mb-3" />
+                                    <p className="text-xs font-bold">{t.pos.history.offline}</p>
+                                </div>
+                            ) : historyLoading && recentSales.length === 0 ? (
+                                <div className="h-full min-h-[200px] flex items-center justify-center text-gray-400 text-xs font-black uppercase tracking-widest">
+                                    {t.pos.history.loading}
+                                </div>
+                            ) : historyError ? (
+                                <div className="h-full min-h-[200px] flex flex-col items-center justify-center text-gray-400 text-center px-4 gap-3">
+                                    <AlertCircle className="w-10 h-10 opacity-30" />
+                                    <p className="text-xs font-bold">{t.pos.history.loadFailed}</p>
+                                    <button
+                                        type="button"
+                                        onClick={() => void loadRecentSales()}
+                                        className="text-xs font-black uppercase tracking-widest text-blue-600 hover:text-blue-700"
+                                    >
+                                        {t.pos.history.retry}
+                                    </button>
+                                </div>
+                            ) : recentSales.length === 0 ? (
+                                <div className="h-full min-h-[200px] flex flex-col items-center justify-center text-gray-300 space-y-3">
+                                    <Receipt className="w-12 h-12 opacity-30" />
+                                    <p className="text-xs font-black uppercase tracking-widest">{t.pos.history.empty}</p>
+                                </div>
+                            ) : (
+                                recentSales.map((sale) => (
+                                    <Link
+                                        key={sale.id}
+                                        href={`/sales/${sale.id}`}
+                                        className="block bg-gray-50/80 hover:bg-white border border-transparent hover:border-blue-500/10 rounded-2xl p-3 transition-all hover:shadow-md hover:shadow-blue-500/5"
+                                    >
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-black text-gray-900 truncate">
+                                                    {sale.serial_number}
+                                                </p>
+                                                <p className="text-[11px] font-bold text-gray-500 mt-0.5">
+                                                    {new Date(sale.created_at).toLocaleString()}
+                                                </p>
+                                                {sale.customer?.name && (
+                                                    <p className="text-[11px] text-gray-400 mt-0.5 truncate">
+                                                        {sale.customer.name}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <div className="text-right flex-shrink-0">
+                                                <p className="text-sm font-black text-blue-600">
+                                                    {formatBDT(parseFloat(sale.total_amount))}
+                                                </p>
+                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+                                                    {interpolate(t.pos.history.itemsCount, { count: sale.items?.length ?? 0 })}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </Link>
+                                ))
+                            )}
+                        </div>
+                    ) : (
                     <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
                         {cart.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center text-gray-300 space-y-4">
@@ -747,7 +876,9 @@ export default function POSPage() {
                             ))
                         )}
                     </div>
+                    )}
 
+                    {rightPanelTab === 'checkout' && (
                     <div className="p-8 bg-gray-50 border-t border-gray-100 space-y-6">
                         <div className="space-y-3">
                             <div className="flex justify-between text-xs font-bold text-gray-400 uppercase tracking-widest">
@@ -783,6 +914,7 @@ export default function POSPage() {
                             <ChevronRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
                         </button>
                     </div>
+                    )}
                 </div>
             </div>
 

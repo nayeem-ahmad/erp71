@@ -658,6 +658,20 @@ export const coreMessages = {
         loadingProducts: 'Loading Products...',
         stockLeft: '{count} left',
         notAvailable: 'N/A',
+        tabs: {
+            checkout: 'Checkout',
+            history: 'History',
+        },
+        history: {
+            mySales: 'My recent sales',
+            loading: 'Loading sales…',
+            empty: 'No sales yet',
+            loadFailed: 'Could not load sales',
+            retry: 'Try again',
+            refresh: 'Refresh',
+            offline: 'History unavailable while offline',
+            itemsCount: '{count} items',
+        },
         cart: {
             currentCart: 'Current Cart',
             itemsCount: '{count} Items',

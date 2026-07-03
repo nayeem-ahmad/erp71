@@ -291,12 +291,15 @@ export class SalesService {
 
     async findAll(
         tenantId: string,
-        opts?: { cursor?: string; limit?: number },
+        opts?: { cursor?: string; limit?: number; createdBy?: string },
     ): Promise<CursorPaginatedResult<any>> {
         const limit = Math.min(opts?.limit ?? 20, 100);
 
         const sales = await this.db.sale.findMany({
-            where: { tenant_id: tenantId },
+            where: {
+                tenant_id: tenantId,
+                ...(opts?.createdBy ? { created_by: opts.createdBy } : {}),
+            },
             include: {
                 items: { include: { product: true } },
                 payments: true,
