@@ -310,8 +310,8 @@ describe('ContactPage', () => {
             expect(screen.getAllByText(/sign in/i).length).toBeGreaterThan(0);
         });
 
-        it('renders Start free trial nav link', () => {
-            expect(screen.getAllByText(/start free trial/i).length).toBeGreaterThan(0);
+        it('renders Get started nav link', () => {
+            expect(screen.getAllByText(/get started/i).length).toBeGreaterThan(0);
         });
 
         it('renders footer Terms of Service link', () => {

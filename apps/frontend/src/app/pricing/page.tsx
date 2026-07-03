@@ -117,7 +117,7 @@ export default function PricingPage() {
             </section>
 
             <section className="py-12 px-6 bg-white">
-                <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+                <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-6">
                     {displayPlans.map((plan) => {
                         const price = yearly ? plan.yearlyPrice : plan.monthlyPrice;
                         const saving = yearly ? yearlySavingsPercent(plan) : 0;
@@ -177,7 +177,7 @@ export default function PricingPage() {
                                             : 'bg-gray-900 hover:bg-gray-700 text-white'
                                     }`}
                                 >
-                                    {plan.monthlyPrice === 0 ? 'Start free' : m.ctaButton}
+                                    {m.ctaButton}
                                 </Link>
                             </div>
                         );
@@ -185,7 +185,7 @@ export default function PricingPage() {
                 </div>
 
                 <p className="text-center text-sm text-gray-400 mt-8">
-                    All paid plans include a 14-day free trial &bull; No credit card required &bull; Cancel anytime
+                    {m.paidPlansNote}
                 </p>
             </section>
 
@@ -250,7 +250,6 @@ export default function PricingPage() {
                                         className={`border-b border-gray-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
                                     >
                                         <td className="px-6 py-3.5 font-medium text-gray-700">{row.feature}</td>
-                                        <td className="px-4 py-3.5 text-center"><Cell value={row.free} /></td>
                                         <td className="px-4 py-3.5 text-center"><Cell value={row.basic} /></td>
                                         <td className="px-4 py-3.5 text-center"><Cell value={row.accounting} /></td>
                                         <td className="px-4 py-3.5 text-center bg-blue-50/40"><Cell value={row.standard} /></td>
@@ -278,7 +277,7 @@ export default function PricingPage() {
                         Get started with STANDARD
                         <ArrowRight className="w-5 h-5" />
                     </Link>
-                    <p className="text-blue-200 text-sm">14-day free trial &bull; Cancel anytime</p>
+                    <p className="text-blue-200 text-sm">{m.paidPlansNote}</p>
                 </div>
             </section>
 

@@ -23,9 +23,9 @@ export const marketingMessages = {
                 titleLine1: "Uruskan perniagaan anda.",
                 titleLine2: "Berkembang dengan yakin.",
                 description: "Pengurusan perniagaan semua-dalam-satu — jualan, inventori, perakaunan, kedai dalam talian, dan pembayaran BDT. Mulakan dalam beberapa minit, sama ada kedai, kilang, atau firma perkhidmatan.",
-                startTrial: "Mulakan percubaan percuma anda",
+                startTrial: "Mulakan",
                 tryDemo: "Cuba Demo",
-                footnote: "Tiada kad kredit diperlukan · Percubaan percuma 14 hari · Batalkan bila-bila masa",
+                footnote: "Pelan berbayar sahaja · Lengkapkan pembayaran untuk mengaktifkan ruang kerja anda",
             },
             stats: {
                 activeStores: "Perniagaan aktif",
@@ -162,23 +162,23 @@ export const marketingMessages = {
             ],
             pricing: {
                 title: "Harga mudah dan telus",
-                description: "Mulakan percuma dengan PERCUMA. Naik taraf apabila anda memerlukan lebih banyak lokasi, pengguna, atau perakaunan.",
+                description: "Pilih pelan berbayar yang sesuai dengan perniagaan anda. Naik taraf bila-bila masa apabila anda berkembang.",
                 mostPopular: "Paling popular",
                 free: "Percuma",
                 perMonth: "/bln",
-                startFree: "Mulakan percuma",
-                startFreeTrial: "Mulakan percubaan percuma",
+                startFree: "Mulakan",
+                startFreeTrial: "Mulakan",
                 seeFull: "Lihat perbandingan harga & ciri penuh",
             },
             cta: {
                 title: "Bersedia untuk memodenkan perniagaan anda?",
                 description: "Sertai ratusan perniagaan Bangladesh yang telah memindahkan operasi mereka ke ERP71.",
-                button: "Mulakan percubaan percuma anda",
+                button: "Lihat harga",
             },
         },
         pricing: {
             title: "Harga mudah dan telus",
-            description: "Dibina untuk PKS Bangladesh. Mulakan percuma — naik taraf apabila anda bersedia.",
+            description: "Dibina untuk PKS Bangladesh. Pelan berbayar sahaja sementara kami meningkatkan kapasiti platform.",
             monthly: "Bulanan",
             yearly: "Tahunan",
             yearlySave: "Jimat {percent}%",
@@ -186,8 +186,9 @@ export const marketingMessages = {
             compareDescription: "Setiap ciri, setiap peringkat — berdampingan.",
             faqTitle: "Soalan yang kerap ditanya",
             ctaTitle: "Bersedia untuk bermula?",
-            ctaDescription: "Mulakan percubaan percuma 14 hari anda hari ini. Tiada kad kredit diperlukan.",
-            ctaButton: "Mulakan percubaan percuma",
+            ctaDescription: "Pilih pelan dan lengkapkan pembayaran untuk mengaktifkan ruang kerja anda.",
+            ctaButton: "Pilih pelan",
+            paidPlansNote: "Pelan berbayar sahaja · Percubaan percuma dan peringkat percuma tidak tersedia buat sementara",
         },
         contact: {
             title: "Hubungi kami",
@@ -218,7 +219,7 @@ export const marketingMessages = {
             },
             nav: {
                 signIn: "Log masuk",
-                startFreeTrial: "Mulakan percubaan percuma",
+                startFreeTrial: "Mulakan",
             },
             footer: {
                 terms: "Terma Perkhidmatan",
@@ -305,7 +306,7 @@ export const marketingMessages = {
         },
         legal: {
             signIn: "Log masuk",
-            startFreeTrial: "Mulakan percubaan percuma",
+            startFreeTrial: "Mulakan",
             lastUpdated: "Dikemas kini: Mei 2026",
             terms: {
                 title: "Terma Perkhidmatan",

@@ -43,7 +43,11 @@ export class BillingService {
         const membership = await this.requireTenantMembership(ctx.userId, ctx.tenantId);
         const [plans, subscription] = await Promise.all([
             this.db.subscriptionPlan.findMany({
-                where: { is_active: true },
+                where: {
+                    is_active: true,
+                    code: { not: 'FREE' },
+                    monthly_price: { gt: 0 },
+                },
                 orderBy: { monthly_price: 'asc' },
             }),
             this.db.tenantSubscription.findUnique({
@@ -71,42 +75,7 @@ export class BillingService {
         await this.assertBillingAccess(ctx);
 
         if (dto.planCode === 'FREE') {
-            const reference = `free_${ctx.tenantId.slice(0, 8)}_${Date.now()}`;
-            const result = await this.applySubscriptionChange({
-                tenantId: ctx.tenantId,
-                planCode: 'FREE',
-                billingCycle: 'MONTHLY',
-                status: 'ACTIVE',
-                providerName: 'manual',
-                providerCustomerRef: `tenant_${ctx.tenantId}`,
-                providerSubscriptionRef: reference,
-                cancelAtPeriodEnd: false,
-            });
-
-            await this.recordBillingEvent({
-                tenantId: ctx.tenantId,
-                providerName: 'manual',
-                externalEventId: reference,
-                eventType: 'CHECKOUT_BYPASSED',
-                status: 'ACTIVE',
-                referenceId: reference,
-                amount: 0,
-                currency: 'BDT',
-                payload: { reason: 'FREE_PLAN_SELECTED' },
-            });
-
-            return {
-                provider_name: 'manual',
-                reference,
-                external_event_id: reference,
-                checkout_url: null,
-                billing_cycle: 'MONTHLY',
-                amount: 0,
-                currency: 'BDT',
-                plan: result.subscription.plan,
-                requires_confirmation: false,
-                activated: true,
-            };
+            throw new BadRequestException('The free plan is not available.');
         }
 
         const billingCycle = this.normalizeBillingCycle(dto.billingCycle);

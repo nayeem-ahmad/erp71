@@ -91,26 +91,33 @@ describe('SubscriptionPlansService', () => {
         );
     });
 
-    it('rejects deactivating the FREE plan', async () => {
+    it('allows deactivating the FREE plan while keeping zero pricing', async () => {
         db.subscriptionPlan.findUnique.mockResolvedValue({
             ...basePlan,
             code: 'FREE',
             monthly_price: 0,
             yearly_price: 0,
         });
+        db.subscriptionPlan.update.mockResolvedValue({
+            ...basePlan,
+            code: 'FREE',
+            monthly_price: 0,
+            yearly_price: 0,
+            is_active: false,
+        });
 
-        await expect(
-            service.updatePlan(
-                'FREE',
-                {
-                    ...updateDto,
-                    monthly_price: 0,
-                    yearly_price: 0,
-                    is_active: false,
-                },
-                'admin-1',
-            ),
-        ).rejects.toBeInstanceOf(BadRequestException);
+        const result = await service.updatePlan(
+            'FREE',
+            {
+                ...updateDto,
+                monthly_price: 0,
+                yearly_price: 0,
+                is_active: false,
+            },
+            'admin-1',
+        );
+
+        expect(result.is_active).toBe(false);
     });
 
     it('throws when plan is missing', async () => {

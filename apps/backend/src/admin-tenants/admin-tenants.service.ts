@@ -403,9 +403,9 @@ export class AdminTenantsService {
                 data: {
                     tenant_id: tenant.id,
                     plan_id: plan.id,
-                    status: 'TRIALING',
+                    status: 'PAST_DUE',
                     current_period_start: new Date(),
-                    current_period_end: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+                    current_period_end: new Date(),
                     provider_name: 'manual',
                 },
             });

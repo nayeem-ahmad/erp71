@@ -20,17 +20,20 @@ async function main() {
         description: string;
         monthly_price: number;
         yearly_price: number;
+        is_active?: boolean;
         features_json: Record<string, unknown>;
         marketing_features_json?: string[];
-    }) =>
-        prisma.subscriptionPlan.upsert({
+    }) => {
+        const isActive = data.is_active ?? true;
+
+        return prisma.subscriptionPlan.upsert({
             where: { code: data.code },
             update: {
                 name: data.name,
                 description: data.description,
                 monthly_price: data.monthly_price,
                 yearly_price: data.yearly_price,
-                is_active: true,
+                is_active: isActive,
                 features_json: data.features_json,
                 marketing_features_json: data.marketing_features_json ?? [],
             },
@@ -40,18 +43,20 @@ async function main() {
                 description: data.description,
                 monthly_price: data.monthly_price,
                 yearly_price: data.yearly_price,
-                is_active: true,
+                is_active: isActive,
                 features_json: data.features_json,
                 marketing_features_json: data.marketing_features_json ?? [],
             },
         });
+    };
 
     await upsertPlan({
         code: 'FREE',
         name: 'Free',
-        description: 'Starter plan for single-user onboarding and light usage',
+        description: 'Legacy fallback plan — not offered for new signups',
         monthly_price: 0,
         yearly_price: 0,
+        is_active: false,
         features_json: {
             maxStores: 1,
             maxUsers: 1,

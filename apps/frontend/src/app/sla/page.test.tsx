@@ -126,9 +126,9 @@ describe('SlaPage', () => {
         expect(signInLinks.length).toBeGreaterThan(0);
     });
 
-    it('renders the nav Start free trial link', () => {
+    it('renders the nav Get started link', () => {
         render(<SlaPage />);
-        const trialLinks = screen.getAllByRole('link', { name: /start free trial/i });
+        const trialLinks = screen.getAllByRole('link', { name: /get started/i });
         expect(trialLinks.length).toBeGreaterThan(0);
     });
 

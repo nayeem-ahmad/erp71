@@ -219,7 +219,7 @@ export const coreMessages = {
             loadingTitle: "ডেমো স্যান্ডবক্স খোলা হচ্ছে…",
             loadingDescription: "নমুনা পণ্য, বিক্রয় ও অ্যাকাউন্টিং ডেটা লোড হচ্ছে।",
             unavailableTitle: "ডেমো উপলব্ধ নয়",
-            startFreeTrial: "ফ্রি ট্রায়াল শুরু করুন",
+            startFreeTrial: "শুরু করুন",
             backToLogin: "সাইন ইনে ফিরে যান",
         },
         sidebar: {

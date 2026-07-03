@@ -261,7 +261,7 @@ export const adminMessages = {
             inactiveBadge: 'Hidden',
             perMonth: '/mo',
             subscribersLabel: '{count} subscribers',
-            freePlanNotice: 'The FREE plan must stay active with zero pricing.',
+            freePlanNotice: 'The FREE plan is hidden from signup and kept at zero pricing for legacy downgrade paths.',
             entitlementsTitle: 'Entitlements',
             entitlementGroups: {
                 quotas: 'Limits & quotas',

@@ -321,7 +321,7 @@ export default function HomePage() {
                                             : 'bg-gray-900 hover:bg-gray-700 text-white'
                                     }`}
                                 >
-                                    {plan.monthlyPrice === 0 ? m.pricing.startFree : m.pricing.startFreeTrial}
+                                    {m.pricing.startFreeTrial}
                                 </Link>
                             </div>
                         ))}

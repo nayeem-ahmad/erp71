@@ -187,7 +187,7 @@ describe('AuthService', () => {
             .mockResolvedValueOnce(null)
             .mockResolvedValueOnce(makeUserWithAccess('store-1', 'tenant-1'));
         db.user.create.mockResolvedValue({ id: 'user-1', email: 'owner@example.com', name: 'Owner' });
-        db.subscriptionPlan.findUnique.mockResolvedValue({ id: 'plan-free', code: 'FREE', is_active: true });
+        db.subscriptionPlan.findUnique.mockResolvedValue({ id: 'plan-basic', code: 'BASIC', is_active: true, monthly_price: 499 });
         db.tenant.create.mockResolvedValue({ id: 'tenant-1' });
         db.store.create.mockResolvedValue({ id: 'store-1' });
 

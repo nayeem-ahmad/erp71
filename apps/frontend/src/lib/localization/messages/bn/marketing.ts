@@ -23,9 +23,9 @@ export const marketingMessages = {
                 titleLine1: "আপনার ব্যবসা চালান।",
                 titleLine2: "আত্মবিশ্বাসের সাথে বাড়ান।",
                 description: "অল-ইন-ওয়ান ব্যবসা ব্যবস্থাপনা — বিক্রয়, ইনভেন্টরি, হিসাব, স্টোরফ্রন্ট ও BDT পেমেন্ট। দোকান, কারখানা বা সেবা প্রতিষ্ঠান — যেকোনো ব্যবসায় কয়েক মিনিটেই লাইভ হন।",
-                startTrial: "বিনামূল্যে ট্রায়াল শুরু করুন",
+                startTrial: "শুরু করুন",
                 tryDemo: "ডেমো দেখুন",
-                footnote: "ক্রেডিট কার্ড লাগবে না · ১৪ দিনের বিনামূল্যে ট্রায়াল · যেকোনো সময় বাতিল",
+                footnote: "শুধু পেইড প্ল্যান · ওয়ার্কস্পেস সক্রিয় করতে চেকআউট সম্পন্ন করুন",
             },
             stats: {
                 activeStores: "সক্রিয় ব্যবসা",
@@ -162,23 +162,23 @@ export const marketingMessages = {
             ],
             pricing: {
                 title: "সহজ, স্বচ্ছ মূল্য",
-                description: "FREE-তে বিনামূল্যে শুরু করুন। আরও লোকেশন, ব্যবহারকারী বা হিসাব দরকার হলে আপগ্রেড করুন।",
+                description: "আপনার ব্যবসার জন্য উপযুক্ত পেইড প্ল্যান বেছে নিন। বৃদ্ধির সাথে যেকোনো সময় আপগ্রেড করুন।",
                 mostPopular: "সবচেয়ে জনপ্রিয়",
                 free: "বিনামূল্যে",
                 perMonth: "/মাস",
-                startFree: "বিনামূল্যে শুরু",
-                startFreeTrial: "বিনামূল্যে ট্রায়াল শুরু",
+                startFree: "শুরু করুন",
+                startFreeTrial: "শুরু করুন",
                 seeFull: "সম্পূর্ণ মূল্য ও ফিচার তুলনা দেখুন",
             },
             cta: {
                 title: "আপনার ব্যবসা আধুনিক করতে প্রস্তুত?",
                 description: "শত শত বাংলাদেশি ব্যবসা যারা তাদের কার্যক্রম ERP71-এ নিয়ে এসেছে তাদের সাথে যোগ দিন।",
-                button: "বিনামূল্যে ট্রায়াল শুরু করুন",
+                button: "মূল্য দেখুন",
             },
         },
         pricing: {
             title: "Simple, transparent pricing",
-            description: "বাংলাদেশি ক্ষুদ্র ও মাঝারি ব্যবসার জন্য তৈরি। বিনামূল্যে শুরু করুন — প্রস্তুত হলে আপগ্রেড করুন।",
+            description: "বাংলাদেশি ক্ষুদ্র ও মাঝারি ব্যবসার জন্য তৈরি। প্ল্যাটফর্ম ক্যাপাসিটি বাড়ানোর সময় শুধু পেইড প্ল্যান।",
             monthly: "Monthly",
             yearly: "Yearly",
             yearlySave: "Save {percent}%",
@@ -186,8 +186,9 @@ export const marketingMessages = {
             compareDescription: "Every feature, every tier — side by side.",
             faqTitle: "Frequently asked questions",
             ctaTitle: "Ready to get started?",
-            ctaDescription: "Start your 14-day free trial today. No credit card required.",
-            ctaButton: "Start free trial",
+            ctaDescription: "একটি প্ল্যান বেছে নিন এবং ওয়ার্কস্পেস সক্রিয় করতে চেকআউট সম্পন্ন করুন।",
+            ctaButton: "প্ল্যান বেছে নিন",
+            paidPlansNote: "শুধু পেইড প্ল্যান · ফ্রি ট্রায়াল ও ফ্রি টিয়ার সাময়িকভাবে বন্ধ",
         },
         contact: {
             title: "যোগাযোগ করুন",
@@ -218,7 +219,7 @@ export const marketingMessages = {
             },
             nav: {
                 signIn: "সাইন ইন",
-                startFreeTrial: "বিনামূল্যে ট্রায়াল শুরু করুন",
+                startFreeTrial: "শুরু করুন",
             },
             footer: {
                 terms: "সেবার শর্তাবলী",
@@ -305,7 +306,7 @@ export const marketingMessages = {
         },
         legal: {
             signIn: "Sign in",
-            startFreeTrial: "Start free trial",
+            startFreeTrial: "শুরু করুন",
             lastUpdated: "Last updated: May 2026",
             terms: {
                 title: "Terms of Service",

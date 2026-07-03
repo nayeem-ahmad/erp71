@@ -84,18 +84,18 @@ describe('HomePage', () => {
         expect(screen.getByText('Rahim Uddin')).toBeInTheDocument();
     });
 
-    it('renders all four plan tiers in the pricing preview', () => {
+    it('renders paid plan tiers in the pricing preview', () => {
         render(<HomePage />);
-        expect(screen.getAllByText('FREE').length).toBeGreaterThan(0);
         expect(screen.getAllByText('BASIC').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('ACCOUNTING').length).toBeGreaterThan(0);
         expect(screen.getAllByText('STANDARD').length).toBeGreaterThan(0);
         expect(screen.getAllByText('PREMIUM').length).toBeGreaterThan(0);
     });
 
     it('renders plan prices aligned with backend seed', () => {
         render(<HomePage />);
-        expect(screen.getByText('Free')).toBeInTheDocument();
         expect(screen.getByText('৳499')).toBeInTheDocument();
+        expect(screen.getByText('৳749')).toBeInTheDocument();
         expect(screen.getByText('৳999')).toBeInTheDocument();
         expect(screen.getByText('৳1,499')).toBeInTheDocument();
     });

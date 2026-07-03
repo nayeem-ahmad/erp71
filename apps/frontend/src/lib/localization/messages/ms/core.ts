@@ -219,7 +219,7 @@ export const coreMessages = {
             loadingTitle: "Membuka kotak pasir demo…",
             loadingDescription: "Memuatkan produk, jualan, dan data perakaunan sampel.",
             unavailableTitle: "Demo tidak tersedia",
-            startFreeTrial: "Mulakan percubaan percuma",
+            startFreeTrial: "Mulakan",
             backToLogin: "Kembali ke log masuk",
         },
         sidebar: {

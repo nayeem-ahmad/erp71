@@ -218,7 +218,11 @@ export class AuthService {
 
     async getPlans() {
         const plans = await this.db.subscriptionPlan.findMany({
-            where: { is_active: true },
+            where: {
+                is_active: true,
+                code: { not: 'FREE' },
+                monthly_price: { gt: 0 },
+            },
             orderBy: { monthly_price: 'asc' },
         });
 
@@ -418,7 +422,7 @@ export class AuthService {
                 tenantName: dto.name,
                 storeName: dto.name,
                 address: dto.address,
-                planCode: dto.planCode ?? 'FREE',
+                planCode: dto.planCode ?? 'BASIC',
             }),
         );
     }
@@ -448,12 +452,16 @@ export class AuthService {
         userId: string,
         dto: TenantProvisionDto,
     ) {
-        const planCode = dto.planCode ?? 'FREE';
+        const planCode = dto.planCode ?? 'BASIC';
+        if (planCode === 'FREE') {
+            throw new BadRequestException('The free plan is not available for new signups.');
+        }
+
         const plan = await tx.subscriptionPlan.findUnique({
             where: { code: planCode },
         });
 
-        if (!plan?.is_active) {
+        if (!plan?.is_active || Number(plan.monthly_price) <= 0) {
             throw new BadRequestException('Selected subscription plan is not available.');
         }
 
@@ -487,9 +495,9 @@ export class AuthService {
             data: {
                 tenant_id: tenant.id,
                 plan_id: plan.id,
-                status: 'TRIALING',
+                status: 'PAST_DUE',
                 current_period_start: new Date(),
-                current_period_end: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+                current_period_end: new Date(),
                 provider_name: 'manual',
             },
         });

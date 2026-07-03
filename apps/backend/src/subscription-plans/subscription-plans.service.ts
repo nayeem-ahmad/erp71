@@ -115,13 +115,8 @@ export class SubscriptionPlansService {
     }
 
     private assertUpdateAllowed(code: FixedSubscriptionPlanCode, dto: UpdateSubscriptionPlanDto) {
-        if (code === 'FREE') {
-            if (!dto.is_active) {
-                throw new BadRequestException('The FREE plan must remain active.');
-            }
-            if (dto.monthly_price !== 0 || (dto.yearly_price ?? 0) !== 0) {
-                throw new BadRequestException('The FREE plan must have zero pricing.');
-            }
+        if (code === 'FREE' && (dto.monthly_price !== 0 || (dto.yearly_price ?? 0) !== 0)) {
+            throw new BadRequestException('The FREE plan must have zero pricing.');
         }
 
         if (dto.monthly_price < 0) {

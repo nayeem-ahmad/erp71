@@ -1,4 +1,4 @@
-export type PlanId = 'free' | 'basic' | 'accounting' | 'standard' | 'premium';
+export type PlanId = 'basic' | 'accounting' | 'standard' | 'premium';
 
 export type MarketingPlan = {
     id: PlanId;
@@ -11,24 +11,8 @@ export type MarketingPlan = {
     features: string[];
 };
 
-/** Aligned with `packages/database/prisma/seed.ts` subscription plans. */
+/** Aligned with `packages/database/prisma/seed.ts` paid subscription plans. */
 export const MARKETING_PLANS: MarketingPlan[] = [
-    {
-        id: 'free',
-        code: 'FREE',
-        name: 'FREE',
-        monthlyPrice: 0,
-        yearlyPrice: 0,
-        highlight: false,
-        tagline: 'Try it out, no strings attached',
-        features: [
-            'Basic POS terminal',
-            '1 user account',
-            '1 store location',
-            'Up to 100 products',
-            'Community support',
-        ],
-    },
     {
         id: 'basic',
         code: 'BASIC',
@@ -111,7 +95,6 @@ export type ComparisonCell = string | boolean;
 
 export type ComparisonRow = {
     feature: string;
-    free: ComparisonCell;
     basic: ComparisonCell;
     accounting: ComparisonCell;
     standard: ComparisonCell;
@@ -119,22 +102,22 @@ export type ComparisonRow = {
 };
 
 export const PLAN_COMPARISON_ROWS: ComparisonRow[] = [
-    { feature: 'POS terminal', free: true, basic: true, accounting: false, standard: true, premium: true },
-    { feature: 'Inventory management', free: false, basic: true, accounting: false, standard: true, premium: true },
-    { feature: 'Purchase orders', free: false, basic: true, accounting: false, standard: true, premium: true },
-    { feature: 'Sales orders', free: false, basic: false, accounting: false, standard: true, premium: true },
-    { feature: 'Accounting module', free: false, basic: false, accounting: true, standard: true, premium: true },
-    { feature: 'Financial reports', free: false, basic: false, accounting: true, standard: true, premium: true },
-    { feature: 'Expense & fund management', free: false, basic: false, accounting: true, standard: true, premium: true },
-    { feature: 'Customer management', free: false, basic: false, accounting: false, standard: true, premium: true },
-    { feature: 'Supplier management', free: false, basic: false, accounting: false, standard: true, premium: true },
-    { feature: 'Multi-store support', free: '1 store', basic: '1 store', accounting: '1 store', standard: '3 stores', premium: '10 stores' },
-    { feature: 'E-commerce storefront', free: false, basic: false, accounting: false, standard: true, premium: true },
-    { feature: 'Manufacturing / BOM', free: false, basic: false, accounting: false, standard: false, premium: true },
-    { feature: 'White-label branding', free: false, basic: false, accounting: false, standard: false, premium: true },
-    { feature: 'Lead management & conversations', free: false, basic: false, accounting: false, standard: false, premium: true },
-    { feature: 'Public API access', free: false, basic: false, accounting: false, standard: false, premium: true },
-    { feature: 'Priority support', free: false, basic: false, accounting: false, standard: true, premium: true },
+    { feature: 'POS terminal', basic: true, accounting: false, standard: true, premium: true },
+    { feature: 'Inventory management', basic: true, accounting: false, standard: true, premium: true },
+    { feature: 'Purchase orders', basic: true, accounting: false, standard: true, premium: true },
+    { feature: 'Sales orders', basic: false, accounting: false, standard: true, premium: true },
+    { feature: 'Accounting module', basic: false, accounting: true, standard: true, premium: true },
+    { feature: 'Financial reports', basic: false, accounting: true, standard: true, premium: true },
+    { feature: 'Expense & fund management', basic: false, accounting: true, standard: true, premium: true },
+    { feature: 'Customer management', basic: false, accounting: false, standard: true, premium: true },
+    { feature: 'Supplier management', basic: false, accounting: false, standard: true, premium: true },
+    { feature: 'Multi-store support', basic: '1 store', accounting: '1 store', standard: '3 stores', premium: '10 stores' },
+    { feature: 'E-commerce storefront', basic: false, accounting: false, standard: true, premium: true },
+    { feature: 'Manufacturing / BOM', basic: false, accounting: false, standard: false, premium: true },
+    { feature: 'White-label branding', basic: false, accounting: false, standard: false, premium: true },
+    { feature: 'Lead management & conversations', basic: false, accounting: false, standard: false, premium: true },
+    { feature: 'Public API access', basic: false, accounting: false, standard: false, premium: true },
+    { feature: 'Priority support', basic: false, accounting: false, standard: true, premium: true },
 ];
 
 export const PRICING_FAQS = [
@@ -144,7 +127,7 @@ export const PRICING_FAQS = [
     },
     {
         q: 'Is there a free trial?',
-        a: 'Every paid plan comes with a 14-day free trial. No credit card is required to start. If you decide not to continue, your account simply reverts to the FREE plan.',
+        a: 'We are not offering free trials or a free plan at this time. Choose a paid plan during signup and complete checkout from your billing dashboard to activate your workspace.',
     },
     {
         q: 'How does billing work?',
@@ -176,10 +159,11 @@ export type PublicPlanFromApi = {
 
 /** Merge live API plan data onto static marketing defaults (pricing/signup). */
 export function buildMarketingPlansFromApi(apiPlans: PublicPlanFromApi[]): MarketingPlan[] {
-    if (!apiPlans.length) return MARKETING_PLANS;
+    const paidApiPlans = apiPlans.filter((plan) => plan.code !== 'FREE' && plan.monthly_price > 0);
+    if (!paidApiPlans.length) return MARKETING_PLANS;
 
     return MARKETING_PLANS.map((fallback) => {
-        const live = apiPlans.find((plan) => plan.code === fallback.code);
+        const live = paidApiPlans.find((plan) => plan.code === fallback.code);
         if (!live) return fallback;
 
         const yearlyMonthlyEquivalent = live.yearly_price && live.yearly_price > 0

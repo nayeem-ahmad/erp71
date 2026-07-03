@@ -6,7 +6,7 @@ export const componentsMessages = {
         reviews: 'Reviews',
         contact: 'Contact',
         signIn: 'Sign in',
-        startFreeTrial: 'Start free trial',
+        startFreeTrial: 'Get started',
     },
     marketingFooter: {
         brand: 'ERP71',

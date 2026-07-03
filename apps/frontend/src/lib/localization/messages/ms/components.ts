@@ -6,7 +6,7 @@ export const componentsMessages = {
             reviews: 'Ulasan',
             contact: 'Hubungi',
             signIn: 'Log masuk',
-            startFreeTrial: 'Mulakan percubaan percuma',
+            startFreeTrial: 'Mulakan',
         },
         marketingFooter: {
             brand: 'ERP71',

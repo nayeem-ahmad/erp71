@@ -17,9 +17,9 @@ export const marketingMessages = {
             titleLine1: 'Run your business.',
             titleLine2: 'Grow with confidence.',
             description: 'All-in-one business management — sales, inventory, accounting, storefront, and BDT payments. Go live in minutes, whether you run a shop, factory, or service firm.',
-            startTrial: 'Start your free trial',
+            startTrial: 'Get started',
             tryDemo: 'Try Demo',
-            footnote: 'No credit card required · 14-day free trial · Cancel anytime',
+            footnote: 'Paid plans only · Complete checkout to activate your workspace',
         },
         stats: {
             activeStores: 'Active businesses',
@@ -31,7 +31,7 @@ export const marketingMessages = {
             title: 'Up and running in one afternoon',
             description: 'From signup to first transaction — a guided path designed for business owners, not IT teams.',
             steps: [
-                { step: '01', title: 'Create your workspace', description: 'Sign up in minutes with your business name, branch, and preferred plan. No credit card required.' },
+                { step: '01', title: 'Create your workspace', description: 'Sign up in minutes with your business name, branch, and preferred paid plan.' },
                 { step: '02', title: 'Add products & stock', description: 'Import or add products, set prices in BDT, and configure warehouses for accurate inventory.' },
                 { step: '03', title: 'Start selling', description: 'Process orders and payments with barcode scan, split payments, and automatic stock updates in real time.' },
                 { step: '04', title: 'Track & grow', description: 'Monitor revenue, margins, and branch performance — then scale to accounting and storefront.' },
@@ -73,23 +73,23 @@ export const marketingMessages = {
         trustBadges: ['Bangladesh-hosted', 'BDT-native billing', 'Role-based access', 'Audit logs'],
         pricing: {
             title: 'Simple, transparent pricing',
-            description: 'Start free on FREE. Upgrade when you need more locations, users, or accounting.',
+            description: 'Choose a paid plan that fits your business. Upgrade anytime as you grow.',
             mostPopular: 'Most popular',
             free: 'Free',
             perMonth: '/mo',
-            startFree: 'Start free',
-            startFreeTrial: 'Start free trial',
+            startFree: 'Get started',
+            startFreeTrial: 'Get started',
             seeFull: 'See full pricing & feature comparison',
         },
         cta: {
             title: 'Ready to modernise your business?',
             description: 'Join hundreds of Bangladeshi businesses who have moved their operations to ERP71.',
-            button: 'Start your free trial',
+            button: 'View pricing',
         },
     },
     pricing: {
         title: 'Simple, transparent pricing',
-        description: 'Built for Bangladeshi SMEs. Start free — upgrade when you\'re ready.',
+        description: 'Built for Bangladeshi SMEs. Paid plans only while we scale platform capacity.',
         monthly: 'Monthly',
         yearly: 'Yearly',
         yearlySave: 'Save {percent}%',
@@ -97,8 +97,9 @@ export const marketingMessages = {
         compareDescription: 'Every feature, every tier — side by side.',
         faqTitle: 'Frequently asked questions',
         ctaTitle: 'Ready to get started?',
-        ctaDescription: 'Start your 14-day free trial today. No credit card required.',
-        ctaButton: 'Start free trial',
+        ctaDescription: 'Pick a plan and complete checkout to activate your workspace.',
+        ctaButton: 'Choose a plan',
+        paidPlansNote: 'Paid plans only · Free trials and the free tier are temporarily unavailable',
     },
     contact: {
         title: 'Get in touch',
@@ -129,7 +130,7 @@ export const marketingMessages = {
         },
         nav: {
             signIn: 'Sign in',
-            startFreeTrial: 'Start free trial',
+            startFreeTrial: 'Get started',
         },
         footer: {
             terms: 'Terms of Service',
@@ -210,7 +211,7 @@ export const marketingMessages = {
     },
     legal: {
         signIn: 'Sign in',
-        startFreeTrial: 'Start free trial',
+        startFreeTrial: 'Get started',
         lastUpdated: 'Last updated: May 2026',
         terms: {
             title: 'Terms of Service',

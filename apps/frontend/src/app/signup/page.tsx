@@ -8,6 +8,21 @@ import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { syncLocalePreferenceFromSession } from '@/lib/localization/preference';
+import { isSelfServeSubscriptionPlan } from '@erp71/shared-types';
+
+const PLAN_QUERY_TO_CODE: Record<string, Plan['code']> = {
+    basic: 'BASIC',
+    accounting: 'ACCOUNTING',
+    standard: 'STANDARD',
+    premium: 'PREMIUM',
+};
+
+const FALLBACK_PLANS: Plan[] = [
+    { code: 'BASIC', name: 'Basic', description: 'Core operations for small teams', monthly_price: 499 },
+    { code: 'ACCOUNTING', name: 'Accounting', description: 'Bookkeeping pack: accounting, reports, expenses & funds', monthly_price: 749 },
+    { code: 'STANDARD', name: 'Standard', description: 'Multi-branch operations with analytics', monthly_price: 999 },
+    { code: 'PREMIUM', name: 'Premium', description: 'Full suite with advanced controls', monthly_price: 1499 },
+];
 
 type Plan = {
     code: 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
@@ -46,14 +61,32 @@ function SignupPageContent() {
         password: '',
         tenantName: '',
         storeName: '',
-        planCode: 'FREE' as 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM',
+        planCode: 'BASIC' as Plan['code'],
     });
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        api.getSubscriptionPlans().then(setPlans).catch(() => null);
+        api.getSubscriptionPlans()
+            .then((loadedPlans) => {
+                const paidPlans = (Array.isArray(loadedPlans) ? loadedPlans : [])
+                    .filter((plan: Plan) => isSelfServeSubscriptionPlan(plan.code, plan.monthly_price));
+                setPlans(paidPlans);
+            })
+            .catch(() => null);
     }, []);
+
+    useEffect(() => {
+        const requestedPlan = searchParams.get('plan');
+        if (!requestedPlan) {
+            return;
+        }
+
+        const resolvedCode = PLAN_QUERY_TO_CODE[requestedPlan.toLowerCase()];
+        if (resolvedCode) {
+            setForm((current) => ({ ...current, planCode: resolvedCode }));
+        }
+    }, [searchParams]);
 
     const handleChange = (field: keyof typeof form, value: string) => {
         setForm((current) => ({ ...current, [field]: value }));
@@ -190,13 +223,7 @@ function SignupPageContent() {
                         <div className="md:col-span-2 space-y-3">
                             <label className="text-sm font-medium text-gray-700 ml-1">{t.auth.signup.planLabel}</label>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {(plans.length > 0 ? plans : [
-                                    { code: 'FREE', name: 'Free', description: 'Starter plan for single-store onboarding', monthly_price: 0 },
-                                    { code: 'BASIC', name: 'Basic', description: 'Core operations for small teams', monthly_price: 499 },
-                                    { code: 'ACCOUNTING', name: 'Accounting', description: 'Bookkeeping pack: accounting, reports, expenses & funds', monthly_price: 749 },
-                                    { code: 'STANDARD', name: 'Standard', description: 'Multi-branch operations with analytics', monthly_price: 999 },
-                                    { code: 'PREMIUM', name: 'Premium', description: 'Full suite with advanced controls', monthly_price: 1499 },
-                                ]).map((plan) => {
+                                {(plans.length > 0 ? plans : FALLBACK_PLANS).map((plan) => {
                                     const selected = form.planCode === plan.code;
                                     return (
                                         <button

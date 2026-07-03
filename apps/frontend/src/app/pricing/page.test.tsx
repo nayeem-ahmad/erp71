@@ -14,6 +14,17 @@ jest.mock('next/navigation', () => ({
     useSearchParams: () => new URLSearchParams(),
 }));
 
+jest.mock('@/lib/api', () => ({
+    api: {
+        getSubscriptionPlans: jest.fn().mockResolvedValue([
+            { code: 'BASIC', name: 'BASIC', description: 'For small shops just getting started', monthly_price: 499, yearly_price: 4992 },
+            { code: 'ACCOUNTING', name: 'ACCOUNTING', description: 'Bookkeeping-focused pack for accountants', monthly_price: 749, yearly_price: 7488 },
+            { code: 'STANDARD', name: 'STANDARD', description: 'For growing businesses with multiple locations', monthly_price: 999, yearly_price: 9996 },
+            { code: 'PREMIUM', name: 'PREMIUM', description: 'For enterprise retailers scaling fast', monthly_price: 1499, yearly_price: 14988 },
+        ]),
+    },
+}));
+
 import PricingPage from './page';
 
 describe('PricingPage', () => {
@@ -29,25 +40,19 @@ describe('PricingPage', () => {
         ).toBeInTheDocument();
     });
 
-    it('renders all four plan names', () => {
+    it('renders paid plan names', () => {
         render(<PricingPage />);
-        expect(screen.getAllByText('FREE').length).toBeGreaterThan(0);
         expect(screen.getAllByText('BASIC').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('ACCOUNTING').length).toBeGreaterThan(0);
         expect(screen.getAllByText('STANDARD').length).toBeGreaterThan(0);
         expect(screen.getAllByText('PREMIUM').length).toBeGreaterThan(0);
     });
 
     it('renders plan taglines', () => {
         render(<PricingPage />);
-        expect(screen.getByText('Try it out, no strings attached')).toBeInTheDocument();
         expect(screen.getByText('For small shops just getting started')).toBeInTheDocument();
         expect(screen.getByText('For growing businesses with multiple locations')).toBeInTheDocument();
         expect(screen.getByText('For enterprise retailers scaling fast')).toBeInTheDocument();
-    });
-
-    it('renders "Free" price for free plan by default (monthly)', () => {
-        render(<PricingPage />);
-        expect(screen.getByText('Free')).toBeInTheDocument();
     });
 
     it('shows "Most Popular" badge on the highlighted plan', () => {
@@ -93,10 +98,9 @@ describe('PricingPage', () => {
         expect(screen.queryByText('2 months free!')).not.toBeInTheDocument();
     });
 
-    it('renders "Start free" CTA for free plan and "Start free trial" for paid plans', () => {
+    it('renders paid-plan CTAs on every card', () => {
         render(<PricingPage />);
-        expect(screen.getAllByText('Start free trial').length).toBeGreaterThan(0);
-        expect(screen.getAllByText('Start free').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Choose a plan').length).toBeGreaterThan(0);
     });
 
     it('renders the feature comparison table heading', () => {
@@ -182,10 +186,10 @@ describe('PricingPage', () => {
         expect(screen.getAllByText('ERP71').length).toBeGreaterThan(0);
     });
 
-    it('renders the 14-day free trial note under plan cards', () => {
+    it('renders the paid-plans-only note under plan cards', () => {
         render(<PricingPage />);
         expect(
-            screen.getByText(/All paid plans include a 14-day free trial/),
-        ).toBeInTheDocument();
+            screen.getAllByText(/Paid plans only · Free trials and the free tier are temporarily unavailable/).length,
+        ).toBeGreaterThan(0);
     });
 });

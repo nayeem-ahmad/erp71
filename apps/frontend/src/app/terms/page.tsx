@@ -81,9 +81,9 @@ export default function TermsPage() {
                             </div>
                             <ul className="list-disc pl-6 space-y-2 text-sm">
                                 <li>
-                                    <strong>Free trial.</strong> Paid plans include a 14-day free trial. No credit card is
-                                    required to start a trial. At the end of the trial period your subscription will
-                                    automatically commence unless you downgrade to the Free plan.
+                                    <strong>Activation.</strong> New workspaces require a paid plan and successful checkout
+                                    before full access is granted. Free trials and the free tier are temporarily unavailable
+                                    while platform capacity is being scaled.
                                 </li>
                                 <li>
                                     <strong>Auto-renewal.</strong> Subscriptions renew automatically each calendar month on

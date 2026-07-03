@@ -113,43 +113,11 @@ describe('BillingService', () => {
         expect(db.billingEvent.upsert).toHaveBeenCalled();
     });
 
-    it('bypasses external checkout when selecting Free plan', async () => {
-        db.subscriptionPlan.findUnique.mockResolvedValueOnce({
-            id: 'plan-free',
-            code: 'FREE',
-            name: 'Free',
-            description: 'Starter plan',
-            monthly_price: 0,
-            yearly_price: 0,
-            is_active: true,
-            features_json: {},
-        });
-        db.tenantSubscription.upsert.mockResolvedValueOnce({
-            status: 'ACTIVE',
-            current_period_start: new Date('2026-03-21T00:00:00.000Z'),
-            current_period_end: new Date('2026-04-20T00:00:00.000Z'),
-            cancel_at_period_end: false,
-            provider_name: 'manual',
-            provider_customer_ref: 'tenant-1',
-            provider_subscription_ref: 'free-tenant-1',
-            plan: {
-                code: 'FREE',
-                name: 'Free',
-                description: 'Starter plan',
-                monthly_price: 0,
-                yearly_price: 0,
-                features_json: {},
-            },
-        });
-
-        const result = await service.createCheckoutSession(tenantCtx(), {
+    it('rejects checkout when selecting the free plan', async () => {
+        await expect(service.createCheckoutSession(tenantCtx(), {
             planCode: 'FREE',
             billingCycle: 'MONTHLY',
-        });
-
-        expect(result.requires_confirmation).toBe(false);
-        expect(result.amount).toBe(0);
-        expect(fetchMock).not.toHaveBeenCalled();
+        })).rejects.toThrow(BadRequestException);
     });
 
     it('rejects invalid manual webhook signatures', async () => {

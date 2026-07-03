@@ -219,7 +219,7 @@ export const coreMessages = {
         loadingTitle: 'Opening demo sandbox…',
         loadingDescription: 'Loading sample products, sales, and accounting data.',
         unavailableTitle: 'Demo unavailable',
-        startFreeTrial: 'Start free trial',
+        startFreeTrial: 'Get started',
         backToLogin: 'Back to sign in',
     },
     sidebar: {

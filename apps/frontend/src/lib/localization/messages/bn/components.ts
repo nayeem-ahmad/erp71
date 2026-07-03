@@ -6,7 +6,7 @@ export const componentsMessages = {
             reviews: "রিভিউ",
             contact: "যোগাযোগ",
             signIn: "সাইন ইন",
-            startFreeTrial: "ফ্রি ট্রায়াল শুরু করুন",
+            startFreeTrial: "শুরু করুন",
         },
         marketingFooter: {
             brand: "ERP71",
