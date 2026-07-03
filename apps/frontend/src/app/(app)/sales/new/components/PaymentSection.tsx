@@ -2,10 +2,12 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Payment } from '@/lib/hooks/useNewSaleCart';
+import { canKeepDue, creditDueAmount, availableCustomerCredit } from '@/lib/customer-credit';
 
 interface PaymentSectionProps {
     payments: Payment[];
     total: number;
+    customer?: any;
     onPaymentChange: (payments: Payment[]) => void;
 }
 
@@ -76,7 +78,7 @@ function amountsToPayments(methods: PickMethod[], amounts: Record<string, number
         }));
 }
 
-export default function PaymentSection({ payments, total, onPaymentChange }: PaymentSectionProps) {
+export default function PaymentSection({ payments, total, customer, onPaymentChange }: PaymentSectionProps) {
     const [definedMethods, setDefinedMethods] = useState<DefinedMethod[]>([]);
     const [amounts, setAmounts] = useState<Record<string, number>>({});
     const [showOther, setShowOther] = useState(false);
@@ -129,7 +131,10 @@ export default function PaymentSection({ payments, total, onPaymentChange }: Pay
 
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
     const balance = total - totalPaid;
-    const paymentValid = Math.abs(balance) < 0.01;
+    const creditDue = creditDueAmount(total, totalPaid);
+    const keepDueCheck = canKeepDue(customer, creditDue);
+    const paymentValid = Math.abs(balance) < 0.01 || keepDueCheck.allowed;
+    const availableCredit = availableCustomerCredit(customer);
 
     const renderMethodRow = (m: PickMethod) => (
         <div key={m.key} className="flex items-center gap-2">
@@ -159,9 +164,24 @@ export default function PaymentSection({ payments, total, onPaymentChange }: Pay
                         paymentValid ? 'text-green-600' : balance > 0 ? 'text-red-600' : 'text-amber-600'
                     }`}
                 >
-                    {paymentValid ? '✓ Settled' : `Due ৳${Math.abs(balance).toFixed(2)}`}
+                    {Math.abs(balance) < 0.01
+                        ? '✓ Settled'
+                        : balance > 0
+                            ? keepDueCheck.allowed
+                                ? `Keeping due ৳${creditDue.toFixed(2)}`
+                                : `Due ৳${creditDue.toFixed(2)}`
+                            : `Overpaid ৳${Math.abs(balance).toFixed(2)}`}
                 </span>
             </div>
+
+            {balance > 0.01 && customer && availableCredit != null && (
+                <p className="text-[11px] text-gray-500">
+                    Available credit: ৳{availableCredit.toFixed(2)}
+                </p>
+            )}
+            {balance > 0.01 && !keepDueCheck.allowed && keepDueCheck.reason && (
+                <p className="text-[11px] text-red-600">{keepDueCheck.reason}</p>
+            )}
 
             <div className="space-y-1.5 rounded border p-2">
                 {visibleMethods.map(renderMethodRow)}

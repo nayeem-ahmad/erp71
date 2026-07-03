@@ -72,6 +72,7 @@ export class CreateSaleDto {
     @Type(() => CreateSaleItemDto)
     items: CreateSaleItemDto[];
 
+    /** Optional when the full balance is kept as customer due (credit sale). */
     @IsOptional()
     @IsArray()
     @ValidateNested({ each: true })

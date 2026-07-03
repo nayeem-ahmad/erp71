@@ -2,12 +2,16 @@ import { Injectable, BadRequestException, NotFoundException, Logger } from '@nes
 import { DatabaseService } from '../database/database.service';
 import { CreateSaleDto, UpdateSaleDto } from './sale.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
-import { autoPostFromRules } from '../accounting/posting.utils';
+import { autoPostFromRules, type AutoPostResult } from '../accounting/posting.utils';
 import { previewSaleLoyaltyRedemption, recordSaleLoyalty } from '../loyalty/loyalty-sale.utils';
 import { cursorPaginate, CursorPaginatedResult } from '../common/pagination.dto';
 import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
 import { CrmCampaignsService } from '../crm-campaigns/crm-campaigns.service';
+import {
+    assertCustomerCreditForSale,
+    creditDueAmount,
+} from '../customers/customer-credit.utils';
 
 @Injectable()
 export class SalesService {
@@ -76,6 +80,43 @@ export class SalesService {
             if (Math.abs(computedTotal - dto.totalAmount) > 0.02) {
                 throw new BadRequestException(
                     `Sale total mismatch. Expected ৳${computedTotal.toFixed(2)} after discounts and loyalty.`,
+                );
+            }
+
+            const balanceDue = creditDueAmount(computedTotal, dto.amountPaid);
+            if (dto.amountPaid - computedTotal > 0.02) {
+                throw new BadRequestException(
+                    `Payment amount exceeds sale total by ৳${(dto.amountPaid - computedTotal).toFixed(2)}.`,
+                );
+            }
+
+            let creditCustomerDueBalance = 0;
+
+            if (balanceDue > 0.005) {
+                if (!dto.customerId) {
+                    throw new BadRequestException(
+                        'Select a customer to keep due on this sale.',
+                    );
+                }
+
+                const creditCustomer = await tx.customer.findFirst({
+                    where: { id: dto.customerId, tenant_id: tenantId, deleted_at: null },
+                    select: { id: true, due_balance: true, credit_limit: true },
+                });
+
+                if (!creditCustomer) {
+                    throw new NotFoundException('Customer not found');
+                }
+
+                creditCustomerDueBalance = Number(creditCustomer.due_balance);
+                assertCustomerCreditForSale(
+                    {
+                        due_balance: creditCustomerDueBalance,
+                        credit_limit: creditCustomer.credit_limit != null
+                            ? Number(creditCustomer.credit_limit)
+                            : null,
+                    },
+                    balanceDue,
                 );
             }
 
@@ -203,27 +244,98 @@ export class SalesService {
                 );
             }
 
-            const primaryPaymentMethod = dto.payments?.[0]?.paymentMethod?.toLowerCase() || 'cash';
-            const paymentMode = primaryPaymentMethod.includes('bank') || primaryPaymentMethod.includes('card') || primaryPaymentMethod.includes('wallet')
-                ? 'bank'
-                : primaryPaymentMethod.includes('credit')
-                    ? 'credit'
-                    : 'cash';
+            if (balanceDue > 0.005 && dto.customerId) {
+                const balanceAfter = creditCustomerDueBalance + balanceDue;
+                await tx.customerCreditTransaction.create({
+                    data: {
+                        tenant_id: tenantId,
+                        customer_id: dto.customerId,
+                        type: 'CREDIT_SALE',
+                        amount: balanceDue,
+                        balance_after: balanceAfter,
+                        reference_type: 'SALE',
+                        reference_id: sale.id,
+                        created_by: userId,
+                    },
+                });
+                await tx.customer.update({
+                    where: { id: dto.customerId },
+                    data: { due_balance: balanceAfter },
+                });
+            }
 
-            const posting = await autoPostFromRules({
-                tx,
-                tenantId,
-                eventType: 'sale',
-                conditionKey: 'payment_mode',
-                conditionValue: paymentMode,
-                sourceModule: 'sales',
-                sourceType: 'sale',
-                sourceId: sale.id,
-                amount: Number(sale.total_amount),
-                description: `Auto-posted sale ${sale.serial_number}`,
-                referenceNumber: sale.serial_number,
-                storeId: dto.storeId,
-            });
+            const classifyPaymentMode = (method: string) => {
+                const normalized = method.toLowerCase();
+                if (
+                    normalized.includes('bank')
+                    || normalized.includes('card')
+                    || normalized.includes('wallet')
+                    || normalized.includes('bkash')
+                    || normalized.includes('nagad')
+                    || normalized.includes('rocket')
+                ) {
+                    return 'bank';
+                }
+                if (normalized.includes('credit')) {
+                    return 'credit';
+                }
+                return 'cash';
+            };
+
+            let posting: AutoPostResult = { postingStatus: 'skipped' };
+
+            if (balanceDue > 0.005) {
+                posting = await autoPostFromRules({
+                    tx,
+                    tenantId,
+                    eventType: 'sale',
+                    conditionKey: 'payment_mode',
+                    conditionValue: 'credit',
+                    sourceModule: 'sales',
+                    sourceType: 'sale',
+                    sourceId: sale.id,
+                    amount: balanceDue,
+                    description: `Auto-posted credit portion — sale ${sale.serial_number}`,
+                    referenceNumber: sale.serial_number,
+                    storeId: dto.storeId,
+                });
+
+                if (dto.amountPaid > 0.005) {
+                    const primaryPaymentMethod = dto.payments?.[0]?.paymentMethod ?? 'cash';
+                    await autoPostFromRules({
+                        tx,
+                        tenantId,
+                        eventType: 'sale',
+                        conditionKey: 'payment_mode',
+                        conditionValue: classifyPaymentMode(primaryPaymentMethod),
+                        sourceModule: 'sales',
+                        sourceType: 'sale',
+                        sourceId: sale.id,
+                        amount: dto.amountPaid,
+                        description: `Auto-posted paid portion — sale ${sale.serial_number}`,
+                        referenceNumber: sale.serial_number,
+                        storeId: dto.storeId,
+                    });
+                }
+            } else {
+                const primaryPaymentMethod = dto.payments?.[0]?.paymentMethod?.toLowerCase() || 'cash';
+                const paymentMode = classifyPaymentMode(primaryPaymentMethod);
+
+                posting = await autoPostFromRules({
+                    tx,
+                    tenantId,
+                    eventType: 'sale',
+                    conditionKey: 'payment_mode',
+                    conditionValue: paymentMode,
+                    sourceModule: 'sales',
+                    sourceType: 'sale',
+                    sourceId: sale.id,
+                    amount: Number(sale.total_amount),
+                    description: `Auto-posted sale ${sale.serial_number}`,
+                    referenceNumber: sale.serial_number,
+                    storeId: dto.storeId,
+                });
+            }
 
             return {
                 ...sale,

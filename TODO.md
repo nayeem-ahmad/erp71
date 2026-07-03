@@ -355,6 +355,9 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Sales credit due — allow keeping due on New Sale and POS when a customer is selected and `due_balance + new due <= credit_limit`; backend validates, records `CREDIT_SALE` ledger entry, updates `due_balance`, and posts AR for the credit portion; shared `customer-credit` helpers + unit tests — done 2026-07-03
+- [x] Merge dev → main + deploy (`a6c44ee`) — synced local `dev` with `origin/dev` (#313 demo data); fast-forwarded `main`; VPS `/opt/erp71` `scripts/deploy.sh main`; `prisma db push` on backend start; smoke checks green at `api.erp71.com` / `app.erp71.com` — done 2026-07-03
+- [x] Demo data loading and clearing for shop owners (#313) — `seed-demo.ts` + tenant APIs; Settings → Data page (`/settings/data`) to load/clear demo catalog, customers, sales; i18n en/bn/ms — done 2026-07-03
 - [x] Per-tenant nav layout reset (platform admin) — `TenantNavLayout` model; resolution order tenant pin/custom → platform → code default; admin APIs reset one tenant or all; UI on Tenants detail + Navigation settings — done 2026-07-03
 - [x] Sales sidebar restructure — top-level: Overview, Sales, Sales Returns, Customer Payments (+ POS/New Entry); removed Storefront & Customers & CRM subgroups; online orders merged into Sales Orders page (Sales Orders | Online Orders tabs); `/storefront` redirects to orders tab; Customers, Cashier Sessions, Storefront Settings → Setup; Customer Ledger, Due Aging, Loyalty → Sales Reports; default nav layout + hub updated — done 2026-07-03
 - [x] Sales nav + optional POS — sidebar/list label "All Sales" → "Sales"; sales list primary action is New Sales Entry (`/sales/new` compact UI); POS secondary/optional; shop owner can disable POS via `SalesSettings.pos_enabled` (migration, API, settings toggle); sidebar/hub/list hide POS link; `/sales/pos` route guard redirects to list; i18n en/bn/ms + unit tests — done 2026-07-03

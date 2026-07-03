@@ -18,6 +18,7 @@ import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
 import { printSalesInvoice, PAPER_SIZES, type PaperSize } from '@/lib/sales-invoice-printer';
 import { toast } from '@/lib/toast';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
+import { canKeepDue, creditDueAmount } from '@/lib/customer-credit';
 
 export default function NewSalePage() {
     const { t } = useI18n();
@@ -178,16 +179,14 @@ export default function NewSalePage() {
 
         const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
         const balance = totals.total - totalPaid;
+        const creditDue = creditDueAmount(totals.total, totalPaid);
+        const keepDueCheck = canKeepDue(customer, creditDue);
 
-        if (Math.abs(balance) > 0.01) {
-            errors.push(
-                balance > 0
-                    ? `Payment amount is ৳${balance.toFixed(2)} short of the total`
-                    : `Payment amount exceeds total by ৳${Math.abs(balance).toFixed(2)}`
-            );
-        }
-
-        if (payments.length === 0) {
+        if (balance < -0.01) {
+            errors.push(`Payment amount exceeds total by ৳${Math.abs(balance).toFixed(2)}`);
+        } else if (creditDue > 0.01 && !keepDueCheck.allowed) {
+            errors.push(keepDueCheck.reason ?? `Payment amount is ৳${creditDue.toFixed(2)} short of the total`);
+        } else if (creditDue <= 0.01 && payments.length === 0) {
             errors.push('Please add at least one payment method');
         }
 
@@ -308,7 +307,12 @@ export default function NewSalePage() {
                             tenantVatRate={salesSettings?.tenant?.default_vat_rate || 0}
                         />
                         <div className="border-t pt-3">
-                            <PaymentSection payments={payments} total={totals.total} onPaymentChange={updatePayment} />
+                            <PaymentSection
+                                payments={payments}
+                                total={totals.total}
+                                customer={customer}
+                                onPaymentChange={updatePayment}
+                            />
                         </div>
                     </div>
 

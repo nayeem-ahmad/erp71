@@ -10,6 +10,7 @@ import { formatBDT } from '@/lib/format';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { savePendingSale, cacheProducts, getCachedProducts } from '@/lib/pos-db';
 import { useI18n } from '@/lib/i18n';
+import { canKeepDue, creditDueAmount } from '@/lib/customer-credit';
 
 type Notification = { id: string; type: 'success' | 'error' | 'info'; message: string };
 
@@ -311,6 +312,8 @@ export default function POSPage() {
     const total = Math.max(0, preLoyaltyTotal - loyaltyDiscount);
 
     const totalPaid = (cashAmount || 0) + (bkashAmount || 0) + (cardAmount || 0);
+    const creditDue = creditDueAmount(total, totalPaid);
+    const keepDueCheck = canKeepDue(selectedCustomer, creditDue);
     const changeDue = Math.max(0, totalPaid - total);
 
     const handleApplyDiscountCode = async () => {
@@ -395,8 +398,8 @@ export default function POSPage() {
     };
 
     const handleConfirmCheckout = async () => {
-        if (totalPaid < total) {
-            addNotification(t.pos.notifications.insufficientPaid, 'error');
+        if (creditDue > 0.01 && !keepDueCheck.allowed) {
+            addNotification(keepDueCheck.reason ?? t.pos.notifications.insufficientPaid, 'error');
             return;
         }
 
@@ -1151,9 +1154,25 @@ export default function POSPage() {
                                     <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">{t.pos.payment.totalPaid}</span>
                                     <span className="text-lg font-black text-gray-900">{formatBDT(totalPaid)}</span>
                                 </div>
-                                <div className={`p-3 rounded-2xl flex flex-col justify-center ${totalPaid < total ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
-                                    <span className={`text-[10px] font-black uppercase tracking-widest mb-1 ${totalPaid < total ? 'text-red-400' : 'text-green-500'}`}>
-                                        {totalPaid < total ? t.pos.payment.remaining : t.pos.payment.changeDue}
+                                <div className={`p-3 rounded-2xl flex flex-col justify-center ${
+                                    creditDue > 0.01
+                                        ? keepDueCheck.allowed
+                                            ? 'bg-amber-50 text-amber-700'
+                                            : 'bg-red-50 text-red-600'
+                                        : 'bg-green-50 text-green-600'
+                                }`}>
+                                    <span className={`text-[10px] font-black uppercase tracking-widest mb-1 ${
+                                        creditDue > 0.01
+                                            ? keepDueCheck.allowed
+                                                ? 'text-amber-500'
+                                                : 'text-red-400'
+                                            : 'text-green-500'
+                                    }`}>
+                                        {creditDue > 0.01
+                                            ? keepDueCheck.allowed
+                                                ? t.pos.payment.remaining
+                                                : t.pos.payment.remaining
+                                            : t.pos.payment.changeDue}
                                     </span>
                                     <span className="text-lg font-black">{formatBDT(Math.abs(totalPaid - total))}</span>
                                 </div>

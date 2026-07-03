@@ -130,10 +130,16 @@ export default function CustomerSelection({ customer, setCustomer }: CustomerSel
                             <span>{customer.address}</span>
                         </>
                     ) : null}
+                    {customer.due_balance != null && Number(customer.due_balance) > 0 ? (
+                        <>
+                            <span className="mx-1.5 text-gray-300">·</span>
+                            <span>Due ৳{Number(customer.due_balance).toLocaleString()}</span>
+                        </>
+                    ) : null}
                     {customer.credit_limit ? (
                         <>
                             <span className="mx-1.5 text-gray-300">·</span>
-                            <span>Credit ৳{Number(customer.credit_limit).toLocaleString()}</span>
+                            <span>Limit ৳{Number(customer.credit_limit).toLocaleString()}</span>
                         </>
                     ) : null}
                     {customer.loyalty_points ? (

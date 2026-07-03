@@ -28,6 +28,9 @@ describe('SalesService', () => {
       product: {
         findMany: jest.fn(),
       },
+      productPrice: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       sale: {
         create: jest.fn(),
         findFirst: jest.fn(),
@@ -47,6 +50,10 @@ describe('SalesService', () => {
       },
       customer: {
         update: jest.fn(),
+        findFirst: jest.fn(),
+      },
+      customerCreditTransaction: {
+        create: jest.fn(),
       },
       tenant: {
         findUnique: jest.fn(),
@@ -135,7 +142,7 @@ describe('SalesService', () => {
       });
 
       expect(tx.saleItem.create).toHaveBeenCalledWith({
-        data: { sale_id: 'sale-1', product_id: 'prod-1', quantity: 2, price_at_sale: 15 },
+        data: { sale_id: 'sale-1', product_id: 'prod-1', quantity: 2, price_at_sale: 15, unit_cost_at_sale: null },
       });
       expect(applyInventoryMovement).toHaveBeenCalledWith(
         tx,
@@ -201,6 +208,77 @@ describe('SalesService', () => {
       });
 
       expect(tx.customer.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('create() — customer credit / keeping due', () => {
+    it('records a credit sale when payment is short and within credit limit', async () => {
+      tx.customer.findFirst.mockResolvedValue({
+        id: 'cust-1',
+        due_balance: 1000,
+        credit_limit: 5000,
+      });
+      tx.sale.create.mockResolvedValue({ id: 'sale-credit', serial_number: 'SL-1', total_amount: 1000 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.customer.update.mockResolvedValue({});
+      tx.customerCreditTransaction.create.mockResolvedValue({});
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        customerId: 'cust-1',
+        totalAmount: 1000,
+        amountPaid: 600,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 1000 }],
+        payments: [{ paymentMethod: 'CASH', amount: 600 }],
+      });
+
+      expect(tx.customerCreditTransaction.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          customer_id: 'cust-1',
+          type: 'CREDIT_SALE',
+          amount: 400,
+          balance_after: 1400,
+          reference_type: 'SALE',
+          reference_id: 'sale-credit',
+        }),
+      });
+      expect(autoPostFromRules).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conditionValue: 'credit',
+          amount: 400,
+        }),
+      );
+    });
+
+    it('rejects keeping due when credit limit would be exceeded', async () => {
+      tx.customer.findFirst.mockResolvedValue({
+        id: 'cust-1',
+        due_balance: 4800,
+        credit_limit: 5000,
+      });
+
+      await expect(
+        service.create('tenant-1', 'user-1', {
+          storeId: 'store-1',
+          customerId: 'cust-1',
+          totalAmount: 1000,
+          amountPaid: 600,
+          items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 1000 }],
+          payments: [{ paymentMethod: 'CASH', amount: 600 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects keeping due without a customer', async () => {
+      await expect(
+        service.create('tenant-1', 'user-1', {
+          storeId: 'store-1',
+          totalAmount: 1000,
+          amountPaid: 600,
+          items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 1000 }],
+          payments: [{ paymentMethod: 'CASH', amount: 600 }],
+        }),
+      ).rejects.toThrow(/Select a customer/);
     });
   });
 
