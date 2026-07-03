@@ -1330,6 +1330,13 @@ export const api = {
         }),
     resetAdminNavLayout: (scope: 'tenant' | 'platform_admin') =>
         fetchWithAuth(`/admin/navigation/layout/${scope}/reset`, { method: 'POST' }),
+    getAdminTenantNavOverrides: () => fetchWithAuth('/admin/navigation/tenant-overrides'),
+    getAdminTenantNavOverride: (tenantId: string) =>
+        fetchWithAuth(`/admin/navigation/tenant-overrides/${tenantId}`),
+    resetAdminTenantNavLayout: (tenantId: string) =>
+        fetchWithAuth(`/admin/navigation/tenant-overrides/${tenantId}/reset`, { method: 'POST' }),
+    resetAllAdminTenantNavLayouts: () =>
+        fetchWithAuth('/admin/navigation/tenant-overrides/reset-all', { method: 'POST' }),
     getAdminSubscriptionPlans: () => fetchWithAuth('/admin/subscription-plans'),
     getAdminSubscriptionPlanRegistry: () => fetchWithAuth('/admin/subscription-plans/registry'),
     updateAdminSubscriptionPlan: (code: string, payload: unknown) =>

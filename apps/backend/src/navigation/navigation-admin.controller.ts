@@ -48,4 +48,27 @@ export class NavigationAdminController {
     ) {
         return this.navigation.resetLayout(scope, req.user.userId);
     }
+
+    @Get('tenant-overrides')
+    listTenantOverrides() {
+        return this.navigation.listTenantNavOverrides();
+    }
+
+    @Post('tenant-overrides/reset-all')
+    resetAllTenantOverrides(@Request() req: { user: { userId: string } }) {
+        return this.navigation.resetAllTenantNavLayouts(req.user.userId);
+    }
+
+    @Get('tenant-overrides/:tenantId')
+    getTenantOverride(@Param('tenantId') tenantId: string) {
+        return this.navigation.getTenantNavOverride(tenantId);
+    }
+
+    @Post('tenant-overrides/:tenantId/reset')
+    resetTenantOverride(
+        @Param('tenantId') tenantId: string,
+        @Request() req: { user: { userId: string } },
+    ) {
+        return this.navigation.resetTenantNavLayout(tenantId, req.user.userId);
+    }
 }

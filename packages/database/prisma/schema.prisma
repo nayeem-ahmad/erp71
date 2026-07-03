@@ -409,6 +409,7 @@ model Tenant {
   aiUsageLogs       AiUsageLog[]
   paymentMethods    PaymentMethod[]
   salesSettings     SalesSettings?
+  navLayout         TenantNavLayout?
   referralSignup    ReferralSignup?
 
   @@index([deleted_at])
@@ -441,6 +442,16 @@ model SalesSettings {
   updated_at             DateTime @updatedAt
 
   tenant                 Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+}
+
+/// Per-tenant sidebar override. layout=null means pinned to built-in code defaults.
+model TenantNavLayout {
+  tenant_id  String   @id
+  layout     Json?
+  updated_at DateTime @updatedAt
+  updated_by String?
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 }
 
 model TenantUser {

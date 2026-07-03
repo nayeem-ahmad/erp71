@@ -2,7 +2,7 @@
 
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, Building2, CheckCircle, Loader2, LogIn, Plus, Search, ShieldCheck, Trash2, Users, UserX } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Building2, CheckCircle, Loader2, LogIn, Plus, RotateCcw, Search, ShieldCheck, Trash2, Users, UserX } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
@@ -56,6 +56,8 @@ export default function AdminTenantsPage() {
     const [isSuspending, setIsSuspending] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isImpersonating, setIsImpersonating] = useState(false);
+    const [tenantNavKind, setTenantNavKind] = useState<'none' | 'custom' | 'pinned_default'>('none');
+    const [isResettingTenantNav, setIsResettingTenantNav] = useState(false);
 
     const mc = m.createModal;
 
@@ -161,11 +163,13 @@ export default function AdminTenantsPage() {
         setSelectedTenantId(tenantId);
         setError('');
         try {
-            const [detail] = await Promise.all([
+            const [detail, navOverride] = await Promise.all([
                 api.getAdminTenant(tenantId),
-                loadLedger(tenantId),
+                api.getAdminTenantNavOverride(tenantId).catch(() => null),
             ]);
+            await loadLedger(tenantId);
             setSelectedTenant(detail);
+            setTenantNavKind(navOverride?.kind ?? 'none');
         } catch (err: any) {
             setError(err.message || m.loadDetailFailed);
         }
@@ -276,6 +280,22 @@ export default function AdminTenantsPage() {
     };
 
     const lc = m.localizationControls;
+    const nc = m.navLayoutControls;
+
+    const resetTenantNavLayout = async () => {
+        if (!selectedTenant) return;
+        if (!window.confirm(formatMessage(nc.resetConfirm, { name: selectedTenant.name }))) return;
+        setIsResettingTenantNav(true);
+        try {
+            await api.resetAdminTenantNavLayout(selectedTenant.id);
+            setTenantNavKind('pinned_default');
+            showToast(formatMessage(nc.resetSuccess, { name: selectedTenant.name }));
+        } catch (err: any) {
+            setError(err.message || nc.resetFailed);
+        } finally {
+            setIsResettingTenantNav(false);
+        }
+    };
 
     const saveLocalization = async () => {
         if (!selectedTenant) return;
@@ -691,6 +711,30 @@ export default function AdminTenantsPage() {
                                     >
                                         {isSavingLocalization ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                                         {lc.save}
+                                    </button>
+                                </div>
+
+                                <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5 space-y-4">
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{nc.badge}</p>
+                                        <h3 className="mt-2 text-lg font-black tracking-tight text-slate-900">{nc.title}</h3>
+                                        <p className="mt-1 text-xs text-slate-600">{nc.description}</p>
+                                    </div>
+                                    <p className="text-sm text-slate-700">
+                                        {tenantNavKind === 'custom'
+                                            ? nc.status.custom
+                                            : tenantNavKind === 'pinned_default'
+                                                ? nc.status.pinned
+                                                : nc.status.inherit}
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={resetTenantNavLayout}
+                                        disabled={isResettingTenantNav}
+                                        className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100 disabled:opacity-60"
+                                    >
+                                        {isResettingTenantNav ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                                        {nc.reset}
                                     </button>
                                 </div>
 

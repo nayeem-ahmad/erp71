@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, CheckCircle, XCircle, RotateCcw } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import NavLayoutEditor from '@/components/admin/NavLayoutEditor';
@@ -48,6 +48,16 @@ export default function PlatformNavigationSettingsPage() {
     const [resetting, setResetting] = useState(false);
     const [isDefault, setIsDefault] = useState(true);
     const [toast, setToast] = useState<Toast>(null);
+    const [tenantOverrides, setTenantOverrides] = useState<Array<{
+        tenantId: string;
+        tenantName: string;
+        kind: 'custom' | 'pinned_default';
+        updatedAt: string;
+    }>>([]);
+    const [loadingOverrides, setLoadingOverrides] = useState(true);
+    const [resettingAllTenants, setResettingAllTenants] = useState(false);
+
+    const tenantOverrideCopy = m.tenantOverrides;
 
     const loadLayout = useCallback(async (nextScope: NavScope) => {
         setLoading(true);
@@ -63,9 +73,25 @@ export default function PlatformNavigationSettingsPage() {
         }
     }, [t.admin.platformSettings.common.loadFailed]);
 
+    const loadTenantOverrides = useCallback(async () => {
+        setLoadingOverrides(true);
+        try {
+            const rows = await api.getAdminTenantNavOverrides();
+            setTenantOverrides(Array.isArray(rows) ? rows : []);
+        } catch {
+            setTenantOverrides([]);
+        } finally {
+            setLoadingOverrides(false);
+        }
+    }, []);
+
     useEffect(() => {
         loadLayout(scope);
     }, [scope, loadLayout]);
+
+    useEffect(() => {
+        loadTenantOverrides();
+    }, [loadTenantOverrides]);
 
     const handleSave = async () => {
         setSaving(true);
@@ -95,6 +121,29 @@ export default function PlatformNavigationSettingsPage() {
             setResetting(false);
         }
     };
+
+    const handleResetAllTenants = async () => {
+        if (!window.confirm(tenantOverrideCopy.resetAllConfirm)) return;
+        setResettingAllTenants(true);
+        try {
+            const result = await api.resetAllAdminTenantNavLayouts();
+            await loadTenantOverrides();
+            window.dispatchEvent(new CustomEvent('erp71:nav-layout-updated'));
+            setToast({
+                type: 'success',
+                message: tenantOverrideCopy.resetAllSuccess.replace(
+                    '{count}',
+                    String(result?.resetCount ?? 0),
+                ),
+            });
+        } catch {
+            setToast({ type: 'error', message: tenantOverrideCopy.resetAllFailed });
+        } finally {
+            setResettingAllTenants(false);
+        }
+    };
+
+    const overrideRows = useMemo(() => tenantOverrides, [tenantOverrides]);
 
     const toggleExpand = (id: string) => {
         setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -180,6 +229,60 @@ export default function PlatformNavigationSettingsPage() {
                             {m.resetToDefaults}
                         </button>
                     </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h2 className="text-base font-bold text-gray-900">{tenantOverrideCopy.title}</h2>
+                            <p className="mt-1 text-sm text-gray-500">{tenantOverrideCopy.description}</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleResetAllTenants}
+                            disabled={resettingAllTenants || loadingOverrides}
+                            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                            {resettingAllTenants ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                            {tenantOverrideCopy.resetAll}
+                        </button>
+                    </div>
+
+                    {loadingOverrides ? (
+                        <div className="flex items-center justify-center py-8 text-gray-500">
+                            <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                            {t.admin.platformSettings.common.loading}
+                        </div>
+                    ) : overrideRows.length === 0 ? (
+                        <p className="text-sm text-gray-500 py-4">{tenantOverrideCopy.empty}</p>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b text-left text-gray-500">
+                                        <th className="py-2 pr-4 font-semibold">{tenantOverrideCopy.columns.tenant}</th>
+                                        <th className="py-2 pr-4 font-semibold">{tenantOverrideCopy.columns.kind}</th>
+                                        <th className="py-2 font-semibold">{tenantOverrideCopy.columns.updated}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {overrideRows.map((row) => (
+                                        <tr key={row.tenantId} className="border-b border-gray-50">
+                                            <td className="py-2 pr-4 font-medium text-gray-900">{row.tenantName}</td>
+                                            <td className="py-2 pr-4 text-gray-600">
+                                                {row.kind === 'custom'
+                                                    ? tenantOverrideCopy.kinds.custom
+                                                    : tenantOverrideCopy.kinds.pinned_default}
+                                            </td>
+                                            <td className="py-2 text-gray-500">
+                                                {new Date(row.updatedAt).toLocaleString()}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
