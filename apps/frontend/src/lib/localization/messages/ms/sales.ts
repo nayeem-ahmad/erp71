@@ -244,7 +244,7 @@ export const salesMessages = {
             title: "Jualan",
             subtitle: "Semua transactions",
             list: {
-                title: "Semua Jualan",
+                title: "Jualan",
                 subtitle: "Semua transactions",
             },
             hub: {
@@ -260,7 +260,7 @@ export const salesMessages = {
                 setup: "Persediaan",
                 links: {
                     pos: { title: "Titik Jualan", description: "Jualan kaunter dan walk-in." },
-                    allSales: { title: "Semua Jualan", description: "Cari dan semak semua transaksi." },
+                    allSales: { title: "Jualan", description: "Cari dan semak semua transaksi." },
                     newSale: { title: "Entri Jualan Baharu", description: "Cipta jualan manual." },
                     cashierSessions: { title: "Sesi Juruwang", description: "Buka dan tutup sesi daftar." },
                     customerPayments: { title: "Bayaran Pelanggan", description: "Rekod bayaran baki tertunggak." },
@@ -357,6 +357,10 @@ export const salesMessages = {
         orders: {
             title: "Jualan Pesanan",
             subtitle: "Urus fulfillment and deposits",
+            tabs: {
+                salesOrders: "Pesanan Jualan",
+                onlineOrders: "Pesanan Dalam Talian",
+            },
             newOrder: "Baharu Pesanan",
             columns: {
                 orderNumber: "Pesanan #",

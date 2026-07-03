@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Receipt, Eye, Edit2, Plus } from 'lucide-react';
+import { Receipt, Eye, Edit2, Plus, ShoppingCart } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import Link from 'next/link';
@@ -11,6 +11,8 @@ import { PostingBadge } from '@/components/PostingBadge';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { isPosEnabled } from '@/lib/sales-settings';
+import { routes } from '@/lib/routes';
 
 interface Sale {
     id: string;
@@ -39,9 +41,13 @@ export default function SalesPage() {
     const { t, locale } = useI18n();
     const [sales, setSales] = useState<Sale[]>([]);
     const [loading, setLoading] = useState(true);
+    const [posEnabled, setPosEnabled] = useState(true);
 
     useEffect(() => {
         loadSales();
+        api.getSalesSettings()
+            .then((settings) => setPosEnabled(isPosEnabled(settings)))
+            .catch(() => setPosEnabled(true));
     }, []);
 
     const loadSales = async () => {
@@ -224,19 +230,21 @@ export default function SalesPage() {
                     actions={
                         <>
                             <Link
-                                href="/sales/new"
-                                className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:-translate-y-0.5 active:translate-y-0"
-                            >
-                                <Plus className="w-4 h-4 mr-2" />
-                                New Sales Entry
-                            </Link>
-                            <Link
-                                href="/sales/pos"
+                                href={routes.sales.new}
                                 className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
                             >
                                 <Plus className="w-4 h-4 mr-2" />
-                                {t.sales.newSale}
+                                {t.sidebar.items.newSalesEntry}
                             </Link>
+                            {posEnabled ? (
+                                <Link
+                                    href={routes.sales.pos}
+                                    className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:-translate-y-0.5 active:translate-y-0"
+                                >
+                                    <ShoppingCart className="w-4 h-4 mr-2" />
+                                    {t.sidebar.items.pos}
+                                </Link>
+                            ) : null}
                         </>
                     }
                 />

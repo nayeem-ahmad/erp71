@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsBoolean } from 'class-validator';
 
 export enum PaperSize {
   A4 = 'A4',
@@ -16,6 +16,10 @@ export class UpdateSalesSettingsDto {
   @IsOptional()
   @IsString()
   reference_number_format?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  pos_enabled?: boolean;
 }
 
 export class SalesSettingsResponseDto {
@@ -23,6 +27,7 @@ export class SalesSettingsResponseDto {
   tenant_id: string;
   paper_size: PaperSize;
   reference_number_format: string;
+  pos_enabled: boolean;
   created_at: Date;
   updated_at: Date;
 }

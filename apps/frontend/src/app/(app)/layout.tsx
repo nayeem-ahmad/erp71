@@ -39,6 +39,7 @@ import { clampLocaleToTenant } from '@/lib/tenant-locales';
 import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
 import { hasPermission, isOwner } from '@/lib/permissions';
+import { isPosEnabled } from '@/lib/sales-settings';
 
 type DashboardLayoutProps = Readonly<{ children: React.ReactNode }>;
 
@@ -58,6 +59,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const [platformFeatures, setPlatformFeatures] = useState<PlatformFeatures>(DEFAULT_PLATFORM_FEATURES);
     const [tenantNavLayout, setTenantNavLayout] = useState<NavLayoutNode[]>(DEFAULT_TENANT_NAV_LAYOUT);
     const [platformAdminNavLayout, setPlatformAdminNavLayout] = useState<NavLayoutNode[]>(DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT);
+    const [posEnabled, setPosEnabled] = useState(true);
 
     const refreshNavLayouts = useCallback(() => {
         Promise.all([
@@ -125,6 +127,26 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         const done = localStorage.getItem('onboarding_complete');
         if (!done && pathname === routes.home) setShowOnboardingBanner(true);
     }, [pathname, inPlatformAdminMode]);
+
+    const refreshSalesSettings = useCallback(() => {
+        if (inPlatformAdminMode) {
+            setPosEnabled(true);
+            return;
+        }
+        api.getSalesSettings()
+            .then((settings) => setPosEnabled(isPosEnabled(settings)))
+            .catch(() => setPosEnabled(true));
+    }, [inPlatformAdminMode]);
+
+    useEffect(() => {
+        refreshSalesSettings();
+    }, [refreshSalesSettings, workspaceEpoch]);
+
+    useEffect(() => {
+        const onSalesSettingsUpdated = () => refreshSalesSettings();
+        window.addEventListener('erp71:sales-settings-updated', onSalesSettingsUpdated);
+        return () => window.removeEventListener('erp71:sales-settings-updated', onSalesSettingsUpdated);
+    }, [refreshSalesSettings]);
 
     useEffect(() => {
         if (!mobileNavOpen) return;
@@ -264,7 +286,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         if (!platformFeatures.support && pathname === routes.support) {
             router.replace(routes.home);
         }
-    }, [accountingOnlyMode, canAccessAccounting, canAccessAccountingAdvanced, canAccessInventoryReports, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, platformFeatures.help, platformFeatures.support, router, user]);
+        if (!posEnabled && pathname.startsWith(routes.sales.pos)) {
+            router.replace(routes.sales.list);
+        }
+    }, [accountingOnlyMode, canAccessAccounting, canAccessAccountingAdvanced, canAccessInventoryReports, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, platformFeatures.help, platformFeatures.support, posEnabled, router, user]);
 
     const activeStore =
         tenantStores.find((store: { id: string }) => store.id === activeStoreId) ?? tenantStores[0];
@@ -303,6 +328,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 supportEnabled={platformFeatures.support}
                 activePlanCode={activePlanCode}
                 accountingOnlyMode={accountingOnlyMode}
+                posEnabled={posEnabled}
                 compactNav={useCompactChrome}
                 isOpen={mobileNavOpen}
                 onClose={() => setMobileNavOpen(false)}

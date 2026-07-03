@@ -76,7 +76,7 @@ export const componentsMessages = {
             'sales-entry': 'New Sales Entry',
             pos: 'POS',
             sales: 'Sales',
-            'all-sales': 'All Sales',
+            'all-sales': 'Sales',
             'customer-payment': 'Customer Payment',
             'supplier-payment': 'Supplier Payment',
             'customer-ledger': 'Customer Ledger',

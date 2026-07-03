@@ -257,14 +257,14 @@ describe('Sidebar — Story 30.1', () => {
     it('expands and collapses all menu groups', () => {
         render(<Sidebar canAccessAccounting canAccessInventoryReports canAccessAccountingAdvanced />);
 
-        expect(screen.queryByText('All Sales')).not.toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: /^Sales$/ })).not.toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: /expand all/i }));
-        expect(screen.getByText('All Sales')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /^Sales$/ })).toHaveAttribute('href', '/sales/list');
         expect(screen.getByText('Trial Balance')).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: /collapse all/i }));
-        expect(screen.queryByText('All Sales')).not.toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: /^Sales$/ })).not.toBeInTheDocument();
         expect(screen.queryByText('Trial Balance')).not.toBeInTheDocument();
     });
 });

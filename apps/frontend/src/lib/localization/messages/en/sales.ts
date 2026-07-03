@@ -244,7 +244,7 @@ export const salesMessages = {
         title: 'Sales',
         subtitle: 'All transactions',
         list: {
-            title: 'All Sales',
+            title: 'Sales',
             subtitle: 'All transactions',
         },
         hub: {
@@ -260,14 +260,14 @@ export const salesMessages = {
             setup: 'Setup',
             links: {
                 pos: { title: 'Point of Sale', description: 'Fast checkout for walk-in and counter sales.' },
-                allSales: { title: 'All Sales', description: 'Browse, search, and review every completed transaction.' },
+                allSales: { title: 'Sales', description: 'Browse, search, and review every completed transaction.' },
                 newSale: { title: 'New Sales Entry', description: 'Create a manual sale with line items and payments.' },
                 cashierSessions: { title: 'Cashier Sessions', description: 'Open and close register sessions with cash counts.' },
                 customerPayments: { title: 'Customer Payments', description: 'Record payments against customer outstanding balances.' },
                 customerLedger: { title: 'Customer Ledger', description: 'Running balance and transaction history per customer.' },
                 dueAging: { title: 'Due Aging', description: 'See which customers owe money and for how long.' },
                 quotes: { title: 'Sales Quotations', description: 'Prepare estimates and track quote status.' },
-                orders: { title: 'Sales Orders', description: 'Confirm orders, deposits, and fulfillment progress.' },
+                orders: { title: 'Sales Orders', description: 'In-store orders and online storefront orders in one place.' },
                 delivery: { title: 'Delivery', description: 'Schedule and track outbound deliveries.' },
                 returns: { title: 'Sales Returns', description: 'Process refunds and restore stock from returns.' },
                 warrantyClaims: { title: 'Warranty Claims', description: 'Track customer warranty submissions and resolutions.' },
@@ -357,6 +357,10 @@ export const salesMessages = {
     orders: {
         title: 'Sales Orders',
         subtitle: 'Manage fulfillment and deposits',
+        tabs: {
+            salesOrders: 'Sales Orders',
+            onlineOrders: 'Online Orders',
+        },
         newOrder: 'New Order',
         columns: {
             orderNumber: 'Order #',

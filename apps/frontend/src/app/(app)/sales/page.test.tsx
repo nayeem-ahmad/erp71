@@ -32,6 +32,7 @@ jest.mock('@/lib/api', () => ({
                 subscription: { plan: { code: 'BASIC', features_json: {} } },
             }],
         }),
+        getSalesSettings: jest.fn().mockResolvedValue({ pos_enabled: true }),
     },
 }));
 
@@ -49,7 +50,7 @@ describe('SalesHubPage', () => {
         render(<SalesHubPage />);
         await waitFor(() => {
             expect(screen.getByRole('link', { name: /Point of Sale/i })).toHaveAttribute('href', '/sales/pos');
-            expect(screen.getByRole('link', { name: /All Sales/i })).toHaveAttribute('href', '/sales/list');
+            expect(screen.getByRole('link', { name: /^Sales$/i })).toHaveAttribute('href', '/sales/list');
         });
     });
 

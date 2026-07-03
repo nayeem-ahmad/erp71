@@ -20,10 +20,15 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import OrdersPage from './page';
 
 jest.mock('next/navigation', () => ({
-    useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
+    useRouter: () => ({ push: jest.fn(), back: jest.fn(), replace: jest.fn() }),
     usePathname: () => '/sales/orders',
-    useSearchParams: () => ({ get: jest.fn().mockReturnValue(null) }),
+    useSearchParams: () => new URLSearchParams(),
     useParams: () => ({}),
+}));
+
+jest.mock('./StorefrontOrdersPanel', () => ({
+    __esModule: true,
+    default: () => <div data-testid="storefront-orders-panel">Online Orders</div>,
 }));
 
 jest.mock('next/link', () => ({

@@ -244,7 +244,7 @@ export const salesMessages = {
             title: "বিক্রয়",
             subtitle: "সব transactions",
             list: {
-                title: "সব বিক্রয়",
+                title: "বিক্রয়",
                 subtitle: "সব transactions",
             },
             hub: {
@@ -260,7 +260,7 @@ export const salesMessages = {
                 setup: "সেটআপ",
                 links: {
                     pos: { title: "পয়েন্ট অফ সেল", description: "কাউন্টার ও ওয়াক-ইন বিক্রয়।" },
-                    allSales: { title: "সব বিক্রয়", description: "সব লেনদেন খুঁজুন ও পর্যালোচনা করুন।" },
+                    allSales: { title: "বিক্রয়", description: "সব লেনদেন খুঁজুন ও পর্যালোচনা করুন।" },
                     newSale: { title: "নতুন বিক্রয় এন্ট্রি", description: "ম্যানুয়াল বিক্রয় তৈরি করুন।" },
                     cashierSessions: { title: "ক্যাশিয়ার সেশন", description: "রেজিস্টার খোলা ও বন্ধ করুন।" },
                     customerPayments: { title: "গ্রাহক পেমেন্ট", description: "বকেয়া বিলের পেমেন্ট রেকর্ড করুন।" },
@@ -357,6 +357,10 @@ export const salesMessages = {
         orders: {
             title: "বিক্রয় অর্ডার",
             subtitle: "পরিচালনা fulfillment and deposits",
+            tabs: {
+                salesOrders: "বিক্রয় অর্ডার",
+                onlineOrders: "অনলাইন অর্ডার",
+            },
             newOrder: "নতুন অর্ডার",
             columns: {
                 orderNumber: "অর্ডার #",

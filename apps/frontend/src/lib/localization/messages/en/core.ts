@@ -254,7 +254,7 @@ export const coreMessages = {
         items: {
             pos: 'POS',
             sales: 'Sales',
-            allSales: 'All Sales',
+            allSales: 'Sales',
             newSalesEntry: 'New Sales Entry',
             dueAging: 'Due Aging',
             crmTasks: 'Tasks & Follow-ups',

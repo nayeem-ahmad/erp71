@@ -5,7 +5,6 @@ import {
     ArrowLeftRight,
     BarChart3,
     BookOpen,
-    CheckSquare,
     Clock,
     ClipboardList,
     FileText,
@@ -13,7 +12,6 @@ import {
     Gift,
     Globe,
     MapPin,
-    Megaphone,
     Package,
     Settings,
     ShieldCheck,
@@ -28,23 +26,18 @@ import { api } from '@/lib/api';
 import { canAccessInventoryAdvancedReports } from '@/lib/plan-entitlements';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
+import { isPosEnabled } from '@/lib/sales-settings';
 
 const SALES_HUB_SECTIONS: HubSectionConfig[] = [
     {
         sectionKey: 'dailyOperations',
         links: [
-            { href: routes.sales.pos, key: 'pos', icon: ShoppingCart, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
+            { href: routes.sales.root, key: 'overview', icon: TrendingUp, accent: 'bg-slate-50 text-slate-700 border-slate-100' },
             { href: routes.sales.list, key: 'allSales', icon: TrendingUp, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
-            { href: routes.sales.new, key: 'newSale', icon: FileText, accent: 'bg-sky-50 text-sky-700 border-sky-100' },
-            { href: routes.sales.cashierSessions, key: 'cashierSessions', icon: Clock, accent: 'bg-violet-50 text-violet-700 border-violet-100' },
-        ],
-    },
-    {
-        sectionKey: 'receivables',
-        links: [
+            { href: routes.sales.returns, key: 'returns', icon: ArrowLeftRight, accent: 'bg-orange-50 text-orange-700 border-orange-100' },
             { href: routes.sales.customerPayments, key: 'customerPayments', icon: Wallet, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
-            { href: routes.sales.customerLedger, key: 'customerLedger', icon: BookOpen, accent: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
-            { href: routes.sales.customerDueAging, key: 'dueAging', icon: Clock, accent: 'bg-rose-50 text-rose-700 border-rose-100' },
+            { href: routes.sales.pos, key: 'pos', icon: ShoppingCart, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
+            { href: routes.sales.new, key: 'newSale', icon: FileText, accent: 'bg-sky-50 text-sky-700 border-sky-100' },
         ],
     },
     {
@@ -53,32 +46,19 @@ const SALES_HUB_SECTIONS: HubSectionConfig[] = [
             { href: routes.sales.quotes, key: 'quotes', icon: FileText, accent: 'bg-sky-50 text-sky-700 border-sky-100' },
             { href: routes.sales.orders, key: 'orders', icon: ClipboardList, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
             { href: routes.sales.delivery, key: 'delivery', icon: MapPin, accent: 'bg-cyan-50 text-cyan-700 border-cyan-100' },
-            { href: routes.sales.returns, key: 'returns', icon: ArrowLeftRight, accent: 'bg-orange-50 text-orange-700 border-orange-100' },
             { href: routes.sales.warrantyClaims, key: 'warrantyClaims', icon: ShieldCheck, accent: 'bg-purple-50 text-purple-700 border-purple-100' },
         ],
     },
     {
-        sectionKey: 'storefront',
-        links: [
-            { href: routes.storefront.root, key: 'storefrontOrders', icon: ShoppingCart, accent: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
-            { href: routes.storefront.settings, key: 'storefrontSettings', icon: Globe, accent: 'bg-violet-50 text-violet-700 border-violet-100' },
-        ],
-    },
-    {
-        sectionKey: 'customersCrm',
-        links: [
-            { href: routes.sales.customers, key: 'customers', icon: Users, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
-            { href: routes.sales.loyalty, key: 'loyalty', icon: Gift, accent: 'bg-pink-50 text-pink-700 border-pink-100' },
-        ],
-    },
-    {
         sectionKey: 'reports',
-        advancedOnly: true,
         links: [
             { href: routes.sales.reports.summary, key: 'salesSummary', icon: TrendingUp, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100', advancedOnly: true },
             { href: routes.sales.reports.products, key: 'salesByProduct', icon: Package, accent: 'bg-sky-50 text-sky-700 border-sky-100', advancedOnly: true },
             { href: routes.sales.reports.consolidated, key: 'consolidated', icon: BarChart3, accent: 'bg-violet-50 text-violet-700 border-violet-100', advancedOnly: true },
             { href: routes.sales.reports.branchReport, key: 'branchReport', icon: BarChart3, accent: 'bg-amber-50 text-amber-700 border-amber-100', advancedOnly: true },
+            { href: routes.sales.customerLedger, key: 'customerLedger', icon: BookOpen, accent: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+            { href: routes.sales.customerDueAging, key: 'dueAging', icon: Clock, accent: 'bg-rose-50 text-rose-700 border-rose-100' },
+            { href: routes.sales.loyalty, key: 'loyalty', icon: Gift, accent: 'bg-pink-50 text-pink-700 border-pink-100' },
         ],
     },
     {
@@ -87,6 +67,9 @@ const SALES_HUB_SECTIONS: HubSectionConfig[] = [
             { href: routes.sales.customerGroups, key: 'customerGroups', icon: FolderTree, accent: 'bg-slate-50 text-slate-700 border-slate-100' },
             { href: routes.sales.priceLists, key: 'priceLists', icon: Tag, accent: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
             { href: routes.sales.territories, key: 'territories', icon: MapPin, accent: 'bg-cyan-50 text-cyan-700 border-cyan-100' },
+            { href: routes.sales.customers, key: 'customers', icon: Users, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
+            { href: routes.sales.cashierSessions, key: 'cashierSessions', icon: Clock, accent: 'bg-violet-50 text-violet-700 border-violet-100' },
+            { href: routes.storefront.settings, key: 'storefrontSettings', icon: Globe, accent: 'bg-violet-50 text-violet-700 border-violet-100' },
             { href: routes.settings.sales, key: 'salesSettings', icon: Settings, accent: 'bg-gray-50 text-gray-700 border-gray-100' },
         ],
     },
@@ -95,6 +78,7 @@ const SALES_HUB_SECTIONS: HubSectionConfig[] = [
 export default function SalesHubPage() {
     const { t } = useI18n();
     const [canAccessAdvancedReports, setCanAccessAdvancedReports] = useState(false);
+    const [posEnabled, setPosEnabled] = useState(true);
 
     useEffect(() => {
         api.getMe()
@@ -106,18 +90,35 @@ export default function SalesHubPage() {
                 setCanAccessAdvancedReports(canAccessInventoryAdvancedReports(planCode, features));
             })
             .catch(() => setCanAccessAdvancedReports(false));
+
+        api.getSalesSettings()
+            .then((settings) => setPosEnabled(isPosEnabled(settings)))
+            .catch(() => setPosEnabled(true));
     }, []);
 
     const hub = t.sales.hub;
     const sectionLabels = useMemo(() => ({
         dailyOperations: hub.dailyOperations,
-        receivables: hub.receivables,
         orderFlow: hub.orderFlow,
-        storefront: hub.storefront,
-        customersCrm: hub.customersCrm,
         reports: hub.reports,
         setup: hub.setup,
     }), [hub]);
+
+    const linkCopy = useMemo(() => ({
+        ...hub.links,
+        overview: { title: t.sidebar.items.overview, description: hub.subtitle },
+    }), [hub.links, hub.subtitle, t.sidebar.items.overview]);
+
+    const sections = useMemo(() => {
+        let next = SALES_HUB_SECTIONS;
+        if (!posEnabled) {
+            next = next.map((section) => ({
+                ...section,
+                links: section.links.filter((link) => link.key !== 'pos'),
+            }));
+        }
+        return next;
+    }, [posEnabled]);
 
     return (
         <ModuleHub
@@ -125,9 +126,9 @@ export default function SalesHubPage() {
             moduleLabel={hub.moduleLabel}
             title={hub.title}
             subtitle={hub.subtitle}
-            sections={SALES_HUB_SECTIONS}
+            sections={sections}
             sectionLabels={sectionLabels}
-            linkCopy={hub.links}
+            linkCopy={linkCopy}
             openSectionLabel={t.accountingShared.openSection}
             viewReportLabel={t.accountingShared.viewReport}
             canAccessAdvanced={canAccessAdvancedReports}

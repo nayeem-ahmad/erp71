@@ -254,7 +254,7 @@ export const coreMessages = {
             items: {
                 pos: "পিওএস",
                 sales: "বিক্রয়",
-                allSales: "সব বিক্রয়",
+                allSales: "বিক্রয়",
                 newSalesEntry: "নতুন বিক্রয় এন্ট্রি",
                 dueAging: "বকেয়া বয়স",
                 crmTasks: "টাস্ক ও ফলো-আপ",

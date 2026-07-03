@@ -1,16 +1,21 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ClipboardList, Plus, Eye, Edit2, Printer, Trash2 } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
 import CreateOrderModal from './CreateOrderModal';
+import StorefrontOrdersPanel from './StorefrontOrdersPanel';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { routes } from '@/lib/routes';
+
+type OrdersTab = 'sales' | 'online';
 
 interface SalesOrder {
     id: string;
@@ -44,13 +49,29 @@ const columnHelper = createColumnHelper<SalesOrder>();
 
 export default function OrdersPage() {
     const { t, locale } = useI18n();
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const activeTab: OrdersTab = searchParams.get('tab') === 'online' ? 'online' : 'sales';
     const [orders, setOrders] = useState<SalesOrder[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
+    const setActiveTab = useCallback((tab: OrdersTab) => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (tab === 'online') {
+            params.set('tab', 'online');
+        } else {
+            params.delete('tab');
+        }
+        const query = params.toString();
+        router.replace(query ? `${routes.sales.orders}?${query}` : routes.sales.orders);
+    }, [router, searchParams]);
+
     useEffect(() => {
-        loadOrders();
-    }, []);
+        if (activeTab === 'sales') {
+            loadOrders();
+        }
+    }, [activeTab]);
 
     const loadOrders = async () => {
         try {
@@ -253,18 +274,48 @@ export default function OrdersPage() {
                         'sales',
                     )}
                     actions={
-                        <button
-                            onClick={() => setIsModalOpen(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                        >
-                            <Plus className="w-4 h-4 mr-2" />
-                            {t.orders.newOrder}
-                        </button>
+                        activeTab === 'sales' ? (
+                            <button
+                                onClick={() => setIsModalOpen(true)}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                            >
+                                <Plus className="w-4 h-4 mr-2" />
+                                {t.orders.newOrder}
+                            </button>
+                        ) : null
                     }
                 />
 
+                <div className="flex gap-1 border-b border-gray-200">
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('sales')}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                            activeTab === 'sales'
+                                ? 'border-blue-600 text-blue-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700'
+                        }`}
+                    >
+                        {t.orders.tabs.salesOrders}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('online')}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                            activeTab === 'online'
+                                ? 'border-blue-600 text-blue-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700'
+                        }`}
+                    >
+                        {t.orders.tabs.onlineOrders}
+                    </button>
+                </div>
+
                 <CreateOrderModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={loadOrders} />
 
+                {activeTab === 'online' ? (
+                    <StorefrontOrdersPanel />
+                ) : (
                 <DataTable<SalesOrder>
                     tableId="sales-orders"
                     columns={columns}
@@ -277,6 +328,7 @@ export default function OrdersPage() {
                     filterPresets={filterPresets}
                     enableRowSelection
                 />
+                )}
             </div>
         </div>
     );

@@ -27,6 +27,7 @@ jest.mock('next/link', () => {
 jest.mock('@/lib/api', () => ({
     api: {
         getSales: jest.fn(),
+        getSalesSettings: jest.fn().mockResolvedValue({ pos_enabled: true }),
     },
 }));
 
@@ -67,7 +68,7 @@ describe('SalesListPage — Sales Transaction List', () => {
 
     it('renders the Sales page heading', async () => {
         render(<SalesListPage />);
-        expect(screen.getByRole('heading', { level: 1, name: 'All Sales' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1, name: 'Sales' })).toBeInTheDocument();
     });
 
     it('displays sales loaded from the API', async () => {

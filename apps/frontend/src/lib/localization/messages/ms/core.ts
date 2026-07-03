@@ -254,7 +254,7 @@ export const coreMessages = {
             items: {
                 pos: "POS",
                 sales: "Jualan",
-                allSales: "Semua Jualan",
+                allSales: "Jualan",
                 newSalesEntry: "Entri Jualan Baharu",
                 dueAging: "Penuaan Hutang",
             crmTasks: "Tugas & Susulan",

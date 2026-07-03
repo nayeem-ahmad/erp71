@@ -47,6 +47,20 @@ function canAccessModuleAdvancedReports(
     return canAccessInventoryReports;
 }
 
+function stripPosNavLink(children: NavChild[], posEnabled: boolean): NavChild[] {
+    if (posEnabled) return children;
+    return children
+        .map((child) => {
+            if (!isNavSubgroup(child)) {
+                return child.href === routes.sales.pos ? null : child;
+            }
+            const filteredLinks = child.children.filter((link) => link.href !== routes.sales.pos);
+            if (filteredLinks.length === 0) return null;
+            return { ...child, children: filteredLinks };
+        })
+        .filter((child): child is NavChild => child !== null);
+}
+
 function filterModuleNavChildren(
     children: NavChild[],
     moduleKey: string,
@@ -102,6 +116,7 @@ export default function Sidebar({
     supportEnabled = false,
     activePlanCode,
     accountingOnlyMode = false,
+    posEnabled = true,
     compactNav = false,
     isOpen = false,
     onClose,
@@ -120,6 +135,8 @@ export default function Sidebar({
     activePlanCode?: string | null;
     /** When true, show only accounting-focused modules. */
     accountingOnlyMode?: boolean;
+    /** When false, hide POS from sales navigation. */
+    posEnabled?: boolean;
     /** Tighter nav when inside the accounting module trial */
     compactNav?: boolean;
     /** Mobile overlay open state */
@@ -177,15 +194,18 @@ export default function Sidebar({
                 }
 
                 if (['sales', 'purchase', 'inventory', 'accounting'].includes(module.key)) {
+                    const filteredChildren = filterModuleNavChildren(
+                        module.children,
+                        module.key,
+                        canAccessInventoryReports,
+                        canAccessAccountingAdvanced,
+                        canAccessPremiumCrm,
+                    );
                     return {
                         ...module,
-                        children: filterModuleNavChildren(
-                            module.children,
-                            module.key,
-                            canAccessInventoryReports,
-                            canAccessAccountingAdvanced,
-                            canAccessPremiumCrm,
-                        ),
+                        children: module.key === 'sales'
+                            ? stripPosNavLink(filteredChildren, posEnabled)
+                            : filteredChildren,
                     };
                 }
 
@@ -220,6 +240,7 @@ export default function Sidebar({
         canManageTeam,
         helpEnabled,
         supportEnabled,
+        posEnabled,
     ]);
 
     const normalizedSearchQuery = normalizeNavSearchQuery(searchQuery);

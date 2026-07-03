@@ -436,6 +436,7 @@ model SalesSettings {
   tenant_id              String   @unique
   paper_size             String   @default("A4") // A4, A5, Letter, Thermal80, Thermal58
   reference_number_format String @default("YYMM-#") // Format template
+  pos_enabled            Boolean  @default(true)
   created_at             DateTime @default(now())
   updated_at             DateTime @updatedAt
 

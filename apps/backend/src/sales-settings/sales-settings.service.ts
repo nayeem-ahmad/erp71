@@ -48,8 +48,9 @@ export class SalesSettingsService {
       settings = await this.db.salesSettings.update({
         where: { tenant_id: tenantId },
         data: {
-          paper_size: dto.paper_size || settings.paper_size,
-          reference_number_format: dto.reference_number_format || settings.reference_number_format,
+          paper_size: dto.paper_size ?? settings.paper_size,
+          reference_number_format: dto.reference_number_format ?? settings.reference_number_format,
+          ...(dto.pos_enabled !== undefined ? { pos_enabled: dto.pos_enabled } : {}),
         },
       });
     }
@@ -67,6 +68,7 @@ export class SalesSettingsService {
       tenant_id: settings.tenant_id,
       paper_size: settings.paper_size as PaperSize,
       reference_number_format: settings.reference_number_format,
+      pos_enabled: settings.pos_enabled ?? true,
       created_at: settings.created_at,
       updated_at: settings.updated_at,
     };

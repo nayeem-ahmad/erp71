@@ -7,6 +7,7 @@ import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import type { PaperSize } from '@/lib/sales-invoice-printer';
+import { isOwner } from '@/lib/permissions';
 
 type ToastState = { type: 'success' | 'error'; message: string } | null;
 
@@ -54,12 +55,20 @@ export default function SalesSettingsPage() {
 
     const [paperSize, setPaperSize] = useState<PaperSize>('A4');
     const [refFormat, setRefFormat] = useState('');
+    const [posEnabled, setPosEnabled] = useState(true);
+    const [isShopOwner, setIsShopOwner] = useState(false);
 
     const loadSettings = useCallback(async () => {
         try {
-            const data = await api.getSalesSettings();
+            const [data, me] = await Promise.all([api.getSalesSettings(), api.getMe()]);
+            const tenantId = localStorage.getItem('tenant_id');
+            const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === tenantId) || me?.tenants?.[0];
+            setIsShopOwner(isOwner(tenant?.role));
+
             if (data?.default_paper_size) setPaperSize(data.default_paper_size as PaperSize);
+            if (data?.paper_size) setPaperSize(data.paper_size as PaperSize);
             if (data?.reference_number_format) setRefFormat(data.reference_number_format);
+            setPosEnabled(data?.pos_enabled !== false);
         } catch (err: any) {
             setToast({ type: 'error', message: err?.message || 'Failed to load settings' });
         } finally {
@@ -76,9 +85,11 @@ export default function SalesSettingsPage() {
         setSaving(true);
         try {
             await api.updateSalesSettings({
-                default_paper_size: paperSize,
+                paper_size: paperSize,
                 ...(refFormat ? { reference_number_format: refFormat } : {}),
+                ...(isShopOwner ? { pos_enabled: posEnabled } : {}),
             });
+            window.dispatchEvent(new Event('erp71:sales-settings-updated'));
             setToast({ type: 'success', message: 'Sales settings saved' });
         } catch (err: any) {
             setToast({ type: 'error', message: err?.message || 'Failed to save settings' });
@@ -137,6 +148,26 @@ export default function SalesSettingsPage() {
                                 </p>
                             </div>
                         </div>
+
+                        {isShopOwner ? (
+                            <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
+                                <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Checkout</h2>
+                                <label className="flex items-start gap-3 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={posEnabled}
+                                        onChange={(e) => setPosEnabled(e.target.checked)}
+                                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span>
+                                        <span className="block text-sm font-semibold text-gray-700">Enable Point of Sale (POS)</span>
+                                        <span className="block mt-1 text-xs text-gray-400">
+                                            When disabled, the POS menu link and page are hidden. Staff can still record sales via New Sales Entry.
+                                        </span>
+                                    </span>
+                                </label>
+                            </div>
+                        ) : null}
 
                         {/* Reference Number Format */}
                         <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
