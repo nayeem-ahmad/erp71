@@ -96,8 +96,14 @@ export default function PaymentSection({ payments, total, onPaymentChange }: Pay
         [definedMethods],
     );
 
-    const visibleMethods = activeMethods.length > 0 ? activeMethods : genericPicks;
-    const otherMethods = activeMethods.length > 0 ? [...inactiveMethods, ...genericPicks] : [];
+    const visibleMethods = useMemo(
+        () => (activeMethods.length > 0 ? activeMethods : genericPicks),
+        [activeMethods],
+    );
+    const otherMethods = useMemo(
+        () => (activeMethods.length > 0 ? [...inactiveMethods, ...genericPicks] : []),
+        [activeMethods, inactiveMethods],
+    );
     const allMethods = useMemo(
         () => [...visibleMethods, ...otherMethods],
         [visibleMethods, otherMethods],
