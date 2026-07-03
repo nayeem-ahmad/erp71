@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '@/lib/api';
+import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { X, Search } from 'lucide-react';
 
 interface CustomerSelectionProps {
@@ -40,21 +41,15 @@ export default function CustomerSelection({ customer, setCustomer }: CustomerSel
         setFilteredCustomers(filtered);
     }, [query, customers]);
 
-    useEffect(() => {
-        function handleClickOutside(event: MouseEvent) {
-            if (
-                dropdownRef.current &&
-                inputRef.current &&
-                !dropdownRef.current.contains(event.target as Node) &&
-                !inputRef.current.contains(event.target as Node)
-            ) {
-                setShowDropdown(false);
-            }
-        }
-
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    const isInside = useCallback(
+        (target: Node) =>
+            !!(
+                dropdownRef.current?.contains(target)
+                || inputRef.current?.contains(target)
+            ),
+        [],
+    );
+    useDismissOnClickOutside(showDropdown, isInside, () => setShowDropdown(false));
 
     const handleSelectCustomer = (cust: any) => {
         setCustomer(cust);

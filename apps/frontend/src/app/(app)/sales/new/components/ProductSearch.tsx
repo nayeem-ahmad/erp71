@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '@/lib/api';
+import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { Search, Plus } from 'lucide-react';
 
 interface ProductSearchProps {
@@ -14,44 +15,44 @@ export default function ProductSearch({ onProductSelect }: ProductSearchProps) {
     const inputRef = useRef<HTMLInputElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    const searchProducts = async (searchQuery: string) => {
-        const term = searchQuery.trim();
-        try {
-            setLoading(true);
-            // Empty term → backend returns the most-sold products so the list can
-            // be browsed without typing. Use a larger limit when browsing.
-            const data = await api.searchProductsByQuantity(term, term ? 20 : 50);
-            setProducts(data || []);
-        } catch (error) {
-            console.error('Failed to search products', error);
-            setProducts([]);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     // Fetch whenever the dropdown is open (including an empty query → browse all).
     useEffect(() => {
         if (!showDropdown) return;
-        const timer = setTimeout(() => searchProducts(query), 300);
-        return () => clearTimeout(timer);
+
+        const controller = new AbortController();
+        const timer = setTimeout(async () => {
+            const term = query.trim();
+            try {
+                setLoading(true);
+                // Empty term → backend returns the most-sold products so the list can
+                // be browsed without typing. Use a larger limit when browsing.
+                const data = await api.searchProductsByQuantity(term, term ? 20 : 50);
+                if (controller.signal.aborted) return;
+                setProducts(data || []);
+            } catch (error) {
+                if (controller.signal.aborted) return;
+                console.error('Failed to search products', error);
+                setProducts([]);
+            } finally {
+                if (!controller.signal.aborted) setLoading(false);
+            }
+        }, 300);
+
+        return () => {
+            clearTimeout(timer);
+            controller.abort();
+        };
     }, [query, showDropdown]);
 
-    useEffect(() => {
-        function handleClickOutside(event: MouseEvent) {
-            if (
-                dropdownRef.current &&
-                inputRef.current &&
-                !dropdownRef.current.contains(event.target as Node) &&
-                !inputRef.current.contains(event.target as Node)
-            ) {
-                setShowDropdown(false);
-            }
-        }
-
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    const isInside = useCallback(
+        (target: Node) =>
+            !!(
+                dropdownRef.current?.contains(target)
+                || inputRef.current?.contains(target)
+            ),
+        [],
+    );
+    useDismissOnClickOutside(showDropdown, isInside, () => setShowDropdown(false));
 
     const handleSelectProduct = (product: any) => {
         onProductSelect(product);
