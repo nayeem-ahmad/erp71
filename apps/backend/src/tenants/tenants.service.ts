@@ -4,6 +4,7 @@ import { StorefrontSettingsDto } from '../storefront/storefront.dto';
 import { UpdateBrandingDto } from './update-branding.dto';
 import { UpdateLocalizationSettingsDto } from './localization-settings.dto';
 import { seedTenantDemoData } from '@erp71/database';
+import { ensureDefaultWarehouse } from '../database/inventory.utils';
 
 @Injectable()
 export class TenantsService {
@@ -198,10 +199,7 @@ export class TenantsService {
         });
         if (!store) throw new NotFoundException('No store found for this tenant');
 
-        const warehouse = await this.db.warehouse.findFirst({
-            where: { tenant_id: tenantId, store_id: store.id, is_default: true },
-        });
-        if (!warehouse) throw new NotFoundException('No default warehouse found for this tenant');
+        const warehouse = await ensureDefaultWarehouse(this.db, tenantId, store.id);
 
         return seedTenantDemoData(this.db, tenantId, store.id, warehouse.id);
     }

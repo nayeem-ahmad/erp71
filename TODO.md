@@ -355,6 +355,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Fix Load Demo Data 500 — `packages/database/index.js` did not export compiled `seedTenantDemoData`; added `prisma/seed-demo.js` + exports; `loadDemoData` auto-creates default warehouse for new tenants — done 2026-07-03
 - [x] Sales credit due — allow keeping due on New Sale and POS when a customer is selected and `due_balance + new due <= credit_limit`; backend validates, records `CREDIT_SALE` ledger entry, updates `due_balance`, and posts AR for the credit portion; shared `customer-credit` helpers + unit tests — done 2026-07-03
 - [x] Merge dev → main + deploy (`a6c44ee`) — synced local `dev` with `origin/dev` (#313 demo data); fast-forwarded `main`; VPS `/opt/erp71` `scripts/deploy.sh main`; `prisma db push` on backend start; smoke checks green at `api.erp71.com` / `app.erp71.com` — done 2026-07-03
 - [x] Demo data loading and clearing for shop owners (#313) — `seed-demo.ts` + tenant APIs; Settings → Data page (`/settings/data`) to load/clear demo catalog, customers, sales; i18n en/bn/ms — done 2026-07-03
