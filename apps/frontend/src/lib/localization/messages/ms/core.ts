@@ -337,6 +337,7 @@ export const coreMessages = {
                 leaves: "Cuti",
                 salaryPayments: "Pembayaran Gaji",
                 teamPermissions: "Pasukan & Kebenaran",
+                dataManagement: "Pengurusan Data",
                 delivery: "Penghantaran",
                 profitAndLoss: "Untung Rugi",
                 balanceSheet: "Kunci Kira-kira",

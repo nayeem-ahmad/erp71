@@ -337,6 +337,7 @@ export const coreMessages = {
                 leaves: "ছুটি",
                 salaryPayments: "বেতন প্রদান",
                 teamPermissions: "টিম ও অনুমতি",
+                dataManagement: "ডেটা ব্যবস্থাপনা",
                 delivery: "ডেলিভারি",
                 profitAndLoss: "লাভ ও ক্ষতি",
                 balanceSheet: "ব্যালেন্স শীট",
