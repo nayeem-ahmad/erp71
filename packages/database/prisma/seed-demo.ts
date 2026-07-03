@@ -27,6 +27,101 @@ const CUSTOMERS = [
     { name: 'Shafiqul Islam', phone: '01715005005', code: 'CUST-0005' },
 ] as const;
 
+/** Seed demo products, customers, and sample sales into any existing tenant. Idempotent. */
+export async function seedTenantDemoData(
+    prisma: PrismaClient,
+    tenantId: string,
+    storeId: string,
+    warehouseId: string,
+) {
+    const createdProducts: Array<{ id: string; price: number }> = [];
+    for (const productDef of PRODUCTS) {
+        const product = await prisma.product.upsert({
+            where: { tenant_id_sku: { tenant_id: tenantId, sku: productDef.sku } },
+            update: { name: productDef.name, price: productDef.price, reorder_level: productDef.reorder },
+            create: {
+                tenant_id: tenantId,
+                name: productDef.name,
+                sku: productDef.sku,
+                price: productDef.price,
+                reorder_level: productDef.reorder,
+                unit_type: 'none',
+            },
+        });
+        await prisma.productStock.upsert({
+            where: {
+                tenant_id_product_id_warehouse_id: {
+                    tenant_id: tenantId,
+                    product_id: product.id,
+                    warehouse_id: warehouseId,
+                },
+            },
+            update: { quantity: productDef.stock },
+            create: { tenant_id: tenantId, product_id: product.id, warehouse_id: warehouseId, quantity: productDef.stock },
+        });
+        createdProducts.push({ id: product.id, price: productDef.price });
+    }
+
+    const createdCustomers: Array<{ id: string }> = [];
+    for (const customerDef of CUSTOMERS) {
+        const customer = await prisma.customer.upsert({
+            where: { tenant_id_phone: { tenant_id: tenantId, phone: customerDef.phone } },
+            update: { name: customerDef.name },
+            create: {
+                tenant_id: tenantId,
+                customer_code: customerDef.code,
+                name: customerDef.name,
+                phone: customerDef.phone,
+                customer_type: 'INDIVIDUAL',
+            },
+        });
+        createdCustomers.push(customer);
+    }
+
+    const sampleSales = [
+        { serial: 'DEMO-SALE-0001', customerId: createdCustomers[0].id, items: [{ productIdx: 0, qty: 2 }, { productIdx: 1, qty: 1 }] },
+        { serial: 'DEMO-SALE-0002', customerId: createdCustomers[1].id, items: [{ productIdx: 5, qty: 1 }, { productIdx: 6, qty: 2 }, { productIdx: 7, qty: 1 }] },
+        { serial: 'DEMO-SALE-0003', customerId: createdCustomers[2].id, items: [{ productIdx: 3, qty: 5 }, { productIdx: 8, qty: 3 }, { productIdx: 9, qty: 2 }] },
+    ] as const;
+
+    let salesCreated = 0;
+    for (const saleDef of sampleSales) {
+        const existing = await prisma.sale.findUnique({
+            where: { tenant_id_serial_number: { tenant_id: tenantId, serial_number: saleDef.serial } },
+        });
+        if (existing) continue;
+        const totalAmount = saleDef.items.reduce(
+            (sum, item) => sum + item.qty * createdProducts[item.productIdx].price,
+            0,
+        );
+        await prisma.sale.create({
+            data: {
+                tenant_id: tenantId,
+                store_id: storeId,
+                serial_number: saleDef.serial,
+                total_amount: totalAmount,
+                amount_paid: totalAmount,
+                status: 'COMPLETED',
+                customer_id: saleDef.customerId,
+                items: {
+                    create: saleDef.items.map((item) => ({
+                        product_id: createdProducts[item.productIdx].id,
+                        quantity: item.qty,
+                        price_at_sale: createdProducts[item.productIdx].price,
+                    })),
+                },
+            },
+        });
+        salesCreated++;
+    }
+
+    return {
+        productsUpserted: createdProducts.length,
+        customersUpserted: createdCustomers.length,
+        salesCreated,
+    };
+}
+
 /** Idempotent sandbox tenant for public demo login (POST /auth/demo). */
 export async function seedDemoAccount(prisma: PrismaClient) {
     const passwordHash = await bcrypt.hash(DEMO_ACCOUNT_PASSWORD, 10);

@@ -337,6 +337,7 @@ export const coreMessages = {
             leaves: 'Leaves',
             salaryPayments: 'Salary Payments',
             teamPermissions: 'Team & Permissions',
+            dataManagement: 'Data Management',
             delivery: 'Delivery',
             profitAndLoss: 'Profit & Loss',
             balanceSheet: 'Balance Sheet',

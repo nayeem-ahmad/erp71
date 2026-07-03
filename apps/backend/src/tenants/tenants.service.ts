@@ -1,8 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { StorefrontSettingsDto } from '../storefront/storefront.dto';
 import { UpdateBrandingDto } from './update-branding.dto';
 import { UpdateLocalizationSettingsDto } from './localization-settings.dto';
+import { seedTenantDemoData } from '@erp71/database';
 
 @Injectable()
 export class TenantsService {
@@ -186,6 +187,127 @@ export class TenantsService {
                 secondary_locale: true,
             },
         });
+    }
+
+    async loadDemoData(tenantId: string, userRole: string | undefined) {
+        if (userRole !== 'OWNER') throw new ForbiddenException('Only the shop owner can load demo data');
+
+        const store = await this.db.store.findFirst({
+            where: { tenant_id: tenantId },
+            orderBy: { created_at: 'asc' },
+        });
+        if (!store) throw new NotFoundException('No store found for this tenant');
+
+        const warehouse = await this.db.warehouse.findFirst({
+            where: { tenant_id: tenantId, store_id: store.id, is_default: true },
+        });
+        if (!warehouse) throw new NotFoundException('No default warehouse found for this tenant');
+
+        return seedTenantDemoData(this.db, tenantId, store.id, warehouse.id);
+    }
+
+    async clearData(tenantId: string, mode: 'transactions' | 'all', userRole: string | undefined) {
+        if (userRole !== 'OWNER') throw new ForbiddenException('Only the shop owner can clear data');
+        if (mode !== 'transactions' && mode !== 'all') {
+            throw new BadRequestException('mode must be "transactions" or "all"');
+        }
+
+        await this.db.$transaction(async (tx) => {
+            // --- Transactional / operational records ---
+
+            // CRM operational (before Customer)
+            await tx.lead.deleteMany({ where: { tenant_id: tenantId } }); // cascades LeadConversation
+            await tx.crmTask.deleteMany({ where: { tenant_id: tenantId } });
+            await tx.customerInteraction.deleteMany({ where: { tenant_id: tenantId } });
+            await tx.crmCampaign.deleteMany({ where: { tenant_id: tenantId } }); // cascades CrmCampaignRecipient
+
+            // Credit balances (before Customer / Supplier)
+            await tx.customerCreditTransaction.deleteMany({ where: { tenant_id: tenantId } });
+            await tx.supplierCreditTransaction.deleteMany({ where: { tenant_id: tenantId } });
+            await tx.loyaltyTransaction.deleteMany({ where: { tenantId } });
+
+            // Records referencing Sale (must go before Sale)
+            await tx.warrantyClaim.deleteMany({ where: { tenant_id: tenantId } });
+            await tx.deliveryOrder.deleteMany({ where: { tenantId } });
+            await tx.salesReturn.deleteMany({ where: { tenant_id: tenantId } }); // cascades SalesReturnItem
+
+            // Sales
+            await tx.sale.deleteMany({ where: { tenant_id: tenantId } }); // cascades SaleItem, PaymentRecord
+            await tx.quotation.deleteMany({ where: { tenant_id: tenantId } }); // cascades QuotationItem
+            await tx.salesOrder.deleteMany({ where: { tenant_id: tenantId } }); // cascades SalesOrderItem
+
+            // Purchases
+            await tx.purchaseReturn.deleteMany({ where: { tenant_id: tenantId } }); // cascades PurchaseReturnItem
+            await tx.purchase.deleteMany({ where: { tenant_id: tenantId } }); // cascades PurchaseItem
+            await tx.purchaseOrder.deleteMany({ where: { tenant_id: tenantId } }); // cascades PurchaseOrderItem
+            await tx.purchaseQuotation.deleteMany({ where: { tenant_id: tenantId } }); // cascades PurchaseQuotationItem
+
+            // Inventory operational
+            await tx.productionJob.deleteMany({ where: { tenantId } });
+            await tx.inventoryMovement.deleteMany({ where: { tenant_id: tenantId } });
+            await tx.inventoryShrinkage.deleteMany({ where: { tenant_id: tenantId } }); // cascades InventoryShrinkageItem
+            await tx.warehouseTransfer.deleteMany({ where: { tenant_id: tenantId } }); // cascades WarehouseTransferItem
+            await tx.stockTakeSession.deleteMany({ where: { tenant_id: tenantId } }); // cascades StockTakeCountLine
+
+            // Accounting journals
+            await tx.voucher.deleteMany({ where: { tenant_id: tenantId } }); // cascades VoucherDetail, PostingEvent
+
+            // Financials
+            await tx.expenseEntry.deleteMany({ where: { tenant_id: tenantId } });
+            await tx.loan.deleteMany({ where: { tenant_id: tenantId } }); // cascades LoanPayment
+            await tx.salaryPayment.deleteMany({ where: { tenant_id: tenantId } });
+
+            // HR operational
+            await tx.attendanceRecord.deleteMany({ where: { tenant_id: tenantId } });
+            await tx.leaveRequest.deleteMany({ where: { tenant_id: tenantId } });
+            await tx.leaveBalance.deleteMany({ where: { tenant_id: tenantId } });
+
+            // Storefront & sessions
+            await tx.storefrontOrder.deleteMany({ where: { tenantId } }); // cascades StorefrontOrderItem
+            await tx.cashierSession.deleteMany({ where: { tenant_id: tenantId } });
+
+            // Serial inventory
+            await tx.productSerial.deleteMany({ where: { tenant_id: tenantId } });
+
+            if (mode === 'all') {
+                // --- Master / reference data ---
+
+                // BOM before Products
+                await tx.bomRecipe.deleteMany({ where: { tenantId } }); // cascades BomComponent, ProductionJob
+
+                // Products and stock (after all transactional refs are gone)
+                await tx.productStock.deleteMany({ where: { tenant_id: tenantId } });
+                await tx.priceList.deleteMany({ where: { tenant_id: tenantId } }); // cascades PriceListItem
+
+                // Customers and related groupings
+                await tx.customer.deleteMany({ where: { tenant_id: tenantId } });
+                await tx.customerGroup.deleteMany({ where: { tenant_id: tenantId } });
+                await tx.territory.deleteMany({ where: { tenant_id: tenantId } });
+
+                // Suppliers
+                await tx.supplier.deleteMany({ where: { tenant_id: tenantId } });
+
+                // Products — after stock, serials, BOM, and all sale/purchase items are gone
+                await tx.product.deleteMany({ where: { tenant_id: tenantId } });
+                await tx.brand.deleteMany({ where: { tenant_id: tenantId } });
+                await tx.productSubgroup.deleteMany({ where: { tenant_id: tenantId } });
+                await tx.productGroup.deleteMany({ where: { tenant_id: tenantId } });
+
+                // HR master data (operational records deleted above)
+                await tx.employee.deleteMany({ where: { tenant_id: tenantId } });
+                await tx.designation.deleteMany({ where: { tenant_id: tenantId } });
+                await tx.department.deleteMany({ where: { tenant_id: tenantId } });
+                await tx.leaveType.deleteMany({ where: { tenant_id: tenantId } });
+
+                // Inventory system data
+                await tx.inventoryReason.deleteMany({ where: { tenant_id: tenantId } });
+
+                // Discount codes
+                await tx.discountCode.deleteMany({ where: { tenantId } });
+            }
+        });
+
+        return { cleared: mode };
     }
 
     async updateLocalizationSettings(tenantId: string, dto: UpdateLocalizationSettingsDto) {

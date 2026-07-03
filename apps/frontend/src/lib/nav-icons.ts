@@ -55,6 +55,7 @@ import {
     Wallet,
     Waves,
     Cpu,
+    Database,
 } from 'lucide-react';
 
 const NAV_ICON_MAP: Record<string, LucideIcon> = {
@@ -105,6 +106,7 @@ const NAV_ICON_MAP: Record<string, LucideIcon> = {
     BadgeCheck,
     Building2,
     Cpu,
+    Database,
     GitMerge,
     Lock,
     RefreshCw,
