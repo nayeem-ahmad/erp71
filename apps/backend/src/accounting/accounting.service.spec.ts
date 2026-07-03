@@ -43,6 +43,10 @@ describe('AccountingService — Story 30.2', () => {
             aggregate: jest.fn(),
             findMany: jest.fn(),
         },
+        voucherAttachment: {
+            deleteMany: jest.fn(),
+            createMany: jest.fn(),
+        },
         store: {
             findMany: jest.fn(),
         },
@@ -300,6 +304,76 @@ describe('AccountingService — Story 30.2', () => {
                 tenant_id: 'tenant-1',
                 voucher_number: 'CP-00001',
                 voucher_type: VoucherType.CASH_PAYMENT,
+            }),
+            include: expect.any(Object),
+        });
+    });
+
+    it('creates vouchers with file attachments', async () => {
+        db.account.findMany.mockResolvedValue([
+            { id: 'account-cash', category: 'cash' },
+            { id: 'account-expense', category: 'general' },
+        ]);
+        db.voucherSequence.upsert.mockResolvedValue({
+            id: 'tenant-1:cash_payment',
+            tenant_id: 'tenant-1',
+            voucher_type: VoucherType.CASH_PAYMENT,
+            prefix: 'CP',
+            next_number: 1,
+        });
+        db.voucherSequence.update.mockResolvedValue({
+            id: 'tenant-1:cash_payment',
+            tenant_id: 'tenant-1',
+            voucher_type: VoucherType.CASH_PAYMENT,
+            prefix: 'CP',
+            next_number: 2,
+        });
+        db.voucher.create.mockResolvedValue({
+            id: 'voucher-1',
+            voucher_number: 'CP-00001',
+            details: [
+                { account_id: 'account-cash', credit_amount: 50, debit_amount: 0 },
+                { account_id: 'account-expense', debit_amount: 50, credit_amount: 0 },
+            ],
+            attachments: [
+                {
+                    id: 'att-1',
+                    file_url: 'https://res.cloudinary.com/demo/receipt.pdf',
+                    file_name: 'receipt.pdf',
+                },
+            ],
+        });
+
+        await service.createVoucher('tenant-1', {
+            voucherType: VoucherType.CASH_PAYMENT,
+            description: 'Office expense paid in cash',
+            details: [
+                { accountId: 'account-cash', debitAmount: 0, creditAmount: 50 },
+                { accountId: 'account-expense', debitAmount: 50, creditAmount: 0 },
+            ],
+            attachments: [
+                {
+                    url: 'https://res.cloudinary.com/demo/receipt.pdf',
+                    fileName: 'receipt.pdf',
+                    mimeType: 'application/pdf',
+                    fileSize: 1200,
+                },
+            ],
+        });
+
+        expect(db.voucher.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+                attachments: {
+                    create: [
+                        expect.objectContaining({
+                            tenant_id: 'tenant-1',
+                            file_url: 'https://res.cloudinary.com/demo/receipt.pdf',
+                            file_name: 'receipt.pdf',
+                            mime_type: 'application/pdf',
+                            file_size: 1200,
+                        }),
+                    ],
+                },
             }),
             include: expect.any(Object),
         });
@@ -738,10 +812,26 @@ describe('AccountingService — Story 30.2', () => {
         ).rejects.toThrow(BadRequestException);
     });
 
+    it('rejects vouchers without narration before any write occurs', async () => {
+        await expect(
+            service.createVoucher('tenant-1', {
+                voucherType: VoucherType.JOURNAL,
+                description: '   ',
+                details: [
+                    { accountId: 'account-a', debitAmount: 50, creditAmount: 0 },
+                    { accountId: 'account-b', debitAmount: 0, creditAmount: 50 },
+                ],
+            }),
+        ).rejects.toThrow(BadRequestException);
+
+        expect(db.$transaction).not.toHaveBeenCalled();
+    });
+
     it('rejects unbalanced vouchers before any write occurs', async () => {
         await expect(
             service.createVoucher('tenant-1', {
                 voucherType: VoucherType.JOURNAL,
+                description: 'Adjusting accrual',
                 details: [
                     { accountId: 'account-a', debitAmount: 60, creditAmount: 0 },
                     { accountId: 'account-b', debitAmount: 0, creditAmount: 50 },
@@ -758,6 +848,7 @@ describe('AccountingService — Story 30.2', () => {
         await expect(
             service.createVoucher('tenant-1', {
                 voucherType: VoucherType.CASH_PAYMENT,
+                description: 'Office expense paid in cash',
                 details: [
                     { accountId: 'account-cash', debitAmount: 0, creditAmount: 50 },
                     { accountId: 'account-expense', debitAmount: 50, creditAmount: 0 },

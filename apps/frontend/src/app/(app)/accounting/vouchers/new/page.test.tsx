@@ -23,14 +23,22 @@ jest.mock('lucide-react', () => ({
     CircleCheck: () => <span data-testid="icon-circle-check" />,
     Plus: () => <span data-testid="icon-plus" />,
     Trash2: () => <span data-testid="icon-trash" />,
+    Paperclip: () => <span data-testid="icon-paperclip" />,
+    Loader2: () => <span data-testid="icon-loader" />,
+    FileText: () => <span data-testid="icon-file-text" />,
+    ImageIcon: () => <span data-testid="icon-image" />,
+    X: () => <span data-testid="icon-x" />,
 }));
 
 jest.mock('@/lib/api', () => ({
     api: {
         getAccounts: jest.fn(),
+        getStores: jest.fn(),
+        listCostCenters: jest.fn(),
         getVoucherNumberPreview: jest.fn(),
         createVoucher: jest.fn(),
         getVoucherTemplate: jest.fn(),
+        uploadFile: jest.fn(),
     },
 }));
 
@@ -38,6 +46,8 @@ describe('AccountingVouchersPage — Story 30.5', () => {
     beforeEach(() => {
         replace.mockReset();
         mockSearchParams = {};
+        (api.getStores as jest.Mock).mockResolvedValue([{ id: 'store-1', name: 'Main Branch' }]);
+        (api.listCostCenters as jest.Mock).mockResolvedValue([]);
         (api.getAccounts as jest.Mock).mockResolvedValue([
             { id: 'cash-1', name: 'Cash in Hand', category: 'cash', type: 'asset' },
             { id: 'bank-1', name: 'Main Bank Account', category: 'bank', type: 'asset' },
@@ -75,6 +85,27 @@ describe('AccountingVouchersPage — Story 30.5', () => {
         });
     });
 
+    it('blocks submission until narration is provided', async () => {
+        (api.getVoucherNumberPreview as jest.Mock).mockResolvedValue({ voucherNumber: 'CP-00001' });
+
+        render(<AccountingVouchersPage />);
+
+        await waitFor(() => {
+            expect(screen.getByText('CP-00001')).toBeInTheDocument();
+        });
+
+        fireEvent.change(screen.getByLabelText('Description'), { target: { value: '   ' } });
+        fireEvent.change(screen.getByLabelText('Account row 1'), { target: { value: 'cash-1' } });
+        fireEvent.change(screen.getByLabelText('Credit row 1'), { target: { value: '100' } });
+        fireEvent.change(screen.getByLabelText('Account row 2'), { target: { value: 'expense-1' } });
+        fireEvent.change(screen.getByLabelText('Debit row 2'), { target: { value: '100' } });
+
+        await waitFor(() => {
+            expect(screen.getByText('Narration is required before the voucher can be saved.')).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Save Voucher' })).toBeDisabled();
+        });
+    });
+
     it('adds rows and blocks submission while the voucher is unbalanced', async () => {
         (api.getVoucherNumberPreview as jest.Mock).mockResolvedValue({ voucherNumber: 'CP-00001' });
 
@@ -87,6 +118,7 @@ describe('AccountingVouchersPage — Story 30.5', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Add Row' }));
         expect(screen.getByLabelText('Account row 3')).toBeInTheDocument();
 
+        fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Partial cash payment' } });
         fireEvent.change(screen.getByLabelText('Account row 1'), { target: { value: 'cash-1' } });
         fireEvent.change(screen.getByLabelText('Credit row 1'), { target: { value: '100' } });
         fireEvent.change(screen.getByLabelText('Account row 2'), { target: { value: 'expense-1' } });
@@ -154,6 +186,17 @@ describe('AccountingVouchersPage — Story 30.5', () => {
             expect(screen.getByLabelText('Debit row 1')).toHaveValue(100);
             expect(screen.getByLabelText('Account row 2')).toHaveValue('cash-1');
             expect(screen.getByLabelText('Credit row 2')).toHaveValue(100);
+        });
+    });
+
+    it('renders the attachments section on the voucher entry workbench', async () => {
+        (api.getVoucherNumberPreview as jest.Mock).mockResolvedValue({ voucherNumber: 'CP-00001' });
+
+        render(<AccountingVouchersPage />);
+
+        await waitFor(() => {
+            expect(screen.getByText('Attachments')).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Add file' })).toBeInTheDocument();
         });
     });
 });

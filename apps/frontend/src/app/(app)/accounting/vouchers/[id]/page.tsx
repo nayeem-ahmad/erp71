@@ -14,6 +14,8 @@ import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { compactDensity } from '@/lib/ui/compact-density';
+import { mapApiAttachments, VoucherAttachments } from '@/components/accounting/VoucherAttachments';
+import type { VoucherAttachmentItem } from '@/lib/file-preview';
 
 type VoucherDetail = {
     id: string;
@@ -35,6 +37,13 @@ type VoucherDetail = {
             subgroup?: { name: string } | null;
         };
     }>;
+    attachments?: Array<{
+        id: string;
+        file_url: string;
+        file_name: string;
+        mime_type?: string | null;
+        file_size?: number | null;
+    }>;
 };
 
 export default function VoucherDetailPage() {
@@ -43,6 +52,7 @@ export default function VoucherDetailPage() {
     const [voucher, setVoucher] = useState<VoucherDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [attachments, setAttachments] = useState<VoucherAttachmentItem[]>([]);
 
     useEffect(() => {
         let active = true;
@@ -58,6 +68,7 @@ export default function VoucherDetailPage() {
                 }
 
                 setVoucher(data);
+                setAttachments(mapApiAttachments(data.attachments));
             } catch (loadError) {
                 if (!active) {
                     return;
@@ -143,6 +154,17 @@ export default function VoucherDetailPage() {
                                 </table>
                         </div>
                     </CompactSection>
+
+                    {attachments.length > 0 ? (
+                        <CompactSection title={t.vouchers.attachments.title}>
+                            <VoucherAttachments
+                                attachments={attachments}
+                                onChange={setAttachments}
+                                readOnly
+                                labels={t.vouchers.attachments}
+                            />
+                        </CompactSection>
+                    ) : null}
                 </>
             ) : null}
         </AccountingPageShell>

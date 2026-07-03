@@ -358,6 +358,7 @@ model Tenant {
   accounts Account[]
   voucherSequences VoucherSequence[]
   vouchers Voucher[]
+  voucherAttachments VoucherAttachment[]
   cashierSessions   CashierSession[]
   cashTransactions  CashTransaction[]
   userStoreAccess   UserStoreAccess[]
@@ -1583,6 +1584,7 @@ model Voucher {
   store            Store?   @relation("VoucherStore", fields: [store_id], references: [id])
   counterpartyStore Store?  @relation("VoucherCounterpartyStore", fields: [counterparty_store_id], references: [id])
   details          VoucherDetail[]
+  attachments      VoucherAttachment[]
   postingEvents    PostingEvent[]
   fundTransfersSource      FundTransfer[] @relation("FundTransferSourceVoucher")
   fundTransfersDestination FundTransfer[] @relation("FundTransferDestinationVoucher")
@@ -1641,6 +1643,24 @@ model VoucherDetail {
   @@index([account_id])
   @@index([cost_center_id])
   @@map("voucher_details")
+}
+
+model VoucherAttachment {
+  id         String   @id @default(uuid())
+  tenant_id  String
+  voucher_id String
+  file_url   String
+  file_name  String
+  mime_type  String?
+  file_size  Int?
+  created_at DateTime @default(now())
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  voucher Voucher @relation(fields: [voucher_id], references: [id], onDelete: Cascade)
+
+  @@index([voucher_id])
+  @@index([tenant_id])
+  @@map("voucher_attachments")
 }
 
 model PaymentRecord {

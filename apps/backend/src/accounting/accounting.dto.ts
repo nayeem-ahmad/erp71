@@ -113,6 +113,27 @@ export class VoucherNumberPreviewQueryDto {
     voucherType: VoucherType;
 }
 
+export class CreateVoucherAttachmentDto {
+    @IsString()
+    @IsNotEmpty()
+    url: string;
+
+    @IsString()
+    @IsNotEmpty()
+    @MaxLength(255)
+    fileName: string;
+
+    @IsOptional()
+    @IsString()
+    mimeType?: string;
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(0)
+    fileSize?: number;
+}
+
 export class CreateVoucherDetailDto {
     @IsString()
     @IsNotEmpty()
@@ -140,9 +161,10 @@ export class CreateVoucherDto {
     @IsIn(Object.values(VoucherType))
     voucherType: VoucherType;
 
-    @IsOptional()
     @IsString()
-    description?: string;
+    @IsNotEmpty()
+    @MaxLength(500)
+    description: string;
 
     @IsOptional()
     @IsString()
@@ -169,6 +191,11 @@ export class CreateVoucherDto {
     @ValidateNested({ each: true })
     @Type(() => CreateVoucherDetailDto)
     details: CreateVoucherDetailDto[];
+
+    @IsOptional()
+    @ValidateNested({ each: true })
+    @Type(() => CreateVoucherAttachmentDto)
+    attachments?: CreateVoucherAttachmentDto[];
 }
 
 export class ListVouchersQueryDto {

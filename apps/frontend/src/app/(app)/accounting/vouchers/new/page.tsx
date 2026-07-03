@@ -8,6 +8,12 @@ import { AccountCategory, VoucherType } from '@erp71/shared-types';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import {
+    mapApiAttachments,
+    serializeAttachmentsForApi,
+    VoucherAttachments,
+} from '@/components/accounting/VoucherAttachments';
+import type { VoucherAttachmentItem } from '@/lib/file-preview';
 
 type VoucherAccount = {
     id: string;
@@ -110,6 +116,7 @@ function AccountingVouchersPageContent() {
     const [loadError, setLoadError] = useState('');
     const [submitError, setSubmitError] = useState('');
     const [createdVoucher, setCreatedVoucher] = useState<VoucherSummary | null>(null);
+    const [attachments, setAttachments] = useState<VoucherAttachmentItem[]>([]);
 
     const editVoucherId = searchParams.get('edit');
     const isEditMode = Boolean(editVoucherId);
@@ -152,6 +159,7 @@ function AccountingVouchersPageContent() {
                         costCenterId: detail.cost_center_id ?? detail.costCenter?.id ?? '',
                     })),
                 );
+                setAttachments(mapApiAttachments(voucher.attachments));
             } catch (error) {
                 if (!active) {
                     return;
@@ -344,9 +352,10 @@ function AccountingVouchersPageContent() {
     const debitTotal = rows.reduce((sum, row) => sum + parseAmount(row.debitAmount), 0);
     const creditTotal = rows.reduce((sum, row) => sum + parseAmount(row.creditAmount), 0);
     const isBalanced = Math.abs(debitTotal - creditTotal) < 0.0001 && debitTotal > 0;
+    const hasNarration = description.trim().length > 0;
     const rowErrors = rows.map((row, index) => getRowError(row, accounts, voucherType, index));
     const hasRowErrors = rowErrors.some(Boolean);
-    const canSubmit = !isLoadingPreview && !isLoadingAccounts && !isSubmitting && !hasRowErrors && isBalanced;
+    const canSubmit = !isLoadingPreview && !isLoadingAccounts && !isSubmitting && !hasRowErrors && isBalanced && hasNarration;
 
     const handleVoucherTypeChange = (nextType: VoucherType) => {
         setVoucherType(nextType);
@@ -402,6 +411,7 @@ function AccountingVouchersPageContent() {
         setReferenceNumber('');
         setVoucherDate(new Date().toISOString().slice(0, 10));
         setRows([createEmptyRow(), createEmptyRow()]);
+        setAttachments([]);
     };
 
     const handleSubmit = async (event: React.FormEvent) => {
@@ -417,7 +427,7 @@ function AccountingVouchersPageContent() {
             const payload = {
                 voucherType,
                 date: voucherDate,
-                description: description || undefined,
+                description: description.trim(),
                 referenceNumber: referenceNumber || undefined,
                 ...(branchSelection === 'company'
                     ? { attribution: 'COMPANY' }
@@ -429,6 +439,9 @@ function AccountingVouchersPageContent() {
                     comment: row.comment || undefined,
                     costCenterId: row.costCenterId || undefined,
                 })),
+                ...(attachments.length > 0
+                    ? { attachments: serializeAttachmentsForApi(attachments) }
+                    : {}),
             };
 
             if (isEditMode && editVoucherId) {
@@ -551,6 +564,23 @@ function AccountingVouchersPageContent() {
 
             <div className="flex flex-col lg:flex-1 lg:flex-row lg:overflow-hidden">
                 <div className="flex flex-col lg:flex-1 lg:overflow-hidden p-3 gap-2 min-w-0">
+                    <label className="block flex-shrink-0">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                            {t.vouchers.description}
+                            <span className="text-red-600" aria-hidden="true"> *</span>
+                        </span>
+                        <input
+                            type="text"
+                            required
+                            aria-required="true"
+                            aria-label={t.vouchers.descriptionAria}
+                            value={description}
+                            onChange={(event) => setDescription(event.target.value)}
+                            placeholder={`${t.vouchers.narrationPlaceholder}…`}
+                            className="mt-1 w-full border rounded px-2 py-1.5 text-sm focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                        />
+                    </label>
+
                     <div className="flex items-center justify-between gap-2 flex-shrink-0">
                         <p className="text-xs text-gray-500 truncate" title={voucherTypeHelpers[voucherType]}>
                             {voucherTypeHelpers[voucherType]}
@@ -677,13 +707,10 @@ function AccountingVouchersPageContent() {
                         </div>
                     </div>
 
-                    <input
-                        type="text"
-                        aria-label={t.vouchers.descriptionAria}
-                        value={description}
-                        onChange={(event) => setDescription(event.target.value)}
-                        placeholder={`${t.vouchers.narrationPlaceholder}…`}
-                        className="w-full border rounded px-2 py-1.5 text-sm flex-shrink-0"
+                    <VoucherAttachments
+                        attachments={attachments}
+                        onChange={setAttachments}
+                        labels={t.vouchers.attachments}
                     />
                 </div>
 
@@ -697,7 +724,11 @@ function AccountingVouchersPageContent() {
                                 <span className="font-semibold">{formatBDT(Math.abs(debitTotal - creditTotal), { locale })}</span>
                             </div>
                             <p className="mt-1 text-xs">
-                                {isBalanced ? 'Balanced — ready to save.' : 'Voucher must balance before it can be saved.'}
+                                {!hasNarration
+                                    ? t.vouchers.narrationRequired
+                                    : isBalanced
+                                        ? 'Balanced — ready to save.'
+                                        : 'Voucher must balance before it can be saved.'}
                             </p>
                         </div>
                         {submitError ? (

@@ -387,19 +387,7 @@ export class AccountingService {
                 tenant_id: tenantId,
                 id,
             },
-            include: {
-                details: {
-                    include: {
-                        account: {
-                            include: {
-                                group: true,
-                                subgroup: true,
-                            },
-                        },
-                    },
-                    orderBy: { created_at: 'asc' },
-                },
-            },
+            include: this.getVoucherInclude(),
         });
 
         if (!voucher) {
@@ -722,6 +710,8 @@ export class AccountingService {
                 const generatedNumber = await this.generateNextVoucherNumberWithClient(tx, tenantId, dto.voucherType);
                 const parsedDate = dto.date ? new Date(dto.date) : undefined;
 
+                const attachmentRows = this.buildVoucherAttachmentRows(tenantId, dto.attachments);
+
                 return tx.voucher.create({
                     data: {
                         tenant_id: tenantId,
@@ -742,20 +732,15 @@ export class AccountingService {
                                 cost_center_id: detail.costCenterId ?? null,
                             })),
                         },
-                    },
-                    include: {
-                        details: {
-                            include: {
-                                account: {
-                                    include: {
-                                        group: true,
-                                        subgroup: true,
-                                    },
+                        ...(attachmentRows.length > 0
+                            ? {
+                                attachments: {
+                                    create: attachmentRows,
                                 },
-                            },
-                            orderBy: { created_at: 'asc' },
-                        },
+                            }
+                            : {}),
                     },
+                    include: this.getVoucherInclude(),
                 });
             }, {
                 isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
@@ -802,6 +787,7 @@ export class AccountingService {
             this.validateVoucherTypeRules(dto, accounts);
 
             await tx.voucherDetail.deleteMany({ where: { voucher_id: id } });
+            await this.syncVoucherAttachments(tx, tenantId, id, dto.attachments);
 
             return tx.voucher.update({
                 where: { id },
@@ -823,19 +809,7 @@ export class AccountingService {
                         })),
                     },
                 },
-                include: {
-                    details: {
-                        include: {
-                            account: {
-                                include: {
-                                    group: true,
-                                    subgroup: true,
-                                },
-                            },
-                        },
-                        orderBy: { created_at: 'asc' },
-                    },
-                },
+                include: this.getVoucherInclude(),
             });
         });
 
@@ -3176,6 +3150,10 @@ ${voucherMessages}
     }
 
     private validateVoucherDetails(dto: CreateVoucherDto) {
+        if (!dto.description?.trim()) {
+            throw new BadRequestException('Voucher narration is required.');
+        }
+
         let totalDebit = 0;
         let totalCredit = 0;
 
@@ -3754,6 +3732,49 @@ ${voucherMessages}
                 credit: finalizeCompareAmounts(creditTotals, columnKeys),
             },
         };
+    }
+
+    private getVoucherInclude() {
+        return {
+            details: {
+                include: {
+                    account: {
+                        include: {
+                            group: true,
+                            subgroup: true,
+                        },
+                    },
+                },
+                orderBy: { created_at: 'asc' as const },
+            },
+            attachments: {
+                orderBy: { created_at: 'asc' as const },
+            },
+        };
+    }
+
+    private buildVoucherAttachmentRows(tenantId: string, attachments?: CreateVoucherDto['attachments']) {
+        return (attachments ?? []).map((attachment) => ({
+            tenant_id: tenantId,
+            file_url: attachment.url,
+            file_name: attachment.fileName,
+            mime_type: attachment.mimeType ?? null,
+            file_size: attachment.fileSize ?? null,
+        }));
+    }
+
+    private async syncVoucherAttachments(
+        tx: Prisma.TransactionClient,
+        tenantId: string,
+        voucherId: string,
+        attachments?: CreateVoucherDto['attachments'],
+    ) {
+        await tx.voucherAttachment.deleteMany({ where: { voucher_id: voucherId } });
+
+        const rows = this.buildVoucherAttachmentRows(tenantId, attachments);
+        if (rows.length > 0) {
+            await tx.voucherAttachment.createMany({ data: rows.map((row) => ({ ...row, voucher_id: voucherId })) });
+        }
     }
 
     private serializeVoucher(voucher: any) {
