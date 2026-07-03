@@ -57,6 +57,24 @@ test.describe.serial('Core modules — sales, purchase, accounting, inventory', 
 
     // ── Sales ───────────────────────────────────────────────────────────────
 
+    test('S0 — sidebar navigates away from New Sale', async ({ page }) => {
+        await page.goto('/sales/new');
+        await expect(page.getByRole('heading', { name: 'New Sale' })).toBeVisible({ timeout: 10_000 });
+
+        await page.locator('aside a[href="/dashboard"]').click();
+        await expect(page).toHaveURL(/\/dashboard/, { timeout: 10_000 });
+
+        await page.goto('/sales/new');
+        await expect(page.getByRole('heading', { name: 'New Sale' })).toBeVisible({ timeout: 10_000 });
+
+        const productSearch = page.getByPlaceholder(/add product/i);
+        await productSearch.click();
+        await page.waitForTimeout(400);
+
+        await page.locator('aside a[href="/inventory/products"]').click();
+        await expect(page).toHaveURL(/\/inventory\/products/, { timeout: 10_000 });
+    });
+
     test('S1 — cash sale via New Sale', async ({ page }) => {
         await page.goto('/sales/new');
         await expect(page.getByRole('heading', { name: 'New Sale' })).toBeVisible({ timeout: 10_000 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { ChevronLeft, Printer, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -17,6 +17,7 @@ import SalesHeader from './components/SalesHeader';
 import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
 import { printSalesInvoice, PAPER_SIZES, type PaperSize } from '@/lib/sales-invoice-printer';
 import { toast } from '@/lib/toast';
+import { useDismissOnClickOutside } from '@/lib/click-outside';
 
 export default function NewSalePage() {
     const { t } = useI18n();
@@ -43,35 +44,43 @@ export default function NewSalePage() {
     const [showPaperMenu, setShowPaperMenu] = useState(false);
     const [paperSize, setPaperSize] = useState<PaperSize>('A4');
     const printMenuRef = useRef<HTMLDivElement>(null);
-    const [totals, setTotals] = useState({
-        subtotal: 0,
-        discount: 0,
+    const [adjustments, setAdjustments] = useState({
         discountPercent: 0,
         rounding: 0,
-        vat: 0,
         transportCost: 0,
         laborCost: 0,
-        total: 0,
     });
 
     useEffect(() => {
         loadPageData();
     }, []);
 
-    // Close paper size menu when clicking outside
-    useEffect(() => {
-        function handleClickOutside(e: MouseEvent) {
-            if (printMenuRef.current && !printMenuRef.current.contains(e.target as Node)) {
-                setShowPaperMenu(false);
-            }
-        }
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    const isInsidePrintMenu = useCallback(
+        (target: Node) => !!printMenuRef.current?.contains(target),
+        [],
+    );
+    useDismissOnClickOutside(showPaperMenu, isInsidePrintMenu, () => setShowPaperMenu(false));
 
-    useEffect(() => {
-        calculateTotals();
-    }, [items, totals.discountPercent, totals.transportCost, totals.laborCost]);
+    const totals = useMemo(() => {
+        const subtotal = items.reduce((sum, item) => sum + item.quantity * item.price, 0);
+        const discount = subtotal * (adjustments.discountPercent / 100);
+        const afterDiscount = subtotal - discount;
+        const vat = afterDiscount * ((salesSettings?.tenant?.default_vat_rate || 0) / 100);
+        const total =
+            afterDiscount
+            + vat
+            + (adjustments.transportCost || 0)
+            + (adjustments.laborCost || 0)
+            + (adjustments.rounding || 0);
+
+        return {
+            subtotal,
+            discount,
+            vat,
+            total,
+            ...adjustments,
+        };
+    }, [items, adjustments, salesSettings]);
 
     const loadPageData = async () => {
         try {
@@ -121,22 +130,6 @@ export default function NewSalePage() {
             },
             selectedSize,
         );
-    };
-
-    const calculateTotals = () => {
-        const subtotal = items.reduce((sum, item) => sum + item.quantity * item.price, 0);
-        const discountAmount = subtotal * (totals.discountPercent / 100);
-        const afterDiscount = subtotal - discountAmount;
-        const vatAmount = afterDiscount * ((salesSettings?.tenant?.default_vat_rate || 0) / 100);
-        const grandTotal = afterDiscount + vatAmount + (totals.transportCost || 0) + (totals.laborCost || 0) + (totals.rounding || 0);
-
-        setTotals((prev) => ({
-            ...prev,
-            subtotal,
-            discount: discountAmount,
-            vat: vatAmount,
-            total: grandTotal,
-        }));
     };
 
     const handleAddItem = (product: any, quantity = 1) => {
@@ -311,7 +304,7 @@ export default function NewSalePage() {
                     <div className="lg:flex-1 lg:overflow-y-auto p-3 space-y-3">
                         <TotalsFooter
                             totals={totals}
-                            onTotalsChange={(newTotals) => setTotals((prev) => ({ ...prev, ...newTotals }))}
+                            onTotalsChange={(patch) => setAdjustments((prev) => ({ ...prev, ...patch }))}
                             tenantVatRate={salesSettings?.tenant?.default_vat_rate || 0}
                         />
                         <div className="border-t pt-3">
