@@ -417,20 +417,33 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                         ))}
                                     </div>
                                 </div>
-                                <div className="rounded-2xl border border-gray-100 p-4">
-                                    <p className="text-xs font-medium text-gray-500">{m.usersSection}</p>
-                                    <div className="mt-3 space-y-3">
-                                        {tenant.users.map((user) => (
-                                            <div key={user.id} className="rounded-2xl bg-gray-50 px-4 py-3">
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <div>
-                                                        <p className="text-sm font-black text-gray-900">{user.name || user.email}</p>
-                                                        <p className="mt-1 text-xs text-gray-500">{user.email}</p>
-                                                    </div>
-                                                    <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-widest text-gray-500">{user.role}</span>
-                                                </div>
-                                            </div>
-                                        ))}
+                                <div className="rounded-2xl border border-gray-100 p-4 md:col-span-2">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.admin.users.tenantUsers.title}</p>
+                                    <h3 className="mt-2 text-sm font-black text-gray-900">{m.usersSection}</h3>
+                                    <p className="mt-1 text-xs text-gray-500">{t.admin.users.tenantUsers.description}</p>
+                                    <div className="mt-4 overflow-hidden rounded-2xl border border-gray-100">
+                                        <table className="w-full text-xs">
+                                            <thead>
+                                                <tr className="bg-gray-50 text-left">
+                                                    <th className="px-4 py-2.5 font-black uppercase tracking-widest text-[10px] text-gray-500">{t.admin.users.tenantUsers.columns.name}</th>
+                                                    <th className="px-4 py-2.5 font-black uppercase tracking-widest text-[10px] text-gray-500">{t.admin.users.tenantUsers.columns.email}</th>
+                                                    <th className="px-4 py-2.5 font-black uppercase tracking-widest text-[10px] text-gray-500">{t.admin.users.tenantUsers.columns.role}</th>
+                                                    <th className="px-4 py-2.5 font-black uppercase tracking-widest text-[10px] text-gray-500">{t.admin.users.tenantUsers.columns.joined}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100">
+                                                {tenant.users.map((user) => (
+                                                    <tr key={user.id}>
+                                                        <td className="px-4 py-3 font-semibold text-gray-900">{user.name || user.email}</td>
+                                                        <td className="px-4 py-3 text-gray-600">{user.email}</td>
+                                                        <td className="px-4 py-3">
+                                                            <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-gray-600">{user.role}</span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-gray-500">{user.joined_at ? formatDate(user.joined_at) : '—'}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 </div>
                             </div>

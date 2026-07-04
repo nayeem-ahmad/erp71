@@ -1,6 +1,7 @@
 jest.mock('@erp71/database', () => ({
     bootstrapDefaultAccountingForTenant: jest.fn().mockResolvedValue(undefined),
     seedBusinessTypeTemplate: jest.fn().mockResolvedValue(undefined),
+    seedDefaultTenantRoles: jest.fn().mockResolvedValue(undefined),
     PrismaClient: class MockPrismaClient {},
 }));
 
@@ -16,6 +17,7 @@ import { DatabaseService } from '../database/database.service';
 import { BillingService } from '../billing/billing.service';
 import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
+import { PasswordResetService } from '../password-reset/password-reset.service';
 
 describe('AdminTenantsService', () => {
   let service: AdminTenantsService;
@@ -24,6 +26,7 @@ describe('AdminTenantsService', () => {
   let jwtService: any;
   let auditService: any;
   let emailService: any;
+  let passwordResetService: any;
 
   const makeTenant = (overrides: any = {}) => ({
     id: 't-1',
@@ -81,8 +84,10 @@ describe('AdminTenantsService', () => {
       passwordResetToken: { create: jest.fn().mockResolvedValue({}) },
       user: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         findMany: jest.fn(),
         update: jest.fn(),
+        delete: jest.fn(),
         count: jest.fn(),
         create: jest.fn(),
       },
@@ -106,6 +111,10 @@ describe('AdminTenantsService', () => {
       log: jest.fn().mockResolvedValue(undefined),
     };
 
+    passwordResetService = {
+      requestReset: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminTenantsService,
@@ -114,6 +123,7 @@ describe('AdminTenantsService', () => {
         { provide: JwtService, useValue: jwtService },
         { provide: AuditService, useValue: auditService },
         { provide: EmailService, useValue: emailService },
+        { provide: PasswordResetService, useValue: passwordResetService },
       ],
     }).compile();
 
@@ -598,10 +608,11 @@ describe('AdminTenantsService', () => {
       id: 'u-1',
       email: 'user@test.com',
       name: 'Test User',
-      is_platform_admin: false,
+      mobile: '+8801712345678',
+      mobile_country_code: 'BD',
+      is_platform_admin: true,
       email_verified_at: new Date(),
       created_at: new Date(),
-      _count: { tenantMembers: 2 },
       ...overrides,
     });
 
@@ -618,15 +629,28 @@ describe('AdminTenantsService', () => {
       expect(result.limit).toBe(20);
     });
 
-    it('maps user correctly with email_verified and tenant_count', async () => {
-      const users = [makeUser({ email_verified_at: new Date(), _count: { tenantMembers: 3 } })];
+    it('maps user correctly with email_verified and mobile', async () => {
+      const users = [makeUser({ email_verified_at: new Date(), mobile: '+8801711111111' })];
       db.user.findMany.mockResolvedValue(users);
       db.user.count.mockResolvedValue(1);
 
       const result = await service.listUsers({});
 
       expect(result.data[0].email_verified).toBe(true);
-      expect(result.data[0].tenant_count).toBe(3);
+      expect(result.data[0].mobile).toBe('+8801711111111');
+    });
+
+    it('filters to platform admin users only', async () => {
+      db.user.findMany.mockResolvedValue([]);
+      db.user.count.mockResolvedValue(0);
+
+      await service.listUsers({});
+
+      expect(db.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ is_platform_admin: true }),
+        }),
+      );
     });
 
     it('returns email_verified false when email not verified', async () => {
@@ -648,9 +672,11 @@ describe('AdminTenantsService', () => {
       expect(db.user.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
+            is_platform_admin: true,
             OR: expect.arrayContaining([
               expect.objectContaining({ email: expect.any(Object) }),
               expect.objectContaining({ name: expect.any(Object) }),
+              expect.objectContaining({ mobile: expect.any(Object) }),
             ]),
           }),
         }),
@@ -740,7 +766,8 @@ describe('AdminTenantsService', () => {
 
   describe('demoteUser', () => {
     it('sets is_platform_admin to false for the user', async () => {
-      db.user.findUnique.mockResolvedValue({ id: 'u-1', email: 'admin@test.com' });
+      db.user.findUnique.mockResolvedValue({ id: 'u-1', email: 'admin@test.com', is_platform_admin: true });
+      db.user.count.mockResolvedValue(1);
       db.user.update.mockResolvedValue({ id: 'u-1', is_platform_admin: false });
 
       const result = await service.demoteUser('u-1', 'super-admin');
@@ -754,7 +781,8 @@ describe('AdminTenantsService', () => {
     });
 
     it('logs the demotion via auditService', async () => {
-      db.user.findUnique.mockResolvedValue({ id: 'u-1', email: 'admin@test.com' });
+      db.user.findUnique.mockResolvedValue({ id: 'u-1', email: 'admin@test.com', is_platform_admin: true });
+      db.user.count.mockResolvedValue(1);
       db.user.update.mockResolvedValue({ id: 'u-1' });
 
       await service.demoteUser('u-1', 'super-admin');

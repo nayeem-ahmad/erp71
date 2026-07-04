@@ -31,6 +31,13 @@ export class SignupDto {
     @IsOptional()
     @IsString()
     referralCode?: string;
+
+    @IsString({ message: 'Mobile number is required.' })
+    mobile: string;
+
+    @IsOptional()
+    @IsString()
+    mobile_country_code?: string;
 }
 
 export class LoginDto {

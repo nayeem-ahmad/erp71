@@ -99,3 +99,48 @@ export class RecordTenantRefundDto {
     @IsNumber() @IsPositive() amount: number;
     @IsOptional() @IsString() notes?: string;
 }
+
+export class CreatePlatformAdminUserDto {
+    @IsEmail()
+    email: string;
+
+    @IsString()
+    @MinLength(8)
+    password: string;
+
+    @IsOptional()
+    @IsString()
+    name?: string;
+
+    @IsOptional()
+    @IsString()
+    mobile_country_code?: string;
+
+    @IsOptional()
+    @IsString()
+    mobile?: string;
+}
+
+export class UpdatePlatformAdminUserDto {
+    @IsOptional()
+    @IsEmail()
+    email?: string;
+
+    @IsOptional()
+    @IsString()
+    name?: string;
+
+    @IsOptional()
+    @IsString()
+    mobile_country_code?: string;
+
+    @IsOptional()
+    @IsString()
+    mobile?: string;
+}
+
+export class AdminResetPlatformUserPasswordDto {
+    @IsString()
+    @MinLength(8)
+    newPassword: string;
+}

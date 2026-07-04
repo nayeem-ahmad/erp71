@@ -22,6 +22,7 @@ describe('AuthService', () => {
     const db = {
         user: {
             findUnique: jest.fn(),
+            findFirst: jest.fn().mockResolvedValue(null),
             create: jest.fn(),
             update: jest.fn(),
         },
@@ -135,6 +136,7 @@ describe('AuthService', () => {
         db.emailVerificationToken.create.mockResolvedValue({});
         jwtService.sign.mockReturnValue('jwt-token');
         auditService.log.mockResolvedValue(undefined);
+        db.user.findFirst.mockResolvedValue(null);
         platformSettings.getPlatformFeatures.mockResolvedValue({
             feedback: false,
             support: false,
@@ -173,6 +175,8 @@ describe('AuthService', () => {
             email: 'owner@example.com',
             password: 'password123',
             name: 'Owner',
+            mobile: '01712345678',
+            mobile_country_code: 'BD',
             tenantName: 'Tenant One',
             storeName: 'Main Store',
             planCode: 'BASIC',
@@ -195,6 +199,8 @@ describe('AuthService', () => {
             email: 'owner@example.com',
             password: 'password123',
             name: 'Owner',
+            mobile: '01712345678',
+            mobile_country_code: 'BD',
             tenantName: 'Tenant One',
             storeName: 'Main Store',
         });
@@ -320,6 +326,8 @@ describe('AuthService', () => {
         await expect(service.signup({
             email: 'owner@example.com',
             password: 'password123',
+            mobile: '01712345678',
+            mobile_country_code: 'BD',
             tenantName: 'Tenant One',
             storeName: 'Main Store',
             planCode: 'PREMIUM',

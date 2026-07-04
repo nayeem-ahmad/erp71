@@ -8,7 +8,13 @@ import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { syncLocalePreferenceFromSession } from '@/lib/localization/preference';
-import { isComingSoonSubscriptionPlan, isSelfServeSubscriptionPlan } from '@erp71/shared-types';
+import {
+    DEFAULT_MOBILE_COUNTRY_CODE,
+    isComingSoonSubscriptionPlan,
+    isSelfServeSubscriptionPlan,
+    normalizeMobileToE164,
+} from '@erp71/shared-types';
+import PhoneNumberField from '@/components/PhoneNumberField';
 
 const PLAN_QUERY_TO_CODE: Record<string, Plan['code']> = {
     basic: 'BASIC',
@@ -58,6 +64,8 @@ function SignupPageContent() {
         name: '',
         email: '',
         password: '',
+        mobile: '',
+        mobile_country_code: DEFAULT_MOBILE_COUNTRY_CODE,
         tenantName: '',
         storeName: '',
         planCode: 'BASIC' as Plan['code'],
@@ -113,6 +121,14 @@ function SignupPageContent() {
         }
         if (!form.storeName.trim()) {
             setError(t.auth.signup.storeNameRequired);
+            return;
+        }
+        if (!form.mobile.trim()) {
+            setError(t.auth.signup.mobileRequired);
+            return;
+        }
+        if (!normalizeMobileToE164(form.mobile_country_code, form.mobile)) {
+            setError(t.auth.signup.mobileInvalid);
             return;
         }
 
@@ -193,6 +209,20 @@ function SignupPageContent() {
                                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                                 <input id="signup-email" type="email" value={form.email} onChange={(e) => handleChange('email', e.target.value)} required className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="owner@company.com" />
                             </div>
+                        </div>
+
+                        <div className="space-y-2 md:col-span-2">
+                            <PhoneNumberField
+                                countryCode={form.mobile_country_code}
+                                mobile={form.mobile}
+                                onCountryCodeChange={(value) => handleChange('mobile_country_code', value)}
+                                onMobileChange={(value) => handleChange('mobile', value)}
+                                countryLabel={t.auth.signup.countryLabel}
+                                mobileLabel={t.auth.signup.mobileLabel}
+                                mobilePlaceholder={t.auth.signup.mobilePlaceholder}
+                                required
+                                idPrefix="signup"
+                            />
                         </div>
 
                         <div className="space-y-2">

@@ -18,6 +18,8 @@ import {
     UserRole,
     isComingSoonSubscriptionPlan,
     isSelfServeSubscriptionPlan,
+    DEFAULT_MOBILE_COUNTRY_CODE,
+    normalizeMobileToE164,
 } from '@erp71/shared-types';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 
@@ -52,6 +54,17 @@ export class AuthService {
             throw new ConflictException('Email already exists');
         }
 
+        const mobileCountryCode = dto.mobile_country_code?.trim() || DEFAULT_MOBILE_COUNTRY_CODE;
+        const normalizedMobile = normalizeMobileToE164(mobileCountryCode, dto.mobile);
+        if (!normalizedMobile) {
+            throw new BadRequestException('Please enter a valid mobile number including country code.');
+        }
+
+        const mobileTaken = await this.db.user.findFirst({ where: { mobile: normalizedMobile } });
+        if (mobileTaken) {
+            throw new ConflictException('Mobile number already in use');
+        }
+
         const passwordHash = await bcrypt.hash(dto.password, 10);
 
         const user = await this.db.$transaction(async (tx) => {
@@ -60,6 +73,8 @@ export class AuthService {
                     email: dto.email,
                     passwordHash,
                     name: dto.name,
+                    mobile: normalizedMobile,
+                    mobile_country_code: mobileCountryCode,
                 },
             });
 

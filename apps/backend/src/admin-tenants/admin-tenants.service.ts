@@ -7,7 +7,13 @@ import { EmailService } from '../email/email.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
 import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate } from '@erp71/database';
-import { ROLE_DEFAULT_PERMISSIONS, UserRole } from '@erp71/shared-types';
+import {
+    DEFAULT_MOBILE_COUNTRY_CODE,
+    ROLE_DEFAULT_PERMISSIONS,
+    UserRole,
+    normalizeMobileToE164,
+} from '@erp71/shared-types';
+import { PasswordResetService } from '../password-reset/password-reset.service';
 import { seedDefaultTenantRoles } from '@erp71/database';
 import {
     ListAdminTenantsQueryDto,
@@ -19,6 +25,9 @@ import {
     CreateAdminTenantDto,
     RecordTenantPaymentDto,
     RecordTenantRefundDto,
+    CreatePlatformAdminUserDto,
+    UpdatePlatformAdminUserDto,
+    AdminResetPlatformUserPasswordDto,
 } from './admin-tenants.dto';
 
 const ACTIVE_TENANT_FILTER = { deleted_at: null } as const;
@@ -31,7 +40,29 @@ export class AdminTenantsService {
         private readonly jwtService: JwtService,
         private readonly auditService: AuditService,
         private readonly emailService: EmailService,
+        private readonly passwordResetService: PasswordResetService,
     ) {}
+
+    private resolveMobileFields(
+        mobile?: string,
+        mobileCountryCode?: string,
+        options?: { required?: boolean },
+    ): { mobile: string | null; mobile_country_code: string } {
+        const countryCode = mobileCountryCode?.trim() || DEFAULT_MOBILE_COUNTRY_CODE;
+        if (!mobile?.trim()) {
+            if (options?.required) {
+                throw new BadRequestException('A valid mobile number is required.');
+            }
+            return { mobile: null, mobile_country_code: countryCode };
+        }
+
+        const normalized = normalizeMobileToE164(countryCode, mobile);
+        if (!normalized) {
+            throw new BadRequestException('Please enter a valid mobile number including country code.');
+        }
+
+        return { mobile: normalized, mobile_country_code: countryCode };
+    }
 
     async listTenants(query: ListAdminTenantsQueryDto) {
         const tenants = await this.db.tenant.findMany({
@@ -500,15 +531,15 @@ export class AdminTenantsService {
         const limit = Math.min(100, Math.max(1, query.limit ?? 20));
         const skip = (page - 1) * limit;
 
-        const where: any = {};
+        const where: any = {
+            is_platform_admin: true,
+        };
         if (query.search) {
             where.OR = [
                 { email: { contains: query.search, mode: 'insensitive' as const } },
                 { name: { contains: query.search, mode: 'insensitive' as const } },
+                { mobile: { contains: query.search, mode: 'insensitive' as const } },
             ];
-        }
-        if (query.isAdmin !== undefined) {
-            where.is_platform_admin = query.isAdmin;
         }
 
         const [users, total] = await Promise.all([
@@ -518,16 +549,11 @@ export class AdminTenantsService {
                     id: true,
                     email: true,
                     name: true,
+                    mobile: true,
+                    mobile_country_code: true,
                     is_platform_admin: true,
                     email_verified_at: true,
                     created_at: true,
-                    _count: {
-                        select: {
-                            tenantMembers: {
-                                where: { tenant: ACTIVE_TENANT_FILTER },
-                            },
-                        },
-                    },
                 },
                 orderBy: { created_at: 'desc' },
                 skip,
@@ -541,9 +567,10 @@ export class AdminTenantsService {
                 id: u.id,
                 email: u.email,
                 name: u.name,
+                mobile: u.mobile,
+                mobile_country_code: u.mobile_country_code,
                 is_platform_admin: (u as any).is_platform_admin,
                 email_verified: !!u.email_verified_at,
-                tenant_count: (u as any)._count.tenantMembers,
                 created_at: u.created_at,
             })),
             total,
@@ -599,6 +626,186 @@ export class AdminTenantsService {
         });
 
         return { success: true, userId, is_platform_admin: false };
+    }
+
+    async createPlatformAdminUser(dto: CreatePlatformAdminUserDto, adminUserId: string) {
+        const existing = await this.db.user.findUnique({ where: { email: dto.email } });
+        if (existing) {
+            throw new ConflictException('Email already exists');
+        }
+
+        const mobileFields = this.resolveMobileFields(dto.mobile, dto.mobile_country_code);
+        if (mobileFields.mobile) {
+            const mobileTaken = await this.db.user.findFirst({ where: { mobile: mobileFields.mobile } });
+            if (mobileTaken) throw new ConflictException('Mobile number already in use');
+        }
+
+        const passwordHash = await bcrypt.hash(dto.password, 10);
+        const user = await this.db.user.create({
+            data: {
+                email: dto.email,
+                passwordHash,
+                name: dto.name?.trim() || null,
+                is_platform_admin: true,
+                mobile: mobileFields.mobile,
+                mobile_country_code: mobileFields.mobile_country_code,
+            },
+            select: {
+                id: true,
+                email: true,
+                name: true,
+                mobile: true,
+                mobile_country_code: true,
+                is_platform_admin: true,
+                email_verified_at: true,
+                created_at: true,
+            },
+        });
+
+        await this.auditService.log('user.platform.create', 'User', { userId: adminUserId }, user.id, {
+            email: user.email,
+        });
+
+        return {
+            ...user,
+            email_verified: !!user.email_verified_at,
+        };
+    }
+
+    async updatePlatformAdminUser(userId: string, dto: UpdatePlatformAdminUserDto, adminUserId: string) {
+        const user = await this.db.user.findUnique({ where: { id: userId } });
+        if (!user || !user.is_platform_admin) {
+            throw new NotFoundException('Platform admin user not found');
+        }
+
+        const data: Record<string, unknown> = {};
+        if (dto.name !== undefined) data.name = dto.name?.trim() || null;
+        if (dto.email !== undefined && dto.email !== user.email) {
+            const taken = await this.db.user.findUnique({ where: { email: dto.email } });
+            if (taken) throw new ConflictException('Email already exists');
+            data.email = dto.email;
+        }
+        if (dto.mobile !== undefined || dto.mobile_country_code !== undefined) {
+            if (!dto.mobile?.trim()) {
+                data.mobile = null;
+                if (dto.mobile_country_code !== undefined) {
+                    data.mobile_country_code = dto.mobile_country_code || DEFAULT_MOBILE_COUNTRY_CODE;
+                }
+            } else {
+                const mobileFields = this.resolveMobileFields(
+                    dto.mobile,
+                    dto.mobile_country_code ?? user.mobile_country_code,
+                );
+                const mobileTaken = await this.db.user.findFirst({
+                    where: { mobile: mobileFields.mobile, id: { not: userId } },
+                });
+                if (mobileTaken) throw new ConflictException('Mobile number already in use');
+                data.mobile = mobileFields.mobile;
+                data.mobile_country_code = mobileFields.mobile_country_code;
+            }
+        }
+
+        const updated = await this.db.user.update({
+            where: { id: userId },
+            data,
+            select: {
+                id: true,
+                email: true,
+                name: true,
+                mobile: true,
+                mobile_country_code: true,
+                is_platform_admin: true,
+                email_verified_at: true,
+                created_at: true,
+            },
+        });
+
+        await this.auditService.log('user.platform.update', 'User', { userId: adminUserId }, userId, {
+            email: updated.email,
+        });
+
+        return {
+            ...updated,
+            email_verified: !!updated.email_verified_at,
+        };
+    }
+
+    async deletePlatformAdminUser(userId: string, adminUserId: string) {
+        if (userId === adminUserId) {
+            throw new BadRequestException('You cannot delete your own account');
+        }
+
+        const user = await this.db.user.findUnique({
+            where: { id: userId },
+            include: {
+                _count: {
+                    select: {
+                        tenantsOwned: { where: ACTIVE_TENANT_FILTER },
+                        tenantMembers: { where: { tenant: ACTIVE_TENANT_FILTER } },
+                    },
+                },
+            },
+        });
+        if (!user || !user.is_platform_admin) {
+            throw new NotFoundException('Platform admin user not found');
+        }
+
+        const remainingAdmins = await this.db.user.count({
+            where: { is_platform_admin: true, id: { not: userId } },
+        });
+        if (remainingAdmins === 0) {
+            throw new BadRequestException('Cannot delete the last platform admin');
+        }
+
+        if (user._count.tenantsOwned > 0 || user._count.tenantMembers > 0) {
+            throw new BadRequestException(
+                'Cannot delete a user who belongs to tenant workspaces. Remove tenant access first.',
+            );
+        }
+
+        await this.db.user.delete({ where: { id: userId } });
+        await this.auditService.log('user.platform.delete', 'User', { userId: adminUserId }, userId, {
+            email: user.email,
+        });
+
+        return { success: true, userId };
+    }
+
+    async resetPlatformAdminUserPassword(
+        userId: string,
+        dto: AdminResetPlatformUserPasswordDto,
+        adminUserId: string,
+    ) {
+        const user = await this.db.user.findUnique({ where: { id: userId } });
+        if (!user || !user.is_platform_admin) {
+            throw new NotFoundException('Platform admin user not found');
+        }
+
+        const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+        await this.db.user.update({
+            where: { id: userId },
+            data: { passwordHash, token_version: { increment: 1 } },
+        });
+
+        await this.auditService.log('user.platform.reset_password', 'User', { userId: adminUserId }, userId, {
+            email: user.email,
+        });
+
+        return { success: true };
+    }
+
+    async sendPlatformAdminUserResetEmail(userId: string, adminUserId: string) {
+        const user = await this.db.user.findUnique({ where: { id: userId } });
+        if (!user || !user.is_platform_admin) {
+            throw new NotFoundException('Platform admin user not found');
+        }
+
+        await this.passwordResetService.requestReset(user.email);
+        await this.auditService.log('user.platform.reset_email', 'User', { userId: adminUserId }, userId, {
+            email: user.email,
+        });
+
+        return { success: true };
     }
 
     async listTenantLedger(query: { tenantId?: string }) {

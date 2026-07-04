@@ -34,6 +34,7 @@ describe('SignupPage', () => {
         fireEvent.change(screen.getByPlaceholderText(/Nayeem Ahmed/i), { target: { value: 'Nayeem' } });
         fireEvent.change(screen.getByPlaceholderText(/owner@company.com/i), { target: { value: 'owner@example.com' } });
         fireEvent.change(screen.getByPlaceholderText(/At least 8 characters/i), { target: { value: 'password123' } });
+        fireEvent.change(screen.getByPlaceholderText(/01XXXXXXXXX/i), { target: { value: '01712345678' } });
         fireEvent.change(screen.getByPlaceholderText(/Dhaka Retail Co./i), { target: { value: 'Tenant One' } });
         fireEvent.change(screen.getByPlaceholderText(/Gulshan Branch/i), { target: { value: 'Main Store' } });
 
@@ -43,6 +44,8 @@ describe('SignupPage', () => {
             name: 'Nayeem',
             email: 'owner@example.com',
             password: 'password123',
+            mobile: '01712345678',
+            mobile_country_code: 'BD',
             tenantName: 'Tenant One',
             storeName: 'Main Store',
             planCode: 'BASIC',

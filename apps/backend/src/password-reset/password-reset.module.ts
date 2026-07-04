@@ -5,5 +5,6 @@ import { PasswordResetController } from './password-reset.controller';
 @Module({
     providers: [PasswordResetService],
     controllers: [PasswordResetController],
+    exports: [PasswordResetService],
 })
 export class PasswordResetModule {}

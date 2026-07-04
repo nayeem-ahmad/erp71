@@ -1221,6 +1221,36 @@ export const api = {
     },
     promoteUser: (userId: string) => fetchWithAuth(`/admin/users/${userId}/promote`, { method: 'POST' }),
     demoteUser: (userId: string) => fetchWithAuth(`/admin/users/${userId}/promote`, { method: 'DELETE' }),
+    createPlatformAdminUser: (data: {
+        email: string;
+        password: string;
+        name?: string;
+        mobile?: string;
+        mobile_country_code?: string;
+    }) => fetchWithAuth('/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    }),
+    updatePlatformAdminUser: (userId: string, data: {
+        email?: string;
+        name?: string;
+        mobile?: string;
+        mobile_country_code?: string;
+    }) => fetchWithAuth(`/admin/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    }),
+    deletePlatformAdminUser: (userId: string) => fetchWithAuth(`/admin/users/${userId}`, { method: 'DELETE' }),
+    resetPlatformAdminUserPassword: (userId: string, newPassword: string) =>
+        fetchWithAuth(`/admin/users/${userId}/reset-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ newPassword }),
+        }),
+    sendPlatformAdminUserResetEmail: (userId: string) =>
+        fetchWithAuth(`/admin/users/${userId}/send-reset-email`, { method: 'POST' }),
     getAdminFeedback: (params?: { type?: string; search?: string; page?: number; limit?: number }) => {
         const query = new URLSearchParams();
         if (params?.type) query.set('type', params.type);
