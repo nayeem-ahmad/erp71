@@ -357,7 +357,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
-- [x] Referee login redirect + invite email fix — `storeAuthResponse` always calls `getMe()` so referee context is detected; dedicated `sendRefereeLoginInvite` email (not generic password reset); layout auto-applies referee context on refresh — done 2026-07-04
+- [x] Referee login redirect + invite email fix — `storeAuthResponse` always calls `getMe()` so referee context is detected; dedicated `sendRefereeLoginInvite` email (not generic password reset); layout auto-applies referee context on refresh; `resolveActiveRefereeForUser` falls back to email match and auto-links `user_id` — done 2026-07-04
 - [x] Referee self-service portal — link `Referee.user_id` to `User`; auto-provision login + password-reset invite on create; `GET /referrals/me/ledger` for referees; `/referrals` dashboard (copy code, signup link, balance due, commissions, payments); workspace chooser + referee sidebar mode; admin resend-invite — done 2026-07-04
 - [x] Referee/referral commission system — frontend completion — Prisma migration `20260704160000_add_referral_commission_system`; platform-admin `/admin/referrals` list + per-referee ledger/payment UI; sidebar nav link; API client methods; signup referral code field with live validation (`?ref=` / `?referral=`); i18n en/bn/ms — done 2026-07-04
 - [x] Fix Load Demo Data 500 — `packages/database/index.js` did not export compiled `seedTenantDemoData`; added `prisma/seed-demo.js` + exports; `loadDemoData` auto-creates default warehouse for new tenants — done 2026-07-03

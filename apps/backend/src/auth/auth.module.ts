@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AssetsModule } from '../assets/assets.module';
 import { PlatformSettingsModule } from '../platform-settings/platform-settings.module';
+import { ReferralsModule } from '../referrals/referrals.module';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
@@ -19,6 +20,7 @@ import { TotpService } from './totp.service';
     imports: [
         AssetsModule,
         PlatformSettingsModule,
+        ReferralsModule,
         PassportModule,
         JwtModule.register({
             secret: process.env.JWT_SECRET || 'fallback-secret-for-dev-only',

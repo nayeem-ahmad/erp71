@@ -81,6 +81,48 @@ export class ReferralsService {
         await this.passwordReset.requestRefereeInvite(user.email, referee.name, referee.referral_code);
     }
 
+    /** Resolve the active referee profile for a signed-in user, linking by email when needed. */
+    async resolveActiveRefereeForUser(userId: string, email: string) {
+        const select = {
+            id: true,
+            name: true,
+            email: true,
+            referral_code: true,
+            signup_discount: true,
+            commission_rate: true,
+            is_active: true,
+            user_id: true,
+        } as const;
+
+        const byUserId = await this.db.referee.findFirst({
+            where: { user_id: userId, is_active: true },
+            select,
+        });
+        if (byUserId) return byUserId;
+
+        const byEmail = await this.db.referee.findFirst({
+            where: { email, is_active: true },
+            select,
+        });
+        if (!byEmail) return null;
+        if (byEmail.user_id && byEmail.user_id !== userId) return null;
+
+        if (!byEmail.user_id) {
+            const linkedElsewhere = await this.db.referee.findFirst({
+                where: { user_id: userId, id: { not: byEmail.id } },
+            });
+            if (linkedElsewhere) return null;
+
+            await this.db.referee.update({
+                where: { id: byEmail.id },
+                data: { user_id: userId },
+            });
+            return { ...byEmail, user_id: userId };
+        }
+
+        return byEmail;
+    }
+
     private mapReferee(r: any) {
         return {
             ...r,

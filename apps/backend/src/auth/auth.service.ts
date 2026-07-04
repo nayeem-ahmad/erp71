@@ -22,6 +22,7 @@ import {
     normalizeMobileToE164,
 } from '@erp71/shared-types';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
+import { ReferralsService } from '../referrals/referrals.service';
 
 
 type TenantProvisionDto = {
@@ -43,6 +44,7 @@ export class AuthService {
         private readonly totp: TotpService,
         private readonly assets: AssetsService,
         private readonly platformSettings: PlatformSettingsService,
+        private readonly referrals: ReferralsService,
     ) { }
 
     async signup(dto: SignupDto) {
@@ -356,19 +358,7 @@ export class AuthService {
         const twoFactorEnabled = !!totpSecret && !totpSecret.startsWith('pending:');
 
         const platformFeatures = await this.platformSettings.getPlatformFeatures().catch(() => DEFAULT_PLATFORM_FEATURES);
-        const referee = await this.db.referee.findFirst({
-            where: { user_id: userId, is_active: true },
-            select: {
-                id: true,
-                name: true,
-                email: true,
-                referral_code: true,
-                signup_discount: true,
-                commission_rate: true,
-                is_active: true,
-                user_id: true,
-            },
-        });
+        const referee = await this.referrals.resolveActiveRefereeForUser(userId, user.email);
 
         return {
             id: user.id,

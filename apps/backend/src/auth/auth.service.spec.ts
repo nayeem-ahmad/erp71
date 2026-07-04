@@ -9,6 +9,7 @@ import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { TotpService } from './totp.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
+import { ReferralsService } from '../referrals/referrals.service';
 import { StorePermission } from '@erp71/shared-types';
 
 jest.mock('bcrypt', () => ({
@@ -80,6 +81,10 @@ describe('AuthService', () => {
             help: false,
             voice: false,
         }),
+    };
+
+    const referralsService = {
+        resolveActiveRefereeForUser: jest.fn().mockResolvedValue(null),
     };
 
     const makeUserWithAccess = (storeId: string, tenantId: string) => ({
@@ -154,6 +159,7 @@ describe('AuthService', () => {
                 { provide: TotpService, useValue: { isEnabled: jest.fn().mockReturnValue(false) } },
                 { provide: AssetsService, useValue: { uploadFile: jest.fn() } },
                 { provide: PlatformSettingsService, useValue: platformSettings },
+                { provide: ReferralsService, useValue: referralsService },
             ],
         }).compile();
 
