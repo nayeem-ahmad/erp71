@@ -60,6 +60,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Audit `SubscriptionAccessGuard` — verify it correctly gates all premium features — done 2026-06-09
 - [x] Build billing portal page (tenants view invoices and billing history) — `/dashboard/billing` with plan management + billing event history (amount, reference) — done 2026-06-12
 - [x] Disable free plan and free trial for new signups — FREE plan deactivated in DB/seed; `getPlans`/checkout reject FREE; new tenants provisioned as `PAST_DUE` until payment; marketing/signup/pricing copy updated (en/bn/ms); migration `16_disable_free_plan.sql` — done 2026-07-03
+- [x] Mark Premium subscription as coming soon — `COMING_SOON_SUBSCRIPTION_PLAN_CODES`; self-serve signup/checkout blocked; marketing cards show Coming Soon badge; admin manual Premium assignment kept — done 2026-07-03
 
 ---
 
@@ -616,3 +617,4 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Record `unit_cost_at_sale` on SaleItem + expose gross profit in sales reports — Prisma migration adds nullable `unit_cost_at_sale` column; sales service snapshots cost from ProductPrice (store-specific → global fallback) at sale creation and on sale edit; fixed InventoryMovement.unit_cost bug (was storing selling price instead of cost); getSalesSummary/getSalesByProduct/getBranchReport now return COGS, grossProfit, and grossMarginPct — done 2026-07-02
 - [x] WhatsApp settings admin page — `/admin/platform-settings/whatsapp` with Meta Cloud API credential form (access token, phone number ID, API version), test send endpoint `POST /admin/platform-settings/whatsapp/test`, index card link, en/bn/ms i18n — done 2026-07-03
 - [x] Disable free plan and free trial for new signups — `4814fdd`; FREE hidden from signup/pricing; new tenants `PAST_DUE` until checkout; deployed to VPS — done 2026-07-03
+- [x] Mark Premium as coming soon — `17c52a1`; visible on pricing/homepage with badge; excluded from self-serve signup/billing; admin Premium assignment unchanged — done 2026-07-03
