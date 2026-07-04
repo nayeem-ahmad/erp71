@@ -142,6 +142,43 @@ describe('Sidebar — Story 30.1', () => {
         expect(screen.queryByText('Inventory')).not.toBeInTheDocument();
     });
 
+    it('trims the Admin menu to accounting-relevant links in accounting-only mode', () => {
+        render(<Sidebar canAccessAccounting accountingOnlyMode canManageBilling canManageTeam />);
+
+        fireEvent.click(screen.getByText('Admin'));
+
+        // Accounting-relevant links stay
+        expect(screen.getByText('My Account')).toBeInTheDocument();
+        expect(screen.getByText('Team & Permissions')).toBeInTheDocument();
+        expect(screen.getByText('Audit Logs')).toBeInTheDocument();
+        expect(screen.getByText('Localization')).toBeInTheDocument();
+        expect(screen.getByText('Tax / VAT')).toBeInTheDocument();
+        expect(screen.getByText('Data Management')).toBeInTheDocument();
+        expect(screen.getByText('Billing')).toBeInTheDocument();
+
+        // Retail / marketing links are hidden
+        expect(screen.queryByText('Loyalty Program')).not.toBeInTheDocument();
+        expect(screen.queryByText('POS Counters')).not.toBeInTheDocument();
+        expect(screen.queryByText('Discount Codes')).not.toBeInTheDocument();
+        expect(screen.queryByText('Payment Methods')).not.toBeInTheDocument();
+        expect(screen.queryByText('Sales Settings')).not.toBeInTheDocument();
+        expect(screen.queryByText('SMS Notifications')).not.toBeInTheDocument();
+        expect(screen.queryByText('Report Emails')).not.toBeInTheDocument();
+        expect(screen.queryByText('Branding')).not.toBeInTheDocument();
+        expect(screen.queryByText('SMS Credits')).not.toBeInTheDocument();
+        expect(screen.queryByText('AI Credits')).not.toBeInTheDocument();
+    });
+
+    it('keeps the full Admin menu when not in accounting-only mode', () => {
+        render(<Sidebar canAccessAccounting canManageBilling canManageTeam />);
+
+        fireEvent.click(screen.getByText('Admin'));
+
+        expect(screen.getByText('Loyalty Program')).toBeInTheDocument();
+        expect(screen.getByText('Payment Methods')).toBeInTheDocument();
+        expect(screen.getByText('Branding')).toBeInTheDocument();
+    });
+
     it('shows full platform admin navigation in platform admin mode', () => {
         render(<Sidebar platformAdminMode helpEnabled />);
 
