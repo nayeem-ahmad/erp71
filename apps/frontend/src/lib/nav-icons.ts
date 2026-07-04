@@ -1,8 +1,10 @@
 import type { LucideIcon } from 'lucide-react';
 import {
+    Activity,
     AlertTriangle,
     ArrowLeftRight,
     BadgeCheck,
+    BadgePercent,
     Banknote,
     BarChart3,
     BookOpen,
@@ -28,8 +30,11 @@ import {
     Landmark,
     Layers,
     LayoutDashboard,
+    LayoutList,
     Lock,
+    Mail,
     MapPin,
+    MessageCircle,
     MessageSquare,
     Monitor,
     Package,
@@ -59,7 +64,12 @@ import {
 } from 'lucide-react';
 
 const NAV_ICON_MAP: Record<string, LucideIcon> = {
+    Activity,
     LayoutDashboard,
+    LayoutList,
+    Mail,
+    MessageCircle,
+    BadgePercent,
     ShoppingBag,
     ShoppingCart,
     Package,

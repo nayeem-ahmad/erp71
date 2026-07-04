@@ -1,4 +1,4 @@
-import { DEFAULT_TENANT_NAV_LAYOUT } from '@erp71/shared-types';
+import { DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT, DEFAULT_TENANT_NAV_LAYOUT } from '@erp71/shared-types';
 import { buildNavModulesFromLayout } from './nav-resolver';
 import { enMessages } from './localization/messages/en/index';
 
@@ -23,5 +23,27 @@ describe('nav-resolver', () => {
         expect(labels).toContain('Transactions & Funds');
         expect(labels).toContain('Reports');
         expect(labels).toContain('Settings');
+    });
+
+    it('builds platform admin sidebar with platform settings subgroup', () => {
+        const modules = buildNavModulesFromLayout(
+            DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT,
+            enMessages as Record<string, unknown>,
+        );
+
+        const admin = modules.find((mod) => mod.key === 'admin');
+        expect(admin?.children?.length).toBeGreaterThan(0);
+
+        const labels = (admin?.children ?? []).flatMap((child) => {
+            if ('type' in child && child.type === 'subgroup') {
+                return [child.label, ...child.children.map((link) => link.label)];
+            }
+            return [child.label];
+        });
+
+        expect(labels).toContain('System Health');
+        expect(labels).toContain('Platform Settings');
+        expect(labels).toContain('SMS Gateway');
+        expect(labels).toContain('Subscription Plans');
     });
 });

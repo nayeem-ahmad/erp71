@@ -142,6 +142,18 @@ describe('Sidebar — Story 30.1', () => {
         expect(screen.queryByText('Inventory')).not.toBeInTheDocument();
     });
 
+    it('shows full platform admin navigation in platform admin mode', () => {
+        render(<Sidebar platformAdminMode helpEnabled />);
+
+        fireEvent.click(screen.getByText('Platform Admin'));
+        expect(screen.getByText('System Health')).toBeInTheDocument();
+        expect(screen.getByText('Platform Settings')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByText('Platform Settings'));
+        expect(screen.getByText('SMS Gateway')).toBeInTheDocument();
+        expect(screen.getByText('Subscription Plans')).toBeInTheDocument();
+    });
+
     it('shows platform admin and billing items when enabled', () => {
         render(<Sidebar canAccessAccounting canAccessAdmin canManageBilling canAccessInventoryReports activePlanCode="STANDARD" />);
 
