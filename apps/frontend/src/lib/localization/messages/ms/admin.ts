@@ -358,8 +358,12 @@ export const adminMessages = {
                         description: 'Kelayakan API SSL Wireless, bKash, dan Nagad.',
                     },
                     general: {
-                        label: 'Am',
+                        label: 'Tetapan Umum',
                         description: 'Nama platform, e-mel sokongan, dan mod penyelenggaraan.',
+                    },
+                    tenantFeatures: {
+                        label: 'Ciri Penyewa',
+                        description: 'Kawal ciri bantuan yang kelihatan kepada pengguna kedai.',
                     },
                     navigation: {
                         label: 'Navigasi',
@@ -443,7 +447,7 @@ export const adminMessages = {
                 apiKeyHint: 'Biarkan kosong untuk mengekalkan kunci sedia ada tanpa perubahan.',
             },
             general: {
-                title: 'Am',
+                title: 'Tetapan Umum',
                 platformName: {
                     label: 'Nama Platform',
                     placeholder: 'ERP71',
@@ -459,27 +463,29 @@ export const adminMessages = {
                     hint: 'Apabila diaktifkan, API mengembalikan 503 untuk semua permintaan bukan pentadbir.',
                     activeWarning: 'Mod penyelenggaraan AKTIF — penyewa tidak dapat mengakses platform.',
                 },
-                features: {
-                    title: 'Ciri Penyewa',
-                    hint: 'Kawal ciri bantuan yang kelihatan kepada pengguna kedai. Semua dimatikan secara lalai.',
-                    feedback: {
-                        label: 'Maklum Balas',
-                        hint: 'Widget maklum balas terapung di sudut kanan bawah.',
-                    },
-                    support: {
-                        label: 'Sokongan',
-                        hint: 'Sembang sokongan dalam aplikasi untuk pemilik kedai.',
-                    },
-                    help: {
-                        label: 'Bantuan',
-                        hint: 'Pautan Pusat Bantuan di bar sisi dan panel bantuan kontekstual.',
-                    },
-                    voice: {
-                        label: 'Suara',
-                        hint: 'Navigasi suara di pengepala dan kemasukan suara pada borang.',
-                    },
-                },
                 saved: 'Tetapan am disimpan.',
+            },
+            tenantFeatures: {
+                title: 'Ciri Penyewa',
+                description: 'Kawal ciri bantuan yang kelihatan kepada pengguna kedai.',
+                hint: 'Semua ciri dimatikan secara lalai. Perubahan dikenakan kepada setiap penyewa di platform.',
+                feedback: {
+                    label: 'Maklum Balas',
+                    hint: 'Widget maklum balas terapung di sudut kanan bawah.',
+                },
+                support: {
+                    label: 'Sokongan',
+                    hint: 'Sembang sokongan dalam aplikasi untuk pemilik kedai.',
+                },
+                help: {
+                    label: 'Bantuan',
+                    hint: 'Pautan Pusat Bantuan di bar sisi dan panel bantuan kontekstual.',
+                },
+                voice: {
+                    label: 'Suara',
+                    hint: 'Navigasi suara di pengepala dan kemasukan suara pada borang.',
+                },
+                saved: 'Tetapan ciri penyewa disimpan.',
             },
             sms: {
                 title: 'Get Laluan SMS',

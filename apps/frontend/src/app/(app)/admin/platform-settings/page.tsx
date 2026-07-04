@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { MessageSquare, Mail, CreditCard, Settings, ChevronRight, Sparkles, LayoutList, BadgePercent, MessageCircle } from 'lucide-react';
+import { MessageSquare, Mail, CreditCard, Settings, ChevronRight, Sparkles, LayoutList, BadgePercent, MessageCircle, ToggleLeft } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -51,6 +51,14 @@ export default function PlatformSettingsIndexPage() {
             description: m.sections.general.description,
             color: 'text-amber-600',
             bg: 'bg-amber-50',
+        },
+        {
+            href: '/admin/platform-settings/tenant-features',
+            icon: ToggleLeft,
+            label: m.sections.tenantFeatures.label,
+            description: m.sections.tenantFeatures.description,
+            color: 'text-indigo-600',
+            bg: 'bg-indigo-50',
         },
         {
             href: '/admin/platform-settings/ai',

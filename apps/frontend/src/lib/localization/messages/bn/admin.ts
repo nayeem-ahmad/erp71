@@ -358,8 +358,12 @@ export const adminMessages = {
                         description: "SSL Wireless, bKash, and Nagad API credentials.",
                     },
                     general: {
-                        label: "General",
+                        label: "General Settings",
                         description: "Platform name, support email, and maintenance mode.",
+                    },
+                    tenantFeatures: {
+                        label: "Tenant Features",
+                        description: "Control which assist features are visible to shop users.",
                     },
                     navigation: {
                         label: "Navigation",
@@ -443,7 +447,7 @@ export const adminMessages = {
                 apiKeyHint: "Leave blank to keep the existing key unchanged.",
             },
             general: {
-                title: "General",
+                title: "General Settings",
                 platformName: {
                     label: "Platform Name",
                     placeholder: "ERP71",
@@ -459,27 +463,29 @@ export const adminMessages = {
                     hint: "When enabled, the API returns a 503 for all non-admin requests.",
                     activeWarning: "Maintenance mode is ON — tenants cannot access the platform.",
                 },
-                features: {
-                    title: "Tenant Features",
-                    hint: "Control which assist features are visible to shop users. All are off by default.",
-                    feedback: {
-                        label: "Feedback",
-                        hint: "Floating feedback widget in the bottom-right corner.",
-                    },
-                    support: {
-                        label: "Support",
-                        hint: "In-app support chat for shop owners.",
-                    },
-                    help: {
-                        label: "Help",
-                        hint: "Help Center sidebar link and contextual help panels.",
-                    },
-                    voice: {
-                        label: "Voice",
-                        hint: "Voice navigation in the header and voice entry on forms.",
-                    },
-                },
                 saved: "General settings saved.",
+            },
+            tenantFeatures: {
+                title: "Tenant Features",
+                description: "Control which assist features are visible to shop users.",
+                hint: "All features are off by default. Changes apply to every tenant on the platform.",
+                feedback: {
+                    label: "Feedback",
+                    hint: "Floating feedback widget in the bottom-right corner.",
+                },
+                support: {
+                    label: "Support",
+                    hint: "In-app support chat for shop owners.",
+                },
+                help: {
+                    label: "Help",
+                    hint: "Help Center sidebar link and contextual help panels.",
+                },
+                voice: {
+                    label: "Voice",
+                    hint: "Voice navigation in the header and voice entry on forms.",
+                },
+                saved: "Tenant feature settings saved.",
             },
             sms: {
                 title: "SMS Gateway",

@@ -212,6 +212,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'admin.platform-settings.whatsapp': { id: 'admin.platform-settings.whatsapp', kind: 'link', icon: 'MessageCircle', labelKey: 'sidebar.items.platformSettingsWhatsapp', href: '/admin/platform-settings/whatsapp' },
   'admin.platform-settings.payments': { id: 'admin.platform-settings.payments', kind: 'link', icon: 'CreditCard', labelKey: 'sidebar.items.platformSettingsPayments', href: '/admin/platform-settings/payments' },
   'admin.platform-settings.general': { id: 'admin.platform-settings.general', kind: 'link', icon: 'Settings', labelKey: 'sidebar.items.platformSettingsGeneral', href: '/admin/platform-settings/general' },
+  'admin.platform-settings.tenant-features': { id: 'admin.platform-settings.tenant-features', kind: 'link', icon: 'ToggleLeft', labelKey: 'sidebar.items.platformSettingsTenantFeatures', href: '/admin/platform-settings/tenant-features' },
   'admin.platform-settings.ai': { id: 'admin.platform-settings.ai', kind: 'link', icon: 'Sparkles', labelKey: 'sidebar.items.platformSettingsAi', href: '/admin/platform-settings/ai' },
   'admin.platform-settings.navigation': { id: 'admin.platform-settings.navigation', kind: 'link', icon: 'LayoutList', labelKey: 'sidebar.items.platformSettingsNavigation', href: '/admin/platform-settings/navigation' },
   'admin.platform-settings.plans': { id: 'admin.platform-settings.plans', kind: 'link', icon: 'BadgePercent', labelKey: 'sidebar.items.platformSettingsPlans', href: '/admin/platform-settings/plans' },
@@ -393,9 +394,10 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.platform-settings.whatsapp', 'admin.platform-settings', 2),
   layoutNode('admin.platform-settings.payments', 'admin.platform-settings', 3),
   layoutNode('admin.platform-settings.general', 'admin.platform-settings', 4),
-  layoutNode('admin.platform-settings.ai', 'admin.platform-settings', 5),
-  layoutNode('admin.platform-settings.navigation', 'admin.platform-settings', 6),
-  layoutNode('admin.platform-settings.plans', 'admin.platform-settings', 7),
+  layoutNode('admin.platform-settings.tenant-features', 'admin.platform-settings', 5),
+  layoutNode('admin.platform-settings.ai', 'admin.platform-settings', 6),
+  layoutNode('admin.platform-settings.navigation', 'admin.platform-settings', 7),
+  layoutNode('admin.platform-settings.plans', 'admin.platform-settings', 8),
   layoutNode('help', null, 1),
 ];
 

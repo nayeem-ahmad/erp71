@@ -204,6 +204,46 @@ function ProfileTab({ user, onToast }: { user: any; onToast: (t: ToastState) => 
 /*  Password Tab                                                       */
 /* ------------------------------------------------------------------ */
 
+const PasswordInput = ({
+    label,
+    value,
+    onChange,
+    show,
+    onToggle,
+    placeholder,
+    hint,
+}: {
+    label: string;
+    value: string;
+    onChange: (v: string) => void;
+    show: boolean;
+    onToggle: () => void;
+    placeholder?: string;
+    hint?: string;
+}) => (
+    <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-1.5">{label}</label>
+        <div className="relative">
+            <input
+                type={show ? 'text' : 'password'}
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                placeholder={placeholder}
+                className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 pr-10 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+            />
+            <button
+                type="button"
+                onClick={onToggle}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                tabIndex={-1}
+            >
+                {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+        </div>
+        {hint && <p className="mt-1.5 text-xs text-gray-400">{hint}</p>}
+    </div>
+);
+
 function PasswordTab({ onToast }: { onToast: (t: ToastState) => void }) {
     const { t } = useI18n();
     const [current, setCurrent] = useState('');
@@ -251,46 +291,6 @@ function PasswordTab({ onToast }: { onToast: (t: ToastState) => void }) {
             setSaving(false);
         }
     };
-
-    const PasswordInput = ({
-        label,
-        value,
-        onChange,
-        show,
-        onToggle,
-        placeholder,
-        hint,
-    }: {
-        label: string;
-        value: string;
-        onChange: (v: string) => void;
-        show: boolean;
-        onToggle: () => void;
-        placeholder?: string;
-        hint?: string;
-    }) => (
-        <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5">{label}</label>
-            <div className="relative">
-                <input
-                    type={show ? 'text' : 'password'}
-                    value={value}
-                    onChange={(e) => onChange(e.target.value)}
-                    placeholder={placeholder}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 pr-10 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                />
-                <button
-                    type="button"
-                    onClick={onToggle}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                    tabIndex={-1}
-                >
-                    {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-            </div>
-            {hint && <p className="mt-1.5 text-xs text-gray-400">{hint}</p>}
-        </div>
-    );
 
     return (
         <form onSubmit={handleSubmit} className="space-y-5 max-w-lg">

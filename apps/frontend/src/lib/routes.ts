@@ -187,6 +187,7 @@ export const routes = {
         platformSettings: {
             root: '/admin/platform-settings',
             general: '/admin/platform-settings/general',
+            tenantFeatures: '/admin/platform-settings/tenant-features',
             email: '/admin/platform-settings/email',
             sms: '/admin/platform-settings/sms',
             whatsapp: '/admin/platform-settings/whatsapp',
