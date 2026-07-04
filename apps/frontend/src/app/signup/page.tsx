@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { syncLocalePreferenceFromSession } from '@/lib/localization/preference';
-import { isSelfServeSubscriptionPlan } from '@erp71/shared-types';
+import { isComingSoonSubscriptionPlan, isSelfServeSubscriptionPlan } from '@erp71/shared-types';
 
 const PLAN_QUERY_TO_CODE: Record<string, Plan['code']> = {
     basic: 'BASIC',
@@ -21,7 +21,6 @@ const FALLBACK_PLANS: Plan[] = [
     { code: 'BASIC', name: 'Basic', description: 'Core operations for small teams', monthly_price: 499 },
     { code: 'ACCOUNTING', name: 'Accounting', description: 'Bookkeeping pack: accounting, reports, expenses & funds', monthly_price: 749 },
     { code: 'STANDARD', name: 'Standard', description: 'Multi-branch operations with analytics', monthly_price: 999 },
-    { code: 'PREMIUM', name: 'Premium', description: 'Full suite with advanced controls', monthly_price: 1499 },
 ];
 
 type Plan = {
@@ -83,7 +82,7 @@ function SignupPageContent() {
         }
 
         const resolvedCode = PLAN_QUERY_TO_CODE[requestedPlan.toLowerCase()];
-        if (resolvedCode) {
+        if (resolvedCode && isSelfServeSubscriptionPlan(resolvedCode) && !isComingSoonSubscriptionPlan(resolvedCode)) {
             setForm((current) => ({ ...current, planCode: resolvedCode }));
         }
     }, [searchParams]);

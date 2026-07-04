@@ -104,7 +104,7 @@ describe('BillingService', () => {
         });
 
         const result = await service.createCheckoutSession(tenantCtx(), {
-            planCode: 'PREMIUM',
+            planCode: 'STANDARD',
             billingCycle: 'MONTHLY',
         });
 
@@ -116,6 +116,13 @@ describe('BillingService', () => {
     it('rejects checkout when selecting the free plan', async () => {
         await expect(service.createCheckoutSession(tenantCtx(), {
             planCode: 'FREE',
+            billingCycle: 'MONTHLY',
+        })).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects checkout when selecting the coming-soon Premium plan', async () => {
+        await expect(service.createCheckoutSession(tenantCtx(), {
+            planCode: 'PREMIUM',
             billingCycle: 'MONTHLY',
         })).rejects.toThrow(BadRequestException);
     });
@@ -370,7 +377,7 @@ describe('BillingService', () => {
         delete process.env.SSL_WIRELESS_STORE_PASSWORD;
 
         await expect(service.createCheckoutSession(tenantCtx(), {
-            planCode: 'PREMIUM',
+            planCode: 'STANDARD',
             billingCycle: 'MONTHLY',
         })).rejects.toThrow(BadRequestException);
     });
@@ -385,7 +392,7 @@ describe('BillingService', () => {
         });
 
         await expect(service.createCheckoutSession(tenantCtx(), {
-            planCode: 'PREMIUM',
+            planCode: 'STANDARD',
             billingCycle: 'MONTHLY',
         })).rejects.toThrow(InternalServerErrorException);
     });
@@ -422,7 +429,7 @@ describe('BillingService', () => {
         });
 
         const result = await service.createCheckoutSession(tenantCtx(), {
-            planCode: 'PREMIUM',
+            planCode: 'STANDARD',
             billingCycle: 'YEARLY',
         });
 
@@ -442,13 +449,21 @@ describe('BillingService', () => {
             userId: 'user-cashier',
             userRole: 'CASHIER',
         }), {
-            planCode: 'PREMIUM',
+            planCode: 'STANDARD',
         })).rejects.toThrow(ForbiddenException);
+    });
+
+    it('rejects sandbox confirmation for the coming-soon Premium plan', async () => {
+        await expect(service.confirmCheckout(tenantCtx(), {
+            planCode: 'PREMIUM',
+            billingCycle: 'MONTHLY',
+            reference: 'manual_ref_premium',
+        })).rejects.toThrow(BadRequestException);
     });
 
     it('confirms manual checkout and activates subscription', async () => {
         const result = await service.confirmCheckout(tenantCtx(), {
-            planCode: 'PREMIUM',
+            planCode: 'STANDARD',
             billingCycle: 'MONTHLY',
             reference: 'manual_ref_123',
         });

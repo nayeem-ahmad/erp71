@@ -25,8 +25,8 @@ export class SignupDto {
     address?: string;
 
     @IsOptional()
-    @IsIn(['BASIC', 'ACCOUNTING', 'STANDARD', 'PREMIUM'])
-    planCode?: 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
+    @IsIn(['BASIC', 'ACCOUNTING', 'STANDARD'])
+    planCode?: 'BASIC' | 'ACCOUNTING' | 'STANDARD';
 
     @IsOptional()
     @IsString()
@@ -46,8 +46,8 @@ export class CreateStoreDto {
     name: string;
     address?: string;
     @IsOptional()
-    @IsIn(['BASIC', 'ACCOUNTING', 'STANDARD', 'PREMIUM'])
-    planCode?: 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
+    @IsIn(['BASIC', 'ACCOUNTING', 'STANDARD'])
+    planCode?: 'BASIC' | 'ACCOUNTING' | 'STANDARD';
     businessType?: string;
 }
 

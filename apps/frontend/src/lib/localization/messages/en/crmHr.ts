@@ -6,8 +6,8 @@ export const crmHrMessages = {
             subtitle: 'Manage leads, conversations, and customer relationships.',
             pipeline: 'Pipeline',
             relationships: 'Relationships',
-            premiumRequired: 'Lead management is available on the Premium plan.',
-            upgradeCta: 'Upgrade to Premium',
+            premiumRequired: 'Lead management will be available on the Premium plan when it launches.',
+            upgradeCta: 'Premium — coming soon',
             links: {
                 leads: { title: 'Leads', description: 'Track prospects, log conversations, and plan next steps.' },
                 customers: { title: 'Customers', description: 'Browse customers and open their relationship profile.' },

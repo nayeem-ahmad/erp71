@@ -36,7 +36,7 @@ export const helpMessages = {
                 },
                 {
                     q: "Apakah pelan langganan yang tersedia?",
-                    a: "Kami menawarkan pelan berbayar BASIC, ACCOUNTING, STANDARD, dan PREMIUM. Lawati /pricing untuk membandingkan ciri-ciri. Anda boleh menaik taraf pada bila-bila masa dari bahagian Pengebilan dalam papan pemuka anda.",
+                    a: "Kami menawarkan pelan berbayar BASIC, ACCOUNTING, dan STANDARD buat masa ini. Premium akan datang. Lawati /pricing untuk membandingkan ciri-ciri. Anda boleh menaik taraf pada bila-bila masa dari bahagian Pengebilan dalam papan pemuka anda.",
                 },
             ],
         },

@@ -164,6 +164,7 @@ export const marketingMessages = {
                 title: "সহজ, স্বচ্ছ মূল্য",
                 description: "আপনার ব্যবসার জন্য উপযুক্ত পেইড প্ল্যান বেছে নিন। বৃদ্ধির সাথে যেকোনো সময় আপগ্রেড করুন।",
                 mostPopular: "সবচেয়ে জনপ্রিয়",
+                comingSoon: "শীঘ্রই আসছে",
                 free: "বিনামূল্যে",
                 perMonth: "/মাস",
                 startFree: "শুরু করুন",
@@ -188,7 +189,9 @@ export const marketingMessages = {
             ctaTitle: "Ready to get started?",
             ctaDescription: "একটি প্ল্যান বেছে নিন এবং ওয়ার্কস্পেস সক্রিয় করতে চেকআউট সম্পন্ন করুন।",
             ctaButton: "প্ল্যান বেছে নিন",
+            comingSoon: "শীঘ্রই আসছে",
             paidPlansNote: "শুধু পেইড প্ল্যান · ফ্রি ট্রায়াল ও ফ্রি টিয়ার সাময়িকভাবে বন্ধ",
+            premiumComingSoonNote: "Premium শীঘ্রই আসছে — আগাম অ্যাক্সেস দরকার হলে সাপোর্টে যোগাযোগ করুন।",
         },
         contact: {
             title: "যোগাযোগ করুন",

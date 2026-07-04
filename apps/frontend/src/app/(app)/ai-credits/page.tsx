@@ -116,7 +116,7 @@ export default function AiCreditsPage() {
                         <div>
                             <p className="font-semibold text-amber-800">AI features require a paid plan</p>
                             <p className="text-sm text-amber-700 mt-1">
-                                Upgrade to BASIC (100 credits/month), STANDARD (500), or PREMIUM (2,000) to use AI-powered report narration and message drafting.
+                                Upgrade to BASIC (100 credits/month) or STANDARD (500) to use AI-powered report narration and message drafting. Premium (2,000 credits/month) is coming soon.
                             </p>
                         </div>
                     </div>

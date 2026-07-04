@@ -13,7 +13,6 @@ jest.mock('../../lib/api', () => ({
         getSubscriptionPlans: jest.fn().mockResolvedValue([
             { code: 'BASIC', name: 'Basic', description: 'Core operations', monthly_price: 499 },
             { code: 'STANDARD', name: 'Standard', description: 'Growth plan', monthly_price: 999 },
-            { code: 'PREMIUM', name: 'Premium', description: 'Advanced features', monthly_price: 1499 },
         ]),
         signup: jest.fn().mockResolvedValue({
             access_token: 'token-1',

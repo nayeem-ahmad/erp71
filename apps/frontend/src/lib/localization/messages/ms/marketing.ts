@@ -164,6 +164,7 @@ export const marketingMessages = {
                 title: "Harga mudah dan telus",
                 description: "Pilih pelan berbayar yang sesuai dengan perniagaan anda. Naik taraf bila-bila masa apabila anda berkembang.",
                 mostPopular: "Paling popular",
+                comingSoon: "Akan datang",
                 free: "Percuma",
                 perMonth: "/bln",
                 startFree: "Mulakan",
@@ -188,7 +189,9 @@ export const marketingMessages = {
             ctaTitle: "Bersedia untuk bermula?",
             ctaDescription: "Pilih pelan dan lengkapkan pembayaran untuk mengaktifkan ruang kerja anda.",
             ctaButton: "Pilih pelan",
+            comingSoon: "Akan datang",
             paidPlansNote: "Pelan berbayar sahaja · Percubaan percuma dan peringkat percuma tidak tersedia buat sementara",
+            premiumComingSoonNote: "Premium akan datang — hubungi sokongan jika anda memerlukan akses awal.",
         },
         contact: {
             title: "Hubungi kami",

@@ -92,6 +92,11 @@ describe('HomePage', () => {
         expect(screen.getAllByText('PREMIUM').length).toBeGreaterThan(0);
     });
 
+    it('marks Premium as coming soon on the homepage pricing preview', () => {
+        render(<HomePage />);
+        expect(screen.getAllByText('Coming soon').length).toBeGreaterThan(0);
+    });
+
     it('renders plan prices aligned with backend seed', () => {
         render(<HomePage />);
         expect(screen.getByText('৳499')).toBeInTheDocument();

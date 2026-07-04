@@ -288,13 +288,18 @@ export default function HomePage() {
                         {MARKETING_PLANS.map((plan) => (
                             <div
                                 key={plan.id}
-                                className={`p-6 rounded-2xl border-2 flex flex-col ${
-                                    plan.highlight
+                                className={`relative p-6 rounded-2xl border-2 flex flex-col ${
+                                    plan.comingSoon
+                                        ? 'border-gray-200 bg-gray-50'
+                                        : plan.highlight
                                         ? 'border-blue-600 bg-blue-50 shadow-xl shadow-blue-100'
                                         : 'border-gray-200 bg-white'
                                 }`}
                             >
-                                {plan.highlight && (
+                                {plan.comingSoon && (
+                                    <div className="text-xs font-bold text-amber-600 uppercase tracking-wider mb-3">{m.pricing.comingSoon}</div>
+                                )}
+                                {plan.highlight && !plan.comingSoon && (
                                     <div className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-3">{m.pricing.mostPopular}</div>
                                 )}
                                 <h3 className="text-sm font-black tracking-widest text-gray-400 uppercase">{plan.name}</h3>
@@ -313,16 +318,22 @@ export default function HomePage() {
                                         </li>
                                     ))}
                                 </ul>
-                                <Link
-                                    href={`/signup?plan=${plan.id}`}
-                                    className={`block text-center font-bold py-3 rounded-xl transition-colors ${
-                                        plan.highlight
-                                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                                            : 'bg-gray-900 hover:bg-gray-700 text-white'
-                                    }`}
-                                >
-                                    {m.pricing.startFreeTrial}
-                                </Link>
+                                {plan.comingSoon ? (
+                                    <span className="block text-center font-bold py-3 rounded-xl bg-gray-200 text-gray-500 cursor-not-allowed">
+                                        {m.pricing.comingSoon}
+                                    </span>
+                                ) : (
+                                    <Link
+                                        href={`/signup?plan=${plan.id}`}
+                                        className={`block text-center font-bold py-3 rounded-xl transition-colors ${
+                                            plan.highlight
+                                                ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                                : 'bg-gray-900 hover:bg-gray-700 text-white'
+                                        }`}
+                                    >
+                                        {m.pricing.startFreeTrial}
+                                    </Link>
+                                )}
                             </div>
                         ))}
                     </div>

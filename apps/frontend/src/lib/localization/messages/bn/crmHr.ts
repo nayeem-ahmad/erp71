@@ -6,8 +6,8 @@ export const crmHrMessages = {
             subtitle: "লিড, কথোপকথন ও গ্রাহক সম্পর্ক পরিচালনা।",
             pipeline: "পাইপলাইন",
             relationships: "সম্পর্ক",
-            premiumRequired: "লিড ম্যানেজমেন্ট Premium প্ল্যানে উপলব্ধ।",
-            upgradeCta: "Premium-এ আপগ্রেড করুন",
+            premiumRequired: "লিড ম্যানেজমেন্ট Premium প্ল্যান চালু হলে উপলব্ধ হবে।",
+            upgradeCta: "Premium — শীঘ্রই আসছে",
             links: {
                 leads: { title: "লিড", description: "সম্ভাব্য ক্রেতা ট্র্যাক করুন, কথোপকথন লগ করুন ও পরবর্তী পদক্ষেপ পরিকল্পনা করুন।" },
                 customers: { title: "গ্রাহক", description: "গ্রাহক ব্রাউজ করুন ও প্রোফাইল খুলুন।" },

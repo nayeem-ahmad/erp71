@@ -48,7 +48,7 @@ describe('BillingPage', () => {
             },
             available_plans: [
                 { code: 'BASIC', name: 'Basic', description: 'Core operations', monthly_price: 1499, yearly_price: 14990 },
-                { code: 'PREMIUM', name: 'Premium', description: 'Advanced features', monthly_price: 3999, yearly_price: 39990 },
+                { code: 'STANDARD', name: 'Standard', description: 'Growth features', monthly_price: 2999, yearly_price: 29990 },
             ],
             billing_history: [
                 { id: 'event-1', event_type: 'CHECKOUT_CREATED', status: 'PENDING', created_at: '2026-03-21T00:00:00.000Z' },

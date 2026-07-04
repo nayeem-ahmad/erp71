@@ -11,21 +11,37 @@ export const SUBSCRIPTION_PLAN_CODES = [
 
 export type FixedSubscriptionPlanCode = (typeof SUBSCRIPTION_PLAN_CODES)[number];
 
-/** Paid plans offered on signup, pricing, and self-serve checkout. */
+/** Paid plans offered on signup and self-serve checkout. */
 export const SELF_SERVE_SUBSCRIPTION_PLAN_CODES = [
   'BASIC',
   'ACCOUNTING',
   'STANDARD',
-  'PREMIUM',
 ] as const;
 
 export type SelfServeSubscriptionPlanCode = (typeof SELF_SERVE_SUBSCRIPTION_PLAN_CODES)[number];
+
+/** Visible on marketing but not yet available for self-serve purchase. */
+export const COMING_SOON_SUBSCRIPTION_PLAN_CODES = [
+  'PREMIUM',
+] as const;
+
+export type ComingSoonSubscriptionPlanCode = (typeof COMING_SOON_SUBSCRIPTION_PLAN_CODES)[number];
+
+export function isComingSoonSubscriptionPlan(
+  code: string,
+): code is ComingSoonSubscriptionPlanCode {
+  return (COMING_SOON_SUBSCRIPTION_PLAN_CODES as readonly string[]).includes(code);
+}
 
 export function isSelfServeSubscriptionPlan(
   code: string,
   monthlyPrice?: number,
 ): code is SelfServeSubscriptionPlanCode {
   if (code === 'FREE') {
+    return false;
+  }
+
+  if (isComingSoonSubscriptionPlan(code)) {
     return false;
   }
 

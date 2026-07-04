@@ -1,4 +1,4 @@
-import { ConflictException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
@@ -311,6 +311,19 @@ describe('AuthService', () => {
             }),
         );
         expect(result.preferred_locale).toBe('bn');
+    });
+
+    it('rejects self-serve signup with the coming-soon Premium plan', async () => {
+        db.user.findUnique.mockResolvedValueOnce(null);
+        db.user.create.mockResolvedValue({ id: 'user-1', email: 'owner@example.com', name: 'Owner' });
+
+        await expect(service.signup({
+            email: 'owner@example.com',
+            password: 'password123',
+            tenantName: 'Tenant One',
+            storeName: 'Main Store',
+            planCode: 'PREMIUM',
+        } as any)).rejects.toThrow(BadRequestException);
     });
 
     it('rejects duplicate emails on signup', async () => {

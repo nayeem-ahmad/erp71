@@ -75,6 +75,7 @@ export const marketingMessages = {
             title: 'Simple, transparent pricing',
             description: 'Choose a paid plan that fits your business. Upgrade anytime as you grow.',
             mostPopular: 'Most popular',
+            comingSoon: 'Coming soon',
             free: 'Free',
             perMonth: '/mo',
             startFree: 'Get started',
@@ -99,7 +100,9 @@ export const marketingMessages = {
         ctaTitle: 'Ready to get started?',
         ctaDescription: 'Pick a plan and complete checkout to activate your workspace.',
         ctaButton: 'Choose a plan',
+        comingSoon: 'Coming soon',
         paidPlansNote: 'Paid plans only · Free trials and the free tier are temporarily unavailable',
+        premiumComingSoonNote: 'Premium is coming soon — contact support if you need early access.',
     },
     contact: {
         title: 'Get in touch',

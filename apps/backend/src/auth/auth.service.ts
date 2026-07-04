@@ -11,7 +11,14 @@ import * as crypto from 'node:crypto';
 import { SignupDto, LoginDto, UpdateProfileDto, ChangePasswordDto } from './auth.dto';
 import { isPlatformAdminEmail } from './platform-admin.util';
 import { DEMO_ACCOUNT_EMAIL } from '@erp71/database';
-import { DEFAULT_PLATFORM_FEATURES, ROLE_DEFAULT_PERMISSIONS, StorePermission, UserRole } from '@erp71/shared-types';
+import {
+    DEFAULT_PLATFORM_FEATURES,
+    ROLE_DEFAULT_PERMISSIONS,
+    StorePermission,
+    UserRole,
+    isComingSoonSubscriptionPlan,
+    isSelfServeSubscriptionPlan,
+} from '@erp71/shared-types';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 
 
@@ -226,17 +233,19 @@ export class AuthService {
             orderBy: { monthly_price: 'asc' },
         });
 
-        return plans.map((plan) => ({
-            code: plan.code,
-            name: plan.name,
-            description: plan.description,
-            monthly_price: Number(plan.monthly_price),
-            yearly_price: plan.yearly_price === null ? null : Number(plan.yearly_price),
-            features_json: plan.features_json,
-            marketing_features: Array.isArray(plan.marketing_features_json)
-                ? plan.marketing_features_json.filter((item): item is string => typeof item === 'string')
-                : [],
-        }));
+        return plans
+            .filter((plan) => isSelfServeSubscriptionPlan(plan.code, Number(plan.monthly_price)))
+            .map((plan) => ({
+                code: plan.code,
+                name: plan.name,
+                description: plan.description,
+                monthly_price: Number(plan.monthly_price),
+                yearly_price: plan.yearly_price === null ? null : Number(plan.yearly_price),
+                features_json: plan.features_json,
+                marketing_features: Array.isArray(plan.marketing_features_json)
+                    ? plan.marketing_features_json.filter((item): item is string => typeof item === 'string')
+                    : [],
+            }));
     }
 
     private async generateAuthResponse(userId: string) {
@@ -455,6 +464,12 @@ export class AuthService {
         const planCode = dto.planCode ?? 'BASIC';
         if (planCode === 'FREE') {
             throw new BadRequestException('The free plan is not available for new signups.');
+        }
+        if (isComingSoonSubscriptionPlan(planCode)) {
+            throw new BadRequestException('The Premium plan is coming soon and is not available for self-serve signup.');
+        }
+        if (!isSelfServeSubscriptionPlan(planCode)) {
+            throw new BadRequestException('Selected subscription plan is not available.');
         }
 
         const plan = await tx.subscriptionPlan.findUnique({

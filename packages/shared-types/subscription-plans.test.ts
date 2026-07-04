@@ -1,5 +1,7 @@
 import {
     defaultPlanFeatures,
+    isComingSoonSubscriptionPlan,
+    isSelfServeSubscriptionPlan,
     normalizePlanFeatures,
     parsePlanFeatures,
     resolveAiCreditsMonthly,
@@ -24,6 +26,12 @@ describe('subscription-plans helpers', () => {
         const features = normalizePlanFeatures({}, 'STANDARD');
         expect(resolvePlanRank(features, 'STANDARD')).toBe(2);
         expect(resolveAiCreditsMonthly(features, 'STANDARD')).toBe(500);
+    });
+
+    it('treats Premium as coming soon and not self-serve', () => {
+        expect(isComingSoonSubscriptionPlan('PREMIUM')).toBe(true);
+        expect(isSelfServeSubscriptionPlan('PREMIUM', 1499)).toBe(false);
+        expect(isSelfServeSubscriptionPlan('STANDARD', 999)).toBe(true);
     });
 
     it('reads granular entitlements from normalized features', () => {

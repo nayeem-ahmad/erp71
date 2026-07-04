@@ -6,8 +6,8 @@ export const crmHrMessages = {
             subtitle: 'Urus prospek, perbualan, dan hubungan pelanggan.',
             pipeline: 'Saluran',
             relationships: 'Hubungan',
-            premiumRequired: 'Pengurusan prospek tersedia pada pelan Premium.',
-            upgradeCta: 'Naik taraf ke Premium',
+            premiumRequired: 'Pengurusan prospek akan tersedia pada pelan Premium apabila dilancarkan.',
+            upgradeCta: 'Premium — akan datang',
             links: {
                 leads: { title: 'Prospek', description: 'Jejaki prospek, log perbualan, dan rancang langkah seterusnya.' },
                 customers: { title: 'Pelanggan', description: 'Semak pelanggan dan buka profil hubungan.' },

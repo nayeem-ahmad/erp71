@@ -7,7 +7,11 @@ import {
     ServiceUnavailableException,
     UnauthorizedException,
 } from '@nestjs/common';
-import { StorePermission } from '@erp71/shared-types';
+import {
+    StorePermission,
+    isComingSoonSubscriptionPlan,
+    isSelfServeSubscriptionPlan,
+} from '@erp71/shared-types';
 import { hasStorePermission } from '../auth/permission.util';
 import { TenantContext } from '../database/tenant.decorator';
 import { DatabaseService } from '../database/database.service';
@@ -65,7 +69,9 @@ export class BillingService {
             can_manage_billing: await this.canManageBilling(ctx),
             provider_name: this.getProviderName(),
             subscription: this.mapSubscription(subscription),
-            available_plans: plans.map((plan) => this.mapPlan(plan)),
+            available_plans: plans
+                .filter((plan) => isSelfServeSubscriptionPlan(plan.code, Number(plan.monthly_price)))
+                .map((plan) => this.mapPlan(plan)),
             billing_history: await this.getBillingHistory(ctx.tenantId),
         };
     }
@@ -76,6 +82,12 @@ export class BillingService {
 
         if (dto.planCode === 'FREE') {
             throw new BadRequestException('The free plan is not available.');
+        }
+        if (isComingSoonSubscriptionPlan(dto.planCode)) {
+            throw new BadRequestException('The Premium plan is coming soon and is not available for checkout.');
+        }
+        if (!isSelfServeSubscriptionPlan(dto.planCode)) {
+            throw new BadRequestException('Selected subscription plan is not available.');
         }
 
         const billingCycle = this.normalizeBillingCycle(dto.billingCycle);
@@ -138,6 +150,16 @@ export class BillingService {
     async confirmCheckout(ctx: TenantContext, dto: ConfirmCheckoutDto) {
         await this.requireTenantMembership(ctx.userId, ctx.tenantId);
         await this.assertBillingAccess(ctx);
+
+        if (dto.planCode === 'FREE') {
+            throw new BadRequestException('The free plan is not available.');
+        }
+        if (isComingSoonSubscriptionPlan(dto.planCode)) {
+            throw new BadRequestException('The Premium plan is coming soon and is not available for checkout.');
+        }
+        if (!isSelfServeSubscriptionPlan(dto.planCode)) {
+            throw new BadRequestException('Selected subscription plan is not available.');
+        }
 
         return this.applySubscriptionChange({
             tenantId: ctx.tenantId,

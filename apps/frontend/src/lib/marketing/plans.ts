@@ -9,6 +9,7 @@ export type MarketingPlan = {
     highlight: boolean;
     tagline: string;
     features: string[];
+    comingSoon?: boolean;
 };
 
 /** Aligned with `packages/database/prisma/seed.ts` paid subscription plans. */
@@ -77,6 +78,7 @@ export const MARKETING_PLANS: MarketingPlan[] = [
         monthlyPrice: 1499,
         yearlyPrice: 1249,
         highlight: false,
+        comingSoon: true,
         tagline: 'For enterprise retailers scaling fast',
         features: [
             'Everything in STANDARD',

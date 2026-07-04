@@ -36,7 +36,7 @@ export const helpMessages = {
                     },
                     {
                         q: "What subscription plans are available?",
-                        a: "We offer BASIC, ACCOUNTING, STANDARD, and PREMIUM paid plans. Visit /pricing to compare features. You can upgrade anytime from the Billing section in your dashboard.",
+                        a: "We offer BASIC, ACCOUNTING, and STANDARD paid plans today. Premium is coming soon. Visit /pricing to compare features. You can upgrade anytime from the Billing section in your dashboard.",
                     },
                 ],
             },

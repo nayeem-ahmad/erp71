@@ -20,7 +20,6 @@ jest.mock('@/lib/api', () => ({
             { code: 'BASIC', name: 'BASIC', description: 'For small shops just getting started', monthly_price: 499, yearly_price: 4992 },
             { code: 'ACCOUNTING', name: 'ACCOUNTING', description: 'Bookkeeping-focused pack for accountants', monthly_price: 749, yearly_price: 7488 },
             { code: 'STANDARD', name: 'STANDARD', description: 'For growing businesses with multiple locations', monthly_price: 999, yearly_price: 9996 },
-            { code: 'PREMIUM', name: 'PREMIUM', description: 'For enterprise retailers scaling fast', monthly_price: 1499, yearly_price: 14988 },
         ]),
     },
 }));
@@ -98,9 +97,18 @@ describe('PricingPage', () => {
         expect(screen.queryByText('2 months free!')).not.toBeInTheDocument();
     });
 
-    it('renders paid-plan CTAs on every card', () => {
+    it('renders choose-plan CTAs for self-serve plans only', () => {
         render(<PricingPage />);
-        expect(screen.getAllByText('Choose a plan').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Choose a plan').length).toBe(3);
+    });
+
+    it('marks Premium as coming soon without a signup link', () => {
+        render(<PricingPage />);
+        expect(screen.getAllByText('Coming soon').length).toBeGreaterThan(0);
+        const premiumSignupLinks = screen.getAllByRole('link').filter((link) =>
+            link.getAttribute('href')?.includes('plan=premium'),
+        );
+        expect(premiumSignupLinks).toHaveLength(0);
     });
 
     it('renders the feature comparison table heading', () => {

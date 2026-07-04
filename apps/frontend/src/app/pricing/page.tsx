@@ -126,12 +126,19 @@ export default function PricingPage() {
                             <div
                                 key={plan.id}
                                 className={`relative flex flex-col p-8 rounded-2xl border-2 transition-shadow ${
-                                    plan.highlight
+                                    plan.comingSoon
+                                        ? 'border-gray-200 bg-gray-50 opacity-95'
+                                        : plan.highlight
                                         ? 'border-blue-600 bg-blue-50 shadow-xl shadow-blue-100'
                                         : 'border-gray-200 bg-white hover:shadow-md'
                                 }`}
                             >
-                                {plan.highlight && (
+                                {plan.comingSoon && (
+                                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-amber-500 text-white text-xs font-bold px-4 py-1 rounded-full whitespace-nowrap tracking-wide uppercase">
+                                        {m.comingSoon}
+                                    </div>
+                                )}
+                                {plan.highlight && !plan.comingSoon && (
                                     <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs font-bold px-4 py-1 rounded-full whitespace-nowrap tracking-wide uppercase">
                                         Most Popular
                                     </div>
@@ -169,16 +176,22 @@ export default function PricingPage() {
                                     ))}
                                 </ul>
 
-                                <Link
-                                    href={`/signup?plan=${plan.id}`}
-                                    className={`block text-center font-bold py-3 rounded-xl transition-colors ${
-                                        plan.highlight
-                                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                                            : 'bg-gray-900 hover:bg-gray-700 text-white'
-                                    }`}
-                                >
-                                    {m.ctaButton}
-                                </Link>
+                                {plan.comingSoon ? (
+                                    <span className="block text-center font-bold py-3 rounded-xl bg-gray-200 text-gray-500 cursor-not-allowed">
+                                        {m.comingSoon}
+                                    </span>
+                                ) : (
+                                    <Link
+                                        href={`/signup?plan=${plan.id}`}
+                                        className={`block text-center font-bold py-3 rounded-xl transition-colors ${
+                                            plan.highlight
+                                                ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                                : 'bg-gray-900 hover:bg-gray-700 text-white'
+                                        }`}
+                                    >
+                                        {m.ctaButton}
+                                    </Link>
+                                )}
                             </div>
                         );
                     })}
@@ -238,7 +251,12 @@ export default function PricingPage() {
                                                 p.highlight ? 'text-blue-600' : 'text-gray-700'
                                             }`}
                                         >
-                                            {p.name}
+                                            <span className="block">{p.name}</span>
+                                            {p.comingSoon && (
+                                                <span className="mt-1 block text-[10px] font-bold normal-case tracking-normal text-amber-600">
+                                                    {m.comingSoon}
+                                                </span>
+                                            )}
                                         </th>
                                     ))}
                                 </tr>
