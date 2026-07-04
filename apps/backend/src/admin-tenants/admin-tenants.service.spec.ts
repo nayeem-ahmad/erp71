@@ -18,6 +18,8 @@ import { BillingService } from '../billing/billing.service';
 import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
 import { PasswordResetService } from '../password-reset/password-reset.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { SmsCreditService } from '../sms/sms-credit.service';
 
 describe('AdminTenantsService', () => {
   let service: AdminTenantsService;
@@ -27,11 +29,15 @@ describe('AdminTenantsService', () => {
   let auditService: any;
   let emailService: any;
   let passwordResetService: any;
+  let notificationsService: any;
+  let smsCreditService: any;
 
   const makeTenant = (overrides: any = {}) => ({
     id: 't-1',
     name: 'Test Store',
     created_at: new Date('2025-01-01'),
+    sms_credits: 100,
+    ai_credits_bonus: 0,
     owner: { id: 'u-owner', email: 'owner@test.com', name: 'Owner' },
     stores: [{ id: 's-1', name: 'Main Store', address: '123 Dhaka', created_at: new Date() }],
     users: [
@@ -91,6 +97,8 @@ describe('AdminTenantsService', () => {
         count: jest.fn(),
         create: jest.fn(),
       },
+      billingEvent: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn(), findUnique: jest.fn() },
+      aiUsageLog: { aggregate: jest.fn().mockResolvedValue({ _sum: { credits_used: 0 } }) },
       $transaction: jest.fn().mockImplementation(async (cb: any) => cb(db)),
     };
 
@@ -115,6 +123,14 @@ describe('AdminTenantsService', () => {
       requestReset: jest.fn().mockResolvedValue(undefined),
     };
 
+    notificationsService = {
+      create: jest.fn().mockResolvedValue({ id: 'n-1' }),
+    };
+
+    smsCreditService = {
+      adminGrantCredits: jest.fn().mockResolvedValue({ balance: 600, transactionId: 'tx-1' }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminTenantsService,
@@ -124,6 +140,8 @@ describe('AdminTenantsService', () => {
         { provide: AuditService, useValue: auditService },
         { provide: EmailService, useValue: emailService },
         { provide: PasswordResetService, useValue: passwordResetService },
+        { provide: NotificationsService, useValue: notificationsService },
+        { provide: SmsCreditService, useValue: smsCreditService },
       ],
     }).compile();
 

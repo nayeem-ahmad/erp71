@@ -170,6 +170,23 @@ ${invoiceUrl ? `<p><a href="${invoiceUrl}">View Invoice</a></p>` : ''}`,
         });
     }
 
+    async sendSubscriptionFeePosted(
+        to: string,
+        tenantName: string,
+        amount: number,
+        currency: string,
+        periodEnd: Date,
+    ): Promise<void> {
+        const { frontendUrl } = await this.getTransportConfig();
+        await this.send({
+            to,
+            subject: `Subscription fee posted for ${tenantName}`,
+            html: `<h2>Subscription Fee</h2>
+<p>Your subscription fee of <strong>${currency} ${amount.toFixed(2)}</strong> for <strong>${tenantName}</strong> has been posted to your account for the period ending <strong>${periodEnd.toDateString()}</strong>.</p>
+<p><a href="${frontendUrl}/billing">View billing &amp; ledger</a></p>`,
+        });
+    }
+
     async sendSubscriptionCancelled(to: string, tenantName: string, graceDays: number): Promise<void> {
         const { frontendUrl } = await this.getTransportConfig();
         await this.send({

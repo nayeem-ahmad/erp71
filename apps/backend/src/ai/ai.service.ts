@@ -115,22 +115,33 @@ export class AiService {
             subscription?.plan?.features_json as Record<string, unknown> | undefined,
             planCode,
         );
-        const creditsLimit = resolveAiCreditsMonthly(features, planCode);
-        const [periodStart, periodEnd] = this.getBillingPeriod(subscription);
+        const [subscriptionRow, periodLogs] = await Promise.all([
+            this.db.tenant.findUnique({
+                where: { id: tenantId },
+                select: { ai_credits_bonus: true },
+            }),
+            (async () => {
+                const [periodStart, periodEnd] = this.getBillingPeriod(subscription);
+                return this.db.aiUsageLog.findMany({
+                    where: { tenant_id: tenantId, created_at: { gte: periodStart, lte: periodEnd } },
+                    orderBy: { created_at: 'desc' },
+                    take: 100,
+                });
+            })(),
+        ]);
 
-        const periodLogs = await this.db.aiUsageLog.findMany({
-            where: { tenant_id: tenantId, created_at: { gte: periodStart, lte: periodEnd } },
-            orderBy: { created_at: 'desc' },
-            take: 100,
-        });
+        const bonus = subscriptionRow?.ai_credits_bonus ?? 0;
+        const creditsLimit = resolveAiCreditsMonthly(features, planCode) + bonus;
+        const [periodStart, periodEnd] = this.getBillingPeriod(subscription);
 
         const creditsUsed = periodLogs.reduce((sum, log) => sum + log.credits_used, 0);
 
         return {
             plan: planCode,
             credits_limit: creditsLimit,
+            credits_bonus: bonus,
             credits_used: Math.round(creditsUsed * 100) / 100,
-            credits_remaining: Math.max(0, creditsLimit - creditsUsed),
+            credits_remaining: Math.max(0, Math.round((creditsLimit - creditsUsed) * 100) / 100),
             period_start: periodStart.toISOString(),
             period_end: periodEnd.toISOString(),
             logs: logs.map((l) => ({
@@ -535,7 +546,12 @@ Rules:
             throw new ForbiddenException('AI features require the Premium plan. Please upgrade to continue.');
         }
 
-        const limit = resolveAiCreditsMonthly(features, planCode);
+        const tenant = await this.db.tenant.findUnique({
+            where: { id: tenantId },
+            select: { ai_credits_bonus: true },
+        });
+        const bonus = tenant?.ai_credits_bonus ?? 0;
+        const limit = resolveAiCreditsMonthly(features, planCode) + bonus;
 
         if (limit === 0) {
             throw new ForbiddenException('AI features are not included in your current plan.');

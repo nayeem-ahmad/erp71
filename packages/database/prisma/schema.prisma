@@ -316,6 +316,7 @@ model Tenant {
   sms_on_sale          Boolean  @default(false)  // send SMS receipt after each sale
   sms_on_low_stock     Boolean  @default(false)  // send SMS for low stock alerts
   sms_credits          Int      @default(0)      // prepaid SMS credit balance (number of message segments remaining)
+  ai_credits_bonus     Int      @default(0)      // purchased / admin-granted AI credits (adds to plan monthly allowance)
 
   report_weekly_enabled  Boolean  @default(false)
   report_monthly_enabled Boolean  @default(false)

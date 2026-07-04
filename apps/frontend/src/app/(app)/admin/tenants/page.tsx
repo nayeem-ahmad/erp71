@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { CheckCircle, Loader2, Pencil, Plus } from 'lucide-react';
+import { CheckCircle, Loader2, MessageSquare, Pencil, Plus, Sparkles } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { DataTable } from '@/components/data-table';
 import CreateTenantModal from '@/components/admin/tenants/CreateTenantModal';
 import TenantDetailModal from '@/components/admin/tenants/TenantDetailModal';
+import TenantSellCreditsModal from '@/components/admin/tenants/TenantSellCreditsModal';
 import type { TenantRecord } from '@/components/admin/tenants/types';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
@@ -27,6 +28,8 @@ export default function AdminTenantsPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [detailTenantId, setDetailTenantId] = useState<string | null>(null);
+    const [sellCreditsTenant, setSellCreditsTenant] = useState<TenantRecord | null>(null);
+    const [sellCreditsKind, setSellCreditsKind] = useState<'sms' | 'ai'>('sms');
 
     const loadTenants = useCallback(async () => {
         setIsLoading(true);
@@ -82,6 +85,27 @@ export default function AdminTenantsPage() {
             header: m.columns.users,
             cell: (info) => info.getValue(),
         }),
+        columnHelper.accessor('ledger_balance', {
+            header: m.columns.ledgerBalance,
+            cell: (info) => {
+                const value = info.getValue() ?? 0;
+                return <span className={`font-semibold ${value < 0 ? 'text-amber-700' : 'text-emerald-700'}`}>৳{Number(value).toFixed(2)}</span>;
+            },
+        }),
+        columnHelper.accessor('sms_credits', {
+            header: m.columns.smsCredits,
+            cell: (info) => info.getValue() ?? 0,
+        }),
+        columnHelper.accessor((row) => row.ai_credits?.remaining ?? 0, {
+            id: 'aiCredits',
+            header: m.columns.aiCredits,
+            cell: (info) => {
+                const row = info.row.original;
+                const remaining = row.ai_credits?.remaining ?? 0;
+                const limit = row.ai_credits?.limit ?? 0;
+                return <span>{remaining} / {limit}</span>;
+            },
+        }),
         columnHelper.accessor('created_at', {
             header: m.columns.created,
             cell: (info) => formatDate(info.getValue()),
@@ -89,17 +113,40 @@ export default function AdminTenantsPage() {
         columnHelper.display({
             id: 'actions',
             header: m.columns.actions,
-            cell: ({ row }) => (
-                <button
-                    type="button"
-                    onClick={() => setDetailTenantId(row.original.id)}
-                    className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2 text-gray-600 hover:border-blue-300 hover:text-blue-600"
-                    title={m.actions.viewEdit}
-                    aria-label={m.actions.viewEdit}
-                >
-                    <Pencil className="w-4 h-4" />
-                </button>
-            ),
+            cell: ({ row }) => {
+                const tenant = row.original;
+                return (
+                    <div className="flex items-center gap-1">
+                        <button
+                            type="button"
+                            onClick={() => setDetailTenantId(tenant.id)}
+                            className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2 text-gray-600 hover:border-blue-300 hover:text-blue-600"
+                            title={m.actions.viewEdit}
+                            aria-label={m.actions.viewEdit}
+                        >
+                            <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { setSellCreditsTenant(tenant); setSellCreditsKind('sms'); }}
+                            className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2 text-gray-600 hover:border-indigo-300 hover:text-indigo-600"
+                            title={m.actions.sellSmsCredits}
+                            aria-label={m.actions.sellSmsCredits}
+                        >
+                            <MessageSquare className="w-4 h-4" />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { setSellCreditsTenant(tenant); setSellCreditsKind('ai'); }}
+                            className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2 text-gray-600 hover:border-violet-300 hover:text-violet-600"
+                            title={m.actions.sellAiCredits}
+                            aria-label={m.actions.sellAiCredits}
+                        >
+                            <Sparkles className="w-4 h-4" />
+                        </button>
+                    </div>
+                );
+            },
         }),
     ], [m]);
 
@@ -194,6 +241,17 @@ export default function AdminTenantsPage() {
                 onClose={() => setDetailTenantId(null)}
                 onChanged={() => void loadTenants()}
                 onToast={showToast}
+            />
+
+            <TenantSellCreditsModal
+                open={Boolean(sellCreditsTenant)}
+                kind={sellCreditsKind}
+                tenant={sellCreditsTenant}
+                onClose={() => setSellCreditsTenant(null)}
+                onSuccess={(message) => {
+                    showToast(message);
+                    void loadTenants();
+                }}
             />
         </div>
     );

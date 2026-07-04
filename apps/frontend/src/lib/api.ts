@@ -1206,6 +1206,18 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
         }),
+    sellTenantSmsCredits: (tenantId: string, data: { credits: number; amount?: number; notes?: string }) =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/sms-credits`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }),
+    sellTenantAiCredits: (tenantId: string, data: { credits: number; amount?: number; notes?: string }) =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/ai-credits`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }),
     lookupAdminUser: (email: string) =>
         fetchWithAuth(`/admin/users/lookup?email=${encodeURIComponent(email)}`),
     getAdminMetrics: () => fetchWithAuth('/admin/metrics'),

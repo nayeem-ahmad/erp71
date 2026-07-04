@@ -232,6 +232,19 @@ export class SmsCreditService {
         };
     }
 
+    /** Platform admin grants prepaid SMS credits (sale or adjustment). */
+    async adminGrantCredits(
+        tenantId: string,
+        credits: number,
+        meta: { description?: string; recordedBy?: string },
+    ) {
+        return this.grantCredits(tenantId, credits, {
+            type: 'ADJUSTMENT',
+            description: meta.description ?? 'Admin SMS credit grant',
+            reference: meta.recordedBy ? `admin:${meta.recordedBy}` : 'admin',
+        });
+    }
+
     /** Add credits to the balance and record a ledger entry. */
     private async grantCredits(
         tenantId: string,

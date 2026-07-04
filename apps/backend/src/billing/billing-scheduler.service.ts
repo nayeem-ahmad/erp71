@@ -5,6 +5,7 @@ import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 import { JOB_NAMES } from '../system-health/jobs/job-names';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class BillingSchedulerService {
@@ -19,6 +20,7 @@ export class BillingSchedulerService {
         private readonly email: EmailService,
         private readonly audit: AuditService,
         private readonly jobTracker: JobTrackerService,
+        private readonly notifications: NotificationsService,
     ) {}
 
     // Run daily at 08:00 — remind PAST_DUE tenants to retry payment before dunning cancels them
@@ -155,6 +157,95 @@ export class BillingSchedulerService {
                 );
             } catch (err) {
                 this.logger.error(`Dunning: failed to process tenant ${sub.tenant_id}: ${err}`);
+            }
+        }
+    }
+
+    // Run daily at 10:00 — post subscription fees to tenant ledger when a billing period ends
+    @Cron('0 10 * * *')
+    async postSubscriptionPeriodFees(): Promise<void> {
+        await this.jobTracker.track(JOB_NAMES.BILLING_PERIOD_FEES, () => this.postSubscriptionPeriodFeesImpl());
+    }
+
+    private async postSubscriptionPeriodFeesImpl(): Promise<void> {
+        const now = new Date();
+        const dueSubscriptions = await this.db.tenantSubscription.findMany({
+            where: {
+                status: { in: ['ACTIVE', 'PAST_DUE'] },
+                cancel_at_period_end: false,
+                current_period_end: { lte: now },
+            },
+            include: {
+                tenant: { include: { owner: true } },
+                plan: true,
+            },
+        });
+
+        for (const sub of dueSubscriptions) {
+            try {
+                const amount = Number(sub.plan?.monthly_price ?? 0);
+                if (amount <= 0) continue;
+
+                const periodKey = sub.current_period_end.toISOString().slice(0, 10);
+                const externalEventId = `subscription_fee:${sub.tenant_id}:${periodKey}`;
+
+                const existing = await this.db.billingEvent.findUnique({
+                    where: {
+                        provider_name_external_event_id: {
+                            provider_name: 'manual',
+                            external_event_id: externalEventId,
+                        },
+                    },
+                });
+                if (existing) continue;
+
+                await this.db.billingEvent.create({
+                    data: {
+                        tenant_id: sub.tenant_id,
+                        provider_name: 'manual',
+                        external_event_id: externalEventId,
+                        event_type: 'subscription_fee',
+                        status: 'posted',
+                        amount,
+                        currency: 'BDT',
+                        reference_id: sub.plan?.code ?? null,
+                        payload: {
+                            period_end: sub.current_period_end.toISOString(),
+                            plan_code: sub.plan?.code ?? null,
+                            plan_name: sub.plan?.name ?? null,
+                        },
+                    },
+                });
+
+                const owner = sub.tenant?.owner;
+                const formattedAmount = amount.toFixed(2);
+                const title = 'Subscription fee posted';
+                const body = `Your ${sub.plan?.name ?? 'subscription'} fee of ৳${formattedAmount} for ${sub.tenant.name} has been posted for the period ending ${sub.current_period_end.toDateString()}.`;
+
+                if (owner?.id) {
+                    await this.notifications.create(
+                        sub.tenant_id,
+                        owner.id,
+                        'subscription_fee',
+                        title,
+                        body,
+                        '/billing',
+                    );
+                }
+
+                if (owner?.email) {
+                    await this.email.sendSubscriptionFeePosted(
+                        owner.email,
+                        sub.tenant.name,
+                        amount,
+                        'BDT',
+                        sub.current_period_end,
+                    );
+                }
+
+                this.logger.log(`Posted subscription fee for tenant ${sub.tenant_id} (৳${formattedAmount})`);
+            } catch (err) {
+                this.logger.error(`Subscription fee posting failed for tenant ${sub.tenant_id}: ${err}`);
             }
         }
     }

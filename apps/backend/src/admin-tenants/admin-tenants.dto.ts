@@ -100,6 +100,18 @@ export class RecordTenantRefundDto {
     @IsOptional() @IsString() notes?: string;
 }
 
+export class AdminSellSmsCreditsDto {
+    @IsInt() @Min(1) credits: number;
+    @IsOptional() @IsNumber() @IsPositive() amount?: number;
+    @IsOptional() @IsString() notes?: string;
+}
+
+export class AdminSellAiCreditsDto {
+    @IsInt() @Min(1) credits: number;
+    @IsOptional() @IsNumber() @IsPositive() amount?: number;
+    @IsOptional() @IsString() notes?: string;
+}
+
 export class CreatePlatformAdminUserDto {
     @IsEmail()
     email: string;

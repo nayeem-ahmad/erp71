@@ -4,7 +4,7 @@ describe('BillingSchedulerService', () => {
     const db = {
         tenantSubscription: { findMany: jest.fn(), update: jest.fn() },
         subscriptionPlan: { findUnique: jest.fn() },
-        billingEvent: { findFirst: jest.fn(), create: jest.fn() },
+        billingEvent: { findFirst: jest.fn(), findUnique: jest.fn(), create: jest.fn() },
     } as any;
 
     const email = {
@@ -19,6 +19,10 @@ describe('BillingSchedulerService', () => {
     // Passthrough tracker: invokes the wrapped job body so tests exercise it.
     const jobTracker = {
         track: jest.fn((_name: string, fn: () => any) => fn()),
+    } as any;
+
+    const notifications = {
+        create: jest.fn().mockResolvedValue({ id: 'n-1' }),
     } as any;
 
     let service: BillingSchedulerService;
@@ -48,7 +52,7 @@ describe('BillingSchedulerService', () => {
         jest.resetAllMocks();
         audit.log.mockResolvedValue(undefined);
         jobTracker.track.mockImplementation((_name: string, fn: () => any) => fn());
-        service = new BillingSchedulerService(db, email, audit, jobTracker);
+        service = new BillingSchedulerService(db, email, audit, jobTracker, notifications);
         delete process.env.DUNNING_GRACE_DAYS;
 
         db.subscriptionPlan.findUnique.mockResolvedValue(freePlan);

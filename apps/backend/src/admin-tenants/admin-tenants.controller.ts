@@ -12,6 +12,8 @@ import {
     CreateAdminTenantDto,
     RecordTenantPaymentDto,
     RecordTenantRefundDto,
+    AdminSellSmsCreditsDto,
+    AdminSellAiCreditsDto,
 } from './admin-tenants.dto';
 
 @Controller('admin/tenants')
@@ -106,5 +108,23 @@ export class AdminTenantsController {
         @Request() req: any,
     ) {
         return this.adminTenantsService.recordRefund(tenantId, dto, req.user.userId);
+    }
+
+    @Post(':tenantId/sms-credits')
+    sellSmsCredits(
+        @Param('tenantId') tenantId: string,
+        @Body() dto: AdminSellSmsCreditsDto,
+        @Request() req: any,
+    ) {
+        return this.adminTenantsService.sellSmsCredits(tenantId, dto, req.user.userId);
+    }
+
+    @Post(':tenantId/ai-credits')
+    sellAiCredits(
+        @Param('tenantId') tenantId: string,
+        @Body() dto: AdminSellAiCreditsDto,
+        @Request() req: any,
+    ) {
+        return this.adminTenantsService.sellAiCredits(tenantId, dto, req.user.userId);
     }
 }

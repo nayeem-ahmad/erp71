@@ -13,6 +13,14 @@ export type TenantRecord = {
     users: Array<{ id: string; email: string; name?: string | null; role: string; joined_at?: string }>;
     store_count: number;
     user_count: number;
+    sms_credits?: number;
+    ledger_balance?: number;
+    ai_credits?: {
+        used: number;
+        limit: number;
+        remaining: number;
+        bonus: number;
+    };
     subscription: {
         status: 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'TRIALING';
         current_period_start: string;

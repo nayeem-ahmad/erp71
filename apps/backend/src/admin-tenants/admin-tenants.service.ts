@@ -12,9 +12,15 @@ import {
     ROLE_DEFAULT_PERMISSIONS,
     UserRole,
     normalizeMobileToE164,
+    normalizePlanFeatures,
+    resolveAiCreditsMonthly,
+    SubscriptionPlanCode,
 } from '@erp71/shared-types';
 import { PasswordResetService } from '../password-reset/password-reset.service';
 import { getPlatformAdminEmails, isPlatformAdminEmail } from '../auth/platform-admin.util';
+import { NotificationsService } from '../notifications/notifications.service';
+import { SmsCreditService } from '../sms/sms-credit.service';
+import { ledgerEventDelta } from './ledger-balance.util';
 import { seedDefaultTenantRoles } from '@erp71/database';
 import {
     ListAdminTenantsQueryDto,
@@ -29,6 +35,8 @@ import {
     CreatePlatformAdminUserDto,
     UpdatePlatformAdminUserDto,
     AdminResetPlatformUserPasswordDto,
+    AdminSellSmsCreditsDto,
+    AdminSellAiCreditsDto,
 } from './admin-tenants.dto';
 
 const ACTIVE_TENANT_FILTER = { deleted_at: null } as const;
@@ -42,6 +50,8 @@ export class AdminTenantsService {
         private readonly auditService: AuditService,
         private readonly emailService: EmailService,
         private readonly passwordResetService: PasswordResetService,
+        private readonly notificationsService: NotificationsService,
+        private readonly smsCreditService: SmsCreditService,
     ) {}
 
     private resolveMobileFields(
@@ -82,6 +92,110 @@ export class AdminTenantsService {
         };
     }
 
+    private getSubscriptionBillingPeriod(subscription: {
+        current_period_start: Date;
+        current_period_end: Date;
+    } | null): [Date, Date] {
+        const now = new Date();
+        if (subscription) {
+            return [subscription.current_period_start, subscription.current_period_end];
+        }
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        return [start, end];
+    }
+
+    private async computeLedgerBalancesByTenant(tenantIds: string[]): Promise<Map<string, number>> {
+        if (tenantIds.length === 0) return new Map();
+
+        const events = await this.db.billingEvent.findMany({
+            where: { tenant_id: { in: tenantIds }, tenant: ACTIVE_TENANT_FILTER },
+            select: { tenant_id: true, event_type: true, amount: true, created_at: true },
+            orderBy: { created_at: 'asc' },
+        });
+
+        const balances = new Map<string, number>();
+        for (const event of events) {
+            const previous = balances.get(event.tenant_id) ?? 0;
+            const amount = event.amount !== null ? Number(event.amount) : null;
+            balances.set(event.tenant_id, previous + ledgerEventDelta(event.event_type, amount));
+        }
+        return balances;
+    }
+
+    private async computeAiCreditSnapshots(
+        tenants: Array<{
+            id: string;
+            ai_credits_bonus?: number | null;
+            subscription?: {
+                current_period_start: Date;
+                current_period_end: Date;
+                plan?: { code: string; features_json?: unknown } | null;
+            } | null;
+        }>,
+    ): Promise<Map<string, { used: number; limit: number; remaining: number; bonus: number }>> {
+        const snapshots = new Map<string, { used: number; limit: number; remaining: number; bonus: number }>();
+        await Promise.all(tenants.map(async (tenant) => {
+            const bonus = tenant.ai_credits_bonus ?? 0;
+            const planCode = (tenant.subscription?.plan?.code ?? 'FREE') as SubscriptionPlanCode;
+            const features = normalizePlanFeatures(
+                tenant.subscription?.plan?.features_json as Record<string, unknown> | undefined,
+                planCode,
+            );
+            const monthly = resolveAiCreditsMonthly(features, planCode);
+            const limit = monthly + bonus;
+            const [periodStart, periodEnd] = this.getSubscriptionBillingPeriod(
+                tenant.subscription
+                    ? {
+                        current_period_start: tenant.subscription.current_period_start,
+                        current_period_end: tenant.subscription.current_period_end,
+                    }
+                    : null,
+            );
+            const aggregate = await this.db.aiUsageLog.aggregate({
+                where: {
+                    tenant_id: tenant.id,
+                    created_at: { gte: periodStart, lte: periodEnd },
+                },
+                _sum: { credits_used: true },
+            });
+            const used = Math.round((aggregate._sum.credits_used ?? 0) * 100) / 100;
+            snapshots.set(tenant.id, {
+                used,
+                limit,
+                remaining: Math.max(0, Math.round((limit - used) * 100) / 100),
+                bonus,
+            });
+        }));
+        return snapshots;
+    }
+
+    private async recordOptionalSalePayment(
+        tenantId: string,
+        adminUserId: string,
+        input: { amount?: number; notes?: string; eventType: string; method?: string },
+    ) {
+        if (!input.amount || input.amount <= 0) return null;
+
+        const externalEventId = `${input.eventType}_${crypto.randomBytes(16).toString('hex')}`;
+        return this.db.billingEvent.create({
+            data: {
+                tenant_id: tenantId,
+                provider_name: 'manual',
+                external_event_id: externalEventId,
+                event_type: input.eventType,
+                status: 'succeeded',
+                amount: input.amount,
+                currency: 'BDT',
+                payload: {
+                    recorded_by: adminUserId,
+                    notes: input.notes ?? null,
+                    method: input.method ?? 'admin_sale',
+                },
+            },
+        });
+    }
+
     async listTenants(query: ListAdminTenantsQueryDto) {
         const tenants = await this.db.tenant.findMany({
             where: ACTIVE_TENANT_FILTER,
@@ -117,20 +231,29 @@ export class AdminTenantsService {
             orderBy: { created_at: 'desc' },
         });
 
-        return tenants
-            .filter((tenant) => {
-                const normalizedSearch = query.search?.trim().toLowerCase();
-                const matchesSearch = !normalizedSearch || [
-                    tenant.name,
-                    tenant.owner?.email,
-                    tenant.owner?.name,
-                ].some((value) => value?.toLowerCase().includes(normalizedSearch));
-                const matchesPlan = !query.planCode || tenant.subscription?.plan?.code === query.planCode;
-                const matchesStatus = !query.status || tenant.subscription?.status === query.status;
+        const filtered = tenants.filter((tenant) => {
+            const normalizedSearch = query.search?.trim().toLowerCase();
+            const matchesSearch = !normalizedSearch || [
+                tenant.name,
+                tenant.owner?.email,
+                tenant.owner?.name,
+            ].some((value) => value?.toLowerCase().includes(normalizedSearch));
+            const matchesPlan = !query.planCode || tenant.subscription?.plan?.code === query.planCode;
+            const matchesStatus = !query.status || tenant.subscription?.status === query.status;
 
-                return matchesSearch && matchesPlan && matchesStatus;
-            })
-            .map((tenant) => this.mapTenant(tenant));
+            return matchesSearch && matchesPlan && matchesStatus;
+        });
+
+        const tenantIds = filtered.map((tenant) => tenant.id);
+        const ledgerBalances = await this.computeLedgerBalancesByTenant(tenantIds);
+        const aiSnapshots = await this.computeAiCreditSnapshots(filtered);
+
+        return filtered.map((tenant) =>
+            this.mapTenant(tenant, {
+                ledger_balance: ledgerBalances.get(tenant.id) ?? 0,
+                ai_credits: aiSnapshots.get(tenant.id),
+            }),
+        );
     }
 
     async getTenant(tenantId: string) {
@@ -174,7 +297,15 @@ export class AdminTenantsService {
             throw new NotFoundException('Tenant not found');
         }
 
-        return this.mapTenant(tenant);
+        const [ledgerBalance, aiSnapshots] = await Promise.all([
+            this.computeLedgerBalancesByTenant([tenantId]).then((map) => map.get(tenantId) ?? 0),
+            this.computeAiCreditSnapshots([tenant]),
+        ]);
+
+        return this.mapTenant(tenant, {
+            ledger_balance: ledgerBalance,
+            ai_credits: aiSnapshots.get(tenantId),
+        });
     }
 
     async updateSubscription(tenantId: string, dto: UpdateAdminTenantSubscriptionDto) {
@@ -961,7 +1092,76 @@ export class AdminTenantsService {
         };
     }
 
-    private mapTenant(tenant: any) {
+    async sellSmsCredits(tenantId: string, dto: AdminSellSmsCreditsDto, adminUserId: string) {
+        const tenant = await this.db.tenant.findFirst({
+            where: { id: tenantId, ...ACTIVE_TENANT_FILTER },
+            select: { id: true, name: true },
+        });
+        if (!tenant) throw new NotFoundException('Tenant not found');
+
+        const grant = await this.smsCreditService.adminGrantCredits(tenantId, dto.credits, {
+            description: dto.notes ?? `Admin sale: ${dto.credits} SMS credits`,
+            recordedBy: adminUserId,
+        });
+
+        const paymentEvent = await this.recordOptionalSalePayment(tenantId, adminUserId, {
+            amount: dto.amount,
+            notes: dto.notes ?? `SMS credit sale (${dto.credits} credits)`,
+            eventType: 'sms_credit_sale_payment',
+        });
+
+        await this.auditService.log('tenant.sms_credits.sell', 'Tenant', { userId: adminUserId }, tenantId, {
+            credits: dto.credits,
+            amount: dto.amount ?? null,
+            balance: grant.balance,
+        });
+
+        return {
+            credits_added: dto.credits,
+            sms_credits: grant.balance,
+            payment_event_id: paymentEvent?.id ?? null,
+        };
+    }
+
+    async sellAiCredits(tenantId: string, dto: AdminSellAiCreditsDto, adminUserId: string) {
+        const tenant = await this.db.tenant.findFirst({
+            where: { id: tenantId, ...ACTIVE_TENANT_FILTER },
+            select: { id: true, name: true, ai_credits_bonus: true },
+        });
+        if (!tenant) throw new NotFoundException('Tenant not found');
+
+        const updated = await this.db.tenant.update({
+            where: { id: tenantId },
+            data: { ai_credits_bonus: { increment: dto.credits } },
+            select: { ai_credits_bonus: true },
+        });
+
+        const paymentEvent = await this.recordOptionalSalePayment(tenantId, adminUserId, {
+            amount: dto.amount,
+            notes: dto.notes ?? `AI credit sale (${dto.credits} credits)`,
+            eventType: 'ai_credit_sale_payment',
+        });
+
+        await this.auditService.log('tenant.ai_credits.sell', 'Tenant', { userId: adminUserId }, tenantId, {
+            credits: dto.credits,
+            amount: dto.amount ?? null,
+            ai_credits_bonus: updated.ai_credits_bonus,
+        });
+
+        return {
+            credits_added: dto.credits,
+            ai_credits_bonus: updated.ai_credits_bonus,
+            payment_event_id: paymentEvent?.id ?? null,
+        };
+    }
+
+    private mapTenant(
+        tenant: any,
+        extras?: {
+            ledger_balance?: number;
+            ai_credits?: { used: number; limit: number; remaining: number; bonus: number };
+        },
+    ) {
         return {
             id: tenant.id,
             name: tenant.name,
@@ -991,6 +1191,14 @@ export class AdminTenantsService {
             })),
             store_count: tenant.stores.length,
             user_count: tenant.users.length,
+            sms_credits: tenant.sms_credits ?? 0,
+            ledger_balance: extras?.ledger_balance ?? 0,
+            ai_credits: extras?.ai_credits ?? {
+                used: 0,
+                limit: 0,
+                remaining: 0,
+                bonus: tenant.ai_credits_bonus ?? 0,
+            },
             subscription: tenant.subscription
                 ? {
                       status: tenant.subscription.status,

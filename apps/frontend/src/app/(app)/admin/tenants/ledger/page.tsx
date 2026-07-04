@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { ArrowDownLeft, ArrowUpRight, Loader2 } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, CheckCircle, Loader2, Plus } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { DataTable } from '@/components/data-table';
+import TenantLedgerPaymentModal from '@/components/admin/tenants/TenantLedgerPaymentModal';
 import { withRunningBalances } from '@/components/admin/tenants/ledger-utils';
 import type { LedgerEvent, TenantRecord } from '@/components/admin/tenants/types';
 import { api } from '@/lib/api';
@@ -24,7 +25,9 @@ export default function AdminTenantLedgerPage() {
     const [tenantFilter, setTenantFilter] = useState('');
     const [events, setEvents] = useState<LedgerEvent[]>([]);
     const [error, setError] = useState('');
+    const [toast, setToast] = useState('');
     const [isLoading, setIsLoading] = useState(true);
+    const [paymentModalOpen, setPaymentModalOpen] = useState(false);
 
     const loadLedger = useCallback(async () => {
         setIsLoading(true);
@@ -51,6 +54,11 @@ export default function AdminTenantLedgerPage() {
         void loadLedger();
     }, [loadLedger]);
 
+    const showToast = (msg: string) => {
+        setToast(msg);
+        setTimeout(() => setToast(''), 3500);
+    };
+
     const columns: ColumnDef<LedgerEvent, unknown>[] = useMemo(() => [
         columnHelper.accessor('created_at', {
             header: ml.columns.date,
@@ -63,11 +71,13 @@ export default function AdminTenantLedgerPage() {
         columnHelper.accessor('event_type', {
             header: ml.columns.type,
             cell: (info) => {
-                const isPayment = info.getValue() === 'manual_payment';
+                const type = info.getValue();
+                const isCredit = ['manual_payment', 'sms_credit_sale_payment', 'ai_credit_sale_payment'].includes(type);
+                const isDebit = ['manual_refund', 'subscription_fee'].includes(type);
                 return (
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${isPayment ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {isPayment ? <ArrowDownLeft className="w-2.5 h-2.5" /> : <ArrowUpRight className="w-2.5 h-2.5" />}
-                        {(ml.eventType as Record<string, string>)[info.getValue()] ?? info.getValue()}
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${isCredit ? 'bg-emerald-100 text-emerald-700' : isDebit ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
+                        {isCredit ? <ArrowDownLeft className="w-2.5 h-2.5" /> : isDebit ? <ArrowUpRight className="w-2.5 h-2.5" /> : null}
+                        {(ml.eventType as Record<string, string>)[type] ?? type}
                     </span>
                 );
             },
@@ -76,10 +86,10 @@ export default function AdminTenantLedgerPage() {
             header: ml.columns.amount,
             cell: (info) => {
                 const row = info.row.original;
-                const isPayment = row.event_type === 'manual_payment';
+                const isCredit = ['manual_payment', 'sms_credit_sale_payment', 'ai_credit_sale_payment'].includes(row.event_type);
                 const value = info.getValue();
                 return (
-                    <span className={`font-black ${isPayment ? 'text-emerald-700' : 'text-amber-700'}`}>
+                    <span className={`font-black ${isCredit ? 'text-emerald-700' : 'text-amber-700'}`}>
                         {value !== null ? `৳${Number(value).toFixed(2)}` : '—'}
                     </span>
                 );
@@ -112,7 +122,23 @@ export default function AdminTenantLedgerPage() {
                         [{ label: m.title, href: '/admin/tenants' }],
                         lp.title,
                     )}
+                    actions={(
+                        <button
+                            type="button"
+                            onClick={() => setPaymentModalOpen(true)}
+                            className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-emerald-200 hover:bg-emerald-700"
+                        >
+                            <Plus className="w-4 h-4" />
+                            {lp.recordPayment}
+                        </button>
+                    )}
                 />
+
+                {toast && (
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center gap-2 text-sm font-semibold text-emerald-700">
+                        <CheckCircle className="w-4 h-4 shrink-0" /> {toast}
+                    </div>
+                )}
 
                 {error && (
                     <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
@@ -147,6 +173,17 @@ export default function AdminTenantLedgerPage() {
                     />
                 )}
             </div>
+
+            <TenantLedgerPaymentModal
+                open={paymentModalOpen}
+                tenants={tenants}
+                defaultTenantId={tenantFilter}
+                onClose={() => setPaymentModalOpen(false)}
+                onSuccess={(message) => {
+                    showToast(message);
+                    void loadLedger();
+                }}
+            />
         </div>
     );
 }

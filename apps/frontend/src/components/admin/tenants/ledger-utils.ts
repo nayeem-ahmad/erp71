@@ -1,9 +1,18 @@
 import type { LedgerEvent } from './types';
 
 function ledgerDelta(event: LedgerEvent): number {
-    if (event.event_type === 'manual_payment') return event.amount ?? 0;
-    if (event.event_type === 'manual_refund') return -(event.amount ?? 0);
-    return 0;
+    const amount = event.amount ?? 0;
+    switch (event.event_type) {
+        case 'manual_payment':
+        case 'sms_credit_sale_payment':
+        case 'ai_credit_sale_payment':
+            return amount;
+        case 'manual_refund':
+        case 'subscription_fee':
+            return -amount;
+        default:
+            return 0;
+    }
 }
 
 /** Compute per-tenant running balance; returns rows newest-first for display. */
