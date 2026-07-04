@@ -75,7 +75,7 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit = {})
     if (storeId) {
         headers.set('x-store-id', storeId);
     }
-    if (options.body && !headers.has('Content-Type')) {
+    if (options.body && !headers.has('Content-Type') && !(options.body instanceof FormData)) {
         headers.set('Content-Type', 'application/json');
     }
 
