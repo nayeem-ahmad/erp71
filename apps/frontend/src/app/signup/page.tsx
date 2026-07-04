@@ -3,10 +3,10 @@
 import Link from 'next/link';
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowRight, Building2, Loader2, Lock, Mail, Store } from 'lucide-react';
+import { ArrowRight, Building2, Gift, Loader2, Lock, Mail, Store } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
-import { useI18n } from '@/lib/i18n';
+import { formatMessage, useI18n } from '@/lib/i18n';
 import { syncLocalePreferenceFromSession } from '@/lib/localization/preference';
 import {
     DEFAULT_MOBILE_COUNTRY_CODE,
@@ -69,9 +69,13 @@ function SignupPageContent() {
         tenantName: '',
         storeName: '',
         planCode: 'BASIC' as Plan['code'],
+        referralCode: '',
     });
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [referralStatus, setReferralStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
+    const [referralDiscount, setReferralDiscount] = useState<number | null>(null);
+    const [referralName, setReferralName] = useState('');
 
     useEffect(() => {
         api.getSubscriptionPlans()
@@ -94,6 +98,46 @@ function SignupPageContent() {
             setForm((current) => ({ ...current, planCode: resolvedCode }));
         }
     }, [searchParams]);
+
+    useEffect(() => {
+        const referralFromUrl = searchParams.get('ref') || searchParams.get('referral');
+        if (referralFromUrl) {
+            setForm((current) => ({ ...current, referralCode: referralFromUrl.trim().toUpperCase() }));
+        }
+    }, [searchParams]);
+
+    useEffect(() => {
+        const code = form.referralCode.trim();
+        if (!code) {
+            setReferralStatus('idle');
+            setReferralDiscount(null);
+            setReferralName('');
+            return;
+        }
+
+        setReferralStatus('checking');
+        const timer = window.setTimeout(() => {
+            api.validateReferralCode(code)
+                .then((result: { valid?: boolean; discount_pct?: number; referee_name?: string }) => {
+                    if (result?.valid) {
+                        setReferralStatus('valid');
+                        setReferralDiscount(result.discount_pct ?? null);
+                        setReferralName(result.referee_name ?? '');
+                    } else {
+                        setReferralStatus('invalid');
+                        setReferralDiscount(null);
+                        setReferralName('');
+                    }
+                })
+                .catch(() => {
+                    setReferralStatus('invalid');
+                    setReferralDiscount(null);
+                    setReferralName('');
+                });
+        }, 400);
+
+        return () => window.clearTimeout(timer);
+    }, [form.referralCode]);
 
     const handleChange = (field: keyof typeof form, value: string) => {
         setForm((current) => ({ ...current, [field]: value }));
@@ -135,7 +179,10 @@ function SignupPageContent() {
         setIsLoading(true);
 
         try {
-            const signupRes = await api.signup(form);
+            const signupRes = await api.signup({
+                ...form,
+                referralCode: form.referralCode.trim() || undefined,
+            });
             localStorage.setItem('access_token', signupRes.access_token);
             syncLocalePreferenceFromSession(signupRes, { overwrite: true });
 
@@ -239,6 +286,34 @@ function SignupPageContent() {
                                 <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                                 <input id="signup-organization" value={form.tenantName} onChange={(e) => handleChange('tenantName', e.target.value)} required className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="Dhaka Retail Co." />
                             </div>
+                        </div>
+
+                        <div className="space-y-2 md:col-span-2">
+                            <label htmlFor="signup-referral" className="text-sm font-medium text-gray-700 ml-1">{t.auth.signup.referralCodeLabel}</label>
+                            <div className="relative">
+                                <Gift className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                                <input
+                                    id="signup-referral"
+                                    value={form.referralCode}
+                                    onChange={(e) => handleChange('referralCode', e.target.value.toUpperCase())}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 uppercase tracking-wider"
+                                    placeholder={t.auth.signup.referralCodePlaceholder}
+                                />
+                            </div>
+                            {referralStatus === 'checking' && (
+                                <p className="text-xs text-gray-500 ml-1">{t.auth.signup.referralCodeValidating}</p>
+                            )}
+                            {referralStatus === 'valid' && referralDiscount !== null && (
+                                <p className="text-xs font-medium text-emerald-600 ml-1">
+                                    {formatMessage(t.auth.signup.referralCodeValid, {
+                                        discount: String(referralDiscount),
+                                        name: referralName,
+                                    })}
+                                </p>
+                            )}
+                            {referralStatus === 'invalid' && form.referralCode.trim() && (
+                                <p className="text-xs font-medium text-red-600 ml-1">{t.auth.signup.referralCodeInvalid}</p>
+                            )}
                         </div>
 
                         <div className="space-y-2 md:col-span-2">

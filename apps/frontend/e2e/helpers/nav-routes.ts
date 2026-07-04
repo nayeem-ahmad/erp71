@@ -131,6 +131,7 @@ export const NAV_ROUTES: { path: string; label: string }[] = [
     { path: '/admin/tenants', label: 'Platform Admin Tenants' },
     { path: '/admin/tenants/ledger', label: 'Tenant Ledger' },
     { path: '/admin/users', label: 'Platform Admin Users' },
+    { path: '/admin/referrals', label: 'Referrals' },
     { path: '/admin/feedback', label: 'Feedback' },
     { path: '/admin/support', label: 'Admin Support' },
     { path: '/admin/platform-settings', label: 'Platform Settings' },

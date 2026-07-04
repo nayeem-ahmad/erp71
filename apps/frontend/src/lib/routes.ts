@@ -180,6 +180,7 @@ export const routes = {
         tenantPayments: '/admin/tenants/payments',
         tenantLedger: '/admin/tenants/ledger',
         users: '/admin/users',
+        referrals: '/admin/referrals',
         feedback: '/admin/feedback',
         support: '/admin/support',
         systemHealth: '/admin/system-health',

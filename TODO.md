@@ -357,6 +357,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Referee/referral commission system — frontend completion — Prisma migration `20260704160000_add_referral_commission_system`; platform-admin `/admin/referrals` list + per-referee ledger/payment UI; sidebar nav link; API client methods; signup referral code field with live validation (`?ref=` / `?referral=`); i18n en/bn/ms — done 2026-07-04
 - [x] Fix Load Demo Data 500 — `packages/database/index.js` did not export compiled `seedTenantDemoData`; added `prisma/seed-demo.js` + exports; `loadDemoData` auto-creates default warehouse for new tenants — done 2026-07-03
 - [x] Sales credit due — allow keeping due on New Sale and POS when a customer is selected and `due_balance + new due <= credit_limit`; backend validates, records `CREDIT_SALE` ledger entry, updates `due_balance`, and posts AR for the credit portion; shared `customer-credit` helpers + unit tests — done 2026-07-03
 - [x] Merge dev → main + deploy (`a6c44ee`) — synced local `dev` with `origin/dev` (#313 demo data); fast-forwarded `main`; VPS `/opt/erp71` `scripts/deploy.sh main`; `prisma db push` on backend start; smoke checks green at `api.erp71.com` / `app.erp71.com` — done 2026-07-03

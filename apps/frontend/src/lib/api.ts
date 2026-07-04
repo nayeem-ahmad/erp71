@@ -1107,6 +1107,11 @@ export const api = {
         if (!res.ok) throw new Error(body?.message || 'Failed to load plans');
         return body && 'data' in body ? body.data : body;
     }),
+    validateReferralCode: (code: string) => fetch(`${API_BASE}/auth/referral-code/${encodeURIComponent(code.trim())}`).then(async res => {
+        const body = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(body?.message || 'Failed to validate referral code');
+        return body && 'data' in body ? body.data : body;
+    }),
     setupTenant: (data: { tenantName: string; name: string; address?: string; planCode?: string; businessType?: string }) =>
         fetchWithAuth('/auth/setup-tenant', {
             method: 'POST',
@@ -1263,6 +1268,52 @@ export const api = {
         }),
     sendPlatformAdminUserResetEmail: (userId: string) =>
         fetchWithAuth(`/admin/users/${userId}/send-reset-email`, { method: 'POST' }),
+    getAdminReferees: () => fetchWithAuth('/admin/referrals/referees'),
+    createAdminReferee: (data: {
+        name: string;
+        email: string;
+        phone?: string;
+        commission_rate: number;
+        signup_discount: number;
+        notes?: string;
+    }) => fetchWithAuth('/admin/referrals/referees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    }),
+    getAdminReferee: (id: string) => fetchWithAuth(`/admin/referrals/referees/${id}`),
+    updateAdminReferee: (id: string, data: {
+        name?: string;
+        email?: string;
+        phone?: string;
+        commission_rate?: number;
+        signup_discount?: number;
+        is_active?: boolean;
+        notes?: string;
+    }) => fetchWithAuth(`/admin/referrals/referees/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    }),
+    getAdminRefereeLedger: (id: string) => fetchWithAuth(`/admin/referrals/referees/${id}/ledger`),
+    recordAdminRefereePayment: (id: string, data: {
+        amount: number;
+        method?: string;
+        reference?: string;
+        notes?: string;
+        commission_ids?: string[];
+    }) => fetchWithAuth(`/admin/referrals/referees/${id}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    }),
+    getAdminReferralCommissions: (params?: { referee_id?: string; status?: 'PENDING' | 'EARNED' | 'PAID' }) => {
+        const query = new URLSearchParams();
+        if (params?.referee_id) query.set('referee_id', params.referee_id);
+        if (params?.status) query.set('status', params.status);
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return fetchWithAuth(`/admin/referrals/commissions${suffix}`);
+    },
     getAdminFeedback: (params?: { type?: string; search?: string; page?: number; limit?: number }) => {
         const query = new URLSearchParams();
         if (params?.type) query.set('type', params.type);
