@@ -14,6 +14,15 @@
 
 ---
 
+**Story 1.7: Customer Interaction Log**
+*   **As a** Shop Owner, **I want to** log every call, SMS, WhatsApp message, email, visit, or note with an existing customer, **so that** I have a service history and know how long it's been since we last spoke.
+*   **Acceptance Criteria:**
+    1.  Staff can log an interaction (channel, direction, summary, outcome) against a customer.
+    2.  Logging an interaction refreshes the customer's "last contacted" timestamp, which feeds the automated reorder-reminder task (Epic 85, Story 3).
+*   Status: Done — `apps/backend/src/crm-interactions/`, "Interactions" tab on `apps/frontend/src/app/(app)/sales/customers/[id]/page.tsx`.
+
+---
+
 **Story 2: Automated Loyalty Points Balance Updates**
 *   **As a** Store Manager, **I want to** automatically notify customers via SMS/Email when their loyalty points balance changes, **so that** they feel rewarded and are encouraged to return.
 *   **Acceptance Criteria:**

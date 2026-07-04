@@ -12,6 +12,10 @@ This document provides a master list of all epics for the ERP71 platform, organi
     *   **Goal:** Unified infrastructure for Cloud Storage, Email, and Multi-channel Notifications.
 *   **Epic 06: Referral & Affiliate Commission Program**
     *   **Goal:** Commission-earning referral partners who bring in paying tenants, with a self-service earnings portal.
+*   **Epic 07: Platform Operations Console**
+    *   **Goal:** Admin-created tenants, platform-admin user management, and manual tenant ledger/payments/credit sales.
+*   **Epic 08: Messaging Channels & AI-Powered Features**
+    *   **Goal:** Paid-usage SMS, WhatsApp, and AI-assisted features on top of the core email channel.
 
 ## 💰 Sales (10-19)
 *   **Epic 10: Core Sales & POS Transactions**
@@ -36,6 +40,10 @@ This document provides a master list of all epics for the ERP71 platform, organi
 ## 📊 Accounting & Expense (30-39, 50-59)
 *   **Epic 30: Financial Ledgers & Core Accounting**
 *   **Epic 31: Automated Accounting Integration & Posting Rules**
+*   **Epic 32: Advanced Accounting Controls**
+    *   **Goal:** Fiscal period locking, budgets, cost centers, fixed assets, recurring vouchers, and bank reconciliation.
+*   **Epic 33: Extended Financial Reporting Suite**
+    *   **Goal:** P&L, balance sheet, trial balance, aging, ratios, and third-party accounting export.
 *   **Epic 34: Accounting & Financial Dashboard**
     *   **Goal:** Cash flow, net profit, and tax liability visualizations.
 *   **Epic 50: Business Expense Management**
@@ -82,6 +90,8 @@ This document provides a master list of all epics for the ERP71 platform, organi
     *   **Goal:** Direct communication through automated SMS, email, and push notifications.
 *   **Epic 84: CRM & Customer Dashboard**
     *   **Goal:** Retention metrics, top customers, and loyalty program effectiveness.
+*   **Epic 85: CRM Lead Pipeline & Marketing Campaigns**
+    *   **Goal:** Work prospects before conversion and run targeted SMS/WhatsApp/email campaigns to existing customers.
 
 ## ⚙️ Admin (90-99)
 *   **Epic 90: Multi-user Role-Based Access Control (RBAC)**

@@ -36,3 +36,9 @@ This epic defines the primary revenue-generating loop for the SaaS platform. It 
 4. **Story 4: Cashier Session Tracking** - Daily register opening/closing and cash reconciliation.
 
 5. **Story 5: Sales History & Management** - UI showing list of already done sales. Any sales entry can be opened for view, edit. It can be print-previewed.
+
+6. **Story 6: Offline-Capable POS** - The POS caches its product catalog into IndexedDB and, when checkout is attempted without connectivity, queues the sale locally instead of failing. Queued sales replay automatically via the browser's Background Sync API when connectivity returns, or through a manual sync loop as a fallback. Status: Done — `apps/frontend/src/lib/pos-db.ts`, `apps/frontend/src/hooks/useOfflineSync.ts`, `apps/frontend/public/sw.js`.
+
+7. **Story 7: Credit-Limit-Aware "Keep Due" Sales** - When a POS sale is under-paid, the backend re-validates (independent of the frontend) that the selected customer has a credit limit and that the new due amount won't push their running balance past it, rejecting the sale with the available headroom shown otherwise. The checkout panel color-codes as allowed-with-due vs. over-limit before the request is even sent. Status: Done — `apps/backend/src/customers/customer-credit.utils.ts` (`assertCustomerCreditForSale`), wired into `sales.service.ts`.
+
+8. **Story 8: Serial Number & Warranty Claim Tracking** - Products flagged `warranty_enabled` require one serial number per unit at checkout; each is recorded as a `ProductSerial` tied to the sale and rejected if already sold elsewhere. Staff can later look up a serial to see its sale/customer/warranty-expiry info and file a `WarrantyClaim` tracked through a status workflow. Status: Done — `sales.service.ts` (serial capture at sale time), `apps/backend/src/warranty-claims/`, `apps/frontend/src/app/(app)/sales/warranty-claims/page.tsx`.

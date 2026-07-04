@@ -26,3 +26,21 @@
 *   **Acceptance Criteria:**
     1.  An admin can link an employee profile to a specific `User` (RBAC).
     2.  The system identifies the employee's role based on their designation for default permissions.
+
+---
+
+**Story 4: Employee Bulk Import**
+*   **As a** Shop Owner, **I want to** bulk-upload employees from a spreadsheet, **so that** I don't have to add my whole existing staff roster one by one.
+*   **Acceptance Criteria:**
+    1.  A CSV/spreadsheet upload accepts name (required), phone, email, joining date, and salary.
+    2.  Rows are matched against existing employees by phone number; skip or update-existing modes are supported, with per-row error reporting.
+*   Status: Done — `EmployeesService.importRows()`, shared `apps/backend/src/common/import.util.ts` engine, "Import" button on `apps/frontend/src/app/(app)/hr/employees/page.tsx`. Note: NID is not importable via CSV — it can only be set through the individual employee form.
+
+---
+
+**Story 5: NID Field Encryption**
+*   **As a** Shop Owner, **I want** employee (and customer) National ID numbers encrypted at rest, **so that** sensitive personal data is protected if the database is ever compromised.
+*   **Acceptance Criteria:**
+    1.  NID values are encrypted before being written to the database and transparently decrypted when read back through the API.
+    2.  Encryption is mandatory in production (the app refuses to start without a configured key).
+*   Status: Done — `apps/backend/src/common/encryption.service.ts` (AES-256-GCM), applied to `Employee.nid` and `Customer.nid`.
