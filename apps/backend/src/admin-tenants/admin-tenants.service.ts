@@ -14,6 +14,7 @@ import {
     normalizeMobileToE164,
 } from '@erp71/shared-types';
 import { PasswordResetService } from '../password-reset/password-reset.service';
+import { getPlatformAdminEmails, isPlatformAdminEmail } from '../auth/platform-admin.util';
 import { seedDefaultTenantRoles } from '@erp71/database';
 import {
     ListAdminTenantsQueryDto,
@@ -62,6 +63,23 @@ export class AdminTenantsService {
         }
 
         return { mobile: normalized, mobile_country_code: countryCode };
+    }
+
+    /** DB flag or PLATFORM_ADMIN_EMAILS whitelist (bootstrap / legacy admins). */
+    private isEffectivePlatformAdmin(user: { is_platform_admin?: boolean | null; email?: string | null }) {
+        return user.is_platform_admin === true || isPlatformAdminEmail(user.email);
+    }
+
+    private buildPlatformAdminWhere() {
+        const whitelistEmails = getPlatformAdminEmails();
+        return {
+            OR: [
+                { is_platform_admin: true },
+                ...whitelistEmails.map((email) => ({
+                    email: { equals: email, mode: 'insensitive' as const },
+                })),
+            ],
+        };
     }
 
     async listTenants(query: ListAdminTenantsQueryDto) {
@@ -531,16 +549,21 @@ export class AdminTenantsService {
         const limit = Math.min(100, Math.max(1, query.limit ?? 20));
         const skip = (page - 1) * limit;
 
-        const where: any = {
-            is_platform_admin: true,
-        };
-        if (query.search) {
-            where.OR = [
-                { email: { contains: query.search, mode: 'insensitive' as const } },
-                { name: { contains: query.search, mode: 'insensitive' as const } },
-                { mobile: { contains: query.search, mode: 'insensitive' as const } },
-            ];
-        }
+        const adminFilter = this.buildPlatformAdminWhere();
+        const where: any = query.search
+            ? {
+                AND: [
+                    adminFilter,
+                    {
+                        OR: [
+                            { email: { contains: query.search, mode: 'insensitive' as const } },
+                            { name: { contains: query.search, mode: 'insensitive' as const } },
+                            { mobile: { contains: query.search, mode: 'insensitive' as const } },
+                        ],
+                    },
+                ],
+            }
+            : adminFilter;
 
         const [users, total] = await Promise.all([
             this.db.user.findMany({
@@ -569,7 +592,7 @@ export class AdminTenantsService {
                 name: u.name,
                 mobile: u.mobile,
                 mobile_country_code: u.mobile_country_code,
-                is_platform_admin: (u as any).is_platform_admin,
+                is_platform_admin: this.isEffectivePlatformAdmin(u),
                 email_verified: !!u.email_verified_at,
                 created_at: u.created_at,
             })),
@@ -674,7 +697,7 @@ export class AdminTenantsService {
 
     async updatePlatformAdminUser(userId: string, dto: UpdatePlatformAdminUserDto, adminUserId: string) {
         const user = await this.db.user.findUnique({ where: { id: userId } });
-        if (!user || !user.is_platform_admin) {
+        if (!user || !this.isEffectivePlatformAdmin(user)) {
             throw new NotFoundException('Platform admin user not found');
         }
 
@@ -746,12 +769,12 @@ export class AdminTenantsService {
                 },
             },
         });
-        if (!user || !user.is_platform_admin) {
+        if (!user || !this.isEffectivePlatformAdmin(user)) {
             throw new NotFoundException('Platform admin user not found');
         }
 
         const remainingAdmins = await this.db.user.count({
-            where: { is_platform_admin: true, id: { not: userId } },
+            where: { AND: [this.buildPlatformAdminWhere(), { id: { not: userId } }] },
         });
         if (remainingAdmins === 0) {
             throw new BadRequestException('Cannot delete the last platform admin');
@@ -777,7 +800,7 @@ export class AdminTenantsService {
         adminUserId: string,
     ) {
         const user = await this.db.user.findUnique({ where: { id: userId } });
-        if (!user || !user.is_platform_admin) {
+        if (!user || !this.isEffectivePlatformAdmin(user)) {
             throw new NotFoundException('Platform admin user not found');
         }
 
@@ -796,7 +819,7 @@ export class AdminTenantsService {
 
     async sendPlatformAdminUserResetEmail(userId: string, adminUserId: string) {
         const user = await this.db.user.findUnique({ where: { id: userId } });
-        if (!user || !user.is_platform_admin) {
+        if (!user || !this.isEffectivePlatformAdmin(user)) {
             throw new NotFoundException('Platform admin user not found');
         }
 

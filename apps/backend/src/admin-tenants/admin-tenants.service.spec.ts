@@ -640,7 +640,7 @@ describe('AdminTenantsService', () => {
       expect(result.data[0].mobile).toBe('+8801711111111');
     });
 
-    it('filters to platform admin users only', async () => {
+    it('filters to platform admin users only (DB flag or email whitelist)', async () => {
       db.user.findMany.mockResolvedValue([]);
       db.user.count.mockResolvedValue(0);
 
@@ -648,9 +648,26 @@ describe('AdminTenantsService', () => {
 
       expect(db.user.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ is_platform_admin: true }),
+          where: expect.objectContaining({
+            OR: expect.arrayContaining([
+              { is_platform_admin: true },
+              expect.objectContaining({
+                email: expect.objectContaining({ equals: 'nayeem.ahmad@gmail.com' }),
+              }),
+            ]),
+          }),
         }),
       );
+    });
+
+    it('includes whitelist admins without DB flag and marks them as platform admin', async () => {
+      const users = [makeUser({ email: 'nayeem.ahmad@gmail.com', is_platform_admin: false })];
+      db.user.findMany.mockResolvedValue(users);
+      db.user.count.mockResolvedValue(1);
+
+      const result = await service.listUsers({});
+
+      expect(result.data[0].is_platform_admin).toBe(true);
     });
 
     it('returns email_verified false when email not verified', async () => {
@@ -672,11 +689,17 @@ describe('AdminTenantsService', () => {
       expect(db.user.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            is_platform_admin: true,
-            OR: expect.arrayContaining([
-              expect.objectContaining({ email: expect.any(Object) }),
-              expect.objectContaining({ name: expect.any(Object) }),
-              expect.objectContaining({ mobile: expect.any(Object) }),
+            AND: expect.arrayContaining([
+              expect.objectContaining({
+                OR: expect.arrayContaining([{ is_platform_admin: true }]),
+              }),
+              expect.objectContaining({
+                OR: expect.arrayContaining([
+                  expect.objectContaining({ email: expect.any(Object) }),
+                  expect.objectContaining({ name: expect.any(Object) }),
+                  expect.objectContaining({ mobile: expect.any(Object) }),
+                ]),
+              }),
             ]),
           }),
         }),
