@@ -45,14 +45,26 @@ export class PasswordResetService {
 
         const passwordHash = await bcrypt.hash(newPassword, 10);
 
-        // Increment token_version to invalidate all active sessions (#68)
-        await this.db.$transaction([
-            this.db.user.update({
+        // Increment token_version to invalidate all active sessions (#68).
+        // Using the emailed reset link proves inbox ownership — mark verified if not already.
+        await this.db.$transaction(async (tx) => {
+            const user = await tx.user.findUnique({
                 where: { id: record.user_id },
-                data: { passwordHash, token_version: { increment: 1 } },
-            }),
-            this.db.passwordResetToken.update({ where: { id: record.id }, data: { used_at: new Date() } }),
-        ]);
+                select: { email_verified_at: true },
+            });
+            await tx.user.update({
+                where: { id: record.user_id },
+                data: {
+                    passwordHash,
+                    token_version: { increment: 1 },
+                    ...(!user?.email_verified_at && { email_verified_at: new Date() }),
+                },
+            });
+            await tx.passwordResetToken.update({ where: { id: record.id }, data: { used_at: new Date() } });
+            if (!user?.email_verified_at) {
+                await tx.emailVerificationToken.deleteMany({ where: { user_id: record.user_id } });
+            }
+        });
         this.audit.log('PASSWORD_RESET_COMPLETED', 'User', { userId: record.user_id }, record.user_id).catch(() => {});
     }
 

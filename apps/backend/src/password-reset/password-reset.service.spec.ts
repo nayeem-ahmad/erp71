@@ -5,10 +5,16 @@ import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import * as crypto from 'crypto';
+import * as bcrypt from 'bcrypt';
+
+jest.mock('bcrypt', () => ({
+    hash: jest.fn().mockResolvedValue('hashed-password'),
+}));
 
 const db = {
     user: { findUnique: jest.fn(), update: jest.fn() },
     passwordResetToken: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn(), deleteMany: jest.fn() },
+    emailVerificationToken: { deleteMany: jest.fn() },
     $transaction: jest.fn(),
 };
 const emailService = { sendPasswordReset: jest.fn().mockResolvedValue(undefined) };
@@ -19,7 +25,11 @@ describe('PasswordResetService', () => {
 
     beforeEach(async () => {
         jest.clearAllMocks();
-        db.$transaction.mockImplementation((ops: any[]) => Promise.all(ops));
+        db.$transaction.mockImplementation(async (fn: any) => {
+            if (typeof fn === 'function') return fn(db);
+            return Promise.all(fn);
+        });
+        db.emailVerificationToken.deleteMany.mockResolvedValue({ count: 0 });
         const mod = await Test.createTestingModule({
             providers: [
                 PasswordResetService,
@@ -67,5 +77,31 @@ describe('PasswordResetService', () => {
             used_at: new Date(),
         });
         await expect(service.resetPassword('used-token', 'newpassword123')).rejects.toThrow(BadRequestException);
+    });
+
+    it('marks email verified when password is set via reset token', async () => {
+        const hash = crypto.createHash('sha256').update('valid-token').digest('hex');
+        db.passwordResetToken.findUnique.mockResolvedValue({
+            id: 'tok1',
+            user_id: 'u1',
+            token_hash: hash,
+            expires_at: new Date(Date.now() + 3600_000),
+            used_at: null,
+        });
+        db.user.findUnique.mockResolvedValue({ email_verified_at: null });
+        db.user.update.mockResolvedValue({});
+        db.passwordResetToken.update.mockResolvedValue({});
+
+        await service.resetPassword('valid-token', 'newpassword123');
+
+        expect(db.user.update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { id: 'u1' },
+                data: expect.objectContaining({ email_verified_at: expect.any(Date) }),
+            }),
+        );
+        expect(db.emailVerificationToken.deleteMany).toHaveBeenCalledWith({
+            where: { user_id: 'u1' },
+        });
     });
 });
