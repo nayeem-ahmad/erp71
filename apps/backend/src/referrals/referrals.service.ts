@@ -15,7 +15,9 @@ export class ReferralsService {
     // ── Referees ──────────────────────────────────────────────────────────────
 
     async createReferee(dto: CreateRefereeDto, adminUserId: string) {
-        const existing = await this.db.referee.findUnique({ where: { email: dto.email } });
+        const existing = await this.db.referee.findFirst({
+            where: { email: dto.email, deleted_at: null },
+        });
         if (existing) throw new ConflictException('A referee with this email already exists');
 
         const referral_code = this.generateReferralCode(dto.name);
@@ -40,6 +42,7 @@ export class ReferralsService {
     async sendRefereeLoginInvite(refereeId: string) {
         const referee = await this.db.referee.findUnique({ where: { id: refereeId } });
         if (!referee) throw new NotFoundException('Referee not found');
+        if (referee.deleted_at) throw new BadRequestException('Cannot send invite to an archived referee');
 
         await this.ensureRefereeUserAccount(referee.id);
         return { sent: true, email: referee.email };
@@ -95,13 +98,13 @@ export class ReferralsService {
         } as const;
 
         const byUserId = await this.db.referee.findFirst({
-            where: { user_id: userId, is_active: true },
+            where: { user_id: userId, is_active: true, deleted_at: null },
             select,
         });
         if (byUserId) return byUserId;
 
         const byEmail = await this.db.referee.findFirst({
-            where: { email, is_active: true },
+            where: { email, is_active: true, deleted_at: null },
             select,
         });
         if (!byEmail) return null;
@@ -181,10 +184,23 @@ export class ReferralsService {
     async updateReferee(id: string, dto: UpdateRefereeDto) {
         const referee = await this.db.referee.findUnique({ where: { id } });
         if (!referee) throw new NotFoundException('Referee not found');
+        if (referee.deleted_at) throw new BadRequestException('Archived referees cannot be edited');
 
         if (dto.email && dto.email !== referee.email) {
-            const conflict = await this.db.referee.findUnique({ where: { email: dto.email } });
+            const conflict = await this.db.referee.findFirst({
+                where: { email: dto.email, deleted_at: null, id: { not: id } },
+            });
             if (conflict) throw new ConflictException('Email already in use by another referee');
+        }
+
+        if (dto.referral_code) {
+            const normalized = this.normalizeReferralCode(dto.referral_code);
+            if (normalized !== referee.referral_code) {
+                const conflict = await this.db.referee.findFirst({
+                    where: { referral_code: normalized, id: { not: id } },
+                });
+                if (conflict) throw new ConflictException('Referral code already in use');
+            }
         }
 
         const updated = await this.db.referee.update({
@@ -197,10 +213,39 @@ export class ReferralsService {
                 ...(dto.signup_discount !== undefined && { signup_discount: dto.signup_discount }),
                 ...(dto.is_active !== undefined && { is_active: dto.is_active }),
                 ...(dto.notes !== undefined && { notes: dto.notes }),
+                ...(dto.referral_code !== undefined && { referral_code: this.normalizeReferralCode(dto.referral_code) }),
             },
         });
 
         return this.mapReferee(updated);
+    }
+
+    async deleteReferee(id: string) {
+        const referee = await this.db.referee.findUnique({
+            where: { id },
+            include: {
+                _count: { select: { referralSignups: true, payments: true } },
+            },
+        });
+        if (!referee) throw new NotFoundException('Referee not found');
+        if (referee.deleted_at) throw new BadRequestException('Referee is already archived');
+
+        const hasLedger = referee._count.referralSignups > 0 || referee._count.payments > 0;
+
+        if (hasLedger) {
+            await this.db.referee.update({
+                where: { id },
+                data: {
+                    deleted_at: new Date(),
+                    is_active: false,
+                    user_id: null,
+                },
+            });
+            return { id, deleted: true, archived: true };
+        }
+
+        await this.db.referee.delete({ where: { id } });
+        return { id, deleted: true, archived: false };
     }
 
     // ── Commissions ───────────────────────────────────────────────────────────
@@ -226,6 +271,7 @@ export class ReferralsService {
     async recordPayment(refereeId: string, dto: RecordPaymentDto, adminUserId: string) {
         const referee = await this.db.referee.findUnique({ where: { id: refereeId } });
         if (!referee) throw new NotFoundException('Referee not found');
+        if (referee.deleted_at) throw new BadRequestException('Cannot record payment for an archived referee');
 
         const earned = await this.db.referralSignup.findMany({
             where: { referee_id: refereeId, status: 'EARNED' },
@@ -289,7 +335,7 @@ export class ReferralsService {
     async getLedger(refereeId: string) {
         const referee = await this.db.referee.findUnique({
             where: { id: refereeId },
-            select: { id: true, name: true, email: true, referral_code: true },
+            select: { id: true, name: true, email: true, referral_code: true, deleted_at: true },
         });
         if (!referee) throw new NotFoundException('Referee not found');
 
@@ -327,6 +373,10 @@ export class ReferralsService {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private normalizeReferralCode(code: string): string {
+        return code.trim().toUpperCase();
+    }
 
     private generateReferralCode(name: string): string {
         const base = name.replace(/\s+/g, '').toUpperCase().slice(0, 4).padEnd(4, 'X');

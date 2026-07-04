@@ -1286,6 +1286,7 @@ export const api = {
         name?: string;
         email?: string;
         phone?: string;
+        referral_code?: string;
         commission_rate?: number;
         signup_discount?: number;
         is_active?: boolean;
@@ -1295,6 +1296,8 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
     }),
+    deleteAdminReferee: (id: string) =>
+        fetchWithAuth(`/admin/referrals/referees/${id}`, { method: 'DELETE' }),
     getAdminRefereeLedger: (id: string) => fetchWithAuth(`/admin/referrals/referees/${id}/ledger`),
     recordAdminRefereePayment: (id: string, data: {
         amount: number;

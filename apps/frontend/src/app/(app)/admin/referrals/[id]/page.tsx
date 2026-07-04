@@ -148,7 +148,7 @@ export default function AdminRefereeDetailPage() {
                         <button
                             type="button"
                             onClick={() => setPaymentOpen(true)}
-                            disabled={!ledger || ledger.summary.earned === 0}
+                            disabled={!ledger || ledger.summary.earned === 0 || Boolean(ledger?.referee.deleted_at)}
                             className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                         >
                             <Plus className="w-4 h-4" />
@@ -168,6 +168,12 @@ export default function AdminRefereeDetailPage() {
             {error && (
                 <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
                     {error}
+                </div>
+            )}
+
+            {ledger?.referee.deleted_at && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
+                    {d.archivedBanner}
                 </div>
             )}
 

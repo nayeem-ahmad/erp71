@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { BookOpen, CheckCircle, Loader2, Mail, Pencil, Plus } from 'lucide-react';
+import { BookOpen, CheckCircle, Loader2, Mail, Pencil, Plus, Trash2 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { DataTable } from '@/components/data-table';
 import RefereeFormModal from '@/components/admin/referrals/RefereeFormModal';
+import RefereeDeleteModal from '@/components/admin/referrals/RefereeDeleteModal';
 import type { RefereeRecord } from '@/components/admin/referrals/types';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
@@ -27,6 +28,9 @@ export default function AdminReferralsPage() {
     const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
     const [selectedReferee, setSelectedReferee] = useState<RefereeRecord | null>(null);
     const [invitingId, setInvitingId] = useState('');
+    const [deleteOpen, setDeleteOpen] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<RefereeRecord | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     const load = useCallback(async () => {
         setIsLoading(true);
@@ -48,6 +52,30 @@ export default function AdminReferralsPage() {
     const showToast = (msg: string) => {
         setToast(msg);
         setTimeout(() => setToast(''), 3500);
+    };
+
+    const hasLedger = (referee: RefereeRecord) =>
+        referee.stats.pending_signups + referee.stats.earned_count + referee.stats.paid_count > 0
+        || referee.stats.earned_amount > 0
+        || referee.stats.paid_amount > 0;
+
+    const confirmDelete = async () => {
+        if (!deleteTarget) return;
+        setDeleting(true);
+        setError('');
+        try {
+            const result = await api.deleteAdminReferee(deleteTarget.id);
+            showToast(result?.archived
+                ? formatMessage(m.archivedToast, { name: deleteTarget.name })
+                : formatMessage(m.deletedToast, { name: deleteTarget.name }));
+            setDeleteOpen(false);
+            setDeleteTarget(null);
+            await load();
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : m.deleteFailed);
+        } finally {
+            setDeleting(false);
+        }
     };
 
     const sendInvite = async (referee: RefereeRecord) => {
@@ -118,6 +146,13 @@ export default function AdminReferralsPage() {
             header: m.columns.status,
             cell: (info) => {
                 const row = info.row.original;
+                if (row.deleted_at) {
+                    return (
+                        <span className="inline-flex rounded-full bg-slate-200 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-700">
+                            {m.archived}
+                        </span>
+                    );
+                }
                 return (
                     <div className="flex flex-col gap-1">
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${info.getValue() ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
@@ -136,6 +171,7 @@ export default function AdminReferralsPage() {
             cell: ({ row }) => {
                 const referee = row.original;
                 const busy = invitingId === referee.id;
+                const archived = Boolean(referee.deleted_at);
                 return (
                     <div className="flex items-center gap-2">
                         <Link
@@ -146,27 +182,42 @@ export default function AdminReferralsPage() {
                             <BookOpen className="w-3.5 h-3.5" />
                             {m.actions.viewLedger}
                         </Link>
-                        <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void sendInvite(referee)}
-                            className="inline-flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                            title={m.actions.sendInvite}
-                        >
-                            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setFormMode('edit');
-                                setSelectedReferee(referee);
-                                setFormOpen(true);
-                            }}
-                            className="inline-flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                            title={m.actions.edit}
-                        >
-                            <Pencil className="w-3.5 h-3.5" />
-                        </button>
+                        {!archived && (
+                            <>
+                                <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => void sendInvite(referee)}
+                                    className="inline-flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                                    title={m.actions.sendInvite}
+                                >
+                                    {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setFormMode('edit');
+                                        setSelectedReferee(referee);
+                                        setFormOpen(true);
+                                    }}
+                                    className="inline-flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                                    title={m.actions.edit}
+                                >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setDeleteTarget(referee);
+                                        setDeleteOpen(true);
+                                    }}
+                                    className="inline-flex items-center gap-1 rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+                                    title={m.actions.delete}
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                            </>
+                        )}
                     </div>
                 );
             },
@@ -246,6 +297,20 @@ export default function AdminReferralsPage() {
                     showToast(message);
                     void load();
                 }}
+            />
+
+            <RefereeDeleteModal
+                open={deleteOpen}
+                referee={deleteTarget}
+                hasLedger={deleteTarget ? hasLedger(deleteTarget) : false}
+                deleting={deleting}
+                onClose={() => {
+                    if (!deleting) {
+                        setDeleteOpen(false);
+                        setDeleteTarget(null);
+                    }
+                }}
+                onConfirm={() => void confirmDelete()}
             />
             </div>
         </div>

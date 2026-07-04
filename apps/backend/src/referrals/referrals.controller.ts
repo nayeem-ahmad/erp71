@@ -1,6 +1,7 @@
 import {
     Body,
     Controller,
+    Delete,
     Get,
     Param,
     Patch,
@@ -44,6 +45,11 @@ export class ReferralsController {
     @Patch('referees/:id')
     updateReferee(@Param('id') id: string, @Body() dto: UpdateRefereeDto) {
         return this.referrals.updateReferee(id, dto);
+    }
+
+    @Delete('referees/:id')
+    deleteReferee(@Param('id') id: string) {
+        return this.referrals.deleteReferee(id);
     }
 
     @Get('referees/:id/ledger')

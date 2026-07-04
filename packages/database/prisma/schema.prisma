@@ -2824,10 +2824,13 @@ model Referee {
   created_by      String?                       // platform admin user id
   created_at      DateTime @default(now())
   updated_at      DateTime @updatedAt
+  deleted_at      DateTime?                     // set when archived (ledger history retained)
 
   user            User?    @relation(fields: [user_id], references: [id])
   referralSignups ReferralSignup[]
   payments        RefereePayment[]
+
+  @@index([deleted_at])
 }
 
 model ReferralSignup {

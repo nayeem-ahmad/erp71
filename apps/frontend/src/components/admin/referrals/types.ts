@@ -18,6 +18,7 @@ export type RefereeRecord = {
     is_active: boolean;
     notes?: string | null;
     created_at: string;
+    deleted_at?: string | null;
     stats: RefereeStats;
 };
 
@@ -52,6 +53,7 @@ export type RefereeLedger = {
         name: string;
         email: string;
         referral_code: string;
+        deleted_at?: string | null;
     };
     summary: {
         total_referrals: number;

@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsBoolean, IsEmail, IsNumber, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
 
 export class CreateRefereeDto {
     @IsString()
@@ -58,6 +58,11 @@ export class UpdateRefereeDto {
     @IsOptional()
     @IsString()
     notes?: string;
+
+    @IsOptional()
+    @IsString()
+    @Matches(/^[A-Za-z0-9]{4,20}$/, { message: 'Referral code must be 4–20 letters or digits' })
+    referral_code?: string;
 }
 
 export class RecordPaymentDto {

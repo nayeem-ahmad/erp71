@@ -226,7 +226,7 @@ export class AuthService {
 
     async validateReferralCode(code: string) {
         const referee = await this.db.referee.findFirst({
-            where: { referral_code: code.trim().toUpperCase(), is_active: true },
+            where: { referral_code: code.trim().toUpperCase(), is_active: true, deleted_at: null },
             select: { referral_code: true, signup_discount: true, name: true },
         });
         if (!referee) {
@@ -574,7 +574,7 @@ export class AuthService {
 
         if (dto.referralCode?.trim()) {
             const referee = await tx.referee.findFirst({
-                where: { referral_code: dto.referralCode.trim().toUpperCase(), is_active: true },
+                where: { referral_code: dto.referralCode.trim().toUpperCase(), is_active: true, deleted_at: null },
             });
             if (referee) {
                 await tx.referralSignup.create({

@@ -22,6 +22,7 @@ export default function RefereeFormModal({ open, mode, referee, onClose, onSaved
     const [phone, setPhone] = useState('');
     const [commissionRate, setCommissionRate] = useState('10');
     const [signupDiscount, setSignupDiscount] = useState('10');
+    const [referralCode, setReferralCode] = useState('');
     const [notes, setNotes] = useState('');
     const [isActive, setIsActive] = useState(true);
     const [error, setError] = useState('');
@@ -34,6 +35,7 @@ export default function RefereeFormModal({ open, mode, referee, onClose, onSaved
         setPhone(referee?.phone ?? '');
         setCommissionRate(String(referee?.commission_rate ?? 10));
         setSignupDiscount(String(referee?.signup_discount ?? 10));
+        setReferralCode(referee?.referral_code ?? '');
         setNotes(referee?.notes ?? '');
         setIsActive(referee?.is_active ?? true);
         setError('');
@@ -56,6 +58,13 @@ export default function RefereeFormModal({ open, mode, referee, onClose, onSaved
             setError(m.saveFailed);
             return;
         }
+        if (mode === 'edit') {
+            const code = referralCode.trim().toUpperCase();
+            if (!/^[A-Z0-9]{4,20}$/.test(code)) {
+                setError(m.codeInvalid);
+                return;
+            }
+        }
 
         setSaving(true);
         setError('');
@@ -75,6 +84,7 @@ export default function RefereeFormModal({ open, mode, referee, onClose, onSaved
                     name: name.trim(),
                     email: email.trim(),
                     phone: phone.trim() || undefined,
+                    referral_code: referralCode.trim().toUpperCase(),
                     commission_rate: commission,
                     signup_discount: discount,
                     notes: notes.trim() || undefined,
@@ -122,6 +132,18 @@ export default function RefereeFormModal({ open, mode, referee, onClose, onSaved
                             <label className="text-xs font-medium text-gray-500">{m.phoneLabel}</label>
                             <input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm font-medium outline-none" />
                         </div>
+                        {mode === 'edit' && (
+                            <div className="space-y-2 md:col-span-2">
+                                <label className="text-xs font-medium text-gray-500">{m.codeLabel}</label>
+                                <input
+                                    value={referralCode}
+                                    onChange={(e) => setReferralCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                                    maxLength={20}
+                                    className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 font-mono text-sm font-bold tracking-wider outline-none"
+                                />
+                                <p className="text-xs text-gray-500">{m.codeHint}</p>
+                            </div>
+                        )}
                         <div className="space-y-2">
                             <label className="text-xs font-medium text-gray-500">{m.commissionLabel}</label>
                             <input type="number" min={0} max={100} step="0.01" value={commissionRate} onChange={(e) => setCommissionRate(e.target.value)} className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm font-medium outline-none" />
