@@ -71,6 +71,6 @@ export class PasswordResetService {
         });
 
         this.email.sendRefereeLoginInvite(user.email, name, rawToken, referralCode);
-        this.audit.log('REFEREE_LOGIN_INVITE_SENT', 'Referee', { userId: user.id, email: user.email }, user.id).catch(() => {});
+        this.audit.log('REFEREE_LOGIN_INVITE_SENT', 'Referee', { userId: user.id }, user.id, { email: user.email }).catch(() => {});
     }
 }
