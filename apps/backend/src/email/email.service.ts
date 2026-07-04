@@ -96,6 +96,31 @@ export class EmailService {
         });
     }
 
+    async sendRefereeLoginInvite(to: string, name: string, token: string, referralCode: string): Promise<void> {
+        const { frontendUrl } = await this.getTransportConfig();
+        const setupLink = `${frontendUrl}/reset-password?token=${token}`;
+        const loginLink = `${frontendUrl}/login`;
+        const signupLink = `${frontendUrl}/signup?ref=${encodeURIComponent(referralCode)}`;
+        const greeting = name?.trim() ? name.trim() : to;
+        await this.send({
+            to,
+            subject: 'Your ERP71 Referral Partner portal is ready',
+            html: `<h2>Welcome to the ERP71 Referral Partner program</h2>
+<p>Hi ${greeting},</p>
+<p>You have been invited to access the ERP71 Referral Partner portal. From there you can:</p>
+<ul>
+  <li>View businesses that signed up with your referral code</li>
+  <li>Track commissions earned and payments received</li>
+  <li>Copy your referral code and signup link</li>
+</ul>
+<p><strong>Your referral code:</strong> ${referralCode}</p>
+<p><strong>Signup link for new customers:</strong> <a href="${signupLink}">${signupLink}</a></p>
+<p>To get started, set your password using the link below, then sign in at <a href="${loginLink}">${loginLink}</a>.</p>
+<p><a href="${setupLink}">Set up your password</a></p>
+<p>This setup link expires in 1 hour. If it expires, ask your ERP71 contact to resend the invite.</p>`,
+        });
+    }
+
     async sendInvitation(to: string, tenantName: string, inviterName: string, token: string): Promise<void> {
         const { frontendUrl } = await this.getTransportConfig();
         const link = `${frontendUrl}/accept-invitation?token=${token}`;

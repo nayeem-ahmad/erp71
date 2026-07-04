@@ -78,7 +78,7 @@ export class ReferralsService {
             });
         }
 
-        await this.passwordReset.requestReset(user.email);
+        await this.passwordReset.requestRefereeInvite(user.email, referee.name, referee.referral_code);
     }
 
     private mapReferee(r: any) {

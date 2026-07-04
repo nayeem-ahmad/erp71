@@ -5,6 +5,7 @@ import { routes } from './routes';
 /**
  * A "login context" is one of the workspaces a signed-in identity can act as:
  *  - the Platform Admin console (only when the user is a platform admin), or
+ *  - the Referral Partner portal (when the user is a linked referee), or
  *  - a specific shop/tenant the user belongs to.
  *
  * When more than one context is available we ask the user to choose which one
@@ -92,7 +93,8 @@ export async function storeAuthResponse(res: any): Promise<StoreAuthResult> {
         localStorage.removeItem('demo_session');
     }
 
-    const meRes = data.tenants ? data : await api.getMe();
+    // Always load the full session profile — login payload omits referee context.
+    const meRes = await api.getMe();
     syncLocalePreferenceFromSession(meRes, { overwrite: true });
 
     if (meRes.is_demo) {

@@ -33,7 +33,13 @@ import { BrandingProvider } from '@/lib/branding';
 import { formatPlanDisplayName } from '@/lib/plan-display';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { applyRefereeContext, applyTenantContext, getLoginContexts, isShopWorkspacePath } from '@/lib/auth-session';
+import {
+    applyPlatformAdminContext,
+    applyRefereeContext,
+    applyTenantContext,
+    getLoginContexts,
+    isShopWorkspacePath,
+} from '@/lib/auth-session';
 import { syncLocalePreferenceFromSession } from '@/lib/localization/preference';
 import { clampLocaleToTenant } from '@/lib/tenant-locales';
 import { routes } from '@/lib/routes';
@@ -80,6 +86,35 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         window.addEventListener('erp71:nav-layout-updated', onNavLayoutUpdated);
         return () => window.removeEventListener('erp71:nav-layout-updated', onNavLayoutUpdated);
     }, [refreshNavLayouts]);
+
+    useEffect(() => {
+        if (!hasResolvedUser || !user) return;
+        if (localStorage.getItem('active_context')) return;
+
+        const { isReferee, isPlatformAdmin, tenants, count } = getLoginContexts(user);
+        if (count !== 1) return;
+
+        if (isReferee) {
+            applyRefereeContext();
+            setWorkspaceEpoch((epoch) => epoch + 1);
+            if (!pathname.startsWith(routes.referralsPortal)) {
+                router.replace(routes.referralsPortal);
+            }
+            return;
+        }
+        if (isPlatformAdmin) {
+            applyPlatformAdminContext();
+            setWorkspaceEpoch((epoch) => epoch + 1);
+            if (pathname === routes.home) {
+                router.replace(routes.admin.root);
+            }
+            return;
+        }
+        if (tenants.length === 1) {
+            applyTenantContext(tenants[0]);
+            setWorkspaceEpoch((epoch) => epoch + 1);
+        }
+    }, [hasResolvedUser, pathname, router, user]);
 
     useEffect(() => {
         api.getMe().then((me) => {

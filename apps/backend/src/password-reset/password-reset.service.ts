@@ -55,4 +55,22 @@ export class PasswordResetService {
         ]);
         this.audit.log('PASSWORD_RESET_COMPLETED', 'User', { userId: record.user_id }, record.user_id).catch(() => {});
     }
+
+    async requestRefereeInvite(emailAddress: string, name: string, referralCode: string): Promise<void> {
+        const user = await this.db.user.findUnique({ where: { email: emailAddress } });
+        if (!user) return;
+
+        await this.db.passwordResetToken.deleteMany({ where: { user_id: user.id, used_at: null } });
+
+        const rawToken = crypto.randomBytes(32).toString('hex');
+        const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+        await this.db.passwordResetToken.create({
+            data: { user_id: user.id, token_hash: tokenHash, expires_at: expiresAt },
+        });
+
+        this.email.sendRefereeLoginInvite(user.email, name, rawToken, referralCode);
+        this.audit.log('REFEREE_LOGIN_INVITE_SENT', 'Referee', { userId: user.id, email: user.email }, user.id).catch(() => {});
+    }
 }
