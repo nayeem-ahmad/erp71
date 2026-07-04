@@ -23,5 +23,9 @@ This epic is the financial core of the platform. It enables store owners to move
 4. **Story 4: Real-time Ledger Generation** - API logic to calculate running balances for any account across a date range.
 5. **Story 5: Journal Viewer** - A comprehensive list view of all vouchers with advanced filtering by type and date.
 
+6. **Story 6: Voucher Attachments & Required Narration** - Every voucher can carry file attachments (receipts, invoices, bank slips) uploaded client-side and stored by URL reference (image/PDF/Word, 10MB limit); the backend requires a non-empty narration/description on every voucher before it will save. Status: Done — `VoucherAttachment` model, `apps/frontend/src/components/accounting/VoucherAttachments.tsx`, narration check in `validateVoucherDetails()`.
+
+7. **Story 7: General-Purpose Loan/Advance Ledger** - A double-entry loan register for any counterparty (bank, owner, supplier, or informally an employee via free text) — not employee-specific despite overlapping with HR — with a `direction` (payable/receivable), interest rate (informational only), and automatic voucher posting through the same rule-based engine used for sales/purchase auto-posting. Status: Done — `apps/backend/src/loans/`, `apps/frontend/src/app/(app)/accounting/loans/page.tsx`.
+
 **Scope Note:**
-Cross-module auto-posting from Sales, Purchase, and Inventory events through configurable account mappings is covered in Epic 31.
+Cross-module auto-posting from Sales, Purchase, and Inventory events through configurable account mappings is covered in Epic 31. Fiscal period locking, budgets, cost centers, fixed assets, recurring vouchers, and bank reconciliation are covered in Epic 32. The extended report suite (P&L, balance sheet, trial balance, aging, VAT, ratios, cashbook/bankbook, GL export) is covered in Epic 33.

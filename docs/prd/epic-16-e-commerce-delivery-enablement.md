@@ -1,4 +1,4 @@
-# Epic 11: E-commerce & Delivery Enablement
+# Epic 16: E-commerce & Delivery Enablement
 
 **Expanded Goal:** This epic introduces a major new sales channel for the business. It enables shop owners to create and manage their own customer-facing online store, accept orders, and manage the entire fulfillment and delivery process, transforming their brick-and-mortar operation into a multi-channel retail business.
 
@@ -43,5 +43,21 @@
     1.  The owner can update an order's status from "Processing" to "Out for Delivery" and then to "Delivered".
     2.  The owner can assign an order to a delivery person (from a simple list of delivery people managed in settings).
     3.  The customer can view the current status of their order in their account's order history page on the storefront.
+
+---
+**Story 3.6: Storefront Branding & Customization**
+*   As a Store Owner, I want to customize my storefront's look (banner, hero image/headline, brand color, logo, favicon), so that it feels like my own store rather than a generic template.
+*   **Acceptance Criteria:**
+    1.  The Owner can set a banner, hero image/headline, primary brand color, logo, and favicon from storefront settings.
+    2.  The public storefront renders using these branding fields.
+*   Status: Done — `Tenant` branding fields (`storefront_banner`, `storefront_hero_image`, `brand_primary_color`, `brand_logo_url`, etc.), `apps/frontend/src/app/(app)/storefront/settings/page.tsx`.
+
+---
+**Story 3.7: Per-Customer Price-List Resolution on Storefront**
+*   As a Shopper who belongs to a customer group with negotiated pricing, I want to see my group's prices when I browse and check out, so that I get the rates I was promised.
+*   **Acceptance Criteria:**
+    1.  A logged-in customer assigned to a `CustomerGroup` with an active linked price list sees that price list's prices throughout browsing and checkout.
+    2.  Anonymous shoppers, and customers without an applicable group/price list, fall back to the tenant's default active price list.
+*   Status: Done — `resolvePriceListForUser`/`resolvePriceListForCustomer` in `apps/backend/src/storefront/storefront.service.ts` and `apps/backend/src/price-lists/price-lists.service.ts`. Note: this resolution is storefront-only — in-store POS checkout does not currently apply customer-group price lists (see Epic 80, Story 4).
 
 ---
