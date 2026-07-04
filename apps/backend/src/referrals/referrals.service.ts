@@ -1,11 +1,16 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { PasswordResetService } from '../password-reset/password-reset.service';
 import { CreateRefereeDto, ListCommissionsQueryDto, RecordPaymentDto, UpdateRefereeDto } from './referrals.dto';
+import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
 
 @Injectable()
 export class ReferralsService {
-    constructor(private readonly db: DatabaseService) {}
+    constructor(
+        private readonly db: DatabaseService,
+        private readonly passwordReset: PasswordResetService,
+    ) {}
 
     // ── Referees ──────────────────────────────────────────────────────────────
 
@@ -15,7 +20,7 @@ export class ReferralsService {
 
         const referral_code = this.generateReferralCode(dto.name);
 
-        return this.db.referee.create({
+        const referee = await this.db.referee.create({
             data: {
                 name: dto.name,
                 email: dto.email,
@@ -27,6 +32,61 @@ export class ReferralsService {
                 created_by: adminUserId,
             },
         });
+
+        await this.ensureRefereeUserAccount(referee.id);
+        return this.mapReferee(referee);
+    }
+
+    async sendRefereeLoginInvite(refereeId: string) {
+        const referee = await this.db.referee.findUnique({ where: { id: refereeId } });
+        if (!referee) throw new NotFoundException('Referee not found');
+
+        await this.ensureRefereeUserAccount(referee.id);
+        return { sent: true, email: referee.email };
+    }
+
+    private async ensureRefereeUserAccount(refereeId: string) {
+        const referee = await this.db.referee.findUnique({ where: { id: refereeId } });
+        if (!referee) throw new NotFoundException('Referee not found');
+
+        let user = referee.user_id
+            ? await this.db.user.findUnique({ where: { id: referee.user_id } })
+            : await this.db.user.findUnique({ where: { email: referee.email } });
+
+        if (!user) {
+            const passwordHash = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10);
+            user = await this.db.user.create({
+                data: {
+                    email: referee.email,
+                    passwordHash,
+                    name: referee.name,
+                },
+            });
+        }
+
+        if (referee.user_id !== user.id) {
+            const linkedElsewhere = await this.db.referee.findFirst({
+                where: { user_id: user.id, id: { not: referee.id } },
+            });
+            if (linkedElsewhere) {
+                throw new ConflictException('This user account is already linked to another referee');
+            }
+
+            await this.db.referee.update({
+                where: { id: referee.id },
+                data: { user_id: user.id },
+            });
+        }
+
+        await this.passwordReset.requestReset(user.email);
+    }
+
+    private mapReferee(r: any) {
+        return {
+            ...r,
+            commission_rate: Number(r.commission_rate),
+            signup_discount: Number(r.signup_discount),
+        };
     }
 
     async listReferees() {
@@ -44,9 +104,7 @@ export class ReferralsService {
                 this.db.referralSignup.aggregate({ where: { referee_id: r.id, status: 'PAID' }, _sum: { commission_amount: true }, _count: true }),
             ]);
             return {
-                ...r,
-                commission_rate: Number(r.commission_rate),
-                signup_discount: Number(r.signup_discount),
+                ...this.mapReferee(r),
                 stats: {
                     pending_signups: pending,
                     earned_count: earned._count,
@@ -72,9 +130,7 @@ export class ReferralsService {
         if (!referee) throw new NotFoundException('Referee not found');
 
         return {
-            ...referee,
-            commission_rate: Number(referee.commission_rate),
-            signup_discount: Number(referee.signup_discount),
+            ...this.mapReferee(referee),
             referralSignups: referee.referralSignups.map(this.mapSignup),
             payments: referee.payments.map(this.mapPayment),
         };
@@ -102,11 +158,7 @@ export class ReferralsService {
             },
         });
 
-        return {
-            ...updated,
-            commission_rate: Number(updated.commission_rate),
-            signup_discount: Number(updated.signup_discount),
-        };
+        return this.mapReferee(updated);
     }
 
     // ── Commissions ───────────────────────────────────────────────────────────

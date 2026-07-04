@@ -33,7 +33,7 @@ import { BrandingProvider } from '@/lib/branding';
 import { formatPlanDisplayName } from '@/lib/plan-display';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { applyTenantContext, isShopWorkspacePath } from '@/lib/auth-session';
+import { applyRefereeContext, applyTenantContext, getLoginContexts, isShopWorkspacePath } from '@/lib/auth-session';
 import { syncLocalePreferenceFromSession } from '@/lib/localization/preference';
 import { clampLocaleToTenant } from '@/lib/tenant-locales';
 import { routes } from '@/lib/routes';
@@ -115,28 +115,28 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     // to. In admin-console mode we never resolve a shop/tenant so the dashboard
     // shows only platform-admin options.
     const inPlatformAdminMode = Boolean(user?.is_platform_admin) && activeContext === 'platform-admin';
-    const tenantCount = user?.tenants?.length || 0;
-    const contextCount = (user?.is_platform_admin ? 1 : 0) + tenantCount;
-    const canSwitchAccount = contextCount > 1;
-    const activeTenant = inPlatformAdminMode
+    const inRefereeMode = Boolean(user?.referee?.is_active) && activeContext === 'referee';
+    const loginContexts = user ? getLoginContexts(user) : { isPlatformAdmin: false, isReferee: false, tenants: [], count: 0 };
+    const canSwitchAccount = loginContexts.count > 1;
+    const activeTenant = (inPlatformAdminMode || inRefereeMode)
         ? null
         : user?.tenants?.find((tenant: any) => tenant.id === activeTenantId) || user?.tenants?.[0];
 
     useEffect(() => {
-        if (inPlatformAdminMode) return;
+        if (inPlatformAdminMode || inRefereeMode) return;
         const done = localStorage.getItem('onboarding_complete');
         if (!done && pathname === routes.home) setShowOnboardingBanner(true);
-    }, [pathname, inPlatformAdminMode]);
+    }, [pathname, inPlatformAdminMode, inRefereeMode]);
 
     const refreshSalesSettings = useCallback(() => {
-        if (inPlatformAdminMode) {
+        if (inPlatformAdminMode || inRefereeMode) {
             setPosEnabled(true);
             return;
         }
         api.getSalesSettings()
             .then((settings) => setPosEnabled(isPosEnabled(settings)))
             .catch(() => setPosEnabled(true));
-    }, [inPlatformAdminMode]);
+    }, [inPlatformAdminMode, inRefereeMode]);
 
     useEffect(() => {
         refreshSalesSettings();
@@ -167,12 +167,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             if (pathname === routes.home) router.replace(routes.admin.root);
             return;
         }
+        if (inRefereeMode) {
+            if (pathname === routes.home) router.replace(routes.referralsPortal);
+            return;
+        }
         const done = localStorage.getItem('onboarding_complete');
         if (done) return;
         if (pathname === routes.home) {
             router.replace(routes.onboarding);
         }
-    }, [hasResolvedUser, pathname, router, inPlatformAdminMode]);
+    }, [hasResolvedUser, pathname, router, inPlatformAdminMode, inRefereeMode]);
 
     const tenantStores = activeTenant?.stores || [];
     const primaryRole = activeTenant?.role;
@@ -206,6 +210,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         ...platformFeatures,
         voice: canAccessVoice,
     };
+
+    useEffect(() => {
+        if (!hasResolvedUser || !user?.referee?.is_active) return;
+        if (!pathname.startsWith(routes.referralsPortal)) return;
+        if (localStorage.getItem('active_context') === 'referee') return;
+        applyRefereeContext();
+        setWorkspaceEpoch((epoch) => epoch + 1);
+    }, [hasResolvedUser, pathname, user]);
 
     // Platform admins can land on shop URLs after refresh while still in admin-console
     // context (active_context=platform-admin). Restore the last shop workspace automatically.
@@ -255,6 +267,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         if (!isPlatformAdmin && pathname.startsWith(routes.admin.root)) {
             router.replace(routes.home);
         }
+        if (!user?.referee?.is_active && pathname.startsWith(routes.referralsPortal)) {
+            router.replace(routes.home);
+        }
         if (!user?.is_platform_admin && pathname === routes.status) {
             if (!user) {
                 router.replace(`/login?redirect=${encodeURIComponent(routes.status)}`);
@@ -289,13 +304,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         if (!posEnabled && pathname.startsWith(routes.sales.pos)) {
             router.replace(routes.sales.list);
         }
-    }, [accountingOnlyMode, canAccessAccounting, canAccessAccountingAdvanced, canAccessInventoryReports, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, platformFeatures.help, platformFeatures.support, posEnabled, router, user]);
+    }, [accountingOnlyMode, activeContext, canAccessAccounting, canAccessAccountingAdvanced, canAccessInventoryReports, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, platformFeatures.help, platformFeatures.support, posEnabled, router, user]);
 
     const activeStore =
         tenantStores.find((store: { id: string }) => store.id === activeStoreId) ?? tenantStores[0];
     const headerStoreLabel = inPlatformAdminMode
         ? 'Platform Admin'
-        : activeStore?.name ?? activeTenant?.name ?? t.dashboardLayout.defaultPageTitle;
+        : inRefereeMode
+            ? t.referralPortal.workspace.title
+            : activeStore?.name ?? activeTenant?.name ?? t.dashboardLayout.defaultPageTitle;
 
     const handleStoreChange = (storeId: string) => {
         setActiveStoreId(storeId);
@@ -303,7 +320,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         router.refresh();
     };
 
-    const tenantLocaleConfig = inPlatformAdminMode ? null : activeTenant;
+    const tenantLocaleConfig = (inPlatformAdminMode || inRefereeMode) ? null : activeTenant;
 
     return (
         <BrandingProvider>
@@ -324,6 +341,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 canManageBilling={canManageBilling}
                 canManageTeam={canManageTeam}
                 platformAdminMode={inPlatformAdminMode}
+                refereeMode={inRefereeMode}
                 helpEnabled={platformFeatures.help}
                 supportEnabled={platformFeatures.support}
                 activePlanCode={activePlanCode}
@@ -347,7 +365,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                             <Menu className="w-5 h-5" />
                         </button>
                         <div className="flex min-w-0 flex-col justify-center gap-0.5">
-                            {tenantStores.length > 1 && !inPlatformAdminMode ? (
+                            {tenantStores.length > 1 && !inPlatformAdminMode && !inRefereeMode ? (
                                 <select
                                     value={activeStoreId}
                                     onChange={(e) => handleStoreChange(e.target.value)}
@@ -365,7 +383,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                                     {headerStoreLabel}
                                 </span>
                             )}
-                            {!inPlatformAdminMode && activePlanLabel ? (
+                            {!inPlatformAdminMode && !inRefereeMode && activePlanLabel ? (
                                 <span className="min-w-0 truncate text-[11px] font-medium text-gray-500 leading-tight">
                                     {activePlanLabel}
                                 </span>
@@ -387,7 +405,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                             roleLabel={
                                 inPlatformAdminMode
                                     ? 'Platform Admin'
-                                    : (activeTenant?.role || t.dashboardLayout.userFallbackRole)
+                                    : inRefereeMode
+                                        ? t.referralPortal.workspace.title
+                                        : (activeTenant?.role || t.dashboardLayout.userFallbackRole)
                             }
                             avatarUrl={user?.avatar_url}
                             canSwitchAccount={canSwitchAccount}

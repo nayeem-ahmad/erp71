@@ -356,6 +356,19 @@ export class AuthService {
         const twoFactorEnabled = !!totpSecret && !totpSecret.startsWith('pending:');
 
         const platformFeatures = await this.platformSettings.getPlatformFeatures().catch(() => DEFAULT_PLATFORM_FEATURES);
+        const referee = await this.db.referee.findFirst({
+            where: { user_id: userId, is_active: true },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                referral_code: true,
+                signup_discount: true,
+                commission_rate: true,
+                is_active: true,
+                user_id: true,
+            },
+        });
 
         return {
             id: user.id,
@@ -368,6 +381,18 @@ export class AuthService {
             two_factor_enabled: twoFactorEnabled,
             avatar_url: (user as any).avatar_url || null,
             platform_features: platformFeatures,
+            referee: referee
+                ? {
+                    id: referee.id,
+                    name: referee.name,
+                    email: referee.email,
+                    referral_code: referee.referral_code,
+                    signup_discount: Number(referee.signup_discount),
+                    commission_rate: Number(referee.commission_rate),
+                    is_active: referee.is_active,
+                    has_login: !!referee.user_id,
+                }
+                : null,
             tenants: await Promise.all(
                 tenantMembers.map((membership) =>
                     this.mapTenantMembership(membership, storeAccess, user.id, storePermissions),

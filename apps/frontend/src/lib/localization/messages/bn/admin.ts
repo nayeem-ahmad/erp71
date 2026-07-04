@@ -717,6 +717,13 @@ export const adminMessages = {
             actions: {
                 viewLedger: "লেজার দেখুন",
                 edit: "সম্পাদনা",
+                sendInvite: "লগইন আমন্ত্রণ পাঠান",
+            },
+            inviteSent: "{email} এ লগইন আমন্ত্রণ পাঠানো হয়েছে",
+            inviteFailed: "লগইন আমন্ত্রণ পাঠাতে ব্যর্থ",
+            loginStatus: {
+                linked: "লগইন করতে পারবেন",
+                pending: "আমন্ত্রণ অপেক্ষমাণ",
             },
             form: {
                 createTitle: "রেফারি যোগ করুন",

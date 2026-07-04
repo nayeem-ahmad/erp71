@@ -1324,4 +1324,58 @@ export const coreMessages = {
                 removeFailed: "Failed to remove member.",
             },
         },
+        referralPortal: {
+            title: "Rakan Rujukan — {name}",
+            subtitle: "Jejaki rujukan, komisen, dan pembayaran anda",
+            breadcrumb: "Rujukan",
+            dashboard: "Papan Pemuka",
+            loadFailed: "Gagal memuatkan papan pemuka rujukan",
+            copyFailed: "Tidak dapat menyalin ke papan keratan",
+            summary: {
+                balanceDue: "Baki terhutang",
+                totalReferrals: "Jumlah pendaftaran",
+                pending: "Menunggu",
+                earned: "Diperoleh",
+                paid: "Dibayar",
+                totalEarned: "Jumlah diperoleh",
+                totalPaid: "Jumlah dibayar",
+            },
+            share: {
+                referralCode: "Kod rujukan anda",
+                signupLink: "Pautan pendaftaran",
+                copyCode: "Salin kod",
+                copyLink: "Salin pautan pendaftaran",
+                codeCopied: "Kod rujukan disalin",
+                linkCopied: "Pautan pendaftaran disalin",
+            },
+            commissions: {
+                title: "Pendaftaran anda",
+                empty: "Tiada pendaftaran lagi. Kongsi kod rujukan anda untuk bermula.",
+                columns: {
+                    tenant: "Perniagaan",
+                    status: "Status",
+                    commission: "Komisen",
+                    signedUp: "Daftar",
+                },
+            },
+            payments: {
+                title: "Sejarah pembayaran",
+                empty: "Tiada pembayaran direkodkan lagi.",
+                columns: {
+                    date: "Tarikh",
+                    amount: "Jumlah",
+                    method: "Kaedah",
+                    reference: "Rujukan",
+                },
+            },
+            status: {
+                PENDING: "Menunggu",
+                EARNED: "Diperoleh",
+                PAID: "Dibayar",
+            },
+            workspace: {
+                title: "Portal Rakan Rujukan",
+                description: "Lihat pendaftaran, komisen, dan sejarah pembayaran",
+            },
+        },
     } as const;

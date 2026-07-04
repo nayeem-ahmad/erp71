@@ -717,6 +717,13 @@ export const adminMessages = {
             actions: {
                 viewLedger: "Lihat lejar",
                 edit: "Edit",
+                sendInvite: "Hantar jemputan log masuk",
+            },
+            inviteSent: "Jemputan log masuk dihantar ke {email}",
+            inviteFailed: "Gagal menghantar jemputan log masuk",
+            loginStatus: {
+                linked: "Boleh log masuk",
+                pending: "Jemputan menunggu",
             },
             form: {
                 createTitle: "Tambah Rujukan",

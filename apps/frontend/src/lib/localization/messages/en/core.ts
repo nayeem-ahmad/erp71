@@ -1324,4 +1324,58 @@ export const coreMessages = {
             removeFailed: 'Failed to remove member.',
         },
     },
+    referralPortal: {
+        title: 'Referral Partner — {name}',
+        subtitle: 'Track your referrals, commissions, and payouts',
+        breadcrumb: 'Referrals',
+        dashboard: 'Dashboard',
+        loadFailed: 'Failed to load your referral dashboard',
+        copyFailed: 'Could not copy to clipboard',
+        summary: {
+            balanceDue: 'Balance due',
+            totalReferrals: 'Total signups',
+            pending: 'Pending',
+            earned: 'Earned',
+            paid: 'Paid',
+            totalEarned: 'Total earned',
+            totalPaid: 'Total paid',
+        },
+        share: {
+            referralCode: 'Your referral code',
+            signupLink: 'Signup link',
+            copyCode: 'Copy code',
+            copyLink: 'Copy signup link',
+            codeCopied: 'Referral code copied',
+            linkCopied: 'Signup link copied',
+        },
+        commissions: {
+            title: 'Your signups',
+            empty: 'No signups yet. Share your referral code to get started.',
+            columns: {
+                tenant: 'Business',
+                status: 'Status',
+                commission: 'Commission',
+                signedUp: 'Signed up',
+            },
+        },
+        payments: {
+            title: 'Payment history',
+            empty: 'No payments recorded yet.',
+            columns: {
+                date: 'Date',
+                amount: 'Amount',
+                method: 'Method',
+                reference: 'Reference',
+            },
+        },
+        status: {
+            PENDING: 'Pending',
+            EARNED: 'Earned',
+            PAID: 'Paid',
+        },
+        workspace: {
+            title: 'Referral Partner Portal',
+            description: 'View signups, commissions, and payment history',
+        },
+    },
 } as const;

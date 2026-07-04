@@ -12,19 +12,34 @@ import { routes } from './routes';
  */
 export type LoginContexts = {
     isPlatformAdmin: boolean;
+    isReferee: boolean;
     tenants: any[];
-    /** Total selectable contexts (admin console + each shop). */
+    /** Total selectable contexts (admin console + referee portal + each shop). */
     count: number;
 };
 
 export function getLoginContexts(me: any): LoginContexts {
     const tenants = Array.isArray(me?.tenants) ? me.tenants : [];
     const isPlatformAdmin = Boolean(me?.is_platform_admin);
+    const isReferee = Boolean(me?.referee?.is_active);
     return {
         isPlatformAdmin,
+        isReferee,
         tenants,
-        count: (isPlatformAdmin ? 1 : 0) + tenants.length,
+        count: (isPlatformAdmin ? 1 : 0) + (isReferee ? 1 : 0) + tenants.length,
     };
+}
+
+/** Activate the referee self-service portal (no shop/tenant scope). */
+export function applyRefereeContext() {
+    const currentTenantId = localStorage.getItem('tenant_id');
+    if (currentTenantId) {
+        localStorage.setItem('last_tenant_id', currentTenantId);
+    }
+    localStorage.setItem('active_context', 'referee');
+    localStorage.removeItem('tenant_id');
+    localStorage.removeItem('store_id');
+    localStorage.removeItem('subscription_plan_code');
 }
 
 /** Activate the Platform Admin console (no shop/tenant scope). */
@@ -84,7 +99,7 @@ export async function storeAuthResponse(res: any): Promise<StoreAuthResult> {
         localStorage.setItem('demo_session', '1');
     }
 
-    const { isPlatformAdmin, tenants, count } = getLoginContexts(meRes);
+    const { isPlatformAdmin, isReferee, tenants, count } = getLoginContexts(meRes);
 
     // More than one workspace available → let the user choose which to enter.
     if (count > 1) {
@@ -96,6 +111,12 @@ export async function storeAuthResponse(res: any): Promise<StoreAuthResult> {
     if (tenants.length === 1) {
         applyTenantContext(tenants[0]);
         return { redirectTo: routes.home };
+    }
+
+    // Referee with no shop of their own → referral portal.
+    if (isReferee) {
+        applyRefereeContext();
+        return { redirectTo: routes.referralsPortal };
     }
 
     // Platform admin with no shop of their own → straight to the admin console.
@@ -123,6 +144,7 @@ export function clearAuthSession() {
 /** True when the path belongs to a shop workspace (not the platform admin console). */
 export function isShopWorkspacePath(pathname: string) {
     if (pathname.startsWith(routes.admin.root)) return false;
+    if (pathname.startsWith(routes.referralsPortal)) return false;
     const shopPrefixes = [
         routes.home,
         routes.onboarding,

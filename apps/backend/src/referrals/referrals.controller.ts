@@ -65,6 +65,11 @@ export class ReferralsController {
         return this.referrals.recordPayment(id, dto, req.user.userId);
     }
 
+    @Post('referees/:id/send-invite')
+    sendInvite(@Param('id') id: string) {
+        return this.referrals.sendRefereeLoginInvite(id);
+    }
+
     // ── Commissions ───────────────────────────────────────────────────────────
 
     @Get('commissions')

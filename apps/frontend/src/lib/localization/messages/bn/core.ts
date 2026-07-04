@@ -1324,4 +1324,58 @@ export const coreMessages = {
                 removeFailed: "Failed to remove member.",
             },
         },
+        referralPortal: {
+            title: "রেফারেল পার্টনার — {name}",
+            subtitle: "আপনার রেফারেল, কমিশন ও পেমেন্ট ট্র্যাক করুন",
+            breadcrumb: "রেফারেল",
+            dashboard: "ড্যাশবোর্ড",
+            loadFailed: "রেফারেল ড্যাশবোর্ড লোড করতে ব্যর্থ",
+            copyFailed: "ক্লিপবোর্ডে কপি করা যায়নি",
+            summary: {
+                balanceDue: "বকেয়া",
+                totalReferrals: "মোট সাইনআপ",
+                pending: "অপেক্ষমাণ",
+                earned: "অর্জিত",
+                paid: "পরিশোধিত",
+                totalEarned: "মোট অর্জিত",
+                totalPaid: "মোট পরিশোধিত",
+            },
+            share: {
+                referralCode: "আপনার রেফারেল কোড",
+                signupLink: "সাইনআপ লিংক",
+                copyCode: "কোড কপি করুন",
+                copyLink: "সাইনআপ লিংক কপি করুন",
+                codeCopied: "রেফারেল কোড কপি হয়েছে",
+                linkCopied: "সাইনআপ লিংক কপি হয়েছে",
+            },
+            commissions: {
+                title: "আপনার সাইনআপ",
+                empty: "এখনও কোনো সাইনআপ নেই। শুরু করতে রেফারেল কোড শেয়ার করুন।",
+                columns: {
+                    tenant: "ব্যবসা",
+                    status: "স্ট্যাটাস",
+                    commission: "কমিশন",
+                    signedUp: "সাইনআপ",
+                },
+            },
+            payments: {
+                title: "পেমেন্ট ইতিহাস",
+                empty: "এখনও কোনো পেমেন্ট রেকর্ড নেই।",
+                columns: {
+                    date: "তারিখ",
+                    amount: "পরিমাণ",
+                    method: "পদ্ধতি",
+                    reference: "রেফারেন্স",
+                },
+            },
+            status: {
+                PENDING: "অপেক্ষমাণ",
+                EARNED: "অর্জিত",
+                PAID: "পরিশোধিত",
+            },
+            workspace: {
+                title: "রেফারেল পার্টনার পোর্টাল",
+                description: "সাইনআপ, কমিশন ও পেমেন্ট ইতিহাস দেখুন",
+            },
+        },
     } as const;

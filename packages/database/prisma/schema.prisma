@@ -195,6 +195,7 @@ model User {
   createdInteractions       CustomerInteraction[] @relation("InteractionCreator")
   assignedCrmTasks          CrmTask[]     @relation("CrmTaskAssignee")
   createdCrmTasks           CrmTask[]     @relation("CrmTaskCreator")
+  refereeProfile            Referee?
   assignedLeads             Lead[]        @relation("LeadAssignee")
   nextStepAssignedLeads     Lead[]        @relation("LeadNextStepAssignee")
   createdLeads              Lead[]        @relation("LeadCreator")
@@ -2811,6 +2812,7 @@ model SupportMessage {
 
 model Referee {
   id              String   @id @default(uuid())
+  user_id         String?  @unique
   name            String
   email           String   @unique
   phone           String?
@@ -2823,6 +2825,7 @@ model Referee {
   created_at      DateTime @default(now())
   updated_at      DateTime @updatedAt
 
+  user            User?    @relation(fields: [user_id], references: [id])
   referralSignups ReferralSignup[]
   payments        RefereePayment[]
 }

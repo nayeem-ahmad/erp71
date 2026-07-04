@@ -724,6 +724,13 @@ export const adminMessages = {
         actions: {
             viewLedger: 'View ledger',
             edit: 'Edit referee',
+            sendInvite: 'Send login invite',
+        },
+        inviteSent: 'Login invite sent to {email}',
+        inviteFailed: 'Failed to send login invite',
+        loginStatus: {
+            linked: 'Can log in',
+            pending: 'Invite pending',
         },
         form: {
             createTitle: 'Add Referee',

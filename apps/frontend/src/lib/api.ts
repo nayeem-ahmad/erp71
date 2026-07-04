@@ -1307,6 +1307,9 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
     }),
+    getRefereePortalLedger: () => fetchWithAuth('/referrals/me/ledger'),
+    sendAdminRefereeInvite: (id: string) =>
+        fetchWithAuth(`/admin/referrals/referees/${id}/send-invite`, { method: 'POST' }),
     getAdminReferralCommissions: (params?: { referee_id?: string; status?: 'PENDING' | 'EARNED' | 'PAID' }) => {
         const query = new URLSearchParams();
         if (params?.referee_id) query.set('referee_id', params.referee_id);

@@ -2,16 +2,19 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ShieldCheck, Store, ChevronRight, Loader2, LogOut } from 'lucide-react';
+import { ShieldCheck, Store, ChevronRight, Loader2, LogOut, Gift } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 import {
     applyPlatformAdminContext,
+    applyRefereeContext,
     applyTenantContext,
     getLoginContexts,
     clearAuthSession,
 } from '@/lib/auth-session';
 
 function SelectAccountContent() {
+    const { t } = useI18n();
     const router = useRouter();
     const searchParams = useSearchParams();
     const [me, setMe] = useState<any>(null);
@@ -26,12 +29,15 @@ function SelectAccountContent() {
     useEffect(() => {
         api.getMe()
             .then((data: any) => {
-                const { isPlatformAdmin, tenants, count } = getLoginContexts(data);
+                const { isPlatformAdmin, isReferee, tenants, count } = getLoginContexts(data);
                 // Nothing ambiguous to choose — resolve automatically.
                 if (count <= 1) {
                     if (tenants.length === 1) {
                         applyTenantContext(tenants[0]);
                         router.replace(shopRedirect);
+                    } else if (isReferee) {
+                        applyRefereeContext();
+                        router.replace('/referrals');
                     } else if (isPlatformAdmin) {
                         applyPlatformAdminContext();
                         router.replace('/admin');
@@ -55,6 +61,11 @@ function SelectAccountContent() {
         router.replace('/admin');
     };
 
+    const chooseReferee = () => {
+        applyRefereeContext();
+        router.replace('/referrals');
+    };
+
     const chooseTenant = (tenant: any) => {
         applyTenantContext(tenant);
         router.replace(shopRedirect);
@@ -73,7 +84,7 @@ function SelectAccountContent() {
         );
     }
 
-    const { isPlatformAdmin, tenants } = getLoginContexts(me);
+    const { isPlatformAdmin, isReferee, tenants } = getLoginContexts(me);
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-[#f9fafb] p-4 font-sans text-[#111827]">
@@ -94,6 +105,23 @@ function SelectAccountContent() {
                     )}
 
                     <div className="space-y-3">
+                        {isReferee && (
+                            <button
+                                type="button"
+                                onClick={chooseReferee}
+                                className="w-full flex items-center gap-3 p-4 rounded-xl border border-gray-200 hover:border-emerald-300 hover:bg-emerald-50/50 transition-all duration-150 text-left group"
+                            >
+                                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                                    <Gift className="w-5 h-5" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="font-semibold text-sm tracking-tight">{t.referralPortal.workspace.title}</p>
+                                    <p className="text-xs text-gray-500">{t.referralPortal.workspace.description}</p>
+                                </div>
+                                <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                            </button>
+                        )}
+
                         {isPlatformAdmin && (
                             <button
                                 type="button"

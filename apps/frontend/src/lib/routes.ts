@@ -197,6 +197,7 @@ export const routes = {
         },
     },
 
+    referralsPortal: '/referrals',
     billing: '/billing',
     team: '/team',
     help: '/help',

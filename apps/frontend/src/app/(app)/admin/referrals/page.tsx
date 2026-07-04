@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { BookOpen, CheckCircle, Loader2, Pencil, Plus } from 'lucide-react';
+import { BookOpen, CheckCircle, Loader2, Mail, Pencil, Plus } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { DataTable } from '@/components/data-table';
 import RefereeFormModal from '@/components/admin/referrals/RefereeFormModal';
 import type { RefereeRecord } from '@/components/admin/referrals/types';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
-import { useI18n } from '@/lib/i18n';
+import { formatMessage, useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
 const columnHelper = createColumnHelper<RefereeRecord>();
@@ -26,6 +26,7 @@ export default function AdminReferralsPage() {
     const [formOpen, setFormOpen] = useState(false);
     const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
     const [selectedReferee, setSelectedReferee] = useState<RefereeRecord | null>(null);
+    const [invitingId, setInvitingId] = useState('');
 
     const load = useCallback(async () => {
         setIsLoading(true);
@@ -47,6 +48,20 @@ export default function AdminReferralsPage() {
     const showToast = (msg: string) => {
         setToast(msg);
         setTimeout(() => setToast(''), 3500);
+    };
+
+    const sendInvite = async (referee: RefereeRecord) => {
+        setInvitingId(referee.id);
+        setError('');
+        try {
+            await api.sendAdminRefereeInvite(referee.id);
+            showToast(formatMessage(m.inviteSent, { email: referee.email }));
+            await load();
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : m.inviteFailed);
+        } finally {
+            setInvitingId('');
+        }
     };
 
     const filtered = useMemo(() => {
@@ -101,41 +116,62 @@ export default function AdminReferralsPage() {
         }),
         columnHelper.accessor('is_active', {
             header: m.columns.status,
-            cell: (info) => (
-                <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${info.getValue() ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
-                    {info.getValue() ? m.active : m.inactive}
-                </span>
-            ),
+            cell: (info) => {
+                const row = info.row.original;
+                return (
+                    <div className="flex flex-col gap-1">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${info.getValue() ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                            {info.getValue() ? m.active : m.inactive}
+                        </span>
+                        <span className="text-[10px] font-semibold text-gray-500">
+                            {row.user_id ? m.loginStatus.linked : m.loginStatus.pending}
+                        </span>
+                    </div>
+                );
+            },
         }),
         columnHelper.display({
             id: 'actions',
             header: m.columns.actions,
-            cell: ({ row }) => (
-                <div className="flex items-center gap-2">
-                    <Link
-                        href={`/admin/referrals/${row.original.id}`}
-                        className="inline-flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                        title={m.actions.viewLedger}
-                    >
-                        <BookOpen className="w-3.5 h-3.5" />
-                        {m.actions.viewLedger}
-                    </Link>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setFormMode('edit');
-                            setSelectedReferee(row.original);
-                            setFormOpen(true);
-                        }}
-                        className="inline-flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                        title={m.actions.edit}
-                    >
-                        <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                </div>
-            ),
+            cell: ({ row }) => {
+                const referee = row.original;
+                const busy = invitingId === referee.id;
+                return (
+                    <div className="flex items-center gap-2">
+                        <Link
+                            href={`/admin/referrals/${row.original.id}`}
+                            className="inline-flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                            title={m.actions.viewLedger}
+                        >
+                            <BookOpen className="w-3.5 h-3.5" />
+                            {m.actions.viewLedger}
+                        </Link>
+                        <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void sendInvite(referee)}
+                            className="inline-flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                            title={m.actions.sendInvite}
+                        >
+                            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setFormMode('edit');
+                                setSelectedReferee(referee);
+                                setFormOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                            title={m.actions.edit}
+                        >
+                            <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                );
+            },
         }),
-    ], [m]);
+    ], [invitingId, m]);
 
     return (
         <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">

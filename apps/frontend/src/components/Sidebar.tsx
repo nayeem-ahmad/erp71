@@ -7,6 +7,8 @@ import {
     ChevronLeft,
     ChevronRight,
     ChevronDown,
+    Gift,
+    LayoutDashboard,
     Package,
     Search,
     X,
@@ -112,6 +114,7 @@ export default function Sidebar({
     canManageBilling = false,
     canManageTeam = false,
     platformAdminMode = false,
+    refereeMode = false,
     helpEnabled = false,
     supportEnabled = false,
     activePlanCode,
@@ -130,6 +133,8 @@ export default function Sidebar({
     canManageTeam?: boolean;
     /** When true, hide all shop modules and show only the admin console. */
     platformAdminMode?: boolean;
+    /** When true, hide shop/admin modules and show only the referee portal. */
+    refereeMode?: boolean;
     helpEnabled?: boolean;
     supportEnabled?: boolean;
     activePlanCode?: string | null;
@@ -157,6 +162,20 @@ export default function Sidebar({
     const [searchQuery, setSearchQuery] = useState('');
     const searchInputRef = useRef<HTMLInputElement>(null);
     const modules = useMemo(() => {
+        if (refereeMode) {
+            return [{
+                key: 'referrals',
+                label: (t as { referralPortal?: { breadcrumb?: string } }).referralPortal?.breadcrumb ?? 'Referrals',
+                icon: Gift,
+                children: [{
+                    href: routes.referralsPortal,
+                    label: (t as { referralPortal?: { dashboard?: string } }).referralPortal?.dashboard ?? 'Dashboard',
+                    icon: LayoutDashboard,
+                    exact: true,
+                }],
+            }] as NavModule[];
+        }
+
         const sourceLayout = platformAdminMode ? platformAdminLayout : tenantLayout;
         return buildNavModulesFromLayout(sourceLayout, t as Record<string, unknown>)
             .filter((module) => {
@@ -226,6 +245,7 @@ export default function Sidebar({
             })
             .filter((module) => !module.children || module.children.length > 0);
     }, [
+        refereeMode,
         platformAdminMode,
         platformAdminLayout,
         tenantLayout,
