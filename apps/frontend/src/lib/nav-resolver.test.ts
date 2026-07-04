@@ -42,6 +42,8 @@ describe('nav-resolver', () => {
         });
 
         expect(labels).toContain('System Health');
+        expect(labels).toContain('Tenant Management');
+        expect(labels).toContain('Tenant Payments');
         expect(labels).toContain('Platform Settings');
         expect(labels).toContain('SMS Gateway');
         expect(labels).toContain('Subscription Plans');

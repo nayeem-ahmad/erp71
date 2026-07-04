@@ -146,8 +146,13 @@ describe('Sidebar — Story 30.1', () => {
         render(<Sidebar platformAdminMode helpEnabled />);
 
         fireEvent.click(screen.getByText('Platform Admin'));
+        expect(screen.getByText('Tenant Management')).toBeInTheDocument();
         expect(screen.getByText('System Health')).toBeInTheDocument();
         expect(screen.getByText('Platform Settings')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByText('Tenant Management'));
+        expect(screen.getByText('Tenant Payments')).toBeInTheDocument();
+        expect(screen.getByText('Tenant Ledger')).toBeInTheDocument();
 
         fireEvent.click(screen.getByText('Platform Settings'));
         expect(screen.getByText('SMS Gateway')).toBeInTheDocument();

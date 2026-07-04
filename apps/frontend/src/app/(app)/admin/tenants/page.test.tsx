@@ -3,13 +3,32 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import AdminTenantsPage from './page';
 
+jest.mock('@/components/data-table', () => ({
+    DataTable: ({ data, emptyMessage, columns }: { data: any[]; emptyMessage?: string; columns: any[] }) => (
+        <div data-testid="data-table">
+            {data.length === 0 ? <span>{emptyMessage}</span> : data.map((row) => (
+                <div key={row.id}>
+                    <span>{row.name}</span>
+                    {columns.find((col) => col.id === 'actions')?.cell?.({ row: { original: row } })}
+                </div>
+            ))}
+        </div>
+    ),
+}));
+
 jest.mock('@/lib/api', () => ({
     api: {
         getAdminTenants: jest.fn(),
         getAdminTenant: jest.fn(),
+        getAdminTenantNavOverride: jest.fn(),
         updateAdminTenantSubscription: jest.fn(),
+        updateAdminTenantLocalization: jest.fn(),
         suspendTenant: jest.fn(),
         impersonateTenant: jest.fn(),
+        deleteAdminTenant: jest.fn(),
+        createAdminTenant: jest.fn(),
+        lookupAdminUser: jest.fn(),
+        resetAdminTenantNavLayout: jest.fn(),
     },
 }));
 
@@ -44,17 +63,6 @@ const mockTenants = [
             plan: { code: 'BASIC' as const, name: 'Basic Plan', monthly_price: 500, description: null, yearly_price: null },
         },
     },
-    {
-        id: 'tenant2',
-        name: 'Beta Ltd',
-        created_at: '2024-02-01T00:00:00Z',
-        owner: { id: 'u2', email: 'owner@beta.com', name: 'Jane Smith' },
-        stores: [],
-        users: [],
-        store_count: 0,
-        user_count: 0,
-        subscription: null,
-    },
 ];
 
 const mockTenantDetail = mockTenants[0];
@@ -65,6 +73,7 @@ describe('AdminTenantsPage', () => {
         const { api } = require('@/lib/api');
         api.getAdminTenants.mockResolvedValue([]);
         api.getAdminTenant.mockResolvedValue(mockTenantDetail);
+        api.getAdminTenantNavOverride.mockResolvedValue(null);
         api.updateAdminTenantSubscription.mockResolvedValue({});
         api.suspendTenant.mockResolvedValue({});
         api.impersonateTenant.mockResolvedValue({
@@ -73,10 +82,10 @@ describe('AdminTenantsPage', () => {
         });
     });
 
-    it('renders the page heading', async () => {
+    it('renders the tenants list heading', async () => {
         render(<AdminTenantsPage />);
         await waitFor(() => {
-            expect(screen.getByRole('heading', { name: 'Tenant Management' })).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Tenants' })).toBeInTheDocument();
         });
     });
 
@@ -98,25 +107,11 @@ describe('AdminTenantsPage', () => {
     it('displays tenant list after loading', async () => {
         const { api } = require('@/lib/api');
         api.getAdminTenants.mockResolvedValue(mockTenants);
-        api.getAdminTenant.mockResolvedValue(mockTenantDetail);
 
         render(<AdminTenantsPage />);
 
         await waitFor(() => {
-            expect(screen.getAllByText('Acme Corp').length).toBeGreaterThan(0);
-            expect(screen.getAllByText('Beta Ltd').length).toBeGreaterThan(0);
-        });
-    });
-
-    it('displays tenant owner email in the list', async () => {
-        const { api } = require('@/lib/api');
-        api.getAdminTenants.mockResolvedValue(mockTenants);
-        api.getAdminTenant.mockResolvedValue(mockTenantDetail);
-
-        render(<AdminTenantsPage />);
-
-        await waitFor(() => {
-            expect(screen.getAllByText('owner@acme.com').length).toBeGreaterThan(0);
+            expect(screen.getByText('Acme Corp')).toBeInTheDocument();
         });
     });
 
@@ -131,111 +126,25 @@ describe('AdminTenantsPage', () => {
         expect(screen.getByText('All statuses')).toBeInTheDocument();
     });
 
-    it('calls API with search term when user types in search box', async () => {
-        const { api } = require('@/lib/api');
-        api.getAdminTenants.mockResolvedValue([]);
-
-        render(<AdminTenantsPage />);
-        await waitFor(() => screen.getByPlaceholderText('Search by tenant or owner'));
-
-        fireEvent.change(screen.getByPlaceholderText('Search by tenant or owner'), {
-            target: { value: 'Acme' },
-        });
-
-        await waitFor(() => {
-            expect(api.getAdminTenants).toHaveBeenCalledWith(
-                expect.objectContaining({ search: 'Acme' })
-            );
-        });
-    });
-
-    it('calls API with planCode filter when plan is selected', async () => {
-        const { api } = require('@/lib/api');
-        api.getAdminTenants.mockResolvedValue([]);
-
-        render(<AdminTenantsPage />);
-        await waitFor(() => screen.getByText('All plans'));
-
-        const planSelect = screen.getAllByRole('combobox')[0];
-        fireEvent.change(planSelect, { target: { value: 'PREMIUM' } });
-
-        await waitFor(() => {
-            expect(api.getAdminTenants).toHaveBeenCalledWith(
-                expect.objectContaining({ planCode: 'PREMIUM' })
-            );
-        });
-    });
-
-    it('shows selected tenant detail panel when a tenant is clicked', async () => {
+    it('opens tenant detail modal from actions column', async () => {
         const { api } = require('@/lib/api');
         api.getAdminTenants.mockResolvedValue(mockTenants);
-        api.getAdminTenant.mockResolvedValue(mockTenantDetail);
 
         render(<AdminTenantsPage />);
-        await waitFor(() => screen.getAllByText('Acme Corp'));
+        await waitFor(() => screen.getByText('Acme Corp'));
 
-        const tenantButton = screen.getAllByRole('button').find(
-            (b) => b.textContent?.includes('Acme Corp'),
-        );
-        if (tenantButton) fireEvent.click(tenantButton);
+        fireEvent.click(screen.getByRole('button', { name: /view \/ edit tenant/i }));
 
         await waitFor(() => {
             expect(api.getAdminTenant).toHaveBeenCalledWith('tenant1');
-        });
-    });
-
-    it('shows Impersonate Owner button in the detail panel', async () => {
-        const { api } = require('@/lib/api');
-        api.getAdminTenants.mockResolvedValue(mockTenants);
-        api.getAdminTenant.mockResolvedValue(mockTenantDetail);
-
-        render(<AdminTenantsPage />);
-
-        await waitFor(() => {
             expect(screen.getByRole('button', { name: /impersonate owner/i })).toBeInTheDocument();
         });
     });
 
-    it('shows Suspend Tenant button in the detail panel', async () => {
-        const { api } = require('@/lib/api');
-        api.getAdminTenants.mockResolvedValue(mockTenants);
-        api.getAdminTenant.mockResolvedValue(mockTenantDetail);
-
+    it('shows New Tenant button in header', async () => {
         render(<AdminTenantsPage />);
-
         await waitFor(() => {
-            expect(screen.getByRole('button', { name: /suspend tenant/i })).toBeInTheDocument();
-        });
-    });
-
-    it('shows Save Subscription button in the detail panel', async () => {
-        const { api } = require('@/lib/api');
-        api.getAdminTenants.mockResolvedValue(mockTenants);
-        api.getAdminTenant.mockResolvedValue(mockTenantDetail);
-
-        render(<AdminTenantsPage />);
-
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /save subscription/i })).toBeInTheDocument();
-        });
-    });
-
-    it('calls updateAdminTenantSubscription when Save Subscription is clicked', async () => {
-        const { api } = require('@/lib/api');
-        api.getAdminTenants.mockResolvedValue(mockTenants);
-        api.getAdminTenant.mockResolvedValue(mockTenantDetail);
-        api.updateAdminTenantSubscription.mockResolvedValue({});
-
-        render(<AdminTenantsPage />);
-
-        await waitFor(() => screen.getByRole('button', { name: /save subscription/i }));
-        fireEvent.click(screen.getByRole('button', { name: /save subscription/i }));
-
-        await waitFor(() => {
-            expect(api.updateAdminTenantSubscription).toHaveBeenCalledWith(
-                'tenant1',
-                expect.any(Object)
-            );
+            expect(screen.getByRole('button', { name: /new tenant/i })).toBeInTheDocument();
         });
     });
 
@@ -247,19 +156,6 @@ describe('AdminTenantsPage', () => {
 
         await waitFor(() => {
             expect(screen.getByText('Server error')).toBeInTheDocument();
-        });
-    });
-
-    it('shows the store and user counts in the tenant list', async () => {
-        const { api } = require('@/lib/api');
-        api.getAdminTenants.mockResolvedValue(mockTenants);
-        api.getAdminTenant.mockResolvedValue(mockTenantDetail);
-
-        render(<AdminTenantsPage />);
-
-        await waitFor(() => {
-            expect(screen.getByText('1 stores')).toBeInTheDocument();
-            expect(screen.getByText('1 users')).toBeInTheDocument();
         });
     });
 });

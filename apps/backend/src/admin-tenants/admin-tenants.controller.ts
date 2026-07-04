@@ -4,6 +4,7 @@ import { PlatformAdminGuard } from '../auth/platform-admin.guard';
 import { AdminTenantsService } from './admin-tenants.service';
 import {
     ListAdminTenantsQueryDto,
+    ListAdminTenantLedgerQueryDto,
     UpdateAdminTenantSubscriptionDto,
     UpdateAdminTenantLocalizationDto,
     SuspendTenantDto,
@@ -29,6 +30,11 @@ export class AdminTenantsController {
         @Request() req: any,
     ) {
         return this.adminTenantsService.createTenant(dto, req.user.userId);
+    }
+
+    @Get('ledger')
+    listLedger(@Query() query: ListAdminTenantLedgerQueryDto) {
+        return this.adminTenantsService.listTenantLedger(query);
     }
 
     @Get(':tenantId')

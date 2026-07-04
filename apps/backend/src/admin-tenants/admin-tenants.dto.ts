@@ -7,6 +7,10 @@ export class ListAdminTenantsQueryDto {
     @IsOptional() @IsString() status?: 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'TRIALING';
 }
 
+export class ListAdminTenantLedgerQueryDto {
+    @IsOptional() @IsString() tenantId?: string;
+}
+
 export class UpdateAdminTenantSubscriptionDto {
     @IsOptional() @IsString() planCode?: 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
     @IsOptional() @IsString() status?: 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'TRIALING';

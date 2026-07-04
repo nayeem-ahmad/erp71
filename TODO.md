@@ -619,3 +619,4 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Disable free plan and free trial for new signups — `4814fdd`; FREE hidden from signup/pricing; new tenants `PAST_DUE` until checkout; deployed to VPS — done 2026-07-03
 - [x] Mark Premium as coming soon — `17c52a1`; visible on pricing/homepage with badge; excluded from self-serve signup/billing; admin Premium assignment unchanged — done 2026-07-03
 - [x] Platform admin sidebar — all admin page links in left menu; Platform Settings as expandable subgroup (SMS, Email, WhatsApp, Payments, General, AI, Navigation, Plans) plus System Health and System Status — done 2026-07-04
+- [x] Tenant Management submenu — sidebar group with Tenants (DataTable list + New Tenant button + detail modal), Tenant Payments (unified receipt/refund form), and Tenant Ledger (transaction history with running balance); `GET /admin/tenants/ledger` — done 2026-07-04

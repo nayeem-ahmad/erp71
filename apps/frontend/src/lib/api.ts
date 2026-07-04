@@ -1188,6 +1188,12 @@ export const api = {
         body: JSON.stringify(data),
     }),
     getTenantLedger: (tenantId: string) => fetchWithAuth(`/admin/tenants/${tenantId}/ledger`),
+    getAdminTenantLedger: (params?: { tenantId?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.tenantId) query.set('tenantId', params.tenantId);
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return fetchWithAuth(`/admin/tenants/ledger${suffix}`);
+    },
     recordTenantPayment: (tenantId: string, data: { amount: number; notes?: string; method?: string }) =>
         fetchWithAuth(`/admin/tenants/${tenantId}/payments`, {
             method: 'POST',

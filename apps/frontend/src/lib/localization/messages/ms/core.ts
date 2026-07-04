@@ -310,6 +310,8 @@ export const coreMessages = {
                 storefrontOrders: "Pesanan Dalam Talian",
                 storefrontSettings: "Tetapan",
                 tenants: "Penyewa",
+                tenantPayments: "Pembayaran Penyewa",
+                tenantLedger: "Lejar Penyewa",
                 users: "Pengguna",
                 feedback: "Maklum Balas",
                 support: "Sokongan",
@@ -369,6 +371,7 @@ export const coreMessages = {
                 purchaseReports: "Laporan Pembelian",
                 purchaseSetup: "Tetapan Pembelian",
                 platformSettings: "Tetapan Platform",
+                tenantManagement: "Pengurusan Penyewa",
             },
         },
         auth: {

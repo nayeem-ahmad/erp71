@@ -601,20 +601,22 @@ export class AdminTenantsService {
         return { success: true, userId, is_platform_admin: false };
     }
 
-    async getTenantLedger(tenantId: string) {
-        const tenant = await this.db.tenant.findFirst({
-            where: { id: tenantId, ...ACTIVE_TENANT_FILTER },
-            select: { id: true },
-        });
-        if (!tenant) throw new NotFoundException('Tenant not found');
-
+    async listTenantLedger(query: { tenantId?: string }) {
         const events = await this.db.billingEvent.findMany({
-            where: { tenant_id: tenantId },
+            where: {
+                ...(query.tenantId ? { tenant_id: query.tenantId } : {}),
+                tenant: ACTIVE_TENANT_FILTER,
+            },
             orderBy: { created_at: 'desc' },
+            include: {
+                tenant: { select: { id: true, name: true } },
+            },
         });
 
         return events.map((e) => ({
             id: e.id,
+            tenant_id: e.tenant_id,
+            tenant_name: e.tenant.name,
             event_type: e.event_type,
             status: e.status,
             provider_name: e.provider_name,
@@ -624,6 +626,16 @@ export class AdminTenantsService {
             payload: e.payload,
             created_at: e.created_at,
         }));
+    }
+
+    async getTenantLedger(tenantId: string) {
+        const tenant = await this.db.tenant.findFirst({
+            where: { id: tenantId, ...ACTIVE_TENANT_FILTER },
+            select: { id: true },
+        });
+        if (!tenant) throw new NotFoundException('Tenant not found');
+
+        return this.listTenantLedger({ tenantId });
     }
 
     async recordPayment(tenantId: string, dto: RecordTenantPaymentDto, adminUserId: string) {

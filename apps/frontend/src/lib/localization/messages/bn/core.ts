@@ -310,6 +310,8 @@ export const coreMessages = {
                 storefrontOrders: "অনলাইন অর্ডার",
                 storefrontSettings: "সেটিংস",
                 tenants: "টেন্যান্ট",
+                tenantPayments: "Tenant Payments",
+                tenantLedger: "Tenant Ledger",
                 users: "ব্যবহারকারীরা",
                 feedback: "ফিডব্যাক",
                 support: "সাপোর্ট",
@@ -369,6 +371,7 @@ export const coreMessages = {
                 purchaseReports: "ক্রয় রিপোর্ট",
                 purchaseSetup: "ক্রয় সেটআপ",
                 platformSettings: "Platform Settings",
+                tenantManagement: "Tenant Management",
             },
         },
         auth: {

@@ -129,6 +129,8 @@ export const NAV_ROUTES: { path: string; label: string }[] = [
     // Admin — sidebar + hub
     { path: '/admin', label: 'Admin Overview' },
     { path: '/admin/tenants', label: 'Platform Admin Tenants' },
+    { path: '/admin/tenants/payments', label: 'Tenant Payments' },
+    { path: '/admin/tenants/ledger', label: 'Tenant Ledger' },
     { path: '/admin/users', label: 'Platform Admin Users' },
     { path: '/admin/feedback', label: 'Feedback' },
     { path: '/admin/support', label: 'Admin Support' },

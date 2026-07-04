@@ -177,6 +177,8 @@ export const routes = {
     admin: {
         root: '/admin',
         tenants: '/admin/tenants',
+        tenantPayments: '/admin/tenants/payments',
+        tenantLedger: '/admin/tenants/ledger',
         users: '/admin/users',
         feedback: '/admin/feedback',
         support: '/admin/support',

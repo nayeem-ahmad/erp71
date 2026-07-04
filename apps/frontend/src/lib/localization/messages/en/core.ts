@@ -311,6 +311,8 @@ export const coreMessages = {
             storefrontOrders: 'Online Orders',
             storefrontSettings: 'Settings',
             tenants: 'Tenants',
+            tenantPayments: 'Tenant Payments',
+            tenantLedger: 'Tenant Ledger',
             users: 'Users',
             feedback: 'Feedback',
             support: 'Support',
@@ -369,6 +371,7 @@ export const coreMessages = {
             purchaseReports: 'Purchase Reports',
             purchaseSetup: 'Purchase Setup',
             platformSettings: 'Platform Settings',
+            tenantManagement: 'Tenant Management',
         },
     },
     auth: {
