@@ -49,12 +49,23 @@ export class LoginDto {
 }
 
 export class CreateStoreDto {
+    @IsOptional()
+    @IsString()
     tenantName?: string;
+
+    @IsString()
     name: string;
+
+    @IsOptional()
+    @IsString()
     address?: string;
+
     @IsOptional()
     @IsIn(['BASIC', 'ACCOUNTING', 'STANDARD'])
     planCode?: 'BASIC' | 'ACCOUNTING' | 'STANDARD';
+
+    @IsOptional()
+    @IsString()
     businessType?: string;
 }
 
@@ -69,6 +80,10 @@ export class UpdateProfileDto {
 }
 
 export class ChangePasswordDto {
+    @IsString()
     currentPassword: string;
+
+    @IsString()
+    @MinLength(8, { message: 'Password must be at least 8 characters.' })
     newPassword: string;
 }
