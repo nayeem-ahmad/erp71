@@ -85,6 +85,19 @@ export class BillingSchedulerService {
                     );
                 }
 
+                const owner = sub.tenant?.owner;
+                if (owner?.id && amount > 0) {
+                    const formattedAmount = amount.toFixed(2);
+                    await this.notifications.create(
+                        sub.tenant_id,
+                        owner.id,
+                        'PAYMENT_RETRY_REMINDER',
+                        'Payment retry reminder',
+                        `Your ${sub.tenant.name} subscription payment of ৳${formattedAmount} is overdue. Please retry within ${this.graceDays} days.`,
+                        '/billing',
+                    );
+                }
+
                 this.logger.log(`Payment retry reminder sent for tenant ${sub.tenant_id}`);
             } catch (err) {
                 this.logger.error(`Payment retry reminder failed for tenant ${sub.tenant_id}: ${err}`);
@@ -149,6 +162,17 @@ export class BillingSchedulerService {
                         owner.email,
                         sub.tenant.name,
                         this.graceDays,
+                    );
+                }
+
+                if (owner?.id) {
+                    await this.notifications.create(
+                        sub.tenant_id,
+                        owner.id,
+                        'SUBSCRIPTION_CANCELLED',
+                        'Subscription cancelled',
+                        `Your ${sub.tenant.name} subscription has been downgraded to the Free plan after ${this.graceDays} days of non-payment.`,
+                        '/billing',
                     );
                 }
 

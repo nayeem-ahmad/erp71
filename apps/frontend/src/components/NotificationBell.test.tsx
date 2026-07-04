@@ -51,7 +51,7 @@ describe('NotificationBell', () => {
         jest.clearAllMocks();
         const { api } = require('@/lib/api');
         api.getNotificationUnreadCount.mockResolvedValue({ count: 0 });
-        api.getNotifications.mockResolvedValue(mockNotifications);
+        api.getNotifications.mockResolvedValue({ items: mockNotifications, total: 3, page: 1, limit: 20, pages: 1 });
         api.markNotificationRead.mockResolvedValue({});
         api.markAllNotificationsRead.mockResolvedValue({});
     });
@@ -90,6 +90,20 @@ describe('NotificationBell', () => {
         });
     });
 
+    it('keeps unread badge visible after opening the panel', async () => {
+        const { api } = require('@/lib/api');
+        api.getNotificationUnreadCount.mockResolvedValue({ count: 5 });
+        render(<NotificationBell />);
+        await waitFor(() => {
+            expect(screen.getByText('5')).toBeInTheDocument();
+        });
+        fireEvent.click(screen.getByRole('button', { name: /notifications/i }));
+        await waitFor(() => {
+            expect(screen.getByText('Low stock alert')).toBeInTheDocument();
+        });
+        expect(screen.getByText('5')).toBeInTheDocument();
+    });
+
     it('opens notification panel when bell is clicked', async () => {
         render(<NotificationBell />);
         fireEvent.click(screen.getByRole('button', { name: /notifications/i }));
@@ -109,7 +123,7 @@ describe('NotificationBell', () => {
 
     it('shows empty state when no notifications', async () => {
         const { api } = require('@/lib/api');
-        api.getNotifications.mockResolvedValue([]);
+        api.getNotifications.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 1 });
         render(<NotificationBell />);
         fireEvent.click(screen.getByRole('button', { name: /notifications/i }));
         await waitFor(() => {

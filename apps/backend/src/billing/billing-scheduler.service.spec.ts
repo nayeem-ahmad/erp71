@@ -80,6 +80,14 @@ describe('BillingSchedulerService', () => {
             'BDT',
             7,
         );
+        expect(notifications.create).toHaveBeenCalledWith(
+            'tenant-1',
+            'user-1',
+            'PAYMENT_RETRY_REMINDER',
+            'Payment retry reminder',
+            expect.stringContaining('Tenant One'),
+            '/billing',
+        );
     });
 
     it('skips payment retry reminders when one was sent in the last 24 hours', async () => {
@@ -105,6 +113,14 @@ describe('BillingSchedulerService', () => {
             'owner@example.com',
             'Tenant One',
             7,
+        );
+        expect(notifications.create).toHaveBeenCalledWith(
+            'tenant-1',
+            'user-1',
+            'SUBSCRIPTION_CANCELLED',
+            'Subscription cancelled',
+            expect.stringContaining('Tenant One'),
+            '/billing',
         );
     });
 

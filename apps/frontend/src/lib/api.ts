@@ -1589,7 +1589,19 @@ export const api = {
     cancelLeaveRequest: (id: string) =>
         fetchWithAuth(`/attendance/leave-requests/${id}/cancel`, { method: 'PATCH' }),
     // In-app notifications
-    getNotifications: () => fetchWithAuth('/notifications').then((r: any) => r?.items ?? r),
+    getNotifications: (params?: { page?: number; limit?: number }) => {
+        const q = new URLSearchParams();
+        if (params?.page) q.set('page', String(params.page));
+        if (params?.limit) q.set('limit', String(params.limit));
+        const query = q.toString();
+        return fetchWithAuth(`/notifications${query ? `?${query}` : ''}`).then((r: any) => ({
+            items: Array.isArray(r?.items) ? r.items : (Array.isArray(r) ? r : []),
+            total: Number(r?.total ?? 0),
+            page: Number(r?.page ?? 1),
+            limit: Number(r?.limit ?? 20),
+            pages: Number(r?.pages ?? 1),
+        }));
+    },
     getNotificationUnreadCount: () => fetchWithAuth('/notifications/unread-count'),
     markNotificationRead: (id: string) => fetchWithAuth(`/notifications/${id}/read`, { method: 'PATCH' }),
     markAllNotificationsRead: () => fetchWithAuth('/notifications/read-all', { method: 'PATCH' }),

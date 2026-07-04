@@ -29,12 +29,16 @@ describe('BillingService', () => {
         sendPaymentFailure: jest.fn().mockResolvedValue(undefined),
     } as any;
 
+    const notifications = {
+        create: jest.fn().mockResolvedValue({ id: 'n-1' }),
+    } as any;
+
     let service: BillingService;
     const fetchMock = jest.fn();
 
     const ownerMembership = {
         role: 'OWNER',
-        user: { email: 'owner@example.com' },
+        user: { id: 'owner-user-1', email: 'owner@example.com' },
     };
 
     const premiumSubscriptionUpsertResult = {
@@ -58,7 +62,7 @@ describe('BillingService', () => {
     beforeEach(() => {
         jest.resetAllMocks();
         audit.log.mockResolvedValue(undefined);
-        service = new BillingService(db, audit, email, new CircuitBreakerRegistry());
+        service = new BillingService(db, audit, email, notifications, new CircuitBreakerRegistry());
         (global as any).fetch = fetchMock;
         process.env.BILLING_PROVIDER = 'SSL_WIRELESS';
         process.env.SSL_WIRELESS_STORE_ID = 'store-id';
@@ -540,6 +544,14 @@ describe('BillingService', () => {
             'Tenant One',
             3999,
             'BDT',
+        );
+        expect(notifications.create).toHaveBeenCalledWith(
+            'tenant-1',
+            'owner-user-1',
+            'PAYMENT_FAILURE',
+            'Payment failed',
+            expect.stringContaining('Tenant One'),
+            '/billing',
         );
         expect(email.sendBillingInvoice).not.toHaveBeenCalled();
     });

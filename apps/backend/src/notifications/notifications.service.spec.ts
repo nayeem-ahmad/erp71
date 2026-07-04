@@ -348,6 +348,10 @@ describe('NotificationsService', () => {
   /* ------------------------------------------------------------------ */
 
   describe('sendLowStockAlerts', () => {
+    beforeEach(() => {
+      db.notification.findFirst.mockResolvedValue(null);
+    });
+
     const makeRow = (overrides: any = {}) => ({
       tenant_id: 't-1',
       tenant_name: 'Test Store',
@@ -390,13 +394,27 @@ describe('NotificationsService', () => {
       db.$queryRaw.mockResolvedValue([makeRow({ sms_on_low_stock: true })]);
       email.sendLowStockAlert.mockResolvedValue(undefined);
       db.notification.create.mockResolvedValue({ id: 'n-1' });
-      // getTenantOwnerPhone returns null (no phone stored per source code)
-      db.tenant.findUnique.mockResolvedValue({ owner: { id: 'u-owner' } });
+      db.notification.findFirst.mockResolvedValue(null);
+      db.tenant.findUnique.mockResolvedValue({ owner: { mobile: '+8801712345678' } });
 
       await service.sendLowStockAlerts();
 
-      // No SMS should be sent because getTenantOwnerPhone always returns null
-      expect(sms.sendLowStockAlert).not.toHaveBeenCalled();
+      expect(sms.sendLowStockAlert).toHaveBeenCalledWith(
+        '+8801712345678',
+        'Widget',
+        2,
+        't-1',
+      );
+    });
+
+    it('skips low stock alerts when tenant was already notified within 24h', async () => {
+      db.$queryRaw.mockResolvedValue([makeRow()]);
+      db.notification.findFirst.mockResolvedValue({ id: 'n-recent' });
+
+      await service.sendLowStockAlerts();
+
+      expect(email.sendLowStockAlert).not.toHaveBeenCalled();
+      expect(db.notification.create).not.toHaveBeenCalled();
     });
 
     it('groups items by tenant and processes each tenant once', async () => {

@@ -17,6 +17,7 @@ import { TenantContext } from '../database/tenant.decorator';
 import { DatabaseService } from '../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CircuitBreakerRegistry } from '../system-health/resilience/circuit-breaker.registry';
 import { CircuitOpenError } from '../system-health/resilience/circuit-breaker';
 import * as Sentry from '@sentry/nestjs';
@@ -40,6 +41,7 @@ export class BillingService {
         private readonly db: DatabaseService,
         private readonly audit: AuditService,
         private readonly email: EmailService,
+        private readonly notifications: NotificationsService,
         private readonly breakers: CircuitBreakerRegistry,
     ) {}
 
@@ -514,7 +516,7 @@ export class BillingService {
     ) {
         const ownerMembership = await this.db.tenantUser.findFirst({
             where: { tenant_id: tenantId, role: 'OWNER' },
-            include: { user: { select: { email: true } } },
+            include: { user: { select: { id: true, email: true } } },
         });
 
         if (!ownerMembership?.user?.email) return;
@@ -533,6 +535,18 @@ export class BillingService {
                 context.amount,
                 context.currency,
             );
+
+            if (ownerMembership.user.id) {
+                const formattedAmount = context.amount.toFixed(2);
+                await this.notifications.create(
+                    tenantId,
+                    ownerMembership.user.id,
+                    'PAYMENT_FAILURE',
+                    'Payment failed',
+                    `We could not process your ৳${formattedAmount} subscription payment for ${context.tenantName}. Please update your payment method.`,
+                    '/billing',
+                );
+            }
         }
     }
 

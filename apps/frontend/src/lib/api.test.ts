@@ -2943,9 +2943,17 @@ describe('api.cancelLeaveRequest', () => {
 
 describe('api.getNotifications', () => {
     it('fetches /notifications', async () => {
-        mockOk({ data: [] });
-        await api.getNotifications();
+        mockOk({ data: { items: [], total: 0, page: 1, limit: 20, pages: 1 } });
+        const result = await api.getNotifications();
         expect(lastUrl()).toContain('/notifications');
+        expect(result.items).toEqual([]);
+    });
+
+    it('passes page and limit query params', async () => {
+        mockOk({ data: { items: [], total: 0, page: 2, limit: 10, pages: 1 } });
+        await api.getNotifications({ page: 2, limit: 10 });
+        expect(lastUrl()).toContain('page=2');
+        expect(lastUrl()).toContain('limit=10');
     });
 });
 

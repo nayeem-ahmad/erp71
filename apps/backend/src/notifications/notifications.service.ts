@@ -161,12 +161,26 @@ export class NotificationsService {
                     'SUBSCRIPTION_EXPIRY',
                     `Subscription expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
                     `Your ${sub.tenant.name} subscription will expire on ${sub.current_period_end.toLocaleDateString()}.`,
-                    '/dashboard/billing',
+                    '/billing',
                 );
             } catch (err) {
                 this.logger.error(`Failed in-app notification for tenant ${sub.tenant_id}: ${err}`);
             }
         }
+    }
+
+    private async hasRecentLowStockNotification(tenantId: string, userId: string): Promise<boolean> {
+        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const recent = await this.db.notification.findFirst({
+            where: {
+                tenant_id: tenantId,
+                user_id: userId,
+                type: 'LOW_STOCK',
+                created_at: { gte: cutoff },
+            },
+            select: { id: true },
+        });
+        return recent !== null;
     }
 
     // Run daily at 07:00
@@ -234,6 +248,11 @@ export class NotificationsService {
         }
 
         for (const [tenantId, { name, ownerId, email, smsOnLowStock, items }] of byTenant) {
+            if (await this.hasRecentLowStockNotification(tenantId, ownerId)) {
+                this.logger.debug(`Skipping low stock alert for tenant ${tenantId} — already notified within 24h`);
+                continue;
+            }
+
             try {
                 await this.email.sendLowStockAlert(email, name, items.slice(0, 50));
                 this.logger.log(`Low stock alert email sent for tenant ${tenantId} (${items.length} items)`);
@@ -252,7 +271,7 @@ export class NotificationsService {
                     'LOW_STOCK',
                     `${items.length} product${items.length === 1 ? '' : 's'} running low`,
                     body,
-                    '/dashboard/inventory',
+                    '/inventory',
                 );
             } catch (err) {
                 this.logger.error(`Failed in-app notification for tenant ${tenantId}: ${err}`);
@@ -278,10 +297,9 @@ export class NotificationsService {
     private async getTenantOwnerPhone(tenantId: string): Promise<string | null> {
         const tenant = await this.db.tenant.findUnique({
             where: { id: tenantId },
-            select: { owner: { select: { id: true } } },
+            select: { owner: { select: { mobile: true } } },
         });
-        if (!tenant?.owner) return null;
-        return null;
+        return tenant?.owner?.mobile ?? null;
     }
 
     /* ------------------------------------------------------------------ */

@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Bell, Check, CheckCheck, Package, CreditCard, Info, X } from 'lucide-react';
+import { Bell, Check, CheckCheck, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { NotificationIcon } from '@/components/NotificationIcon';
 
 interface Notification {
     id: string;
@@ -14,12 +16,6 @@ interface Notification {
     link?: string | null;
     read_at: string | null;
     created_at: string;
-}
-
-function NotificationIcon({ type }: { type: string }) {
-    if (type === 'LOW_STOCK') return <Package className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />;
-    if (type === 'SUBSCRIPTION_EXPIRY') return <CreditCard className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />;
-    return <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />;
 }
 
 export default function NotificationBell() {
@@ -76,9 +72,8 @@ export default function NotificationBell() {
         setOpen(true);
         setLoading(true);
         try {
-            const data = await api.getNotifications();
-            setNotifications(Array.isArray(data) ? data : []);
-            setUnreadCount(0);
+            const data = await api.getNotifications({ limit: 20 });
+            setNotifications(data.items);
         } catch {
             setNotifications([]);
         } finally {
@@ -94,6 +89,7 @@ export default function NotificationBell() {
             setNotifications((prev) =>
                 prev.map((item) => item.id === n.id ? { ...item, read_at: new Date().toISOString() } : item)
             );
+            setUnreadCount((prev) => Math.max(0, prev - 1));
         } catch { /* ignore */ }
     };
 
@@ -104,6 +100,7 @@ export default function NotificationBell() {
                 setNotifications((prev) =>
                     prev.map((item) => item.id === n.id ? { ...item, read_at: new Date().toISOString() } : item)
                 );
+                setUnreadCount((prev) => Math.max(0, prev - 1));
             } catch { /* ignore */ }
         }
         if (n.link) {
@@ -116,6 +113,7 @@ export default function NotificationBell() {
         try {
             await api.markAllNotificationsRead();
             setNotifications((prev) => prev.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })));
+            setUnreadCount(0);
         } catch { /* ignore */ }
     };
 
@@ -208,6 +206,16 @@ export default function NotificationBell() {
                                 </div>
                             ))
                         )}
+                    </div>
+
+                    <div className="border-t border-gray-100 px-4 py-2.5 bg-gray-50/80">
+                        <Link
+                            href="/notifications"
+                            onClick={() => setOpen(false)}
+                            className="block text-center text-xs font-semibold text-blue-600 hover:text-blue-700"
+                        >
+                            {m.viewAll}
+                        </Link>
                     </div>
                 </div>
             )}

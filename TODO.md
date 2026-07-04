@@ -357,6 +357,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Notification system audit fixes — SMS low-stock reads owner `User.mobile`; in-app alerts for payment failure, retry reminder, and subscription cancellation; 24h low-stock deduplication; bell badge no longer clears on open; `/notifications` page with pagination + “View all” link in bell; billing/subscription icons — done 2026-07-04
 - [x] Referee login redirect + invite email fix — `storeAuthResponse` always calls `getMe()` so referee context is detected; dedicated `sendRefereeLoginInvite` email (not generic password reset); layout auto-applies referee context on refresh; `resolveActiveRefereeForUser` falls back to email match and auto-links `user_id` — done 2026-07-04
 - [x] Referee self-service portal — link `Referee.user_id` to `User`; auto-provision login + password-reset invite on create; `GET /referrals/me/ledger` for referees; `/referrals` dashboard (copy code, signup link, balance due, commissions, payments); workspace chooser + referee sidebar mode; admin resend-invite — done 2026-07-04
 - [x] Referee/referral commission system — frontend completion — Prisma migration `20260704160000_add_referral_commission_system`; platform-admin `/admin/referrals` list + per-referee ledger/payment UI; sidebar nav link; API client methods; signup referral code field with live validation (`?ref=` / `?referral=`); i18n en/bn/ms — done 2026-07-04
