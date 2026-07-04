@@ -10,6 +10,8 @@ This document provides a master list of all epics for the ERP71 platform, organi
     *   **Goal:** Global KPI overview and actionable alerts immediately after login.
 *   **Epic 05: Core Platform Services**
     *   **Goal:** Unified infrastructure for Cloud Storage, Email, and Multi-channel Notifications.
+*   **Epic 06: Referral & Affiliate Commission Program**
+    *   **Goal:** Commission-earning referral partners who bring in paying tenants, with a self-service earnings portal.
 
 ## 💰 Sales (10-19)
 *   **Epic 10: Core Sales & POS Transactions**
