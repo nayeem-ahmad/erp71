@@ -33,6 +33,8 @@ export class ProductsService {
                     sku: dto.sku || null,
                     price: dto.price,
                     is_featured: dto.isFeatured ?? false,
+                    description: dto.description || null,
+                    images_gallery: dto.images_gallery ?? [],
                     warranty_enabled: dto.warrantyEnabled ?? false,
                     warranty_duration_days: dto.warrantyDurationDays ?? null,
                     reorder_level: dto.reorderLevel ?? null,
@@ -155,6 +157,8 @@ export class ProductsService {
                 ...(dto.sku !== undefined ? { sku: dto.sku || null } : {}),
                 ...(dto.price !== undefined ? { price: dto.price } : {}),
                 ...(dto.isFeatured !== undefined ? { is_featured: dto.isFeatured } : {}),
+                ...(dto.description !== undefined ? { description: dto.description || null } : {}),
+                ...(dto.images_gallery !== undefined ? { images_gallery: dto.images_gallery } : {}),
                 ...(dto.warrantyEnabled !== undefined ? { warranty_enabled: dto.warrantyEnabled } : {}),
                 ...(dto.warrantyDurationDays !== undefined
                     ? { warranty_duration_days: dto.warrantyDurationDays }

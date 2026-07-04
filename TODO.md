@@ -632,3 +632,5 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Fix settings page password change inputs focus-loss bug — moved `PasswordInput` out of `PasswordTab` to prevent component redeclaration on state changes; verified with unit tests and production build — done 2026-07-04
 - [x] Add class-validator decorators to ChangePasswordDto and CreateStoreDto — decorated all properties to satisfy NestJS ValidationPipe whitelist constraints, resolving the payload validation errors on password change — done 2026-07-04
 - [x] Fix product image upload failing and make Add New Product UI compact/scroll-free — solved FormData content-type header issue in `api.ts`, converted AddProductModal to a responsive 2-column layout (size lg) with compact fields — done 2026-07-04
+- [x] Product storefront tab & spacious layout — added storefront tab to product modal with description editor and image gallery, moved featured toggle there, and widened dialog to xl size; backend DTO/service and shared types updated — done 2026-07-04
+

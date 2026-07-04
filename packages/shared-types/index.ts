@@ -460,6 +460,8 @@ export interface Product {
   group?: ProductGroup | null;
   subgroup?: ProductSubgroup | null;
   stocks?: ProductStock[];
+  description?: string | null;
+  images_gallery?: string[];
 }
 
 export interface ProductGroup {

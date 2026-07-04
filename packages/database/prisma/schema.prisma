@@ -654,6 +654,8 @@ model Product {
   safety_stock Int?
   lead_time_days Int?
   image_url   String?
+  description String?
+  images_gallery String[] @default([])
   unit_type   String    @default("none")
   created_at  DateTime  @default(now())
   deleted_at  DateTime?

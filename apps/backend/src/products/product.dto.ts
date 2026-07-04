@@ -1,4 +1,4 @@
-import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 
 const COMPOUND_UNIT_TYPES = ['none', 'ft_in', 'dozen_pcs', 'kg_g', 'lb_oz', 'm_cm'] as const;
 
@@ -67,6 +67,15 @@ export class CreateProductDto {
     @IsOptional()
     @IsBoolean()
     isFeatured?: boolean;
+
+    @IsOptional()
+    @IsString()
+    description?: string;
+
+    @IsOptional()
+    @IsArray()
+    @IsString({ each: true })
+    images_gallery?: string[];
 }
 
 export class UpdateProductDto {
@@ -131,4 +140,13 @@ export class UpdateProductDto {
     @IsOptional()
     @IsBoolean()
     isFeatured?: boolean;
+
+    @IsOptional()
+    @IsString()
+    description?: string;
+
+    @IsOptional()
+    @IsArray()
+    @IsString({ each: true })
+    images_gallery?: string[];
 }

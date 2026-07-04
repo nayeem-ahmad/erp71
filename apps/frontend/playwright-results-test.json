@@ -1,0 +1,70 @@
+{
+  "config": {
+    "configFile": "/Users/bs01621/Projects/nayeem/erp71/apps/frontend/playwright.config.ts",
+    "rootDir": "/Users/bs01621/Projects/nayeem/erp71/apps/frontend/e2e",
+    "forbidOnly": true,
+    "fullyParallel": true,
+    "globalSetup": "/Users/bs01621/Projects/nayeem/erp71/apps/frontend/e2e/global-setup.ts",
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {},
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/bs01621/Projects/nayeem/erp71/apps/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 2,
+        "metadata": {},
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/bs01621/Projects/nayeem/erp71/apps/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.60.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [],
+  "errors": [
+    {
+      "message": "Error: E2E account provisioning failed after retries: 404 Not Found\n",
+      "stack": "Error: E2E account provisioning failed after retries: 404 Not Found\n\n    at globalSetup (/Users/bs01621/Projects/nayeem/erp71/apps/frontend/e2e/global-setup.ts:54:15)",
+      "location": {
+        "file": "/Users/bs01621/Projects/nayeem/erp71/apps/frontend/e2e/global-setup.ts",
+        "column": 15,
+        "line": 54
+      },
+      "snippet": "   at global-setup.ts:54\n\n  52 |             await new Promise((resolve) => setTimeout(resolve, attempt * 1000));\n  53 |         }\n> 54 |         throw new Error(\n     |               ^\n  55 |             `E2E account provisioning failed after retries: ${lastStatus} ${lastBody}`,\n  56 |         );\n  57 |     } finally {"
+    }
+  ],
+  "stats": {
+    "startTime": "2026-07-01T07:01:36.789Z",
+    "duration": 11725.725,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

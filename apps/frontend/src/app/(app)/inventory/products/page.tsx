@@ -29,6 +29,8 @@ interface Product {
     group?: { id: string; name: string } | null;
     subgroup?: { id: string; name: string } | null;
     stocks?: { quantity: number | string }[];
+    description?: string | null;
+    images_gallery?: string[] | null;
 }
 
 const columnHelper = createColumnHelper<Product>();
