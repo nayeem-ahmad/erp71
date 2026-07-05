@@ -219,6 +219,64 @@ async function main() {
         ],
     });
 
+    // ── Add-on module catalog ───────────────────────────────────────────────
+    // Storefront and Book Publishing are intentionally not seeded here yet —
+    // storefront needs a grandfathering decision before it can be paywalled,
+    // and Book Publishing has no backend module yet (see TODO.md).
+    const upsertAddon = (data: {
+        code: string;
+        name: string;
+        description: string;
+        category: string;
+        monthly_price: number;
+        yearly_price: number;
+        sort_order: number;
+        features_json: Record<string, unknown>;
+    }) => prisma.addonModule.upsert({
+        where: { code: data.code },
+        update: {
+            name: data.name,
+            description: data.description,
+            category: data.category,
+            monthly_price: data.monthly_price,
+            yearly_price: data.yearly_price,
+            sort_order: data.sort_order,
+            features_json: data.features_json,
+        },
+        create: {
+            code: data.code,
+            name: data.name,
+            description: data.description,
+            category: data.category,
+            monthly_price: data.monthly_price,
+            yearly_price: data.yearly_price,
+            sort_order: data.sort_order,
+            features_json: data.features_json,
+        },
+    });
+
+    await upsertAddon({
+        code: 'MANUFACTURING',
+        name: 'Manufacturing',
+        description: 'BOM, production jobs, wastage recording, and production cost/yield analytics — buy standalone on any plan instead of upgrading to Premium.',
+        category: 'operations',
+        monthly_price: 999,
+        yearly_price: 9990,
+        sort_order: 10,
+        features_json: { premiumManufacturing: true },
+    });
+
+    await upsertAddon({
+        code: 'ADVANCED_ACCOUNTING',
+        name: 'Advanced Accounting',
+        description: 'Comparative P&L, budget vs actual, cash flow, and financial ratios for tenants on plans below PREMIUM.',
+        category: 'accounting',
+        monthly_price: 599,
+        yearly_price: 5990,
+        sort_order: 20,
+        features_json: { premiumAccountingAdvanced: true },
+    });
+
     // ── 1. Users ────────────────────────────────────────────────────────────
     const adminUser = await prisma.user.upsert({
         where: { email: 'nayeem.ahmad@gmail.com' },
