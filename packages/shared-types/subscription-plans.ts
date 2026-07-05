@@ -351,10 +351,10 @@ export function normalizePlanFeatures(
     }
   }
 
-  if (typeof base.planRank !== 'number' && isFixedPlanCode(planCode)) {
+  if (input.planRank === undefined && isFixedPlanCode(planCode)) {
     base.planRank = LEGACY_PLAN_RANK[planCode];
   }
-  if (typeof base.aiCreditsMonthly !== 'number' && isFixedPlanCode(planCode)) {
+  if (input.aiCreditsMonthly === undefined && isFixedPlanCode(planCode)) {
     base.aiCreditsMonthly = LEGACY_AI_CREDITS_MONTHLY[planCode];
   }
 

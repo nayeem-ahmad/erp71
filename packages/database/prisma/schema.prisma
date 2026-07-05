@@ -379,6 +379,7 @@ model Tenant {
   storefrontOrders  StorefrontOrder[]
   bomRecipes      BomRecipe[]
   productionJobs  ProductionJob[]
+  productionWastages ProductionWastage[]
   loyaltyTransactions LoyaltyTransaction[]
   discountCodes   DiscountCode[]
   notifications   Notification[]
@@ -684,6 +685,7 @@ model Product {
   storefrontOrderItems StorefrontOrderItem[]
   bomRecipe    BomRecipe?
   bomComponents BomComponent[] @relation("BomComponent")
+  productionWastages ProductionWastage[] @relation("ProductionWastage")
 
   @@unique([tenant_id, sku])
   @@index([tenant_id, brand_id])
@@ -2202,10 +2204,31 @@ model ProductionJob {
 
   tenant  Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   recipe  BomRecipe @relation(fields: [recipeId], references: [id])
+  wastages ProductionWastage[]
 
   @@index([tenantId])
   @@index([tenantId, status])
   @@map("production_jobs")
+}
+
+// Additional raw-material consumption recorded on top of the standard BOM
+// quantities when a production job completes (spoilage, breakage, etc.).
+model ProductionWastage {
+  id         String   @id @default(cuid())
+  tenantId   String
+  jobId      String
+  productId  String
+  quantity   Decimal  @db.Decimal(12, 4)
+  note       String?
+  created_at DateTime @default(now())
+
+  tenant  Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  job     ProductionJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  product Product       @relation("ProductionWastage", fields: [productId], references: [id])
+
+  @@index([tenantId])
+  @@index([jobId])
+  @@map("production_wastages")
 }
 
 model LoyaltyTransaction {

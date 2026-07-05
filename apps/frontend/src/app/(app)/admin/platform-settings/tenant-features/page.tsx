@@ -13,6 +13,7 @@ type FeatureSettings = {
     support_enabled: string;
     help_enabled: string;
     voice_enabled: string;
+    manufacturing_enabled: string;
 };
 
 const DEFAULTS: FeatureSettings = {
@@ -20,18 +21,20 @@ const DEFAULTS: FeatureSettings = {
     support_enabled: 'false',
     help_enabled: 'false',
     voice_enabled: 'false',
+    manufacturing_enabled: 'true',
 };
 
 type FeatureToggleKey = keyof FeatureSettings;
 
 const FEATURE_TOGGLES: Array<{
     key: FeatureToggleKey;
-    labelKey: 'feedback' | 'support' | 'help' | 'voice';
+    labelKey: 'feedback' | 'support' | 'help' | 'voice' | 'manufacturing';
 }> = [
     { key: 'feedback_enabled', labelKey: 'feedback' },
     { key: 'support_enabled', labelKey: 'support' },
     { key: 'help_enabled', labelKey: 'help' },
     { key: 'voice_enabled', labelKey: 'voice' },
+    { key: 'manufacturing_enabled', labelKey: 'manufacturing' },
 ];
 
 function FeatureSwitch({
@@ -101,6 +104,7 @@ export default function PlatformTenantFeaturesPage() {
                     support_enabled: d.support_enabled ?? DEFAULTS.support_enabled,
                     help_enabled: d.help_enabled ?? DEFAULTS.help_enabled,
                     voice_enabled: d.voice_enabled ?? DEFAULTS.voice_enabled,
+                    manufacturing_enabled: d.manufacturing_enabled ?? DEFAULTS.manufacturing_enabled,
                 });
             })
             .catch(() => setToast({ type: 'error', message: c.loadFailed }))

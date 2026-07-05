@@ -19,17 +19,21 @@ import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { RequiresPlan } from '../auth/subscription-access.decorator';
+import { PlatformFeatureGuard } from '../platform-settings/platform-feature.guard';
+import { RequiresPlatformFeature } from '../platform-settings/platform-feature.decorator';
 import { PaginationDto } from '../common/pagination.dto';
 import { ManufacturingService } from './manufacturing.service';
 import {
     CreateBomDto,
     UpdateBomDto,
     CreateProductionJobDto,
+    CompleteProductionJobDto,
 } from './manufacturing.dto';
 
 @Controller('manufacturing')
-@UseGuards(JwtAuthGuard, SubscriptionAccessGuard)
-@RequiresPlan('STANDARD')
+@UseGuards(JwtAuthGuard, SubscriptionAccessGuard, PlatformFeatureGuard)
+@RequiresPlan('PREMIUM')
+@RequiresPlatformFeature('manufacturing')
 @UseInterceptors(TenantInterceptor)
 export class ManufacturingController {
     constructor(private readonly manufacturingService: ManufacturingService) {}
@@ -46,6 +50,15 @@ export class ManufacturingController {
     @Get('bom/:id')
     getBom(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.manufacturingService.getBom(tenant.tenantId, id);
+    }
+
+    @Get('bom/:id/requirements')
+    getRequirements(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Query('quantity', new DefaultValuePipe(1), ParseIntPipe) quantity: number,
+    ) {
+        return this.manufacturingService.getRequirementsPreview(tenant.tenantId, id, Math.max(1, quantity));
     }
 
     @Post('bom')
@@ -100,12 +113,25 @@ export class ManufacturingController {
     }
 
     @Post('jobs/:id/complete')
-    completeJob(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.manufacturingService.completeJob(tenant.tenantId, id);
+    completeJob(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: CompleteProductionJobDto,
+    ) {
+        return this.manufacturingService.completeJob(tenant.tenantId, id, dto?.wastage ?? []);
     }
 
     @Post('jobs/:id/cancel')
     cancelJob(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.manufacturingService.cancelJob(tenant.tenantId, id);
+    }
+
+    // ------------------------------------------------------------------ //
+    //  Analytics                                                           //
+    // ------------------------------------------------------------------ //
+
+    @Get('analytics')
+    getAnalytics(@Tenant() tenant: TenantContext) {
+        return this.manufacturingService.getAnalytics(tenant.tenantId);
     }
 }

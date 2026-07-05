@@ -489,7 +489,27 @@ export const crmHrMessages = {
         "subtitle": "Bill of materials and production job management",
         "tabs": {
             "boms": "Bill of Materials",
-            "jobs": "Production Jobs"
+            "jobs": "Production Jobs",
+            "analytics": "Analytics"
+        },
+        "analytics": {
+            "completedJobs": "Completed Jobs",
+            "unitsProduced": "Units Produced",
+            "totalMaterialCost": "Total Material Cost",
+            "avgUnitCost": "Avg. Unit Cost",
+            "volumeTrendTitle": "Production Volume Trend",
+            "costTableTitle": "Planned vs. Actual Material Cost",
+            "loadFailed": "Failed to load manufacturing analytics",
+            "empty": "No completed production jobs yet. Complete a job to see cost and yield analytics here.",
+            "columns": {
+                "product": "Product",
+                "completed": "Completed",
+                "qtyProduced": "Qty Produced",
+                "plannedCost": "Planned Cost",
+                "wastageCost": "Wastage Cost",
+                "actualCost": "Actual Cost",
+                "unitCost": "Unit Cost"
+            }
         },
         "newBom": "New BOM",
         "newJob": "New Job",
@@ -507,8 +527,17 @@ export const crmHrMessages = {
         "emptyJobs": "No production jobs yet.",
         "productIdRequired": "Product ID is required.",
         "outputQtyMin": "Output quantity must be at least 1.",
-        "recipeIdRequired": "Recipe ID is required.",
+        "recipeIdRequired": "Please select a product to manufacture.",
         "quantityMin": "Quantity must be at least 1.",
+        "noBomsAvailable": "No BOM recipes yet — create one in the Bill of Materials tab first.",
+        "selectRecipePlaceholder": "Select a product…",
+        "loadingRequirements": "Checking material requirements…",
+        "materialsRequired": "Materials Required",
+        "insufficientStockWarning": "Insufficient stock for one or more materials. The job can be created, but it cannot be started until enough stock is available.",
+        "completeProductionJob": "Complete Production Job",
+        "wastageHint": "Optionally record extra material consumed beyond the standard recipe (spoilage, breakage, etc.). Leave at 0 for none.",
+        "wastageQtyLabel": "Wastage Qty",
+        "completingJob": "Completing…",
         "saveFailed": "Save failed",
         "createJobFailed": "Failed to create job",
         "jobActionFailed": "Failed to {action} job",
@@ -521,9 +550,15 @@ export const crmHrMessages = {
         "componentsLabel": "Components / Raw Materials",
         "addComponent": "Add Component",
         "noComponents": "No components added yet.",
-        "bomRecipeId": "BOM Recipe ID *",
+        "bomRecipeId": "Product (BOM Recipe) *",
         "quantityLabel": "Quantity *",
         "quantityHint": "Number of production runs (multiplied by recipe output qty)",
+        "requirementsColumns": {
+            "component": "Component",
+            "perUnit": "Per Unit",
+            "required": "Required",
+            "available": "Available"
+        },
         "creating": "Creating…",
         "createJob": "Create Job",
         "saving": "Saving…",
@@ -549,8 +584,7 @@ export const crmHrMessages = {
         "placeholders": {
             "productId": "Product ID of the manufactured item",
             "componentProductId": "Component Product ID",
-            "qty": "Qty",
-            "recipeId": "Recipe ID"
+            "qty": "Qty"
         },
         "jobActions": {
             "start": "Start",

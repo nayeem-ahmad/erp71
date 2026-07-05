@@ -159,6 +159,8 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'inventory.setup.categories': { id: 'inventory.setup.categories', kind: 'link', icon: 'FolderTree', labelKey: 'sidebar.items.categories', href: '/inventory/categories' },
   'inventory.setup.settings': { id: 'inventory.setup.settings', kind: 'link', icon: 'Settings', labelKey: 'sidebar.items.inventorySettings', href: '/inventory/settings' },
 
+  manufacturing: { id: 'manufacturing', kind: 'module', icon: 'Factory', labelKey: 'sidebar.modules.manufacturing', href: '/manufacturing', moduleKey: 'manufacturing' },
+
   crm: { id: 'crm', kind: 'module', icon: 'Users', labelKey: 'sidebar.modules.crm', moduleKey: 'crm' },
   'crm.overview': { id: 'crm.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/crm', exact: true },
   'crm.leads': { id: 'crm.leads', kind: 'link', icon: 'UserPlus', labelKey: 'sidebar.items.crmLeads', href: '/crm/leads', premiumOnly: true },
@@ -333,7 +335,9 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('crm.leads', 'crm', 1),
   layoutNode('crm.customers', 'crm', 2),
 
-  layoutNode('hr', null, 6),
+  layoutNode('manufacturing', null, 6),
+
+  layoutNode('hr', null, 7),
   layoutNode('hr.overview', 'hr', 0),
   layoutNode('hr.employees', 'hr', 1),
   layoutNode('hr.organization', 'hr', 2),
@@ -344,7 +348,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('hr.operations.leaves', 'hr.operations', 1),
   layoutNode('hr.operations.salary-payments', 'hr.operations', 2),
 
-  layoutNode('account-settings', null, 7),
+  layoutNode('account-settings', null, 8),
   layoutNode('account-settings.overview', 'account-settings', 0),
   layoutNode('account-settings.team', 'account-settings', 1),
   layoutNode('account-settings.audit-logs', 'account-settings', 2),
@@ -363,8 +367,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('account-settings.sms-credits', 'account-settings', 15),
   layoutNode('account-settings.ai-credits', 'account-settings', 16),
 
-  layoutNode('support', null, 8),
-  layoutNode('admin', null, 9),
+  layoutNode('support', null, 9),
+  layoutNode('admin', null, 10),
   layoutNode('admin.overview', 'admin', 0),
   layoutNode('admin.tenant-management', 'admin', 1),
   layoutNode('admin.tenant-management.tenants', 'admin.tenant-management', 0),
@@ -372,7 +376,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.users', 'admin', 2),
   layoutNode('admin.feedback', 'admin', 3),
   layoutNode('admin.support', 'admin', 4),
-  layoutNode('help', null, 10),
+  layoutNode('help', null, 11),
 ];
 
 /** Platform-admin console sidebar (admin module only). */

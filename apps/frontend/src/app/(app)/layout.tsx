@@ -22,6 +22,7 @@ import {
     DEFAULT_TENANT_NAV_LAYOUT,
     hasPlanEntitlement,
     normalizePlanFeatures,
+    resolvePlanRank,
     type NavLayoutNode,
     type PlatformFeatures,
 } from '@erp71/shared-types';
@@ -227,6 +228,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const hasInventoryReportEntitlement = Boolean(planFeatures.premiumInventoryReports);
     const hasAccountingAdvancedEntitlement = Boolean(planFeatures.premiumAccountingAdvanced);
     const hasPremiumCrm = Boolean(planFeatures.premiumCrm);
+    const canAccessManufacturing =
+        platformFeatures.manufacturing && resolvePlanRank(planFeatures, activePlanCode) >= 3;
     const accountingOnlyMode = Boolean(planFeatures.accountingOnly);
     const isPlatformAdmin = inPlatformAdminMode;
     const perms = activeTenant?.permissions ?? [];
@@ -372,6 +375,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 canAccessInventoryReports={canAccessInventoryReports}
                 canAccessAccountingAdvanced={canAccessAccountingAdvanced}
                 canAccessPremiumCrm={hasPremiumCrm}
+                canAccessManufacturing={canAccessManufacturing}
                 canAccessAdmin={isPlatformAdmin}
                 canManageBilling={canManageBilling}
                 canManageTeam={canManageTeam}
