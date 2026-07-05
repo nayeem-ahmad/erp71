@@ -59,6 +59,7 @@ import { StorefrontModule } from './storefront/storefront.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { DeliveryModule } from './delivery/delivery.module';
 import { ManufacturingModule } from './manufacturing/manufacturing.module';
+import { AddonModulesModule } from './addon-modules/addon-modules.module';
 import { LoyaltyModule } from './loyalty/loyalty.module';
 import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
 import { NavigationModule } from './navigation/navigation.module';
@@ -150,6 +151,7 @@ import { ReferralsModule } from './referrals/referrals.module';
         TenantsModule,
         DeliveryModule,
         ManufacturingModule,
+        AddonModulesModule,
         LoyaltyModule,
         DiscountCodesModule,
         EmployeesModule,

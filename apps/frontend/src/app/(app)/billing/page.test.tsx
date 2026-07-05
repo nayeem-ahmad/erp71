@@ -20,6 +20,9 @@ jest.mock('@/lib/api', () => ({
         createBillingCheckoutSession: jest.fn(),
         confirmBillingCheckout: jest.fn(),
         cancelBillingAtPeriodEnd: jest.fn(),
+        getAddonCatalog: jest.fn(),
+        getMyAddonSubscriptions: jest.fn(),
+        cancelAddonAtPeriodEnd: jest.fn(),
     },
 }));
 
@@ -54,6 +57,10 @@ describe('BillingPage', () => {
                 { id: 'event-1', event_type: 'CHECKOUT_CREATED', status: 'PENDING', created_at: '2026-03-21T00:00:00.000Z' },
             ],
         });
+        (api.getAddonCatalog as jest.Mock).mockResolvedValue([
+            { id: 'addon-1', code: 'MANUFACTURING', name: 'Manufacturing', description: 'BOM & production jobs', monthly_price: 500, yearly_price: 5000 },
+        ]);
+        (api.getMyAddonSubscriptions as jest.Mock).mockResolvedValue([]);
     });
 
     it('renders callback success messaging and billing history', async () => {
@@ -87,6 +94,62 @@ describe('BillingPage', () => {
         await waitFor(() => {
             expect(api.createBillingCheckoutSession).toHaveBeenCalled();
             expect(redirectTo).toHaveBeenCalledWith('https://sandbox.sslcommerz.com/gateway');
+        });
+    });
+
+    it('lists available add-ons and includes selected codes in the checkout request', async () => {
+        (api.createBillingCheckoutSession as jest.Mock).mockResolvedValue({
+            provider_name: 'ssl-wireless',
+            checkout_url: 'https://sandbox.sslcommerz.com/gateway',
+            requires_confirmation: false,
+            reference: 'sslw_tenant_1',
+            billing_cycle: 'MONTHLY',
+            plan: { code: 'BASIC' },
+        });
+
+        render(<BillingPage />);
+
+        await waitFor(() => {
+            expect(screen.getByText('Manufacturing')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByRole('checkbox'));
+        fireEvent.click(screen.getByRole('button', { name: /continue to ssl wireless/i }));
+
+        await waitFor(() => {
+            expect(api.createBillingCheckoutSession).toHaveBeenCalledWith(
+                expect.objectContaining({ addonCodes: ['MANUFACTURING'] }),
+            );
+        });
+    });
+
+    it('shows active add-ons with a cancel action', async () => {
+        (api.getMyAddonSubscriptions as jest.Mock).mockResolvedValue([
+            {
+                addon: { id: 'addon-1', code: 'MANUFACTURING', name: 'Manufacturing', monthly_price: 500 },
+                status: 'ACTIVE',
+                current_period_start: '2026-03-21T00:00:00.000Z',
+                current_period_end: '2026-04-20T00:00:00.000Z',
+                cancel_at_period_end: false,
+            },
+        ]);
+        (api.cancelAddonAtPeriodEnd as jest.Mock).mockResolvedValue({});
+
+        render(<BillingPage />);
+
+        await waitFor(() => {
+            expect(screen.getByText('Your Add-ons')).toBeInTheDocument();
+        });
+
+        // Purchased add-ons shouldn't also appear in the purchasable catalog grid
+        expect(screen.queryByText('Available Add-ons')).not.toBeInTheDocument();
+
+        // The add-on's own cancel button renders before the base-plan's (same label) further down the page.
+        const [addonCancelButton] = screen.getAllByRole('button', { name: /cancel at period end/i });
+        fireEvent.click(addonCancelButton);
+
+        await waitFor(() => {
+            expect(api.cancelAddonAtPeriodEnd).toHaveBeenCalledWith('MANUFACTURING');
         });
     });
 });

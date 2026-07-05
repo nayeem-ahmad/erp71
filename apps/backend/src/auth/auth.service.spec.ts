@@ -10,6 +10,7 @@ import { AuditService } from '../audit/audit.service';
 import { TotpService } from './totp.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ReferralsService } from '../referrals/referrals.service';
+import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 import { StorePermission } from '@erp71/shared-types';
 
 jest.mock('bcrypt', () => ({
@@ -54,10 +55,11 @@ describe('AuthService', () => {
         tenantRole: { create: jest.fn() },
         tenantRolePermission: { createMany: jest.fn() },
         store: { create: jest.fn() },
-        tenantSubscription: { create: jest.fn() },
+        tenantSubscription: { create: jest.fn(), findUnique: jest.fn().mockResolvedValue(null) },
         userStoreAccess: { create: jest.fn() },
         userStorePermission: { createMany: jest.fn() },
         emailVerificationToken: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }), create: jest.fn().mockResolvedValue({}) },
+        tenantAddonSubscription: { findMany: jest.fn().mockResolvedValue([]) },
         $transaction: jest.fn(),
     };
 
@@ -142,6 +144,8 @@ describe('AuthService', () => {
         jwtService.sign.mockReturnValue('jwt-token');
         auditService.log.mockResolvedValue(undefined);
         db.user.findFirst.mockResolvedValue(null);
+        db.tenantAddonSubscription.findMany.mockResolvedValue([]);
+        db.tenantSubscription.findUnique.mockResolvedValue(null);
         platformSettings.getPlatformFeatures.mockResolvedValue({
             feedback: false,
             support: false,
@@ -160,6 +164,7 @@ describe('AuthService', () => {
                 { provide: AssetsService, useValue: { uploadFile: jest.fn() } },
                 { provide: PlatformSettingsService, useValue: platformSettings },
                 { provide: ReferralsService, useValue: referralsService },
+                PlanEntitlementsService,
             ],
         }).compile();
 

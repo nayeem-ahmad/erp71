@@ -50,6 +50,15 @@ export class PlanFeaturesDto {
     premiumAccountingAdvanced!: boolean;
 
     @IsBoolean()
+    premiumManufacturing!: boolean;
+
+    @IsBoolean()
+    premiumStorefront!: boolean;
+
+    @IsBoolean()
+    premiumBookPublishing!: boolean;
+
+    @IsBoolean()
     premiumAi!: boolean;
 
     @IsBoolean()

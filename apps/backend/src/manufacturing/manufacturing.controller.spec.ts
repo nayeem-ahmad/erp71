@@ -29,6 +29,7 @@ describe('ManufacturingController — subscription guard', () => {
     const db = {
         tenantUser: { findUnique: jest.fn() },
         tenantSubscription: { findUnique: jest.fn() },
+        tenantAddonSubscription: { findMany: jest.fn().mockResolvedValue([]) },
     } as any;
 
     const platformSettings = {
@@ -92,7 +93,7 @@ describe('ManufacturingController — subscription guard', () => {
         db.tenantUser.findUnique.mockResolvedValue({ tenant_id: 'tenant-1', user_id: 'user-1' });
         db.tenantSubscription.findUnique.mockResolvedValue({
             status: 'ACTIVE',
-            plan: { code: 'PREMIUM', features_json: {} },
+            plan: { code: 'PREMIUM', features_json: { premiumManufacturing: true } },
         });
         await buildApp();
 
@@ -152,7 +153,7 @@ describe('ManufacturingController — subscription guard', () => {
         db.tenantUser.findUnique.mockResolvedValue({ tenant_id: 'tenant-1', user_id: 'user-1' });
         db.tenantSubscription.findUnique.mockResolvedValue({
             status: 'ACTIVE',
-            plan: { code: 'PREMIUM', features_json: {} },
+            plan: { code: 'PREMIUM', features_json: { premiumManufacturing: true } },
         });
         platformSettings.isFeatureEnabled.mockResolvedValue(false);
         await buildApp();
@@ -162,6 +163,24 @@ describe('ManufacturingController — subscription guard', () => {
             .set('x-tenant-id', 'tenant-1');
 
         expect(res.status).toBe(403);
+    });
+
+    it('allows a FREE plan tenant with an active Manufacturing add-on', async () => {
+        db.tenantUser.findUnique.mockResolvedValue({ tenant_id: 'tenant-1', user_id: 'user-1' });
+        db.tenantSubscription.findUnique.mockResolvedValue({
+            status: 'ACTIVE',
+            plan: { code: 'FREE', features_json: {} },
+        });
+        db.tenantAddonSubscription.findMany.mockResolvedValueOnce([
+            { addon: { features_json: { premiumManufacturing: true } } },
+        ]);
+        await buildApp();
+
+        const res = await request(app.getHttpServer())
+            .get('/manufacturing/bom')
+            .set('x-tenant-id', 'tenant-1');
+
+        expect(res.status).not.toBe(403);
     });
 
     it('blocks a user who is not a member of the requested tenant with 401', async () => {

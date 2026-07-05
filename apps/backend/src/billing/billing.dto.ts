@@ -1,12 +1,15 @@
 export class CreateCheckoutSessionDto {
     planCode!: 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
     billingCycle?: 'MONTHLY' | 'YEARLY';
+    /** Add-on module codes to purchase alongside the plan, billed in the same checkout. */
+    addonCodes?: string[];
 }
 
 export class ConfirmCheckoutDto {
     planCode!: 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
     billingCycle?: 'MONTHLY' | 'YEARLY';
     reference?: string;
+    addonCodes?: string[];
 }
 
 export class BillingCallbackDto {
@@ -34,6 +37,7 @@ export class ManualBillingWebhookDto {
     providerSubscriptionRef?: string;
     /** Idempotency key — duplicate webhooks with the same key are ignored. */
     externalEventId?: string;
+    addonCodes?: string[];
 }
 
 export class RefundBillingDto {

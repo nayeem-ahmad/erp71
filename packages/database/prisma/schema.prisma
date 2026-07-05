@@ -330,6 +330,7 @@ model Tenant {
   users      TenantUser[]
   subscription TenantSubscription?
   billingEvents BillingEvent[]
+  addonSubscriptions TenantAddonSubscription[]
 
   apiKeys         ApiKey[]
   deliveryOrders  DeliveryOrder[]
@@ -1860,6 +1861,48 @@ model SubscriptionPlan {
   marketing_features_json  Json     @default("[]")
   is_active                Boolean  @default(true)
   subscriptions TenantSubscription[]
+}
+
+// ── Add-on modules (independently priced, purchasable regardless of base plan) ──
+
+// Catalog of optional modules a tenant can buy on top of their subscription plan
+// (e.g. Manufacturing, Advanced Accounting). `code` is a plain string, not an
+// enum, so new add-ons never require a schema migration.
+model AddonModule {
+  id            String   @id @default(uuid())
+  code          String   @unique
+  name          String
+  description   String?
+  category      String?
+  monthly_price Decimal  @db.Decimal(12, 2)
+  yearly_price  Decimal? @db.Decimal(12, 2)
+  features_json Json     @default("{}")
+  is_active     Boolean  @default(true)
+  sort_order    Int      @default(0)
+
+  subscriptions TenantAddonSubscription[]
+
+  @@index([is_active, sort_order])
+}
+
+// A tenant's purchase of a single add-on module, billed independently of but
+// alongside the tenant's base TenantSubscription.
+model TenantAddonSubscription {
+  id                        String             @id @default(uuid())
+  tenant_id                 String
+  addon_id                  String
+  status                    SubscriptionStatus @default(ACTIVE)
+  current_period_start      DateTime           @default(now())
+  current_period_end        DateTime
+  cancel_at_period_end      Boolean            @default(false)
+  provider_name             String?
+  provider_subscription_ref String?
+
+  tenant Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  addon  AddonModule @relation(fields: [addon_id], references: [id])
+
+  @@unique([tenant_id, addon_id])
+  @@index([addon_id, status])
 }
 
 model CashierSession {
