@@ -30,6 +30,7 @@
     2.  A real-time subscription (via Supabase Realtime) updates the notification count and list without refreshing the page.
     3.  Users can mark notifications as "read" or "clear all".
     4.  The UI supports different notification types (Info, Warning, Error) with distinct icons.
+*   Status: Partial — `Notification` model + `apps/backend/src/notifications/notifications.service.ts` (list/unread-count/mark-read/mark-all-read), bell icon dropdown, and a dedicated `/notifications` page (`apps/frontend/src/app/(app)/notifications/page.tsx`) are all built, and now cover subscription-expiry warnings (linking to `/billing`) and low-stock alerts with a 24h de-dup guard (`hasRecentLowStockNotification`) plus optional SMS fan-out (`tenant.sms_on_low_stock`). Gap vs. the AC as written: the frontend polls every 60s rather than using a Supabase Realtime subscription — acceptable in practice, but AC2 is not literally satisfied.
 
 ---
 

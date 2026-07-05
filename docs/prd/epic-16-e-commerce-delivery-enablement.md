@@ -61,3 +61,12 @@
 *   Status: Done — `resolvePriceListForUser`/`resolvePriceListForCustomer` in `apps/backend/src/storefront/storefront.service.ts` and `apps/backend/src/price-lists/price-lists.service.ts`. Note: this resolution is storefront-only — in-store POS checkout does not currently apply customer-group price lists (see Epic 80, Story 4).
 
 ---
+**Story 3.8: Product Storefront Content (Description & Image Gallery)**
+*   As a Store Owner, I want to write a rich storefront description and upload a gallery of extra product photos, so that my online listing looks as complete as the physical product deserves.
+*   **Acceptance Criteria:**
+    1.  The Add/Edit Product modal has a dedicated "Storefront (Ecommerce)" tab, separate from the basic inventory fields.
+    2.  The Owner can write a free-text storefront description and mark the product as "trending" for the storefront homepage.
+    3.  The Owner can upload multiple gallery images for the product, in addition to the single primary product image.
+*   Status: Done — "Storefront (Ecommerce)" tab in `apps/frontend/src/app/(app)/inventory/AddProductModal.tsx` (`activeTab === 'storefront'`), backed by `Product.description` and `Product.images_gallery` (`packages/database/prisma/schema.prisma`).
+
+---
