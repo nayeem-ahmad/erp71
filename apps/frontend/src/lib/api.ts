@@ -1342,6 +1342,27 @@ export const api = {
         if (params?.limit) query.set('limit', String(params.limit));
         return fetchWithAuth(`/admin/feedback${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    // Feedback automation (propose plan -> admin approve -> implement -> PR -> rollback)
+    getAdminFeedbackDetail: (id: string) => fetchWithAuth(`/admin/feedback/${id}`),
+    saveFeedbackInstruction: (id: string, instruction: string) =>
+        fetchWithAuth(`/admin/feedback/${id}/instruction`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ instruction }),
+        }),
+    proposeFeedbackPlan: (id: string) => fetchWithAuth(`/admin/feedback/${id}/propose-plan`, { method: 'POST' }),
+    reviewFeedbackPlan: (
+        planId: string,
+        data: { decision: 'APPROVE' | 'REQUEST_CHANGES'; comment?: string; confirmMigration?: boolean },
+    ) =>
+        fetchWithAuth(`/admin/feedback/plans/${planId}/review`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }),
+    implementFeedbackNow: (id: string) => fetchWithAuth(`/admin/feedback/${id}/implement`, { method: 'POST' }),
+    getFeedbackPrStatus: (id: string) => fetchWithAuth(`/admin/feedback/${id}/pr-status`),
+    rollbackFeedback: (id: string) => fetchWithAuth(`/admin/feedback/${id}/rollback`, { method: 'POST' }),
     // Support chat (shop owner)
     getSupportThreads: () => fetchWithAuth('/support/threads'),
     createSupportThread: (data: { subject: string; body: string }) =>

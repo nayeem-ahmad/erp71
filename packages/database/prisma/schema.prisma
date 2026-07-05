@@ -2146,10 +2146,48 @@ model Feedback {
   page       String?
   createdAt  DateTime @default(now())
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  user   User   @relation(fields: [userId], references: [id])
+  /// Admin-driven automation pipeline (propose plan -> approve -> implement -> PR -> rollback).
+  /// NEW | ADMIN_REVIEWING | PLAN_REQUESTED | PLAN_PROPOSED | PLAN_APPROVED | CHANGES_REQUESTED
+  /// | IN_PROGRESS | PR_OPENED | MERGED | RESOLVED | ROLLED_BACK
+  status            String    @default("NEW")
+  adminInstruction  String?
+  prNumber          Int?
+  prUrl             String?
+  mergeCommitSha    String?
+  backupSnapshotId  String?
+  deployedAt        DateTime?
+  lastError         String?
+  rollbackPrNumber  Int?
+  rollbackPrUrl     String?
+  updatedAt         DateTime  @updatedAt
+
+  tenant Tenant         @relation(fields: [tenantId], references: [id])
+  user   User           @relation(fields: [userId], references: [id])
+  plans  FeedbackPlan[]
 
   @@map("feedbacks")
+}
+
+/// A single version of an agent-proposed implementation plan for a Feedback
+/// item, reviewed and approved/rejected by a platform admin before any code
+/// is written. Versioned so a "request changes" revision loop keeps history.
+model FeedbackPlan {
+  id           String    @id @default(cuid())
+  feedbackId   String
+  version      Int
+  planText     String
+  hasMigration Boolean   @default(false)
+  /// PROPOSED | APPROVED | CHANGES_REQUESTED | SUPERSEDED
+  status       String    @default("PROPOSED")
+  adminComment String?
+  createdAt    DateTime  @default(now())
+  reviewedAt   DateTime?
+  reviewedBy   String?
+
+  feedback Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+
+  @@index([feedbackId, version])
+  @@map("feedback_plans")
 }
 
 model ApiKey {
