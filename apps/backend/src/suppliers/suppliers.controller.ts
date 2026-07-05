@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import {
+    AllocateSupplierPaymentDto,
     CreateSupplierDto,
     ListSupplierCreditPaymentsQueryDto,
     RecordSupplierCreditPaymentDto,
@@ -66,6 +67,31 @@ export class SuppliersController {
         @Param('paymentId') paymentId: string,
     ) {
         return this.suppliersService.deleteCreditPayment(tenant.tenantId, paymentId);
+    }
+
+    @Post('credit/payments/:paymentId/allocate')
+    allocatePayment(
+        @Tenant() tenant: TenantContext,
+        @Param('paymentId') paymentId: string,
+        @Body() dto: AllocateSupplierPaymentDto,
+    ) {
+        return this.suppliersService.allocatePayment(tenant.tenantId, paymentId, dto);
+    }
+
+    @Delete('credit/allocations/:allocationId')
+    removeAllocation(
+        @Tenant() tenant: TenantContext,
+        @Param('allocationId') allocationId: string,
+    ) {
+        return this.suppliersService.removeAllocation(tenant.tenantId, allocationId);
+    }
+
+    @Get(':id/billing-summary')
+    getBillingSummary(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+    ) {
+        return this.suppliersService.getBillingSummary(tenant.tenantId, id);
     }
 
     @Get(':id/credit')

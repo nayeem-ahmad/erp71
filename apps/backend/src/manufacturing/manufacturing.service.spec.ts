@@ -43,6 +43,13 @@ describe('ManufacturingService', () => {
             },
             productionJob: { findFirst: jest.fn(), update: jest.fn(), findMany: jest.fn() },
             productionWastage: { create: jest.fn().mockResolvedValue({}) },
+            productionJobCost: {
+                create: jest.fn().mockResolvedValue({}),
+                aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 0 } }),
+                findMany: jest.fn().mockResolvedValue([]),
+                findFirst: jest.fn().mockResolvedValue(null),
+                delete: jest.fn().mockResolvedValue({}),
+            },
             product: { findMany: jest.fn().mockResolvedValue([]) },
             productPrice: { findMany: jest.fn().mockResolvedValue([]) },
             warehouse: { findFirst: jest.fn().mockResolvedValue({ id: 'wh-1' }) },
@@ -231,6 +238,72 @@ describe('ManufacturingService', () => {
             db.productionJob.findFirst.mockResolvedValue({ ...job, status: 'DRAFT' });
 
             await expect(service.completeJob('tenant-1', 'job-1')).rejects.toThrow(BadRequestException);
+        });
+
+        it('rolls up raw-material cost into a ProductionJobCost line and sets totalJobCost/costPerUnit', async () => {
+            db.productionJob.findFirst.mockResolvedValue(job);
+            db.productionJob.update.mockResolvedValue({ ...job, status: 'COMPLETED' });
+            db.productPrice.findMany.mockResolvedValue([{ product_id: 'product-flour', cost: 2.5 }]);
+            // flour: 5 * 10 qty = 50 units * 2.5 = 125; yeast has no cost entry -> 0
+            db.productionJobCost.aggregate.mockResolvedValue({ _sum: { amount: 125 } });
+
+            await service.completeJob('tenant-1', 'job-1');
+
+            expect(db.productionJobCost.create).toHaveBeenCalledWith({
+                data: {
+                    tenantId: 'tenant-1',
+                    jobId: 'job-1',
+                    costType: 'RAW_MATERIAL',
+                    amount: 125,
+                    notes: 'Auto-computed from BOM consumption + wastage at completion',
+                },
+            });
+            expect(db.productionJob.update).toHaveBeenLastCalledWith({
+                where: { id: 'job-1' },
+                data: { status: 'COMPLETED', completedAt: expect.any(Date), totalJobCost: 125, costPerUnit: 6.25 },
+            });
+        });
+    });
+
+    describe('job cost lines', () => {
+        const job = {
+            id: 'job-1',
+            tenantId: 'tenant-1',
+            recipeId: 'recipe-1',
+            productId: 'product-out',
+            quantity: 10,
+            status: 'IN_PROGRESS',
+            recipe,
+        };
+
+        it('adds a non-material cost line and recomputes job totals', async () => {
+            db.productionJob.findFirst.mockResolvedValue(job);
+            db.productionJobCost.create.mockResolvedValue({ id: 'cost-1', costType: 'PRINTING', amount: 500 });
+            db.productionJobCost.aggregate.mockResolvedValue({ _sum: { amount: 500 } });
+
+            await service.addJobCost('tenant-1', 'job-1', { costType: 'PRINTING', amount: 500 });
+
+            expect(db.productionJobCost.create).toHaveBeenCalledWith({
+                data: {
+                    tenantId: 'tenant-1',
+                    jobId: 'job-1',
+                    costType: 'PRINTING',
+                    amount: 500,
+                    sourcePurchaseItemId: null,
+                    notes: null,
+                },
+            });
+            expect(db.productionJob.update).toHaveBeenCalledWith({
+                where: { id: 'job-1' },
+                data: { totalJobCost: 500, costPerUnit: 25 },
+            });
+        });
+
+        it('rejects removing a RAW_MATERIAL cost line directly', async () => {
+            db.productionJob.findFirst.mockResolvedValue(job);
+            db.productionJobCost.findFirst.mockResolvedValue({ id: 'cost-1', costType: 'RAW_MATERIAL' });
+
+            await expect(service.removeJobCost('tenant-1', 'job-1', 'cost-1')).rejects.toThrow(BadRequestException);
         });
     });
 

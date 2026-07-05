@@ -25,6 +25,10 @@ describe('PurchasesService', () => {
                 findUnique: jest.fn(),
                 create: jest.fn(),
                 findFirst: jest.fn(),
+                update: jest.fn(),
+            },
+            supplierCreditTransaction: {
+                create: jest.fn(),
             },
             purchase: {
                 count: jest.fn(),
@@ -138,6 +142,7 @@ describe('PurchasesService', () => {
         db.product.findMany.mockResolvedValue([{ id: 'prod-1' }]);
         tx.supplier.findUnique.mockResolvedValue(null);
         tx.supplier.create.mockResolvedValue({ id: 'sup-1' });
+        tx.supplier.findFirst.mockResolvedValue({ due_balance: 0 });
         tx.purchase.count.mockResolvedValue(2);
         tx.purchase.create.mockResolvedValue({ id: 'purchase-2' });
         tx.purchase.findFirst.mockResolvedValue({ id: 'purchase-2', supplier_id: 'sup-1' });
@@ -153,6 +158,21 @@ describe('PurchasesService', () => {
         });
         expect(tx.purchase.create).toHaveBeenCalledWith({
             data: expect.objectContaining({ supplier_id: 'sup-1' }),
+        });
+        expect(tx.supplierCreditTransaction.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+                tenant_id: 'tenant-1',
+                supplier_id: 'sup-1',
+                type: 'CREDIT_PURCHASE',
+                amount: 5,
+                balance_after: 5,
+                reference_type: 'PURCHASE',
+                reference_id: 'purchase-2',
+            }),
+        });
+        expect(tx.supplier.update).toHaveBeenCalledWith({
+            where: { id: 'sup-1' },
+            data: { due_balance: 5 },
         });
     });
 

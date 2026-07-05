@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { DatabaseService } from '../database/database.service';
-import { CreateBomDto, UpdateBomDto, CreateProductionJobDto, WastageItemDto } from './manufacturing.dto';
+import { CreateBomDto, UpdateBomDto, CreateProductionJobDto, CreateJobCostDto, WastageItemDto } from './manufacturing.dto';
 import { applyInventoryMovement, ensureDefaultWarehouse } from '../database/inventory.utils';
 
 @Injectable()
@@ -366,6 +366,8 @@ export class ManufacturingService {
             const warehouse = await ensureDefaultWarehouse(tx, tenantId);
             const warehouseId = warehouse.id;
 
+            let materialCost = 0;
+
             // Decrement each component's stock
             for (const comp of components) {
                 const consumeQty = Number(comp.quantity) * job.quantity;
@@ -379,6 +381,7 @@ export class ManufacturingService {
                     referenceId: id,
                     unitCost: costMap.get(comp.productId),
                 });
+                materialCost += consumeQty * (costMap.get(comp.productId) ?? 0);
             }
 
             // Decrement stock for any additional wastage recorded on top of the BOM, logged separately
@@ -402,6 +405,7 @@ export class ManufacturingService {
                         note: w.note ?? null,
                     },
                 });
+                materialCost += w.quantity * (costMap.get(w.productId) ?? 0);
             }
 
             // Increment output product's stock
@@ -417,11 +421,126 @@ export class ManufacturingService {
                 unitCost: costMap.get(job.productId),
             });
 
+            // Snapshot raw-material cost as a job cost line so it rolls up alongside
+            // any printing/binding/transport/labor costs already recorded on the job,
+            // and doesn't drift later if product costs change.
+            if (materialCost > 0) {
+                await tx.productionJobCost.create({
+                    data: {
+                        tenantId,
+                        jobId: id,
+                        costType: 'RAW_MATERIAL',
+                        amount: materialCost,
+                        notes: 'Auto-computed from BOM consumption + wastage at completion',
+                    },
+                });
+            }
+
+            const { totalJobCost, costPerUnit } = await this.recomputeJobCostTotals(tx, tenantId, id, outputQty);
+
             // Mark job as completed
             return tx.productionJob.update({
                 where: { id },
-                data: { status: 'COMPLETED', completedAt: new Date() },
+                data: { status: 'COMPLETED', completedAt: new Date(), totalJobCost, costPerUnit },
             });
+        });
+    }
+
+    // ------------------------------------------------------------------ //
+    //  Job cost lines                                                      //
+    // ------------------------------------------------------------------ //
+
+    /** Recomputes and persists the job's totalJobCost/costPerUnit from its cost lines. */
+    private async recomputeJobCostTotals(tx: any, tenantId: string, jobId: string, outputQty: number) {
+        const agg = await tx.productionJobCost.aggregate({
+            where: { tenantId, jobId },
+            _sum: { amount: true },
+        });
+        const totalJobCost = Number(agg._sum.amount ?? 0);
+        const costPerUnit = outputQty > 0 ? totalJobCost / outputQty : 0;
+
+        await tx.productionJob.update({
+            where: { id: jobId },
+            data: { totalJobCost, costPerUnit },
+        });
+
+        return { totalJobCost, costPerUnit };
+    }
+
+    async listJobCosts(tenantId: string, jobId: string) {
+        await this.getJob(tenantId, jobId);
+
+        return this.db.productionJobCost.findMany({
+            where: { tenantId, jobId },
+            include: {
+                sourcePurchaseItem: {
+                    select: {
+                        id: true,
+                        unit_cost: true,
+                        quantity: true,
+                        product: { select: { id: true, name: true, sku: true } },
+                        purchase: { select: { id: true, purchase_number: true } },
+                    },
+                },
+            },
+            orderBy: { created_at: 'asc' },
+        });
+    }
+
+    /** Adds a non-material cost line (printing, binding, transport, labor, ...) to a job, optionally traced to a bill. */
+    async addJobCost(tenantId: string, jobId: string, dto: CreateJobCostDto) {
+        const job = await this.getJob(tenantId, jobId);
+
+        if (job.status === 'CANCELLED') {
+            throw new BadRequestException('Cannot add a cost to a cancelled job');
+        }
+
+        if (dto.sourcePurchaseItemId) {
+            const purchaseItem = await this.db.purchaseItem.findFirst({
+                where: { id: dto.sourcePurchaseItemId, purchase: { tenant_id: tenantId } },
+                select: { id: true },
+            });
+            if (!purchaseItem) {
+                throw new BadRequestException('Purchase item not found or does not belong to this tenant');
+            }
+        }
+
+        const recipe = job.recipe as any;
+        const outputQty = job.quantity * recipe.outputQty;
+
+        return this.db.$transaction(async (tx) => {
+            const cost = await tx.productionJobCost.create({
+                data: {
+                    tenantId,
+                    jobId,
+                    costType: dto.costType,
+                    amount: dto.amount,
+                    sourcePurchaseItemId: dto.sourcePurchaseItemId ?? null,
+                    notes: dto.notes ?? null,
+                },
+            });
+
+            await this.recomputeJobCostTotals(tx, tenantId, jobId, outputQty);
+
+            return cost;
+        });
+    }
+
+    async removeJobCost(tenantId: string, jobId: string, costId: string) {
+        const job = await this.getJob(tenantId, jobId);
+        const cost = await this.db.productionJobCost.findFirst({ where: { id: costId, tenantId, jobId } });
+        if (!cost) throw new NotFoundException('Job cost line not found');
+        if (cost.costType === 'RAW_MATERIAL') {
+            throw new BadRequestException('Raw-material cost is computed automatically at job completion and cannot be removed directly');
+        }
+
+        const recipe = job.recipe as any;
+        const outputQty = job.quantity * recipe.outputQty;
+
+        return this.db.$transaction(async (tx) => {
+            await tx.productionJobCost.delete({ where: { id: costId } });
+            await this.recomputeJobCostTotals(tx, tenantId, jobId, outputQty);
+            return { removed: true, id: costId };
         });
     }
 

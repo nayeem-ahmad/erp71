@@ -596,6 +596,35 @@ export const crmHrMessages = {
             "inProgress": "In Progress",
             "completed": "Completed",
             "cancelled": "Cancelled"
+        },
+        "jobCosts": {
+            "viewCosts": "Costs",
+            "hideCosts": "Hide costs",
+            "title": "Job Costs",
+            "totalCost": "Total Job Cost",
+            "costPerUnit": "Cost / Unit",
+            "loadFailed": "Failed to load job costs",
+            "empty": "No cost lines yet.",
+            "addCost": "Add Cost",
+            "costType": "Cost Type",
+            "amount": "Amount",
+            "notes": "Notes",
+            "notesPlaceholder": "e.g. printer invoice reference",
+            "add": "Add",
+            "adding": "Adding…",
+            "addFailed": "Failed to add cost",
+            "remove": "Remove",
+            "removeConfirm": "Remove this cost line?",
+            "removeFailed": "Failed to remove cost",
+            "costTypes": {
+                "RAW_MATERIAL": "Raw Material",
+                "PRINTING": "Printing",
+                "BINDING": "Binding",
+                "TRANSPORT": "Transport",
+                "LABOR": "Labor",
+                "OVERHEAD": "Overhead",
+                "OTHER": "Other"
+            }
         }
     }
 } as const;
