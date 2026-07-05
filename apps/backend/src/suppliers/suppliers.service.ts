@@ -4,8 +4,10 @@ import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { paginate } from '../common/pagination.dto';
 import {
+    AllocateSupplierPaymentDto,
     CreateSupplierDto,
     ListSupplierCreditPaymentsQueryDto,
+    PaymentAllocationInputDto,
     RecordSupplierCreditPaymentDto,
     SupplierPaymentDirectionDto,
     UpdateSupplierCreditPaymentDto,
@@ -154,6 +156,71 @@ export class SuppliersService {
                 return amount;
             default:
                 return 0;
+        }
+    }
+
+    private paymentStatusFor(paidAmount: number, totalAmount: number): string {
+        if (paidAmount <= 0.005) return 'UNPAID';
+        if (paidAmount >= totalAmount - 0.005) return 'PAID';
+        return 'PARTIAL';
+    }
+
+    /** Validates and applies a set of allocations against open bills for one supplier, inside an existing transaction. */
+    private async applyAllocations(
+        tx: any,
+        tenantId: string,
+        supplierId: string,
+        transactionId: string,
+        allocations: PaymentAllocationInputDto[],
+        remainingOnTransaction: number,
+    ) {
+        const requestedTotal = allocations.reduce((sum, a) => sum + a.amount, 0);
+        if (requestedTotal - remainingOnTransaction > 0.005) {
+            throw new BadRequestException(
+                `Allocation total (${requestedTotal.toFixed(2)}) exceeds the unapplied amount on this payment (${remainingOnTransaction.toFixed(2)}).`,
+            );
+        }
+
+        const purchaseIds = allocations.map((a) => a.purchaseId);
+        const purchases = await tx.purchase.findMany({
+            where: { id: { in: purchaseIds }, tenant_id: tenantId, supplier_id: supplierId },
+            select: { id: true, total_amount: true, paid_amount: true, purchase_number: true },
+        });
+        const purchaseById = new Map<string, any>(purchases.map((p: any) => [p.id, p]));
+
+        for (const allocation of allocations) {
+            const purchase = purchaseById.get(allocation.purchaseId);
+            if (!purchase) {
+                throw new BadRequestException('One or more bills do not belong to this supplier.');
+            }
+            const balanceDue = Number(purchase.total_amount) - Number(purchase.paid_amount);
+            if (allocation.amount - balanceDue > 0.005) {
+                throw new BadRequestException(
+                    `Allocation of ${allocation.amount.toFixed(2)} exceeds the balance due (${balanceDue.toFixed(2)}) on bill ${purchase.purchase_number}.`,
+                );
+            }
+        }
+
+        for (const allocation of allocations) {
+            const purchase = purchaseById.get(allocation.purchaseId);
+            const newPaidAmount = Number(purchase.paid_amount) + allocation.amount;
+
+            await tx.supplierPaymentAllocation.create({
+                data: {
+                    tenant_id: tenantId,
+                    transaction_id: transactionId,
+                    purchase_id: allocation.purchaseId,
+                    amount: allocation.amount,
+                },
+            });
+
+            await tx.purchase.update({
+                where: { id: allocation.purchaseId },
+                data: {
+                    paid_amount: newPaidAmount,
+                    payment_status: this.paymentStatusFor(newPaidAmount, Number(purchase.total_amount)),
+                },
+            });
         }
     }
 
@@ -344,11 +411,42 @@ export class SuppliersService {
             this.db.supplierCreditTransaction.count({ where }),
         ]);
 
-        return paginate(items, total, page, limit);
+        const paymentIds = items.filter((i) => i.type === 'PAYMENT').map((i) => i.id);
+        const allocatedByTransaction = new Map<string, number>();
+        if (paymentIds.length > 0) {
+            const grouped = await this.db.supplierPaymentAllocation.groupBy({
+                by: ['transaction_id'],
+                where: { tenant_id: tenantId, transaction_id: { in: paymentIds } },
+                _sum: { amount: true },
+            });
+            for (const g of grouped) {
+                allocatedByTransaction.set(g.transaction_id, Number(g._sum.amount ?? 0));
+            }
+        }
+
+        const itemsWithAllocation = items.map((item) => {
+            if (item.type !== 'PAYMENT') return item;
+            const allocated = allocatedByTransaction.get(item.id) ?? 0;
+            return {
+                ...item,
+                allocated_amount: allocated,
+                unapplied_amount: Number(item.amount) - allocated,
+            };
+        });
+
+        return paginate(itemsWithAllocation, total, page, limit);
     }
 
     async getCreditPayment(tenantId: string, paymentId: string) {
-        return this.findCreditPaymentOrThrow(tenantId, paymentId);
+        const payment = await this.findCreditPaymentOrThrow(tenantId, paymentId);
+        if (payment.type !== 'PAYMENT') return payment;
+
+        const allocatedSum = await this.db.supplierPaymentAllocation.aggregate({
+            where: { tenant_id: tenantId, transaction_id: paymentId },
+            _sum: { amount: true },
+        });
+        const allocated = Number(allocatedSum._sum.amount ?? 0);
+        return { ...payment, allocated_amount: allocated, unapplied_amount: Number(payment.amount) - allocated };
     }
 
     async updateCreditPayment(tenantId: string, paymentId: string, dto: UpdateSupplierCreditPaymentDto) {
@@ -363,6 +461,22 @@ export class SuppliersService {
         const newNotes = dto.notes !== undefined ? dto.notes : payment.notes;
 
         if (newAmount <= 0) throw new BadRequestException('Amount must be positive');
+
+        const allocatedSum = await this.db.supplierPaymentAllocation.aggregate({
+            where: { tenant_id: tenantId, transaction_id: paymentId },
+            _sum: { amount: true },
+        });
+        const allocatedTotal = Number(allocatedSum._sum.amount ?? 0);
+        if (allocatedTotal > 0.005) {
+            if (newType !== 'PAYMENT') {
+                throw new BadRequestException('Remove this payment\'s bill allocations before changing its direction.');
+            }
+            if (newAmount - allocatedTotal < -0.005) {
+                throw new BadRequestException(
+                    `Cannot reduce this payment below its already-allocated amount (${allocatedTotal.toFixed(2)}). Remove allocations first.`,
+                );
+            }
+        }
 
         return this.db.$transaction(async (tx) => {
             const supplier = await tx.supplier.findFirst({
@@ -403,6 +517,13 @@ export class SuppliersService {
         const oldType = payment.type as 'PAYMENT' | 'PAYOUT';
         const oldAmount = Number(payment.amount);
 
+        const allocationCount = await this.db.supplierPaymentAllocation.count({
+            where: { tenant_id: tenantId, transaction_id: paymentId },
+        });
+        if (allocationCount > 0) {
+            throw new BadRequestException('Remove this payment\'s bill allocations before deleting it.');
+        }
+
         return this.db.$transaction(async (tx) => {
             const supplier = await tx.supplier.findFirst({
                 where: { id: payment.supplier_id, tenant_id: tenantId },
@@ -441,6 +562,10 @@ export class SuppliersService {
 
         if (dto.amount <= 0) throw new BadRequestException('Amount must be positive');
 
+        if (dto.allocations?.length && txType !== 'PAYMENT') {
+            throw new BadRequestException('Only payments made to the supplier (not receipts) can be allocated to bills.');
+        }
+
         const currentDue = Number(supplier.due_balance);
         const balanceAfter = currentDue + this.dueDelta(txType, dto.amount);
 
@@ -469,7 +594,99 @@ export class SuppliersService {
                 data: { due_balance: balanceAfter },
             });
 
+            if (dto.allocations?.length) {
+                await this.applyAllocations(tx, tenantId, id, payment.id, dto.allocations, dto.amount);
+            }
+
             return payment;
         });
+    }
+
+    /** Matches part or all of an existing (previously unapplied) supplier payment to specific bill(s). */
+    async allocatePayment(tenantId: string, transactionId: string, dto: AllocateSupplierPaymentDto) {
+        const transaction = await this.db.supplierCreditTransaction.findFirst({
+            where: { id: transactionId, tenant_id: tenantId, type: 'PAYMENT' },
+        });
+        if (!transaction) throw new NotFoundException('Supplier payment not found');
+
+        const alreadyAllocated = await this.db.supplierPaymentAllocation.aggregate({
+            where: { tenant_id: tenantId, transaction_id: transactionId },
+            _sum: { amount: true },
+        });
+        const remaining = Number(transaction.amount) - Number(alreadyAllocated._sum.amount ?? 0);
+
+        return this.db.$transaction(async (tx) => {
+            await this.applyAllocations(tx, tenantId, transaction.supplier_id, transactionId, dto.allocations, remaining);
+            return this.getCreditPayment(tenantId, transactionId);
+        });
+    }
+
+    /** Reverses a single bill allocation, freeing that amount back up as an unapplied advance. */
+    async removeAllocation(tenantId: string, allocationId: string) {
+        const allocation = await this.db.supplierPaymentAllocation.findFirst({
+            where: { id: allocationId, tenant_id: tenantId },
+            include: { purchase: { select: { id: true, total_amount: true, paid_amount: true } } },
+        });
+        if (!allocation) throw new NotFoundException('Allocation not found');
+
+        return this.db.$transaction(async (tx) => {
+            await tx.supplierPaymentAllocation.delete({ where: { id: allocationId } });
+
+            const newPaidAmount = Number(allocation.purchase.paid_amount) - Number(allocation.amount);
+            await tx.purchase.update({
+                where: { id: allocation.purchase.id },
+                data: {
+                    paid_amount: newPaidAmount,
+                    payment_status: this.paymentStatusFor(newPaidAmount, Number(allocation.purchase.total_amount)),
+                },
+            });
+
+            return { removed: true, id: allocationId };
+        });
+    }
+
+    /** Open bills and unapplied advance total for a supplier - the working view for matching payments to bills. */
+    async getBillingSummary(tenantId: string, supplierId: string) {
+        const supplier = await this.db.supplier.findFirst({
+            where: { id: supplierId, tenant_id: tenantId, deleted_at: null },
+            select: { id: true, name: true, due_balance: true },
+        });
+        if (!supplier) throw new NotFoundException('Supplier not found');
+
+        const openBills = await this.db.purchase.findMany({
+            where: { tenant_id: tenantId, supplier_id: supplierId, payment_status: { not: 'PAID' } },
+            select: {
+                id: true,
+                purchase_number: true,
+                total_amount: true,
+                paid_amount: true,
+                payment_status: true,
+                created_at: true,
+            },
+            orderBy: { created_at: 'asc' },
+        });
+
+        const paymentTransactions = await this.db.supplierCreditTransaction.findMany({
+            where: { tenant_id: tenantId, supplier_id: supplierId, type: 'PAYMENT' },
+            include: { allocations: { select: { amount: true } } },
+        });
+
+        const unallocatedAdvance = paymentTransactions.reduce((sum, txn) => {
+            const allocated = txn.allocations.reduce((s, a) => s + Number(a.amount), 0);
+            const remaining = Number(txn.amount) - allocated;
+            return sum + Math.max(0, remaining);
+        }, 0);
+
+        return {
+            supplier: { id: supplier.id, name: supplier.name },
+            due_balance: Number(supplier.due_balance),
+            unallocated_advance: unallocatedAdvance,
+            open_bills: openBills.map((bill: any) => ({
+                ...bill,
+                total_amount: Number(bill.total_amount),
+                paid_amount: Number(bill.paid_amount),
+                balance_due: Number(bill.total_amount) - Number(bill.paid_amount),
+            })),
+        };
     }
 }

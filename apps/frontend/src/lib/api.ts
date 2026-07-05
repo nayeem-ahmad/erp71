@@ -876,12 +876,26 @@ export const api = {
             },
         );
     },
-    recordSupplierCreditPayment: (id: string, data: { amount: number; direction?: 'pay' | 'receive'; notes?: string }) =>
+    recordSupplierCreditPayment: (id: string, data: {
+        amount: number;
+        direction?: 'pay' | 'receive';
+        notes?: string;
+        allocations?: { purchaseId: string; amount: number }[];
+    }) =>
         fetchWithAuth(`/suppliers/${id}/credit/payment`, {
             method: 'POST',
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    getSupplierBillingSummary: (id: string) => fetchWithAuth(`/suppliers/${id}/billing-summary`),
+    allocateSupplierPayment: (paymentId: string, allocations: { purchaseId: string; amount: number }[]) =>
+        fetchWithAuth(`/suppliers/credit/payments/${paymentId}/allocate`, {
+            method: 'POST',
+            body: JSON.stringify({ allocations }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    removeSupplierPaymentAllocation: (allocationId: string) =>
+        fetchWithAuth(`/suppliers/credit/allocations/${allocationId}`, { method: 'DELETE' }),
     getSupplierCreditPayments: (params?: {
         page?: number;
         limit?: number;

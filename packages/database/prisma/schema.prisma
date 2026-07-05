@@ -380,6 +380,8 @@ model Tenant {
   bomRecipes      BomRecipe[]
   productionJobs  ProductionJob[]
   productionWastages ProductionWastage[]
+  productionJobCosts ProductionJobCost[]
+  supplierPaymentAllocations SupplierPaymentAllocation[]
   loyaltyTransactions LoyaltyTransaction[]
   discountCodes   DiscountCode[]
   notifications   Notification[]
@@ -966,10 +968,31 @@ model SupplierCreditTransaction {
   tenant    Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   supplier  Supplier  @relation(fields: [supplier_id], references: [id], onDelete: Cascade)
   creator   User?     @relation("SupplierCreditTransactionCreator", fields: [created_by], references: [id])
+  allocations SupplierPaymentAllocation[]
 
   @@unique([tenant_id, payment_number])
   @@index([tenant_id, supplier_id])
   @@index([tenant_id, created_at])
+}
+
+// Matches a supplier PAYMENT transaction (in full or in part) to a specific
+// Purchase bill, so advances and part-payments taken before/without a bill
+// can be applied to the correct bill(s) later instead of only moving a
+// tenant-wide running balance.
+model SupplierPaymentAllocation {
+  id             String   @id @default(uuid())
+  tenant_id      String
+  transaction_id String
+  purchase_id    String
+  amount         Decimal  @db.Decimal(12, 2)
+  created_at     DateTime @default(now())
+
+  tenant      Tenant                    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  transaction SupplierCreditTransaction @relation(fields: [transaction_id], references: [id], onDelete: Cascade)
+  purchase    Purchase                  @relation(fields: [purchase_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, purchase_id])
+  @@index([tenant_id, transaction_id])
 }
 
 model Purchase {
@@ -983,6 +1006,8 @@ model Purchase {
   discount_amount Decimal  @default(0) @db.Decimal(12, 2)
   freight_amount  Decimal  @default(0) @db.Decimal(12, 2)
   total_amount    Decimal  @default(0) @db.Decimal(12, 2)
+  paid_amount     Decimal  @default(0) @db.Decimal(12, 2)
+  payment_status  String   @default("UNPAID") // UNPAID | PARTIAL | PAID
   notes           String?
   created_by      String?
   created_at      DateTime @default(now())
@@ -992,10 +1017,12 @@ model Purchase {
   supplier        Supplier? @relation(fields: [supplier_id], references: [id])
   items           PurchaseItem[]
   returns         PurchaseReturn[]
+  paymentAllocations SupplierPaymentAllocation[]
 
   @@unique([tenant_id, purchase_number])
   @@index([tenant_id, created_at])
   @@index([tenant_id, store_id])
+  @@index([tenant_id, payment_status])
 }
 
 model PurchaseItem {
@@ -1009,6 +1036,7 @@ model PurchaseItem {
   purchase      Purchase @relation(fields: [purchase_id], references: [id], onDelete: Cascade)
   product       Product  @relation(fields: [product_id], references: [id])
   returnItems   PurchaseReturnItem[]
+  jobCosts      ProductionJobCost[]
 }
 
 model PurchaseReturn {
@@ -2199,16 +2227,41 @@ model ProductionJob {
   notes        String?
   startedAt    DateTime?
   completedAt  DateTime?
+  totalJobCost Decimal? @db.Decimal(12, 2) // sum of ProductionJobCost lines, snapshotted at completion
+  costPerUnit  Decimal? @db.Decimal(12, 4) // totalJobCost / (quantity * recipe.outputQty)
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
 
   tenant  Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   recipe  BomRecipe @relation(fields: [recipeId], references: [id])
   wastages ProductionWastage[]
+  costs    ProductionJobCost[]
 
   @@index([tenantId])
   @@index([tenantId, status])
   @@map("production_jobs")
+}
+
+// A cost line attached to a production job: either the raw-material cost
+// rolled up automatically at completion, or a non-material job cost (printing,
+// binding, transport, labor, ...) added manually or allocated from a
+// PurchaseItem covering a bill that spans multiple jobs/titles.
+model ProductionJobCost {
+  id                    String   @id @default(cuid())
+  tenantId              String
+  jobId                 String
+  costType              String   // RAW_MATERIAL | PRINTING | BINDING | TRANSPORT | LABOR | OVERHEAD | OTHER
+  amount                Decimal  @db.Decimal(12, 2)
+  sourcePurchaseItemId  String?  // traceable back to the bill line this cost came from, when there is one
+  notes                 String?
+  created_at            DateTime @default(now())
+
+  tenant             Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  job                ProductionJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  sourcePurchaseItem PurchaseItem? @relation(fields: [sourcePurchaseItemId], references: [id])
+
+  @@index([tenantId, jobId])
+  @@map("production_job_costs")
 }
 
 // Additional raw-material consumption recorded on top of the standard BOM

@@ -111,6 +111,32 @@ export class PurchasesService {
                 });
             }
 
+            if (supplierId) {
+                const supplier = await tx.supplier.findFirst({
+                    where: { id: supplierId, tenant_id: tenantId },
+                    select: { due_balance: true },
+                });
+                const balanceAfter = Number(supplier!.due_balance) + totalAmount;
+
+                await tx.supplierCreditTransaction.create({
+                    data: {
+                        tenant_id: tenantId,
+                        supplier_id: supplierId,
+                        type: 'CREDIT_PURCHASE',
+                        amount: totalAmount,
+                        balance_after: balanceAfter,
+                        reference_type: 'PURCHASE',
+                        reference_id: purchase.id,
+                        created_by: userId,
+                    },
+                });
+
+                await tx.supplier.update({
+                    where: { id: supplierId },
+                    data: { due_balance: balanceAfter },
+                });
+            }
+
             const posting = await autoPostFromRules({
                 tx,
                 tenantId,

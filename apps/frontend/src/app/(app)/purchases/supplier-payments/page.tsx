@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { Eye, Loader2, Pencil, Plus, Printer, Trash2 } from 'lucide-react';
+import { Eye, Link2, Loader2, Pencil, Plus, Printer, Trash2 } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { useBranding } from '@/lib/branding';
@@ -34,6 +34,16 @@ interface SupplierCreditPayment {
     creator?: { id: string; name: string } | null;
     voucher_id?: string | null;
     accounting_voucher_number?: string | null;
+    unapplied_amount?: number;
+}
+
+interface OpenBill {
+    id: string;
+    purchase_number: string;
+    total_amount: number;
+    paid_amount: number;
+    balance_due: number;
+    payment_status: string;
 }
 
 const columnHelper = createColumnHelper<SupplierCreditPayment>();
@@ -87,6 +97,14 @@ function SupplierPaymentsContent() {
     const [formDirection, setFormDirection] = useState<PaymentDirection>('pay');
     const [formAmount, setFormAmount] = useState('');
     const [formNotes, setFormNotes] = useState('');
+    const [openBills, setOpenBills] = useState<OpenBill[]>([]);
+    const [billAllocations, setBillAllocations] = useState<Record<string, string>>({});
+
+    const [allocatingPayment, setAllocatingPayment] = useState<SupplierCreditPayment | null>(null);
+    const [allocateBills, setAllocateBills] = useState<OpenBill[]>([]);
+    const [allocateAmounts, setAllocateAmounts] = useState<Record<string, string>>({});
+    const [allocating, setAllocating] = useState(false);
+    const [allocateError, setAllocateError] = useState('');
 
     const [viewPayment, setViewPayment] = useState<SupplierCreditPayment | null>(null);
     const [editPayment, setEditPayment] = useState<SupplierCreditPayment | null>(null);
@@ -140,10 +158,25 @@ function SupplierPaymentsContent() {
         setFormDirection('pay');
         setFormAmount('');
         setFormNotes('');
+        setBillAllocations({});
     };
 
     const selectedFormSupplier = suppliers.find((s) => s.id === formSupplierId) ?? null;
     const dueBalance = selectedFormSupplier ? Number(selectedFormSupplier.due_balance ?? 0) : 0;
+
+    useEffect(() => {
+        if (!showForm || formDirection !== 'pay' || !formSupplierId) {
+            setOpenBills([]);
+            return;
+        }
+        let cancelled = false;
+        api.getSupplierBillingSummary(formSupplierId)
+            .then((data: any) => { if (!cancelled) setOpenBills(data?.open_bills ?? []); })
+            .catch(() => { if (!cancelled) setOpenBills([]); });
+        return () => { cancelled = true; };
+    }, [showForm, formDirection, formSupplierId]);
+
+    const totalBillAllocated = Object.values(billAllocations).reduce((sum, v) => sum + (Number(v) || 0), 0);
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -156,12 +189,20 @@ function SupplierPaymentsContent() {
             setToast({ type: 'error', message: copy.invalidAmount });
             return;
         }
+        if (totalBillAllocated - amt > 0.005) {
+            setToast({ type: 'error', message: copy.allocation.exceedsAmount });
+            return;
+        }
+        const allocations = Object.entries(billAllocations)
+            .map(([purchaseId, value]) => ({ purchaseId, amount: Number(value) || 0 }))
+            .filter((a) => a.amount > 0);
         setSaving(true);
         try {
             await api.recordSupplierCreditPayment(formSupplierId, {
                 amount: amt,
                 direction: formDirection,
                 notes: formNotes.trim() || undefined,
+                allocations: allocations.length > 0 ? allocations : undefined,
             });
             setToast({ type: 'success', message: copy.paymentSaved });
             setShowForm(false);
@@ -225,6 +266,41 @@ function SupplierPaymentsContent() {
                 type: 'error',
                 message: error instanceof Error ? error.message : copy.deleteFailed,
             });
+        }
+    };
+
+    const openAllocateModal = async (payment: SupplierCreditPayment) => {
+        setAllocatingPayment(payment);
+        setAllocateAmounts({});
+        setAllocateError('');
+        try {
+            const data: any = await api.getSupplierBillingSummary(payment.supplier?.id ?? '');
+            setAllocateBills(data?.open_bills ?? []);
+        } catch {
+            setAllocateBills([]);
+        }
+    };
+
+    const handleAllocateSubmit = async () => {
+        if (!allocatingPayment) return;
+        const allocations = Object.entries(allocateAmounts)
+            .map(([purchaseId, value]) => ({ purchaseId, amount: Number(value) || 0 }))
+            .filter((a) => a.amount > 0);
+        if (allocations.length === 0) {
+            setAllocateError(copy.allocation.exceedsAmount);
+            return;
+        }
+        setAllocating(true);
+        setAllocateError('');
+        try {
+            await api.allocateSupplierPayment(allocatingPayment.id, allocations);
+            setToast({ type: 'success', message: copy.allocation.allocateSuccess });
+            setAllocatingPayment(null);
+            await loadData();
+        } catch (error: unknown) {
+            setAllocateError(error instanceof Error ? error.message : copy.allocation.allocateFailed);
+        } finally {
+            setAllocating(false);
         }
     };
 
@@ -331,8 +407,19 @@ function SupplierPaymentsContent() {
                 cell: ({ row }) => {
                     const payment = row.original;
                     const isPayment = payment.type === 'PAYMENT';
+                    const hasUnapplied = isPayment && (payment.unapplied_amount ?? 0) > 0.005;
                     return (
                         <div className="flex items-center gap-0.5">
+                            {hasUnapplied && (
+                                <button
+                                    type="button"
+                                    onClick={() => void openAllocateModal(payment)}
+                                    className="p-1.5 rounded-lg text-teal-600 hover:bg-teal-50"
+                                    title={copy.allocation.allocateAction}
+                                >
+                                    <Link2 className="w-4 h-4" />
+                                </button>
+                            )}
                             <button
                                 type="button"
                                 onClick={() => setViewPayment(payment)}
@@ -372,7 +459,7 @@ function SupplierPaymentsContent() {
                 size: 130,
             }),
         ],
-        [copy, locale, t.common, handlePrint],
+        [copy, locale, t.common, handlePrint, openAllocateModal],
     );
 
     const totalAmount = payments.reduce((sum, p) => {
@@ -534,6 +621,37 @@ function SupplierPaymentsContent() {
                                             className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm"
                                         />
                                     </label>
+                                    {formDirection === 'pay' && openBills.length > 0 && (
+                                        <div className="space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-3">
+                                            <div>
+                                                <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.allocation.sectionTitle}</p>
+                                                <p className="text-xs text-gray-400 mt-0.5">{copy.allocation.sectionHint}</p>
+                                            </div>
+                                            <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                                                {openBills.map((bill) => (
+                                                    <div key={bill.id} className="flex items-center justify-between gap-2 text-xs">
+                                                        <span className="font-mono font-bold text-gray-700">{bill.purchase_number}</span>
+                                                        <span className="text-gray-500">{formatBDT(bill.balance_due)}</span>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            max={bill.balance_due}
+                                                            step="0.01"
+                                                            value={billAllocations[bill.id] ?? ''}
+                                                            onChange={(e) => setBillAllocations((prev) => ({ ...prev, [bill.id]: e.target.value }))}
+                                                            className="w-24 rounded-lg border border-gray-200 px-2 py-1"
+                                                            placeholder="0.00"
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <p className={`text-xs ${totalBillAllocated - (Number(formAmount) || 0) > 0.005 ? 'text-rose-600 font-bold' : 'text-gray-400'}`}>
+                                                {formatMessage(copy.allocation.remainingToAllocate, {
+                                                    amount: formatBDT(Math.max(0, (Number(formAmount) || 0) - totalBillAllocated)),
+                                                })}
+                                            </p>
+                                        </div>
+                                    )}
                                 </>
                             )}
                         </div>
@@ -550,6 +668,63 @@ function SupplierPaymentsContent() {
                             </button>
                         </div>
                     </form>
+                </div>
+            )}
+
+            {allocatingPayment && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
+                        <div className="p-6 border-b border-gray-100">
+                            <h2 className="text-xl font-black">{copy.allocation.allocateModalTitle}</h2>
+                            <p className="text-xs text-gray-400 mt-1">{allocatingPayment.supplier?.name}</p>
+                        </div>
+                        <div className="p-6 space-y-3">
+                            <div className="rounded-xl bg-orange-50 border border-orange-100 px-4 py-3 text-sm flex justify-between">
+                                <span className="text-gray-600">{copy.allocation.unappliedAmount}</span>
+                                <span className="font-black text-orange-700">
+                                    {formatBDT(allocatingPayment.unapplied_amount ?? 0)}
+                                </span>
+                            </div>
+                            {allocateBills.length === 0 ? (
+                                <p className="text-sm text-gray-500">{copy.allocation.noOpenBills}</p>
+                            ) : (
+                                <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                                    {allocateBills.map((bill) => (
+                                        <div key={bill.id} className="flex items-center justify-between gap-2 text-sm">
+                                            <span className="font-mono font-bold text-gray-700">{bill.purchase_number}</span>
+                                            <span className="text-gray-500 text-xs">{formatBDT(bill.balance_due)}</span>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max={bill.balance_due}
+                                                step="0.01"
+                                                value={allocateAmounts[bill.id] ?? ''}
+                                                onChange={(e) => setAllocateAmounts((prev) => ({ ...prev, [bill.id]: e.target.value }))}
+                                                className="w-28 rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {allocateError && (
+                                <div className="rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs p-2">{allocateError}</div>
+                            )}
+                        </div>
+                        <div className="p-6 border-t border-gray-100 flex gap-3">
+                            <button type="button" onClick={() => setAllocatingPayment(null)} className="flex-1 py-3 rounded-2xl font-bold text-gray-500 hover:bg-gray-50">
+                                {t.common.cancel}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void handleAllocateSubmit()}
+                                disabled={allocating || allocateBills.length === 0}
+                                className="flex-1 py-3 rounded-2xl font-black bg-[#293F75] text-white hover:bg-[#1f3058] disabled:opacity-50"
+                            >
+                                {allocating ? copy.allocation.allocating : copy.allocation.allocateSubmit}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 

@@ -28,6 +28,7 @@ import {
     UpdateBomDto,
     CreateProductionJobDto,
     CompleteProductionJobDto,
+    CreateJobCostDto,
 } from './manufacturing.dto';
 
 @Controller('manufacturing')
@@ -124,6 +125,34 @@ export class ManufacturingController {
     @Post('jobs/:id/cancel')
     cancelJob(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.manufacturingService.cancelJob(tenant.tenantId, id);
+    }
+
+    // ------------------------------------------------------------------ //
+    //  Job cost lines                                                      //
+    // ------------------------------------------------------------------ //
+
+    @Get('jobs/:id/costs')
+    listJobCosts(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.manufacturingService.listJobCosts(tenant.tenantId, id);
+    }
+
+    @Post('jobs/:id/costs')
+    @HttpCode(HttpStatus.CREATED)
+    addJobCost(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: CreateJobCostDto,
+    ) {
+        return this.manufacturingService.addJobCost(tenant.tenantId, id, dto);
+    }
+
+    @Delete('jobs/:id/costs/:costId')
+    removeJobCost(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Param('costId') costId: string,
+    ) {
+        return this.manufacturingService.removeJobCost(tenant.tenantId, id, costId);
     }
 
     // ------------------------------------------------------------------ //

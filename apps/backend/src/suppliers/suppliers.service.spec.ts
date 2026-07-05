@@ -21,6 +21,16 @@ describe('SuppliersService', () => {
                 count: jest.fn(),
                 findMany: jest.fn(),
                 create: jest.fn(),
+                findFirst: jest.fn(),
+            },
+            supplierPaymentAllocation: {
+                aggregate: jest.fn(),
+                findFirst: jest.fn(),
+                findMany: jest.fn(),
+            },
+            purchase: {
+                findMany: jest.fn(),
+                update: jest.fn(),
             },
             $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
         };
@@ -103,5 +113,140 @@ describe('SuppliersService', () => {
         const result = await service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 150 });
 
         expect(result.type).toBe('PAYMENT');
+    });
+
+    describe('bill allocations', () => {
+        function mockTxForPayment() {
+            const tx = {
+                supplierCreditTransaction: {
+                    create: jest.fn().mockResolvedValue({ id: 'tx-1', type: 'PAYMENT', payment_number: 'SPY-00001' }),
+                    findFirst: jest.fn().mockResolvedValue(null),
+                },
+                supplier: { update: jest.fn().mockResolvedValue({}) },
+                purchase: {
+                    findMany: jest.fn().mockResolvedValue([
+                        { id: 'purchase-1', total_amount: 100, paid_amount: 0, purchase_number: 'PUR-00001' },
+                    ]),
+                    update: jest.fn().mockResolvedValue({}),
+                },
+                supplierPaymentAllocation: {
+                    create: jest.fn().mockResolvedValue({}),
+                },
+            };
+            db.$transaction.mockImplementation((fn: (tx: any) => Promise<unknown>) => fn(tx));
+            return tx;
+        }
+
+        it('allocates part of a payment to an open bill at recording time', async () => {
+            db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', due_balance: 100, name: 'ACME' });
+            const tx = mockTxForPayment();
+
+            await service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', {
+                amount: 100,
+                allocations: [{ purchaseId: 'purchase-1', amount: 60 }],
+            });
+
+            expect(tx.supplierPaymentAllocation.create).toHaveBeenCalledWith({
+                data: { tenant_id: 'tenant-1', transaction_id: 'tx-1', purchase_id: 'purchase-1', amount: 60 },
+            });
+            expect(tx.purchase.update).toHaveBeenCalledWith({
+                where: { id: 'purchase-1' },
+                data: { paid_amount: 60, payment_status: 'PARTIAL' },
+            });
+        });
+
+        it('rejects an allocation total that exceeds the payment amount', async () => {
+            db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', due_balance: 100, name: 'ACME' });
+            mockTxForPayment();
+
+            await expect(
+                service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', {
+                    amount: 50,
+                    allocations: [{ purchaseId: 'purchase-1', amount: 60 }],
+                }),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it('rejects an allocation that exceeds a bill\'s balance due', async () => {
+            db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', due_balance: 100, name: 'ACME' });
+            const tx = mockTxForPayment();
+            tx.purchase.findMany.mockResolvedValue([
+                { id: 'purchase-1', total_amount: 100, paid_amount: 80, purchase_number: 'PUR-00001' },
+            ]);
+
+            await expect(
+                service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', {
+                    amount: 100,
+                    allocations: [{ purchaseId: 'purchase-1', amount: 50 }],
+                }),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it('allocates an existing unapplied advance to a bill later', async () => {
+            db.supplierPaymentAllocation.aggregate.mockResolvedValue({ _sum: { amount: 40 } });
+            const tx = mockTxForPayment();
+
+            db.supplierCreditTransaction.findFirst
+                .mockResolvedValueOnce({ id: 'tx-1', type: 'PAYMENT', amount: 100, supplier_id: 'sup-1' })
+                .mockResolvedValueOnce({
+                    id: 'tx-1',
+                    type: 'PAYMENT',
+                    amount: 100,
+                    supplier: { id: 'sup-1', name: 'ACME', phone: null },
+                    creator: null,
+                });
+
+            await service.allocatePayment('tenant-1', 'tx-1', {
+                allocations: [{ purchaseId: 'purchase-1', amount: 60 }],
+            });
+
+            expect(tx.supplierPaymentAllocation.create).toHaveBeenCalledWith({
+                data: { tenant_id: 'tenant-1', transaction_id: 'tx-1', purchase_id: 'purchase-1', amount: 60 },
+            });
+        });
+
+        it('rejects allocating more than the remaining unapplied amount on a payment', async () => {
+            db.supplierCreditTransaction.findFirst.mockResolvedValue({
+                id: 'tx-1',
+                type: 'PAYMENT',
+                amount: 100,
+                supplier_id: 'sup-1',
+            });
+            db.supplierPaymentAllocation.aggregate.mockResolvedValue({ _sum: { amount: 90 } });
+            mockTxForPayment();
+
+            await expect(
+                service.allocatePayment('tenant-1', 'tx-1', {
+                    allocations: [{ purchaseId: 'purchase-1', amount: 60 }],
+                }),
+            ).rejects.toThrow(BadRequestException);
+        });
+    });
+
+    describe('getBillingSummary()', () => {
+        it('returns open bills and the total unapplied advance for a supplier', async () => {
+            db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', name: 'ACME', due_balance: 40 });
+            db.purchase.findMany.mockResolvedValue([
+                {
+                    id: 'purchase-1',
+                    purchase_number: 'PUR-00001',
+                    total_amount: 100,
+                    paid_amount: 60,
+                    payment_status: 'PARTIAL',
+                    created_at: new Date('2026-01-01'),
+                },
+            ]);
+            db.supplierCreditTransaction.findMany.mockResolvedValue([
+                { amount: 100, allocations: [{ amount: 60 }] },
+                { amount: 30, allocations: [] },
+            ]);
+
+            const result = await service.getBillingSummary('tenant-1', 'sup-1');
+
+            expect(result.unallocated_advance).toBe(70);
+            expect(result.open_bills).toEqual([
+                expect.objectContaining({ id: 'purchase-1', balance_due: 40 }),
+            ]);
+        });
     });
 });

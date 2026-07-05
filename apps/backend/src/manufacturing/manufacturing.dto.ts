@@ -107,3 +107,22 @@ export class CompleteProductionJobDto {
     @Type(() => WastageItemDto)
     wastage?: WastageItemDto[];
 }
+
+export class CreateJobCostDto {
+    @IsString()
+    @IsNotEmpty()
+    costType: 'PRINTING' | 'BINDING' | 'TRANSPORT' | 'LABOR' | 'OVERHEAD' | 'OTHER';
+
+    @IsNumber()
+    @IsPositive()
+    amount: number;
+
+    @IsOptional()
+    @IsString()
+    sourcePurchaseItemId?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(500)
+    notes?: string;
+}

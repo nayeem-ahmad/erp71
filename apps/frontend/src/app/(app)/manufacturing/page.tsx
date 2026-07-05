@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Factory, Plus, X, RefreshCw, Cog, Trash2, CheckCircle2, Package, Wallet, Calculator } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
 import { formatDate, formatBDT } from '@/lib/format';
@@ -56,6 +56,24 @@ interface ProductionJob {
     completedAt: string | null;
     created_at: string;
     recipe: ProductionJobRecipe;
+    totalJobCost: number | string | null;
+    costPerUnit: number | string | null;
+}
+
+type JobCostType = 'RAW_MATERIAL' | 'PRINTING' | 'BINDING' | 'TRANSPORT' | 'LABOR' | 'OVERHEAD' | 'OTHER';
+
+interface ProductionJobCost {
+    id: string;
+    jobId: string;
+    costType: JobCostType;
+    amount: number | string;
+    notes: string | null;
+    created_at: string;
+    sourcePurchaseItem?: {
+        id: string;
+        product: { id: string; name: string; sku: string | null };
+        purchase: { id: string; purchase_number: string };
+    } | null;
 }
 
 interface JobsResponse {
@@ -140,6 +158,21 @@ const JOB_STATUS_LABEL_KEYS: Record<string, 'draft' | 'inProgress' | 'completed'
     IN_PROGRESS: 'inProgress',
     COMPLETED: 'completed',
     CANCELLED: 'cancelled',
+};
+
+const ADDABLE_JOB_COST_TYPES: Exclude<JobCostType, 'RAW_MATERIAL'>[] = [
+    'PRINTING',
+    'BINDING',
+    'TRANSPORT',
+    'LABOR',
+    'OVERHEAD',
+    'OTHER',
+];
+
+const EMPTY_JOB_COST_FORM = {
+    costType: 'PRINTING' as Exclude<JobCostType, 'RAW_MATERIAL'>,
+    amount: '',
+    notes: '',
 };
 
 // ------------------------------------------------------------------ //
@@ -579,6 +612,14 @@ function JobsTab() {
     const [completing, setCompleting] = useState(false);
     const [completeError, setCompleteError] = useState('');
 
+    const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+    const [jobCosts, setJobCosts] = useState<Record<string, ProductionJobCost[]>>({});
+    const [jobCostsLoading, setJobCostsLoading] = useState(false);
+    const [jobCostsError, setJobCostsError] = useState('');
+    const [costForm, setCostForm] = useState({ ...EMPTY_JOB_COST_FORM });
+    const [addingCost, setAddingCost] = useState(false);
+    const [addCostError, setAddCostError] = useState('');
+
     const load = useCallback(async () => {
         setLoading(true);
         setError('');
@@ -713,6 +754,71 @@ function JobsTab() {
         }
     }
 
+    async function loadJobCosts(jobId: string) {
+        setJobCostsLoading(true);
+        setJobCostsError('');
+        try {
+            const data: ProductionJobCost[] = await fetchWithAuth(`/manufacturing/jobs/${jobId}/costs`);
+            setJobCosts((prev) => ({ ...prev, [jobId]: data ?? [] }));
+        } catch {
+            setJobCostsError(t.manufacturing.jobCosts.loadFailed);
+        } finally {
+            setJobCostsLoading(false);
+        }
+    }
+
+    function toggleCosts(jobId: string) {
+        if (expandedJobId === jobId) {
+            setExpandedJobId(null);
+            return;
+        }
+        setExpandedJobId(jobId);
+        setCostForm({ ...EMPTY_JOB_COST_FORM });
+        setAddCostError('');
+        if (!jobCosts[jobId]) {
+            loadJobCosts(jobId);
+        }
+    }
+
+    async function handleAddCost(jobId: string) {
+        const amount = parseFloat(costForm.amount);
+        if (!amount || amount <= 0) {
+            setAddCostError(t.manufacturing.jobCosts.amount);
+            return;
+        }
+        setAddingCost(true);
+        setAddCostError('');
+        try {
+            await fetchWithAuth(`/manufacturing/jobs/${jobId}/costs`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    costType: costForm.costType,
+                    amount,
+                    notes: costForm.notes || undefined,
+                }),
+            });
+            setCostForm({ ...EMPTY_JOB_COST_FORM });
+            await loadJobCosts(jobId);
+            load();
+        } catch (e: any) {
+            setAddCostError(e.message ?? t.manufacturing.jobCosts.addFailed);
+        } finally {
+            setAddingCost(false);
+        }
+    }
+
+    async function handleRemoveCost(jobId: string, costId: string) {
+        if (!confirm(t.manufacturing.jobCosts.removeConfirm)) return;
+        try {
+            await fetchWithAuth(`/manufacturing/jobs/${jobId}/costs/${costId}`, { method: 'DELETE' });
+            await loadJobCosts(jobId);
+            load();
+        } catch (e: any) {
+            setAddCostError(e.message ?? t.manufacturing.jobCosts.removeFailed);
+        }
+    }
+
     const filterTabs = [
         { label: t.manufacturing.filterAll, value: '' },
         { label: t.manufacturing.jobStatuses.draft, value: 'DRAFT' },
@@ -796,7 +902,8 @@ function JobsTab() {
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {jobs.map((job) => (
-                                <tr key={job.id} className="hover:bg-gray-50">
+                                <React.Fragment key={job.id}>
+                                <tr className="hover:bg-gray-50">
                                     <td className="px-4 py-3 font-mono text-xs text-gray-500">
                                         {job.id.slice(0, 8)}…
                                     </td>
@@ -855,9 +962,133 @@ function JobsTab() {
                                                     {t.manufacturing.jobActions.cancel}
                                                 </button>
                                             )}
+                                            <button
+                                                onClick={() => toggleCosts(job.id)}
+                                                className="text-gray-600 hover:text-gray-900 text-xs font-medium flex items-center gap-1"
+                                            >
+                                                <Wallet className="h-3 w-3" />
+                                                {expandedJobId === job.id
+                                                    ? t.manufacturing.jobCosts.hideCosts
+                                                    : t.manufacturing.jobCosts.viewCosts}
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
+                                {expandedJobId === job.id && (
+                                    <tr key={`${job.id}-costs`} className="bg-gray-50">
+                                        <td colSpan={8} className="px-4 py-4">
+                                            <div className="max-w-2xl space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <h4 className="text-sm font-semibold text-gray-800">
+                                                        {t.manufacturing.jobCosts.title}
+                                                    </h4>
+                                                    <div className="flex gap-4 text-sm">
+                                                        <span className="text-gray-500">
+                                                            {t.manufacturing.jobCosts.totalCost}:{' '}
+                                                            <span className="font-semibold text-gray-800">
+                                                                {formatBDT(Number(job.totalJobCost ?? 0))}
+                                                            </span>
+                                                        </span>
+                                                        <span className="text-gray-500">
+                                                            {t.manufacturing.jobCosts.costPerUnit}:{' '}
+                                                            <span className="font-semibold text-gray-800">
+                                                                {formatBDT(Number(job.costPerUnit ?? 0))}
+                                                            </span>
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {jobCostsError && (
+                                                    <div className="bg-red-50 text-red-700 p-2 rounded text-xs">{jobCostsError}</div>
+                                                )}
+
+                                                {jobCostsLoading && !jobCosts[job.id] ? (
+                                                    <div className="text-xs text-gray-500">{t.common.loading}</div>
+                                                ) : (jobCosts[job.id]?.length ?? 0) === 0 ? (
+                                                    <div className="text-xs text-gray-400">{t.manufacturing.jobCosts.empty}</div>
+                                                ) : (
+                                                    <table className="w-full text-xs">
+                                                        <tbody className="divide-y divide-gray-200">
+                                                            {jobCosts[job.id]!.map((cost) => (
+                                                                <tr key={cost.id}>
+                                                                    <td className="py-1.5 pr-3 text-gray-700">
+                                                                        {t.manufacturing.jobCosts.costTypes[cost.costType]}
+                                                                    </td>
+                                                                    <td className="py-1.5 pr-3 text-gray-500">
+                                                                        {cost.notes}
+                                                                        {cost.sourcePurchaseItem && (
+                                                                            <span className="text-gray-400">
+                                                                                {' '}({cost.sourcePurchaseItem.purchase.purchase_number})
+                                                                            </span>
+                                                                        )}
+                                                                    </td>
+                                                                    <td className="py-1.5 pr-3 text-right font-medium text-gray-800">
+                                                                        {formatBDT(Number(cost.amount))}
+                                                                    </td>
+                                                                    <td className="py-1.5 text-right">
+                                                                        {cost.costType !== 'RAW_MATERIAL' && (
+                                                                            <button
+                                                                                onClick={() => handleRemoveCost(job.id, cost.id)}
+                                                                                className="text-red-500 hover:text-red-700"
+                                                                            >
+                                                                                {t.manufacturing.jobCosts.remove}
+                                                                            </button>
+                                                                        )}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                )}
+
+                                                {job.status !== 'CANCELLED' && (
+                                                    <div className="flex flex-wrap items-end gap-2 pt-2 border-t border-gray-200">
+                                                        <select
+                                                            value={costForm.costType}
+                                                            onChange={(e) =>
+                                                                setCostForm((f) => ({ ...f, costType: e.target.value as any }))
+                                                            }
+                                                            className="border rounded px-2 py-1.5 text-xs"
+                                                        >
+                                                            {ADDABLE_JOB_COST_TYPES.map((type) => (
+                                                                <option key={type} value={type}>
+                                                                    {t.manufacturing.jobCosts.costTypes[type]}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            step="0.01"
+                                                            placeholder={t.manufacturing.jobCosts.amount}
+                                                            value={costForm.amount}
+                                                            onChange={(e) => setCostForm((f) => ({ ...f, amount: e.target.value }))}
+                                                            className="border rounded px-2 py-1.5 text-xs w-28"
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            placeholder={t.manufacturing.jobCosts.notesPlaceholder}
+                                                            value={costForm.notes}
+                                                            onChange={(e) => setCostForm((f) => ({ ...f, notes: e.target.value }))}
+                                                            className="border rounded px-2 py-1.5 text-xs flex-1 min-w-[140px]"
+                                                        />
+                                                        <button
+                                                            onClick={() => handleAddCost(job.id)}
+                                                            disabled={addingCost}
+                                                            className="px-3 py-1.5 bg-gray-800 text-white rounded text-xs font-medium disabled:opacity-50"
+                                                        >
+                                                            {addingCost ? t.manufacturing.jobCosts.adding : t.manufacturing.jobCosts.add}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                {addCostError && (
+                                                    <div className="bg-red-50 text-red-700 p-2 rounded text-xs">{addCostError}</div>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
+                            </React.Fragment>
                             ))}
                         </tbody>
                     </table>
