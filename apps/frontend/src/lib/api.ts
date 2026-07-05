@@ -1450,6 +1450,24 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         }),
+    getAdminAddonModules: () => fetchWithAuth('/admin/addon-modules'),
+    getAdminAddonModule: (id: string) => fetchWithAuth(`/admin/addon-modules/${id}`),
+    createAdminAddonModule: (payload: unknown) =>
+        fetchWithAuth('/admin/addon-modules', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }),
+    updateAdminAddonModule: (id: string, payload: unknown) =>
+        fetchWithAuth(`/admin/addon-modules/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }),
+    getAddonCatalog: () => fetchWithAuth('/addon-modules'),
+    getMyAddonSubscriptions: () => fetchWithAuth('/addon-modules/mine'),
+    cancelAddonAtPeriodEnd: (code: string) =>
+        fetchWithAuth(`/addon-modules/${code}/cancel-at-period-end`, { method: 'POST' }),
     updateProfile: (data: { name?: string; preferred_locale?: 'en' | 'bn' | 'ms' }) => fetchWithAuth('/auth/me', {
         method: 'PATCH',
         body: JSON.stringify(data),
