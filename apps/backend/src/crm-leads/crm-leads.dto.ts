@@ -1,41 +1,11 @@
 import { Transform } from 'class-transformer';
 import { IsString, IsOptional, IsEnum, IsUUID, IsEmail, IsDateString } from 'class-validator';
+import { LeadSource, LeadStatus, LeadCategory, LeadPriority } from '@prisma/client';
+
+export { LeadSource, LeadStatus, LeadCategory, LeadPriority };
 
 const emptyToUndefined = ({ value }: { value: unknown }) =>
     value === '' || value === null ? undefined : value;
-
-export enum LeadSource {
-    WALK_IN = 'WALK_IN',
-    PHONE = 'PHONE',
-    FACEBOOK = 'FACEBOOK',
-    REFERRAL = 'REFERRAL',
-    WEBSITE = 'WEBSITE',
-    OTHER = 'OTHER',
-}
-
-export enum LeadStatus {
-    NEW = 'NEW',
-    CONTACTED = 'CONTACTED',
-    QUALIFIED = 'QUALIFIED',
-    LOST = 'LOST',
-    CONVERTED = 'CONVERTED',
-}
-
-export enum LeadCategory {
-    RETAIL = 'RETAIL',
-    WHOLESALE = 'WHOLESALE',
-    CORPORATE = 'CORPORATE',
-    INDIVIDUAL = 'INDIVIDUAL',
-    PARTNER = 'PARTNER',
-    OTHER = 'OTHER',
-}
-
-export enum LeadPriority {
-    LOW = 'LOW',
-    MEDIUM = 'MEDIUM',
-    HIGH = 'HIGH',
-    URGENT = 'URGENT',
-}
 
 export class CreateLeadDto {
     @IsString()
@@ -72,6 +42,10 @@ export class CreateLeadDto {
     @IsOptional()
     @IsEnum(LeadStatus)
     status?: LeadStatus;
+
+    @IsOptional()
+    @IsString()
+    lost_reason?: string;
 
     @IsOptional()
     @IsString()
@@ -151,6 +125,10 @@ export class UpdateLeadDto {
     @IsOptional()
     @IsEnum(LeadStatus)
     status?: LeadStatus;
+
+    @IsOptional()
+    @IsString()
+    lost_reason?: string;
 
     @IsOptional()
     @IsString()

@@ -344,6 +344,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Campaign scheduling — `@Cron('*/5 * * * *')` in `CrmCampaignsService.processScheduledCampaigns()` auto-dispatches SCHEDULED campaigns once `scheduled_at` passes — done 2026-06-11
 - [x] Campaign ROI tracking — `CrmCampaignsService.attributeSale()` called fire-and-forget from `SalesService.create()`; 30-day attribution window; increments `attributed_revenue` + `attributed_orders` on the campaign; ROI stats shown in campaign detail modal — done 2026-06-11
 - [x] Product Price Lists — `PriceList` + `PriceListItem` models, CRUD API, dashboard pages (`/dashboard/price-lists`, detail editor), customer group price list assignment, storefront price resolution for logged-in customers by group — done 2026-06-17
+- [ ] Campaign recipient preview (`GET /crm/campaigns/:id/preview`) only shows name/phone in the sample list — add email for EMAIL-channel campaigns
+- [ ] CRM analytics dashboard (Epic 84 Stories 1–2: top customers, retention rate, loyalty liability) still not built — only the AR aging report (Story 3) shipped
 
 ---
 
@@ -389,6 +391,10 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] CRM lead scoring + lost-reason tracking — `Lead.score` (0-100, computed from source quality, priority, recency of contact, conversation count, and overdue next-step, recalculated on lead create/update and on new conversations); `Lead.lost_reason` required when status is set to LOST; `Lead.status`/`source`/`category`/`priority` promoted from free-text strings to native Prisma enums (migration `20260705000000_crm_lead_enums_score_and_campaign_subject`); score badge + lost-reason field surfaced on leads list/detail UI — done 2026-07-05
+- [x] CRM campaign EMAIL channel implemented — `CrmCampaign.subject` field (required for EMAIL campaigns); `dispatchCampaign()` sends real email via new `EmailService.sendCustom()` instead of silently marking EMAIL campaigns SENT with no delivery; recipients without an email on file are marked FAILED — done 2026-07-05
+- [x] CRM campaigns frontend rebuilt — restored the full `/crm/campaigns` page (list, create modal with subject field for EMAIL, preview/send/detail modal) in place of the redirect-to-hub stub; CRM hub links to Campaigns and shows a mini-dashboard (open leads by pipeline stage, tasks due today/overdue, recent campaign delivery performance) — done 2026-07-05
+- [x] CRM backend test coverage — `crm-leads.service.spec.ts` (convert() happy/error paths, lost_reason validation, score computation, lead status summary) and `crm-campaigns.service.spec.ts` (SMS/WhatsApp/Email dispatch success + failure counting, EMAIL subject requirement) — done 2026-07-05
 - [x] Trim tenant "Admin" (account-settings) menu for accounting-only subscriptions — sidebar now hides retail/POS/marketing links (Loyalty, POS Counters, Sales Settings, Payment Methods, Discount Codes, SMS Notifications/Credits, Report Emails, Branding, AI Credits) in `accountingOnlyMode`, keeping only My Account, Team & Permissions, Audit Logs, Localization, Tax/VAT, Data Management, Billing; also stopped `isAccountingOnlyBlockedPath` from redirecting those kept `/settings/*` pages away (they were previously dead links) — done 2026-07-04
 - [x] Platform Settings nav split — rename General → General Settings; move Tenant Features to its own sidebar/index page at `/admin/platform-settings/tenant-features` — done 2026-07-04
 - [x] Notification system audit fixes — SMS low-stock reads owner `User.mobile`; in-app alerts for payment failure, retry reminder, and subscription cancellation; 24h low-stock deduplication; bell badge no longer clears on open; `/notifications` page with pagination + “View all” link in bell; billing/subscription icons — done 2026-07-04

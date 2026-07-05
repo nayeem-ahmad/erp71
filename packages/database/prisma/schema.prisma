@@ -47,6 +47,39 @@ enum PriceListDiscountType {
   FIXED_AMOUNT
 }
 
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  LOST
+  CONVERTED
+}
+
+enum LeadSource {
+  WALK_IN
+  PHONE
+  FACEBOOK
+  REFERRAL
+  WEBSITE
+  OTHER
+}
+
+enum LeadCategory {
+  RETAIL
+  WHOLESALE
+  CORPORATE
+  INDIVIDUAL
+  PARTNER
+  OTHER
+}
+
+enum LeadPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
 enum StorePermission {
   // Product & Catalog
   VIEW_PRODUCT_CATALOG
@@ -1340,11 +1373,13 @@ model Lead {
   mobile                  String
   email                   String?
   address                 String?
-  category                String?
-  priority                String    @default("MEDIUM") // LOW | MEDIUM | HIGH | URGENT
+  category                LeadCategory?
+  priority                LeadPriority @default(MEDIUM)
   remarks                 String?
-  source                  String    @default("OTHER") // WALK_IN | PHONE | FACEBOOK | REFERRAL | WEBSITE | OTHER
-  status                  String    @default("NEW")     // NEW | CONTACTED | QUALIFIED | LOST | CONVERTED
+  source                  LeadSource   @default(OTHER)
+  status                  LeadStatus   @default(NEW)
+  lost_reason             String?
+  score                   Int          @default(0)
   linkedin_url            String?
   fb_url                  String?
   x_url                   String?
@@ -1455,6 +1490,7 @@ model CrmCampaign {
   channel             String    // SMS | WHATSAPP | EMAIL
   target_segment      String?   // VIP | At-Risk | Regular | New | ALL
   target_group_id     String?
+  subject             String?   // required for EMAIL channel
   message             String
   scheduled_at        DateTime?
   sent_at             DateTime?

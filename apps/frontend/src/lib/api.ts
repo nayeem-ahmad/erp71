@@ -485,6 +485,7 @@ export const api = {
         return fetchWithAuth(`/crm/leads${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getLead: (id: string) => fetchWithAuth(`/crm/leads/${id}`),
+    getLeadsSummary: () => fetchWithAuth('/crm/leads/summary'),
     createLead: (data: any) => fetchWithAuth('/crm/leads', {
         method: 'POST',
         body: JSON.stringify(data),

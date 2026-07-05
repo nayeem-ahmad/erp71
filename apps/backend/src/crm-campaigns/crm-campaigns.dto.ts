@@ -25,6 +25,10 @@ export class CreateCampaignDto {
     @IsEnum(CampaignChannel)
     channel: CampaignChannel;
 
+    @IsOptional()
+    @IsString()
+    subject?: string;
+
     @IsString()
     message: string;
 
@@ -49,6 +53,10 @@ export class UpdateCampaignDto {
     @IsOptional()
     @IsString()
     description?: string;
+
+    @IsOptional()
+    @IsString()
+    subject?: string;
 
     @IsOptional()
     @IsString()
