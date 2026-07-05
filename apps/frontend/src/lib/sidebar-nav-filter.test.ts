@@ -35,12 +35,12 @@ describe('sidebar-nav-filter', () => {
     });
 
     it('matches subgroup labels and includes their children', () => {
-        const filtered = filterNavModules(tenantModules, 'receivables');
+        const filtered = filterNavModules(tenantModules, 'orders & fulfillment');
         const sales = filtered.find((mod) => mod.key === 'sales');
         expect(sales).toBeDefined();
         expect(
             sales?.children?.some(
-                (child) => 'type' in child && child.type === 'subgroup' && child.label === 'Receivables',
+                (child) => 'type' in child && child.type === 'subgroup' && child.label === 'Orders & Fulfillment',
             ),
         ).toBe(true);
     });
@@ -48,7 +48,7 @@ describe('sidebar-nav-filter', () => {
     it('collects module and subgroup keys for expand/collapse all', () => {
         const keys = collectNavGroupKeys(tenantModules);
         expect(keys).toContain('sales');
-        expect(keys).toContain('sales:receivables');
+        expect(keys).toContain('sales:order-flow');
         expect(keys).not.toContain('dashboard');
     });
 
