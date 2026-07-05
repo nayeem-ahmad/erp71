@@ -201,6 +201,7 @@ async function main() {
             apiAccess: true,
             accountingOnly: false,
             premiumAccountingAdvanced: true,
+            premiumManufacturing: true,
             premiumAi: true,
             premiumVoice: true,
             planRank: 3,

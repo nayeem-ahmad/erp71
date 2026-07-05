@@ -18,7 +18,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
-import { RequiresPlan } from '../auth/subscription-access.decorator';
+import { RequiresFeature } from '../auth/subscription-access.decorator';
 import { PlatformFeatureGuard } from '../platform-settings/platform-feature.guard';
 import { RequiresPlatformFeature } from '../platform-settings/platform-feature.decorator';
 import { PaginationDto } from '../common/pagination.dto';
@@ -32,7 +32,7 @@ import {
 
 @Controller('manufacturing')
 @UseGuards(JwtAuthGuard, SubscriptionAccessGuard, PlatformFeatureGuard)
-@RequiresPlan('PREMIUM')
+@RequiresFeature('premiumManufacturing')
 @RequiresPlatformFeature('manufacturing')
 @UseInterceptors(TenantInterceptor)
 export class ManufacturingController {

@@ -19,6 +19,7 @@ describe('CrmLeadsController — subscription guard', () => {
     const db = {
         tenantUser: { findUnique: jest.fn() },
         tenantSubscription: { findUnique: jest.fn() },
+        tenantAddonSubscription: { findMany: jest.fn().mockResolvedValue([]) },
     } as any;
 
     class MockJwtAuthGuard {
