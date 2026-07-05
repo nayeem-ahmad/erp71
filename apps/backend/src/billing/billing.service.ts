@@ -18,6 +18,7 @@ import { DatabaseService } from '../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { AddonModulesService } from '../addon-modules/addon-modules.service';
 import { CircuitBreakerRegistry } from '../system-health/resilience/circuit-breaker.registry';
 import { CircuitOpenError } from '../system-health/resilience/circuit-breaker';
 import * as Sentry from '@sentry/nestjs';
@@ -42,6 +43,7 @@ export class BillingService {
         private readonly audit: AuditService,
         private readonly email: EmailService,
         private readonly notifications: NotificationsService,
+        private readonly addonModules: AddonModulesService,
         private readonly breakers: CircuitBreakerRegistry,
     ) {}
 
@@ -94,19 +96,31 @@ export class BillingService {
 
         const billingCycle = this.normalizeBillingCycle(dto.billingCycle);
         const plan = await this.getActivePlan(dto.planCode);
-        let amount = billingCycle === 'YEARLY'
+        let planAmount = billingCycle === 'YEARLY'
             ? Number(plan.yearly_price ?? Number(plan.monthly_price) * 12)
             : Number(plan.monthly_price);
 
-        // Apply referral discount if this tenant was referred
+        // Apply referral discount if this tenant was referred (plan price only — add-ons are excluded)
         const referralSignup = await this.db.referralSignup.findUnique({
             where: { tenant_id: ctx.tenantId },
             select: { id: true, discount_pct: true, status: true },
         });
         if (referralSignup && referralSignup.status === 'PENDING' && Number(referralSignup.discount_pct) > 0) {
             const multiplier = (100 - Number(referralSignup.discount_pct)) / 100;
-            amount = Math.round(amount * multiplier * 100) / 100;
+            planAmount = Math.round(planAmount * multiplier * 100) / 100;
         }
+
+        const addons = dto.addonCodes?.length
+            ? await this.addonModules.getActiveAddonsByCodes(dto.addonCodes)
+            : [];
+        const addonLineItems = addons.map((addon) => ({
+            code: addon.code,
+            name: addon.name,
+            price: billingCycle === 'YEARLY'
+                ? Number(addon.yearly_price ?? Number(addon.monthly_price) * 12)
+                : Number(addon.monthly_price),
+        }));
+        const amount = planAmount + addonLineItems.reduce((sum, item) => sum + item.price, 0);
 
         const providerName = this.getProviderName();
         const referencePrefix = providerName === 'ssl-wireless' ? 'sslw' : 'manual';
@@ -124,6 +138,7 @@ export class BillingService {
                   amount,
                   currency: 'BDT',
                   plan: this.mapPlan(plan),
+                  addonNames: addonLineItems.map((item) => item.name),
               })
             : this.createManualCheckout({
                   tenantId: ctx.tenantId,
@@ -143,10 +158,17 @@ export class BillingService {
             referenceId: reference,
             amount,
             currency: 'BDT',
-            payload: checkout.raw_payload,
+            payload: {
+                ...(checkout.raw_payload as Record<string, unknown>),
+                line_items: {
+                    plan: { code: plan.code, name: plan.name, price: planAmount },
+                    addons: addonLineItems,
+                },
+                addon_codes: addonLineItems.map((item) => item.code),
+            },
         });
 
-        return checkout;
+        return { ...checkout, addons: addonLineItems };
     }
 
     async confirmCheckout(ctx: TenantContext, dto: ConfirmCheckoutDto) {
@@ -172,6 +194,7 @@ export class BillingService {
             providerCustomerRef: `tenant_${ctx.tenantId}`,
             providerSubscriptionRef: dto.reference || `manual_${ctx.tenantId}_${Date.now()}`,
             cancelAtPeriodEnd: false,
+            addonCodes: dto.addonCodes,
         });
     }
 
@@ -224,6 +247,7 @@ export class BillingService {
             providerName,
             providerCustomerRef: dto.providerCustomerRef ?? `tenant_${dto.tenantId}`,
             providerSubscriptionRef: dto.providerSubscriptionRef ?? `manual_${dto.tenantId}`,
+            addonCodes: dto.addonCodes,
         });
 
         await this.recordBillingEvent({
@@ -322,6 +346,11 @@ export class BillingService {
             throw new BadRequestException('Missing SSL Wireless callback reference.');
         }
 
+        // SSLCommerz only round-trips 4 custom fields (value_a-d), already spoken for by
+        // tenantId/planCode/billingCycle/userId — so add-on selection travels via the
+        // CHECKOUT_CREATED BillingEvent recorded when the session was created, keyed by reference.
+        const addonCodes = await this.getStoredAddonCodesForReference('ssl-wireless', reference);
+
         if (mode === 'success' || mode === 'ipn') {
             if (payload.val_id) {
                 const duplicate = await this.findProcessedBillingEvent('ssl-wireless', payload.val_id);
@@ -351,6 +380,7 @@ export class BillingService {
                 providerName: 'ssl-wireless',
                 providerCustomerRef: validation.value_a || tenantId,
                 providerSubscriptionRef: validation.bank_tran_id || payload.val_id || reference,
+                addonCodes,
             });
 
             await this.recordBillingEvent({
@@ -417,6 +447,8 @@ export class BillingService {
         providerName?: string;
         providerCustomerRef?: string;
         providerSubscriptionRef?: string;
+        /** Add-on codes purchased alongside this plan checkout; granted only when status resolves to ACTIVE. */
+        addonCodes?: string[];
     }) {
         const tenant = await this.db.tenant.findUnique({
             where: { id: input.tenantId },
@@ -467,6 +499,24 @@ export class BillingService {
         ).catch(() => {});
 
         const resolvedStatus = input.status ?? 'ACTIVE';
+
+        if (resolvedStatus === 'ACTIVE' && input.addonCodes?.length) {
+            const addons = await this.addonModules.getActiveAddonsByCodes(input.addonCodes);
+            await Promise.all(
+                addons.map((addon) =>
+                    this.addonModules.grantOrRenewSubscription({
+                        tenantId: input.tenantId,
+                        addonId: addon.id,
+                        status: 'ACTIVE',
+                        periodStart,
+                        periodEnd,
+                        providerName: input.providerName ?? 'manual',
+                        providerSubscriptionRef: input.providerSubscriptionRef ?? `manual_${input.tenantId}`,
+                    }),
+                ),
+            );
+        }
+
         if (resolvedStatus === 'ACTIVE' || resolvedStatus === 'PAST_DUE') {
             const emailAmount = billingCycle === 'YEARLY'
                 ? Number(plan.yearly_price ?? Number(plan.monthly_price) * 12)
@@ -635,6 +685,7 @@ export class BillingService {
         amount: number;
         currency: string;
         plan: ReturnType<BillingService['mapPlan']>;
+        addonNames?: string[];
     }) {
         const apiUrl = process.env.SSL_WIRELESS_API_URL || 'https://sandbox.sslcommerz.com/gwprocess/v4/api.php';
         const storeId = process.env.SSL_WIRELESS_STORE_ID;
@@ -661,7 +712,9 @@ export class BillingService {
             cus_city: 'Dhaka',
             cus_country: 'Bangladesh',
             shipping_method: 'NO',
-            product_name: `${input.plan.name} Subscription`,
+            product_name: input.addonNames?.length
+                ? `${input.plan.name} Subscription + ${input.addonNames.join(', ')}`
+                : `${input.plan.name} Subscription`,
             product_category: 'SaaS Subscription',
             product_profile: 'general',
             value_a: input.tenantId,
@@ -750,6 +803,17 @@ export class BillingService {
         }
 
         return payload;
+    }
+
+    /** Recovers the add-on codes selected at checkout time from the CHECKOUT_CREATED event's payload. */
+    private async getStoredAddonCodesForReference(providerName: string, referenceId: string): Promise<string[]> {
+        const checkoutEvent = await this.db.billingEvent.findFirst({
+            where: { provider_name: providerName, reference_id: referenceId, event_type: 'CHECKOUT_CREATED' },
+            orderBy: { created_at: 'desc' },
+        });
+
+        const codes = (checkoutEvent?.payload as { addon_codes?: unknown } | null)?.addon_codes;
+        return Array.isArray(codes) ? codes.filter((code): code is string => typeof code === 'string') : [];
     }
 
     private async findProcessedBillingEvent(providerName: string, externalEventId: string) {

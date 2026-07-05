@@ -3,6 +3,7 @@ import { BillingSchedulerService } from './billing-scheduler.service';
 describe('BillingSchedulerService', () => {
     const db = {
         tenantSubscription: { findMany: jest.fn(), update: jest.fn() },
+        tenantAddonSubscription: { findMany: jest.fn(), update: jest.fn() },
         subscriptionPlan: { findUnique: jest.fn() },
         billingEvent: { findFirst: jest.fn(), findUnique: jest.fn(), create: jest.fn() },
     } as any;
@@ -57,7 +58,10 @@ describe('BillingSchedulerService', () => {
 
         db.subscriptionPlan.findUnique.mockResolvedValue(freePlan);
         db.tenantSubscription.update.mockResolvedValue({});
+        db.tenantAddonSubscription.findMany.mockResolvedValue([]);
+        db.tenantAddonSubscription.update.mockResolvedValue({});
         db.billingEvent.findFirst.mockResolvedValue(null);
+        db.billingEvent.findUnique.mockResolvedValue(null);
         db.billingEvent.create.mockResolvedValue({ id: 'retry-event-1' });
     });
 
@@ -245,5 +249,86 @@ describe('BillingSchedulerService', () => {
         await service.performDunning();
 
         expect(db.subscriptionPlan.findUnique).toHaveBeenCalledWith({ where: { code: 'FREE' } });
+    });
+
+    describe('add-on lifecycle', () => {
+        const makeAddonSubscription = (overrides?: Partial<{
+            tenant_id: string;
+            addon_id: string;
+            status: string;
+            current_period_end: Date;
+            cancel_at_period_end: boolean;
+            addon: object;
+            tenant: object;
+        }>) => ({
+            tenant_id: 'tenant-1',
+            addon_id: 'addon-1',
+            status: 'PAST_DUE',
+            current_period_end: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+            cancel_at_period_end: false,
+            addon: { id: 'addon-1', code: 'MANUFACTURING', name: 'Manufacturing', monthly_price: 500 },
+            tenant: {
+                id: 'tenant-1',
+                name: 'Tenant One',
+                owner: { id: 'user-1', email: 'owner@example.com' },
+            },
+            ...overrides,
+        });
+
+        beforeEach(() => {
+            db.tenantSubscription.findMany.mockResolvedValue([]);
+        });
+
+        it('sends a retry reminder for a PAST_DUE add-on subscription within the grace window', async () => {
+            db.tenantAddonSubscription.findMany.mockResolvedValueOnce([
+                makeAddonSubscription({ current_period_end: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) }),
+            ]);
+
+            await service.retryFailedPayments();
+
+            expect(db.billingEvent.create).toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.objectContaining({ event_type: 'ADDON_PAYMENT_RETRY_REMINDER', reference_id: 'addon-1' }),
+            }));
+            expect(notifications.create).toHaveBeenCalledWith(
+                'tenant-1',
+                'user-1',
+                'ADDON_PAYMENT_RETRY_REMINDER',
+                'Add-on payment retry reminder',
+                expect.stringContaining('Manufacturing'),
+                '/billing',
+            );
+        });
+
+        it('cancels an overdue PAST_DUE add-on subscription without touching the base plan', async () => {
+            db.tenantAddonSubscription.findMany.mockResolvedValueOnce([makeAddonSubscription()]);
+
+            await service.performDunning();
+
+            expect(db.tenantAddonSubscription.update).toHaveBeenCalledWith({
+                where: { tenant_id_addon_id: { tenant_id: 'tenant-1', addon_id: 'addon-1' } },
+                data: { status: 'CANCELLED', cancel_at_period_end: false },
+            });
+            expect(db.tenantSubscription.update).not.toHaveBeenCalled();
+            expect(notifications.create).toHaveBeenCalledWith(
+                'tenant-1',
+                'user-1',
+                'ADDON_SUBSCRIPTION_CANCELLED',
+                'Add-on subscription cancelled',
+                expect.stringContaining('Manufacturing'),
+                '/billing',
+            );
+        });
+
+        it('posts a fee for a due add-on subscription and does not duplicate on replay', async () => {
+            db.tenantAddonSubscription.findMany.mockResolvedValueOnce([
+                makeAddonSubscription({ status: 'ACTIVE', current_period_end: new Date(Date.now() - 60_000) }),
+            ]);
+
+            await service.postSubscriptionPeriodFees();
+
+            expect(db.billingEvent.create).toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.objectContaining({ event_type: 'addon_fee', amount: 500, reference_id: 'addon-1' }),
+            }));
+        });
     });
 });

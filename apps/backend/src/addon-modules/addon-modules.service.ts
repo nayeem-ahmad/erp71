@@ -155,6 +155,12 @@ export class AddonModulesService {
         return addon;
     }
 
+    /** Resolves a set of add-on codes to their catalog rows for a checkout — throws if any is unknown/inactive. */
+    async getActiveAddonsByCodes(codes: string[]) {
+        const uniqueCodes = [...new Set(codes.map((code) => code.trim().toUpperCase()).filter(Boolean))];
+        return Promise.all(uniqueCodes.map((code) => this.findActiveByCodeOrThrow(code)));
+    }
+
     /** Grants or renews a tenant's add-on subscription. Called by BillingService after a successful charge. */
     async grantOrRenewSubscription(input: {
         tenantId: string;

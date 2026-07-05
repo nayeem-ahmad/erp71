@@ -33,6 +33,8 @@ export class BillingSchedulerService {
         const graceCutoff = new Date();
         graceCutoff.setDate(graceCutoff.getDate() - this.graceDays);
 
+        await this.retryFailedAddonPaymentsImpl(graceCutoff);
+
         const retryCandidates = await this.db.tenantSubscription.findMany({
             where: {
                 status: 'PAST_DUE',
@@ -105,6 +107,67 @@ export class BillingSchedulerService {
         }
     }
 
+    /** Add-on analog of retryFailedPaymentsImpl — reminds tenants with a PAST_DUE add-on subscription. */
+    private async retryFailedAddonPaymentsImpl(graceCutoff: Date): Promise<void> {
+        const retryCandidates = await this.db.tenantAddonSubscription.findMany({
+            where: {
+                status: 'PAST_DUE',
+                current_period_end: { gte: graceCutoff },
+            },
+            include: {
+                tenant: { include: { owner: true } },
+                addon: true,
+            },
+        });
+
+        for (const sub of retryCandidates) {
+            try {
+                const recentReminder = await this.db.billingEvent.findFirst({
+                    where: {
+                        tenant_id: sub.tenant_id,
+                        event_type: 'ADDON_PAYMENT_RETRY_REMINDER',
+                        reference_id: sub.addon_id,
+                        created_at: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+                    },
+                });
+                if (recentReminder) continue;
+
+                const amount = Number(sub.addon.monthly_price);
+                const owner = sub.tenant?.owner;
+
+                await this.db.billingEvent.create({
+                    data: {
+                        tenant_id: sub.tenant_id,
+                        provider_name: sub.provider_name ?? 'manual',
+                        external_event_id: `addon_retry:${sub.tenant_id}:${sub.addon_id}:${new Date().toISOString().slice(0, 10)}`,
+                        event_type: 'ADDON_PAYMENT_RETRY_REMINDER',
+                        status: 'SENT',
+                        reference_id: sub.addon_id,
+                        amount,
+                        currency: 'BDT',
+                        payload: { addon_code: sub.addon.code, grace_days: this.graceDays },
+                    },
+                });
+
+                if (owner?.id && amount > 0) {
+                    const formattedAmount = amount.toFixed(2);
+                    await this.notifications.create(
+                        sub.tenant_id,
+                        owner.id,
+                        'ADDON_PAYMENT_RETRY_REMINDER',
+                        'Add-on payment retry reminder',
+                        `Your ${sub.addon.name} add-on payment of ৳${formattedAmount} is overdue. Please retry within ${this.graceDays} days.`,
+                        '/billing',
+                    );
+                }
+
+                this.logger.log(`Add-on payment retry reminder sent for tenant ${sub.tenant_id} (${sub.addon.code})`);
+            } catch (err) {
+                this.logger.error(`Add-on payment retry reminder failed for tenant ${sub.tenant_id}: ${err}`);
+            }
+        }
+    }
+
     // Run daily at 09:00 — cancel subscriptions that have been PAST_DUE beyond the grace period
     @Cron('0 9 * * *')
     async performDunning(): Promise<void> {
@@ -114,6 +177,8 @@ export class BillingSchedulerService {
     private async performDunningImpl(): Promise<void> {
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - this.graceDays);
+
+        await this.performAddonDunningImpl(cutoff);
 
         const overdueSubscriptions = await this.db.tenantSubscription.findMany({
             where: {
@@ -181,6 +246,59 @@ export class BillingSchedulerService {
                 );
             } catch (err) {
                 this.logger.error(`Dunning: failed to process tenant ${sub.tenant_id}: ${err}`);
+            }
+        }
+    }
+
+    /**
+     * Add-on analog of performDunningImpl. Unlike the base plan, there's no fallback
+     * plan to downgrade to — an overdue add-on subscription is simply cancelled, which
+     * drops its entitlements out of the merged feature set on the next request.
+     */
+    private async performAddonDunningImpl(cutoff: Date): Promise<void> {
+        const overdueAddonSubscriptions = await this.db.tenantAddonSubscription.findMany({
+            where: {
+                status: 'PAST_DUE',
+                current_period_end: { lt: cutoff },
+            },
+            include: {
+                tenant: { include: { owner: true } },
+                addon: true,
+            },
+        });
+
+        for (const sub of overdueAddonSubscriptions) {
+            try {
+                await this.db.tenantAddonSubscription.update({
+                    where: { tenant_id_addon_id: { tenant_id: sub.tenant_id, addon_id: sub.addon_id } },
+                    data: { status: 'CANCELLED', cancel_at_period_end: false },
+                });
+
+                this.audit.log(
+                    'ADDON_SUBSCRIPTION_CANCELLED_DUNNING',
+                    'TenantAddonSubscription',
+                    { tenantId: sub.tenant_id },
+                    sub.tenant_id,
+                    { addonCode: sub.addon.code, graceDays: this.graceDays },
+                ).catch(() => {});
+
+                const owner = sub.tenant?.owner;
+                if (owner?.id) {
+                    await this.notifications.create(
+                        sub.tenant_id,
+                        owner.id,
+                        'ADDON_SUBSCRIPTION_CANCELLED',
+                        'Add-on subscription cancelled',
+                        `Your ${sub.addon.name} add-on was cancelled after ${this.graceDays} days of non-payment.`,
+                        '/billing',
+                    );
+                }
+
+                this.logger.log(
+                    `Dunning: cancelled add-on subscription for tenant ${sub.tenant_id} (${sub.addon.code}, PAST_DUE since ${sub.current_period_end.toISOString()})`,
+                );
+            } catch (err) {
+                this.logger.error(`Add-on dunning: failed to process tenant ${sub.tenant_id}: ${err}`);
             }
         }
     }
@@ -270,6 +388,78 @@ export class BillingSchedulerService {
                 this.logger.log(`Posted subscription fee for tenant ${sub.tenant_id} (৳${formattedAmount})`);
             } catch (err) {
                 this.logger.error(`Subscription fee posting failed for tenant ${sub.tenant_id}: ${err}`);
+            }
+        }
+
+        await this.postAddonPeriodFeesImpl(now);
+    }
+
+    /** Add-on analog of postSubscriptionPeriodFeesImpl — posts a ledger fee entry per due add-on. */
+    private async postAddonPeriodFeesImpl(now: Date): Promise<void> {
+        const dueAddonSubscriptions = await this.db.tenantAddonSubscription.findMany({
+            where: {
+                status: { in: ['ACTIVE', 'PAST_DUE'] },
+                cancel_at_period_end: false,
+                current_period_end: { lte: now },
+            },
+            include: {
+                tenant: { include: { owner: true } },
+                addon: true,
+            },
+        });
+
+        for (const sub of dueAddonSubscriptions) {
+            try {
+                const amount = Number(sub.addon.monthly_price);
+                if (amount <= 0) continue;
+
+                const periodKey = sub.current_period_end.toISOString().slice(0, 10);
+                const externalEventId = `addon_fee:${sub.tenant_id}:${sub.addon_id}:${periodKey}`;
+
+                const existing = await this.db.billingEvent.findUnique({
+                    where: {
+                        provider_name_external_event_id: {
+                            provider_name: 'manual',
+                            external_event_id: externalEventId,
+                        },
+                    },
+                });
+                if (existing) continue;
+
+                await this.db.billingEvent.create({
+                    data: {
+                        tenant_id: sub.tenant_id,
+                        provider_name: 'manual',
+                        external_event_id: externalEventId,
+                        event_type: 'addon_fee',
+                        status: 'posted',
+                        amount,
+                        currency: 'BDT',
+                        reference_id: sub.addon_id,
+                        payload: {
+                            period_end: sub.current_period_end.toISOString(),
+                            addon_code: sub.addon.code,
+                            addon_name: sub.addon.name,
+                        },
+                    },
+                });
+
+                const owner = sub.tenant?.owner;
+                if (owner?.id) {
+                    const formattedAmount = amount.toFixed(2);
+                    await this.notifications.create(
+                        sub.tenant_id,
+                        owner.id,
+                        'addon_fee',
+                        'Add-on fee posted',
+                        `Your ${sub.addon.name} add-on fee of ৳${formattedAmount} for ${sub.tenant.name} has been posted for the period ending ${sub.current_period_end.toDateString()}.`,
+                        '/billing',
+                    );
+                }
+
+                this.logger.log(`Posted add-on fee for tenant ${sub.tenant_id} (${sub.addon.code})`);
+            } catch (err) {
+                this.logger.error(`Add-on fee posting failed for tenant ${sub.tenant_id}: ${err}`);
             }
         }
     }
