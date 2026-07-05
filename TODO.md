@@ -357,6 +357,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Trim tenant "Admin" (account-settings) menu for accounting-only subscriptions — sidebar now hides retail/POS/marketing links (Loyalty, POS Counters, Sales Settings, Payment Methods, Discount Codes, SMS Notifications/Credits, Report Emails, Branding, AI Credits) in `accountingOnlyMode`, keeping only My Account, Team & Permissions, Audit Logs, Localization, Tax/VAT, Data Management, Billing; also stopped `isAccountingOnlyBlockedPath` from redirecting those kept `/settings/*` pages away (they were previously dead links) — done 2026-07-04
 - [x] Platform Settings nav split — rename General → General Settings; move Tenant Features to its own sidebar/index page at `/admin/platform-settings/tenant-features` — done 2026-07-04
 - [x] Notification system audit fixes — SMS low-stock reads owner `User.mobile`; in-app alerts for payment failure, retry reminder, and subscription cancellation; 24h low-stock deduplication; bell badge no longer clears on open; `/notifications` page with pagination + “View all” link in bell; billing/subscription icons — done 2026-07-04
 - [x] Referee login redirect + invite email fix — `storeAuthResponse` always calls `getMe()` so referee context is detected; dedicated `sendRefereeLoginInvite` email (not generic password reset); layout auto-applies referee context on refresh; `resolveActiveRefereeForUser` falls back to email match and auto-links `user_id` — done 2026-07-04
