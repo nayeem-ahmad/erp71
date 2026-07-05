@@ -6,6 +6,7 @@ import { BillingService } from '../src/billing/billing.service';
 import { DatabaseService } from '../src/database/database.service';
 import { AuditService } from '../src/audit/audit.service';
 import { EmailService } from '../src/email/email.service';
+import { NotificationsService } from '../src/notifications/notifications.service';
 import { CircuitBreakerRegistry } from '../src/system-health/resilience/circuit-breaker.registry';
 import { TransformInterceptor } from '../src/common/transform.interceptor';
 
@@ -28,6 +29,7 @@ describe('Billing webhooks (HTTP)', () => {
                 { provide: DatabaseService, useValue: db },
                 { provide: AuditService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
                 { provide: EmailService, useValue: { sendBillingInvoice: jest.fn(), sendPaymentFailure: jest.fn() } },
+                { provide: NotificationsService, useValue: { create: jest.fn().mockResolvedValue(undefined) } },
                 CircuitBreakerRegistry,
             ],
         }).compile();

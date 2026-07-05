@@ -27,6 +27,9 @@ const config: Config = {
   // Coverage reports are generated and uploaded as CI artifacts on every run.
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
+    // Resolve straight to source so tests don't depend on a prior `npm run build`
+    // of the shared-types workspace package (its "main" points at dist/index.js).
+    '^@erp71/shared-types(|/.*)$': '<rootDir>/../../packages/shared-types/$1',
   },
   transformIgnorePatterns: [
     '/node_modules/(?!(lucide-react)/)',
