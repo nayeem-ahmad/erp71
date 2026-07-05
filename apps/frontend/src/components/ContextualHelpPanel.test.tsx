@@ -4,7 +4,7 @@ import { ContextualHelpPanel } from './ContextualHelpPanel';
 
 function renderHelp(features?: { help?: boolean }) {
     return render(
-        <PlatformFeaturesProvider features={{ feedback: false, support: false, help: true, voice: false, ...features }}>
+        <PlatformFeaturesProvider features={{ feedback: false, support: false, help: true, voice: false, manufacturing: true, ...features }}>
             <ContextualHelpPanel {...HELP} />
         </PlatformFeaturesProvider>,
     );

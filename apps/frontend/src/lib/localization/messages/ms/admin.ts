@@ -467,23 +467,27 @@ export const adminMessages = {
             },
             tenantFeatures: {
                 title: 'Ciri Penyewa',
-                description: 'Kawal ciri bantuan yang kelihatan kepada pengguna kedai.',
-                hint: 'Semua ciri dimatikan secara lalai. Perubahan dikenakan kepada setiap penyewa di platform.',
+                description: 'Kawal ciri bantuan dan modul yang tersedia kepada pengguna kedai.',
+                hint: 'Perubahan dikenakan kepada setiap penyewa di platform serta-merta.',
                 feedback: {
                     label: 'Maklum Balas',
-                    hint: 'Widget maklum balas terapung di sudut kanan bawah.',
+                    hint: 'Widget maklum balas terapung di sudut kanan bawah. Dimatikan secara lalai.',
                 },
                 support: {
                     label: 'Sokongan',
-                    hint: 'Sembang sokongan dalam aplikasi untuk pemilik kedai.',
+                    hint: 'Sembang sokongan dalam aplikasi untuk pemilik kedai. Dimatikan secara lalai.',
                 },
                 help: {
                     label: 'Bantuan',
-                    hint: 'Pautan Pusat Bantuan di bar sisi dan panel bantuan kontekstual.',
+                    hint: 'Pautan Pusat Bantuan di bar sisi dan panel bantuan kontekstual. Dimatikan secara lalai.',
                 },
                 voice: {
                     label: 'Suara',
-                    hint: 'Navigasi suara di pengepala dan kemasukan suara pada borang.',
+                    hint: 'Navigasi suara di pengepala dan kemasukan suara pada borang. Dimatikan secara lalai.',
+                },
+                manufacturing: {
+                    label: 'Pembuatan',
+                    hint: 'Modul Pembuatan (resipi BOM dan pesanan kerja pengeluaran) untuk penyewa pelan Premium. Diaktifkan secara lalai — guna ini sebagai suis kecemasan.',
                 },
                 saved: 'Tetapan ciri penyewa disimpan.',
             },

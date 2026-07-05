@@ -84,3 +84,26 @@ export class UpdateProductionJobDto {
     @MaxLength(1000)
     notes?: string;
 }
+
+export class WastageItemDto {
+    @IsString()
+    @IsNotEmpty()
+    productId: string;
+
+    @IsNumber()
+    @IsPositive()
+    quantity: number;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(500)
+    note?: string;
+}
+
+export class CompleteProductionJobDto {
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => WastageItemDto)
+    wastage?: WastageItemDto[];
+}

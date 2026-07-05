@@ -27,7 +27,7 @@ describe('PlatformSettingsService', () => {
     });
 
     describe('getPlatformFeatures', () => {
-        it('returns all features off by default', async () => {
+        it('returns assist features off and manufacturing on by default', async () => {
             const features = await service.getPlatformFeatures();
 
             expect(features).toEqual({
@@ -35,6 +35,7 @@ describe('PlatformSettingsService', () => {
                 support: false,
                 help: false,
                 voice: false,
+                manufacturing: true,
             });
         });
 
@@ -42,6 +43,7 @@ describe('PlatformSettingsService', () => {
             db.platformSetting.findMany.mockResolvedValue([
                 { group: 'general', key: 'feedback_enabled', value: 'true', is_secret: false },
                 { group: 'general', key: 'voice_enabled', value: 'true', is_secret: false },
+                { group: 'general', key: 'manufacturing_enabled', value: 'false', is_secret: false },
             ]);
 
             const features = await service.getPlatformFeatures();
@@ -51,6 +53,7 @@ describe('PlatformSettingsService', () => {
                 support: false,
                 help: false,
                 voice: true,
+                manufacturing: false,
             });
         });
     });

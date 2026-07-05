@@ -62,6 +62,7 @@ import {
     Waves,
     Cpu,
     Database,
+    Factory,
 } from 'lucide-react';
 
 const NAV_ICON_MAP: Record<string, LucideIcon> = {
@@ -127,6 +128,7 @@ const NAV_ICON_MAP: Record<string, LucideIcon> = {
     Upload,
     Waves,
     Copy,
+    Factory,
 };
 
 export function resolveNavIcon(name: string): LucideIcon {

@@ -257,6 +257,15 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Dashboard KPI widgets (revenue today, low stock count, pending orders) — low stock count widget added; revenue covered by Financial Snapshot; active orders shown — done 2026-05-12
 - [x] Proper 404 and error pages in frontend
 
+### Manufacturing module gaps (audit 2026-07-05)
+- [x] Reconcile Manufacturing plan-tier mismatch — backend now gates `@RequiresPlan('PREMIUM')` to match `marketing/plans.ts`; fixed a latent bug in `normalizePlanFeatures`/`resolvePlanRank` (shared-types) where an empty `features_json` always resolved `planRank: 0` regardless of plan code, which would have silently broken the PREMIUM gate — done 2026-07-05
+- [x] Add platform-admin on/off toggle for the Manufacturing module — reused the existing platform-wide feature-flag pattern (`PlatformSetting` general group + `PlatformFeatures`); new `manufacturing_enabled` key (default on), `PlatformFeatureGuard`/`@RequiresPlatformFeature` on `ManufacturingController`, toggle added to Tenant Features admin page — done 2026-07-05
+- [x] Add Manufacturing link to sidebar — new `manufacturing` nav module (Factory icon) gated on `canAccessManufacturing` (PREMIUM plan rank + platform feature flag) — done 2026-07-05
+- [x] Epic 71: preview required raw materials + insufficient-stock warning at job creation — new `GET /manufacturing/bom/:id/requirements` endpoint; New Job modal now has a recipe dropdown (was a raw text field) with a live materials-required table and warning banner. Also fixed the Manufacturing page misusing `fetchWithAuth` as if it returned a raw `Response` (`.json()`/`.ok`) when it already returns unwrapped data — the entire page was broken in production; also fixed leftover double `/api/v1` prefixes — done 2026-07-05
+- [x] Epic 72: wastage recording on job completion (Story 72.2) — new `ProductionWastage` model + migration; `POST /manufacturing/jobs/:id/complete` accepts an optional `wastage` array, recorded as separate `MANUFACTURING_WASTAGE` inventory movements (not mixed into standard BOM consumption) plus a `ProductionWastage` row per entry; frontend Complete action now opens a modal listing recipe components with optional wastage-qty inputs — done 2026-07-05
+- [x] Epic 73: basic production cost/yield analytics report (Story 73.1) — new `GET /manufacturing/analytics` computes planned vs. actual material cost per completed job from `InventoryMovement.unit_cost` (now stamped on manufacturing movements from current `ProductPrice.cost`), unit production cost, and a daily production-volume trend; new Analytics tab on the Manufacturing page with KPI tiles, a volume-trend bar chart, and a planned/wastage/actual cost table — done 2026-07-05
+- [ ] Audit other pages for the same `fetchWithAuth` `.json()`/`.ok` misuse pattern found in the Manufacturing page — TODO.md's 2026-05-24 entry claims this was fixed for delivery/manufacturing/settings pages, but manufacturing still had it everywhere; unclear how many other pages are affected
+
 ### Performance
 - [ ] Implement Redis caching for hot data (product catalog, active pricing) — Redis is provisioned but unused
 - [ ] Switch large list endpoints to cursor-based pagination
@@ -338,7 +347,6 @@ Track all work here. Check off items as they're completed. Add new items as they
 ## ROADMAP — Post-launch features
 
 - [ ] E-commerce storefront (Standard/Premium tier feature per PRD)
-- [ ] Manufacturing / BOM module (Premium tier)
 - [ ] Delivery / fulfillment management
 - [ ] Offline-capable POS (service worker + IndexedDB sync)
 - [x] Multi-branch consolidated reporting
@@ -634,4 +642,5 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Add class-validator decorators to ChangePasswordDto and CreateStoreDto — decorated all properties to satisfy NestJS ValidationPipe whitelist constraints, resolving the payload validation errors on password change — done 2026-07-04
 - [x] Fix product image upload failing and make Add New Product UI compact/scroll-free — solved FormData content-type header issue in `api.ts`, converted AddProductModal to a responsive 2-column layout (size lg) with compact fields — done 2026-07-04
 - [x] Product storefront tab & spacious layout — added storefront tab to product modal with description editor and image gallery, moved featured toggle there, and widened dialog to xl size; backend DTO/service and shared types updated — done 2026-07-04
+- [x] Manufacturing module audit — module (BOM + Production Jobs, Epics 70-72 partial) already existed; found plan-tier mismatch (marketing says Premium, backend gates STANDARD), no sidebar link, no platform-admin on/off switch, no material-requirement preview at job creation, no wastage recording, and no Epic 73 analytics at all; findings logged under IMPORTANT → Manufacturing module gaps — done 2026-07-05
 
