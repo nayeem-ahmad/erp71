@@ -206,7 +206,7 @@ export default function FeedbackAutomationPanel({ feedbackId, onClose }: { feedb
                                                 checked={confirmMigration}
                                                 onChange={(e) => setConfirmMigration(e.target.checked)}
                                             />
-                                            I've reviewed this plan's database migration and approve it.
+                                            I&apos;ve reviewed this plan&apos;s database migration and approve it.
                                         </label>
                                     )}
                                     <textarea
@@ -297,7 +297,7 @@ export default function FeedbackAutomationPanel({ feedbackId, onClose }: { feedb
                                 {detail.plans.slice(1).map((p) => (
                                     <div key={p.id} className="rounded-lg border border-gray-100 p-2">
                                         <div className="font-bold">v{p.version} — {p.status}</div>
-                                        {p.adminComment && <div className="italic mt-1">"{p.adminComment}"</div>}
+                                        {p.adminComment && <div className="italic mt-1">&quot;{p.adminComment}&quot;</div>}
                                     </div>
                                 ))}
                             </div>
