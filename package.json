@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "workspaces": [
+    "packages/*",
     "apps/backend",
     "apps/frontend",
-    "apps/mobile",
-    "packages/*"
+    "apps/mobile"
   ],
   "scripts": {
     "dev": "npm run dev --workspaces --if-present",
