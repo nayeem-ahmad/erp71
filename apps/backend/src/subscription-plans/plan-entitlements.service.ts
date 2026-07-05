@@ -1,20 +1,42 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import { hasPlanEntitlement, normalizePlanFeatures } from '@erp71/shared-types';
+import { hasPlanEntitlement, mergeAddonFeatures, normalizePlanFeatures } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
+
+const ACTIVE_ADDON_STATUSES = ['ACTIVE', 'TRIALING'] as const;
 
 @Injectable()
 export class PlanEntitlementsService {
     constructor(private readonly db: DatabaseService) {}
 
+    /**
+     * Base plan entitlements unioned with every currently active add-on's
+     * entitlements. Add-ons only ever grant capability on top of the plan —
+     * see `mergeAddonFeatures` in @erp71/shared-types.
+     */
     async getFeaturesForTenant(tenantId: string) {
-        const subscription = await this.db.tenantSubscription.findUnique({
-            where: { tenant_id: tenantId },
-            include: { plan: true },
-        });
+        const [subscription, activeAddons] = await Promise.all([
+            this.db.tenantSubscription.findUnique({
+                where: { tenant_id: tenantId },
+                include: { plan: true },
+            }),
+            this.db.tenantAddonSubscription.findMany({
+                where: {
+                    tenant_id: tenantId,
+                    status: { in: [...ACTIVE_ADDON_STATUSES] },
+                    current_period_end: { gt: new Date() },
+                },
+                include: { addon: true },
+            }),
+        ]);
 
-        return normalizePlanFeatures(
+        const planFeatures = normalizePlanFeatures(
             subscription?.plan?.features_json as Record<string, unknown> | undefined,
             subscription?.plan?.code ?? 'FREE',
+        );
+
+        return mergeAddonFeatures(
+            planFeatures,
+            activeAddons.map((row) => row.addon.features_json as Record<string, unknown>),
         );
     }
 
