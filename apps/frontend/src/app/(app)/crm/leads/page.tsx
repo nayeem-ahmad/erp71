@@ -23,6 +23,7 @@ interface Lead {
     category: string | null;
     priority: string;
     status: string;
+    score: number;
     next_step: string | null;
     next_step_date: string | null;
     last_contacted_at: string | null;
@@ -37,6 +38,12 @@ const priorityColors: Record<string, string> = {
     HIGH: 'bg-amber-50 text-amber-700',
     URGENT: 'bg-rose-50 text-rose-700',
 };
+
+function scoreBadgeColor(score: number): string {
+    if (score >= 70) return 'bg-emerald-50 text-emerald-700';
+    if (score >= 40) return 'bg-amber-50 text-amber-700';
+    return 'bg-gray-100 text-gray-600';
+}
 
 export default function LeadsPage() {
     const { t } = useI18n();
@@ -116,6 +123,14 @@ export default function LeadsPage() {
             cell: (info) => (
                 <span className="text-xs font-semibold px-2 py-1 rounded-full bg-violet-50 text-violet-700">
                     {statusLabel(info.getValue())}
+                </span>
+            ),
+        }),
+        columnHelper.accessor('score', {
+            header: m.fields.score,
+            cell: (info) => (
+                <span className={`text-xs font-semibold px-2 py-1 rounded-full ${scoreBadgeColor(info.getValue() ?? 0)}`}>
+                    {info.getValue() ?? 0}
                 </span>
             ),
         }),

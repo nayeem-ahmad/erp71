@@ -6,6 +6,7 @@ export const crmHrMessages = {
             subtitle: "লিড, কথোপকথন ও গ্রাহক সম্পর্ক পরিচালনা।",
             pipeline: "পাইপলাইন",
             relationships: "সম্পর্ক",
+            engagement: "এনগেজমেন্ট",
             premiumRequired: "লিড ম্যানেজমেন্ট Premium প্ল্যান চালু হলে উপলব্ধ হবে।",
             upgradeCta: "Premium — শীঘ্রই আসছে",
             links: {
@@ -13,6 +14,15 @@ export const crmHrMessages = {
                 customers: { title: "গ্রাহক", description: "গ্রাহক ব্রাউজ করুন ও প্রোফাইল খুলুন।" },
                 crmTasks: { title: "টাস্ক ও ফলো-আপ", description: "গ্রাহক বা লিড-লিঙ্কড ফলো-আপ টাস্ক।" },
                 crmCampaigns: { title: "ক্যাম্পেইন", description: "আউটবাউন্ড বিক্রয় ক্যাম্পেইন পরিচালনা।" },
+            },
+            dashboard: {
+                openLeads: "চলমান লিড",
+                tasksDueToday: "আজকের টাস্ক",
+                overdueTasks: "মেয়াদোত্তীর্ণ টাস্ক",
+                pendingTotal: "টি অমীমাংসিত মোট",
+                recentCampaigns: "সাম্প্রতিক ক্যাম্পেইন",
+                noCampaigns: "এখনও কোনো ক্যাম্পেইন পাঠানো হয়নি",
+                viewAll: "সব দেখুন",
             },
         },
         leads: {
@@ -41,6 +51,7 @@ export const crmHrMessages = {
             deleteConfirm: "এই লিড মুছবেন?",
             validation: {
                 invalidEmail: "সঠিক ইমেইল ঠিকানা দিন।",
+                lostReasonRequired: "এই লিড হারানোর কারণ উল্লেখ করুন।",
             },
             fields: {
                 mobile: "মোবাইল",
@@ -48,6 +59,9 @@ export const crmHrMessages = {
                 category: "বিভাগ",
                 priority: "অগ্রাধিকার",
                 remarks: "মন্তব্য",
+                lostReason: "হারানোর কারণ",
+                lostReasonPlaceholder: "কেন এই লিড হারানো হলো? (যেমন: দাম, প্রতিদ্বন্দ্বী, সাড়া নেই)",
+                score: "স্কোর",
                 linkedinUrl: "LinkedIn",
                 fbUrl: "Facebook",
                 xUrl: "X (Twitter)",
@@ -193,8 +207,8 @@ export const crmHrMessages = {
             },
         },
         crmCampaigns: {
-            title: "SMS ক্যাম্পেইন",
-            subtitle: "গ্রাহক সেগমেন্টে বাল্ক SMS ক্যাম্পেইন তৈরি ও পাঠান",
+            title: "ক্যাম্পেইন",
+            subtitle: "গ্রাহক সেগমেন্টে SMS, WhatsApp বা ইমেইল ক্যাম্পেইন তৈরি ও পাঠান",
             newCampaign: "নতুন ক্যাম্পেইন",
             emptyMessage: "এখনও কোনো ক্যাম্পেইন নেই",
             sendConfirm: "\"{name}\" এখন {count} প্রাপককে পাঠাবেন?",
@@ -203,6 +217,7 @@ export const crmHrMessages = {
             placeholders: {
                 name: "ক্যাম্পেইনের নাম *",
                 message: "আপনার বার্তার টেক্সট...",
+                subject: "ইমেইল সাবজেক্ট *",
             },
             columns: {
                 name: "ক্যাম্পেইন",
@@ -221,6 +236,8 @@ export const crmHrMessages = {
             sending: "পাঠানো হচ্ছে...",
             sendNow: "এখন পাঠান",
             segmentLabel: "সেগমেন্ট:",
+            subjectLabel: "সাবজেক্ট:",
+            subjectRequired: "ইমেইল ক্যাম্পেইনের জন্য সাবজেক্ট আবশ্যক।",
             channels: {
                 sms: "SMS",
                 whatsapp: "WHATSAPP",

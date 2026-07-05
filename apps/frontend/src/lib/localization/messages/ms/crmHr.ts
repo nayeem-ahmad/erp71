@@ -6,6 +6,7 @@ export const crmHrMessages = {
             subtitle: 'Urus prospek, perbualan, dan hubungan pelanggan.',
             pipeline: 'Saluran',
             relationships: 'Hubungan',
+            engagement: 'Penglibatan',
             premiumRequired: 'Pengurusan prospek akan tersedia pada pelan Premium apabila dilancarkan.',
             upgradeCta: 'Premium — akan datang',
             links: {
@@ -13,6 +14,15 @@ export const crmHrMessages = {
                 customers: { title: 'Pelanggan', description: 'Semak pelanggan dan buka profil hubungan.' },
                 crmTasks: { title: 'Tugas & Susulan', description: 'Tugas susulan untuk pelanggan atau prospek.' },
                 crmCampaigns: { title: 'Kempen', description: 'Rancang dan hantar kempen jualan.' },
+            },
+            dashboard: {
+                openLeads: 'Prospek Aktif',
+                tasksDueToday: 'Tugas Hari Ini',
+                overdueTasks: 'Tugas Tertunggak',
+                pendingTotal: 'tertunggak secara keseluruhan',
+                recentCampaigns: 'Kempen Terkini',
+                noCampaigns: 'Belum ada kempen dihantar',
+                viewAll: 'Lihat semua',
             },
         },
         leads: {
@@ -41,6 +51,7 @@ export const crmHrMessages = {
             deleteConfirm: 'Padam prospek ini?',
             validation: {
                 invalidEmail: 'Sila masukkan alamat e-mel yang sah.',
+                lostReasonRequired: 'Sila nyatakan sebab prospek ini hilang.',
             },
             fields: {
                 mobile: 'Mudah Alih',
@@ -48,6 +59,9 @@ export const crmHrMessages = {
                 category: 'Kategori',
                 priority: 'Keutamaan',
                 remarks: 'Catatan',
+                lostReason: 'Sebab Hilang',
+                lostReasonPlaceholder: 'Kenapa prospek ini hilang? (cth. harga, pesaing, tiada respons)',
+                score: 'Skor',
                 linkedinUrl: 'LinkedIn',
                 fbUrl: 'Facebook',
                 xUrl: 'X (Twitter)',
@@ -193,8 +207,8 @@ export const crmHrMessages = {
         },
     },
     crmCampaigns: {
-        title: "Kempen SMS",
-        subtitle: "Cipta dan hantar kempen SMS pukal kepada segmen pelanggan",
+        title: "Kempen",
+        subtitle: "Cipta dan hantar kempen SMS, WhatsApp, atau e-mel kepada segmen pelanggan",
         newCampaign: "Kempen Baharu",
         emptyMessage: "Belum ada kempen",
         sendConfirm: "Hantar \"{name}\" kepada {count} penerima sekarang?",
@@ -203,6 +217,7 @@ export const crmHrMessages = {
         placeholders: {
             name: "Nama kempen *",
             message: "Teks mesej anda...",
+            subject: "Subjek e-mel *",
         },
         columns: {
             name: "Kempen",
@@ -221,6 +236,8 @@ export const crmHrMessages = {
         sending: "Menghantar...",
         sendNow: "Hantar Sekarang",
         segmentLabel: "Segmen:",
+        subjectLabel: "Subjek:",
+        subjectRequired: "Subjek diperlukan untuk kempen e-mel.",
         channels: {
             sms: "SMS",
             whatsapp: "WHATSAPP",

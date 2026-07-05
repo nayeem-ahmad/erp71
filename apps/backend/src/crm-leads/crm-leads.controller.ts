@@ -46,6 +46,11 @@ export class CrmLeadsController {
         });
     }
 
+    @Get('summary')
+    getSummary(@Tenant() tenant: TenantContext) {
+        return this.service.getStatusSummary(tenant.tenantId);
+    }
+
     @Get(':id')
     findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.service.findOne(tenant.tenantId, id);

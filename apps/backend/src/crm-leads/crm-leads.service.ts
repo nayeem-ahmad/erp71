@@ -8,6 +8,7 @@ import { DatabaseService } from '../database/database.service';
 import { CustomersService } from '../customers/customers.service';
 import { CreateLeadDto, LeadStatus, UpdateLeadDto } from './crm-leads.dto';
 import { paginate } from '../common/pagination.dto';
+import { computeLeadScore } from './lead-scoring.util';
 
 const leadIncludes = {
     assignee: { select: { id: true, name: true, email: true } },
@@ -43,6 +44,19 @@ export class CrmLeadsService {
             throw new BadRequestException('A lead with this mobile number already exists.');
         }
 
+        const status = dto.status ?? LeadStatus.NEW;
+        if (status === LeadStatus.LOST && !dto.lost_reason) {
+            throw new BadRequestException('lost_reason is required when creating a lead with status LOST.');
+        }
+
+        const priority = dto.priority ?? 'MEDIUM';
+        const source = dto.source ?? 'OTHER';
+        const nextStepDate = dto.next_step_date ? new Date(dto.next_step_date) : null;
+        const score = computeLeadScore(
+            { status, source, priority, last_contacted_at: null, next_step_date: nextStepDate },
+            0,
+        );
+
         return this.db.lead.create({
             data: {
                 tenant_id: tenantId,
@@ -51,16 +65,18 @@ export class CrmLeadsService {
                 email: dto.email,
                 address: dto.address,
                 category: dto.category,
-                priority: dto.priority ?? 'MEDIUM',
+                priority,
                 remarks: dto.remarks,
-                source: dto.source ?? 'OTHER',
-                status: dto.status ?? 'NEW',
+                source,
+                status,
+                lost_reason: status === LeadStatus.LOST ? dto.lost_reason : undefined,
+                score,
                 linkedin_url: dto.linkedin_url,
                 fb_url: dto.fb_url,
                 x_url: dto.x_url,
                 website_url: dto.website_url,
                 next_step: dto.next_step,
-                next_step_date: dto.next_step_date ? new Date(dto.next_step_date) : undefined,
+                next_step_date: nextStepDate ?? undefined,
                 next_step_assigned_to: dto.next_step_assigned_to,
                 assigned_to: dto.assigned_to,
                 store_id: dto.store_id,
@@ -154,6 +170,32 @@ export class CrmLeadsService {
 
         const data = this.mapLeadData(dto);
 
+        const nextStatus = dto.status ?? existing.status;
+        if (nextStatus === LeadStatus.LOST) {
+            const reason = dto.lost_reason ?? existing.lost_reason;
+            if (!reason) {
+                throw new BadRequestException('lost_reason is required when marking a lead as LOST.');
+            }
+            data.lost_reason = reason;
+        } else if (dto.status && dto.status !== existing.status) {
+            data.lost_reason = null;
+        }
+
+        const conversationCount = await this.db.leadConversation.count({ where: { lead_id: id } });
+        data.score = computeLeadScore(
+            {
+                status: nextStatus,
+                source: dto.source ?? existing.source,
+                priority: dto.priority ?? existing.priority,
+                last_contacted_at: existing.last_contacted_at,
+                next_step_date:
+                    'next_step_date' in data
+                        ? (data.next_step_date as Date | null)
+                        : existing.next_step_date,
+            },
+            conversationCount,
+        );
+
         return this.db.lead.update({
             where: { id },
             data,
@@ -166,6 +208,26 @@ export class CrmLeadsService {
         if (!existing) throw new NotFoundException('Lead not found');
         await this.db.lead.delete({ where: { id } });
         return { success: true };
+    }
+
+    /** Counts of leads per pipeline stage, for the CRM hub dashboard. */
+    async getStatusSummary(tenantId: string) {
+        const grouped = await this.db.lead.groupBy({
+            by: ['status'],
+            where: { tenant_id: tenantId },
+            _count: { _all: true },
+        });
+
+        const counts: Record<string, number> = {};
+        for (const status of Object.values(LeadStatus)) {
+            counts[status] = 0;
+        }
+        for (const row of grouped) {
+            counts[row.status] = row._count._all;
+        }
+
+        const open = counts.NEW + counts.CONTACTED + counts.QUALIFIED;
+        return { counts, open };
     }
 
     async convert(tenantId: string, id: string) {
@@ -198,6 +260,7 @@ export class CrmLeadsService {
             data: {
                 status: LeadStatus.CONVERTED,
                 converted_customer_id: customer.id,
+                score: 100,
             },
             include: leadIncludes,
         });

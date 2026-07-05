@@ -262,6 +262,11 @@ ${page ? `<p><strong>Page:</strong> ${page}</p>` : ''}
         await Promise.all(recipients.map((addr) => this.send({ to: addr, subject, html })));
     }
 
+    /** Sends an arbitrary subject/body email, e.g. a CRM campaign blast. Surfaces send failures to the caller. */
+    async sendCustom(to: string, subject: string, html: string): Promise<void> {
+        await this.send({ to, subject, html }, { throwOnError: true });
+    }
+
     /** Sends a test message and surfaces SMTP errors to the caller (admin UI). */
     async sendTestEmail(to: string): Promise<void> {
         await this.send(

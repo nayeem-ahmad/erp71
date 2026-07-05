@@ -38,6 +38,12 @@ const priorityColors: Record<string, string> = {
     URGENT: 'bg-rose-50 text-rose-700',
 };
 
+function scoreBadgeColor(score: number): string {
+    if (score >= 70) return 'bg-emerald-50 text-emerald-700';
+    if (score >= 40) return 'bg-amber-50 text-amber-700';
+    return 'bg-gray-100 text-gray-600';
+}
+
 type NewConversationState = {
     type: string;
     summary: string;
@@ -190,6 +196,10 @@ export default function LeadDetailPage() {
             alert(m.validation?.invalidEmail ?? 'Please enter a valid email address.');
             return;
         }
+        if (validationError === 'LOST_REASON_REQUIRED') {
+            alert(m.validation?.lostReasonRequired ?? 'Please provide a reason for marking this lead as lost.');
+            return;
+        }
         if (validationError) return;
         setSavingLead(true);
         try {
@@ -264,7 +274,15 @@ export default function LeadDetailPage() {
                                     {priorityLabel}
                                 </span>
                             )}
+                            {typeof lead.score === 'number' && (
+                                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${scoreBadgeColor(lead.score)}`}>
+                                    {m.fields.score}: {lead.score}
+                                </span>
+                            )}
                         </div>
+                        {lead.status === 'LOST' && lead.lost_reason && (
+                            <p className="text-sm text-rose-600 mt-2 font-medium">{m.fields.lostReason}: {lead.lost_reason}</p>
+                        )}
                         <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4">
                             <div className="flex items-center text-sm text-gray-600 font-medium">
                                 <Phone className="w-4 h-4 mr-2 text-gray-400" /> {lead.mobile ?? lead.phone}

@@ -6,6 +6,7 @@ export const crmHrMessages = {
             subtitle: 'Manage leads, conversations, and customer relationships.',
             pipeline: 'Pipeline',
             relationships: 'Relationships',
+            engagement: 'Engagement',
             premiumRequired: 'Lead management will be available on the Premium plan when it launches.',
             upgradeCta: 'Premium — coming soon',
             links: {
@@ -13,6 +14,15 @@ export const crmHrMessages = {
                 customers: { title: 'Customers', description: 'Browse customers and open their relationship profile.' },
                 crmTasks: { title: 'Tasks & Follow-ups', description: 'Follow-up tasks linked to customers or leads.' },
                 crmCampaigns: { title: 'Campaigns', description: 'Plan and send outbound sales campaigns.' },
+            },
+            dashboard: {
+                openLeads: 'Open Leads',
+                tasksDueToday: 'Tasks Due Today',
+                overdueTasks: 'Overdue Tasks',
+                pendingTotal: 'pending in total',
+                recentCampaigns: 'Recent Campaigns',
+                noCampaigns: 'No campaigns sent yet',
+                viewAll: 'View all',
             },
         },
         leads: {
@@ -41,6 +51,7 @@ export const crmHrMessages = {
             deleteConfirm: 'Delete this lead?',
             validation: {
                 invalidEmail: 'Please enter a valid email address.',
+                lostReasonRequired: 'Please provide a reason for marking this lead as lost.',
             },
             fields: {
                 mobile: 'Mobile',
@@ -48,6 +59,9 @@ export const crmHrMessages = {
                 category: 'Category',
                 priority: 'Priority',
                 remarks: 'Remarks',
+                lostReason: 'Lost Reason',
+                lostReasonPlaceholder: 'Why was this lead lost? (e.g. price, competitor, no response)',
+                score: 'Score',
                 linkedinUrl: 'LinkedIn',
                 fbUrl: 'Facebook',
                 xUrl: 'X (Twitter)',
@@ -193,8 +207,8 @@ export const crmHrMessages = {
         }
     },
     "crmCampaigns": {
-        "title": "SMS Campaigns",
-        "subtitle": "Create and send bulk SMS campaigns to customer segments",
+        "title": "Campaigns",
+        "subtitle": "Create and send bulk SMS, WhatsApp, or email campaigns to customer segments",
         "newCampaign": "New Campaign",
         "emptyMessage": "No campaigns yet",
         "sendConfirm": "Send \"{name}\" to {count} recipients now?",
@@ -202,7 +216,8 @@ export const crmHrMessages = {
         "viewSend": "View / Send",
         "placeholders": {
             "name": "Campaign name *",
-            "message": "Your message text..."
+            "message": "Your message text...",
+            "subject": "Email subject *"
         },
         "columns": {
             "name": "Campaign",
@@ -221,6 +236,8 @@ export const crmHrMessages = {
         "sending": "Sending...",
         "sendNow": "Send Now",
         "segmentLabel": "Segment:",
+        "subjectLabel": "Subject:",
+        "subjectRequired": "Subject is required for email campaigns.",
         "channels": {
             "sms": "SMS",
             "whatsapp": "WHATSAPP",

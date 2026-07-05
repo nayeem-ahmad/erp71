@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import CompactLinkGrid, { type CompactLinkItem } from '@/components/ui/compact/CompactLinkGrid';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -38,6 +38,7 @@ interface ModuleHubProps {
     openSectionLabel: string;
     viewReportLabel: string;
     canAccessAdvanced?: boolean;
+    children?: ReactNode;
 }
 
 export default function ModuleHub({
@@ -49,6 +50,7 @@ export default function ModuleHub({
     sectionLabels,
     linkCopy,
     canAccessAdvanced = true,
+    children,
 }: ModuleHubProps) {
     const { t } = useI18n();
     const sectionGrids = useMemo(() => {
@@ -81,6 +83,8 @@ export default function ModuleHub({
     return (
         <PageShell maxWidth="wide">
             <PageHeader title={title} subtitle={subtitle} breadcrumbs={breadcrumbs} />
+
+            {children}
 
             {sectionGrids.map((section) => (
                 <CompactLinkGrid key={section.label} label={section.label} links={section.links} />

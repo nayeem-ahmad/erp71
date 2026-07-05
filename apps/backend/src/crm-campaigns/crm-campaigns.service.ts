@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { DatabaseService } from '../database/database.service';
 import { SmsService } from '../sms/sms.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
+import { EmailService } from '../email/email.service';
 import { AppLogger } from '../common/app-logger.service';
 import { CreateCampaignDto, UpdateCampaignDto } from './crm-campaigns.dto';
 import { paginate } from '../common/pagination.dto';
@@ -15,17 +16,23 @@ export class CrmCampaignsService {
         private db: DatabaseService,
         private sms: SmsService,
         private whatsapp: WhatsAppService,
+        private email: EmailService,
         private readonly logger: AppLogger,
         private readonly jobTracker: JobTrackerService,
     ) {}
 
     async create(tenantId: string, userId: string, dto: CreateCampaignDto) {
+        if (dto.channel === 'EMAIL' && !dto.subject) {
+            throw new BadRequestException('subject is required for EMAIL campaigns.');
+        }
+
         return this.db.crmCampaign.create({
             data: {
                 tenant_id: tenantId,
                 name: dto.name,
                 description: dto.description,
                 channel: dto.channel,
+                subject: dto.subject,
                 message: dto.message,
                 target_segment: dto.target_segment ?? 'ALL',
                 target_group_id: dto.target_group_id,
@@ -80,6 +87,9 @@ export class CrmCampaignsService {
         if (!existing) throw new NotFoundException('Campaign not found');
         if (!['DRAFT', 'SCHEDULED'].includes(existing.status)) {
             throw new BadRequestException('Only DRAFT/SCHEDULED campaigns can be edited');
+        }
+        if (existing.channel === 'EMAIL' && dto.subject !== undefined && !dto.subject) {
+            throw new BadRequestException('subject is required for EMAIL campaigns.');
         }
 
         const data: any = { ...dto };
@@ -146,9 +156,14 @@ export class CrmCampaignsService {
             skipDuplicates: true,
         });
 
-        void this.dispatchCampaign(tenantId, id, campaign.message, campaign.channel, customers).catch((err) =>
-            this.logger.error(`Campaign ${id} dispatch error: ${err}`),
-        );
+        void this.dispatchCampaign(
+            tenantId,
+            id,
+            campaign.message,
+            campaign.subject,
+            campaign.channel,
+            customers,
+        ).catch((err) => this.logger.error(`Campaign ${id} dispatch error: ${err}`));
 
         return { queued: customers.length };
     }
@@ -212,8 +227,9 @@ export class CrmCampaignsService {
         tenantId: string,
         campaignId: string,
         message: string,
+        subject: string | null,
         channel: string,
-        customers: Array<{ id: string; phone: string }>,
+        customers: Array<{ id: string; phone: string; email?: string | null }>,
     ) {
         let delivered = 0;
         let failed = 0;
@@ -230,6 +246,15 @@ export class CrmCampaignsService {
                     }
                 } else if (channel === 'WHATSAPP') {
                     await this.whatsapp.sendMessage(customer.phone, message);
+                } else if (channel === 'EMAIL') {
+                    if (!customer.email) {
+                        throw new Error('Customer has no email address on file');
+                    }
+                    await this.email.sendCustom(
+                        customer.email,
+                        subject ?? '',
+                        message.replace(/\n/g, '<br>'),
+                    );
                 }
                 await this.db.crmCampaignRecipient.updateMany({
                     where: { campaign_id: campaignId, customer_id: customer.id },
@@ -274,7 +299,7 @@ export class CrmCampaignsService {
 
         return this.db.customer.findMany({
             where,
-            select: { id: true, name: true, phone: true },
+            select: { id: true, name: true, phone: true, email: true },
         });
     }
 }

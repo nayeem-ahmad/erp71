@@ -48,6 +48,7 @@ export type LeadFormState = {
     priority: string;
     remarks: string;
     status: string;
+    lost_reason: string;
     source: string;
     linkedin_url: string;
     fb_url: string;
@@ -66,6 +67,7 @@ export const emptyLeadForm = (): LeadFormState => ({
     priority: 'MEDIUM',
     remarks: '',
     status: 'NEW',
+    lost_reason: '',
     source: 'OTHER',
     linkedin_url: '',
     fb_url: '',
@@ -86,6 +88,7 @@ export function leadToFormState(lead: Record<string, unknown>): LeadFormState {
         priority: String(lead.priority ?? 'MEDIUM'),
         remarks: String(lead.remarks ?? lead.notes ?? ''),
         status: String(lead.status ?? 'NEW'),
+        lost_reason: String(lead.lost_reason ?? ''),
         source: String(lead.source ?? 'OTHER'),
         linkedin_url: String(lead.linkedin_url ?? ''),
         fb_url: String(lead.fb_url ?? ''),
@@ -104,6 +107,7 @@ export function validateLeadForm(form: LeadFormState): string | null {
     if (!form.mobile.trim()) return 'MOBILE_REQUIRED';
     const email = form.email.trim();
     if (email && !EMAIL_RE.test(email)) return 'INVALID_EMAIL';
+    if (form.status === 'LOST' && !form.lost_reason.trim()) return 'LOST_REASON_REQUIRED';
     return null;
 }
 
@@ -119,6 +123,7 @@ export function leadFormToPayload(form: LeadFormState) {
     const remarks = form.remarks.trim();
     if (remarks) payload.remarks = remarks;
     if (form.status) payload.status = form.status;
+    if (form.status === 'LOST') payload.lost_reason = form.lost_reason.trim();
     if (form.source) payload.source = form.source;
     const linkedin = form.linkedin_url.trim();
     if (linkedin) payload.linkedin_url = linkedin;
@@ -205,6 +210,18 @@ export function LeadFormFields({ form, onChange, teamMembers = [], showStatus = 
                     <select value={form.status} onChange={(e) => set('status', e.target.value)} className={inputClass}>
                         {LEAD_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
                     </select>
+                </div>
+            )}
+            {showStatus && form.status === 'LOST' && (
+                <div className="sm:col-span-2">
+                    <label className={labelClass}>{m.fields.lostReason}</label>
+                    <textarea
+                        value={form.lost_reason}
+                        onChange={(e) => set('lost_reason', e.target.value)}
+                        className={inputClass}
+                        rows={2}
+                        placeholder={m.fields.lostReasonPlaceholder}
+                    />
                 </div>
             )}
             <div>
