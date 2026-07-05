@@ -485,6 +485,7 @@ export const api = {
         return fetchWithAuth(`/crm/leads${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getLead: (id: string) => fetchWithAuth(`/crm/leads/${id}`),
+    getLeadsSummary: () => fetchWithAuth('/crm/leads/summary'),
     createLead: (data: any) => fetchWithAuth('/crm/leads', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -876,12 +877,26 @@ export const api = {
             },
         );
     },
-    recordSupplierCreditPayment: (id: string, data: { amount: number; direction?: 'pay' | 'receive'; notes?: string }) =>
+    recordSupplierCreditPayment: (id: string, data: {
+        amount: number;
+        direction?: 'pay' | 'receive';
+        notes?: string;
+        allocations?: { purchaseId: string; amount: number }[];
+    }) =>
         fetchWithAuth(`/suppliers/${id}/credit/payment`, {
             method: 'POST',
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    getSupplierBillingSummary: (id: string) => fetchWithAuth(`/suppliers/${id}/billing-summary`),
+    allocateSupplierPayment: (paymentId: string, allocations: { purchaseId: string; amount: number }[]) =>
+        fetchWithAuth(`/suppliers/credit/payments/${paymentId}/allocate`, {
+            method: 'POST',
+            body: JSON.stringify({ allocations }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    removeSupplierPaymentAllocation: (allocationId: string) =>
+        fetchWithAuth(`/suppliers/credit/allocations/${allocationId}`, { method: 'DELETE' }),
     getSupplierCreditPayments: (params?: {
         page?: number;
         limit?: number;
@@ -1328,6 +1343,27 @@ export const api = {
         if (params?.limit) query.set('limit', String(params.limit));
         return fetchWithAuth(`/admin/feedback${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    // Feedback automation (propose plan -> admin approve -> implement -> PR -> rollback)
+    getAdminFeedbackDetail: (id: string) => fetchWithAuth(`/admin/feedback/${id}`),
+    saveFeedbackInstruction: (id: string, instruction: string) =>
+        fetchWithAuth(`/admin/feedback/${id}/instruction`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ instruction }),
+        }),
+    proposeFeedbackPlan: (id: string) => fetchWithAuth(`/admin/feedback/${id}/propose-plan`, { method: 'POST' }),
+    reviewFeedbackPlan: (
+        planId: string,
+        data: { decision: 'APPROVE' | 'REQUEST_CHANGES'; comment?: string; confirmMigration?: boolean },
+    ) =>
+        fetchWithAuth(`/admin/feedback/plans/${planId}/review`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }),
+    implementFeedbackNow: (id: string) => fetchWithAuth(`/admin/feedback/${id}/implement`, { method: 'POST' }),
+    getFeedbackPrStatus: (id: string) => fetchWithAuth(`/admin/feedback/${id}/pr-status`),
+    rollbackFeedback: (id: string) => fetchWithAuth(`/admin/feedback/${id}/rollback`, { method: 'POST' }),
     // Support chat (shop owner)
     getSupportThreads: () => fetchWithAuth('/support/threads'),
     createSupportThread: (data: { subject: string; body: string }) =>
@@ -1450,6 +1486,24 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         }),
+    getAdminAddonModules: () => fetchWithAuth('/admin/addon-modules'),
+    getAdminAddonModule: (id: string) => fetchWithAuth(`/admin/addon-modules/${id}`),
+    createAdminAddonModule: (payload: unknown) =>
+        fetchWithAuth('/admin/addon-modules', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }),
+    updateAdminAddonModule: (id: string, payload: unknown) =>
+        fetchWithAuth(`/admin/addon-modules/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }),
+    getAddonCatalog: () => fetchWithAuth('/addon-modules'),
+    getMyAddonSubscriptions: () => fetchWithAuth('/addon-modules/mine'),
+    cancelAddonAtPeriodEnd: (code: string) =>
+        fetchWithAuth(`/addon-modules/${code}/cancel-at-period-end`, { method: 'POST' }),
     updateProfile: (data: { name?: string; preferred_locale?: 'en' | 'bn' | 'ms' }) => fetchWithAuth('/auth/me', {
         method: 'PATCH',
         body: JSON.stringify(data),

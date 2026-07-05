@@ -2,6 +2,7 @@ import {
     defaultPlanFeatures,
     isComingSoonSubscriptionPlan,
     isSelfServeSubscriptionPlan,
+    mergeAddonFeatures,
     normalizePlanFeatures,
     parsePlanFeatures,
     resolveAiCreditsMonthly,
@@ -43,5 +44,44 @@ describe('subscription-plans helpers', () => {
         expect(features.premiumAccountingAdvanced).toBe(true);
         expect(features.premiumAi).toBe(false);
         expect(features.premiumVoice).toBe(true);
+    });
+
+    describe('mergeAddonFeatures', () => {
+        it('grants a boolean entitlement from an active add-on the base plan lacks', () => {
+            const base = normalizePlanFeatures({}, 'FREE');
+            expect(base.premiumManufacturing).toBe(false);
+
+            const merged = mergeAddonFeatures(base, [{ premiumManufacturing: true }]);
+            expect(merged.premiumManufacturing).toBe(true);
+        });
+
+        it('never turns off a boolean the base plan already grants', () => {
+            const base = normalizePlanFeatures({ premiumManufacturing: true }, 'PREMIUM');
+            const merged = mergeAddonFeatures(base, [{ premiumManufacturing: false }]);
+            expect(merged.premiumManufacturing).toBe(true);
+        });
+
+        it('takes the max of numeric quotas across plan and add-ons', () => {
+            const base = normalizePlanFeatures({ maxStores: 2 });
+            const merged = mergeAddonFeatures(base, [{ maxStores: 1 }, { maxStores: 5 }]);
+            expect(merged.maxStores).toBe(5);
+        });
+
+        it('ignores unknown keys and missing/null add-on feature bags', () => {
+            const base = normalizePlanFeatures({});
+            const merged = mergeAddonFeatures(base, [null, undefined, { notARealKey: true }]);
+            expect(merged).toEqual(base);
+        });
+
+        it('merges multiple active add-ons together', () => {
+            const base = normalizePlanFeatures({}, 'FREE');
+            const merged = mergeAddonFeatures(base, [
+                { premiumManufacturing: true },
+                { premiumStorefront: true },
+            ]);
+            expect(merged.premiumManufacturing).toBe(true);
+            expect(merged.premiumStorefront).toBe(true);
+            expect(merged.premiumBookPublishing).toBe(false);
+        });
     });
 });

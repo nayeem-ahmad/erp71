@@ -55,10 +55,22 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
         support_enabled:  { isSecret: false, default: 'false' },
         help_enabled:     { isSecret: false, default: 'false' },
         voice_enabled:    { isSecret: false, default: 'false' },
+        manufacturing_enabled: { isSecret: false, default: 'true' },
     },
     navigation: {
         tenant_layout: { isSecret: false },
         platform_admin_layout: { isSecret: false },
+    },
+    feedback_automation: {
+        enabled:                    { isSecret: false, default: 'false' },
+        // 'manual' | 'daily' | 'weekly' — cadence for the batch plan-proposal cron;
+        // 'manual' means only the admin's direct "Propose Plan" trigger runs it.
+        schedule:                   { isSecret: false, default: 'manual' },
+        model:                      { isSecret: false, default: 'anthropic/claude-sonnet-4.6' },
+        require_migration_signoff:  { isSecret: false, default: 'true' },
+        github_token:               { isSecret: true },
+        github_repo:                { isSecret: false, default: 'nayeem-ahmad/erp71' },
+        github_base_branch:         { isSecret: false, default: 'dev' },
     },
 };
 

@@ -170,6 +170,30 @@ export const PLAN_ENTITLEMENT_REGISTRY: PlanEntitlementDefinition[] = [
     group: 'accounting',
   },
   {
+    key: 'premiumManufacturing',
+    type: 'boolean',
+    label: 'Manufacturing module',
+    description: 'BOM, production jobs, wastage recording, and production analytics.',
+    defaultValue: false,
+    group: 'modules',
+  },
+  {
+    key: 'premiumStorefront',
+    type: 'boolean',
+    label: 'eCommerce storefront',
+    description: 'Public storefront pages and customer order intake.',
+    defaultValue: false,
+    group: 'modules',
+  },
+  {
+    key: 'premiumBookPublishing',
+    type: 'boolean',
+    label: 'Book publishing module',
+    description: 'Publishing-specific catalog, print runs, and royalty tracking.',
+    defaultValue: false,
+    group: 'modules',
+  },
+  {
     key: 'premiumAi',
     type: 'boolean',
     label: 'AI assistant',
@@ -351,10 +375,10 @@ export function normalizePlanFeatures(
     }
   }
 
-  if (typeof base.planRank !== 'number' && isFixedPlanCode(planCode)) {
+  if (input.planRank === undefined && isFixedPlanCode(planCode)) {
     base.planRank = LEGACY_PLAN_RANK[planCode];
   }
-  if (typeof base.aiCreditsMonthly !== 'number' && isFixedPlanCode(planCode)) {
+  if (input.aiCreditsMonthly === undefined && isFixedPlanCode(planCode)) {
     base.aiCreditsMonthly = LEGACY_AI_CREDITS_MONTHLY[planCode];
   }
 
@@ -371,6 +395,57 @@ export function parsePlanFeatures(
   );
   planFeaturesSchema.parse(normalized);
   return normalized;
+}
+
+/**
+ * Unions one or more purchased add-ons' `features_json` on top of a tenant's
+ * normalized plan features. Add-ons only ever grant capability: booleans are
+ * OR'd in, numeric quotas take the max of plan vs. every active add-on — an
+ * add-on can never reduce what the base plan already grants.
+ */
+export function mergeAddonFeatures(
+  baseFeatures: Record<string, boolean | number>,
+  addonFeaturesList: Array<Record<string, unknown> | null | undefined>,
+): Record<string, boolean | number> {
+  const merged: Record<string, boolean | number> = { ...baseFeatures };
+
+  for (const addonFeatures of addonFeaturesList) {
+    if (!addonFeatures || typeof addonFeatures !== 'object') continue;
+
+    for (const definition of PLAN_ENTITLEMENT_REGISTRY) {
+      const raw = addonFeatures[definition.key];
+      if (raw === undefined) continue;
+
+      if (definition.type === 'boolean') {
+        const grants =
+          typeof raw === 'boolean'
+            ? raw
+            : typeof raw === 'string'
+              ? raw.toLowerCase() === 'true' || raw === '1'
+              : typeof raw === 'number'
+                ? raw > 0
+                : false;
+        if (grants) {
+          merged[definition.key] = true;
+        }
+        continue;
+      }
+
+      const numericValue =
+        typeof raw === 'number' && Number.isFinite(raw)
+          ? raw
+          : typeof raw === 'string' && raw.trim() !== '' && !Number.isNaN(Number(raw))
+            ? Number(raw)
+            : undefined;
+      if (numericValue === undefined) continue;
+
+      const current = merged[definition.key];
+      const currentNumeric = typeof current === 'number' ? current : 0;
+      merged[definition.key] = Math.max(currentNumeric, numericValue);
+    }
+  }
+
+  return merged;
 }
 
 export function hasPlanEntitlement(

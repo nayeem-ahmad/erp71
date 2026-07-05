@@ -53,12 +53,14 @@ import { AdminTenantsModule } from './admin-tenants/admin-tenants.module';
 import { WarrantyClaimsModule } from './warranty-claims/warranty-claims.module';
 import { AccountModule } from './account/account.module';
 import { FeedbackModule } from './feedback/feedback.module';
+import { FeedbackAutomationModule } from './feedback-automation/feedback-automation.module';
 import { ContactModule } from './contact/contact.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { StorefrontModule } from './storefront/storefront.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { DeliveryModule } from './delivery/delivery.module';
 import { ManufacturingModule } from './manufacturing/manufacturing.module';
+import { AddonModulesModule } from './addon-modules/addon-modules.module';
 import { LoyaltyModule } from './loyalty/loyalty.module';
 import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
 import { NavigationModule } from './navigation/navigation.module';
@@ -144,12 +146,14 @@ import { ReferralsModule } from './referrals/referrals.module';
         WarrantyClaimsModule,
         AccountModule,
         FeedbackModule,
+        FeedbackAutomationModule,
         ContactModule,
         ApiKeysModule,
         StorefrontModule,
         TenantsModule,
         DeliveryModule,
         ManufacturingModule,
+        AddonModulesModule,
         LoyaltyModule,
         DiscountCodesModule,
         EmployeesModule,

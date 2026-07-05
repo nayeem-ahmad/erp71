@@ -31,6 +31,22 @@ import { routes } from '@/lib/routes';
 /*  Navigation structure                                               */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Account-settings ("Admin") links that stay relevant to an accounting-only
+ * subscription. Everything else in the module is retail/POS/marketing and is
+ * hidden in `accountingOnlyMode`. Keep this in sync with the accounting-only
+ * settings route allow-list in `@/lib/accounting-only-paths`.
+ */
+const ACCOUNTING_ONLY_ADMIN_LINK_HREFS: ReadonlySet<string> = new Set([
+    routes.settings.root, // My Account
+    routes.team, // Team & Permissions
+    routes.settings.auditLogs, // Audit Logs
+    routes.settings.localization, // Localization
+    routes.settings.tax, // Tax / VAT
+    routes.settings.data, // Data Management
+    routes.billing, // Billing
+]);
+
 type NavChild = ResolvedNavChild;
 type NavModule = ResolvedNavModule;
 
@@ -110,6 +126,7 @@ export default function Sidebar({
     canAccessInventoryReports = false,
     canAccessAccountingAdvanced = false,
     canAccessPremiumCrm = false,
+    canAccessManufacturing = false,
     canAccessAdmin = false,
     canManageBilling = false,
     canManageTeam = false,
@@ -128,6 +145,7 @@ export default function Sidebar({
     canAccessInventoryReports?: boolean;
     canAccessAccountingAdvanced?: boolean;
     canAccessPremiumCrm?: boolean;
+    canAccessManufacturing?: boolean;
     canAccessAdmin?: boolean;
     canManageBilling?: boolean;
     canManageTeam?: boolean;
@@ -193,6 +211,7 @@ export default function Sidebar({
                 if (module.key === 'admin') return canAccessAdmin;
                 if (module.key === 'help') return helpEnabled;
                 if (module.key === 'support') return supportEnabled;
+                if (module.key === 'manufacturing') return canAccessManufacturing;
                 return true;
             })
             .map((module) => {
@@ -203,6 +222,9 @@ export default function Sidebar({
                         ...module,
                         children: module.children.filter((child) => {
                             if (isNavSubgroup(child)) return true;
+                            if (accountingOnlyMode && !ACCOUNTING_ONLY_ADMIN_LINK_HREFS.has(child.href)) {
+                                return false;
+                            }
                             if (child.href === routes.billing) return canManageBilling;
                             if (child.href === routes.team || child.href === routes.settings.auditLogs) {
                                 return canManageTeam;
@@ -255,6 +277,7 @@ export default function Sidebar({
         canAccessInventoryReports,
         canAccessAccountingAdvanced,
         canAccessPremiumCrm,
+        canAccessManufacturing,
         canAccessAdmin,
         canManageBilling,
         canManageTeam,

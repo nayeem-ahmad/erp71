@@ -71,7 +71,7 @@ describe('LoyaltySettingsPage', () => {
         });
     });
 
-    it('shows Settings breadcrumb link', async () => {
+    it('shows Admin breadcrumb link', async () => {
         const { fetchWithAuth } = require('@/lib/api');
         fetchWithAuth.mockResolvedValue({
             loyalty_points_enabled: false,
@@ -81,7 +81,7 @@ describe('LoyaltySettingsPage', () => {
         });
         render(<LoyaltySettingsPage />);
         await waitFor(() => {
-            expect(screen.getByText('Settings')).toBeInTheDocument();
+            expect(screen.getByText('Admin')).toBeInTheDocument();
         });
     });
 });

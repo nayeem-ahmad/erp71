@@ -17,7 +17,7 @@ describe('BillingService', () => {
         subscriptionPlan: { findMany: jest.fn(), findUnique: jest.fn() },
         tenantSubscription: { findUnique: jest.fn(), upsert: jest.fn(), update: jest.fn() },
         tenant: { findUnique: jest.fn() },
-        billingEvent: { findMany: jest.fn(), findUnique: jest.fn(), upsert: jest.fn() },
+        billingEvent: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), upsert: jest.fn() },
         userStorePermission: { findFirst: jest.fn() },
         referralSignup: { findUnique: jest.fn().mockResolvedValue(null), update: jest.fn() },
     } as any;
@@ -31,6 +31,11 @@ describe('BillingService', () => {
 
     const notifications = {
         create: jest.fn().mockResolvedValue({ id: 'n-1' }),
+    } as any;
+
+    const addonModules = {
+        getActiveAddonsByCodes: jest.fn().mockResolvedValue([]),
+        grantOrRenewSubscription: jest.fn().mockResolvedValue(undefined),
     } as any;
 
     let service: BillingService;
@@ -62,7 +67,9 @@ describe('BillingService', () => {
     beforeEach(() => {
         jest.resetAllMocks();
         audit.log.mockResolvedValue(undefined);
-        service = new BillingService(db, audit, email, notifications, new CircuitBreakerRegistry());
+        addonModules.getActiveAddonsByCodes.mockResolvedValue([]);
+        addonModules.grantOrRenewSubscription.mockResolvedValue(undefined);
+        service = new BillingService(db, audit, email, notifications, addonModules, new CircuitBreakerRegistry());
         (global as any).fetch = fetchMock;
         process.env.BILLING_PROVIDER = 'SSL_WIRELESS';
         process.env.SSL_WIRELESS_STORE_ID = 'store-id';
@@ -117,6 +124,33 @@ describe('BillingService', () => {
         expect(db.billingEvent.upsert).toHaveBeenCalled();
     });
 
+    it('adds selected add-ons to the checkout total and records their codes for the callback', async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            text: jest.fn().mockResolvedValue(JSON.stringify({
+                status: 'SUCCESS',
+                GatewayPageURL: 'https://sandbox.sslcommerz.com/gateway',
+                sessionkey: 'session-1',
+            })),
+        });
+        addonModules.getActiveAddonsByCodes.mockResolvedValue([
+            { id: 'addon-1', code: 'MANUFACTURING', name: 'Manufacturing', monthly_price: 500, yearly_price: 5000 },
+        ]);
+
+        const result = await service.createCheckoutSession(tenantCtx(), {
+            planCode: 'STANDARD',
+            billingCycle: 'MONTHLY',
+            addonCodes: ['manufacturing'],
+        });
+
+        expect(addonModules.getActiveAddonsByCodes).toHaveBeenCalledWith(['manufacturing']);
+        expect(result.addons).toEqual([{ code: 'MANUFACTURING', name: 'Manufacturing', price: 500 }]);
+
+        const upsertCall = db.billingEvent.upsert.mock.calls[0][0];
+        expect(upsertCall.create.amount).toBe(3999 + 500); // mocked plan monthly_price is 3999
+        expect(upsertCall.create.payload.addon_codes).toEqual(['MANUFACTURING']);
+    });
+
     it('rejects checkout when selecting the free plan', async () => {
         await expect(service.createCheckoutSession(tenantCtx(), {
             planCode: 'FREE',
@@ -162,6 +196,64 @@ describe('BillingService', () => {
 
         expect(db.tenantSubscription.upsert).toHaveBeenCalled();
         expect(redirectUrl).toContain('paymentStatus=success');
+    });
+
+    it('recovers add-on codes from the stored CHECKOUT_CREATED event and grants them on success', async () => {
+        db.billingEvent.findFirst.mockResolvedValue({
+            payload: { addon_codes: ['MANUFACTURING'] },
+        });
+        addonModules.getActiveAddonsByCodes.mockResolvedValue([
+            { id: 'addon-1', code: 'MANUFACTURING', name: 'Manufacturing', monthly_price: 500, yearly_price: 5000 },
+        ]);
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            text: jest.fn().mockResolvedValue(JSON.stringify({
+                status: 'VALID',
+                tran_id: 'sslw_tenant_1',
+                val_id: 'val-1',
+                bank_tran_id: 'bank-ref-1',
+                amount: '4499.00',
+                currency: 'BDT',
+                value_a: 'tenant-1',
+            })),
+        });
+
+        await service.handleSslWirelessCallback({
+            tran_id: 'sslw_tenant_1',
+            val_id: 'val-1',
+            value_a: 'tenant-1',
+            value_b: 'PREMIUM',
+            value_c: 'MONTHLY',
+        }, 'success');
+
+        expect(db.billingEvent.findFirst).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    provider_name: 'ssl-wireless',
+                    reference_id: 'sslw_tenant_1',
+                    event_type: 'CHECKOUT_CREATED',
+                }),
+            }),
+        );
+        expect(addonModules.getActiveAddonsByCodes).toHaveBeenCalledWith(['MANUFACTURING']);
+        expect(addonModules.grantOrRenewSubscription).toHaveBeenCalledWith(
+            expect.objectContaining({ tenantId: 'tenant-1', addonId: 'addon-1', status: 'ACTIVE' }),
+        );
+    });
+
+    it('does not grant add-ons when the SSL Wireless callback fails', async () => {
+        db.billingEvent.findFirst.mockResolvedValue({
+            payload: { addon_codes: ['MANUFACTURING'] },
+        });
+
+        await service.handleSslWirelessCallback({
+            tran_id: 'sslw_tenant_1',
+            value_a: 'tenant-1',
+            value_b: 'PREMIUM',
+            value_c: 'MONTHLY',
+        }, 'fail');
+
+        expect(addonModules.grantOrRenewSubscription).not.toHaveBeenCalled();
     });
 
     it('marks failed SSL Wireless callbacks as non-active', async () => {
@@ -479,6 +571,24 @@ describe('BillingService', () => {
             }),
         }));
         expect(result).toHaveProperty('subscription');
+    });
+
+    it('confirms manual checkout with add-ons and grants each of them', async () => {
+        addonModules.getActiveAddonsByCodes.mockResolvedValue([
+            { id: 'addon-1', code: 'MANUFACTURING', name: 'Manufacturing', monthly_price: 500, yearly_price: 5000 },
+        ]);
+
+        await service.confirmCheckout(tenantCtx(), {
+            planCode: 'STANDARD',
+            billingCycle: 'MONTHLY',
+            reference: 'manual_ref_123',
+            addonCodes: ['MANUFACTURING'],
+        });
+
+        expect(addonModules.getActiveAddonsByCodes).toHaveBeenCalledWith(['MANUFACTURING']);
+        expect(addonModules.grantOrRenewSubscription).toHaveBeenCalledWith(
+            expect.objectContaining({ tenantId: 'tenant-1', addonId: 'addon-1', status: 'ACTIVE' }),
+        );
     });
 
     // --- Transactional email tests ---

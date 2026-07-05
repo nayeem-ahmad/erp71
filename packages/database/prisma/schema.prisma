@@ -47,6 +47,39 @@ enum PriceListDiscountType {
   FIXED_AMOUNT
 }
 
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  LOST
+  CONVERTED
+}
+
+enum LeadSource {
+  WALK_IN
+  PHONE
+  FACEBOOK
+  REFERRAL
+  WEBSITE
+  OTHER
+}
+
+enum LeadCategory {
+  RETAIL
+  WHOLESALE
+  CORPORATE
+  INDIVIDUAL
+  PARTNER
+  OTHER
+}
+
+enum LeadPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
 enum StorePermission {
   // Product & Catalog
   VIEW_PRODUCT_CATALOG
@@ -330,6 +363,7 @@ model Tenant {
   users      TenantUser[]
   subscription TenantSubscription?
   billingEvents BillingEvent[]
+  addonSubscriptions TenantAddonSubscription[]
 
   apiKeys         ApiKey[]
   deliveryOrders  DeliveryOrder[]
@@ -379,6 +413,9 @@ model Tenant {
   storefrontOrders  StorefrontOrder[]
   bomRecipes      BomRecipe[]
   productionJobs  ProductionJob[]
+  productionWastages ProductionWastage[]
+  productionJobCosts ProductionJobCost[]
+  supplierPaymentAllocations SupplierPaymentAllocation[]
   loyaltyTransactions LoyaltyTransaction[]
   discountCodes   DiscountCode[]
   notifications   Notification[]
@@ -684,6 +721,7 @@ model Product {
   storefrontOrderItems StorefrontOrderItem[]
   bomRecipe    BomRecipe?
   bomComponents BomComponent[] @relation("BomComponent")
+  productionWastages ProductionWastage[] @relation("ProductionWastage")
 
   @@unique([tenant_id, sku])
   @@index([tenant_id, brand_id])
@@ -964,10 +1002,31 @@ model SupplierCreditTransaction {
   tenant    Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   supplier  Supplier  @relation(fields: [supplier_id], references: [id], onDelete: Cascade)
   creator   User?     @relation("SupplierCreditTransactionCreator", fields: [created_by], references: [id])
+  allocations SupplierPaymentAllocation[]
 
   @@unique([tenant_id, payment_number])
   @@index([tenant_id, supplier_id])
   @@index([tenant_id, created_at])
+}
+
+// Matches a supplier PAYMENT transaction (in full or in part) to a specific
+// Purchase bill, so advances and part-payments taken before/without a bill
+// can be applied to the correct bill(s) later instead of only moving a
+// tenant-wide running balance.
+model SupplierPaymentAllocation {
+  id             String   @id @default(uuid())
+  tenant_id      String
+  transaction_id String
+  purchase_id    String
+  amount         Decimal  @db.Decimal(12, 2)
+  created_at     DateTime @default(now())
+
+  tenant      Tenant                    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  transaction SupplierCreditTransaction @relation(fields: [transaction_id], references: [id], onDelete: Cascade)
+  purchase    Purchase                  @relation(fields: [purchase_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, purchase_id])
+  @@index([tenant_id, transaction_id])
 }
 
 model Purchase {
@@ -981,6 +1040,8 @@ model Purchase {
   discount_amount Decimal  @default(0) @db.Decimal(12, 2)
   freight_amount  Decimal  @default(0) @db.Decimal(12, 2)
   total_amount    Decimal  @default(0) @db.Decimal(12, 2)
+  paid_amount     Decimal  @default(0) @db.Decimal(12, 2)
+  payment_status  String   @default("UNPAID") // UNPAID | PARTIAL | PAID
   notes           String?
   created_by      String?
   created_at      DateTime @default(now())
@@ -990,10 +1051,12 @@ model Purchase {
   supplier        Supplier? @relation(fields: [supplier_id], references: [id])
   items           PurchaseItem[]
   returns         PurchaseReturn[]
+  paymentAllocations SupplierPaymentAllocation[]
 
   @@unique([tenant_id, purchase_number])
   @@index([tenant_id, created_at])
   @@index([tenant_id, store_id])
+  @@index([tenant_id, payment_status])
 }
 
 model PurchaseItem {
@@ -1007,6 +1070,7 @@ model PurchaseItem {
   purchase      Purchase @relation(fields: [purchase_id], references: [id], onDelete: Cascade)
   product       Product  @relation(fields: [product_id], references: [id])
   returnItems   PurchaseReturnItem[]
+  jobCosts      ProductionJobCost[]
 }
 
 model PurchaseReturn {
@@ -1309,11 +1373,13 @@ model Lead {
   mobile                  String
   email                   String?
   address                 String?
-  category                String?
-  priority                String    @default("MEDIUM") // LOW | MEDIUM | HIGH | URGENT
+  category                LeadCategory?
+  priority                LeadPriority @default(MEDIUM)
   remarks                 String?
-  source                  String    @default("OTHER") // WALK_IN | PHONE | FACEBOOK | REFERRAL | WEBSITE | OTHER
-  status                  String    @default("NEW")     // NEW | CONTACTED | QUALIFIED | LOST | CONVERTED
+  source                  LeadSource   @default(OTHER)
+  status                  LeadStatus   @default(NEW)
+  lost_reason             String?
+  score                   Int          @default(0)
   linkedin_url            String?
   fb_url                  String?
   x_url                   String?
@@ -1424,6 +1490,7 @@ model CrmCampaign {
   channel             String    // SMS | WHATSAPP | EMAIL
   target_segment      String?   // VIP | At-Risk | Regular | New | ALL
   target_group_id     String?
+  subject             String?   // required for EMAIL channel
   message             String
   scheduled_at        DateTime?
   sent_at             DateTime?
@@ -1832,6 +1899,48 @@ model SubscriptionPlan {
   subscriptions TenantSubscription[]
 }
 
+// ── Add-on modules (independently priced, purchasable regardless of base plan) ──
+
+// Catalog of optional modules a tenant can buy on top of their subscription plan
+// (e.g. Manufacturing, Advanced Accounting). `code` is a plain string, not an
+// enum, so new add-ons never require a schema migration.
+model AddonModule {
+  id            String   @id @default(uuid())
+  code          String   @unique
+  name          String
+  description   String?
+  category      String?
+  monthly_price Decimal  @db.Decimal(12, 2)
+  yearly_price  Decimal? @db.Decimal(12, 2)
+  features_json Json     @default("{}")
+  is_active     Boolean  @default(true)
+  sort_order    Int      @default(0)
+
+  subscriptions TenantAddonSubscription[]
+
+  @@index([is_active, sort_order])
+}
+
+// A tenant's purchase of a single add-on module, billed independently of but
+// alongside the tenant's base TenantSubscription.
+model TenantAddonSubscription {
+  id                        String             @id @default(uuid())
+  tenant_id                 String
+  addon_id                  String
+  status                    SubscriptionStatus @default(ACTIVE)
+  current_period_start      DateTime           @default(now())
+  current_period_end        DateTime
+  cancel_at_period_end      Boolean            @default(false)
+  provider_name             String?
+  provider_subscription_ref String?
+
+  tenant Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  addon  AddonModule @relation(fields: [addon_id], references: [id])
+
+  @@unique([tenant_id, addon_id])
+  @@index([addon_id, status])
+}
+
 model CashierSession {
   id            String   @id @default(uuid())
   tenant_id     String
@@ -2073,10 +2182,48 @@ model Feedback {
   page       String?
   createdAt  DateTime @default(now())
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  user   User   @relation(fields: [userId], references: [id])
+  /// Admin-driven automation pipeline (propose plan -> approve -> implement -> PR -> rollback).
+  /// NEW | ADMIN_REVIEWING | PLAN_REQUESTED | PLAN_PROPOSED | PLAN_APPROVED | CHANGES_REQUESTED
+  /// | IN_PROGRESS | PR_OPENED | MERGED | RESOLVED | ROLLED_BACK
+  status            String    @default("NEW")
+  adminInstruction  String?
+  prNumber          Int?
+  prUrl             String?
+  mergeCommitSha    String?
+  backupSnapshotId  String?
+  deployedAt        DateTime?
+  lastError         String?
+  rollbackPrNumber  Int?
+  rollbackPrUrl     String?
+  updatedAt         DateTime  @updatedAt
+
+  tenant Tenant         @relation(fields: [tenantId], references: [id])
+  user   User           @relation(fields: [userId], references: [id])
+  plans  FeedbackPlan[]
 
   @@map("feedbacks")
+}
+
+/// A single version of an agent-proposed implementation plan for a Feedback
+/// item, reviewed and approved/rejected by a platform admin before any code
+/// is written. Versioned so a "request changes" revision loop keeps history.
+model FeedbackPlan {
+  id           String    @id @default(cuid())
+  feedbackId   String
+  version      Int
+  planText     String
+  hasMigration Boolean   @default(false)
+  /// PROPOSED | APPROVED | CHANGES_REQUESTED | SUPERSEDED
+  status       String    @default("PROPOSED")
+  adminComment String?
+  createdAt    DateTime  @default(now())
+  reviewedAt   DateTime?
+  reviewedBy   String?
+
+  feedback Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+
+  @@index([feedbackId, version])
+  @@map("feedback_plans")
 }
 
 model ApiKey {
@@ -2197,15 +2344,61 @@ model ProductionJob {
   notes        String?
   startedAt    DateTime?
   completedAt  DateTime?
+  totalJobCost Decimal? @db.Decimal(12, 2) // sum of ProductionJobCost lines, snapshotted at completion
+  costPerUnit  Decimal? @db.Decimal(12, 4) // totalJobCost / (quantity * recipe.outputQty)
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
 
   tenant  Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   recipe  BomRecipe @relation(fields: [recipeId], references: [id])
+  wastages ProductionWastage[]
+  costs    ProductionJobCost[]
 
   @@index([tenantId])
   @@index([tenantId, status])
   @@map("production_jobs")
+}
+
+// A cost line attached to a production job: either the raw-material cost
+// rolled up automatically at completion, or a non-material job cost (printing,
+// binding, transport, labor, ...) added manually or allocated from a
+// PurchaseItem covering a bill that spans multiple jobs/titles.
+model ProductionJobCost {
+  id                    String   @id @default(cuid())
+  tenantId              String
+  jobId                 String
+  costType              String   // RAW_MATERIAL | PRINTING | BINDING | TRANSPORT | LABOR | OVERHEAD | OTHER
+  amount                Decimal  @db.Decimal(12, 2)
+  sourcePurchaseItemId  String?  // traceable back to the bill line this cost came from, when there is one
+  notes                 String?
+  created_at            DateTime @default(now())
+
+  tenant             Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  job                ProductionJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  sourcePurchaseItem PurchaseItem? @relation(fields: [sourcePurchaseItemId], references: [id])
+
+  @@index([tenantId, jobId])
+  @@map("production_job_costs")
+}
+
+// Additional raw-material consumption recorded on top of the standard BOM
+// quantities when a production job completes (spoilage, breakage, etc.).
+model ProductionWastage {
+  id         String   @id @default(cuid())
+  tenantId   String
+  jobId      String
+  productId  String
+  quantity   Decimal  @db.Decimal(12, 4)
+  note       String?
+  created_at DateTime @default(now())
+
+  tenant  Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  job     ProductionJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  product Product       @relation("ProductionWastage", fields: [productId], references: [id])
+
+  @@index([tenantId])
+  @@index([jobId])
+  @@map("production_wastages")
 }
 
 model LoyaltyTransaction {

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { MessageSquare, Mail, CreditCard, Settings, ChevronRight, Sparkles, LayoutList, BadgePercent, MessageCircle, ToggleLeft } from 'lucide-react';
+import { MessageSquare, Mail, CreditCard, Settings, ChevronRight, Sparkles, LayoutList, BadgePercent, MessageCircle, ToggleLeft, PackagePlus, Bot } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -83,6 +83,22 @@ export default function PlatformSettingsIndexPage() {
             description: m.sections.plans.description,
             color: 'text-rose-600',
             bg: 'bg-rose-50',
+        },
+        {
+            href: '/admin/platform-settings/addons',
+            icon: PackagePlus,
+            label: 'Add-on Modules',
+            description: 'Manage optional paid modules (Manufacturing, Advanced Accounting, etc.) tenants can buy on top of any plan.',
+            color: 'text-teal-600',
+            bg: 'bg-teal-50',
+        },
+        {
+            href: '/admin/platform-settings/feedback-automation',
+            icon: Bot,
+            label: 'Feedback Automation',
+            description: 'Experimental: let an agent propose implementation plans for approved tenant feedback and open a PR once you approve.',
+            color: 'text-fuchsia-600',
+            bg: 'bg-fuchsia-50',
         },
     ];
 

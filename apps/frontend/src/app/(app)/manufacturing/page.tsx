@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { Factory, Plus, X, RefreshCw, Cog, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Factory, Plus, X, RefreshCw, Cog, Trash2, CheckCircle2, Package, Wallet, Calculator } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatBDT } from '@/lib/format';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { FinancialKpiTile } from '@/components/dashboard/KpiTile';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
@@ -55,6 +56,24 @@ interface ProductionJob {
     completedAt: string | null;
     created_at: string;
     recipe: ProductionJobRecipe;
+    totalJobCost: number | string | null;
+    costPerUnit: number | string | null;
+}
+
+type JobCostType = 'RAW_MATERIAL' | 'PRINTING' | 'BINDING' | 'TRANSPORT' | 'LABOR' | 'OVERHEAD' | 'OTHER';
+
+interface ProductionJobCost {
+    id: string;
+    jobId: string;
+    costType: JobCostType;
+    amount: number | string;
+    notes: string | null;
+    created_at: string;
+    sourcePurchaseItem?: {
+        id: string;
+        product: { id: string; name: string; sku: string | null };
+        purchase: { id: string; purchase_number: string };
+    } | null;
 }
 
 interface JobsResponse {
@@ -63,6 +82,51 @@ interface JobsResponse {
     page: number;
     limit: number;
     pages: number;
+}
+
+interface RequirementItem {
+    productId: string;
+    productName: string;
+    productSku: string | null;
+    perUnitQty: number;
+    requiredQty: number;
+    availableQty: number;
+    sufficient: boolean;
+}
+
+interface RequirementsPreview {
+    recipeId: string;
+    quantity: number;
+    outputQty: number;
+    sufficient: boolean;
+    components: RequirementItem[];
+}
+
+interface AnalyticsJobRow {
+    jobId: string;
+    productId: string;
+    productName: string;
+    productSku: string | null;
+    quantityProduced: number;
+    plannedMaterialCost: number;
+    wastageCost: number;
+    actualMaterialCost: number;
+    unitProductionCost: number;
+    completedAt: string | null;
+}
+
+interface AnalyticsTrendPoint {
+    date: string;
+    quantityProduced: number;
+}
+
+interface AnalyticsSummary {
+    totalCompletedJobs: number;
+    totalUnitsProduced: number;
+    totalMaterialCost: number;
+    avgUnitProductionCost: number;
+    jobs: AnalyticsJobRow[];
+    volumeTrend: AnalyticsTrendPoint[];
 }
 
 // ------------------------------------------------------------------ //
@@ -96,13 +160,34 @@ const JOB_STATUS_LABEL_KEYS: Record<string, 'draft' | 'inProgress' | 'completed'
     CANCELLED: 'cancelled',
 };
 
+const ADDABLE_JOB_COST_TYPES: Exclude<JobCostType, 'RAW_MATERIAL'>[] = [
+    'PRINTING',
+    'BINDING',
+    'TRANSPORT',
+    'LABOR',
+    'OVERHEAD',
+    'OTHER',
+];
+
+const EMPTY_JOB_COST_FORM = {
+    costType: 'PRINTING' as Exclude<JobCostType, 'RAW_MATERIAL'>,
+    amount: '',
+    notes: '',
+};
+
 // ------------------------------------------------------------------ //
 //  Main Page                                                          //
 // ------------------------------------------------------------------ //
 
 export default function ManufacturingPage() {
     const { t } = useI18n();
-    const [activeTab, setActiveTab] = useState<'bom' | 'jobs'>('bom');
+    const [activeTab, setActiveTab] = useState<'bom' | 'jobs' | 'analytics'>('bom');
+
+    const tabs: Array<{ key: 'bom' | 'jobs' | 'analytics'; label: string }> = [
+        { key: 'bom', label: t.manufacturing.tabs.boms },
+        { key: 'jobs', label: t.manufacturing.tabs.jobs },
+        { key: 'analytics', label: t.manufacturing.tabs.analytics },
+    ];
 
     return (
         <div className="p-6 space-y-6">
@@ -118,29 +203,22 @@ export default function ManufacturingPage() {
             />
 
             <div className="flex gap-1 border-b border-gray-200">
-                <button
-                    onClick={() => setActiveTab('bom')}
-                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                        activeTab === 'bom'
-                            ? 'border-blue-600 text-blue-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700'
-                    }`}
-                >
-                    {t.manufacturing.tabs.boms}
-                </button>
-                <button
-                    onClick={() => setActiveTab('jobs')}
-                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                        activeTab === 'jobs'
-                            ? 'border-blue-600 text-blue-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700'
-                    }`}
-                >
-                    {t.manufacturing.tabs.jobs}
-                </button>
+                {tabs.map((tab) => (
+                    <button
+                        key={tab.key}
+                        onClick={() => setActiveTab(tab.key)}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                            activeTab === tab.key
+                                ? 'border-blue-600 text-blue-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700'
+                        }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
             </div>
 
-            {activeTab === 'bom' ? <BomTab /> : <JobsTab />}
+            {activeTab === 'bom' ? <BomTab /> : activeTab === 'jobs' ? <JobsTab /> : <AnalyticsTab />}
         </div>
     );
 }
@@ -165,9 +243,8 @@ function BomTab() {
         setLoading(true);
         setError('');
         try {
-            const res = await fetchWithAuth('/manufacturing/bom');
-            const json = await res.json();
-            setBoms(json?.data ?? json ?? []);
+            const data = await fetchWithAuth('/manufacturing/bom?limit=200');
+            setBoms(data?.items ?? []);
         } catch {
             setError(t.manufacturing.loadBomsFailed);
         } finally {
@@ -187,9 +264,7 @@ function BomTab() {
     async function openEdit(bom: BomRecipe) {
         setSaveError('');
         try {
-            const res = await fetchWithAuth(`/api/v1/manufacturing/bom/${bom.id}`);
-            const json = await res.json();
-            const detail: BomRecipeDetail = json?.data ?? json;
+            const detail: BomRecipeDetail = await fetchWithAuth(`/manufacturing/bom/${bom.id}`);
             setEditingId(bom.id);
             setForm({
                 productId: detail.productId,
@@ -225,19 +300,14 @@ function BomTab() {
                 components: form.components.filter((c) => c.productId.trim()),
             };
             const url = editingId
-                ? `/api/v1/manufacturing/bom/${editingId}`
-                : '/api/v1/manufacturing/bom';
+                ? `/manufacturing/bom/${editingId}`
+                : '/manufacturing/bom';
             const method = editingId ? 'PATCH' : 'POST';
-            const res = await fetchWithAuth(url, {
+            await fetchWithAuth(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
             });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                const msg = err?.message;
-                throw new Error(Array.isArray(msg) ? msg.join(', ') : (msg ?? t.manufacturing.saveFailed));
-            }
             setShowModal(false);
             load();
         } catch (e: any) {
@@ -250,7 +320,7 @@ function BomTab() {
     async function handleDelete(id: string) {
         if (!confirm(t.manufacturing.deleteBomConfirm)) return;
         try {
-            await fetchWithAuth(`/api/v1/manufacturing/bom/${id}`, { method: 'DELETE' });
+            await fetchWithAuth(`/manufacturing/bom/${id}`, { method: 'DELETE' });
             load();
         } catch {
             alert(t.manufacturing.deleteBomFailed);
@@ -532,6 +602,24 @@ function JobsTab() {
 
     const [actionError, setActionError] = useState('');
 
+    const [boms, setBoms] = useState<BomRecipe[]>([]);
+    const [bomsLoading, setBomsLoading] = useState(false);
+    const [requirements, setRequirements] = useState<RequirementsPreview | null>(null);
+    const [requirementsLoading, setRequirementsLoading] = useState(false);
+
+    const [completingJob, setCompletingJob] = useState<ProductionJob | null>(null);
+    const [wastageQty, setWastageQty] = useState<Record<string, string>>({});
+    const [completing, setCompleting] = useState(false);
+    const [completeError, setCompleteError] = useState('');
+
+    const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+    const [jobCosts, setJobCosts] = useState<Record<string, ProductionJobCost[]>>({});
+    const [jobCostsLoading, setJobCostsLoading] = useState(false);
+    const [jobCostsError, setJobCostsError] = useState('');
+    const [costForm, setCostForm] = useState({ ...EMPTY_JOB_COST_FORM });
+    const [addingCost, setAddingCost] = useState(false);
+    const [addCostError, setAddCostError] = useState('');
+
     const load = useCallback(async () => {
         setLoading(true);
         setError('');
@@ -539,9 +627,7 @@ function JobsTab() {
         try {
             const params = new URLSearchParams({ page: String(page), limit: '20' });
             if (statusFilter) params.set('status', statusFilter);
-            const res = await fetchWithAuth(`/api/v1/manufacturing/jobs?${params}`);
-            const json = await res.json();
-            const data: JobsResponse = json?.data ?? json;
+            const data: JobsResponse = await fetchWithAuth(`/manufacturing/jobs?${params}`);
             setJobs(data.items ?? []);
             setTotal(data.total ?? 0);
             setPages(data.pages ?? 1);
@@ -554,11 +640,46 @@ function JobsTab() {
 
     useEffect(() => { load(); }, [load]);
 
-    function openCreate() {
+    async function openCreate() {
         setForm({ ...EMPTY_JOB_FORM });
         setSaveError('');
+        setRequirements(null);
         setShowModal(true);
+        setBomsLoading(true);
+        try {
+            const data = await fetchWithAuth('/manufacturing/bom?limit=200');
+            setBoms(data?.items ?? []);
+        } catch {
+            setBoms([]);
+        } finally {
+            setBomsLoading(false);
+        }
     }
+
+    useEffect(() => {
+        if (!showModal || !form.recipeId || form.quantity < 1) {
+            setRequirements(null);
+            return;
+        }
+        let cancelled = false;
+        setRequirementsLoading(true);
+        const timer = setTimeout(async () => {
+            try {
+                const data: RequirementsPreview = await fetchWithAuth(
+                    `/manufacturing/bom/${form.recipeId}/requirements?quantity=${form.quantity}`,
+                );
+                if (!cancelled) setRequirements(data);
+            } catch {
+                if (!cancelled) setRequirements(null);
+            } finally {
+                if (!cancelled) setRequirementsLoading(false);
+            }
+        }, 300);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [showModal, form.recipeId, form.quantity]);
 
     async function handleCreateJob() {
         if (!form.recipeId.trim()) {
@@ -577,16 +698,11 @@ function JobsTab() {
                 quantity: form.quantity,
                 notes: form.notes || undefined,
             };
-            const res = await fetchWithAuth('/manufacturing/jobs', {
+            await fetchWithAuth('/manufacturing/jobs', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
             });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                const msg = err?.message;
-                throw new Error(Array.isArray(msg) ? msg.join(', ') : (msg ?? t.manufacturing.createJobFailed));
-            }
             setShowModal(false);
             load();
         } catch (e: any) {
@@ -601,17 +717,105 @@ function JobsTab() {
         if (!confirm(formatMessage(t.manufacturing.jobActionConfirm, { action: actionLabel }))) return;
         setActionError('');
         try {
-            const res = await fetchWithAuth(`/api/v1/manufacturing/jobs/${jobId}/${action}`, {
+            await fetchWithAuth(`/manufacturing/jobs/${jobId}/${action}`, {
                 method: 'POST',
             });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                const msg = err?.message;
-                throw new Error(Array.isArray(msg) ? msg.join(', ') : (msg ?? formatMessage(t.manufacturing.jobActionFailed, { action })));
-            }
             load();
         } catch (e: any) {
             setActionError(e.message ?? formatMessage(t.manufacturing.jobActionFailed, { action }));
+        }
+    }
+
+    function openCompleteModal(job: ProductionJob) {
+        setCompletingJob(job);
+        setWastageQty({});
+        setCompleteError('');
+    }
+
+    async function handleCompleteJob() {
+        if (!completingJob) return;
+        setCompleting(true);
+        setCompleteError('');
+        try {
+            const wastage = Object.entries(wastageQty)
+                .map(([productId, qty]) => ({ productId, quantity: parseFloat(qty) }))
+                .filter((w) => w.quantity > 0);
+            await fetchWithAuth(`/manufacturing/jobs/${completingJob.id}/complete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ wastage }),
+            });
+            setCompletingJob(null);
+            load();
+        } catch (e: any) {
+            setCompleteError(e.message ?? formatMessage(t.manufacturing.jobActionFailed, { action: t.manufacturing.jobActions.complete }));
+        } finally {
+            setCompleting(false);
+        }
+    }
+
+    async function loadJobCosts(jobId: string) {
+        setJobCostsLoading(true);
+        setJobCostsError('');
+        try {
+            const data: ProductionJobCost[] = await fetchWithAuth(`/manufacturing/jobs/${jobId}/costs`);
+            setJobCosts((prev) => ({ ...prev, [jobId]: data ?? [] }));
+        } catch {
+            setJobCostsError(t.manufacturing.jobCosts.loadFailed);
+        } finally {
+            setJobCostsLoading(false);
+        }
+    }
+
+    function toggleCosts(jobId: string) {
+        if (expandedJobId === jobId) {
+            setExpandedJobId(null);
+            return;
+        }
+        setExpandedJobId(jobId);
+        setCostForm({ ...EMPTY_JOB_COST_FORM });
+        setAddCostError('');
+        if (!jobCosts[jobId]) {
+            loadJobCosts(jobId);
+        }
+    }
+
+    async function handleAddCost(jobId: string) {
+        const amount = parseFloat(costForm.amount);
+        if (!amount || amount <= 0) {
+            setAddCostError(t.manufacturing.jobCosts.amount);
+            return;
+        }
+        setAddingCost(true);
+        setAddCostError('');
+        try {
+            await fetchWithAuth(`/manufacturing/jobs/${jobId}/costs`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    costType: costForm.costType,
+                    amount,
+                    notes: costForm.notes || undefined,
+                }),
+            });
+            setCostForm({ ...EMPTY_JOB_COST_FORM });
+            await loadJobCosts(jobId);
+            load();
+        } catch (e: any) {
+            setAddCostError(e.message ?? t.manufacturing.jobCosts.addFailed);
+        } finally {
+            setAddingCost(false);
+        }
+    }
+
+    async function handleRemoveCost(jobId: string, costId: string) {
+        if (!confirm(t.manufacturing.jobCosts.removeConfirm)) return;
+        try {
+            await fetchWithAuth(`/manufacturing/jobs/${jobId}/costs/${costId}`, { method: 'DELETE' });
+            await loadJobCosts(jobId);
+            load();
+        } catch (e: any) {
+            setAddCostError(e.message ?? t.manufacturing.jobCosts.removeFailed);
         }
     }
 
@@ -698,7 +902,8 @@ function JobsTab() {
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {jobs.map((job) => (
-                                <tr key={job.id} className="hover:bg-gray-50">
+                                <React.Fragment key={job.id}>
+                                <tr className="hover:bg-gray-50">
                                     <td className="px-4 py-3 font-mono text-xs text-gray-500">
                                         {job.id.slice(0, 8)}…
                                     </td>
@@ -743,7 +948,7 @@ function JobsTab() {
                                             )}
                                             {job.status === 'IN_PROGRESS' && (
                                                 <button
-                                                    onClick={() => handleJobAction(job.id, 'complete')}
+                                                    onClick={() => openCompleteModal(job)}
                                                     className="text-green-600 hover:text-green-800 text-xs font-medium"
                                                 >
                                                     {t.manufacturing.jobActions.complete}
@@ -757,9 +962,133 @@ function JobsTab() {
                                                     {t.manufacturing.jobActions.cancel}
                                                 </button>
                                             )}
+                                            <button
+                                                onClick={() => toggleCosts(job.id)}
+                                                className="text-gray-600 hover:text-gray-900 text-xs font-medium flex items-center gap-1"
+                                            >
+                                                <Wallet className="h-3 w-3" />
+                                                {expandedJobId === job.id
+                                                    ? t.manufacturing.jobCosts.hideCosts
+                                                    : t.manufacturing.jobCosts.viewCosts}
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
+                                {expandedJobId === job.id && (
+                                    <tr key={`${job.id}-costs`} className="bg-gray-50">
+                                        <td colSpan={8} className="px-4 py-4">
+                                            <div className="max-w-2xl space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <h4 className="text-sm font-semibold text-gray-800">
+                                                        {t.manufacturing.jobCosts.title}
+                                                    </h4>
+                                                    <div className="flex gap-4 text-sm">
+                                                        <span className="text-gray-500">
+                                                            {t.manufacturing.jobCosts.totalCost}:{' '}
+                                                            <span className="font-semibold text-gray-800">
+                                                                {formatBDT(Number(job.totalJobCost ?? 0))}
+                                                            </span>
+                                                        </span>
+                                                        <span className="text-gray-500">
+                                                            {t.manufacturing.jobCosts.costPerUnit}:{' '}
+                                                            <span className="font-semibold text-gray-800">
+                                                                {formatBDT(Number(job.costPerUnit ?? 0))}
+                                                            </span>
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {jobCostsError && (
+                                                    <div className="bg-red-50 text-red-700 p-2 rounded text-xs">{jobCostsError}</div>
+                                                )}
+
+                                                {jobCostsLoading && !jobCosts[job.id] ? (
+                                                    <div className="text-xs text-gray-500">{t.common.loading}</div>
+                                                ) : (jobCosts[job.id]?.length ?? 0) === 0 ? (
+                                                    <div className="text-xs text-gray-400">{t.manufacturing.jobCosts.empty}</div>
+                                                ) : (
+                                                    <table className="w-full text-xs">
+                                                        <tbody className="divide-y divide-gray-200">
+                                                            {jobCosts[job.id]!.map((cost) => (
+                                                                <tr key={cost.id}>
+                                                                    <td className="py-1.5 pr-3 text-gray-700">
+                                                                        {t.manufacturing.jobCosts.costTypes[cost.costType]}
+                                                                    </td>
+                                                                    <td className="py-1.5 pr-3 text-gray-500">
+                                                                        {cost.notes}
+                                                                        {cost.sourcePurchaseItem && (
+                                                                            <span className="text-gray-400">
+                                                                                {' '}({cost.sourcePurchaseItem.purchase.purchase_number})
+                                                                            </span>
+                                                                        )}
+                                                                    </td>
+                                                                    <td className="py-1.5 pr-3 text-right font-medium text-gray-800">
+                                                                        {formatBDT(Number(cost.amount))}
+                                                                    </td>
+                                                                    <td className="py-1.5 text-right">
+                                                                        {cost.costType !== 'RAW_MATERIAL' && (
+                                                                            <button
+                                                                                onClick={() => handleRemoveCost(job.id, cost.id)}
+                                                                                className="text-red-500 hover:text-red-700"
+                                                                            >
+                                                                                {t.manufacturing.jobCosts.remove}
+                                                                            </button>
+                                                                        )}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                )}
+
+                                                {job.status !== 'CANCELLED' && (
+                                                    <div className="flex flex-wrap items-end gap-2 pt-2 border-t border-gray-200">
+                                                        <select
+                                                            value={costForm.costType}
+                                                            onChange={(e) =>
+                                                                setCostForm((f) => ({ ...f, costType: e.target.value as any }))
+                                                            }
+                                                            className="border rounded px-2 py-1.5 text-xs"
+                                                        >
+                                                            {ADDABLE_JOB_COST_TYPES.map((type) => (
+                                                                <option key={type} value={type}>
+                                                                    {t.manufacturing.jobCosts.costTypes[type]}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            step="0.01"
+                                                            placeholder={t.manufacturing.jobCosts.amount}
+                                                            value={costForm.amount}
+                                                            onChange={(e) => setCostForm((f) => ({ ...f, amount: e.target.value }))}
+                                                            className="border rounded px-2 py-1.5 text-xs w-28"
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            placeholder={t.manufacturing.jobCosts.notesPlaceholder}
+                                                            value={costForm.notes}
+                                                            onChange={(e) => setCostForm((f) => ({ ...f, notes: e.target.value }))}
+                                                            className="border rounded px-2 py-1.5 text-xs flex-1 min-w-[140px]"
+                                                        />
+                                                        <button
+                                                            onClick={() => handleAddCost(job.id)}
+                                                            disabled={addingCost}
+                                                            className="px-3 py-1.5 bg-gray-800 text-white rounded text-xs font-medium disabled:opacity-50"
+                                                        >
+                                                            {addingCost ? t.manufacturing.jobCosts.adding : t.manufacturing.jobCosts.add}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                {addCostError && (
+                                                    <div className="bg-red-50 text-red-700 p-2 rounded text-xs">{addCostError}</div>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
+                            </React.Fragment>
                             ))}
                         </tbody>
                     </table>
@@ -790,7 +1119,7 @@ function JobsTab() {
 
             {showModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between p-6 border-b">
                             <h2 className="text-lg font-semibold">{t.manufacturing.newProductionJob}</h2>
                             <button
@@ -807,16 +1136,26 @@ function JobsTab() {
                             )}
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label htmlFor="job-recipe-select" className="block text-sm font-medium text-gray-700 mb-1">
                                     {t.manufacturing.bomRecipeId}
                                 </label>
-                                <input
-                                    type="text"
+                                <select
+                                    id="job-recipe-select"
                                     value={form.recipeId}
                                     onChange={(e) => setForm((f) => ({ ...f, recipeId: e.target.value }))}
-                                    placeholder={t.manufacturing.placeholders.recipeId}
                                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                                />
+                                    disabled={bomsLoading}
+                                >
+                                    <option value="">{t.manufacturing.selectRecipePlaceholder}</option>
+                                    {boms.map((bom) => (
+                                        <option key={bom.id} value={bom.id}>
+                                            {bom.productName}{bom.productSku ? ` (${bom.productSku})` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                                {!bomsLoading && boms.length === 0 && (
+                                    <p className="text-xs text-amber-600 mt-1">{t.manufacturing.noBomsAvailable}</p>
+                                )}
                             </div>
 
                             <div>
@@ -846,6 +1185,54 @@ function JobsTab() {
                                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                                 />
                             </div>
+
+                            {form.recipeId && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        {t.manufacturing.materialsRequired}
+                                    </label>
+                                    {requirementsLoading ? (
+                                        <p className="text-xs text-gray-500">{t.manufacturing.loadingRequirements}</p>
+                                    ) : requirements ? (
+                                        <>
+                                            {!requirements.sufficient && (
+                                                <div className="bg-amber-50 text-amber-800 p-3 rounded-lg text-xs mb-2">
+                                                    {t.manufacturing.insufficientStockWarning}
+                                                </div>
+                                            )}
+                                            <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                                                <table className="w-full text-xs">
+                                                    <thead className="bg-gray-50 text-gray-600 uppercase">
+                                                        <tr>
+                                                            <th className="px-3 py-2 text-left">{t.manufacturing.requirementsColumns.component}</th>
+                                                            <th className="px-3 py-2 text-right">{t.manufacturing.requirementsColumns.perUnit}</th>
+                                                            <th className="px-3 py-2 text-right">{t.manufacturing.requirementsColumns.required}</th>
+                                                            <th className="px-3 py-2 text-right">{t.manufacturing.requirementsColumns.available}</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-100">
+                                                        {requirements.components.map((item) => (
+                                                            <tr key={item.productId} className={item.sufficient ? '' : 'bg-amber-50'}>
+                                                                <td className="px-3 py-2 text-gray-900">
+                                                                    {item.productName}
+                                                                    {item.productSku && (
+                                                                        <span className="text-gray-400"> ({item.productSku})</span>
+                                                                    )}
+                                                                </td>
+                                                                <td className="px-3 py-2 text-right text-gray-700">{item.perUnitQty}</td>
+                                                                <td className="px-3 py-2 text-right text-gray-700">{item.requiredQty}</td>
+                                                                <td className={`px-3 py-2 text-right ${item.sufficient ? 'text-gray-700' : 'text-amber-700 font-medium'}`}>
+                                                                    {item.availableQty}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </>
+                                    ) : null}
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex justify-end gap-3 p-6 border-t bg-gray-50 rounded-b-xl">
@@ -866,6 +1253,208 @@ function JobsTab() {
                     </div>
                 </div>
             )}
+
+            {completingJob && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between p-6 border-b">
+                            <h2 className="text-lg font-semibold">{t.manufacturing.completeProductionJob}</h2>
+                            <button
+                                onClick={() => setCompletingJob(null)}
+                                className="text-gray-400 hover:text-gray-600"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            {completeError && (
+                                <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{completeError}</div>
+                            )}
+
+                            <p className="text-xs text-gray-500">{t.manufacturing.wastageHint}</p>
+
+                            <div className="space-y-3">
+                                {completingJob.recipe.components.map((comp) => (
+                                    <div key={comp.productId} className="flex items-center gap-3">
+                                        <label htmlFor={`wastage-${comp.productId}`} className="flex-1 text-sm text-gray-700">
+                                            {comp.product.name}
+                                            {comp.product.sku && (
+                                                <span className="text-gray-400"> ({comp.product.sku})</span>
+                                            )}
+                                        </label>
+                                        <input
+                                            id={`wastage-${comp.productId}`}
+                                            type="number"
+                                            min={0}
+                                            step={0.0001}
+                                            placeholder="0"
+                                            value={wastageQty[comp.productId] ?? ''}
+                                            onChange={(e) =>
+                                                setWastageQty((w) => ({ ...w, [comp.productId]: e.target.value }))
+                                            }
+                                            className="w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 p-6 border-t bg-gray-50 rounded-b-xl">
+                            <button
+                                onClick={() => setCompletingJob(null)}
+                                className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                                {t.common.cancel}
+                            </button>
+                            <button
+                                onClick={handleCompleteJob}
+                                disabled={completing}
+                                className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+                            >
+                                {completing ? t.manufacturing.completingJob : t.manufacturing.jobActions.complete}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
+    );
+}
+
+// ------------------------------------------------------------------ //
+//  Analytics Tab                                                      //
+// ------------------------------------------------------------------ //
+
+function AnalyticsTab() {
+    const { t } = useI18n();
+    const [data, setData] = useState<AnalyticsSummary | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        (async () => {
+            setLoading(true);
+            setError('');
+            try {
+                const result: AnalyticsSummary = await fetchWithAuth('/manufacturing/analytics');
+                setData(result);
+            } catch {
+                setError(t.manufacturing.analytics.loadFailed);
+            } finally {
+                setLoading(false);
+            }
+        })();
+    }, [t.manufacturing.analytics.loadFailed]);
+
+    if (loading) {
+        return <div className="text-center py-12 text-gray-500">{t.common.loading}</div>;
+    }
+
+    if (error) {
+        return <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{error}</div>;
+    }
+
+    if (!data || data.totalCompletedJobs === 0) {
+        return (
+            <div className="text-center py-12 text-gray-400">
+                <Calculator className="h-12 w-12 mx-auto mb-3 opacity-40" />
+                <p>{t.manufacturing.analytics.empty}</p>
+            </div>
+        );
+    }
+
+    const maxVolume = Math.max(...data.volumeTrend.map((p) => p.quantityProduced), 1);
+
+    return (
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <FinancialKpiTile
+                    title={t.manufacturing.analytics.completedJobs}
+                    value={String(data.totalCompletedJobs)}
+                    helper=""
+                    tone="neutral"
+                    Icon={CheckCircle2}
+                />
+                <FinancialKpiTile
+                    title={t.manufacturing.analytics.unitsProduced}
+                    value={String(data.totalUnitsProduced)}
+                    helper=""
+                    tone="neutral"
+                    Icon={Package}
+                />
+                <FinancialKpiTile
+                    title={t.manufacturing.analytics.totalMaterialCost}
+                    value={formatBDT(data.totalMaterialCost)}
+                    helper=""
+                    tone="neutral"
+                    Icon={Wallet}
+                />
+                <FinancialKpiTile
+                    title={t.manufacturing.analytics.avgUnitCost}
+                    value={formatBDT(data.avgUnitProductionCost)}
+                    helper=""
+                    tone="neutral"
+                    Icon={Calculator}
+                />
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <h3 className="text-sm font-semibold text-gray-900 mb-4">
+                    {t.manufacturing.analytics.volumeTrendTitle}
+                </h3>
+                <div className="space-y-2">
+                    {data.volumeTrend.map((point) => (
+                        <div key={point.date} className="flex items-center gap-3">
+                            <span className="w-24 shrink-0 text-xs text-gray-500">{formatDate(point.date)}</span>
+                            <div className="flex-1 bg-blue-50 rounded h-4 overflow-hidden">
+                                <div
+                                    className="bg-blue-600 h-full rounded"
+                                    style={{ width: `${Math.max(4, (point.quantityProduced / maxVolume) * 100)}%` }}
+                                />
+                            </div>
+                            <span className="w-12 shrink-0 text-xs text-gray-700 text-right">{point.quantityProduced}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+                <div className="p-4 border-b border-gray-100">
+                    <h3 className="text-sm font-semibold text-gray-900">{t.manufacturing.analytics.costTableTitle}</h3>
+                </div>
+                <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
+                        <tr>
+                            <th className="px-4 py-3 text-left">{t.manufacturing.analytics.columns.product}</th>
+                            <th className="px-4 py-3 text-left">{t.manufacturing.analytics.columns.completed}</th>
+                            <th className="px-4 py-3 text-right">{t.manufacturing.analytics.columns.qtyProduced}</th>
+                            <th className="px-4 py-3 text-right">{t.manufacturing.analytics.columns.plannedCost}</th>
+                            <th className="px-4 py-3 text-right">{t.manufacturing.analytics.columns.wastageCost}</th>
+                            <th className="px-4 py-3 text-right">{t.manufacturing.analytics.columns.actualCost}</th>
+                            <th className="px-4 py-3 text-right">{t.manufacturing.analytics.columns.unitCost}</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                        {data.jobs.map((job) => (
+                            <tr key={job.jobId} className="hover:bg-gray-50">
+                                <td className="px-4 py-3">
+                                    <div className="font-medium text-gray-900">{job.productName}</div>
+                                    {job.productSku && <div className="text-xs text-gray-500">{job.productSku}</div>}
+                                </td>
+                                <td className="px-4 py-3 text-gray-500">{formatDate(job.completedAt)}</td>
+                                <td className="px-4 py-3 text-right text-gray-700">{job.quantityProduced}</td>
+                                <td className="px-4 py-3 text-right text-gray-700">{formatBDT(job.plannedMaterialCost)}</td>
+                                <td className={`px-4 py-3 text-right ${job.wastageCost > 0 ? 'text-amber-700 font-medium' : 'text-gray-700'}`}>
+                                    {formatBDT(job.wastageCost)}
+                                </td>
+                                <td className="px-4 py-3 text-right text-gray-700">{formatBDT(job.actualMaterialCost)}</td>
+                                <td className="px-4 py-3 text-right text-gray-900 font-medium">{formatBDT(job.unitProductionCost)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     );
 }

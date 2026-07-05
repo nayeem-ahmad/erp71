@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { DatabaseService } from '../database/database.service';
-import { hasPlanEntitlement, normalizePlanFeatures, resolvePlanRank } from '@erp71/shared-types';
+import { hasPlanEntitlement, mergeAddonFeatures, normalizePlanFeatures, resolvePlanRank } from '@erp71/shared-types';
 import {
     SUBSCRIPTION_EXTRA_FEATURES_KEY,
     SUBSCRIPTION_FEATURE_KEY,
@@ -74,18 +74,36 @@ export class SubscriptionAccessGuard implements CanActivate {
             throw new UnauthorizedException('Invalid tenant context');
         }
 
-        const subscription = await this.db.tenantSubscription.findUnique({
-            where: { tenant_id: tenantId },
-            include: { plan: true },
-        });
+        const activeAddonStatuses: Array<'ACTIVE' | 'TRIALING'> = ['ACTIVE', 'TRIALING'];
+        const activeStatuses = new Set<string>(activeAddonStatuses);
 
-        const activeStatuses = new Set(['ACTIVE', 'TRIALING']);
+        const [subscription, activeAddons] = await Promise.all([
+            this.db.tenantSubscription.findUnique({
+                where: { tenant_id: tenantId },
+                include: { plan: true },
+            }),
+            this.db.tenantAddonSubscription.findMany({
+                where: {
+                    tenant_id: tenantId,
+                    status: { in: activeAddonStatuses },
+                    current_period_end: { gt: new Date() },
+                },
+                include: { addon: true },
+            }),
+        ]);
+
         const currentPlan = (subscription?.plan?.code ?? 'FREE') as PlanCode;
-        const features = normalizePlanFeatures(
+        const planFeatures = normalizePlanFeatures(
             subscription?.plan?.features_json as Record<string, unknown> | undefined,
             currentPlan,
         );
-        const currentRank = resolvePlanRank(features, currentPlan);
+        // Add-ons only ever grant entitlements on top of the plan (see mergeAddonFeatures) —
+        // they never affect plan rank, which stays plan-derived for @RequiresPlan checks.
+        const features = mergeAddonFeatures(
+            planFeatures,
+            activeAddons.map((row) => row.addon.features_json as Record<string, unknown>),
+        );
+        const currentRank = resolvePlanRank(planFeatures, currentPlan);
         const hasRequiredPlan = requiredPlan
             ? currentRank >= REQUIRED_PLAN_RANK[requiredPlan]
             : true;

@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { DatabaseService } from '../database/database.service';
-import { CreateBomDto, UpdateBomDto, CreateProductionJobDto } from './manufacturing.dto';
+import { CreateBomDto, UpdateBomDto, CreateProductionJobDto, CreateJobCostDto, WastageItemDto } from './manufacturing.dto';
 import { applyInventoryMovement, ensureDefaultWarehouse } from '../database/inventory.utils';
 
 @Injectable()
@@ -249,6 +249,51 @@ export class ManufacturingService {
         });
     }
 
+    /**
+     * Computes required vs available quantity for each BOM component at a given
+     * production quantity, without mutating anything. Used both to preview
+     * material requirements before creating/starting a job and to enforce the
+     * stock check when a job actually starts.
+     */
+    async getRequirementsPreview(tenantId: string, recipeId: string, quantity: number) {
+        const recipe = await this.getBom(tenantId, recipeId);
+        const components = recipe.components as unknown as Array<{
+            productId: string;
+            quantity: any;
+            product: { id: string; name: string; sku: string | null };
+        }>;
+
+        const items = await Promise.all(
+            components.map(async (comp) => {
+                const requiredQty = Number(comp.quantity) * quantity;
+
+                const stockAgg = await this.db.productStock.aggregate({
+                    where: { tenant_id: tenantId, product_id: comp.productId },
+                    _sum: { quantity: true },
+                });
+                const availableQty = stockAgg._sum.quantity ?? 0;
+
+                return {
+                    productId: comp.productId,
+                    productName: comp.product.name,
+                    productSku: comp.product.sku,
+                    perUnitQty: Number(comp.quantity),
+                    requiredQty,
+                    availableQty,
+                    sufficient: availableQty >= requiredQty,
+                };
+            }),
+        );
+
+        return {
+            recipeId,
+            quantity,
+            outputQty: quantity * recipe.outputQty,
+            sufficient: items.every((item) => item.sufficient),
+            components: items,
+        };
+    }
+
     async startJob(tenantId: string, id: string) {
         const job = await this.getJob(tenantId, id);
 
@@ -256,31 +301,10 @@ export class ManufacturingService {
             throw new BadRequestException(`Cannot start a job in status ${job.status}`);
         }
 
-        // Check component stock availability across all warehouses
-        const recipe = job.recipe as any;
-        const components = recipe.components as Array<{ productId: string; quantity: any; product: { name: string } }>;
-
-        const insufficient: string[] = [];
-
-        for (const comp of components) {
-            const requiredQty = Number(comp.quantity) * job.quantity;
-
-            const stockAgg = await this.db.productStock.aggregate({
-                where: {
-                    tenant_id: tenantId,
-                    product_id: comp.productId,
-                },
-                _sum: { quantity: true },
-            });
-
-            const availableQty = stockAgg._sum.quantity ?? 0;
-
-            if (availableQty < requiredQty) {
-                insufficient.push(
-                    `${comp.product.name}: required ${requiredQty}, available ${availableQty}`,
-                );
-            }
-        }
+        const preview = await this.getRequirementsPreview(tenantId, job.recipeId, job.quantity);
+        const insufficient = preview.components
+            .filter((item) => !item.sufficient)
+            .map((item) => `${item.productName}: required ${item.requiredQty}, available ${item.availableQty}`);
 
         if (insufficient.length > 0) {
             throw new BadRequestException(
@@ -294,7 +318,23 @@ export class ManufacturingService {
         });
     }
 
-    async completeJob(tenantId: string, id: string) {
+    /** Latest known cost price per product (tenant-wide, most recently effective). */
+    private async getCostMap(tenantId: string, productIds: string[]): Promise<Map<string, number>> {
+        const prices = await this.db.productPrice.findMany({
+            where: { tenant_id: tenantId, product_id: { in: productIds }, cost: { not: null } },
+            orderBy: { effective_from: 'desc' },
+            select: { product_id: true, cost: true },
+        });
+        const costByProductId = new Map<string, number>();
+        for (const p of prices) {
+            if (!costByProductId.has(p.product_id)) {
+                costByProductId.set(p.product_id, Number(p.cost));
+            }
+        }
+        return costByProductId;
+    }
+
+    async completeJob(tenantId: string, id: string, wastage: WastageItemDto[] = []) {
         const job = await this.getJob(tenantId, id);
 
         if (job.status !== 'IN_PROGRESS') {
@@ -304,10 +344,29 @@ export class ManufacturingService {
         const recipe = job.recipe as any;
         const components = recipe.components as Array<{ productId: string; quantity: any }>;
 
+        if (wastage.length > 0) {
+            const wastageProductIds = wastage.map((w) => w.productId);
+            const found = await this.db.product.findMany({
+                where: { id: { in: wastageProductIds }, tenant_id: tenantId, deleted_at: null },
+                select: { id: true },
+            });
+            if (found.length !== new Set(wastageProductIds).size) {
+                throw new BadRequestException('One or more wastage products not found or do not belong to this tenant');
+            }
+        }
+
+        const costMap = await this.getCostMap(tenantId, [
+            ...components.map((c) => c.productId),
+            ...wastage.map((w) => w.productId),
+            job.productId,
+        ]);
+
         return this.db.$transaction(async (tx) => {
             // Get or create default warehouse for the tenant
             const warehouse = await ensureDefaultWarehouse(tx, tenantId);
             const warehouseId = warehouse.id;
+
+            let materialCost = 0;
 
             // Decrement each component's stock
             for (const comp of components) {
@@ -320,7 +379,33 @@ export class ManufacturingService {
                     movementType: 'MANUFACTURING_CONSUMPTION',
                     referenceType: 'PRODUCTION_JOB',
                     referenceId: id,
+                    unitCost: costMap.get(comp.productId),
                 });
+                materialCost += consumeQty * (costMap.get(comp.productId) ?? 0);
+            }
+
+            // Decrement stock for any additional wastage recorded on top of the BOM, logged separately
+            for (const w of wastage) {
+                await applyInventoryMovement(tx, {
+                    tenantId,
+                    productId: w.productId,
+                    warehouseId,
+                    quantityDelta: -w.quantity,
+                    movementType: 'MANUFACTURING_WASTAGE',
+                    referenceType: 'PRODUCTION_JOB',
+                    referenceId: id,
+                    unitCost: costMap.get(w.productId),
+                });
+                await tx.productionWastage.create({
+                    data: {
+                        tenantId,
+                        jobId: id,
+                        productId: w.productId,
+                        quantity: w.quantity,
+                        note: w.note ?? null,
+                    },
+                });
+                materialCost += w.quantity * (costMap.get(w.productId) ?? 0);
             }
 
             // Increment output product's stock
@@ -333,13 +418,129 @@ export class ManufacturingService {
                 movementType: 'MANUFACTURING_OUTPUT',
                 referenceType: 'PRODUCTION_JOB',
                 referenceId: id,
+                unitCost: costMap.get(job.productId),
             });
+
+            // Snapshot raw-material cost as a job cost line so it rolls up alongside
+            // any printing/binding/transport/labor costs already recorded on the job,
+            // and doesn't drift later if product costs change.
+            if (materialCost > 0) {
+                await tx.productionJobCost.create({
+                    data: {
+                        tenantId,
+                        jobId: id,
+                        costType: 'RAW_MATERIAL',
+                        amount: materialCost,
+                        notes: 'Auto-computed from BOM consumption + wastage at completion',
+                    },
+                });
+            }
+
+            const { totalJobCost, costPerUnit } = await this.recomputeJobCostTotals(tx, tenantId, id, outputQty);
 
             // Mark job as completed
             return tx.productionJob.update({
                 where: { id },
-                data: { status: 'COMPLETED', completedAt: new Date() },
+                data: { status: 'COMPLETED', completedAt: new Date(), totalJobCost, costPerUnit },
             });
+        });
+    }
+
+    // ------------------------------------------------------------------ //
+    //  Job cost lines                                                      //
+    // ------------------------------------------------------------------ //
+
+    /** Recomputes and persists the job's totalJobCost/costPerUnit from its cost lines. */
+    private async recomputeJobCostTotals(tx: any, tenantId: string, jobId: string, outputQty: number) {
+        const agg = await tx.productionJobCost.aggregate({
+            where: { tenantId, jobId },
+            _sum: { amount: true },
+        });
+        const totalJobCost = Number(agg._sum.amount ?? 0);
+        const costPerUnit = outputQty > 0 ? totalJobCost / outputQty : 0;
+
+        await tx.productionJob.update({
+            where: { id: jobId },
+            data: { totalJobCost, costPerUnit },
+        });
+
+        return { totalJobCost, costPerUnit };
+    }
+
+    async listJobCosts(tenantId: string, jobId: string) {
+        await this.getJob(tenantId, jobId);
+
+        return this.db.productionJobCost.findMany({
+            where: { tenantId, jobId },
+            include: {
+                sourcePurchaseItem: {
+                    select: {
+                        id: true,
+                        unit_cost: true,
+                        quantity: true,
+                        product: { select: { id: true, name: true, sku: true } },
+                        purchase: { select: { id: true, purchase_number: true } },
+                    },
+                },
+            },
+            orderBy: { created_at: 'asc' },
+        });
+    }
+
+    /** Adds a non-material cost line (printing, binding, transport, labor, ...) to a job, optionally traced to a bill. */
+    async addJobCost(tenantId: string, jobId: string, dto: CreateJobCostDto) {
+        const job = await this.getJob(tenantId, jobId);
+
+        if (job.status === 'CANCELLED') {
+            throw new BadRequestException('Cannot add a cost to a cancelled job');
+        }
+
+        if (dto.sourcePurchaseItemId) {
+            const purchaseItem = await this.db.purchaseItem.findFirst({
+                where: { id: dto.sourcePurchaseItemId, purchase: { tenant_id: tenantId } },
+                select: { id: true },
+            });
+            if (!purchaseItem) {
+                throw new BadRequestException('Purchase item not found or does not belong to this tenant');
+            }
+        }
+
+        const recipe = job.recipe as any;
+        const outputQty = job.quantity * recipe.outputQty;
+
+        return this.db.$transaction(async (tx) => {
+            const cost = await tx.productionJobCost.create({
+                data: {
+                    tenantId,
+                    jobId,
+                    costType: dto.costType,
+                    amount: dto.amount,
+                    sourcePurchaseItemId: dto.sourcePurchaseItemId ?? null,
+                    notes: dto.notes ?? null,
+                },
+            });
+
+            await this.recomputeJobCostTotals(tx, tenantId, jobId, outputQty);
+
+            return cost;
+        });
+    }
+
+    async removeJobCost(tenantId: string, jobId: string, costId: string) {
+        const job = await this.getJob(tenantId, jobId);
+        const cost = await this.db.productionJobCost.findFirst({ where: { id: costId, tenantId, jobId } });
+        if (!cost) throw new NotFoundException('Job cost line not found');
+        if (cost.costType === 'RAW_MATERIAL') {
+            throw new BadRequestException('Raw-material cost is computed automatically at job completion and cannot be removed directly');
+        }
+
+        const recipe = job.recipe as any;
+        const outputQty = job.quantity * recipe.outputQty;
+
+        return this.db.$transaction(async (tx) => {
+            await tx.productionJobCost.delete({ where: { id: costId } });
+            await this.recomputeJobCostTotals(tx, tenantId, jobId, outputQty);
+            return { removed: true, id: costId };
         });
     }
 
@@ -354,5 +555,101 @@ export class ManufacturingService {
             where: { id },
             data: { status: 'CANCELLED' },
         });
+    }
+
+    // ------------------------------------------------------------------ //
+    //  Analytics                                                           //
+    // ------------------------------------------------------------------ //
+
+    /**
+     * Basic production cost & yield report (Epic 73): planned vs. actual material
+     * cost per completed job, unit production cost, and a daily production
+     * volume trend.
+     */
+    async getAnalytics(tenantId: string) {
+        const jobs = await this.db.productionJob.findMany({
+            where: { tenantId, status: 'COMPLETED' },
+            orderBy: { completedAt: 'asc' },
+            include: {
+                recipe: { include: { product: { select: { id: true, name: true, sku: true } } } },
+            },
+        });
+
+        if (jobs.length === 0) {
+            return {
+                totalCompletedJobs: 0,
+                totalUnitsProduced: 0,
+                totalMaterialCost: 0,
+                avgUnitProductionCost: 0,
+                jobs: [],
+                volumeTrend: [],
+            };
+        }
+
+        const jobIds = jobs.map((j: any) => j.id);
+        const movements = await this.db.inventoryMovement.findMany({
+            where: {
+                tenant_id: tenantId,
+                reference_type: 'PRODUCTION_JOB',
+                reference_id: { in: jobIds },
+                movement_type: { in: ['MANUFACTURING_CONSUMPTION', 'MANUFACTURING_WASTAGE'] },
+            },
+            select: { reference_id: true, movement_type: true, quantity_delta: true, unit_cost: true },
+        });
+
+        const costByJob = new Map<string, { planned: number; wastage: number }>();
+        for (const m of movements) {
+            const entry = costByJob.get(m.reference_id as string) ?? { planned: 0, wastage: 0 };
+            const cost = Math.abs(m.quantity_delta) * Number(m.unit_cost ?? 0);
+            if (m.movement_type === 'MANUFACTURING_CONSUMPTION') {
+                entry.planned += cost;
+            } else {
+                entry.wastage += cost;
+            }
+            costByJob.set(m.reference_id as string, entry);
+        }
+
+        const volumeByDate = new Map<string, number>();
+        let totalUnitsProduced = 0;
+        let totalMaterialCost = 0;
+
+        const jobRows = jobs.map((job: any) => {
+            const outputQty = job.quantity * job.recipe.outputQty;
+            const { planned, wastage } = costByJob.get(job.id) ?? { planned: 0, wastage: 0 };
+            const actual = planned + wastage;
+            const unitCost = outputQty > 0 ? actual / outputQty : 0;
+
+            totalUnitsProduced += outputQty;
+            totalMaterialCost += actual;
+
+            const dateKey = (job.completedAt ?? job.created_at).toISOString().slice(0, 10);
+            volumeByDate.set(dateKey, (volumeByDate.get(dateKey) ?? 0) + outputQty);
+
+            return {
+                jobId: job.id,
+                productId: job.recipe.product.id,
+                productName: job.recipe.product.name,
+                productSku: job.recipe.product.sku,
+                quantityProduced: outputQty,
+                plannedMaterialCost: planned,
+                wastageCost: wastage,
+                actualMaterialCost: actual,
+                unitProductionCost: unitCost,
+                completedAt: job.completedAt,
+            };
+        });
+
+        const volumeTrend = Array.from(volumeByDate.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([date, quantityProduced]) => ({ date, quantityProduced }));
+
+        return {
+            totalCompletedJobs: jobs.length,
+            totalUnitsProduced,
+            totalMaterialCost,
+            avgUnitProductionCost: totalUnitsProduced > 0 ? totalMaterialCost / totalUnitsProduced : 0,
+            jobs: jobRows,
+            volumeTrend,
+        };
     }
 }

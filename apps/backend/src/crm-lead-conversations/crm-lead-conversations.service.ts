@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateLeadConversationDto, UpdateLeadConversationDto } from './crm-lead-conversations.dto';
 import { paginate } from '../common/pagination.dto';
+import { computeLeadScore } from '../crm-leads/lead-scoring.util';
 
 @Injectable()
 export class CrmLeadConversationsService {
@@ -10,11 +11,11 @@ export class CrmLeadConversationsService {
     async create(tenantId: string, userId: string, dto: CreateLeadConversationDto) {
         const lead = await this.db.lead.findFirst({
             where: { id: dto.lead_id, tenant_id: tenantId },
-            select: { id: true },
         });
         if (!lead) throw new NotFoundException('Lead not found');
 
-        const leadUpdate: Record<string, unknown> = { last_contacted_at: new Date() };
+        const now = new Date();
+        const leadUpdate: Record<string, unknown> = { last_contacted_at: now };
         if (dto.next_step !== undefined) leadUpdate.next_step = dto.next_step;
         if (dto.next_step_date !== undefined) {
             leadUpdate.next_step_date = dto.next_step_date ? new Date(dto.next_step_date) : null;
@@ -22,6 +23,21 @@ export class CrmLeadConversationsService {
         if (dto.next_step_assigned_to !== undefined) {
             leadUpdate.next_step_assigned_to = dto.next_step_assigned_to;
         }
+
+        const conversationCount = await this.db.leadConversation.count({ where: { lead_id: dto.lead_id } });
+        leadUpdate.score = computeLeadScore(
+            {
+                status: lead.status,
+                source: lead.source,
+                priority: lead.priority,
+                last_contacted_at: now,
+                next_step_date:
+                    'next_step_date' in leadUpdate
+                        ? (leadUpdate.next_step_date as Date | null)
+                        : lead.next_step_date,
+            },
+            conversationCount + 1,
+        );
 
         const [conversation] = await this.db.$transaction([
             this.db.leadConversation.create({

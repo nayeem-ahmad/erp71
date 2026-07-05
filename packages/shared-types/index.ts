@@ -750,6 +750,7 @@ export interface PlatformFeatures {
   support: boolean;
   help: boolean;
   voice: boolean;
+  manufacturing: boolean;
 }
 
 export const DEFAULT_PLATFORM_FEATURES: PlatformFeatures = {
@@ -757,6 +758,7 @@ export const DEFAULT_PLATFORM_FEATURES: PlatformFeatures = {
   support: false,
   help: false,
   voice: false,
+  manufacturing: false,
 };
 
 const PLATFORM_FEATURE_SETTING_KEYS: Record<keyof PlatformFeatures, string> = {
@@ -764,6 +766,7 @@ const PLATFORM_FEATURE_SETTING_KEYS: Record<keyof PlatformFeatures, string> = {
   support: 'support_enabled',
   help: 'help_enabled',
   voice: 'voice_enabled',
+  manufacturing: 'manufacturing_enabled',
 };
 
 /** Parses general-group platform settings into feature booleans (`'true'` only). */
@@ -775,6 +778,7 @@ export function parsePlatformFeatures(
     support: settings[PLATFORM_FEATURE_SETTING_KEYS.support] === 'true',
     help: settings[PLATFORM_FEATURE_SETTING_KEYS.help] === 'true',
     voice: settings[PLATFORM_FEATURE_SETTING_KEYS.voice] === 'true',
+    manufacturing: settings[PLATFORM_FEATURE_SETTING_KEYS.manufacturing] === 'true',
   };
 }
 

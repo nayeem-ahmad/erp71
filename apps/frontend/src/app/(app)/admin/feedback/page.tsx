@@ -6,6 +6,7 @@ import { Search, Bug, Sparkles, MessageSquare, Loader2, ChevronDown, ChevronUp }
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { api } from '@/lib/api';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import FeedbackAutomationPanel from '@/components/admin/FeedbackAutomationPanel';
 
 type FeedbackItem = {
     id: string;
@@ -47,6 +48,7 @@ export default function AdminFeedbackPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [automationId, setAutomationId] = useState<string | null>(null);
 
     const load = async (opts?: { search?: string; type?: string }) => {
         setIsLoading(true);
@@ -182,19 +184,28 @@ export default function AdminFeedbackPage() {
                                         </div>
                                         <div className="pl-0">
                                             <p className="text-sm text-gray-700 whitespace-pre-wrap">{preview}</p>
-                                            {isLong && (
+                                            <div className="mt-1 flex items-center gap-3">
+                                                {isLong && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => toggleExpand(item.id)}
+                                                        className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+                                                    >
+                                                        {isExpanded ? (
+                                                            <><ChevronUp className="w-3 h-3" /> Show less</>
+                                                        ) : (
+                                                            <><ChevronDown className="w-3 h-3" /> Show more</>
+                                                        )}
+                                                    </button>
+                                                )}
                                                 <button
                                                     type="button"
-                                                    onClick={() => toggleExpand(item.id)}
-                                                    className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+                                                    onClick={() => setAutomationId(item.id)}
+                                                    className="text-xs font-semibold text-purple-600 hover:text-purple-800"
                                                 >
-                                                    {isExpanded ? (
-                                                        <><ChevronUp className="w-3 h-3" /> Show less</>
-                                                    ) : (
-                                                        <><ChevronDown className="w-3 h-3" /> Show more</>
-                                                    )}
+                                                    Automate →
                                                 </button>
-                                            )}
+                                            </div>
                                         </div>
                                     </div>
                                 );
@@ -203,6 +214,10 @@ export default function AdminFeedbackPage() {
                     )}
                 </div>
             </div>
+
+            {automationId && (
+                <FeedbackAutomationPanel feedbackId={automationId} onClose={() => setAutomationId(null)} />
+            )}
         </div>
     );
 }

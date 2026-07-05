@@ -84,3 +84,45 @@ export class UpdateProductionJobDto {
     @MaxLength(1000)
     notes?: string;
 }
+
+export class WastageItemDto {
+    @IsString()
+    @IsNotEmpty()
+    productId: string;
+
+    @IsNumber()
+    @IsPositive()
+    quantity: number;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(500)
+    note?: string;
+}
+
+export class CompleteProductionJobDto {
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => WastageItemDto)
+    wastage?: WastageItemDto[];
+}
+
+export class CreateJobCostDto {
+    @IsString()
+    @IsNotEmpty()
+    costType: 'PRINTING' | 'BINDING' | 'TRANSPORT' | 'LABOR' | 'OVERHEAD' | 'OTHER';
+
+    @IsNumber()
+    @IsPositive()
+    amount: number;
+
+    @IsOptional()
+    @IsString()
+    sourcePurchaseItemId?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(500)
+    notes?: string;
+}

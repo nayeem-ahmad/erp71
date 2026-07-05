@@ -89,17 +89,19 @@ describe('BillingController', () => {
     });
 
     describe('getSummary', () => {
-        it('calls the service with userId and tenantId from the request context', async () => {
+        it('calls the service with the tenant context', async () => {
             billingService.getSummary.mockResolvedValue({ tenant: { id: 'tenant-1' }, subscription: null, available_plans: [] });
 
-            await controller.getSummary({ user: { userId: 'user-1' } } as any, { tenantId: 'tenant-1' } as any);
+            await controller.getSummary({ userId: 'user-1', tenantId: 'tenant-1' } as any);
 
-            expect(billingService.getSummary).toHaveBeenCalledWith('user-1', 'tenant-1');
+            expect(billingService.getSummary).toHaveBeenCalledWith(
+                expect.objectContaining({ userId: 'user-1', tenantId: 'tenant-1' }),
+            );
         });
     });
 
     describe('createCheckoutSession', () => {
-        it('delegates to the service with userId, tenantId and the checkout DTO', async () => {
+        it('delegates to the service with the tenant context and the checkout DTO', async () => {
             billingService.createCheckoutSession.mockResolvedValue({
                 provider_name: 'ssl-wireless',
                 checkout_url: 'https://gateway.example.com',
@@ -107,13 +109,12 @@ describe('BillingController', () => {
             });
 
             await controller.createCheckoutSession(
-                { user: { userId: 'user-1' } } as any,
-                { tenantId: 'tenant-1' } as any,
+                { userId: 'user-1', tenantId: 'tenant-1' } as any,
                 { planCode: 'PREMIUM', billingCycle: 'MONTHLY' } as any,
             );
 
             expect(billingService.createCheckoutSession).toHaveBeenCalledWith(
-                'user-1', 'tenant-1',
+                expect.objectContaining({ userId: 'user-1', tenantId: 'tenant-1' }),
                 expect.objectContaining({ planCode: 'PREMIUM', billingCycle: 'MONTHLY' }),
             );
         });
@@ -123,9 +124,11 @@ describe('BillingController', () => {
         it('schedules cancellation via the service', async () => {
             billingService.cancelAtPeriodEnd.mockResolvedValue({ cancel_at_period_end: true });
 
-            await controller.cancelAtPeriodEnd({ user: { userId: 'user-1' } } as any, { tenantId: 'tenant-1' } as any);
+            await controller.cancelAtPeriodEnd({ userId: 'user-1', tenantId: 'tenant-1' } as any);
 
-            expect(billingService.cancelAtPeriodEnd).toHaveBeenCalledWith('user-1', 'tenant-1');
+            expect(billingService.cancelAtPeriodEnd).toHaveBeenCalledWith(
+                expect.objectContaining({ userId: 'user-1', tenantId: 'tenant-1' }),
+            );
         });
     });
 });

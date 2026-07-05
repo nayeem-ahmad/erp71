@@ -87,6 +87,7 @@ describe('SalesReportsService', () => {
         it('returns zero summary when no sales or returns', async () => {
             db.sale.findMany.mockResolvedValue([]);
             db.salesReturn.findMany.mockResolvedValue([]);
+            db.saleItem.findMany.mockResolvedValue([]);
 
             const result = await service.getSalesSummary(tenantId, {});
 
@@ -105,6 +106,7 @@ describe('SalesReportsService', () => {
                 makeSale('2026-01-02', 2000),
             ]);
             db.salesReturn.findMany.mockResolvedValue([]);
+            db.saleItem.findMany.mockResolvedValue([]);
 
             const result = await service.getSalesSummary(tenantId, {});
 
@@ -122,6 +124,7 @@ describe('SalesReportsService', () => {
             db.salesReturn.findMany.mockResolvedValue([
                 makeReturn('2026-01-01', 200),
             ]);
+            db.saleItem.findMany.mockResolvedValue([]);
 
             const result = await service.getSalesSummary(tenantId, {});
 
@@ -138,6 +141,7 @@ describe('SalesReportsService', () => {
             db.salesReturn.findMany.mockResolvedValue([
                 makeReturn('2026-01-01', 100),
             ]);
+            db.saleItem.findMany.mockResolvedValue([]);
 
             const result = await service.getSalesSummary(tenantId, {});
 
@@ -157,6 +161,7 @@ describe('SalesReportsService', () => {
                 makeSale('2026-01-02', 300),
             ]);
             db.salesReturn.findMany.mockResolvedValue([]);
+            db.saleItem.findMany.mockResolvedValue([]);
 
             const result = await service.getSalesSummary(tenantId, {});
 
@@ -168,6 +173,7 @@ describe('SalesReportsService', () => {
         it('passes storeId filter to queries', async () => {
             db.sale.findMany.mockResolvedValue([]);
             db.salesReturn.findMany.mockResolvedValue([]);
+            db.saleItem.findMany.mockResolvedValue([]);
 
             await service.getSalesSummary(tenantId, { storeId: 'store-1' });
 
@@ -181,6 +187,7 @@ describe('SalesReportsService', () => {
         it('passes date filter when from/to provided', async () => {
             db.sale.findMany.mockResolvedValue([]);
             db.salesReturn.findMany.mockResolvedValue([]);
+            db.saleItem.findMany.mockResolvedValue([]);
 
             await service.getSalesSummary(tenantId, { from: '2026-01-01', to: '2026-01-31' });
 
@@ -201,6 +208,7 @@ describe('SalesReportsService', () => {
             db.salesReturn.findMany.mockResolvedValue([
                 makeReturn('2026-01-05', 300),
             ]);
+            db.saleItem.findMany.mockResolvedValue([]);
 
             const result = await service.getSalesSummary(tenantId, {});
 

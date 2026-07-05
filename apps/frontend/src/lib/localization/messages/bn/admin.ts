@@ -467,23 +467,27 @@ export const adminMessages = {
             },
             tenantFeatures: {
                 title: "Tenant Features",
-                description: "Control which assist features are visible to shop users.",
-                hint: "All features are off by default. Changes apply to every tenant on the platform.",
+                description: "Control which assist features and modules are available to shop users.",
+                hint: "Changes apply to every tenant on the platform immediately.",
                 feedback: {
                     label: "Feedback",
-                    hint: "Floating feedback widget in the bottom-right corner.",
+                    hint: "Floating feedback widget in the bottom-right corner. Off by default.",
                 },
                 support: {
                     label: "Support",
-                    hint: "In-app support chat for shop owners.",
+                    hint: "In-app support chat for shop owners. Off by default.",
                 },
                 help: {
                     label: "Help",
-                    hint: "Help Center sidebar link and contextual help panels.",
+                    hint: "Help Center sidebar link and contextual help panels. Off by default.",
                 },
                 voice: {
                     label: "Voice",
-                    hint: "Voice navigation in the header and voice entry on forms.",
+                    hint: "Voice navigation in the header and voice entry on forms. Off by default.",
+                },
+                manufacturing: {
+                    label: "Manufacturing",
+                    hint: "Manufacturing module (BOM recipes and production jobs) for Premium-plan tenants. On by default — use this as a kill switch.",
                 },
                 saved: "Tenant feature settings saved.",
             },

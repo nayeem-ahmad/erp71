@@ -227,6 +227,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const hasInventoryReportEntitlement = Boolean(planFeatures.premiumInventoryReports);
     const hasAccountingAdvancedEntitlement = Boolean(planFeatures.premiumAccountingAdvanced);
     const hasPremiumCrm = Boolean(planFeatures.premiumCrm);
+    const canAccessManufacturing =
+        platformFeatures.manufacturing && hasPlanEntitlement(planFeatures, 'premiumManufacturing');
     const accountingOnlyMode = Boolean(planFeatures.accountingOnly);
     const isPlatformAdmin = inPlatformAdminMode;
     const perms = activeTenant?.permissions ?? [];
@@ -372,6 +374,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 canAccessInventoryReports={canAccessInventoryReports}
                 canAccessAccountingAdvanced={canAccessAccountingAdvanced}
                 canAccessPremiumCrm={hasPremiumCrm}
+                canAccessManufacturing={canAccessManufacturing}
                 canAccessAdmin={isPlatformAdmin}
                 canManageBilling={canManageBilling}
                 canManageTeam={canManageTeam}

@@ -19,14 +19,20 @@ describe('DemoPage', () => {
         localStorage.clear();
         replaceMock.mockReset();
         const { api } = require('../../lib/api');
+        const demoTenant = {
+            id: 'tenant-demo',
+            stores: [{ id: 'store-demo' }],
+            subscription: { plan: { code: 'STANDARD' } },
+        };
         api.demoLogin.mockResolvedValue({
             access_token: 'demo-token',
             is_demo: true,
-            tenants: [{
-                id: 'tenant-demo',
-                stores: [{ id: 'store-demo' }],
-                subscription: { plan: { code: 'STANDARD' } },
-            }],
+            tenants: [demoTenant],
+        });
+        // storeAuthResponse always reloads the full session profile after login.
+        api.getMe.mockResolvedValue({
+            is_demo: true,
+            tenants: [demoTenant],
         });
     });
 

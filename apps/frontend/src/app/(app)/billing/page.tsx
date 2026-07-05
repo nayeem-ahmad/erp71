@@ -49,6 +49,24 @@ type BillingSummary = {
     }>;
 };
 
+type AddonCatalogItem = {
+    id: string;
+    code: string;
+    name: string;
+    description?: string | null;
+    category?: string | null;
+    monthly_price: number;
+    yearly_price?: number | null;
+};
+
+type MyAddonSubscription = {
+    addon: AddonCatalogItem;
+    status: string;
+    current_period_start: string;
+    current_period_end: string;
+    cancel_at_period_end: boolean;
+};
+
 export default function BillingPage() {
     return (
         <Suspense fallback={<BillingPageFallback />}>
@@ -70,6 +88,9 @@ function BillingPageContent() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
+    const [addonCatalog, setAddonCatalog] = useState<AddonCatalogItem[]>([]);
+    const [myAddons, setMyAddons] = useState<MyAddonSubscription[]>([]);
+    const [selectedAddonCodes, setSelectedAddonCodes] = useState<string[]>([]);
 
     const loadSummary = async () => {
         setIsLoading(true);
@@ -93,8 +114,22 @@ function BillingPageContent() {
         }
     };
 
+    const loadAddons = async () => {
+        try {
+            const [catalog, mine] = await Promise.all([
+                api.getAddonCatalog(),
+                api.getMyAddonSubscriptions(),
+            ]);
+            setAddonCatalog(catalog ?? []);
+            setMyAddons(mine ?? []);
+        } catch {
+            // Non-fatal — the base plan summary above still loaded fine.
+        }
+    };
+
     useEffect(() => {
         void loadSummary();
+        void loadAddons();
     }, []);
 
     useEffect(() => {
@@ -115,6 +150,26 @@ function BillingPageContent() {
         [selectedPlanCode, summary],
     );
 
+    const myAddonCodes = useMemo(() => new Set(myAddons.map((row) => row.addon.code)), [myAddons]);
+    const availableAddons = useMemo(
+        () => addonCatalog.filter((addon) => !myAddonCodes.has(addon.code)),
+        [addonCatalog, myAddonCodes],
+    );
+    const addonsTotal = useMemo(() => {
+        return availableAddons
+            .filter((addon) => selectedAddonCodes.includes(addon.code))
+            .reduce((sum, addon) => {
+                const price = billingCycle === 'YEARLY' ? (addon.yearly_price ?? addon.monthly_price * 12) : addon.monthly_price;
+                return sum + price;
+            }, 0);
+    }, [availableAddons, selectedAddonCodes, billingCycle]);
+
+    const toggleAddon = (code: string) => {
+        setSelectedAddonCodes((current) => (
+            current.includes(code) ? current.filter((c) => c !== code) : [...current, code]
+        ));
+    };
+
     const activeReference = checkout?.reference || searchParams.get('reference');
     const isSslProvider = summary?.provider_name === 'ssl-wireless';
     const tenantLabel = summary?.tenant.name || copy.yourTenant;
@@ -127,6 +182,7 @@ function BillingPageContent() {
             const session = await api.createBillingCheckoutSession({
                 planCode: selectedPlanCode,
                 billingCycle,
+                addonCodes: selectedAddonCodes,
             });
             setCheckout(session);
             if (session.requires_confirmation === false && session.checkout_url) {
@@ -149,11 +205,14 @@ function BillingPageContent() {
                 planCode: selectedPlanCode,
                 billingCycle,
                 reference: activeReference,
+                addonCodes: selectedAddonCodes,
             });
             localStorage.setItem('subscription_plan_code', selectedPlanCode);
             setCheckout(null);
+            setSelectedAddonCodes([]);
             router.replace('/billing');
             await loadSummary();
+            await loadAddons();
         } catch (err: any) {
             setError(err.message || copy.checkoutConfirmFailed);
         } finally {
@@ -169,6 +228,19 @@ function BillingPageContent() {
             await loadSummary();
         } catch (err: any) {
             setError(err.message || copy.cancellationFailed);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const cancelAddon = async (code: string) => {
+        setIsSubmitting(true);
+        setError('');
+        try {
+            await api.cancelAddonAtPeriodEnd(code);
+            await loadAddons();
+        } catch (err: any) {
+            setError(err.message || 'Failed to cancel add-on.');
         } finally {
             setIsSubmitting(false);
         }
@@ -244,6 +316,44 @@ function BillingPageContent() {
                                 />
                             </div>
 
+                            {myAddons.length > 0 && (
+                                <div className="rounded-3xl border border-gray-100 bg-gray-50 p-5 space-y-3">
+                                    <h3 className="text-sm font-black uppercase tracking-widest text-gray-500">
+                                        Your Add-ons
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {myAddons.map((row) => (
+                                            <div key={row.addon.code} className="rounded-2xl border border-gray-200 bg-white p-4">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div>
+                                                        <p className="text-sm font-black text-gray-900">{row.addon.name}</p>
+                                                        <p className="mt-1 text-xs text-gray-500">
+                                                            {formatMessage(copy.periodEnds, {
+                                                                date: formatDate(row.current_period_end, locale),
+                                                            })}
+                                                        </p>
+                                                    </div>
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                                        {row.cancel_at_period_end ? copy.scheduled : row.status}
+                                                    </span>
+                                                </div>
+                                                {summary.can_manage_billing && !row.cancel_at_period_end && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => cancelAddon(row.addon.code)}
+                                                        disabled={isSubmitting}
+                                                        className="mt-3 inline-flex items-center rounded-xl bg-white px-3 py-2 text-xs font-bold text-rose-700 border border-rose-200 transition hover:bg-rose-50 disabled:opacity-60"
+                                                    >
+                                                        <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                                                        {copy.cancelAtPeriodEnd}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             {summary.can_manage_billing ? (
                                 <div className="rounded-3xl border border-blue-100 bg-blue-50/70 p-5 space-y-4">
                                     <div className="flex items-center gap-2 text-blue-700">
@@ -276,6 +386,50 @@ function BillingPageContent() {
                                         })}
                                     </div>
 
+                                    {availableAddons.length > 0 && (
+                                        <div className="space-y-3 border-t border-blue-100 pt-4">
+                                            <h4 className="text-sm font-black uppercase tracking-widest text-blue-900">
+                                                Available Add-ons
+                                            </h4>
+                                            <p className="text-xs text-blue-800/70">
+                                                Optional modules billed alongside your plan in the same checkout.
+                                            </p>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                {availableAddons.map((addon) => {
+                                                    const checked = selectedAddonCodes.includes(addon.code);
+                                                    const addonPrice = billingCycle === 'YEARLY'
+                                                        ? (addon.yearly_price ?? addon.monthly_price * 12)
+                                                        : addon.monthly_price;
+
+                                                    return (
+                                                        <label
+                                                            key={addon.code}
+                                                            className={`flex items-start gap-3 rounded-2xl border p-4 cursor-pointer transition-all ${checked ? 'border-blue-600 bg-white shadow-lg shadow-blue-100' : 'border-blue-100 bg-white/70 hover:border-blue-200'}`}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={checked}
+                                                                onChange={() => toggleAddon(addon.code)}
+                                                                className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                            />
+                                                            <div className="min-w-0">
+                                                                <div className="flex items-center justify-between gap-3">
+                                                                    <span className="text-sm font-black text-gray-900">{addon.name}</span>
+                                                                </div>
+                                                                {addon.description && (
+                                                                    <p className="mt-1 text-xs text-gray-500">{addon.description}</p>
+                                                                )}
+                                                                <p className="mt-2 text-base font-black text-gray-900">
+                                                                    {formatBDT(addonPrice, { locale })}
+                                                                </p>
+                                                            </div>
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="flex flex-wrap items-center gap-3">
                                         <button
                                             type="button"
@@ -292,6 +446,12 @@ function BillingPageContent() {
                                             {copy.yearly}
                                         </button>
                                     </div>
+
+                                    {addonsTotal > 0 && (
+                                        <p className="text-xs font-semibold text-blue-900">
+                                            Includes {formatBDT(addonsTotal, { locale })} in selected add-ons.
+                                        </p>
+                                    )}
 
                                     <div className="flex flex-wrap gap-3">
                                         <button

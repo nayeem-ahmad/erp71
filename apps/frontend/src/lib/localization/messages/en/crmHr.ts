@@ -6,6 +6,7 @@ export const crmHrMessages = {
             subtitle: 'Manage leads, conversations, and customer relationships.',
             pipeline: 'Pipeline',
             relationships: 'Relationships',
+            engagement: 'Engagement',
             premiumRequired: 'Lead management will be available on the Premium plan when it launches.',
             upgradeCta: 'Premium — coming soon',
             links: {
@@ -13,6 +14,15 @@ export const crmHrMessages = {
                 customers: { title: 'Customers', description: 'Browse customers and open their relationship profile.' },
                 crmTasks: { title: 'Tasks & Follow-ups', description: 'Follow-up tasks linked to customers or leads.' },
                 crmCampaigns: { title: 'Campaigns', description: 'Plan and send outbound sales campaigns.' },
+            },
+            dashboard: {
+                openLeads: 'Open Leads',
+                tasksDueToday: 'Tasks Due Today',
+                overdueTasks: 'Overdue Tasks',
+                pendingTotal: 'pending in total',
+                recentCampaigns: 'Recent Campaigns',
+                noCampaigns: 'No campaigns sent yet',
+                viewAll: 'View all',
             },
         },
         leads: {
@@ -41,6 +51,7 @@ export const crmHrMessages = {
             deleteConfirm: 'Delete this lead?',
             validation: {
                 invalidEmail: 'Please enter a valid email address.',
+                lostReasonRequired: 'Please provide a reason for marking this lead as lost.',
             },
             fields: {
                 mobile: 'Mobile',
@@ -48,6 +59,9 @@ export const crmHrMessages = {
                 category: 'Category',
                 priority: 'Priority',
                 remarks: 'Remarks',
+                lostReason: 'Lost Reason',
+                lostReasonPlaceholder: 'Why was this lead lost? (e.g. price, competitor, no response)',
+                score: 'Score',
                 linkedinUrl: 'LinkedIn',
                 fbUrl: 'Facebook',
                 xUrl: 'X (Twitter)',
@@ -193,8 +207,8 @@ export const crmHrMessages = {
         }
     },
     "crmCampaigns": {
-        "title": "SMS Campaigns",
-        "subtitle": "Create and send bulk SMS campaigns to customer segments",
+        "title": "Campaigns",
+        "subtitle": "Create and send bulk SMS, WhatsApp, or email campaigns to customer segments",
         "newCampaign": "New Campaign",
         "emptyMessage": "No campaigns yet",
         "sendConfirm": "Send \"{name}\" to {count} recipients now?",
@@ -202,7 +216,8 @@ export const crmHrMessages = {
         "viewSend": "View / Send",
         "placeholders": {
             "name": "Campaign name *",
-            "message": "Your message text..."
+            "message": "Your message text...",
+            "subject": "Email subject *"
         },
         "columns": {
             "name": "Campaign",
@@ -221,6 +236,8 @@ export const crmHrMessages = {
         "sending": "Sending...",
         "sendNow": "Send Now",
         "segmentLabel": "Segment:",
+        "subjectLabel": "Subject:",
+        "subjectRequired": "Subject is required for email campaigns.",
         "channels": {
             "sms": "SMS",
             "whatsapp": "WHATSAPP",
@@ -489,7 +506,27 @@ export const crmHrMessages = {
         "subtitle": "Bill of materials and production job management",
         "tabs": {
             "boms": "Bill of Materials",
-            "jobs": "Production Jobs"
+            "jobs": "Production Jobs",
+            "analytics": "Analytics"
+        },
+        "analytics": {
+            "completedJobs": "Completed Jobs",
+            "unitsProduced": "Units Produced",
+            "totalMaterialCost": "Total Material Cost",
+            "avgUnitCost": "Avg. Unit Cost",
+            "volumeTrendTitle": "Production Volume Trend",
+            "costTableTitle": "Planned vs. Actual Material Cost",
+            "loadFailed": "Failed to load manufacturing analytics",
+            "empty": "No completed production jobs yet. Complete a job to see cost and yield analytics here.",
+            "columns": {
+                "product": "Product",
+                "completed": "Completed",
+                "qtyProduced": "Qty Produced",
+                "plannedCost": "Planned Cost",
+                "wastageCost": "Wastage Cost",
+                "actualCost": "Actual Cost",
+                "unitCost": "Unit Cost"
+            }
         },
         "newBom": "New BOM",
         "newJob": "New Job",
@@ -507,8 +544,17 @@ export const crmHrMessages = {
         "emptyJobs": "No production jobs yet.",
         "productIdRequired": "Product ID is required.",
         "outputQtyMin": "Output quantity must be at least 1.",
-        "recipeIdRequired": "Recipe ID is required.",
+        "recipeIdRequired": "Please select a product to manufacture.",
         "quantityMin": "Quantity must be at least 1.",
+        "noBomsAvailable": "No BOM recipes yet — create one in the Bill of Materials tab first.",
+        "selectRecipePlaceholder": "Select a product…",
+        "loadingRequirements": "Checking material requirements…",
+        "materialsRequired": "Materials Required",
+        "insufficientStockWarning": "Insufficient stock for one or more materials. The job can be created, but it cannot be started until enough stock is available.",
+        "completeProductionJob": "Complete Production Job",
+        "wastageHint": "Optionally record extra material consumed beyond the standard recipe (spoilage, breakage, etc.). Leave at 0 for none.",
+        "wastageQtyLabel": "Wastage Qty",
+        "completingJob": "Completing…",
         "saveFailed": "Save failed",
         "createJobFailed": "Failed to create job",
         "jobActionFailed": "Failed to {action} job",
@@ -521,9 +567,15 @@ export const crmHrMessages = {
         "componentsLabel": "Components / Raw Materials",
         "addComponent": "Add Component",
         "noComponents": "No components added yet.",
-        "bomRecipeId": "BOM Recipe ID *",
+        "bomRecipeId": "Product (BOM Recipe) *",
         "quantityLabel": "Quantity *",
         "quantityHint": "Number of production runs (multiplied by recipe output qty)",
+        "requirementsColumns": {
+            "component": "Component",
+            "perUnit": "Per Unit",
+            "required": "Required",
+            "available": "Available"
+        },
         "creating": "Creating…",
         "createJob": "Create Job",
         "saving": "Saving…",
@@ -549,8 +601,7 @@ export const crmHrMessages = {
         "placeholders": {
             "productId": "Product ID of the manufactured item",
             "componentProductId": "Component Product ID",
-            "qty": "Qty",
-            "recipeId": "Recipe ID"
+            "qty": "Qty"
         },
         "jobActions": {
             "start": "Start",
@@ -562,6 +613,35 @@ export const crmHrMessages = {
             "inProgress": "In Progress",
             "completed": "Completed",
             "cancelled": "Cancelled"
+        },
+        "jobCosts": {
+            "viewCosts": "Costs",
+            "hideCosts": "Hide costs",
+            "title": "Job Costs",
+            "totalCost": "Total Job Cost",
+            "costPerUnit": "Cost / Unit",
+            "loadFailed": "Failed to load job costs",
+            "empty": "No cost lines yet.",
+            "addCost": "Add Cost",
+            "costType": "Cost Type",
+            "amount": "Amount",
+            "notes": "Notes",
+            "notesPlaceholder": "e.g. printer invoice reference",
+            "add": "Add",
+            "adding": "Adding…",
+            "addFailed": "Failed to add cost",
+            "remove": "Remove",
+            "removeConfirm": "Remove this cost line?",
+            "removeFailed": "Failed to remove cost",
+            "costTypes": {
+                "RAW_MATERIAL": "Raw Material",
+                "PRINTING": "Printing",
+                "BINDING": "Binding",
+                "TRANSPORT": "Transport",
+                "LABOR": "Labor",
+                "OVERHEAD": "Overhead",
+                "OTHER": "Other"
+            }
         }
     }
 } as const;

@@ -23,6 +23,7 @@ import {
 } from '@erp71/shared-types';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ReferralsService } from '../referrals/referrals.service';
+import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 
 
 type TenantProvisionDto = {
@@ -45,6 +46,7 @@ export class AuthService {
         private readonly assets: AssetsService,
         private readonly platformSettings: PlatformSettingsService,
         private readonly referrals: ReferralsService,
+        private readonly planEntitlements: PlanEntitlementsService,
     ) { }
 
     async signup(dto: SignupDto) {
@@ -605,6 +607,12 @@ export class AuthService {
             .filter((a) => a.tenant_id === membership.tenant_id)
             .map((a) => a.store);
 
+        // Merge in any active add-on entitlements so the frontend's plan-gating
+        // (Sidebar, layout) reflects purchased add-ons without a separate fetch.
+        const mergedFeatures = subscription
+            ? await this.planEntitlements.getFeaturesForTenant(membership.tenant_id)
+            : undefined;
+
         return {
             id: membership.tenant.id,
             name: membership.tenant.name,
@@ -641,7 +649,7 @@ export class AuthService {
                                 description: plan.description,
                                 monthly_price: Number(plan.monthly_price),
                                 yearly_price: plan.yearly_price === null ? null : Number(plan.yearly_price),
-                                features_json: plan.features_json,
+                                features_json: mergedFeatures ?? plan.features_json,
                             }
                           : null,
                   }
