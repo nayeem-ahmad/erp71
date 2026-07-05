@@ -53,6 +53,7 @@ import { AdminTenantsModule } from './admin-tenants/admin-tenants.module';
 import { WarrantyClaimsModule } from './warranty-claims/warranty-claims.module';
 import { AccountModule } from './account/account.module';
 import { FeedbackModule } from './feedback/feedback.module';
+import { FeedbackAutomationModule } from './feedback-automation/feedback-automation.module';
 import { ContactModule } from './contact/contact.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { StorefrontModule } from './storefront/storefront.module';
@@ -145,6 +146,7 @@ import { ReferralsModule } from './referrals/referrals.module';
         WarrantyClaimsModule,
         AccountModule,
         FeedbackModule,
+        FeedbackAutomationModule,
         ContactModule,
         ApiKeysModule,
         StorefrontModule,
