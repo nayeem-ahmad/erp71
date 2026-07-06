@@ -328,6 +328,8 @@ export const coreMessages = {
                 platformSettingsAi: "AI (OpenRouter)",
                 platformSettingsNavigation: "Navigasi",
                 platformSettingsPlans: "Pelan Langganan",
+                platformSettingsAddons: "Modul Tambahan",
+                platformSettingsFeedbackAutomation: "Automasi Maklum Balas",
                 customers: "Pelanggan",
                 customerGroups: "Kumpulan Pelanggan",
                 priceLists: "Senarai Harga",

@@ -218,6 +218,8 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'admin.platform-settings.ai': { id: 'admin.platform-settings.ai', kind: 'link', icon: 'Sparkles', labelKey: 'sidebar.items.platformSettingsAi', href: '/admin/platform-settings/ai' },
   'admin.platform-settings.navigation': { id: 'admin.platform-settings.navigation', kind: 'link', icon: 'LayoutList', labelKey: 'sidebar.items.platformSettingsNavigation', href: '/admin/platform-settings/navigation' },
   'admin.platform-settings.plans': { id: 'admin.platform-settings.plans', kind: 'link', icon: 'BadgePercent', labelKey: 'sidebar.items.platformSettingsPlans', href: '/admin/platform-settings/plans' },
+  'admin.platform-settings.addons': { id: 'admin.platform-settings.addons', kind: 'link', icon: 'PackagePlus', labelKey: 'sidebar.items.platformSettingsAddons', href: '/admin/platform-settings/addons' },
+  'admin.platform-settings.feedback-automation': { id: 'admin.platform-settings.feedback-automation', kind: 'link', icon: 'Bot', labelKey: 'sidebar.items.platformSettingsFeedbackAutomation', href: '/admin/platform-settings/feedback-automation' },
 
   help: { id: 'help', kind: 'module', icon: 'HelpCircle', labelKey: 'sidebar.modules.help', href: '/help', moduleKey: 'help', platformFeature: 'help' },
 };
@@ -403,6 +405,8 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.platform-settings.ai', 'admin.platform-settings', 6),
   layoutNode('admin.platform-settings.navigation', 'admin.platform-settings', 7),
   layoutNode('admin.platform-settings.plans', 'admin.platform-settings', 8),
+  layoutNode('admin.platform-settings.addons', 'admin.platform-settings', 9),
+  layoutNode('admin.platform-settings.feedback-automation', 'admin.platform-settings', 10),
   layoutNode('help', null, 1),
 ];
 
