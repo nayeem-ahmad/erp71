@@ -34,6 +34,14 @@ describe('DemoPage', () => {
             is_demo: true,
             tenants: [demoTenant],
         });
+        api.getMe.mockResolvedValue({
+            is_demo: true,
+            tenants: [{
+                id: 'tenant-demo',
+                stores: [{ id: 'store-demo' }],
+                subscription: { plan: { code: 'STANDARD' } },
+            }],
+        });
     });
 
     it('logs in and redirects to onboarding', async () => {

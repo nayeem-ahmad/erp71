@@ -116,6 +116,7 @@ describe('Integration Tests (e2e)', () => {
                     name: 'Test User',
                     tenantName: 'Integration Tenant',
                     storeName: 'Integration Store',
+                    mobile: '01700000000',
                 });
 
             const payload = bodyOf(response);
@@ -234,6 +235,7 @@ describe('Integration Tests (e2e)', () => {
                     name: 'Second User',
                     tenantName: 'Second Tenant',
                     storeName: 'Second Store',
+                    mobile: '01700000001',
                 });
 
             const signupPayload = bodyOf(signupResponse);

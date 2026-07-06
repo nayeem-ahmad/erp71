@@ -11,13 +11,19 @@ CREATE TYPE "PostingRuleEventType" AS ENUM (
     'purchase',
     'purchase_return',
     'inventory_adjustment',
-    'fund_movement'
+    'fund_movement',
+    'expense',
+    'loan_disbursement',
+    'loan_repayment',
+    'customer_payment'
 );
 
 CREATE TYPE "PostingRuleConditionKey" AS ENUM (
     'payment_mode',
     'reason_type',
     'transfer_scope',
+    'loan_direction',
+    'payment_direction',
     'none'
 );
 
