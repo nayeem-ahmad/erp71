@@ -507,7 +507,8 @@ export const crmHrMessages = {
         "tabs": {
             "boms": "Bill of Materials",
             "jobs": "Production Jobs",
-            "analytics": "Analytics"
+            "analytics": "Analytics",
+            "productPL": "Product P&L"
         },
         "analytics": {
             "completedJobs": "Completed Jobs",
@@ -526,6 +527,25 @@ export const crmHrMessages = {
                 "wastageCost": "Wastage Cost",
                 "actualCost": "Actual Cost",
                 "unitCost": "Unit Cost"
+            }
+        },
+        "productPL": {
+            "loadFailed": "Failed to load the product P&L report",
+            "empty": "No completed production jobs yet.",
+            "quantityProduced": "Qty Produced",
+            "totalProductionCost": "Production Cost",
+            "revenue": "Revenue",
+            "grossProfit": "Gross Profit",
+            "columns": {
+                "product": "Product",
+                "jobsCompleted": "Jobs",
+                "qtyProduced": "Qty Produced",
+                "unitsSold": "Units Sold",
+                "avgCost": "Avg. Cost / Unit",
+                "productionCost": "Production Cost",
+                "revenue": "Revenue",
+                "grossProfit": "Gross Profit",
+                "margin": "Margin %"
             }
         },
         "newBom": "New BOM",
@@ -633,6 +653,8 @@ export const crmHrMessages = {
             "remove": "Remove",
             "removeConfirm": "Remove this cost line?",
             "removeFailed": "Failed to remove cost",
+            "noBillLink": "No bill link (manual entry)",
+            "remaining": "remaining",
             "costTypes": {
                 "RAW_MATERIAL": "Raw Material",
                 "PRINTING": "Printing",
@@ -642,6 +664,21 @@ export const crmHrMessages = {
                 "OVERHEAD": "Overhead",
                 "OTHER": "Other"
             }
+        },
+        "pricing": {
+            "title": "Cost-Plus Pricing",
+            "onlyForCompleted": "Complete this job to get a pricing suggestion from its actual cost.",
+            "marginLabel": "Target Margin %",
+            "suggest": "Suggest Price",
+            "suggesting": "Calculating…",
+            "suggestFailed": "Failed to calculate a suggested price",
+            "costPerUnit": "Cost / unit",
+            "currentPrice": "Current price",
+            "suggestedPrice": "Suggested price",
+            "apply": "Apply to Product Price",
+            "applying": "Applying…",
+            "applySuccess": "Product price updated",
+            "applyFailed": "Failed to apply price"
         }
     }
 } as const;

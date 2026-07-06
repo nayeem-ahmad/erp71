@@ -1,6 +1,11 @@
-import { IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 
 const COMPOUND_UNIT_TYPES = ['none', 'ft_in', 'dozen_pcs', 'kg_g', 'lb_oz', 'm_cm'] as const;
+
+export enum ProductTypeDto {
+    GOODS = 'GOODS',
+    SERVICE = 'SERVICE',
+}
 
 export class CreateProductDto {
     @IsString()
@@ -9,6 +14,10 @@ export class CreateProductDto {
     @IsOptional()
     @IsString()
     sku?: string;
+
+    @IsOptional()
+    @IsEnum(ProductTypeDto)
+    type?: ProductTypeDto;
 
     @IsNumber()
     @Min(0)
@@ -86,6 +95,10 @@ export class UpdateProductDto {
     @IsOptional()
     @IsString()
     sku?: string;
+
+    @IsOptional()
+    @IsEnum(ProductTypeDto)
+    type?: ProductTypeDto;
 
     @IsOptional()
     @IsNumber()

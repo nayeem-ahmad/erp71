@@ -1046,6 +1046,14 @@ export const coreMessages = {
             noTransactions: "এই সময়কালে কোনো লেনদেন নেই",
             directionPay: "সরবরাহকারীকে প্রদান",
             directionReceive: "সরবরাহকারীর কাছ থেকে গ্রহণ",
+            billStatuses: {
+                UNPAID: "অপরিশোধিত",
+                PARTIAL: "আংশিক পরিশোধিত",
+                PAID: "পরিশোধিত",
+            },
+            balanceDue: "বকেয়া পরিমাণ",
+            unapplied: "অপ্রয়োগিত",
+            appliedTo: "প্রয়োগ করা হয়েছে",
             columns: {
                 dateTime: "তারিখ / সময়",
                 serial: "সিরিয়াল",
@@ -1054,6 +1062,7 @@ export const coreMessages = {
                 amount: "পরিমাণ",
                 notes: "নোট",
                 balance: "ব্যালেন্স",
+                status: "বিলের অবস্থা",
             },
         },
         dashboardHome: {

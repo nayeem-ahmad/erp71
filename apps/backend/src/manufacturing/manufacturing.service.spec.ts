@@ -49,8 +49,14 @@ describe('ManufacturingService', () => {
                 findMany: jest.fn().mockResolvedValue([]),
                 findFirst: jest.fn().mockResolvedValue(null),
                 delete: jest.fn().mockResolvedValue({}),
+                groupBy: jest.fn().mockResolvedValue([]),
             },
-            product: { findMany: jest.fn().mockResolvedValue([]) },
+            purchaseItem: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+            saleItem: { findMany: jest.fn().mockResolvedValue([]) },
+            product: {
+                findMany: jest.fn().mockResolvedValue([]),
+                findUnique: jest.fn().mockResolvedValue({ type: 'GOODS' }),
+            },
             productPrice: { findMany: jest.fn().mockResolvedValue([]) },
             warehouse: { findFirst: jest.fn().mockResolvedValue({ id: 'wh-1' }) },
             inventoryMovement: { create: jest.fn().mockResolvedValue({}), findMany: jest.fn().mockResolvedValue([]) },
@@ -304,6 +310,185 @@ describe('ManufacturingService', () => {
             db.productionJobCost.findFirst.mockResolvedValue({ id: 'cost-1', costType: 'RAW_MATERIAL' });
 
             await expect(service.removeJobCost('tenant-1', 'job-1', 'cost-1')).rejects.toThrow(BadRequestException);
+        });
+
+        it('allocates a bill line to a job cost without exceeding its remaining unallocated amount', async () => {
+            db.productionJob.findFirst.mockResolvedValue(job);
+            db.purchaseItem.findFirst.mockResolvedValue({ id: 'pi-1', line_total: 1000 });
+            db.productionJobCost.aggregate
+                .mockResolvedValueOnce({ _sum: { amount: 400 } }) // already allocated to this bill line
+                .mockResolvedValueOnce({ _sum: { amount: 500 } }); // job total after adding this cost
+            db.productionJobCost.create.mockResolvedValue({ id: 'cost-1' });
+
+            await service.addJobCost('tenant-1', 'job-1', {
+                costType: 'PRINTING',
+                amount: 500,
+                sourcePurchaseItemId: 'pi-1',
+            });
+
+            expect(db.productionJobCost.create).toHaveBeenCalledWith({
+                data: {
+                    tenantId: 'tenant-1',
+                    jobId: 'job-1',
+                    costType: 'PRINTING',
+                    amount: 500,
+                    sourcePurchaseItemId: 'pi-1',
+                    notes: null,
+                },
+            });
+        });
+
+        it("rejects an allocation exceeding the bill line's remaining unallocated amount", async () => {
+            db.productionJob.findFirst.mockResolvedValue(job);
+            db.purchaseItem.findFirst.mockResolvedValue({ id: 'pi-1', line_total: 1000 });
+            db.productionJobCost.aggregate.mockResolvedValueOnce({ _sum: { amount: 700 } });
+
+            await expect(
+                service.addJobCost('tenant-1', 'job-1', {
+                    costType: 'PRINTING',
+                    amount: 500,
+                    sourcePurchaseItemId: 'pi-1',
+                }),
+            ).rejects.toThrow(BadRequestException);
+        });
+    });
+
+    describe('listCostSources()', () => {
+        it('lists service purchase items with remaining unallocated amount, excluding fully-allocated ones', async () => {
+            db.purchaseItem.findMany.mockResolvedValue([
+                {
+                    id: 'pi-1',
+                    line_total: 1000,
+                    product: { id: 'svc-1', name: 'Printing Service' },
+                    purchase: {
+                        id: 'purch-1',
+                        purchase_number: 'PUR-00010',
+                        created_at: new Date('2026-01-01'),
+                        supplier: { id: 'sup-1', name: 'ACME Printers' },
+                    },
+                },
+                {
+                    id: 'pi-2',
+                    line_total: 500,
+                    product: { id: 'svc-1', name: 'Printing Service' },
+                    purchase: {
+                        id: 'purch-2',
+                        purchase_number: 'PUR-00011',
+                        created_at: new Date('2026-01-02'),
+                        supplier: { id: 'sup-1', name: 'ACME Printers' },
+                    },
+                },
+            ]);
+            db.productionJobCost.groupBy.mockResolvedValue([
+                { sourcePurchaseItemId: 'pi-1', _sum: { amount: 400 } },
+                { sourcePurchaseItemId: 'pi-2', _sum: { amount: 500 } },
+            ]);
+
+            const result = await service.listCostSources('tenant-1');
+
+            expect(result).toEqual([
+                expect.objectContaining({ id: 'pi-1', lineTotal: 1000, allocatedAmount: 400, remainingAmount: 600 }),
+            ]);
+        });
+    });
+
+    describe('cost-plus pricing', () => {
+        const completedJob = {
+            id: 'job-1',
+            tenantId: 'tenant-1',
+            recipeId: 'recipe-1',
+            productId: 'product-out',
+            quantity: 10,
+            status: 'COMPLETED',
+            costPerUnit: 20,
+            recipe,
+        };
+
+        it('suggests a price from cost per unit plus a target margin', async () => {
+            db.productionJob.findFirst.mockResolvedValue(completedJob);
+            db.product.findFirst = jest.fn().mockResolvedValue({ id: 'product-out', name: 'Bread Loaf', price: 22 });
+
+            const suggestion = await service.getPricingSuggestion('tenant-1', 'job-1', 25);
+
+            expect(suggestion).toEqual(expect.objectContaining({
+                costPerUnit: 20,
+                marginPct: 25,
+                suggestedPrice: 25,
+                currentPrice: 22,
+            }));
+        });
+
+        it('throws when the job has no cost per unit yet', async () => {
+            db.productionJob.findFirst.mockResolvedValue({ ...completedJob, costPerUnit: null });
+
+            await expect(service.getPricingSuggestion('tenant-1', 'job-1', 25)).rejects.toThrow(BadRequestException);
+        });
+
+        it('applies the suggested price to the output product', async () => {
+            db.productionJob.findFirst.mockResolvedValue(completedJob);
+            db.product.findFirst = jest.fn().mockResolvedValue({ id: 'product-out', name: 'Bread Loaf', price: 22 });
+            db.product.update = jest.fn().mockResolvedValue({});
+
+            await service.applySuggestedPrice('tenant-1', 'job-1', 25);
+
+            expect(db.product.update).toHaveBeenCalledWith({
+                where: { id: 'product-out' },
+                data: { price: 25 },
+            });
+        });
+    });
+
+    describe('getProductPL()', () => {
+        it('returns an empty report when there are no completed jobs', async () => {
+            db.productionJob.findMany.mockResolvedValue([]);
+
+            const result = await service.getProductPL('tenant-1');
+
+            expect(result).toEqual({
+                products: [],
+                totals: { quantityProduced: 0, totalProductionCost: 0, revenue: 0, grossProfit: 0 },
+            });
+        });
+
+        it('rolls up production cost and sales revenue per output product', async () => {
+            db.productionJob.findMany.mockResolvedValue([
+                {
+                    productId: 'product-out',
+                    quantity: 10,
+                    totalJobCost: 200,
+                    recipe: { outputQty: 2, product: { id: 'product-out', name: 'Bread Loaf', sku: 'BRD-1' } },
+                },
+                {
+                    productId: 'product-out',
+                    quantity: 5,
+                    totalJobCost: 120,
+                    recipe: { outputQty: 2, product: { id: 'product-out', name: 'Bread Loaf', sku: 'BRD-1' } },
+                },
+            ]);
+            db.saleItem.findMany.mockResolvedValue([
+                { product_id: 'product-out', quantity: 10, price_at_sale: 25 },
+                { product_id: 'product-out', quantity: 5, price_at_sale: 25 },
+            ]);
+
+            const result = await service.getProductPL('tenant-1');
+
+            expect(result.products).toEqual([
+                expect.objectContaining({
+                    productId: 'product-out',
+                    jobsCompleted: 2,
+                    quantityProduced: 30, // (10*2) + (5*2)
+                    totalProductionCost: 320,
+                    unitsSold: 15,
+                    revenue: 375, // 15 * 25
+                    grossProfit: 55,
+                }),
+            ]);
+            expect(result.totals).toEqual({
+                quantityProduced: 30,
+                totalProductionCost: 320,
+                revenue: 375,
+                grossProfit: 55,
+            });
         });
     });
 

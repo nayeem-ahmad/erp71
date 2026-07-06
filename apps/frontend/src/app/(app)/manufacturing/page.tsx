@@ -76,6 +76,27 @@ interface ProductionJobCost {
     } | null;
 }
 
+interface CostSource {
+    id: string;
+    productName: string;
+    purchaseId: string;
+    purchaseNumber: string;
+    supplierName: string | null;
+    purchaseDate: string;
+    lineTotal: number;
+    allocatedAmount: number;
+    remainingAmount: number;
+}
+
+interface PricingSuggestion {
+    productId: string;
+    productName: string;
+    costPerUnit: number;
+    marginPct: number;
+    suggestedPrice: number;
+    currentPrice: number;
+}
+
 interface JobsResponse {
     items: ProductionJob[];
     total: number;
@@ -129,6 +150,25 @@ interface AnalyticsSummary {
     volumeTrend: AnalyticsTrendPoint[];
 }
 
+interface ProductPLRow {
+    productId: string;
+    productName: string;
+    productSku: string | null;
+    jobsCompleted: number;
+    quantityProduced: number;
+    totalProductionCost: number;
+    avgCostPerUnit: number;
+    unitsSold: number;
+    revenue: number;
+    grossProfit: number;
+    grossMarginPct: number;
+}
+
+interface ProductPLReport {
+    products: ProductPLRow[];
+    totals: { quantityProduced: number; totalProductionCost: number; revenue: number; grossProfit: number };
+}
+
 // ------------------------------------------------------------------ //
 //  Constants                                                          //
 // ------------------------------------------------------------------ //
@@ -173,6 +213,7 @@ const EMPTY_JOB_COST_FORM = {
     costType: 'PRINTING' as Exclude<JobCostType, 'RAW_MATERIAL'>,
     amount: '',
     notes: '',
+    sourcePurchaseItemId: '',
 };
 
 // ------------------------------------------------------------------ //
@@ -181,12 +222,13 @@ const EMPTY_JOB_COST_FORM = {
 
 export default function ManufacturingPage() {
     const { t } = useI18n();
-    const [activeTab, setActiveTab] = useState<'bom' | 'jobs' | 'analytics'>('bom');
+    const [activeTab, setActiveTab] = useState<'bom' | 'jobs' | 'analytics' | 'productPL'>('bom');
 
-    const tabs: Array<{ key: 'bom' | 'jobs' | 'analytics'; label: string }> = [
+    const tabs: Array<{ key: 'bom' | 'jobs' | 'analytics' | 'productPL'; label: string }> = [
         { key: 'bom', label: t.manufacturing.tabs.boms },
         { key: 'jobs', label: t.manufacturing.tabs.jobs },
         { key: 'analytics', label: t.manufacturing.tabs.analytics },
+        { key: 'productPL', label: t.manufacturing.tabs.productPL },
     ];
 
     return (
@@ -218,7 +260,15 @@ export default function ManufacturingPage() {
                 ))}
             </div>
 
-            {activeTab === 'bom' ? <BomTab /> : activeTab === 'jobs' ? <JobsTab /> : <AnalyticsTab />}
+            {activeTab === 'bom' ? (
+                <BomTab />
+            ) : activeTab === 'jobs' ? (
+                <JobsTab />
+            ) : activeTab === 'analytics' ? (
+                <AnalyticsTab />
+            ) : (
+                <ProductPLTab />
+            )}
         </div>
     );
 }
@@ -619,6 +669,14 @@ function JobsTab() {
     const [costForm, setCostForm] = useState({ ...EMPTY_JOB_COST_FORM });
     const [addingCost, setAddingCost] = useState(false);
     const [addCostError, setAddCostError] = useState('');
+    const [costSources, setCostSources] = useState<CostSource[]>([]);
+    const [costSourcesLoaded, setCostSourcesLoaded] = useState(false);
+
+    const [marginPct, setMarginPct] = useState<Record<string, string>>({});
+    const [pricingSuggestion, setPricingSuggestion] = useState<Record<string, PricingSuggestion | null>>({});
+    const [pricingLoading, setPricingLoading] = useState(false);
+    const [pricingError, setPricingError] = useState('');
+    const [applyingPrice, setApplyingPrice] = useState(false);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -775,8 +833,26 @@ function JobsTab() {
         setExpandedJobId(jobId);
         setCostForm({ ...EMPTY_JOB_COST_FORM });
         setAddCostError('');
+        setPricingError('');
+        if (!marginPct[jobId]) {
+            setMarginPct((prev) => ({ ...prev, [jobId]: '30' }));
+        }
         if (!jobCosts[jobId]) {
             loadJobCosts(jobId);
+        }
+        if (!costSourcesLoaded) {
+            loadCostSources();
+        }
+    }
+
+    async function loadCostSources() {
+        try {
+            const data: CostSource[] = await fetchWithAuth('/manufacturing/cost-sources');
+            setCostSources(data ?? []);
+        } catch {
+            setCostSources([]);
+        } finally {
+            setCostSourcesLoaded(true);
         }
     }
 
@@ -796,10 +872,11 @@ function JobsTab() {
                     costType: costForm.costType,
                     amount,
                     notes: costForm.notes || undefined,
+                    sourcePurchaseItemId: costForm.sourcePurchaseItemId || undefined,
                 }),
             });
             setCostForm({ ...EMPTY_JOB_COST_FORM });
-            await loadJobCosts(jobId);
+            await Promise.all([loadJobCosts(jobId), loadCostSources()]);
             load();
         } catch (e: any) {
             setAddCostError(e.message ?? t.manufacturing.jobCosts.addFailed);
@@ -816,6 +893,40 @@ function JobsTab() {
             load();
         } catch (e: any) {
             setAddCostError(e.message ?? t.manufacturing.jobCosts.removeFailed);
+        }
+    }
+
+    async function handleSuggestPrice(jobId: string) {
+        const margin = parseFloat(marginPct[jobId] ?? '30') || 0;
+        setPricingLoading(true);
+        setPricingError('');
+        try {
+            const data: PricingSuggestion = await fetchWithAuth(
+                `/manufacturing/jobs/${jobId}/pricing-suggestion?marginPct=${margin}`,
+            );
+            setPricingSuggestion((prev) => ({ ...prev, [jobId]: data }));
+        } catch (e: any) {
+            setPricingError(e.message ?? t.manufacturing.pricing.suggestFailed);
+        } finally {
+            setPricingLoading(false);
+        }
+    }
+
+    async function handleApplyPrice(jobId: string) {
+        const margin = parseFloat(marginPct[jobId] ?? '30') || 0;
+        setApplyingPrice(true);
+        setPricingError('');
+        try {
+            const data: PricingSuggestion = await fetchWithAuth(`/manufacturing/jobs/${jobId}/apply-price`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ marginPct: margin }),
+            });
+            setPricingSuggestion((prev) => ({ ...prev, [jobId]: data }));
+        } catch (e: any) {
+            setPricingError(e.message ?? t.manufacturing.pricing.applyFailed);
+        } finally {
+            setApplyingPrice(false);
         }
     }
 
@@ -1044,6 +1155,25 @@ function JobsTab() {
                                                 {job.status !== 'CANCELLED' && (
                                                     <div className="flex flex-wrap items-end gap-2 pt-2 border-t border-gray-200">
                                                         <select
+                                                            value={costForm.sourcePurchaseItemId}
+                                                            onChange={(e) => {
+                                                                const source = costSources.find((s) => s.id === e.target.value);
+                                                                setCostForm((f) => ({
+                                                                    ...f,
+                                                                    sourcePurchaseItemId: e.target.value,
+                                                                    amount: source ? String(source.remainingAmount) : f.amount,
+                                                                }));
+                                                            }}
+                                                            className="border rounded px-2 py-1.5 text-xs w-full sm:w-auto sm:max-w-[220px]"
+                                                        >
+                                                            <option value="">{t.manufacturing.jobCosts.noBillLink}</option>
+                                                            {costSources.map((source) => (
+                                                                <option key={source.id} value={source.id}>
+                                                                    {source.purchaseNumber} — {source.productName} ({formatBDT(source.remainingAmount)} {t.manufacturing.jobCosts.remaining})
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                        <select
                                                             value={costForm.costType}
                                                             onChange={(e) =>
                                                                 setCostForm((f) => ({ ...f, costType: e.target.value as any }))
@@ -1084,6 +1214,73 @@ function JobsTab() {
                                                 {addCostError && (
                                                     <div className="bg-red-50 text-red-700 p-2 rounded text-xs">{addCostError}</div>
                                                 )}
+
+                                                <div className="pt-3 border-t border-gray-200 space-y-2">
+                                                    <h5 className="text-xs font-semibold text-gray-700">{t.manufacturing.pricing.title}</h5>
+                                                    {job.status !== 'COMPLETED' || job.costPerUnit == null ? (
+                                                        <p className="text-xs text-gray-400">{t.manufacturing.pricing.onlyForCompleted}</p>
+                                                    ) : (
+                                                        <>
+                                                            <div className="flex flex-wrap items-end gap-2">
+                                                                <div>
+                                                                    <label className="block text-[10px] text-gray-500 mb-0.5">
+                                                                        {t.manufacturing.pricing.marginLabel}
+                                                                    </label>
+                                                                    <input
+                                                                        type="number"
+                                                                        min="0"
+                                                                        step="1"
+                                                                        value={marginPct[job.id] ?? '30'}
+                                                                        onChange={(e) =>
+                                                                            setMarginPct((prev) => ({ ...prev, [job.id]: e.target.value }))
+                                                                        }
+                                                                        className="border rounded px-2 py-1.5 text-xs w-20"
+                                                                    />
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => handleSuggestPrice(job.id)}
+                                                                    disabled={pricingLoading}
+                                                                    className="px-3 py-1.5 border border-gray-300 rounded text-xs font-medium disabled:opacity-50"
+                                                                >
+                                                                    {pricingLoading ? t.manufacturing.pricing.suggesting : t.manufacturing.pricing.suggest}
+                                                                </button>
+                                                            </div>
+
+                                                            {pricingSuggestion[job.id] && (
+                                                                <div className="flex flex-wrap items-center gap-4 text-xs bg-white border border-gray-200 rounded p-2">
+                                                                    <span className="text-gray-500">
+                                                                        {t.manufacturing.pricing.costPerUnit}:{' '}
+                                                                        <span className="font-semibold text-gray-800">
+                                                                            {formatBDT(pricingSuggestion[job.id]!.costPerUnit)}
+                                                                        </span>
+                                                                    </span>
+                                                                    <span className="text-gray-500">
+                                                                        {t.manufacturing.pricing.currentPrice}:{' '}
+                                                                        <span className="font-semibold text-gray-800">
+                                                                            {formatBDT(pricingSuggestion[job.id]!.currentPrice)}
+                                                                        </span>
+                                                                    </span>
+                                                                    <span className="text-gray-500">
+                                                                        {t.manufacturing.pricing.suggestedPrice}:{' '}
+                                                                        <span className="font-semibold text-emerald-700">
+                                                                            {formatBDT(pricingSuggestion[job.id]!.suggestedPrice)}
+                                                                        </span>
+                                                                    </span>
+                                                                    <button
+                                                                        onClick={() => handleApplyPrice(job.id)}
+                                                                        disabled={applyingPrice}
+                                                                        className="px-3 py-1.5 bg-emerald-600 text-white rounded text-xs font-medium disabled:opacity-50"
+                                                                    >
+                                                                        {applyingPrice ? t.manufacturing.pricing.applying : t.manufacturing.pricing.apply}
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </>
+                                                    )}
+                                                    {pricingError && (
+                                                        <div className="bg-red-50 text-red-700 p-2 rounded text-xs">{pricingError}</div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </td>
                                     </tr>
@@ -1450,6 +1647,124 @@ function AnalyticsTab() {
                                 </td>
                                 <td className="px-4 py-3 text-right text-gray-700">{formatBDT(job.actualMaterialCost)}</td>
                                 <td className="px-4 py-3 text-right text-gray-900 font-medium">{formatBDT(job.unitProductionCost)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+
+// ------------------------------------------------------------------ //
+//  Per-Product P&L Tab                                                //
+// ------------------------------------------------------------------ //
+
+function ProductPLTab() {
+    const { t } = useI18n();
+    const [data, setData] = useState<ProductPLReport | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        (async () => {
+            setLoading(true);
+            setError('');
+            try {
+                const result: ProductPLReport = await fetchWithAuth('/manufacturing/reports/product-pl');
+                setData(result);
+            } catch {
+                setError(t.manufacturing.productPL.loadFailed);
+            } finally {
+                setLoading(false);
+            }
+        })();
+    }, [t.manufacturing.productPL.loadFailed]);
+
+    if (loading) {
+        return <div className="text-center py-12 text-gray-500">{t.common.loading}</div>;
+    }
+
+    if (error) {
+        return <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{error}</div>;
+    }
+
+    if (!data || data.products.length === 0) {
+        return (
+            <div className="text-center py-12 text-gray-400">
+                <Calculator className="h-12 w-12 mx-auto mb-3 opacity-40" />
+                <p>{t.manufacturing.productPL.empty}</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <FinancialKpiTile
+                    title={t.manufacturing.productPL.quantityProduced}
+                    value={String(data.totals.quantityProduced)}
+                    helper=""
+                    tone="neutral"
+                    Icon={Package}
+                />
+                <FinancialKpiTile
+                    title={t.manufacturing.productPL.totalProductionCost}
+                    value={formatBDT(data.totals.totalProductionCost)}
+                    helper=""
+                    tone="neutral"
+                    Icon={Wallet}
+                />
+                <FinancialKpiTile
+                    title={t.manufacturing.productPL.revenue}
+                    value={formatBDT(data.totals.revenue)}
+                    helper=""
+                    tone="neutral"
+                    Icon={Calculator}
+                />
+                <FinancialKpiTile
+                    title={t.manufacturing.productPL.grossProfit}
+                    value={formatBDT(data.totals.grossProfit)}
+                    helper=""
+                    tone={data.totals.grossProfit >= 0 ? 'positive' : 'negative'}
+                    Icon={Calculator}
+                />
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+                <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
+                        <tr>
+                            <th className="px-4 py-3 text-left">{t.manufacturing.productPL.columns.product}</th>
+                            <th className="px-4 py-3 text-right">{t.manufacturing.productPL.columns.jobsCompleted}</th>
+                            <th className="px-4 py-3 text-right">{t.manufacturing.productPL.columns.qtyProduced}</th>
+                            <th className="px-4 py-3 text-right">{t.manufacturing.productPL.columns.unitsSold}</th>
+                            <th className="px-4 py-3 text-right">{t.manufacturing.productPL.columns.avgCost}</th>
+                            <th className="px-4 py-3 text-right">{t.manufacturing.productPL.columns.productionCost}</th>
+                            <th className="px-4 py-3 text-right">{t.manufacturing.productPL.columns.revenue}</th>
+                            <th className="px-4 py-3 text-right">{t.manufacturing.productPL.columns.grossProfit}</th>
+                            <th className="px-4 py-3 text-right">{t.manufacturing.productPL.columns.margin}</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                        {data.products.map((row) => (
+                            <tr key={row.productId} className="hover:bg-gray-50">
+                                <td className="px-4 py-3">
+                                    <div className="font-medium text-gray-900">{row.productName}</div>
+                                    {row.productSku && <div className="text-xs text-gray-500">{row.productSku}</div>}
+                                </td>
+                                <td className="px-4 py-3 text-right text-gray-700">{row.jobsCompleted}</td>
+                                <td className="px-4 py-3 text-right text-gray-700">{row.quantityProduced}</td>
+                                <td className="px-4 py-3 text-right text-gray-700">{row.unitsSold}</td>
+                                <td className="px-4 py-3 text-right text-gray-700">{formatBDT(row.avgCostPerUnit)}</td>
+                                <td className="px-4 py-3 text-right text-gray-700">{formatBDT(row.totalProductionCost)}</td>
+                                <td className="px-4 py-3 text-right text-gray-700">{formatBDT(row.revenue)}</td>
+                                <td className={`px-4 py-3 text-right font-medium ${row.grossProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                                    {formatBDT(row.grossProfit)}
+                                </td>
+                                <td className={`px-4 py-3 text-right font-medium ${row.grossMarginPct >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                                    {row.grossMarginPct.toFixed(1)}%
+                                </td>
                             </tr>
                         ))}
                     </tbody>
