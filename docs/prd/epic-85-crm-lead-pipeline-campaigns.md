@@ -22,7 +22,11 @@ This entire pipeline — leads, their conversation history, task reminders, and 
 
 4. **Story 4: Marketing Campaign Engine**
    * **Description:** Draft an SMS/WhatsApp/email blast targeted at a customer segment or customer group, preview the recipient list, schedule or send immediately, track per-recipient delivery, and auto-attribute a customer's next purchase (within 30 days) back to the campaign that reached them.
-   * Status: Partial — the backend is fully built (`apps/backend/src/crm-campaigns/`), but the EMAIL channel has no actual send implementation (a campaign would be marked SENT without emailing anyone), and there is currently no working frontend to build or send a campaign (`/crm/campaigns` is a redirect stub) — it can only be operated via the API today.
+   * Status: Done — as of 2026-07-05 the EMAIL channel now actually sends (`CrmCampaign.subject` + `EmailService.sendCustom()` in `crm-campaigns.service.ts`), and `/crm/campaigns` was rebuilt with a real list/create/preview/send/detail UI, replacing the former redirect stub.
+
+5. **Story 5: Lead Scoring**
+   * **Description:** Automatically score a lead so staff can prioritize outreach, independent of the manual `priority` field.
+   * Status: Done — `crm-leads/lead-scoring.util.ts`, shipped 2026-07-05.
 
 ### Notes
-Stories 1-3 were already fully implemented before this epic doc was written. Story 4 documents a real functional gap (no frontend, no email channel) rather than claiming completion — this is the most actionable item in this whole documentation pass, since campaigns can't currently be used by anyone without calling the API directly.
+Stories 1-3 were already fully implemented before this epic doc was written. Story 4 was Partial (no frontend, no email send) when this epic doc was first written, and was completed on 2026-07-05. Story 5 (lead scoring) was added the same day and had no prior story coverage.
