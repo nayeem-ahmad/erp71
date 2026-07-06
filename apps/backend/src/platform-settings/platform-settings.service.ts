@@ -67,6 +67,9 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
         // 'manual' means only the admin's direct "Propose Plan" trigger runs it.
         schedule:                   { isSecret: false, default: 'manual' },
         model:                      { isSecret: false, default: 'anthropic/claude-sonnet-4.6' },
+        // Max model round-trips (tool-call turns) the agent may take per run before
+        // it must return a best-effort answer. Clamped to 5–100 in the runner.
+        max_turns:                  { isSecret: false, default: '40' },
         require_migration_signoff:  { isSecret: false, default: 'true' },
         github_token:               { isSecret: true },
         github_repo:                { isSecret: false, default: 'nayeem-ahmad/erp71' },

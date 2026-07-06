@@ -12,6 +12,7 @@ type Settings = {
     enabled: string;
     schedule: string;
     model: string;
+    max_turns: string;
     require_migration_signoff: string;
     github_token: string;
     github_repo: string;
@@ -22,6 +23,7 @@ const DEFAULTS: Settings = {
     enabled: 'false',
     schedule: 'manual',
     model: 'anthropic/claude-sonnet-4.6',
+    max_turns: '40',
     require_migration_signoff: 'true',
     github_token: '',
     github_repo: 'nayeem-ahmad/erp71',
@@ -74,6 +76,7 @@ export default function FeedbackAutomationSettingsPage() {
                     enabled: d.enabled ?? DEFAULTS.enabled,
                     schedule: d.schedule ?? DEFAULTS.schedule,
                     model: d.model ?? DEFAULTS.model,
+                    max_turns: d.max_turns ?? DEFAULTS.max_turns,
                     require_migration_signoff: d.require_migration_signoff ?? DEFAULTS.require_migration_signoff,
                     github_token: d.github_token === '••••••••' ? '' : (d.github_token ?? ''),
                     github_repo: d.github_repo ?? DEFAULTS.github_repo,
@@ -91,6 +94,7 @@ export default function FeedbackAutomationSettingsPage() {
                 enabled: settings.enabled,
                 schedule: settings.schedule,
                 model: settings.model,
+                max_turns: settings.max_turns,
                 require_migration_signoff: settings.require_migration_signoff,
                 github_repo: settings.github_repo,
                 github_base_branch: settings.github_base_branch,
@@ -166,6 +170,17 @@ export default function FeedbackAutomationSettingsPage() {
                             <input
                                 value={settings.model}
                                 onChange={(e) => setSettings((s) => ({ ...s, model: e.target.value }))}
+                                className={inputCls}
+                            />
+                        </Field>
+
+                        <Field label="Max tool-call turns" hint="How many model round-trips the agent may take per run (5–100) before it must return a best-effort plan. Raise this for large repos where the agent runs out of turns while exploring; lower it to cap cost per run.">
+                            <input
+                                type="number"
+                                min={5}
+                                max={100}
+                                value={settings.max_turns}
+                                onChange={(e) => setSettings((s) => ({ ...s, max_turns: e.target.value }))}
                                 className={inputCls}
                             />
                         </Field>

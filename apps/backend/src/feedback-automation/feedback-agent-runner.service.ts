@@ -9,7 +9,9 @@ import { FeedbackGithubService, RepoWorkspace } from './feedback-github.service'
 const execFileAsync = promisify(execFile);
 
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1';
-const MAX_TURNS = 20;
+const DEFAULT_MAX_TURNS = 40;
+const MIN_MAX_TURNS = 5;
+const MAX_TURNS_CAP = 100;
 const MAX_FILE_BYTES = 200_000;
 const MAX_TOOL_RESULT_CHARS = 20_000;
 
@@ -225,6 +227,7 @@ When finished, respond with a short plain-text summary of what you changed (no t
             throw new InternalServerErrorException('Feedback automation is not configured: no OpenRouter API key set (ai.api_key).');
         }
         const model = settings.model ?? 'anthropic/claude-sonnet-4.6';
+        const maxTurns = this.resolveMaxTurns(settings.max_turns);
         const writeAllowed = tools.some((t) => t.function.name === 'write_file');
 
         const messages: ChatMessage[] = [
@@ -233,11 +236,23 @@ When finished, respond with a short plain-text summary of what you changed (no t
         ];
         let tokensUsed = 0;
 
-        for (let turn = 0; turn < MAX_TURNS; turn++) {
-            const { message, usage } = await this.callOpenRouter(apiKey, model, messages, tools);
+        for (let turn = 0; turn < maxTurns; turn++) {
+            // On the final allowed turn, withhold tools so the model is forced to
+            // return a best-effort plan as plain text instead of the whole run
+            // failing when it would otherwise keep exploring — common on large
+            // repos where read-only investigation eats the turn budget.
+            const isFinalTurn = turn === maxTurns - 1;
+            const turnTools = isFinalTurn ? [] : tools;
+            const { message, usage } = await this.callOpenRouter(apiKey, model, messages, turnTools);
             tokensUsed += (usage?.total_tokens ?? 0);
 
             if (!message.tool_calls || message.tool_calls.length === 0) {
+                return { text: message.content ?? '', tokensUsed };
+            }
+
+            // Final turn had no tools available, so any tool_calls are moot —
+            // take whatever text the model produced alongside them.
+            if (isFinalTurn) {
                 return { text: message.content ?? '', tokensUsed };
             }
 
@@ -249,7 +264,18 @@ When finished, respond with a short plain-text summary of what you changed (no t
             }
         }
 
-        throw new InternalServerErrorException(`Agent did not finish within ${MAX_TURNS} tool-call turns.`);
+        // Unreachable in practice — the final turn always returns above — but
+        // keep a guard so the loop can never fall through silently.
+        throw new InternalServerErrorException(`Agent did not finish within ${maxTurns} tool-call turns.`);
+    }
+
+    /** Resolve the per-run tool-call turn budget from platform settings, clamped to a safe range. */
+    private resolveMaxTurns(raw: string | undefined): number {
+        const parsed = Number.parseInt(raw ?? '', 10);
+        if (!Number.isFinite(parsed)) {
+            return DEFAULT_MAX_TURNS;
+        }
+        return Math.min(Math.max(parsed, MIN_MAX_TURNS), MAX_TURNS_CAP);
     }
 
     private async executeTool(repoDir: string, name: string, argsJson: string, writeAllowed: boolean): Promise<string> {
@@ -341,6 +367,13 @@ When finished, respond with a short plain-text summary of what you changed (no t
         const referer = process.env.FRONTEND_URL ?? 'https://erp71.com';
         const title = process.env.OPENROUTER_APP_NAME ?? 'ERP71';
 
+        // Omit `tools` entirely when empty — some providers reject an empty
+        // tools array, and an empty array is how we force a final text answer.
+        const payload: Record<string, unknown> = { model, messages, max_tokens: 4096 };
+        if (tools.length > 0) {
+            payload.tools = tools;
+        }
+
         let response: Response;
         try {
             response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
@@ -351,7 +384,7 @@ When finished, respond with a short plain-text summary of what you changed (no t
                     'HTTP-Referer': referer,
                     'X-OpenRouter-Title': title,
                 },
-                body: JSON.stringify({ model, messages, tools, max_tokens: 4096 }),
+                body: JSON.stringify(payload),
             });
         } catch (err) {
             throw new InternalServerErrorException(`Feedback agent request failed: ${err instanceof Error ? err.message : String(err)}`);
