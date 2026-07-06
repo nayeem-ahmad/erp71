@@ -244,6 +244,22 @@ describe('CrmLeadsService', () => {
             );
         });
 
+        it('does not overwrite existing optional fields when they are absent from the import row', async () => {
+            db.lead.findUnique.mockResolvedValueOnce({ id: 'lead-existing' });
+            db.lead.update.mockResolvedValueOnce({ id: 'lead-existing' });
+
+            await service.importRows('tenant-1', [
+                { name: 'Bob', mobile: '01800000002' },  // no email, address, remarks, category
+            ], 'upsert');
+
+            const updateCall = db.lead.update.mock.calls[0][0];
+            expect(updateCall.data).not.toHaveProperty('email');
+            expect(updateCall.data).not.toHaveProperty('address');
+            expect(updateCall.data).not.toHaveProperty('remarks');
+            expect(updateCall.data).not.toHaveProperty('category');
+            expect(updateCall.data.priority).toBe('MEDIUM');  // default still applied
+        });
+
         it('reports a row error for missing required fields and continues', async () => {
             db.lead.findUnique.mockResolvedValueOnce(null);
             db.lead.create.mockResolvedValueOnce({ id: 'lead-11' });
@@ -274,8 +290,6 @@ describe('CrmLeadsService', () => {
         });
 
         it('rejects a row with status LOST since lost_reason is not importable', async () => {
-            db.lead.findUnique.mockResolvedValueOnce(null);
-
             const result = await service.importRows('tenant-1', [
                 { name: 'Evan', mobile: '01800000005', status: 'LOST' },
             ], 'skip');
