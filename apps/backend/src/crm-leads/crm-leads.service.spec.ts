@@ -249,7 +249,7 @@ describe('CrmLeadsService', () => {
             db.lead.update.mockResolvedValueOnce({ id: 'lead-existing' });
 
             await service.importRows('tenant-1', [
-                { name: 'Bob', mobile: '01800000002' },  // no email, address, remarks, category
+                { name: 'Bob', mobile: '01800000002' },  // no email, address, remarks, category, priority, source, status
             ], 'upsert');
 
             const updateCall = db.lead.update.mock.calls[0][0];
@@ -257,7 +257,23 @@ describe('CrmLeadsService', () => {
             expect(updateCall.data).not.toHaveProperty('address');
             expect(updateCall.data).not.toHaveProperty('remarks');
             expect(updateCall.data).not.toHaveProperty('category');
-            expect(updateCall.data.priority).toBe('MEDIUM');  // default still applied
+            expect(updateCall.data).not.toHaveProperty('priority');
+            expect(updateCall.data).not.toHaveProperty('source');
+            expect(updateCall.data).not.toHaveProperty('status');
+        });
+
+        it('does not clobber existing status/priority/source in upsert mode when those columns are absent', async () => {
+            db.lead.findUnique.mockResolvedValueOnce({ id: 'lead-existing' });
+            db.lead.update.mockResolvedValueOnce({ id: 'lead-existing' });
+
+            await service.importRows('tenant-1', [
+                { name: 'Bob', mobile: '01800000003' },  // no status, priority, source
+            ], 'upsert');
+
+            const updateCall = db.lead.update.mock.calls[0][0];
+            expect(updateCall.data).not.toHaveProperty('status');
+            expect(updateCall.data).not.toHaveProperty('priority');
+            expect(updateCall.data).not.toHaveProperty('source');
         });
 
         it('reports a row error for missing required fields and continues', async () => {

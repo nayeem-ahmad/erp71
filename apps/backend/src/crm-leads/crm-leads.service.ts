@@ -245,8 +245,10 @@ export class CrmLeadsService {
         return runImport(rows, mode, tenantId, {
             requiredFields: ['name', 'mobile'],
             castRow: (raw) => {
-                const status = this.resolveEnum(raw.status, Object.values(LeadStatus) as string[]) ?? LeadStatus.NEW;
-                if (status === LeadStatus.LOST) {
+                const rawStatus = raw.status != null && String(raw.status).trim() !== ''
+                    ? (this.resolveEnum(raw.status, Object.values(LeadStatus) as string[]) ?? LeadStatus.NEW)
+                    : undefined;
+                if (rawStatus === LeadStatus.LOST) {
                     throw new Error('status LOST requires a lost_reason, which import does not support — set status after import instead');
                 }
                 return {
@@ -256,9 +258,13 @@ export class CrmLeadsService {
                     address: raw.address ? String(raw.address).trim() || null : null,
                     remarks: raw.remarks ? String(raw.remarks).trim() || null : null,
                     category: this.resolveEnum(raw.category, Object.values(LeadCategory) as string[]) ?? null,
-                    priority: this.resolveEnum(raw.priority, Object.values(LeadPriority) as string[]) ?? LeadPriority.MEDIUM,
-                    source: this.resolveEnum(raw.source, Object.values(LeadSource) as string[]) ?? LeadSource.OTHER,
-                    status,
+                    priority: raw.priority != null && String(raw.priority).trim() !== ''
+                        ? (this.resolveEnum(raw.priority, Object.values(LeadPriority) as string[]) ?? LeadPriority.MEDIUM)
+                        : undefined,
+                    source: raw.source != null && String(raw.source).trim() !== ''
+                        ? (this.resolveEnum(raw.source, Object.values(LeadSource) as string[]) ?? LeadSource.OTHER)
+                        : undefined,
+                    status: rawStatus,
                 };
             },
             findDuplicate: async (row) => {
@@ -270,7 +276,13 @@ export class CrmLeadsService {
             },
             create: async (row) => {
                 const score = computeLeadScore(
-                    { status: row.status, source: row.source, priority: row.priority, last_contacted_at: null, next_step_date: null },
+                    {
+                        status: row.status ?? LeadStatus.NEW as any,
+                        source: row.source ?? LeadSource.OTHER as any,
+                        priority: row.priority ?? LeadPriority.MEDIUM as any,
+                        last_contacted_at: null,
+                        next_step_date: null,
+                    },
                     0,
                 );
                 await this.db.lead.create({
@@ -278,15 +290,15 @@ export class CrmLeadsService {
                         tenant_id: tenantId,
                         name: row.name,
                         mobile: row.mobile,
-                        email: row.email,
-                        address: row.address,
-                        remarks: row.remarks,
-                        category: row.category,
-                        priority: row.priority,
-                        source: row.source,
-                        status: row.status,
+                        email: row.email ?? undefined,
+                        address: row.address ?? undefined,
+                        remarks: row.remarks ?? undefined,
+                        category: row.category ?? undefined,
+                        priority: row.priority ?? LeadPriority.MEDIUM,
+                        source: row.source ?? LeadSource.OTHER,
+                        status: row.status ?? LeadStatus.NEW,
                         score,
-                    },
+                    } as any,
                 });
             },
             update: async (id, row) => {
@@ -295,13 +307,13 @@ export class CrmLeadsService {
                     data: {
                         name: row.name,
                         mobile: row.mobile,
-                        ...(row.email    !== null ? { email: row.email }       : {}),
-                        ...(row.address  !== null ? { address: row.address }   : {}),
-                        ...(row.remarks  !== null ? { remarks: row.remarks }   : {}),
-                        ...(row.category !== null ? { category: row.category } : {}),
-                        priority: row.priority,
-                        source: row.source,
-                        status: row.status,
+                        ...(row.email    !== null      ? { email: row.email }       : {}),
+                        ...(row.address  !== null      ? { address: row.address }   : {}),
+                        ...(row.remarks  !== null      ? { remarks: row.remarks }   : {}),
+                        ...(row.category !== null      ? { category: row.category } : {}),
+                        ...(row.priority !== undefined ? { priority: row.priority } : {}),
+                        ...(row.source   !== undefined ? { source: row.source }     : {}),
+                        ...(row.status   !== undefined ? { status: row.status }     : {}),
                     },
                 });
             },
