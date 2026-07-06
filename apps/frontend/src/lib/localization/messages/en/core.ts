@@ -1046,6 +1046,14 @@ export const coreMessages = {
         noTransactions: 'No transactions in this period',
         directionPay: 'Pay to supplier',
         directionReceive: 'Receive from supplier',
+        billStatuses: {
+            UNPAID: 'Unpaid',
+            PARTIAL: 'Partially paid',
+            PAID: 'Paid',
+        },
+        balanceDue: 'Balance due',
+        unapplied: 'Unapplied',
+        appliedTo: 'Applied to',
         columns: {
             dateTime: 'Date / Time',
             serial: 'Serial',
@@ -1054,6 +1062,7 @@ export const coreMessages = {
             amount: 'Amount',
             notes: 'Notes',
             balance: 'Balance',
+            status: 'Bill Status',
         },
     },
     dashboardHome: {

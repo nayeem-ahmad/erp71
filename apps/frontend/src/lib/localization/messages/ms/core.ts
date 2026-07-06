@@ -1046,6 +1046,14 @@ export const coreMessages = {
             noTransactions: "Tiada transaksi dalam tempoh ini",
             directionPay: "Bayar kepada pembekal",
             directionReceive: "Terima daripada pembekal",
+            billStatuses: {
+                UNPAID: "Belum dibayar",
+                PARTIAL: "Dibayar sebahagian",
+                PAID: "Dibayar",
+            },
+            balanceDue: "Baki tertunggak",
+            unapplied: "Belum digunakan",
+            appliedTo: "Digunakan untuk",
             columns: {
                 dateTime: "Tarikh / Masa",
                 serial: "Siri",
@@ -1054,6 +1062,7 @@ export const coreMessages = {
                 amount: "Jumlah",
                 notes: "Nota",
                 balance: "Baki",
+                status: "Status Bil",
             },
         },
         dashboardHome: {

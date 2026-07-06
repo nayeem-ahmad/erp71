@@ -8,6 +8,7 @@ import {
     ValidateNested,
     IsNumber,
     MaxLength,
+    Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -125,4 +126,10 @@ export class CreateJobCostDto {
     @IsString()
     @MaxLength(500)
     notes?: string;
+}
+
+export class ApplySuggestedPriceDto {
+    @IsNumber()
+    @Min(0)
+    marginPct: number;
 }

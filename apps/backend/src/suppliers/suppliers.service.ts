@@ -328,15 +328,78 @@ export class SuppliersService {
             }),
         ]);
 
+        const purchaseIds = transactions
+            .filter((tx) => tx.type === 'CREDIT_PURCHASE' && tx.reference_type === 'PURCHASE' && tx.reference_id)
+            .map((tx) => tx.reference_id as string);
+        const paymentTransactionIds = transactions.filter((tx) => tx.type === 'PAYMENT').map((tx) => tx.id);
+
+        const [bills, allocations] = await Promise.all([
+            purchaseIds.length > 0
+                ? this.db.purchase.findMany({
+                      where: { id: { in: purchaseIds }, tenant_id: tenantId },
+                      select: { id: true, payment_status: true, paid_amount: true, total_amount: true },
+                  })
+                : Promise.resolve([]),
+            paymentTransactionIds.length > 0
+                ? this.db.supplierPaymentAllocation.findMany({
+                      where: { tenant_id: tenantId, transaction_id: { in: paymentTransactionIds } },
+                      select: {
+                          transaction_id: true,
+                          amount: true,
+                          purchase: { select: { id: true, purchase_number: true } },
+                      },
+                  })
+                : Promise.resolve([]),
+        ]);
+
+        const billById = new Map(bills.map((b: any) => [b.id, b]));
+        const allocationsByTransaction = new Map<string, any[]>();
+        for (const allocation of allocations) {
+            const list = allocationsByTransaction.get(allocation.transaction_id) ?? [];
+            list.push({
+                purchaseId: allocation.purchase.id,
+                purchaseNumber: allocation.purchase.purchase_number,
+                amount: Number(allocation.amount),
+            });
+            allocationsByTransaction.set(allocation.transaction_id, list);
+        }
+
         const items = transactions.map((tx) => {
             const amount = Number(tx.amount);
             const balanceAfter = Number(tx.balance_after);
-            return {
+            const base = {
                 ...tx,
                 amount,
                 balance_after: balanceAfter,
                 balance_before: balanceAfter - this.ledgerDueDelta(tx.type, amount),
             };
+
+            if (tx.type === 'CREDIT_PURCHASE' && tx.reference_type === 'PURCHASE' && tx.reference_id) {
+                const bill = billById.get(tx.reference_id);
+                if (bill) {
+                    return {
+                        ...base,
+                        bill: {
+                            payment_status: bill.payment_status,
+                            paid_amount: Number(bill.paid_amount),
+                            total_amount: Number(bill.total_amount),
+                            balance_due: Number(bill.total_amount) - Number(bill.paid_amount),
+                        },
+                    };
+                }
+            }
+
+            if (tx.type === 'PAYMENT') {
+                const txAllocations = allocationsByTransaction.get(tx.id) ?? [];
+                const allocatedTotal = txAllocations.reduce((sum, a) => sum + a.amount, 0);
+                return {
+                    ...base,
+                    allocations: txAllocations,
+                    unapplied_amount: amount - allocatedTotal,
+                };
+            }
+
+            return base;
         });
 
         const closing_balance = items.length > 0

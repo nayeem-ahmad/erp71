@@ -21,6 +21,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
     const [formData, setFormData] = useState({
         name: '',
         sku: '',
+        type: 'GOODS' as 'GOODS' | 'SERVICE',
         price: '',
         initialStock: '',
         isFeatured: false,
@@ -71,6 +72,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
             setFormData({
                 name: initialProduct.name || '',
                 sku: initialProduct.sku || '',
+                type: (initialProduct.type as 'GOODS' | 'SERVICE') || 'GOODS',
                 price: String(initialProduct.price ?? ''),
                 initialStock: '',
                 isFeatured: Boolean(initialProduct.is_featured),
@@ -93,6 +95,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
             setFormData({
                 name: '',
                 sku: '',
+                type: 'GOODS',
                 price: '',
                 initialStock: '',
                 isFeatured: false,
@@ -162,8 +165,9 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
             const parseOptionalInt = (value: string) => (value === '' ? undefined : parseInt(value, 10));
             await onSubmit({
                 ...formData,
+                type: formData.type,
                 price: parseFloat(formData.price),
-                initialStock: mode === 'create' ? parseInt(formData.initialStock) || 0 : undefined,
+                initialStock: mode === 'create' && formData.type !== 'SERVICE' ? parseInt(formData.initialStock) || 0 : undefined,
                 isFeatured: formData.isFeatured,
                 warrantyEnabled: formData.warrantyEnabled,
                 warrantyDurationDays: formData.warrantyEnabled ? parseOptionalInt(formData.warrantyDurationDays) : undefined,
@@ -242,6 +246,33 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                         value={formData.name}
                                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                     />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.addProductModal.productType}</label>
+                                    <div className="flex gap-2 bg-gray-50 rounded-xl p-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormData({ ...formData, type: 'GOODS' })}
+                                            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
+                                                formData.type === 'GOODS' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-400'
+                                            }`}
+                                        >
+                                            {t.addProductModal.typeGoods}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormData({ ...formData, type: 'SERVICE' })}
+                                            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
+                                                formData.type === 'SERVICE' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-400'
+                                            }`}
+                                        >
+                                            {t.addProductModal.typeService}
+                                        </button>
+                                    </div>
+                                    {formData.type === 'SERVICE' && (
+                                        <p className="text-[11px] text-gray-400 mt-1 ml-1">{t.addProductModal.typeHint}</p>
+                                    )}
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
@@ -377,18 +408,20 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                     </div>
 
                                     {/* Initial Stock */}
-                                    <div className="flex-1">
-                                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.addProductModal.initialStock}</label>
-                                        <input
-                                            required={mode === 'create'}
-                                            type="number"
-                                            placeholder={t.addProductModal.placeholders.initialStock}
-                                            disabled={mode === 'edit'}
-                                            className="w-full bg-gray-50 border-none rounded-xl py-2.5 px-3.5 text-sm focus:ring-2 focus:ring-blue-500/10 transition-all font-bold disabled:opacity-50"
-                                            value={formData.initialStock}
-                                            onChange={(e) => setFormData({ ...formData, initialStock: e.target.value })}
-                                        />
-                                    </div>
+                                    {formData.type !== 'SERVICE' && (
+                                        <div className="flex-1">
+                                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.addProductModal.initialStock}</label>
+                                            <input
+                                                required={mode === 'create'}
+                                                type="number"
+                                                placeholder={t.addProductModal.placeholders.initialStock}
+                                                disabled={mode === 'edit'}
+                                                className="w-full bg-gray-50 border-none rounded-xl py-2.5 px-3.5 text-sm focus:ring-2 focus:ring-blue-500/10 transition-all font-bold disabled:opacity-50"
+                                                value={formData.initialStock}
+                                                onChange={(e) => setFormData({ ...formData, initialStock: e.target.value })}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="bg-gray-50 rounded-2xl p-4 space-y-3 border border-gray-100">
@@ -415,6 +448,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                     </div>
                                 </div>
 
+                                {formData.type !== 'SERVICE' && (
                                 <div className="bg-gray-50/50 rounded-2xl p-4 border border-gray-100/50 space-y-3">
                                     <span className="block text-xs font-bold text-gray-700 ml-1">Inventory Alert & Lead Times</span>
                                     <div className="grid grid-cols-3 gap-2">
@@ -459,6 +493,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                         </div>
                                     </div>
                                 </div>
+                                )}
                             </div>
                         </div>
                     ) : (

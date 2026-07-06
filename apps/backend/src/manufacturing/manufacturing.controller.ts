@@ -12,6 +12,7 @@ import {
     HttpCode,
     HttpStatus,
     ParseIntPipe,
+    ParseFloatPipe,
     DefaultValuePipe,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -29,6 +30,7 @@ import {
     CreateProductionJobDto,
     CompleteProductionJobDto,
     CreateJobCostDto,
+    ApplySuggestedPriceDto,
 } from './manufacturing.dto';
 
 @Controller('manufacturing')
@@ -131,6 +133,15 @@ export class ManufacturingController {
     //  Job cost lines                                                      //
     // ------------------------------------------------------------------ //
 
+    @Get('cost-sources')
+    listCostSources(
+        @Tenant() tenant: TenantContext,
+        @Query('search') search?: string,
+        @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit?: number,
+    ) {
+        return this.manufacturingService.listCostSources(tenant.tenantId, search, limit);
+    }
+
     @Get('jobs/:id/costs')
     listJobCosts(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.manufacturingService.listJobCosts(tenant.tenantId, id);
@@ -156,11 +167,38 @@ export class ManufacturingController {
     }
 
     // ------------------------------------------------------------------ //
+    //  Cost-plus pricing                                                   //
+    // ------------------------------------------------------------------ //
+
+    @Get('jobs/:id/pricing-suggestion')
+    getPricingSuggestion(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Query('marginPct', new DefaultValuePipe(30), ParseFloatPipe) marginPct: number,
+    ) {
+        return this.manufacturingService.getPricingSuggestion(tenant.tenantId, id, marginPct);
+    }
+
+    @Post('jobs/:id/apply-price')
+    applySuggestedPrice(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: ApplySuggestedPriceDto,
+    ) {
+        return this.manufacturingService.applySuggestedPrice(tenant.tenantId, id, dto.marginPct);
+    }
+
+    // ------------------------------------------------------------------ //
     //  Analytics                                                           //
     // ------------------------------------------------------------------ //
 
     @Get('analytics')
     getAnalytics(@Tenant() tenant: TenantContext) {
         return this.manufacturingService.getAnalytics(tenant.tenantId);
+    }
+
+    @Get('reports/product-pl')
+    getProductPL(@Tenant() tenant: TenantContext) {
+        return this.manufacturingService.getProductPL(tenant.tenantId);
     }
 }

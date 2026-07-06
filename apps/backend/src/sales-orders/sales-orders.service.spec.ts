@@ -23,6 +23,9 @@ describe('SalesOrdersService', () => {
         findUnique: jest.fn(),
         upsert: jest.fn(),
       },
+      product: {
+        findUnique: jest.fn().mockResolvedValue({ type: 'GOODS' }),
+      },
       inventoryMovement: {
         create: jest.fn(),
       },

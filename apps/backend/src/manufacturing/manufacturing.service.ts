@@ -487,6 +487,70 @@ export class ManufacturingService {
         });
     }
 
+    /**
+     * Lists service-type purchase items (printing/binding/transport bills, ...) with
+     * their remaining unallocated amount, so a bill spanning multiple book titles can
+     * be split across several jobs' cost lines instead of allocated to just one.
+     */
+    async listCostSources(tenantId: string, search?: string, limit = 50) {
+        const items = await this.db.purchaseItem.findMany({
+            where: {
+                purchase: { tenant_id: tenantId },
+                product: { type: 'SERVICE' },
+                ...(search
+                    ? {
+                          OR: [
+                              { product: { name: { contains: search, mode: 'insensitive' } } },
+                              { purchase: { purchase_number: { contains: search, mode: 'insensitive' } } },
+                          ],
+                      }
+                    : {}),
+            },
+            include: {
+                product: { select: { id: true, name: true } },
+                purchase: {
+                    select: {
+                        id: true,
+                        purchase_number: true,
+                        created_at: true,
+                        supplier: { select: { id: true, name: true } },
+                    },
+                },
+            },
+            orderBy: { purchase: { created_at: 'desc' } },
+            take: Math.min(limit, 200),
+        });
+
+        if (items.length === 0) return [];
+
+        const allocatedByItem = new Map<string, number>();
+        const grouped = await this.db.productionJobCost.groupBy({
+            by: ['sourcePurchaseItemId'],
+            where: { tenantId, sourcePurchaseItemId: { in: items.map((i: any) => i.id) } },
+            _sum: { amount: true },
+        });
+        for (const g of grouped) {
+            allocatedByItem.set(g.sourcePurchaseItemId, Number(g._sum.amount ?? 0));
+        }
+
+        return items
+            .map((item: any) => {
+                const allocated = allocatedByItem.get(item.id) ?? 0;
+                return {
+                    id: item.id,
+                    productName: item.product.name,
+                    purchaseId: item.purchase.id,
+                    purchaseNumber: item.purchase.purchase_number,
+                    supplierName: item.purchase.supplier?.name ?? null,
+                    purchaseDate: item.purchase.created_at,
+                    lineTotal: Number(item.line_total),
+                    allocatedAmount: allocated,
+                    remainingAmount: Number(item.line_total) - allocated,
+                };
+            })
+            .filter((item) => item.remainingAmount > 0.005);
+    }
+
     /** Adds a non-material cost line (printing, binding, transport, labor, ...) to a job, optionally traced to a bill. */
     async addJobCost(tenantId: string, jobId: string, dto: CreateJobCostDto) {
         const job = await this.getJob(tenantId, jobId);
@@ -498,10 +562,22 @@ export class ManufacturingService {
         if (dto.sourcePurchaseItemId) {
             const purchaseItem = await this.db.purchaseItem.findFirst({
                 where: { id: dto.sourcePurchaseItemId, purchase: { tenant_id: tenantId } },
-                select: { id: true },
+                select: { id: true, line_total: true },
             });
             if (!purchaseItem) {
                 throw new BadRequestException('Purchase item not found or does not belong to this tenant');
+            }
+
+            const allocated = await this.db.productionJobCost.aggregate({
+                where: { tenantId, sourcePurchaseItemId: dto.sourcePurchaseItemId },
+                _sum: { amount: true },
+            });
+            const alreadyAllocated = Number(allocated._sum.amount ?? 0);
+            const remaining = Number(purchaseItem.line_total) - alreadyAllocated;
+            if (dto.amount - remaining > 0.005) {
+                throw new BadRequestException(
+                    `This allocation (${dto.amount.toFixed(2)}) exceeds the remaining unallocated amount (${remaining.toFixed(2)}) on this bill line.`,
+                );
             }
         }
 
@@ -555,6 +631,140 @@ export class ManufacturingService {
             where: { id },
             data: { status: 'CANCELLED' },
         });
+    }
+
+    // ------------------------------------------------------------------ //
+    //  Cost-plus pricing                                                   //
+    // ------------------------------------------------------------------ //
+
+    /** Suggests a sales price for a job's output product from its actual cost per unit + a target margin %. */
+    async getPricingSuggestion(tenantId: string, jobId: string, marginPct: number) {
+        const job = await this.getJob(tenantId, jobId);
+
+        if (job.costPerUnit == null) {
+            throw new BadRequestException('This job has no cost per unit yet - complete the job first.');
+        }
+
+        const product = await this.db.product.findFirst({
+            where: { id: job.productId, tenant_id: tenantId },
+            select: { id: true, name: true, price: true },
+        });
+        if (!product) throw new NotFoundException('Output product not found');
+
+        const costPerUnit = Number(job.costPerUnit);
+        const suggestedPrice = costPerUnit * (1 + marginPct / 100);
+
+        return {
+            jobId,
+            productId: product.id,
+            productName: product.name,
+            costPerUnit,
+            marginPct,
+            suggestedPrice,
+            currentPrice: Number(product.price),
+        };
+    }
+
+    /** Computes the suggestion again and writes it to the output product's base sale price. */
+    async applySuggestedPrice(tenantId: string, jobId: string, marginPct: number) {
+        const suggestion = await this.getPricingSuggestion(tenantId, jobId, marginPct);
+
+        await this.db.product.update({
+            where: { id: suggestion.productId },
+            data: { price: suggestion.suggestedPrice },
+        });
+
+        return suggestion;
+    }
+
+    // ------------------------------------------------------------------ //
+    //  Per-product production P&L                                         //
+    // ------------------------------------------------------------------ //
+
+    /**
+     * Per-book/edition profitability: total quantity produced and production cost
+     * (from completed jobs) against total sales revenue for the same product,
+     * all-time. This compares total cost to produce a title against total revenue
+     * from selling it - it does not FIFO-match specific units sold to specific
+     * production runs.
+     */
+    async getProductPL(tenantId: string) {
+        const jobs = await this.db.productionJob.findMany({
+            where: { tenantId, status: 'COMPLETED' },
+            select: {
+                productId: true,
+                quantity: true,
+                totalJobCost: true,
+                recipe: { select: { outputQty: true, product: { select: { id: true, name: true, sku: true } } } },
+            },
+        });
+
+        if (jobs.length === 0) {
+            return { products: [], totals: { quantityProduced: 0, totalProductionCost: 0, revenue: 0, grossProfit: 0 } };
+        }
+
+        const productIds = [...new Set(jobs.map((j: any) => j.productId))];
+
+        const saleItems = await this.db.saleItem.findMany({
+            where: { product_id: { in: productIds }, sale: { tenant_id: tenantId, status: 'COMPLETED' } },
+            select: { product_id: true, quantity: true, price_at_sale: true },
+        });
+
+        const revenueByProduct = new Map<string, number>();
+        const unitsSoldByProduct = new Map<string, number>();
+        for (const item of saleItems) {
+            const revenue = item.quantity * Number(item.price_at_sale);
+            revenueByProduct.set(item.product_id, (revenueByProduct.get(item.product_id) ?? 0) + revenue);
+            unitsSoldByProduct.set(item.product_id, (unitsSoldByProduct.get(item.product_id) ?? 0) + item.quantity);
+        }
+
+        const byProduct = new Map<string, {
+            productId: string;
+            productName: string;
+            productSku: string | null;
+            jobsCompleted: number;
+            quantityProduced: number;
+            totalProductionCost: number;
+        }>();
+
+        for (const job of jobs as any[]) {
+            const outputQty = job.quantity * job.recipe.outputQty;
+            const entry = byProduct.get(job.productId) ?? {
+                productId: job.productId,
+                productName: job.recipe.product.name,
+                productSku: job.recipe.product.sku,
+                jobsCompleted: 0,
+                quantityProduced: 0,
+                totalProductionCost: 0,
+            };
+            entry.jobsCompleted += 1;
+            entry.quantityProduced += outputQty;
+            entry.totalProductionCost += Number(job.totalJobCost ?? 0);
+            byProduct.set(job.productId, entry);
+        }
+
+        const products = Array.from(byProduct.values())
+            .map((p) => {
+                const revenue = revenueByProduct.get(p.productId) ?? 0;
+                const unitsSold = unitsSoldByProduct.get(p.productId) ?? 0;
+                const avgCostPerUnit = p.quantityProduced > 0 ? p.totalProductionCost / p.quantityProduced : 0;
+                const grossProfit = revenue - p.totalProductionCost;
+                const grossMarginPct = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
+                return { ...p, unitsSold, avgCostPerUnit, revenue, grossProfit, grossMarginPct };
+            })
+            .sort((a, b) => b.revenue - a.revenue);
+
+        const totals = products.reduce(
+            (acc, p) => ({
+                quantityProduced: acc.quantityProduced + p.quantityProduced,
+                totalProductionCost: acc.totalProductionCost + p.totalProductionCost,
+                revenue: acc.revenue + p.revenue,
+                grossProfit: acc.grossProfit + p.grossProfit,
+            }),
+            { quantityProduced: 0, totalProductionCost: 0, revenue: 0, grossProfit: 0 },
+        );
+
+        return { products, totals };
     }
 
     // ------------------------------------------------------------------ //

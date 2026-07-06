@@ -30,6 +30,14 @@ type LedgerRow = {
     notes?: string | null;
     created_at: string;
     creator?: { name: string } | null;
+    bill?: {
+        payment_status: 'UNPAID' | 'PARTIAL' | 'PAID';
+        paid_amount: number;
+        total_amount: number;
+        balance_due: number;
+    };
+    allocations?: { purchaseId: string; purchaseNumber: string; amount: number }[];
+    unapplied_amount?: number;
 };
 
 const columnHelper = createColumnHelper<LedgerRow>();
@@ -253,6 +261,55 @@ function SupplierLedgerContent() {
                 return <span className="text-sm text-gray-500 line-clamp-2">{info.getValue() || '—'}</span>;
             },
             size: 180,
+        }),
+        columnHelper.display({
+            id: 'status',
+            header: copy.columns.status,
+            cell: (info) => {
+                const row = info.row.original;
+                if (row.rowType === 'opening') return <span className="text-gray-300">—</span>;
+
+                if (row.bill) {
+                    const tone =
+                        row.bill.payment_status === 'PAID'
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : row.bill.payment_status === 'PARTIAL'
+                              ? 'bg-amber-50 text-amber-700'
+                              : 'bg-rose-50 text-rose-700';
+                    return (
+                        <div className="text-xs">
+                            <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${tone}`}>
+                                {copy.billStatuses[row.bill.payment_status]}
+                            </span>
+                            {row.bill.payment_status !== 'PAID' && (
+                                <div className="text-gray-400 mt-0.5">
+                                    {copy.balanceDue}: {formatBDT(row.bill.balance_due)}
+                                </div>
+                            )}
+                        </div>
+                    );
+                }
+
+                if (row.type === 'PAYMENT') {
+                    if (row.allocations && row.allocations.length > 0) {
+                        return (
+                            <div className="text-xs text-gray-500">
+                                {copy.appliedTo}: {row.allocations.map((a) => a.purchaseNumber).join(', ')}
+                            </div>
+                        );
+                    }
+                    if ((row.unapplied_amount ?? 0) > 0.005) {
+                        return (
+                            <span className="inline-block px-1.5 py-0.5 rounded font-bold text-xs bg-orange-50 text-orange-700">
+                                {copy.unapplied}: {formatBDT(row.unapplied_amount ?? 0)}
+                            </span>
+                        );
+                    }
+                }
+
+                return <span className="text-gray-300">—</span>;
+            },
+            size: 160,
         }),
         columnHelper.accessor('balance_after', {
             header: copy.columns.balance,
