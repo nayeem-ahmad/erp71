@@ -12,6 +12,10 @@ const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL ?? 'https://openrout
 const DEFAULT_MAX_TURNS = 40;
 const MIN_MAX_TURNS = 5;
 const MAX_TURNS_CAP = 100;
+// Per-request timeout for a single OpenRouter completion, and how many times to
+// retry a transient failure (connection drop / timeout / 429 / 5xx) before giving up.
+const OPENROUTER_REQUEST_TIMEOUT_MS = 180_000;
+const OPENROUTER_MAX_ATTEMPTS = 3;
 const MAX_FILE_BYTES = 200_000;
 const MAX_TOOL_RESULT_CHARS = 20_000;
 
@@ -374,9 +378,41 @@ When finished, respond with a short plain-text summary of what you changed (no t
             payload.tools = tools;
         }
 
-        let response: Response;
+        // Retry transient failures: undici drops a long-running socket as
+        // `TypeError: terminated`, and OpenRouter can return 429/5xx under load.
+        // Re-requesting is safe — the caller only commits the assistant message
+        // after a successful return, so nothing is duplicated.
+        let lastError = '';
+        for (let attempt = 1; attempt <= OPENROUTER_MAX_ATTEMPTS; attempt++) {
+            try {
+                return await this.requestCompletion(apiKey, model, payload, referer, title);
+            } catch (err) {
+                lastError = err instanceof Error ? err.message : String(err);
+                if (err instanceof NonRetryableAgentError || attempt === OPENROUTER_MAX_ATTEMPTS) {
+                    break;
+                }
+                this.logger.warn(`OpenRouter attempt ${attempt}/${OPENROUTER_MAX_ATTEMPTS} failed (${lastError}); retrying…`);
+                await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+            }
+        }
+        throw new InternalServerErrorException(`Feedback agent request failed after ${OPENROUTER_MAX_ATTEMPTS} attempts: ${lastError}`);
+    }
+
+    /** Single OpenRouter completion with an abort-based timeout; throws on network, timeout, or HTTP error. */
+    private async requestCompletion(
+        apiKey: string,
+        model: string,
+        payload: Record<string, unknown>,
+        referer: string,
+        title: string,
+    ): Promise<{
+        message: { content: string | null; tool_calls?: ChatMessage['tool_calls'] };
+        usage?: { total_tokens?: number };
+    }> {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), OPENROUTER_REQUEST_TIMEOUT_MS);
         try {
-            response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+            const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
                 method: 'POST',
                 headers: {
                     Authorization: `Bearer ${apiKey}`,
@@ -385,21 +421,38 @@ When finished, respond with a short plain-text summary of what you changed (no t
                     'X-OpenRouter-Title': title,
                 },
                 body: JSON.stringify(payload),
+                signal: controller.signal,
             });
+
+            // Read the body inside the guarded scope: a mid-stream socket drop
+            // throws here (this is the "terminated" that used to escape raw).
+            const body = (await response.json()) as {
+                choices?: Array<{ message?: { content?: string | null; tool_calls?: ChatMessage['tool_calls'] } }>;
+                usage?: { total_tokens?: number };
+                error?: { message?: string };
+            };
+
+            if (!response.ok) {
+                const msg = `Feedback agent error: ${body.error?.message ?? response.status}`;
+                // 4xx other than 429 won't succeed on retry (bad key, bad model, etc.).
+                if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+                    throw new NonRetryableAgentError(msg);
+                }
+                throw new Error(msg);
+            }
+
+            const message = body.choices?.[0]?.message ?? { content: '' };
+            return { message: { content: message.content ?? '', tool_calls: message.tool_calls }, usage: body.usage };
         } catch (err) {
-            throw new InternalServerErrorException(`Feedback agent request failed: ${err instanceof Error ? err.message : String(err)}`);
+            if (err instanceof Error && err.name === 'AbortError') {
+                throw new Error(`request timed out after ${OPENROUTER_REQUEST_TIMEOUT_MS}ms`);
+            }
+            throw err;
+        } finally {
+            clearTimeout(timer);
         }
-
-        const body = (await response.json()) as {
-            choices?: Array<{ message?: { content?: string | null; tool_calls?: ChatMessage['tool_calls'] } }>;
-            usage?: { total_tokens?: number };
-            error?: { message?: string };
-        };
-        if (!response.ok) {
-            throw new InternalServerErrorException(`Feedback agent error: ${body.error?.message ?? response.status}`);
-        }
-
-        const message = body.choices?.[0]?.message ?? { content: '' };
-        return { message: { content: message.content ?? '', tool_calls: message.tool_calls }, usage: body.usage };
     }
 }
+
+/** Marks an OpenRouter failure that must not be retried (e.g. bad API key or model). */
+class NonRetryableAgentError extends Error {}
