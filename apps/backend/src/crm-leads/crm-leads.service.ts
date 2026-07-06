@@ -6,9 +6,10 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CustomersService } from '../customers/customers.service';
-import { CreateLeadDto, LeadStatus, UpdateLeadDto } from './crm-leads.dto';
+import { CreateLeadDto, LeadCategory, LeadPriority, LeadSource, LeadStatus, UpdateLeadDto } from './crm-leads.dto';
 import { paginate } from '../common/pagination.dto';
 import { computeLeadScore } from './lead-scoring.util';
+import { runImport, ImportResult } from '../common/import.util';
 
 const leadIncludes = {
     assignee: { select: { id: true, name: true, email: true } },
@@ -228,6 +229,95 @@ export class CrmLeadsService {
 
         const open = counts.NEW + counts.CONTACTED + counts.QUALIFIED;
         return { counts, open };
+    }
+
+    private resolveEnum<T extends string>(raw: unknown, allowed: T[]): T | undefined {
+        if (raw === undefined || raw === null) return undefined;
+        const value = String(raw).trim().toUpperCase();
+        return allowed.includes(value as T) ? (value as T) : undefined;
+    }
+
+    async importRows(
+        tenantId: string,
+        rows: Record<string, unknown>[],
+        mode: 'skip' | 'upsert',
+    ): Promise<ImportResult> {
+        return runImport(rows, mode, tenantId, {
+            requiredFields: ['name', 'mobile'],
+            castRow: (raw) => {
+                const rawStatus = raw.status != null && String(raw.status).trim() !== ''
+                    ? (this.resolveEnum(raw.status, Object.values(LeadStatus) as string[]) ?? LeadStatus.NEW)
+                    : undefined;
+                if (rawStatus === LeadStatus.LOST) {
+                    throw new Error('status LOST requires a lost_reason, which import does not support — set status after import instead');
+                }
+                return {
+                    name: String(raw.name ?? '').trim(),
+                    mobile: String(raw.mobile ?? '').trim(),
+                    email: raw.email ? String(raw.email).trim() || null : null,
+                    address: raw.address ? String(raw.address).trim() || null : null,
+                    remarks: raw.remarks ? String(raw.remarks).trim() || null : null,
+                    category: this.resolveEnum(raw.category, Object.values(LeadCategory) as string[]) ?? null,
+                    priority: raw.priority != null && String(raw.priority).trim() !== ''
+                        ? (this.resolveEnum(raw.priority, Object.values(LeadPriority) as string[]) ?? LeadPriority.MEDIUM)
+                        : undefined,
+                    source: raw.source != null && String(raw.source).trim() !== ''
+                        ? (this.resolveEnum(raw.source, Object.values(LeadSource) as string[]) ?? LeadSource.OTHER)
+                        : undefined,
+                    status: rawStatus,
+                };
+            },
+            findDuplicate: async (row) => {
+                const existing = await this.db.lead.findUnique({
+                    where: { tenant_id_mobile: { tenant_id: tenantId, mobile: row.mobile } },
+                    select: { id: true },
+                });
+                return existing?.id ?? null;
+            },
+            create: async (row) => {
+                const score = computeLeadScore(
+                    {
+                        status: row.status ?? LeadStatus.NEW as any,
+                        source: row.source ?? LeadSource.OTHER as any,
+                        priority: row.priority ?? LeadPriority.MEDIUM as any,
+                        last_contacted_at: null,
+                        next_step_date: null,
+                    },
+                    0,
+                );
+                await this.db.lead.create({
+                    data: {
+                        tenant_id: tenantId,
+                        name: row.name,
+                        mobile: row.mobile,
+                        email: row.email ?? undefined,
+                        address: row.address ?? undefined,
+                        remarks: row.remarks ?? undefined,
+                        category: row.category ?? undefined,
+                        priority: row.priority ?? LeadPriority.MEDIUM,
+                        source: row.source ?? LeadSource.OTHER,
+                        status: row.status ?? LeadStatus.NEW,
+                        score,
+                    } as any,
+                });
+            },
+            update: async (id, row) => {
+                await this.db.lead.update({
+                    where: { id },
+                    data: {
+                        name: row.name,
+                        mobile: row.mobile,
+                        ...(row.email    !== null      ? { email: row.email }       : {}),
+                        ...(row.address  !== null      ? { address: row.address }   : {}),
+                        ...(row.remarks  !== null      ? { remarks: row.remarks }   : {}),
+                        ...(row.category !== null      ? { category: row.category } : {}),
+                        ...(row.priority !== undefined ? { priority: row.priority } : {}),
+                        ...(row.source   !== undefined ? { source: row.source }     : {}),
+                        ...(row.status   !== undefined ? { status: row.status }     : {}),
+                    },
+                });
+            },
+        });
     }
 
     async convert(tenantId: string, id: string) {

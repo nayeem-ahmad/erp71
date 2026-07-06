@@ -1,8 +1,39 @@
 import { Transform } from 'class-transformer';
 import { IsString, IsOptional, IsEnum, IsUUID, IsEmail, IsDateString } from 'class-validator';
-import { LeadSource, LeadStatus, LeadCategory, LeadPriority } from '@prisma/client';
 
-export { LeadSource, LeadStatus, LeadCategory, LeadPriority };
+// Define enums locally since Prisma enums aren't exported at runtime
+export enum LeadStatus {
+    NEW = 'NEW',
+    CONTACTED = 'CONTACTED',
+    QUALIFIED = 'QUALIFIED',
+    LOST = 'LOST',
+    CONVERTED = 'CONVERTED',
+}
+
+export enum LeadSource {
+    WALK_IN = 'WALK_IN',
+    PHONE = 'PHONE',
+    FACEBOOK = 'FACEBOOK',
+    REFERRAL = 'REFERRAL',
+    WEBSITE = 'WEBSITE',
+    OTHER = 'OTHER',
+}
+
+export enum LeadCategory {
+    RETAIL = 'RETAIL',
+    WHOLESALE = 'WHOLESALE',
+    CORPORATE = 'CORPORATE',
+    INDIVIDUAL = 'INDIVIDUAL',
+    PARTNER = 'PARTNER',
+    OTHER = 'OTHER',
+}
+
+export enum LeadPriority {
+    LOW = 'LOW',
+    MEDIUM = 'MEDIUM',
+    HIGH = 'HIGH',
+    URGENT = 'URGENT',
+}
 
 const emptyToUndefined = ({ value }: { value: unknown }) =>
     value === '' || value === null ? undefined : value;
