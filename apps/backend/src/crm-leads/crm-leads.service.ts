@@ -6,9 +6,10 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CustomersService } from '../customers/customers.service';
-import { CreateLeadDto, LeadStatus, UpdateLeadDto } from './crm-leads.dto';
+import { CreateLeadDto, LeadCategory, LeadPriority, LeadSource, LeadStatus, UpdateLeadDto } from './crm-leads.dto';
 import { paginate } from '../common/pagination.dto';
 import { computeLeadScore } from './lead-scoring.util';
+import { runImport, ImportResult } from '../common/import.util';
 
 const leadIncludes = {
     assignee: { select: { id: true, name: true, email: true } },
@@ -228,6 +229,83 @@ export class CrmLeadsService {
 
         const open = counts.NEW + counts.CONTACTED + counts.QUALIFIED;
         return { counts, open };
+    }
+
+    private resolveEnum<T extends string>(raw: unknown, allowed: T[]): T | undefined {
+        if (raw === undefined || raw === null) return undefined;
+        const value = String(raw).trim().toUpperCase();
+        return allowed.includes(value as T) ? (value as T) : undefined;
+    }
+
+    async importRows(
+        tenantId: string,
+        rows: Record<string, unknown>[],
+        mode: 'skip' | 'upsert',
+    ): Promise<ImportResult> {
+        return runImport(rows, mode, tenantId, {
+            requiredFields: ['name', 'mobile'],
+            castRow: (raw) => {
+                const status = this.resolveEnum(raw.status, Object.values(LeadStatus) as string[]) ?? LeadStatus.NEW;
+                if (status === LeadStatus.LOST) {
+                    throw new Error('status LOST requires a lost_reason, which import does not support — set status after import instead');
+                }
+                return {
+                    name: String(raw.name ?? '').trim(),
+                    mobile: String(raw.mobile ?? '').trim(),
+                    email: raw.email ? String(raw.email).trim() || null : null,
+                    address: raw.address ? String(raw.address).trim() || null : null,
+                    remarks: raw.remarks ? String(raw.remarks).trim() || null : null,
+                    category: this.resolveEnum(raw.category, Object.values(LeadCategory) as string[]) ?? null,
+                    priority: this.resolveEnum(raw.priority, Object.values(LeadPriority) as string[]) ?? LeadPriority.MEDIUM,
+                    source: this.resolveEnum(raw.source, Object.values(LeadSource) as string[]) ?? LeadSource.OTHER,
+                    status,
+                };
+            },
+            findDuplicate: async (row) => {
+                const existing = await this.db.lead.findUnique({
+                    where: { tenant_id_mobile: { tenant_id: tenantId, mobile: row.mobile } },
+                    select: { id: true },
+                });
+                return existing?.id ?? null;
+            },
+            create: async (row) => {
+                const score = computeLeadScore(
+                    { status: row.status, source: row.source, priority: row.priority, last_contacted_at: null, next_step_date: null },
+                    0,
+                );
+                await this.db.lead.create({
+                    data: {
+                        tenant_id: tenantId,
+                        name: row.name,
+                        mobile: row.mobile,
+                        email: row.email,
+                        address: row.address,
+                        remarks: row.remarks,
+                        category: row.category,
+                        priority: row.priority,
+                        source: row.source,
+                        status: row.status,
+                        score,
+                    },
+                });
+            },
+            update: async (id, row) => {
+                await this.db.lead.update({
+                    where: { id },
+                    data: {
+                        name: row.name,
+                        mobile: row.mobile,
+                        email: row.email,
+                        address: row.address,
+                        remarks: row.remarks,
+                        category: row.category,
+                        priority: row.priority,
+                        source: row.source,
+                        status: row.status,
+                    },
+                });
+            },
+        });
     }
 
     async convert(tenantId: string, id: string) {

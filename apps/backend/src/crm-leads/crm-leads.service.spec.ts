@@ -190,4 +190,101 @@ describe('CrmLeadsService', () => {
             expect(result.open).toBe(6);
         });
     });
+
+    describe('importRows()', () => {
+        it('creates a new lead from a valid row with defaults applied', async () => {
+            db.lead.findUnique.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-10' });
+
+            const result = await service.importRows('tenant-1', [
+                { name: 'Alice', mobile: '01800000001', email: 'alice@example.com' },
+            ], 'skip');
+
+            expect(result).toEqual({ created: 1, updated: 0, skipped: 0, errors: [] });
+            expect(db.lead.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        tenant_id: 'tenant-1',
+                        name: 'Alice',
+                        mobile: '01800000001',
+                        email: 'alice@example.com',
+                        priority: 'MEDIUM',
+                        source: 'OTHER',
+                        status: 'NEW',
+                    }),
+                }),
+            );
+        });
+
+        it('skips a duplicate mobile in skip mode', async () => {
+            db.lead.findUnique.mockResolvedValueOnce({ id: 'lead-existing' });
+
+            const result = await service.importRows('tenant-1', [
+                { name: 'Bob', mobile: '01800000002' },
+            ], 'skip');
+
+            expect(result).toEqual({ created: 0, updated: 0, skipped: 1, errors: [] });
+            expect(db.lead.update).not.toHaveBeenCalled();
+        });
+
+        it('updates a duplicate mobile in upsert mode', async () => {
+            db.lead.findUnique.mockResolvedValueOnce({ id: 'lead-existing' });
+            db.lead.update.mockResolvedValueOnce({ id: 'lead-existing' });
+
+            const result = await service.importRows('tenant-1', [
+                { name: 'Bob Updated', mobile: '01800000002', priority: 'HIGH' },
+            ], 'upsert');
+
+            expect(result).toEqual({ created: 0, updated: 1, skipped: 0, errors: [] });
+            expect(db.lead.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { id: 'lead-existing' },
+                    data: expect.objectContaining({ name: 'Bob Updated', priority: 'HIGH' }),
+                }),
+            );
+        });
+
+        it('reports a row error for missing required fields and continues', async () => {
+            db.lead.findUnique.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-11' });
+
+            const result = await service.importRows('tenant-1', [
+                { name: '', mobile: '' },
+                { name: 'Carol', mobile: '01800000003' },
+            ], 'skip');
+
+            expect(result.created).toBe(1);
+            expect(result.errors).toEqual(['Row 2: missing required field(s): name, mobile']);
+        });
+
+        it('falls back to defaults for an invalid enum value instead of erroring', async () => {
+            db.lead.findUnique.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-12' });
+
+            const result = await service.importRows('tenant-1', [
+                { name: 'Dana', mobile: '01800000004', priority: 'not-a-priority', source: 'nope' },
+            ], 'skip');
+
+            expect(result).toEqual({ created: 1, updated: 0, skipped: 0, errors: [] });
+            expect(db.lead.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ priority: 'MEDIUM', source: 'OTHER' }),
+                }),
+            );
+        });
+
+        it('rejects a row with status LOST since lost_reason is not importable', async () => {
+            db.lead.findUnique.mockResolvedValueOnce(null);
+
+            const result = await service.importRows('tenant-1', [
+                { name: 'Evan', mobile: '01800000005', status: 'LOST' },
+            ], 'skip');
+
+            expect(result.created).toBe(0);
+            expect(result.errors).toEqual([
+                'Row 2: status LOST requires a lost_reason, which import does not support — set status after import instead',
+            ]);
+            expect(db.lead.create).not.toHaveBeenCalled();
+        });
+    });
 });
