@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { CreateProductDto, UpdateProductDto } from './product.dto';
+import { CreateProductDto, ProductTypeDto, UpdateProductDto } from './product.dto';
 import { CsvProductRow } from './import-products.dto';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant, ensureDefaultWarehouse } from '../database/inventory.utils';
 import { paginate, PaginatedResult, cursorPaginate, CursorPaginatedResult } from '../common/pagination.dto';
@@ -31,6 +31,7 @@ export class ProductsService {
                     tenant_id: tenantId,
                     name: dto.name,
                     sku: dto.sku || null,
+                    type: dto.type ?? 'GOODS',
                     price: dto.price,
                     is_featured: dto.isFeatured ?? false,
                     description: dto.description || null,
@@ -49,7 +50,7 @@ export class ProductsService {
                 include: this.productInclude(),
             });
 
-            if ((dto.initialStock ?? 0) > 0) {
+            if (dto.type !== ProductTypeDto.SERVICE && (dto.initialStock ?? 0) > 0) {
                 const settings = await tx.inventorySettings.findUnique({
                     where: { tenant_id: tenantId },
                 });
@@ -155,6 +156,7 @@ export class ProductsService {
             data: {
                 ...(dto.name !== undefined ? { name: dto.name } : {}),
                 ...(dto.sku !== undefined ? { sku: dto.sku || null } : {}),
+                ...(dto.type !== undefined ? { type: dto.type } : {}),
                 ...(dto.price !== undefined ? { price: dto.price } : {}),
                 ...(dto.isFeatured !== undefined ? { is_featured: dto.isFeatured } : {}),
                 ...(dto.description !== undefined ? { description: dto.description || null } : {}),

@@ -94,6 +94,7 @@ describe('Sales Returns & Orders (e2e)', () => {
                     name: 'Returns Tester',
                     tenantName: 'Returns Tenant',
                     storeName: 'Returns Store',
+                    mobile: '01700000000',
                 })
                 .expect(201);
 
@@ -324,6 +325,7 @@ describe('Sales Returns & Orders (e2e)', () => {
                     name: 'Other Tenant User',
                     tenantName: 'Other Tenant',
                     storeName: 'Other Store',
+                    mobile: '01700000001',
                 })
                 .expect(201);
 

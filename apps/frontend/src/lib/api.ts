@@ -498,6 +498,12 @@ export const api = {
     }),
     convertLead: (id: string) => fetchWithAuth(`/crm/leads/${id}/convert`, { method: 'POST' }),
     deleteLead: (id: string) => fetchWithAuth(`/crm/leads/${id}`, { method: 'DELETE' }),
+    importLeads: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert') =>
+        fetchWithAuth('/crm/leads/import', {
+            method: 'POST',
+            body: JSON.stringify({ rows, mode }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     // CRM Lead Conversations
     getLeadConversations: (params?: { leadId?: string; page?: number; limit?: number }) => {
         const query = new URLSearchParams();

@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
-import { UserPlus, Plus, RefreshCw, Search, Eye, Trash2, ListChecks } from 'lucide-react';
+import { UserPlus, Plus, RefreshCw, Search, Eye, Trash2, ListChecks, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
+import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import {
     LEAD_CATEGORIES,
     LEAD_PRIORITIES,
@@ -45,6 +46,18 @@ function scoreBadgeColor(score: number): string {
     return 'bg-gray-100 text-gray-600';
 }
 
+const LEAD_IMPORT_FIELDS: ImportField[] = [
+    { key: 'name', label: 'Name', required: true },
+    { key: 'mobile', label: 'Mobile', required: true },
+    { key: 'email', label: 'Email', required: false },
+    { key: 'address', label: 'Address', required: false },
+    { key: 'category', label: 'Category', required: false },
+    { key: 'priority', label: 'Priority', required: false },
+    { key: 'source', label: 'Source', required: false },
+    { key: 'status', label: 'Status', required: false },
+    { key: 'remarks', label: 'Remarks', required: false },
+];
+
 export default function LeadsPage() {
     const { t } = useI18n();
     const m = t.crm.leads;
@@ -57,6 +70,7 @@ export default function LeadsPage() {
     const [categoryFilter, setCategoryFilter] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('');
     const [myTodaysActions, setMyTodaysActions] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
 
     const loadLeads = useCallback(async () => {
         setLoading(true);
@@ -192,6 +206,12 @@ export default function LeadsPage() {
                     <button onClick={loadLeads} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
                         <RefreshCw className="w-4 h-4" />
                     </button>
+                    <button
+                        onClick={() => setImportOpen(true)}
+                        className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm font-semibold hover:bg-gray-50"
+                    >
+                        <Upload className="w-4 h-4" /> Import
+                    </button>
                     <Link
                         href={routes.crm.leadNew}
                         className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-semibold hover:bg-violet-700"
@@ -244,6 +264,15 @@ export default function LeadsPage() {
                 columns={columns}
                 isLoading={loading}
                 emptyMessage={myTodaysActions ? m.myTodaysActionsEmpty : m.emptyMessage}
+            />
+
+            <ImportDialog
+                open={importOpen}
+                onClose={() => setImportOpen(false)}
+                entityLabel="Leads"
+                fields={LEAD_IMPORT_FIELDS}
+                importFn={(rows, mode) => api.importLeads(rows, mode)}
+                onSuccess={() => void loadLeads()}
             />
         </div>
     );

@@ -249,4 +249,53 @@ describe('SuppliersService', () => {
             ]);
         });
     });
+
+    describe('getCreditLedger()', () => {
+        it('enriches CREDIT_PURCHASE rows with bill status and PAYMENT rows with their allocations', async () => {
+            db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', name: 'ACME', phone: null, due_balance: 40 });
+            db.supplierCreditTransaction.count.mockResolvedValue(2);
+            db.supplierCreditTransaction.findMany.mockResolvedValue([
+                {
+                    id: 'tx-1',
+                    type: 'CREDIT_PURCHASE',
+                    amount: 100,
+                    balance_after: 100,
+                    reference_type: 'PURCHASE',
+                    reference_id: 'purchase-1',
+                    created_at: new Date('2026-01-01'),
+                },
+                {
+                    id: 'tx-2',
+                    type: 'PAYMENT',
+                    amount: 60,
+                    balance_after: 40,
+                    reference_type: null,
+                    reference_id: null,
+                    created_at: new Date('2026-01-02'),
+                },
+            ]);
+            db.purchase.findMany.mockResolvedValue([
+                { id: 'purchase-1', payment_status: 'PARTIAL', paid_amount: 60, total_amount: 100 },
+            ]);
+            db.supplierPaymentAllocation.findMany.mockResolvedValue([
+                { transaction_id: 'tx-2', amount: 60, purchase: { id: 'purchase-1', purchase_number: 'PUR-00001' } },
+            ]);
+
+            const result = await service.getCreditLedger('tenant-1', 'sup-1');
+
+            expect(result.transactions[0]).toEqual(
+                expect.objectContaining({
+                    id: 'tx-1',
+                    bill: { payment_status: 'PARTIAL', paid_amount: 60, total_amount: 100, balance_due: 40 },
+                }),
+            );
+            expect(result.transactions[1]).toEqual(
+                expect.objectContaining({
+                    id: 'tx-2',
+                    allocations: [{ purchaseId: 'purchase-1', purchaseNumber: 'PUR-00001', amount: 60 }],
+                    unapplied_amount: 0,
+                }),
+            );
+        });
+    });
 });

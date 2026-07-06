@@ -45,7 +45,7 @@ export class SalesReportsService {
         const transactionCount = sales.length;
         const netRevenue = totalRevenue - totalReturns;
         const avgOrderValue = transactionCount > 0 ? totalRevenue / transactionCount : 0;
-        const totalCogs = saleItems.reduce(
+        const totalCogs = (saleItems ?? []).reduce(
             (sum, i) => sum + (i.unit_cost_at_sale !== null ? Number(i.unit_cost_at_sale) * i.quantity : 0),
             0,
         );
@@ -69,7 +69,7 @@ export class SalesReportsService {
             dayMap.set(day, existing);
         }
 
-        for (const item of saleItems) {
+        for (const item of (saleItems ?? [])) {
             const day = item.sale.created_at.toISOString().slice(0, 10);
             const existing = dayMap.get(day) ?? { transactions: 0, grossRevenue: 0, returns: 0, cogs: 0 };
             existing.cogs += item.unit_cost_at_sale !== null ? Number(item.unit_cost_at_sale) * item.quantity : 0;

@@ -58,6 +58,8 @@ describe('SalesReportsService', () => {
             $queryRaw: jest.fn(),
         };
 
+        db.saleItem.findMany.mockResolvedValue([]);
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 SalesReportsService,

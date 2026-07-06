@@ -97,6 +97,7 @@ describe('Inventory Operations (e2e)', () => {
                     name: 'Inventory Tester',
                     tenantName: 'Inventory Tenant',
                     storeName: 'Inventory Store',
+                    mobile: '01700000000',
                 })
                 .expect(201);
 

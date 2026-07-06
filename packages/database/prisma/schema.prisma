@@ -673,6 +673,11 @@ model Brand {
   @@index([tenant_id, deleted_at])
 }
 
+enum ProductType {
+  GOODS
+  SERVICE
+}
+
 model Product {
   id          String   @id @default(uuid())
   tenant_id   String
@@ -681,6 +686,7 @@ model Product {
   subgroup_id String?
   name        String
   sku         String?
+  type        ProductType @default(GOODS)
   price       Decimal  @default(0) @db.Decimal(12, 2)
   compare_at_price Decimal? @db.Decimal(12, 2)  // original price for sale display
   is_featured Boolean  @default(false)

@@ -36,6 +36,7 @@ describe('ProductsService', () => {
       product: {
         create: jest.fn(),
         findFirst: jest.fn(),
+        findUnique: jest.fn().mockResolvedValue({ type: 'GOODS' }),
       },
       productStock: {
         create: jest.fn(),

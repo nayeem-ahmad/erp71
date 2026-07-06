@@ -138,6 +138,16 @@ export async function applyInventoryMovement(
         throw new BadRequestException('Inventory movement delta cannot be zero.');
     }
 
+    // Service products (printing, binding, transport, ...) are never stock-tracked -
+    // skip the movement/stock update entirely rather than failing on missing stock rows.
+    const product = await tx.product.findUnique({
+        where: { id: productId },
+        select: { type: true },
+    });
+    if (product?.type === 'SERVICE') {
+        return 0;
+    }
+
     let balanceAfter: number;
 
     if (quantityDelta > 0) {
