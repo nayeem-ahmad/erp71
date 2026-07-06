@@ -1,4 +1,4 @@
-import { LeadPriority, LeadSource, LeadStatus } from './crm-leads.dto';
+import { LeadPriority, LeadSource, LeadStatus } from '@prisma/client';
 
 const SOURCE_WEIGHT: Record<LeadSource, number> = {
     REFERRAL: 25,

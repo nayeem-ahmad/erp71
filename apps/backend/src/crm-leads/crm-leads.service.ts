@@ -314,7 +314,7 @@ export class CrmLeadsService {
                         ...(row.priority !== undefined ? { priority: row.priority } : {}),
                         ...(row.source   !== undefined ? { source: row.source }     : {}),
                         ...(row.status   !== undefined ? { status: row.status }     : {}),
-                    },
+                    } as any,
                 });
             },
         });
