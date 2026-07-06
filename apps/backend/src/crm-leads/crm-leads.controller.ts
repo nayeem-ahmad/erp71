@@ -1,6 +1,7 @@
 import { Controller, Post, Get, Patch, Delete, Body, Param, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { CrmLeadsService } from './crm-leads.service';
 import { CreateLeadDto, UpdateLeadDto } from './crm-leads.dto';
+import { ImportRowsDto } from '../common/import.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { RequiresFeature } from '../auth/subscription-access.decorator';
@@ -17,6 +18,11 @@ export class CrmLeadsController {
     @Post()
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateLeadDto) {
         return this.service.create(tenant.tenantId, tenant.userId, dto);
+    }
+
+    @Post('import')
+    importRows(@Tenant() tenant: TenantContext, @Body() body: ImportRowsDto) {
+        return this.service.importRows(tenant.tenantId, body.rows, body.mode);
     }
 
     @Get()
