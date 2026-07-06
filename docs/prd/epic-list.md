@@ -16,6 +16,8 @@ This document provides a master list of all epics for the ERP71 platform, organi
     *   **Goal:** Admin-created tenants, platform-admin user management, and manual tenant ledger/payments/credit sales.
 *   **Epic 08: Messaging Channels & AI-Powered Features**
     *   **Goal:** Paid-usage SMS, WhatsApp, and AI-assisted features on top of the core email channel.
+*   **Epic 09: Pay-per-Module Add-on Marketplace**
+    *   **Goal:** Let tenants buy individual premium modules standalone, without upgrading their whole plan tier.
 
 ## 💰 Sales (10-19)
 *   **Epic 10: Core Sales & POS Transactions**

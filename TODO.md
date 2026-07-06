@@ -387,6 +387,11 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [ ] Third-party accounting exports (Tally/QuickBooks format)
 - [ ] Public API + API key management for enterprise customers
 - [ ] White-label option
+- [ ] Purchase Settings (Epic 25) — no `purchase-settings` module exists at all; no default tax/freight config, communication templates, approval config, or accounting posting-preference mapping for purchases
+- [ ] Customer Wallets & Store Credit (Epic 82) — no `CustomerWallet` model, no store-credit issuance from returns, no wallet payment method in POS
+- [ ] Delivery & Fulfillment (Epic 17) gaps — no managed delivery-personnel list (driver name/phone are free-text), no delivery-charge/fee config, no delivery analytics/performance report
+- [ ] Sales Settings (Epic 15) gaps — no default tax/discount rules, no invoice/receipt template fields, no sales-specific accounting posting-preference mapping
+- [ ] Payroll (Epic 62/63) remaining — no allowances/deductions beyond basic salary, no employee-linked loan/advance repayment integration, no automated monthly payroll run, no digital payslips, no staff-presence/payroll-analytics dashboard
 
 ### HR (Epic 60–63)
 - [x] Basic employee management — Employee profiles (code, name, phone, email, NID encrypted, DOJ, department, designation, status), Department and Designation models, full CRUD API, link/unlink system user account — done 2026-06-09
@@ -399,6 +404,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Full docs/prd vs. codebase story audit — compared all 63 epic docs against actual implementation across every module; found two shipped features with zero story coverage (pay-per-module add-on marketplace, admin-driven feedback automation pipeline) and documented them as new `epic-09-addon-module-marketplace.md` and Epic 07 Story 5; updated Epic 84/85 status annotations that had gone stale after the 2026-07-05 CRM campaign/lead-scoring work; logged newly-found undocumented gaps (Purchase Settings, Customer Wallets, Delivery personnel/charges, Sales Settings, Payroll) to the roadmap above — done 2026-07-06
 - [x] CRM lead scoring + lost-reason tracking — `Lead.score` (0-100, computed from source quality, priority, recency of contact, conversation count, and overdue next-step, recalculated on lead create/update and on new conversations); `Lead.lost_reason` required when status is set to LOST; `Lead.status`/`source`/`category`/`priority` promoted from free-text strings to native Prisma enums (migration `20260705000000_crm_lead_enums_score_and_campaign_subject`); score badge + lost-reason field surfaced on leads list/detail UI — done 2026-07-05
 - [x] CRM campaign EMAIL channel implemented — `CrmCampaign.subject` field (required for EMAIL campaigns); `dispatchCampaign()` sends real email via new `EmailService.sendCustom()` instead of silently marking EMAIL campaigns SENT with no delivery; recipients without an email on file are marked FAILED — done 2026-07-05
 - [x] CRM campaigns frontend rebuilt — restored the full `/crm/campaigns` page (list, create modal with subject field for EMAIL, preview/send/detail modal) in place of the redirect-to-hub stub; CRM hub links to Campaigns and shows a mini-dashboard (open leads by pipeline stage, tasks due today/overdue, recent campaign delivery performance) — done 2026-07-05
