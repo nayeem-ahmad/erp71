@@ -329,6 +329,8 @@ export const coreMessages = {
             platformSettingsAi: 'AI (OpenRouter)',
             platformSettingsNavigation: 'Navigation',
             platformSettingsPlans: 'Subscription Plans',
+            platformSettingsAddons: 'Add-on Modules',
+            platformSettingsFeedbackAutomation: 'Feedback Automation',
             customers: 'Customers',
             customerGroups: 'Customer Groups',
             priceLists: 'Price Lists',
