@@ -125,16 +125,13 @@ export default function PlatformPaymentsSettingsPage() {
 
     useEffect(() => {
         const load = async () => {
-            const [sslRes, bkashRes, nagadRes] = await Promise.all([
-                fetchWithAuth('/admin/platform-settings/payment_ssl').then((r) => r.json()),
-                fetchWithAuth('/admin/platform-settings/payment_bkash').then((r) => r.json()),
-                fetchWithAuth('/admin/platform-settings/payment_nagad').then((r) => r.json()),
+            const [s, b, n] = await Promise.all([
+                fetchWithAuth('/admin/platform-settings/payment_ssl'),
+                fetchWithAuth('/admin/platform-settings/payment_bkash'),
+                fetchWithAuth('/admin/platform-settings/payment_nagad'),
             ]);
-            const s = sslRes?.data ?? sslRes;
             setSsl({ store_id: s.store_id ?? '', store_password: s.store_password === '••••••••' ? '' : (s.store_password ?? ''), is_sandbox: s.is_sandbox ?? 'true' });
-            const b = bkashRes?.data ?? bkashRes;
             setBkash({ app_key: b.app_key ?? '', app_secret: b.app_secret === '••••••••' ? '' : (b.app_secret ?? ''), username: b.username ?? '', password: b.password === '••••••••' ? '' : (b.password ?? ''), is_sandbox: b.is_sandbox ?? 'true' });
-            const n = nagadRes?.data ?? nagadRes;
             setNagad({ merchant_id: n.merchant_id ?? '', merchant_private_key: n.merchant_private_key === '••••••••' ? '' : (n.merchant_private_key ?? ''), merchant_public_key: n.merchant_public_key ?? '', is_sandbox: n.is_sandbox ?? 'true' });
         };
         load()
@@ -145,12 +142,11 @@ export default function PlatformPaymentsSettingsPage() {
     async function saveGroup(group: string, payload: Record<string, string | null>, setSaving: (v: boolean) => void) {
         setSaving(true);
         try {
-            const res = await fetchWithAuth(`/admin/platform-settings/${group}`, {
+            await fetchWithAuth(`/admin/platform-settings/${group}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ settings: payload }),
             });
-            if (!res.ok) throw new Error('Save failed');
             setToast({ type: 'success', message: c.saved });
         } catch (e: any) {
             setToast({ type: 'error', message: e.message ?? c.saveFailed });

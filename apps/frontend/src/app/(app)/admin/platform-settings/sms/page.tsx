@@ -64,9 +64,7 @@ export default function PlatformSmsSeetingsPage() {
 
     useEffect(() => {
         fetchWithAuth('/admin/platform-settings/sms')
-            .then((r) => r.json())
-            .then((json) => {
-                const d = json?.data ?? json;
+            .then((d) => {
                 setSettings({
                     provider: d.provider ?? DEFAULTS.provider,
                     api_key: d.api_key === '••••••••' ? '' : (d.api_key ?? ''),
@@ -89,12 +87,11 @@ export default function PlatformSmsSeetingsPage() {
             // Only send api_key if the user typed a new value
             if (settings.api_key) payload.api_key = settings.api_key;
 
-            const res = await fetchWithAuth('/admin/platform-settings/sms', {
+            await fetchWithAuth('/admin/platform-settings/sms', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ settings: payload }),
             });
-            if (!res.ok) throw new Error('Save failed');
             setSettings((prev) => ({ ...prev, api_key: '' }));
             setToast({ type: 'success', message: m.saved });
         } catch (e: any) {
@@ -108,12 +105,11 @@ export default function PlatformSmsSeetingsPage() {
         if (!testPhone.trim()) return;
         setTesting(true);
         try {
-            const res = await fetchWithAuth('/admin/platform-settings/sms/test', {
+            await fetchWithAuth('/admin/platform-settings/sms/test', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ phone: testPhone }),
             });
-            if (!res.ok) throw new Error('Test failed');
             setToast({ type: 'success', message: formatMessage(m.test.success, { phone: testPhone }) });
         } catch (e: any) {
             setToast({ type: 'error', message: e.message ?? m.test.failed });

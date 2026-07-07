@@ -60,9 +60,7 @@ export default function ReportSettingsPage() {
 
     useEffect(() => {
         fetchWithAuth('/tenants/report-settings')
-            .then((r) => r.json())
-            .then((json) => {
-                const d = json?.data ?? json;
+            .then((d) => {
                 if (d) {
                     setSettings({
                         report_weekly_enabled: d.report_weekly_enabled ?? false,
@@ -80,7 +78,7 @@ export default function ReportSettingsPage() {
         setError('');
         setSuccess(false);
         try {
-            const res = await fetchWithAuth('/tenants/report-settings', {
+            await fetchWithAuth('/tenants/report-settings', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -89,7 +87,6 @@ export default function ReportSettingsPage() {
                     report_email: settings.report_email?.trim() || null,
                 }),
             });
-            if (!res.ok) throw new Error('Save failed');
             setSuccess(true);
             setTimeout(() => setSuccess(false), 3000);
         } catch (e: any) {

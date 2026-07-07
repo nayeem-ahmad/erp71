@@ -68,9 +68,7 @@ export default function PlatformEmailSettingsPage() {
 
     useEffect(() => {
         fetchWithAuth('/admin/platform-settings/email')
-            .then((r) => r.json())
-            .then((json) => {
-                const d = json?.data ?? json;
+            .then((d) => {
                 setSettings({
                     smtp_host: d.smtp_host ?? DEFAULTS.smtp_host,
                     smtp_port: d.smtp_port ?? DEFAULTS.smtp_port,
@@ -100,12 +98,11 @@ export default function PlatformEmailSettingsPage() {
             };
             if (settings.smtp_pass) payload.smtp_pass = settings.smtp_pass;
 
-            const res = await fetchWithAuth('/admin/platform-settings/email', {
+            await fetchWithAuth('/admin/platform-settings/email', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ settings: payload }),
             });
-            if (!res.ok) throw new Error('Save failed');
             setSettings((prev) => ({ ...prev, smtp_pass: '' }));
             setToast({ type: 'success', message: m.saved });
         } catch (e: any) {
@@ -120,17 +117,12 @@ export default function PlatformEmailSettingsPage() {
         try {
             const body: Record<string, string> = {};
             if (testEmail.trim()) body.email = testEmail.trim();
-            const res = await fetchWithAuth('/admin/platform-settings/email/test', {
+            const result = await fetchWithAuth('/admin/platform-settings/email/test', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
             });
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) {
-                const errMsg = json?.message ?? json?.error ?? (Array.isArray(json?.message) ? json.message.join(', ') : null);
-                throw new Error(errMsg || m.test.failed);
-            }
-            const msg = (json?.data ?? json)?.message ?? m.test.success;
+            const msg = result?.message ?? m.test.success;
             setToast({ type: 'success', message: msg });
         } catch (e: any) {
             setToast({ type: 'error', message: e.message ?? m.test.failed });

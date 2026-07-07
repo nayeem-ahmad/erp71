@@ -20,9 +20,7 @@ export default function TaxSettingsPage() {
 
     useEffect(() => {
         fetchWithAuth('/tenants/tax-settings')
-            .then(r => r.json())
-            .then(json => {
-                const d = json?.data ?? json;
+            .then(d => {
                 setVatRate(d?.default_vat_rate != null ? String(d.default_vat_rate) : '');
                 setVatRegNo(d?.vat_registration_no ?? '');
                 setBusinessTin(d?.business_tin ?? '');
@@ -41,7 +39,7 @@ export default function TaxSettingsPage() {
                 setError(m.vatRateInvalid);
                 return;
             }
-            const res = await fetchWithAuth('/tenants/tax-settings', {
+            await fetchWithAuth('/tenants/tax-settings', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -50,7 +48,6 @@ export default function TaxSettingsPage() {
                     business_tin: businessTin || null,
                 }),
             });
-            if (!res.ok) throw new Error('Save failed');
             setSuccess(true);
             setTimeout(() => setSuccess(false), 3000);
         } catch (e: any) {

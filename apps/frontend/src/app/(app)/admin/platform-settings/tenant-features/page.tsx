@@ -96,9 +96,7 @@ export default function PlatformTenantFeaturesPage() {
 
     useEffect(() => {
         fetchWithAuth('/admin/platform-settings/general')
-            .then((r) => r.json())
-            .then((json) => {
-                const d = json?.data ?? json;
+            .then((d) => {
                 setSettings({
                     feedback_enabled: d.feedback_enabled ?? DEFAULTS.feedback_enabled,
                     support_enabled: d.support_enabled ?? DEFAULTS.support_enabled,
@@ -118,12 +116,11 @@ export default function PlatformTenantFeaturesPage() {
     async function handleSave() {
         setSaving(true);
         try {
-            const res = await fetchWithAuth('/admin/platform-settings/general', {
+            await fetchWithAuth('/admin/platform-settings/general', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ settings }),
             });
-            if (!res.ok) throw new Error('Save failed');
             setToast({ type: 'success', message: m.saved });
         } catch (e: any) {
             setToast({ type: 'error', message: e.message ?? c.saveFailed });
