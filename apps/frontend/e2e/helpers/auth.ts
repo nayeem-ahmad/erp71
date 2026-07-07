@@ -22,10 +22,31 @@ export function sessionHasAccountingAccess(session: E2ESession): boolean {
 
 let cachedSession: E2ESession | null = null;
 
+async function sleep(ms: number) {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Login is throttled server-side (10/60s per IP). Playwright restarts the worker
+ * process after a test failure, which resets the module-level session cache and
+ * forces a fresh login — a burst of failures can otherwise exhaust the bucket and
+ * turn transient 429s into hard login errors. Back off and retry instead.
+ */
+async function loginWithThrottleRetry(init: RequestInit, attempts = 8): Promise<Response> {
+    let lastRes: Response | null = null;
+    for (let i = 0; i < attempts; i++) {
+        const res = await fetch(`${E2E_API_URL}/api/v1/auth/login`, init);
+        if (res.status !== 429) return res;
+        lastRes = res;
+        await sleep(Math.min((i + 1) * 2000, 15_000));
+    }
+    return lastRes!;
+}
+
 /** Authenticate via the public login API (fast, no UI flake). Cached per worker. */
 export async function fetchE2ESession(force = false): Promise<E2ESession> {
     if (!force && cachedSession) return cachedSession;
-    const res = await fetch(`${E2E_API_URL}/api/v1/auth/login`, {
+    const res = await loginWithThrottleRetry({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: E2E_EMAIL, password: E2E_PASSWORD }),

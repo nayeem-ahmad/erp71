@@ -34,8 +34,10 @@ async function assertHubLinks(page: Page, hubPath: string) {
         }
     });
 
+    // Compact hubs (ModuleHub → CompactLinkGrid) render card titles as
+    // `text-sm font-semibold`; older hubs use headings / `text-sm font-bold`.
     const cardLinks = page.locator('a[href^="/"]').filter({
-        has: page.locator('h2, h3, .text-sm.font-bold'),
+        has: page.locator('h2, h3, .text-sm.font-bold, .text-sm.font-semibold'),
     });
 
     const hrefs = await cardLinks.evaluateAll((anchors) =>
