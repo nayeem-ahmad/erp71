@@ -35,7 +35,7 @@ describe('FeedbackAutomationService', () => {
             getRawGroup: jest.fn().mockResolvedValue({}),
         };
         runner = { proposePlan: jest.fn(), implementPlan: jest.fn() };
-        github = { createWorkspace: jest.fn(), commitAndPush: jest.fn(), openPullRequest: jest.fn(), revertCommit: jest.fn(), getPullRequestStatus: jest.fn() };
+        github = { createWorkspace: jest.fn(), commitAndPush: jest.fn(), openPullRequest: jest.fn(), revertCommit: jest.fn(), getPullRequestStatus: jest.fn(), getPrReadiness: jest.fn(), mergePullRequest: jest.fn() };
         audit = { log: jest.fn().mockResolvedValue(undefined) };
         jobTracker = { track: jest.fn((_name: string, fn: () => Promise<unknown>) => fn()) };
 
@@ -204,6 +204,63 @@ describe('FeedbackAutomationService', () => {
                 data: { status: 'PLAN_APPROVED', lastError: expect.stringContaining('destructive') },
             });
             expect(workspace.cleanup).toHaveBeenCalled();
+        });
+    });
+
+    describe('mergeFeedbackPr', () => {
+        const green = {
+            state: 'open', mergeable: true, headSha: 'sha1', merged: false, mergeCommitSha: null,
+            checks: { total: 2, passed: 2, failed: 0, pending: 0, allPassed: true }, green: true,
+        };
+
+        it('rejects when the feedback is not awaiting merge', async () => {
+            db.feedback.findUnique.mockResolvedValue({ id: 'fb-1', status: 'PLAN_APPROVED', prNumber: 42 });
+            await expect(service.mergeFeedbackPr('fb-1', 'admin-1')).rejects.toThrow(BadRequestException);
+            expect(github.mergePullRequest).not.toHaveBeenCalled();
+        });
+
+        it('rejects when there is no pull request number', async () => {
+            db.feedback.findUnique.mockResolvedValue({ id: 'fb-1', status: 'PR_OPENED', prNumber: null });
+            await expect(service.mergeFeedbackPr('fb-1', 'admin-1')).rejects.toThrow(BadRequestException);
+        });
+
+        it('refuses to merge when the PR is not green and does not call the merge API', async () => {
+            db.feedback.findUnique.mockResolvedValue({ id: 'fb-1', status: 'PR_OPENED', prNumber: 42 });
+            github.getPrReadiness.mockResolvedValue({
+                ...green, green: false, mergeable: true,
+                checks: { total: 2, passed: 1, failed: 1, pending: 0, allPassed: false },
+            });
+            await expect(service.mergeFeedbackPr('fb-1', 'admin-1')).rejects.toThrow(/CI failed/);
+            expect(github.mergePullRequest).not.toHaveBeenCalled();
+        });
+
+        it('merges a green PR and sets status MERGED with the merge commit sha', async () => {
+            db.feedback.findUnique.mockResolvedValue({ id: 'fb-1', status: 'PR_OPENED', prNumber: 42 });
+            github.getPrReadiness.mockResolvedValue(green);
+            github.mergePullRequest.mockResolvedValue({ merged: true, sha: 'merge-sha-9' });
+
+            const result = await service.mergeFeedbackPr('fb-1', 'admin-1');
+
+            expect(github.mergePullRequest).toHaveBeenCalledWith(42);
+            expect(db.feedback.update).toHaveBeenCalledWith({
+                where: { id: 'fb-1' },
+                data: { status: 'MERGED', mergeCommitSha: 'merge-sha-9' },
+            });
+            expect(audit.log).toHaveBeenCalledWith('feedback_automation.pr_merged', 'Feedback', { userId: 'admin-1' }, 'fb-1', expect.objectContaining({ prNumber: 42 }));
+            expect(result.status).toBe('MERGED');
+        });
+
+        it('flips to MERGED without re-merging when GitHub already shows it merged', async () => {
+            db.feedback.findUnique.mockResolvedValue({ id: 'fb-1', status: 'PR_OPENED', prNumber: 42 });
+            github.getPrReadiness.mockResolvedValue({ ...green, merged: true, mergeCommitSha: 'already-merged' });
+
+            await service.mergeFeedbackPr('fb-1', 'admin-1');
+
+            expect(github.mergePullRequest).not.toHaveBeenCalled();
+            expect(db.feedback.update).toHaveBeenCalledWith({
+                where: { id: 'fb-1' },
+                data: { status: 'MERGED', mergeCommitSha: 'already-merged' },
+            });
         });
     });
 

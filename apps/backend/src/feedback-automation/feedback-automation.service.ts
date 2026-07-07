@@ -244,14 +244,49 @@ export class FeedbackAutomationService {
         if (!feedback) throw new NotFoundException('Feedback not found');
         if (!feedback.prNumber) throw new BadRequestException('No pull request has been opened for this feedback yet.');
 
-        const status = await this.github.getPullRequestStatus(feedback.prNumber);
-        if (status.merged && feedback.status !== 'MERGED' && feedback.status !== 'RESOLVED') {
-            return this.db.feedback.update({
+        const readiness = await this.github.getPrReadiness(feedback.prNumber);
+        if (readiness.merged && feedback.status !== 'MERGED' && feedback.status !== 'RESOLVED') {
+            const updated = await this.db.feedback.update({
                 where: { id: feedbackId },
-                data: { status: 'MERGED', mergeCommitSha: status.mergeCommitSha },
+                data: { status: 'MERGED', mergeCommitSha: readiness.mergeCommitSha },
             });
+            return { ...updated, readiness };
         }
-        return feedback;
+        // Surface CI/mergeability alongside the feedback so the panel can gate the Merge button.
+        return { ...feedback, readiness };
+    }
+
+    async mergeFeedbackPr(feedbackId: string, adminUserId: string) {
+        const feedback = await this.db.feedback.findUnique({ where: { id: feedbackId } });
+        if (!feedback) throw new NotFoundException('Feedback not found');
+        if (feedback.status !== 'PR_OPENED') {
+            throw new BadRequestException(`Feedback is not awaiting merge (status: ${feedback.status}).`);
+        }
+        if (!feedback.prNumber) throw new BadRequestException('No pull request has been opened for this feedback yet.');
+
+        // Re-verify the gate server-side — never trust the button's enabled state.
+        const readiness = await this.github.getPrReadiness(feedback.prNumber);
+        if (readiness.merged) {
+            const updated = await this.db.feedback.update({
+                where: { id: feedbackId },
+                data: { status: 'MERGED', mergeCommitSha: readiness.mergeCommitSha },
+            });
+            return { ...updated, readiness };
+        }
+        if (!readiness.green) {
+            throw new BadRequestException(
+                `PR #${feedback.prNumber} is not ready to merge: ` +
+                `${readiness.checks.failed > 0 ? 'CI failed' : readiness.checks.pending > 0 ? 'CI still running' : readiness.checks.total === 0 ? 'no CI checks yet' : readiness.mergeable === false ? 'merge conflict with base branch' : 'not mergeable yet'}.`,
+            );
+        }
+
+        const result = await this.github.mergePullRequest(feedback.prNumber);
+        const updated = await this.db.feedback.update({
+            where: { id: feedbackId },
+            data: { status: 'MERGED', mergeCommitSha: result.sha ?? readiness.mergeCommitSha },
+        });
+        await this.audit.log('feedback_automation.pr_merged', 'Feedback', { userId: adminUserId }, feedbackId, { prNumber: feedback.prNumber, mergeCommitSha: result.sha });
+        return { ...updated, readiness: { ...readiness, merged: true, mergeCommitSha: result.sha ?? readiness.mergeCommitSha } };
     }
 
     async generateRollbackPr(feedbackId: string, adminUserId: string) {
