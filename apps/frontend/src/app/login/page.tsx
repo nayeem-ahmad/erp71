@@ -170,7 +170,7 @@ function LoginPageContent() {
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
-                                    placeholder="[EMAIL]"
+                                    placeholder="name@company.com"
                                 />
                             </div>
                         </div>
