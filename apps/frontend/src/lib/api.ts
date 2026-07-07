@@ -15,8 +15,14 @@ function normalizeApiBase(rawBase?: string) {
 const API_BASE = normalizeApiBase(process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL)
     || (process.env.NODE_ENV === 'production' ? `${DEFAULT_PROD_API_BASE}/api/v1` : '/api/v1');
 
+/** Read an auth token from localStorage first, falling back to sessionStorage. */
+function getAccessToken(): string | null {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem('access_token') ?? sessionStorage.getItem('access_token');
+}
+
 export async function fetchBlobWithAuth(endpoint: string, options: RequestInit = {}): Promise<{ blob: Blob; filename: string }> {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const token = getAccessToken();
     const tenantId = typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null;
     const storeId = typeof window !== 'undefined' ? localStorage.getItem('store_id') : null;
 
@@ -61,7 +67,7 @@ export async function fetchBlobWithAuth(endpoint: string, options: RequestInit =
 }
 
 export async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const token = getAccessToken();
     const tenantId = typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null;
     const storeId = typeof window !== 'undefined' ? localStorage.getItem('store_id') : null;
 
