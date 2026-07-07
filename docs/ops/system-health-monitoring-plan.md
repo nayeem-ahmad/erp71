@@ -82,10 +82,12 @@ campaigns (`*/5 * * * *`), CRM reorder/birthday tasks, customer-segment recalc.
 | Payment success vs. failure ratio per provider | ratio | `BillingEvent` |
 | Per-tenant request anomalies | top-N noisy tenants | metrics interceptor (tenant tag) |
 
-### 2.6 Infrastructure (Render.com)
+### 2.6 Infrastructure (self-managed VPS)
 CPU/memory/restarts, deploy success/failure, SSL cert expiry, external uptime
-ping — see `docs/ops/uptime-monitoring.md`. Mostly covered by Render +
-external pinger; we surface the cert-expiry and uptime status in the dashboard.
+ping — see `docs/ops/uptime-monitoring.md`. Production runs on a self-managed
+Ubuntu VPS (Docker Compose + Caddy); container health comes from
+`docker compose -p erp71 ... ps` and the external pinger, and Caddy handles
+auto-TLS/cert renewal. We surface the cert-expiry and uptime status in the dashboard.
 
 ---
 
@@ -94,7 +96,7 @@ external pinger; we surface the cert-expiry and uptime status in the dashboard.
 New backend module: **`apps/backend/src/system-health/`** (kebab-case, per
 `CLAUDE.md` conventions). It owns deep checks, the metrics registry, and the
 platform-admin health API. The existing `health/` module stays as the
-lightweight liveness probe Render hits.
+lightweight liveness probe that Caddy and the external uptime monitor hit.
 
 ```
 apps/backend/src/system-health/
@@ -150,7 +152,7 @@ Each phase is independently shippable and leaves the system in a working state.
   (2s) and run in parallel (`Promise.allSettled`).
 - Aggregate into `SystemHealthReport` with overall `status` =
   worst-of(dependencies), where a `disabled` optional dep never degrades overall.
-- Keep existing `GET /api/v1/health` unchanged (Render liveness).
+- Keep existing `GET /api/v1/health` unchanged (Caddy / uptime-monitor liveness).
 - **Acceptance:** endpoint reflects real status; killing Redis/DB flips the
   relevant dependency and the overall status; unit tests for the worst-of rollup.
 - **Est:** 1.5 days.
@@ -180,8 +182,8 @@ Each phase is independently shippable and leaves the system in a working state.
 - `GET /metrics` (Prometheus text format) guarded by a `METRICS_TOKEN` bearer
   (separate from user auth so a scraper can hit it).
 - Export job metrics (last duration, failure total) from Phase 2 data.
-- **Note:** this exposes metrics; wiring a scraper (Grafana Cloud, Render
-  metrics, or a hosted Prometheus) is an ops follow-up, not in this PR.
+- **Note:** this exposes metrics; wiring a scraper (Grafana Cloud or a
+  self-hosted Prometheus on the VPS) is an ops follow-up, not in this PR.
 - **Acceptance:** `/metrics` returns valid Prometheus exposition; histograms
   populate under load; token required.
 - **Est:** 1.5 days.
@@ -258,13 +260,13 @@ All under `/api/v1`, guarded by `JwtAuthGuard + PlatformAdminGuard` unless noted
 | GET | `/admin/system-health/jobs` | Cron job run history |
 | GET | `/admin/system-health/dependencies` | Dependency statuses only |
 | GET | `/metrics` | Prometheus metrics (guarded by `METRICS_TOKEN`, not user auth) |
-| GET | `/health` | **Unchanged** — Render liveness probe |
+| GET | `/health` | **Unchanged** — Caddy / uptime-monitor liveness probe |
 
 ---
 
 ## 7. Configuration (new env vars)
 
-Add to `.env.example` and `.env.production.example`, and document in `render.yaml`.
+Add to `.env.example` and `.env.production.example`, and document in `.env.example` / `.env.production`.
 
 | Var | Default | Purpose |
 |---|---|---|
@@ -322,5 +324,5 @@ Existing reused: `DB_QUERY_TIMEOUT_MS`, `SENTRY_DSN`, `UPSTASH_REDIS_*`.
   every cron job.
 - A failing dependency or overdue/failed cron job is visible within one poll
   cycle and triggers an alert (respecting cooldown).
-- `/metrics` is scrapeable with a token; `/health` still serves Render liveness.
+- `/metrics` is scrapeable with a token; `/health` still serves Caddy / uptime-monitor liveness.
 - New code covered by unit + integration tests; `TODO.md` updated.

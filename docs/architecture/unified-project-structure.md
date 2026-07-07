@@ -4,7 +4,7 @@ This section defines the monorepo structure that houses the frontend, backend, a
 
 ```plaintext
 retail/
-├── .github/                    # CI/CD workflows (e.g., deploy to Render)
+├── .github/                    # CI/CD workflows (tests/build; deploy is manual via scripts/deploy.sh on the VPS)
 │   └── workflows/
 │       └── main.yaml
 ├── apps/                       # The individual applications

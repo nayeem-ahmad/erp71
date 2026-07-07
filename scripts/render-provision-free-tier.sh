@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# ⚠️ DEPRECATED / RETIRED — DO NOT USE.
+# ERP71 was cut over off Render.com to a self-managed VPS on 2026-06-27.
+# Deploy via SSH instead: ssh root@66.116.236.127 'cd /opt/erp71 && ./scripts/deploy.sh main'
+# See docs/ops/deployment-runbook.md. This script is kept for historical reference only.
+#
 # Provision erp71 Render services on the free tier.
 # Requires: Render CLI logged in (~/.render/cli.yaml) and optional VPS SSH for secrets.
 #

@@ -1,5 +1,7 @@
 # Session Status
 
+> **Infra note (2026-07-07):** Production was cut over off Render.com to a self-managed VPS on 2026-06-27 (Docker Compose + Caddy; see docs/ops/deployment-runbook.md). Render-specific action items below are obsolete.
+
 ## Last updated: Session 15 (2026-05-22)
 
 ## Completed
