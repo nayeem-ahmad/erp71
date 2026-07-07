@@ -1369,6 +1369,7 @@ export const api = {
         }),
     implementFeedbackNow: (id: string) => fetchWithAuth(`/admin/feedback/${id}/implement`, { method: 'POST' }),
     getFeedbackPrStatus: (id: string) => fetchWithAuth(`/admin/feedback/${id}/pr-status`),
+    mergeFeedback: (id: string) => fetchWithAuth(`/admin/feedback/${id}/merge`, { method: 'POST' }),
     rollbackFeedback: (id: string) => fetchWithAuth(`/admin/feedback/${id}/rollback`, { method: 'POST' }),
     // Support chat (shop owner)
     getSupportThreads: () => fetchWithAuth('/support/threads'),

@@ -1,8 +1,29 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { X, Loader2, Sparkles, CheckCircle2, XCircle, RotateCcw, ExternalLink, AlertTriangle } from 'lucide-react';
+import { X, Loader2, Sparkles, CheckCircle2, XCircle, RotateCcw, ExternalLink, AlertTriangle, GitMerge } from 'lucide-react';
 import { api } from '@/lib/api';
+
+type PrReadiness = {
+    state: string;
+    mergeable: boolean | null;
+    headSha: string;
+    merged: boolean;
+    mergeCommitSha: string | null;
+    checks: { total: number; passed: number; failed: number; pending: number; allPassed: boolean };
+    green: boolean;
+};
+
+/** Human-readable CI + mergeability summary shown next to the PR while awaiting merge. */
+function ciLabel(r: PrReadiness): string {
+    if (r.merged) return 'Merged';
+    if (r.checks.total === 0) return 'No CI checks yet';
+    if (r.checks.failed > 0) return `CI failed (${r.checks.failed} failing)`;
+    if (r.checks.pending > 0) return `CI running… (${r.checks.passed}/${r.checks.total})`;
+    if (r.mergeable === false) return 'CI passed · merge conflict';
+    if (r.mergeable === null) return 'CI passed · checking mergeability…';
+    return `CI passed (${r.checks.passed}/${r.checks.total}) · mergeable`;
+}
 
 type FeedbackPlan = {
     id: string;
@@ -63,6 +84,7 @@ export default function FeedbackAutomationPanel({ feedbackId, onClose }: { feedb
     const [confirmMigration, setConfirmMigration] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
+    const [readiness, setReadiness] = useState<PrReadiness | null>(null);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const load = async () => {
@@ -76,6 +98,15 @@ export default function FeedbackAutomationPanel({ feedbackId, onClose }: { feedb
         }
     };
 
+    // Polls the PR endpoint for CI/mergeability; also flips the item to MERGED if GitHub already shows it merged.
+    const refreshPr = async () => {
+        const res = (await api.getFeedbackPrStatus(feedbackId)) as FeedbackDetail & { readiness?: PrReadiness };
+        if (res.readiness) setReadiness(res.readiness);
+        setDetail((prev) =>
+            prev ? { ...prev, status: res.status, mergeCommitSha: res.mergeCommitSha, prNumber: res.prNumber, prUrl: res.prUrl } : prev,
+        );
+    };
+
     useEffect(() => {
         void load();
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -85,6 +116,10 @@ export default function FeedbackAutomationPanel({ feedbackId, onClose }: { feedb
         if (pollRef.current) clearInterval(pollRef.current);
         if (detail && WORKING_STATUSES.has(detail.status)) {
             pollRef.current = setInterval(() => void load(), 4000);
+        } else if (detail && detail.status === 'PR_OPENED') {
+            // While awaiting merge, keep checking CI so the Merge button lights up as soon as it's green.
+            void refreshPr();
+            pollRef.current = setInterval(() => void refreshPr(), 8000);
         }
         return () => { if (pollRef.current) clearInterval(pollRef.current); };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -260,17 +295,44 @@ export default function FeedbackAutomationPanel({ feedbackId, onClose }: { feedb
                     )}
 
                     {detail.prUrl && (
-                        <div className="rounded-xl border border-gray-200 p-3 flex items-center justify-between">
-                            <a href={detail.prUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 underline">
-                                <ExternalLink className="w-3.5 h-3.5" /> PR #{detail.prNumber}
-                            </a>
-                            <button
-                                disabled={busy}
-                                onClick={() => run(() => api.getFeedbackPrStatus(feedbackId))}
-                                className="text-xs font-semibold text-gray-500 hover:text-gray-700"
-                            >
-                                Refresh status
-                            </button>
+                        <div className="rounded-xl border border-gray-200 p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <a href={detail.prUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 underline">
+                                    <ExternalLink className="w-3.5 h-3.5" /> PR #{detail.prNumber}
+                                </a>
+                                <button
+                                    disabled={busy}
+                                    onClick={() => run(refreshPr)}
+                                    className="text-xs font-semibold text-gray-500 hover:text-gray-700"
+                                >
+                                    Refresh status
+                                </button>
+                            </div>
+
+                            {detail.status === 'PR_OPENED' && (
+                                <div className="flex items-center justify-between gap-2 border-t border-gray-100 pt-2">
+                                    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${
+                                        !readiness ? 'text-gray-400'
+                                            : readiness.green ? 'text-green-700'
+                                            : readiness.checks.failed > 0 || readiness.mergeable === false ? 'text-red-600'
+                                            : 'text-gray-500'
+                                    }`}>
+                                        {!readiness ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            : readiness.green ? <CheckCircle2 className="w-3.5 h-3.5" />
+                                            : (readiness.checks.failed > 0 || readiness.mergeable === false) ? <XCircle className="w-3.5 h-3.5" />
+                                            : <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                        {readiness ? ciLabel(readiness) : 'Checking CI…'}
+                                    </span>
+                                    <button
+                                        disabled={busy || !readiness?.green}
+                                        onClick={() => run(() => api.mergeFeedback(feedbackId))}
+                                        title={readiness?.green ? 'Merge this PR into the base branch' : 'Enabled once CI passes and the PR is conflict-free'}
+                                        className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40"
+                                    >
+                                        <GitMerge className="w-3.5 h-3.5" /> Merge PR
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
 
