@@ -60,9 +60,7 @@ export default function SmsSettingsPage() {
 
     useEffect(() => {
         fetchWithAuth('/tenants/sms-settings')
-            .then((r) => r.json())
-            .then((json) => {
-                const d = json?.data ?? json;
+            .then((d) => {
                 if (d) {
                     setSettings({
                         sms_enabled: d.sms_enabled ?? false,
@@ -80,12 +78,11 @@ export default function SmsSettingsPage() {
         setError('');
         setSuccess(false);
         try {
-            const res = await fetchWithAuth('/tenants/sms-settings', {
+            await fetchWithAuth('/tenants/sms-settings', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(settings),
             });
-            if (!res.ok) throw new Error('Save failed');
             setSuccess(true);
             setTimeout(() => setSuccess(false), 3000);
         } catch (e: any) {

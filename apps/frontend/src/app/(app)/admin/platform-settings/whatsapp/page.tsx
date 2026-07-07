@@ -62,9 +62,7 @@ export default function PlatformWhatsAppSettingsPage() {
 
     useEffect(() => {
         fetchWithAuth('/admin/platform-settings/whatsapp')
-            .then((r) => r.json())
-            .then((json) => {
-                const d = json?.data ?? json;
+            .then((d) => {
                 setSettings({
                     access_token: d.access_token === '••••••••' ? '' : (d.access_token ?? ''),
                     phone_number_id: d.phone_number_id ?? '',
@@ -88,12 +86,11 @@ export default function PlatformWhatsAppSettingsPage() {
             };
             if (settings.access_token) payload.access_token = settings.access_token;
 
-            const res = await fetchWithAuth('/admin/platform-settings/whatsapp', {
+            await fetchWithAuth('/admin/platform-settings/whatsapp', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ settings: payload }),
             });
-            if (!res.ok) throw new Error('Save failed');
             setSettings((prev) => ({ ...prev, access_token: '' }));
             setToast({ type: 'success', message: m.saved });
         } catch (e: any) {
@@ -107,17 +104,12 @@ export default function PlatformWhatsAppSettingsPage() {
         if (!testPhone.trim()) return;
         setTesting(true);
         try {
-            const res = await fetchWithAuth('/admin/platform-settings/whatsapp/test', {
+            const result = await fetchWithAuth('/admin/platform-settings/whatsapp/test', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ phone: testPhone.trim() }),
             });
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) {
-                const errMsg = json?.message ?? json?.error ?? (Array.isArray(json?.message) ? json.message.join(', ') : null);
-                throw new Error(errMsg || m.test.failed);
-            }
-            const msg = (json?.data ?? json)?.message ?? formatMessage(m.test.success, { phone: testPhone.trim() });
+            const msg = result?.message ?? formatMessage(m.test.success, { phone: testPhone.trim() });
             setToast({ type: 'success', message: msg });
         } catch (e: any) {
             setToast({ type: 'error', message: e.message ?? m.test.failed });

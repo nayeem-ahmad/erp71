@@ -67,9 +67,7 @@ export default function PlatformAiSettingsPage() {
 
     useEffect(() => {
         fetchWithAuth('/admin/platform-settings/ai')
-            .then((r) => r.json())
-            .then((json) => {
-                const d = json?.data ?? json;
+            .then((d) => {
                 setSettings({
                     api_key: d.api_key === '••••••••' ? '' : (d.api_key ?? ''),
                     default_model: d.default_model ?? DEFAULTS.default_model,
@@ -87,12 +85,11 @@ export default function PlatformAiSettingsPage() {
             };
             if (settings.api_key) payload.api_key = settings.api_key;
 
-            const res = await fetchWithAuth('/admin/platform-settings/ai', {
+            await fetchWithAuth('/admin/platform-settings/ai', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ settings: payload }),
             });
-            if (!res.ok) throw new Error('Save failed');
             setSettings((prev) => ({ ...prev, api_key: '' }));
             setToast({ type: 'success', message: 'AI settings saved.' });
         } catch (e: any) {
@@ -105,9 +102,7 @@ export default function PlatformAiSettingsPage() {
     async function handleTest() {
         setTesting(true);
         try {
-            const res = await fetchWithAuth('/admin/platform-settings/ai/test', { method: 'POST' });
-            const json = await res.json();
-            const result = json?.data ?? json;
+            const result = await fetchWithAuth('/admin/platform-settings/ai/test', { method: 'POST' });
             if (result?.success) {
                 setToast({ type: 'success', message: `Connection OK — model: ${result.model}` });
             } else {

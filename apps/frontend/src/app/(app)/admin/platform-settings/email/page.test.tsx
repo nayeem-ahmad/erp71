@@ -34,10 +34,7 @@ function getFetchWithAuth() {
 describe('AdminEmailSettingsPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        getFetchWithAuth().mockResolvedValue({
-            ok: true,
-            json: () => Promise.resolve(mockSettings),
-        });
+        getFetchWithAuth().mockResolvedValue(mockSettings);
     });
 
     it('renders the page heading', async () => {
@@ -84,10 +81,7 @@ describe('AdminEmailSettingsPage', () => {
 
     it('calls PATCH on save', async () => {
         const fetchWithAuth = getFetchWithAuth();
-        fetchWithAuth.mockResolvedValue({
-            ok: true,
-            json: () => Promise.resolve(mockSettings),
-        });
+        fetchWithAuth.mockResolvedValue(mockSettings);
         render(<AdminEmailSettingsPage />);
         await waitFor(() => screen.getByRole('button', { name: /save settings/i }));
         fireEvent.click(screen.getByRole('button', { name: /save settings/i }));
@@ -101,10 +95,7 @@ describe('AdminEmailSettingsPage', () => {
 
     it('shows success toast after save', async () => {
         const fetchWithAuth = getFetchWithAuth();
-        fetchWithAuth.mockResolvedValue({
-            ok: true,
-            json: () => Promise.resolve(mockSettings),
-        });
+        fetchWithAuth.mockResolvedValue(mockSettings);
         render(<AdminEmailSettingsPage />);
         await waitFor(() => screen.getByRole('button', { name: /save settings/i }));
         fireEvent.click(screen.getByRole('button', { name: /save settings/i }));
@@ -132,7 +123,7 @@ describe('AdminEmailSettingsPage', () => {
     it('shows error toast when save fails', async () => {
         const fetchWithAuth = getFetchWithAuth();
         fetchWithAuth
-            .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockSettings) })
+            .mockResolvedValueOnce(mockSettings)
             .mockRejectedValueOnce(new Error('Save failed'));
         render(<AdminEmailSettingsPage />);
         await waitFor(() => screen.getByRole('button', { name: /save settings/i }));
