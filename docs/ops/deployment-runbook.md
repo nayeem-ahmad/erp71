@@ -1,64 +1,91 @@
 # Production Deployment Runbook
 
+> **Production runs on a self-managed Ubuntu VPS, not Render.** Render.com was
+> retired in the 2026-06-27 cutover. `render.yaml` and
+> `scripts/render-provision-free-tier.sh` are kept only as legacy references.
+
+**At a glance:**
+
+| | |
+|---|---|
+| Host | `66.116.236.127` (SSH user `root`) |
+| Repo path | `/opt/erp71` |
+| Deploy branch | `main` |
+| Stack | `docker-compose.prod.yml` — Caddy + Next.js (`:3000`) + NestJS (`:4000`) + Postgres 15 |
+| Live URL | `app.erp71.com` (Caddy auto-TLS) |
+| Runtime env | `/opt/erp71/.env.production` (chmod 600, uncommitted) |
+
+---
+
 ## Pre-Deployment Checklist
 
 - [ ] All CI checks green on the release branch
-- [ ] PR reviewed and approved
+- [ ] PR `dev` → `main` reviewed, approved, and **merged** (there is no auto-deploy — deploying is a manual SSH step)
 - [ ] Database migrations reviewed (if any schema changes)
-- [ ] Staging environment tested with the same build
-- [ ] Rollback plan identified (previous Render deploy hash)
+- [ ] Rollback plan identified (previous good commit hash)
 
 ---
 
 ## Standard Deploy (main branch)
 
-Render auto-deploys on push to `main`. For a manual deploy:
+There is **no auto-deploy**. After merging to `main`, SSH into the VPS and run the
+idempotent deploy script:
 
-1. Go to Render Dashboard → `erp71-backend` → **Manual Deploy**
-2. Select the commit to deploy and click **Deploy**
-3. Watch the deploy log — it should complete in ~3-5 minutes
-4. Verify `/health` returns `{"status":"ok"}`:
-   ```
-   curl https://your-backend.onrender.com/health
-   ```
-5. Smoke-test the frontend: login, create a sale, check the dashboard
-6. Check Sentry for any new error spikes (allow 5 min for traffic)
+```bash
+ssh root@66.116.236.127 'cd /opt/erp71 && ./scripts/deploy.sh main'
+```
+
+`scripts/deploy.sh` (safe to re-run):
+
+1. `git fetch` + `git checkout main` + `git pull --ff-only origin main`
+2. Syncs erp71.com URLs into `.env.production` (`scripts/sync-erp71-env-urls.sh`)
+3. Rebuilds + restarts the stack:
+   `docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml up -d --build`
+4. Reattaches the shared **Hermes** Caddy to the `erp71_default` network (otherwise `app.erp71.com` returns 502)
+5. Prints `docker compose ... ps`
+
+Build + restart takes ~3–5 minutes. Then run the [Post-Deploy Verification](#post-deploy-verification).
 
 ---
 
 ## Schema Migrations
 
-This project uses Prisma `db push` (no migration files). To apply schema changes:
+This project uses Prisma `db push` (no migration files). Schema changes are applied
+on the VPS against the compose Postgres. To run a push explicitly (deploy.sh's
+`--build` restart also re-runs the backend's startup `db push`):
 
 ```bash
-# From your local machine or CI, pointing at production DIRECT_URL (not PgBouncer)
-DATABASE_URL=$DIRECT_URL npx prisma db push --schema=packages/database/prisma/schema.prisma
+ssh root@66.116.236.127
+cd /opt/erp71
+docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml run --rm backend sh -lc \
+  'npx prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate'
 ```
 
-> **Important:** Always run migrations during low-traffic windows. PgBouncer uses port 6543; use DIRECT_URL (port 5432) for Prisma CLI.
+> **Important:** Run migrations during low-traffic windows. Back up first
+> (`docs/ops/vps-backups.md`).
 
 ---
 
 ## Rollback Procedure
 
-### Option 1 — Render rollback (fastest)
-1. Render Dashboard → Service → **Deploys** tab
-2. Find the last known-good deploy
-3. Click **Rollback to this deploy**
-4. Confirm — service restarts within ~1 minute
-
-### Option 2 — Git revert
+### Option 1 — Git revert + redeploy (standard)
 ```bash
 git revert <bad-commit-hash>
-git push origin main
+git push origin main         # via a dev→main PR per branch policy
+ssh root@66.116.236.127 'cd /opt/erp71 && ./scripts/deploy.sh main'
 ```
-This triggers a new deploy with the reverted code.
+
+### Option 2 — Pin to a known-good commit on the VPS
+```bash
+ssh root@66.116.236.127
+cd /opt/erp71
+git checkout <good-commit-hash>
+docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml up -d --build
+```
+(Return to `main` with `./scripts/deploy.sh main` once fixed.)
 
 ### Option 3 — Database rollback
-If a migration caused data issues, restore from backup:
-```bash
-# See backup-restore.md for full restore procedure
-```
+If a migration caused data issues, restore from backup — see `docs/ops/vps-backups.md`.
 
 ---
 
@@ -66,26 +93,25 @@ If a migration caused data issues, restore from backup:
 
 | Role | Action |
 |---|---|
-| Backend down | Check Render logs + Sentry + `/health` endpoint |
-| DB connection exhaustion | Check PgBouncer pool size in Supabase dashboard |
-| Payment webhook failing | Check SSL Wireless / bKash / Nagad sandbox dashboards |
-| Email not sending | Verify `RESEND_API_KEY` is set; check Resend dashboard logs |
+| Frontend 502 | Confirm Hermes Caddy is attached to `erp71_default` (`docker network connect erp71_default hermes-caddy-1`); check `docker compose ... ps` |
+| Backend down | `docker compose -p erp71 ... logs --tail=100 backend`; check `/api/v1/health` |
+| DB issues | Check the `db` container logs + disk on the VPS; restore from backup if needed |
+| Payment webhook failing | Check SSL Wireless / bKash / Nagad dashboards |
+| Email not sending | Verify SMTP/`EMAIL_FROM` in `.env.production`; check Brevo dashboard logs |
 
 ---
 
 ## Environment Variables — Production
 
-All secrets are managed via Render environment variables (never in git):
+All secrets live in `/opt/erp71/.env.production` on the VPS (chmod 600, never in git).
 
 | Variable | Notes |
 |---|---|
-| `DATABASE_URL` | PgBouncer pooled URL (port 6543) |
-| `DIRECT_URL` | Direct Postgres URL (port 5432) — for Prisma CLI only |
-| `JWT_SECRET` | Auto-generated by Render |
-| `FIELD_ENCRYPTION_KEY` | Optional but recommended — 64-char hex or any 8+ char secret; if unset, derived from `JWT_SECRET` |
-| `RESEND_API_KEY` | From resend.com dashboard |
-| `SENTRY_DSN` | From sentry.io project settings |
-| `SUPABASE_SERVICE_ROLE_KEY` | From Supabase project settings |
+| `DATABASE_URL` | Compose Postgres URL |
+| `DIRECT_URL` | Direct Postgres URL — for Prisma CLI |
+| `JWT_SECRET` | Long random secret |
+| `FIELD_ENCRYPTION_KEY` | 32 bytes as 64-char hex or base64; if unset, derived from `JWT_SECRET` |
+| SMTP / `EMAIL_FROM` | Brevo relay credentials |
 | Payment credentials | SSL Wireless / bKash / Nagad — production values |
 
 ---
@@ -93,40 +119,23 @@ All secrets are managed via Render environment variables (never in git):
 ## Post-Deploy Verification
 
 ```bash
-# 1. Health check
-curl https://api.yourdomain.com/health
-
-# 2. Auth smoke test
-curl -X POST https://api.yourdomain.com/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"..."}'
-
-# 3. Check Sentry — no new error groups in last 5 min
-# 4. Check Render metrics — CPU/memory normal
-# 5. Check uptime monitor (BetterStack) — all checks green
-```
-
----
-
-## VPS Deploy (`app.nayeemahmad.com`)
-
-Production also runs on the VPS at `66.116.236.127` via Caddy + `docker-compose.prod.yml`.
-
-```bash
 ssh root@66.116.236.127
 cd /opt/erp71
-git pull origin main
-docker compose --env-file .env.production -f docker-compose.prod.yml run --rm backend sh -lc \
-  'npx prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate'
-docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+
+# 1. Container status — all Up/healthy
+docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml ps
+
+# 2. Backend health
+curl -s https://api.erp71.com/api/v1/health
+
+# 3. Frontend reachable
+curl -s -o /dev/null -w '%{http_code}\n' https://app.erp71.com
+
+# 4. Backend logs — no boot errors
+docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml logs --tail=50 backend
 ```
 
-Post-deploy verification:
+Then smoke-test in the browser: log in, load `app.erp71.com`, exercise the changed
+feature.
 
-```bash
-./scripts/smoke-check.sh
-docker compose --env-file .env.production -f docker-compose.prod.yml ps
-docker compose --env-file .env.production -f docker-compose.prod.yml logs --tail=50 backend
-```
-
-See also: `docs/ops/vps-deployment.md`, `docs/ops/vps-backups.md`.
+See also: `docs/ops/vps-backups.md`, `docs/ops/shared-vps-second-app.md`.

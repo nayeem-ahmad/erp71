@@ -29,7 +29,21 @@ ERP71 platform targeting Bangladeshi small/medium retailers. Monorepo:
 
 **Stack:** NestJS, Next.js 15, PostgreSQL, Prisma, Tailwind CSS, Zustand, JWT auth  
 **Payments:** SSL Wireless, bKash, Nagad (Bangladesh-local providers)  
-**Deployment:** Render.com, Docker
+**Deployment:** Self-managed Ubuntu VPS — Docker Compose (`docker-compose.prod.yml`) + Caddy + self-hosted Postgres. **Not Render** (Render was retired in the 2026-06-27 cutover; `render.yaml` is legacy).
+
+---
+
+## Deployment
+
+Production runs on a self-managed VPS at `66.116.236.127` (repo at `/opt/erp71`, branch `main`), serving `app.erp71.com` via Caddy.
+
+**To deploy: there is no auto-deploy.** Merge to `main`, then SSH in and run the deploy script:
+
+```bash
+ssh root@66.116.236.127 'cd /opt/erp71 && ./scripts/deploy.sh main'
+```
+
+`scripts/deploy.sh` is idempotent: fetches/fast-forwards `main`, syncs erp71.com URLs into `.env.production`, rebuilds the stack via `docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml up -d --build`, and reattaches the shared Hermes Caddy to the `erp71_default` network. Full runbook: `docs/ops/deployment-runbook.md`.
 
 ---
 

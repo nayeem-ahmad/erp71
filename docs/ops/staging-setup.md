@@ -1,6 +1,8 @@
 # Staging Environment Setup
 
-Render staging services are defined in `render.yaml` and deploy automatically from the `staging` branch.
+> **RETIRED — staging on Render.com is no longer used.** The Render staging services (`erp71-backend-staging` / `erp71-frontend-staging`) defined in `render.yaml` were retired when the platform moved off Render.com on 2026-06-27. `render.yaml` is legacy and no longer drives any deploys.
+>
+> **A dedicated staging environment has not been re-provisioned on the VPS.** The notes below are retained as a reference for what a staging setup needs (separate DB, separate secrets, sandbox payment credentials) if/when one is stood up. Production deploys are documented in `docs/ops/deployment-runbook.md` (SSH + `scripts/deploy.sh main`). Do not point `scripts/deploy.sh` at a `staging` branch on the production VPS — it shares the single production `.env.production` and would clobber production URLs.
 
 ## Bootstrap
 
@@ -11,9 +13,9 @@ git checkout -b staging
 git push -u origin staging
 ```
 
-## Configure staging secrets (Render dashboard)
+## Configure staging secrets (VPS `.env`)
 
-Create separate values for each staging service (`erp71-backend-staging`, `erp71-frontend-staging`):
+If a staging environment is provisioned, its secrets belong in a separate staging env file (a staging equivalent of `.env.production`) on whatever host runs it — never in any Render dashboard, and never sharing production credentials. Set separate values for each variable below.
 
 | Variable | Notes |
 |---|---|

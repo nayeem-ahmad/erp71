@@ -1,6 +1,6 @@
 # PgBouncer Configuration Guide (#55)
 
-> **VPS production (`app.nayeemahmad.com`):** Postgres runs in Docker without PgBouncer. Use the internal `db:5432` URL in `.env.production`. The checklist below applies to Supabase/Render pooled connections only.
+> **VPS production (`app.erp71.com`):** Postgres runs in Docker without PgBouncer. Use the internal `db:5432` URL in `.env.production`. The checklist below applies to Supabase/Render pooled connections only.
 
 Supabase provides PgBouncer automatically. Verify it is correctly configured:
 

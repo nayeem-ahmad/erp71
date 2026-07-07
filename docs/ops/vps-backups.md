@@ -33,9 +33,11 @@ docker compose --env-file .env.production -f docker-compose.prod.yml exec -T db 
 
 > Stop the backend before restoring if you need a consistent snapshot.
 
-## Render / Supabase backups
+## Legacy (Render / Supabase) backups
 
-For Render-hosted databases, enable PITR in the provider dashboard and use `scripts/backup-db.sh` for on-demand logical dumps:
+> **No longer applies to production.** Production Postgres is now self-hosted in the `db` Docker container on the VPS — use the `pg_dump`-based path above (`scripts/vps-backup.sh`). This section is retained only for any remaining legacy Render/Supabase-hosted databases.
+
+For a legacy Render/Supabase-hosted database, enable PITR in the provider dashboard and use `scripts/backup-db.sh` for on-demand logical dumps:
 
 ```bash
 DIRECT_URL="postgres://..." ./scripts/backup-db.sh

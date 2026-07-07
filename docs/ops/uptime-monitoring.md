@@ -48,11 +48,18 @@ Sentry.captureException(error, { tags: { domain: 'payment' } });
 
 ---
 
-## Render Alerts (#59)
+## VPS / Container Alerts (#59)
 
-In Render Dashboard → each service → **Notifications**:
-- Enable: Deploy failed, Service suspended, Service crashed
-- Webhook: add Slack webhook URL for real-time alerts
+Production runs on a self-managed VPS (Docker Compose + Caddy), so there is no Render dashboard. Cover deploy/crash/uptime alerting two ways:
+
+- **External uptime monitor** (BetterStack or equivalent) hitting the live endpoints — alert on non-200 / non-`ok`:
+  - `https://api.erp71.com/api/v1/health`
+  - `https://app.erp71.com`
+- **Container health on the VPS** — check that all services are up:
+  ```bash
+  ssh root@66.116.236.127 'cd /opt/erp71 && docker compose -p erp71 -f docker-compose.prod.yml ps'
+  ```
+  Any container not in `Up`/`healthy` state means a crashed or restarting service. Wire this into a cron/monitor if you want proactive alerts.
 
 ---
 

@@ -1,3 +1,10 @@
+# ⚠️ DEPRECATED / RETIRED — DO NOT USE.
+# Production and staging were cut over off Render.com to a self-managed Ubuntu VPS
+# on 2026-06-27 (Docker Compose + Caddy; see docs/ops/deployment-runbook.md).
+# This blueprint is kept only for historical reference. To deploy, SSH to the VPS
+# and run scripts/deploy.sh — NOT this file:
+#     ssh root@66.116.236.127 'cd /opt/erp71 && ./scripts/deploy.sh main'
+#
 # Free-tier notes (https://render.com/docs/free):
 # - Only one free Postgres per workspace (shared by prod + staging backends).
 # - Free Postgres expires 30 days after creation; renew or upgrade before expiry.
