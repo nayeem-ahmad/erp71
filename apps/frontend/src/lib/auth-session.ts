@@ -33,59 +33,93 @@ export function getLoginContexts(me: any): LoginContexts {
 
 /** Activate the referee self-service portal (no shop/tenant scope). */
 export function applyRefereeContext() {
-    const currentTenantId = localStorage.getItem('tenant_id');
+    const currentTenantId = getStorage('tenant_id');
     if (currentTenantId) {
-        localStorage.setItem('last_tenant_id', currentTenantId);
+        setStorage('last_tenant_id', currentTenantId);
     }
-    localStorage.setItem('active_context', 'referee');
-    localStorage.removeItem('tenant_id');
-    localStorage.removeItem('store_id');
-    localStorage.removeItem('subscription_plan_code');
+    setStorage('active_context', 'referee');
+    removeStorage('tenant_id');
+    removeStorage('store_id');
+    removeStorage('subscription_plan_code');
 }
 
 /** Activate the Platform Admin console (no shop/tenant scope). */
 export function applyPlatformAdminContext() {
-    const currentTenantId = localStorage.getItem('tenant_id');
+    const currentTenantId = getStorage('tenant_id');
     if (currentTenantId) {
-        localStorage.setItem('last_tenant_id', currentTenantId);
+        setStorage('last_tenant_id', currentTenantId);
     }
-    localStorage.setItem('active_context', 'platform-admin');
-    localStorage.removeItem('tenant_id');
-    localStorage.removeItem('store_id');
-    localStorage.removeItem('subscription_plan_code');
+    setStorage('active_context', 'platform-admin');
+    removeStorage('tenant_id');
+    removeStorage('store_id');
+    removeStorage('subscription_plan_code');
 }
 
 /** Activate a specific shop/tenant as the current workspace. */
 export function applyTenantContext(tenant: any) {
-    localStorage.removeItem('active_context');
-    localStorage.setItem('tenant_id', tenant.id);
-    localStorage.setItem('last_tenant_id', tenant.id);
+    removeStorage('active_context');
+    setStorage('tenant_id', tenant.id);
+    setStorage('last_tenant_id', tenant.id);
     if (tenant.stores && tenant.stores.length > 0) {
-        localStorage.setItem('store_id', tenant.stores[0].id);
+        setStorage('store_id', tenant.stores[0].id);
     } else {
-        localStorage.removeItem('store_id');
+        removeStorage('store_id');
     }
     if (tenant.subscription?.plan?.code) {
-        localStorage.setItem('subscription_plan_code', tenant.subscription.plan.code);
+        setStorage('subscription_plan_code', tenant.subscription.plan.code);
     } else {
-        localStorage.removeItem('subscription_plan_code');
+        removeStorage('subscription_plan_code');
     }
 }
 
 /** Forget the selected workspace so the account chooser starts clean. */
 export function clearActiveContext() {
-    localStorage.removeItem('active_context');
-    localStorage.removeItem('tenant_id');
-    localStorage.removeItem('last_tenant_id');
-    localStorage.removeItem('store_id');
-    localStorage.removeItem('subscription_plan_code');
+    removeStorage('active_context');
+    removeStorage('tenant_id');
+    removeStorage('last_tenant_id');
+    removeStorage('store_id');
+    removeStorage('subscription_plan_code');
 }
 
 export type StoreAuthResult = { redirectTo: string };
 
-export async function storeAuthResponse(res: any): Promise<StoreAuthResult> {
+/**
+ * Helper: get an item from localStorage, falling back to sessionStorage.
+ * Used for reading token and other session-scoped values.
+ */
+function getStorage(key: string): string | null {
+    return localStorage.getItem(key) ?? sessionStorage.getItem(key);
+}
+
+/**
+ * Helper: set a value in the correct storage depending on whether "Remember Me"
+ * was checked. When `rememberMe` is true, use localStorage (persists across
+ * browser closes). When false, use sessionStorage (cleared when tab closes).
+ * For keys that are always contextual (tenant_id, store_id, etc.) we always
+ * write to localStorage since those are not secrets.
+ */
+const ALWAYS_LOCAL_KEYS = new Set([
+    'tenant_id', 'last_tenant_id', 'store_id', 'subscription_plan_code',
+    'active_context', 'demo_session', 'onboarding_complete', 'locale',
+    'demo_banner_dismissed', 'last_tenant_id',
+]);
+
+function setStorage(key: string, value: string, rememberMe?: boolean): void {
+    if (ALWAYS_LOCAL_KEYS.has(key) || rememberMe) {
+        localStorage.setItem(key, value);
+    } else {
+        sessionStorage.setItem(key, value);
+    }
+}
+
+function removeStorage(key: string): void {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+}
+
+export async function storeAuthResponse(res: any, rememberMe = false): Promise<StoreAuthResult> {
     const data = res.data ? res.data : res;
-    localStorage.setItem('access_token', data.access_token);
+    setStorage('access_token', data.access_token, rememberMe);
 
     if (data.is_demo) {
         localStorage.setItem('demo_session', '1');
@@ -133,14 +167,21 @@ export async function storeAuthResponse(res: any): Promise<StoreAuthResult> {
 }
 
 export function clearAuthSession() {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('tenant_id');
-    localStorage.removeItem('last_tenant_id');
-    localStorage.removeItem('store_id');
-    localStorage.removeItem('subscription_plan_code');
-    localStorage.removeItem('demo_session');
-    localStorage.removeItem('onboarding_complete');
-    localStorage.removeItem('active_context');
+    // Clear both storage backends to ensure full logout.
+    const keys = [
+        'access_token',
+        'tenant_id',
+        'last_tenant_id',
+        'store_id',
+        'subscription_plan_code',
+        'demo_session',
+        'onboarding_complete',
+        'active_context',
+    ];
+    for (const key of keys) {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+    }
 }
 
 /** True when the path belongs to a shop workspace (not the platform admin console). */
