@@ -39,6 +39,11 @@ export class FeedbackAutomationController {
         return this.service.refreshPrStatus(id);
     }
 
+    @Post(':id/merge')
+    async merge(@Param('id') id: string, @Request() req: any) {
+        return this.service.mergeFeedbackPr(id, req.user.userId);
+    }
+
     @Post(':id/rollback')
     async rollback(@Param('id') id: string, @Request() req: any) {
         return this.service.generateRollbackPr(id, req.user.userId);

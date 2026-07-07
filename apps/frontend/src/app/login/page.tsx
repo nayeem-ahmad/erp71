@@ -14,6 +14,7 @@ function LoginPageContent() {
     const { t } = useI18n();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [rememberMe, setRememberMe] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isDemoLoading, setIsDemoLoading] = useState(false);
@@ -61,7 +62,7 @@ function LoginPageContent() {
                 setTwoFactorUserId(loginRes.user_id);
                 return;
             }
-            const { redirectTo } = await storeAuthResponse(loginRes);
+            const { redirectTo } = await storeAuthResponse(loginRes, rememberMe);
             router.push(resolveDestination(redirectTo));
         } catch (err: any) {
             setError(err.message || t.auth.login.defaultError);
@@ -77,7 +78,7 @@ function LoginPageContent() {
         setError(null);
         try {
             const loginRes = await api.verify2FALogin(twoFactorUserId, twoFactorCode);
-            const { redirectTo } = await storeAuthResponse(loginRes);
+            const { redirectTo } = await storeAuthResponse(loginRes, rememberMe);
             router.push(resolveDestination(redirectTo));
         } catch (err: any) {
             setError(err.message || t.auth.login.defaultError);
@@ -100,7 +101,7 @@ function LoginPageContent() {
 
         try {
             const auth = await api.demoLogin();
-            await storeAuthResponse(auth);
+            await storeAuthResponse(auth, true); // demo always persists
             localStorage.removeItem('onboarding_complete');
             router.push('/dashboard/onboarding');
         } catch (err: any) {
@@ -192,7 +193,12 @@ function LoginPageContent() {
 
                         <div className="flex items-center justify-between text-sm">
                             <label className="flex items-center space-x-2 cursor-pointer group">
-                                <input type="checkbox" className="w-4 h-4 rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                <input
+                                    type="checkbox"
+                                    checked={rememberMe}
+                                    onChange={(e) => setRememberMe(e.target.checked)}
+                                    className="w-4 h-4 rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
                                 <span className="text-gray-600 group-hover:text-gray-900 transition-colors">{t.common.rememberMe}</span>
                             </label>
                             <Link href="/forgot-password" className="font-medium text-blue-600 hover:text-blue-700 transition-colors">{t.common.forgotPassword}</Link>
