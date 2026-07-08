@@ -20,6 +20,8 @@ import { useBranding } from '@/lib/branding';
 import { useI18n } from '@/lib/i18n';
 import { buildNavModulesFromLayout, type ResolvedNavChild, type ResolvedNavModule } from '@/lib/nav-resolver';
 import {
+    accordionCloseState,
+    accordionOpenState,
     buildOpenGroupsState,
     collectNavGroupKeys,
     filterNavModules,
@@ -348,17 +350,14 @@ export default function Sidebar({
         if (Object.keys(toOpen).length === 0) return;
 
         setOpenGroups((prev) => {
-            let changed = false;
-            const next = { ...prev };
-            for (const [key, value] of Object.entries(toOpen)) {
-                if (value && !next[key]) {
-                    next[key] = true;
-                    changed = true;
-                }
-            }
-            if (!changed) return prev;
-            localStorage.setItem('sidebar-open-groups', JSON.stringify(next));
-            return next;
+            const prevKeys = Object.keys(prev).filter((key) => prev[key]);
+            const nextKeys = Object.keys(toOpen);
+            const unchanged =
+                prevKeys.length === nextKeys.length &&
+                nextKeys.every((key) => prev[key]);
+            if (unchanged) return prev;
+            localStorage.setItem('sidebar-open-groups', JSON.stringify(toOpen));
+            return toOpen;
         });
     }, [canAccessAccounting, pathname, modules]);
 
@@ -457,7 +456,9 @@ export default function Sidebar({
 
     const toggleGroup = (key: string) => {
         setOpenGroups((prev) => {
-            const next = { ...prev, [key]: !prev[key] };
+            const next = prev[key]
+                ? accordionCloseState(prev, key)
+                : accordionOpenState(key);
             localStorage.setItem('sidebar-open-groups', JSON.stringify(next));
             return next;
         });
