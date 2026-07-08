@@ -8,7 +8,7 @@ import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { DatabaseService } from '../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { InvitationsService } from '../invitations/invitations.service';
-import { StorePermission, UserRole } from '@erp71/shared-types';
+import { StorePermission, UserRole, resolveBaseUserRole } from '@erp71/shared-types';
 import { TenantContext } from '../database/tenant.decorator';
 import { syncMemberPermissionsFromRole } from './role-sync.util';
 import { CreateTenantRoleDto, UpdateTenantRoleDto } from './team.dto';
@@ -384,12 +384,15 @@ export class TeamService {
             throw new BadRequestException('Cannot change the role of an owner.');
         }
 
-        await this.getTenantRole(ctx.tenantId, tenantRoleId);
+        const role = await this.getTenantRole(ctx.tenantId, tenantRoleId);
 
         await this.db.$transaction(async (tx) => {
             await tx.tenantUser.update({
                 where: { tenant_id_user_id: { tenant_id: ctx.tenantId, user_id: userId } },
-                data: { tenant_role_id: tenantRoleId },
+                // Keep the coarse role enum in lockstep with the assigned TenantRole —
+                // it drives the session's displayed role, the OWNER/MANAGER authorization
+                // gates, and the platform-admin Edit Tenant view, all of which read the enum.
+                data: { tenant_role_id: tenantRoleId, role: resolveBaseUserRole(role.name) },
             });
 
             await syncMemberPermissionsFromRole(tx, {
