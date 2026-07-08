@@ -124,28 +124,28 @@ describe('Sidebar — Story 30.1', () => {
     it('shows accounting navigation when access is allowed', () => {
         render(<Sidebar canAccessAccounting />);
 
-        expect(screen.getByText('Accounting')).toBeInTheDocument();
+        expect(screen.getByTitle('Accounting')).toBeInTheDocument();
     });
 
     it('hides accounting navigation when access is not allowed', () => {
         render(<Sidebar canAccessAccounting={false} />);
 
-        expect(screen.queryByText('Accounting')).not.toBeInTheDocument();
+        expect(screen.queryByTitle('Accounting')).not.toBeInTheDocument();
     });
 
     it('hides retail modules in accounting-only mode', () => {
         render(<Sidebar canAccessAccounting accountingOnlyMode />);
 
-        expect(screen.getByText('Accounting')).toBeInTheDocument();
-        expect(screen.getByText('Admin')).toBeInTheDocument();
-        expect(screen.queryByText('Sales')).not.toBeInTheDocument();
-        expect(screen.queryByText('Inventory')).not.toBeInTheDocument();
+        expect(screen.getByTitle('Accounting')).toBeInTheDocument();
+        expect(screen.getByTitle('Admin')).toBeInTheDocument();
+        expect(screen.queryByTitle('Sales')).not.toBeInTheDocument();
+        expect(screen.queryByTitle('Inventory')).not.toBeInTheDocument();
     });
 
     it('trims the Admin menu to accounting-relevant links in accounting-only mode', () => {
         render(<Sidebar canAccessAccounting accountingOnlyMode canManageBilling canManageTeam />);
 
-        fireEvent.click(screen.getByText('Admin'));
+        fireEvent.click(screen.getByTitle('Admin'));
 
         // Accounting-relevant links stay
         expect(screen.getByText('My Account')).toBeInTheDocument();
@@ -172,7 +172,7 @@ describe('Sidebar — Story 30.1', () => {
     it('keeps the full Admin menu when not in accounting-only mode', () => {
         render(<Sidebar canAccessAccounting canManageBilling canManageTeam />);
 
-        fireEvent.click(screen.getByText('Admin'));
+        fireEvent.click(screen.getByTitle('Admin'));
 
         expect(screen.getByText('Loyalty Program')).toBeInTheDocument();
         expect(screen.getByText('Payment Methods')).toBeInTheDocument();
@@ -182,7 +182,7 @@ describe('Sidebar — Story 30.1', () => {
     it('shows full platform admin navigation in platform admin mode', () => {
         render(<Sidebar platformAdminMode helpEnabled />);
 
-        fireEvent.click(screen.getByText('Platform Admin'));
+        fireEvent.click(screen.getByTitle('Platform Admin'));
         expect(screen.getByText('Tenant Management')).toBeInTheDocument();
         expect(screen.getByText('System Health')).toBeInTheDocument();
         expect(screen.getByText('Platform Settings')).toBeInTheDocument();
@@ -198,22 +198,22 @@ describe('Sidebar — Story 30.1', () => {
     it('shows platform admin and billing items when enabled', () => {
         render(<Sidebar canAccessAccounting canAccessAdmin canManageBilling canAccessInventoryReports activePlanCode="STANDARD" />);
 
-        expect(screen.getByText('Platform Admin')).toBeInTheDocument();
-        expect(screen.getByText('Admin')).toBeInTheDocument();
-        fireEvent.click(screen.getByText('Admin'));
+        expect(screen.getByTitle('Platform Admin')).toBeInTheDocument();
+        expect(screen.getByTitle('Admin')).toBeInTheDocument();
+        fireEvent.click(screen.getByTitle('Admin'));
         expect(screen.getByText('Billing')).toBeInTheDocument();
 
         // Open Sales group
-        fireEvent.click(screen.getByText('Sales'));
+        fireEvent.click(screen.getByTitle('Sales'));
         expect(screen.getByText('Sales Reports')).toBeInTheDocument();
 
         // Open Purchase group
-        fireEvent.click(screen.getByText('Purchase'));
+        fireEvent.click(screen.getByTitle('Purchase'));
         expect(screen.getByText('Purchase Reports')).toBeInTheDocument();
         expect(screen.getByText('Payables')).toBeInTheDocument();
 
         // Open Inventory group
-        fireEvent.click(screen.getByText('Inventory'));
+        fireEvent.click(screen.getByTitle('Inventory'));
         expect(screen.getByText('Inventory Reports')).toBeInTheDocument();
     });
 
@@ -221,16 +221,16 @@ describe('Sidebar — Story 30.1', () => {
         render(<Sidebar canAccessAccounting canAccessInventoryReports={false} />);
 
         // Open Sales group
-        fireEvent.click(screen.getByText('Sales'));
+        fireEvent.click(screen.getByTitle('Sales'));
         expect(screen.queryByText('Sales Reports')).not.toBeInTheDocument();
 
         // Open Purchase group
-        fireEvent.click(screen.getByText('Purchase'));
+        fireEvent.click(screen.getByTitle('Purchase'));
         expect(screen.queryByText('Purchase Reports')).not.toBeInTheDocument();
         expect(screen.getByText('Payables')).toBeInTheDocument();
 
         // Open Inventory group
-        fireEvent.click(screen.getByText('Inventory'));
+        fireEvent.click(screen.getByTitle('Inventory'));
         fireEvent.click(screen.getByText('Inventory Reports'));
         expect(screen.queryByText('Reorder Report')).not.toBeInTheDocument();
         expect(screen.queryByText('Shrinkage Report')).not.toBeInTheDocument();
