@@ -10,7 +10,7 @@
 - **User Skill Level**: intermediate
 - **Output Folder**: {project-root}/_bmad-output
 - **Planning Artifacts**: {project-root}/_bmad-output/planning-artifacts
-- **Implementation Artifacts**: {project-root}/_bmad-output/implementation-artifacts
+- **Implementation Artifacts (stories)**: {project-root}/docs/stories
 - **Project Knowledge**: {project-root}/docs
 
 ## BMAD Runtime Structure
