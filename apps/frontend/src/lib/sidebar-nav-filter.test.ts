@@ -60,3 +60,34 @@ describe('sidebar-nav-filter', () => {
         expect(buildOpenGroupsState(['sales'], false)).toEqual({ sales: false });
     });
 });
+
+import { accordionOpenState, accordionCloseState } from './sidebar-nav-filter';
+
+describe('accordion state helpers', () => {
+    it('opens a top-level group as the only open node', () => {
+        expect(accordionOpenState('accounting')).toEqual({ accounting: true });
+    });
+
+    it('opens a subgroup together with its parent', () => {
+        expect(accordionOpenState('accounting:reports')).toEqual({
+            accounting: true,
+            'accounting:reports': true,
+        });
+    });
+
+    it('closing a top-level group also drops its subgroups', () => {
+        const prev = { accounting: true, 'accounting:reports': true };
+        expect(accordionCloseState(prev, 'accounting')).toEqual({});
+    });
+
+    it('closing a subgroup keeps the parent open', () => {
+        const prev = { accounting: true, 'accounting:reports': true };
+        expect(accordionCloseState(prev, 'accounting:reports')).toEqual({ accounting: true });
+    });
+
+    it('does not mutate the input map', () => {
+        const prev = { accounting: true, 'accounting:reports': true };
+        accordionCloseState(prev, 'accounting');
+        expect(prev).toEqual({ accounting: true, 'accounting:reports': true });
+    });
+});

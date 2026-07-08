@@ -88,3 +88,37 @@ export function collectNavGroupKeys(modules: ResolvedNavModule[]): string[] {
 export function buildOpenGroupsState(keys: string[], open: boolean): Record<string, boolean> {
     return Object.fromEntries(keys.map((key) => [key, open]));
 }
+
+/**
+ * Accordion open-map when `key` becomes the open node: the key plus its
+ * ancestor chain set to true, nothing else. For `parent:child` keys the
+ * parent is included so the subgroup is visible inside its module.
+ */
+export function accordionOpenState(key: string): Record<string, boolean> {
+    const state: Record<string, boolean> = { [key]: true };
+    const sepIndex = key.indexOf(':');
+    if (sepIndex !== -1) {
+        state[key.slice(0, sepIndex)] = true;
+    }
+    return state;
+}
+
+/**
+ * Remove `key` from an accordion open-map. Closing a top-level group also
+ * drops any of its `parent:child` subgroups, since they can no longer show.
+ */
+export function accordionCloseState(
+    prev: Record<string, boolean>,
+    key: string,
+): Record<string, boolean> {
+    const next = { ...prev };
+    delete next[key];
+    if (key.indexOf(':') === -1) {
+        for (const existing of Object.keys(next)) {
+            if (existing.startsWith(`${key}:`)) {
+                delete next[existing];
+            }
+        }
+    }
+    return next;
+}
