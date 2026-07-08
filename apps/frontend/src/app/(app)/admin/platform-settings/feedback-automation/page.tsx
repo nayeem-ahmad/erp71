@@ -30,6 +30,21 @@ const DEFAULTS: Settings = {
     github_base_branch: 'dev',
 };
 
+// Curated for the coding agent: reliable tool-calling on a provider without an aggressive
+// input guardrail (avoid z-ai/glm-* and deepseek, which block or ignore tool calls on repo code).
+// Prices are per 1M tokens (input/output); verify current pricing on openrouter.ai before relying on it.
+const RECOMMENDED_MODELS: { slug: string; price: string; note: string }[] = [
+    { slug: 'openai/gpt-5.1-codex-mini', price: '$0.25/$2.00', note: 'cheapest solid — coding-tuned' },
+    { slug: 'openai/gpt-5-mini', price: '$0.25/$2.00', note: 'cheap — strong reasoning + tools' },
+    { slug: 'google/gemini-2.5-flash', price: '$0.30/$2.50', note: 'cheap — 1M context' },
+    { slug: 'anthropic/claude-haiku-4.5', price: '$1.00/$5.00', note: 'cheap Claude — great tool-use' },
+    { slug: 'openai/gpt-5.1-codex', price: '$1.25/$10', note: 'best value coder' },
+    { slug: 'google/gemini-2.5-pro', price: '$1.25/$10', note: 'strong coder — 1M context' },
+    { slug: 'anthropic/claude-sonnet-4.6', price: '$3.00/$15', note: 'most reliable (default)' },
+];
+
+const MANUAL_MODEL = '__manual__';
+
 type Toast = { type: 'success' | 'error'; message: string } | null;
 
 function ToastBanner({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
@@ -65,6 +80,10 @@ export default function FeedbackAutomationSettingsPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [toast, setToast] = useState<Toast>(null);
+    // Show the free-text slug box when the user picks "manual" or the saved model isn't a preset.
+    const [manualModel, setManualModel] = useState(false);
+    const isPresetModel = RECOMMENDED_MODELS.some((m) => m.slug === settings.model);
+    const showManualModel = manualModel || !isPresetModel;
 
     const inputCls = 'w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition';
 
@@ -166,12 +185,35 @@ export default function FeedbackAutomationSettingsPage() {
                             </select>
                         </Field>
 
-                        <Field label="Model" hint="OpenRouter model slug used for the coding agent. A stronger model than the default AI assistant is recommended.">
-                            <input
-                                value={settings.model}
-                                onChange={(e) => setSettings((s) => ({ ...s, model: e.target.value }))}
+                        <Field label="Model" hint="OpenRouter model slug for the coding agent. Pick a recommended model or enter any slug manually. Use a strong tool-calling model on a provider without an aggressive input guardrail — avoid z-ai/glm-* and deepseek, which block or ignore tool calls on repo code.">
+                            <select
+                                value={showManualModel ? MANUAL_MODEL : settings.model}
+                                onChange={(e) => {
+                                    const v = e.target.value;
+                                    if (v === MANUAL_MODEL) {
+                                        setManualModel(true);
+                                    } else {
+                                        setManualModel(false);
+                                        setSettings((s) => ({ ...s, model: v }));
+                                    }
+                                }}
                                 className={inputCls}
-                            />
+                            >
+                                {RECOMMENDED_MODELS.map((m) => (
+                                    <option key={m.slug} value={m.slug}>
+                                        {m.slug} ({m.price} per 1M — {m.note})
+                                    </option>
+                                ))}
+                                <option value={MANUAL_MODEL}>✏️ Enter model slug manually…</option>
+                            </select>
+                            {showManualModel && (
+                                <input
+                                    value={settings.model}
+                                    onChange={(e) => setSettings((s) => ({ ...s, model: e.target.value }))}
+                                    placeholder="e.g. openai/gpt-5.1-codex"
+                                    className={`${inputCls} mt-2`}
+                                />
+                            )}
                         </Field>
 
                         <Field label="Max tool-call turns" hint="How many model round-trips the agent may take per run (5–100) before it must return a best-effort plan. Raise this for large repos where the agent runs out of turns while exploring; lower it to cap cost per run.">

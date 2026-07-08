@@ -97,3 +97,5 @@ This document provides a master list of all epics for the ERP71 platform, organi
 *   **Epic 90: Multi-user Role-Based Access Control (RBAC)**
 *   **Epic 91: System Audit Logs**
 *   **Epic 92: Store-wide Settings & Localization**
+*   **Epic 93: Feedback Automation**
+    *   **Goal:** Platform admins turn tenant feedback into merged code via an LLM coding agent — propose plan, approve, implement, open a CI-gated PR, merge in-app, and roll back.

@@ -262,6 +262,9 @@ development_status:
   92-3-communication-templates: review
   92-4-white-label-branding: done
 
+  # ── Epic 93: Feedback Automation ───────────────────────────────────────────
+  93-1-feedback-automation-pipeline: done
+
   # ── Extras (shipped outside original epic tracker) ─────────────────────────
   extra-platform-superadmin: done
   extra-public-api-keys: done
@@ -323,20 +326,20 @@ epic_status:
   epic-92: review
 
 summary:
-  epics_total: 46
-  epics_done: 17
+  epics_total: 47
+  epics_done: 18
   epics_review: 13
   epics_in_progress: 8
   epics_not_started: 7
-  stories_total: 172
-  stories_done: 120
+  stories_total: 173
+  stories_done: 121
   stories_review: 21
   stories_in_progress: 1
   stories_not_started: 30
 
 metadata:
-  last_updated: 2026-06-12
-  regenerated_by: Grok (codebase + PRD audit)
+  last_updated: 2026-07-08
+  regenerated_by: Grok (codebase + PRD audit); Epic 93 feedback automation added 2026-07-08
   sources:
     - docs/prd/epic-list.md
     - docs/prd/epic-*.md
