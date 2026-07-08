@@ -420,7 +420,12 @@ Only after you have written all the files with write_file, respond with a short 
                 return await this.requestCompletion(apiKey, model, payload, referer, title);
             } catch (err) {
                 lastError = err instanceof Error ? err.message : String(err);
-                if (err instanceof NonRetryableAgentError || attempt === OPENROUTER_MAX_ATTEMPTS) {
+                // Non-retryable (bad key/model, content guardrail): surface the message as-is,
+                // without a misleading "after N attempts" — it only ran once.
+                if (err instanceof NonRetryableAgentError) {
+                    throw new InternalServerErrorException(lastError);
+                }
+                if (attempt === OPENROUTER_MAX_ATTEMPTS) {
                     break;
                 }
                 this.logger.warn(`OpenRouter attempt ${attempt}/${OPENROUTER_MAX_ATTEMPTS} failed (${lastError}); retrying…`);
