@@ -325,6 +325,11 @@ export default function Sidebar({
         }
     }, []);
 
+    // Tracks the last pathname we auto-opened a section for, so re-renders that
+    // change `modules` (locale switch, async nav-layout load, permission change)
+    // don't clobber a section the user manually opened on the current page.
+    const lastAutoOpenPathRef = useRef<string | null>(null);
+
     // auto-expand the module and any nested subgroup that contains the current page
     useEffect(() => {
         const toOpen: Record<string, boolean> = {};
@@ -349,9 +354,15 @@ export default function Sidebar({
 
         if (Object.keys(toOpen).length === 0) return;
 
+        // Auto-open applies once per distinct route (real navigation), not on
+        // every re-render that rebuilds `modules`.
+        if (lastAutoOpenPathRef.current === pathname) return;
+        lastAutoOpenPathRef.current = pathname;
+
         setOpenGroups((prev) => {
             const prevKeys = Object.keys(prev).filter((key) => prev[key]);
             const nextKeys = Object.keys(toOpen);
+            // Already showing exactly this chain? Return prev to skip a redundant write/re-render.
             const unchanged =
                 prevKeys.length === nextKeys.length &&
                 nextKeys.every((key) => prev[key]);

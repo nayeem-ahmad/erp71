@@ -337,6 +337,18 @@ describe('Sidebar — Story 30.1', () => {
         expect(screen.queryByText('Expense Categories')).not.toBeInTheDocument();
     });
 
+    it('opening one top-level module closes another top-level module (accordion)', () => {
+        render(<Sidebar canAccessAccounting canAccessInventoryReports canAccessAccountingAdvanced />);
+
+        fireEvent.click(screen.getByText('Inventory'));
+        expect(screen.getByText('Inventory Reports')).toBeInTheDocument();
+
+        // Opening Purchase must collapse Inventory.
+        fireEvent.click(screen.getByText('Purchase'));
+        expect(screen.getByText('Purchase Reports')).toBeInTheDocument();
+        expect(screen.queryByText('Inventory Reports')).not.toBeInTheDocument();
+    });
+
     it('persists the single open subgroup to localStorage', async () => {
         render(<Sidebar canAccessAccounting canAccessInventoryReports canAccessAccountingAdvanced />);
 

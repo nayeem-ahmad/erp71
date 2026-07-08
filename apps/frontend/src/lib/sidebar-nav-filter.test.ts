@@ -1,7 +1,13 @@
 import { buildNavModulesFromLayout } from '@/lib/nav-resolver';
 import { DEFAULT_TENANT_NAV_LAYOUT } from '@erp71/shared-types';
 import { enMessages } from '@/lib/localization/messages/en';
-import { buildOpenGroupsState, collectNavGroupKeys, filterNavModules } from './sidebar-nav-filter';
+import {
+    accordionCloseState,
+    accordionOpenState,
+    buildOpenGroupsState,
+    collectNavGroupKeys,
+    filterNavModules,
+} from './sidebar-nav-filter';
 
 const tenantModules = buildNavModulesFromLayout(
     DEFAULT_TENANT_NAV_LAYOUT,
@@ -60,8 +66,6 @@ describe('sidebar-nav-filter', () => {
         expect(buildOpenGroupsState(['sales'], false)).toEqual({ sales: false });
     });
 });
-
-import { accordionOpenState, accordionCloseState } from './sidebar-nav-filter';
 
 describe('accordion state helpers', () => {
     it('opens a top-level group as the only open node', () => {
