@@ -112,9 +112,11 @@ describe('TeamService', () => {
 
         await service.updateRole(owner, 'u2', 'role-manager');
 
+        // Coarse role enum must move in lockstep with tenant_role_id so the session,
+        // auth gates, and platform-admin Edit Tenant view reflect the new role.
         expect(db.tenantUser.update).toHaveBeenCalledWith({
             where: { tenant_id_user_id: { tenant_id: 't1', user_id: 'u2' } },
-            data: { tenant_role_id: 'role-manager' },
+            data: { tenant_role_id: 'role-manager', role: UserRole.MANAGER },
         });
         expect(syncMemberPermissionsFromRole).toHaveBeenCalledWith(
             db,
