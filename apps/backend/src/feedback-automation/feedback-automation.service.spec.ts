@@ -186,6 +186,19 @@ describe('FeedbackAutomationService', () => {
             expect(workspace.cleanup).toHaveBeenCalled();
         });
 
+        it('aborts with a clear message when the agent changed no files', async () => {
+            runner.implementPlan.mockResolvedValue({ summary: 'here is what I would do', filesChanged: [], tokensUsed: 800, workspace });
+
+            await expect((service as any).runImplementation('fb-1', 'plan-1')).rejects.toThrow(/no file changes/i);
+
+            expect(github.commitAndPush).not.toHaveBeenCalled();
+            expect(db.feedback.update).toHaveBeenCalledWith({
+                where: { id: 'fb-1' },
+                data: { status: 'PLAN_APPROVED', lastError: expect.stringContaining('no file changes') },
+            });
+            expect(workspace.cleanup).toHaveBeenCalled();
+        });
+
         it('aborts without opening a PR when a generated migration is destructive', async () => {
             (fsPromises.readFile as jest.Mock).mockResolvedValue('ALTER TABLE "x" DROP COLUMN "y";');
             runner.implementPlan.mockResolvedValue({

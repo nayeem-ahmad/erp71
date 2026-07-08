@@ -188,6 +188,16 @@ export class FeedbackAutomationService {
                 branch,
             );
 
+            if (result.filesChanged.length === 0) {
+                // The model returned a summary/plan but never applied any edits via write_file, so the
+                // working tree is clean. Fail with a clear message instead of an opaque git-commit error.
+                throw new Error(
+                    'The agent made no file changes, so there is nothing to commit. ' +
+                    'This usually means the model described the fix without applying it. ' +
+                    'Retry the implementation, or switch to a stronger model in Feedback Automation settings.',
+                );
+            }
+
             const migrationFiles = result.filesChanged.filter((f) => f.includes('prisma/migrations/'));
             if (migrationFiles.length > 0) {
                 const destructive = await this.anyFileMatches(result.workspace.dir, migrationFiles, DESTRUCTIVE_SQL_PATTERN);
