@@ -16,6 +16,8 @@ const MAX_TURNS_CAP = 100;
 // retry a transient failure (connection drop / timeout / 429 / 5xx) before giving up.
 const OPENROUTER_REQUEST_TIMEOUT_MS = 180_000;
 const OPENROUTER_MAX_ATTEMPTS = 3;
+// In implement mode, how many times to nudge a model that tries to finish without writing any files.
+const MAX_WRITE_NUDGES = 2;
 const MAX_FILE_BYTES = 200_000;
 const MAX_TOOL_RESULT_CHARS = 20_000;
 
@@ -177,10 +179,12 @@ Keep it concrete — name real files and line numbers you found via the tools, n
 
     private buildImplementSystemPrompt(): string {
         return `You are a senior engineer on the ERP71 codebase (NestJS backend, Next.js 15 frontend, Prisma/Postgres, monorepo). \
-A platform admin has approved the implementation plan below. Implement it now using list_dir/read_file/search_code to understand existing conventions, then write_file for every file you add or change. \
+A platform admin has approved the implementation plan below. \
+Use list_dir/read_file/search_code to understand existing conventions, then ACTUALLY APPLY every change by calling the write_file tool — arguments: "path" (relative to the repo root) and "content" (the full new contents of the file). \
+You MUST edit files with write_file. Describing the change in prose without calling write_file does NOT count and is a failed run — the changes are only real once written. Call write_file once for every file you add or change (pass the complete file contents, not a diff). \
 Match this repo's existing conventions exactly (see CLAUDE.md: TenantInterceptor-scoped queries, permissions in packages/shared-types, Prisma migrations as hand-written SQL files under packages/database/prisma/migrations/<timestamp>_<name>/migration.sql). \
 Do not run git commands or open a pull request yourself — that is handled outside this session. Do not touch anything outside the approved plan's scope. \
-When finished, respond with a short plain-text summary of what you changed (no tool call).`;
+Only after you have written all the files with write_file, respond with a short plain-text summary of what you changed (no tool call in that final message).`;
     }
 
     private buildPlanUserPrompt(context: FeedbackContext): string {
@@ -239,6 +243,8 @@ When finished, respond with a short plain-text summary of what you changed (no t
             { role: 'user', content: userPrompt },
         ];
         let tokensUsed = 0;
+        let wroteAnything = false;
+        let writeNudges = 0;
 
         for (let turn = 0; turn < maxTurns; turn++) {
             // On the final allowed turn, withhold tools so the model is forced to
@@ -251,6 +257,15 @@ When finished, respond with a short plain-text summary of what you changed (no t
             tokensUsed += (usage?.total_tokens ?? 0);
 
             if (!message.tool_calls || message.tool_calls.length === 0) {
+                // In implement mode, weaker models often "finish" by describing the change in
+                // prose without ever calling write_file. Don't accept a no-op run — nudge the
+                // model to actually apply the edits (a couple of times) before giving up.
+                const canNudge = writeAllowed && !wroteAnything && !isFinalTurn && writeNudges < MAX_WRITE_NUDGES;
+                if (canNudge) {
+                    writeNudges++;
+                    this.pushWriteNudge(messages, message.content ?? '');
+                    continue;
+                }
                 return { text: message.content ?? '', tokensUsed };
             }
 
@@ -264,6 +279,9 @@ When finished, respond with a short plain-text summary of what you changed (no t
 
             for (const call of message.tool_calls) {
                 const result = await this.executeTool(workspace.dir, call.function.name, call.function.arguments, writeAllowed);
+                if (call.function.name === 'write_file' && !result.startsWith('Error:')) {
+                    wroteAnything = true;
+                }
                 messages.push({ role: 'tool', tool_call_id: call.id, content: result });
             }
         }
@@ -271,6 +289,20 @@ When finished, respond with a short plain-text summary of what you changed (no t
         // Unreachable in practice — the final turn always returns above — but
         // keep a guard so the loop can never fall through silently.
         throw new InternalServerErrorException(`Agent did not finish within ${maxTurns} tool-call turns.`);
+    }
+
+    /** Records the model's no-op reply and tells it to actually apply the edits via write_file. */
+    private pushWriteNudge(messages: ChatMessage[], assistantText: string): void {
+        messages.push(
+            { role: 'assistant', content: assistantText },
+            {
+                role: 'user',
+                content:
+                    'You have not created or modified any files yet. Do not just describe the change — apply it now by ' +
+                    'calling the write_file tool (arguments: "path" relative to the repo root, "content" = the full new file ' +
+                    'contents) for every file you add or change. Only after the files are written, reply with a short summary.',
+            },
+        );
     }
 
     /** Resolve the per-run tool-call turn budget from platform settings, clamped to a safe range. */
