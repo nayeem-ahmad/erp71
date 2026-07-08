@@ -433,7 +433,18 @@ When finished, respond with a short plain-text summary of what you changed (no t
             };
 
             if (!response.ok) {
-                const msg = `Feedback agent error: ${body.error?.message ?? response.status}`;
+                const providerMsg = body.error?.message ?? String(response.status);
+                const msg = `Feedback agent error: ${providerMsg}`;
+                // Provider content guardrails (prompt-injection / moderation / safety filters) reject
+                // the request *content* — retrying identical content always fails, whatever the status.
+                if (isContentGuardrailBlock(providerMsg)) {
+                    throw new NonRetryableAgentError(
+                        `The model provider blocked the request content ("${providerMsg}"). ` +
+                        `This is a provider-side content guardrail, not a transient error, so retrying will not help. ` +
+                        `Switch the Feedback Automation model to one without an aggressive input filter ` +
+                        `(e.g. anthropic/claude-sonnet-4.6).`,
+                    );
+                }
                 // 4xx other than 429 won't succeed on retry (bad key, bad model, etc.).
                 if (response.status >= 400 && response.status < 500 && response.status !== 429) {
                     throw new NonRetryableAgentError(msg);
@@ -456,3 +467,8 @@ When finished, respond with a short plain-text summary of what you changed (no t
 
 /** Marks an OpenRouter failure that must not be retried (e.g. bad API key or model). */
 class NonRetryableAgentError extends Error {}
+
+/** True when a provider error is a content guardrail (prompt-injection / moderation / safety) that retrying won't fix. */
+export function isContentGuardrailBlock(message: string): boolean {
+    return /prompt injection|moderat|content (policy|filter)|safety (filter|system)|flagged|guardrail|blocked by/i.test(message);
+}
