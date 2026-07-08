@@ -3,7 +3,7 @@ import { Throttle } from '@nestjs/throttler';
 import { InvitationsService } from './invitations.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
-import { IsEmail, IsString } from 'class-validator';
+import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
 
 class InviteDto {
     @IsEmail()
@@ -16,6 +16,25 @@ class InviteDto {
 class AcceptInvitationDto {
     @IsString()
     token: string;
+}
+
+class AcceptSignupDto {
+    @IsString()
+    token: string;
+
+    @IsString({ message: 'Name is required.' })
+    name: string;
+
+    @IsString({ message: 'Mobile number is required.' })
+    mobile: string;
+
+    @IsString()
+    @MinLength(8, { message: 'Password must be at least 8 characters.' })
+    password: string;
+
+    @IsOptional()
+    @IsString()
+    mobile_country_code?: string;
 }
 
 class UpdateMemberRoleDto {
@@ -87,6 +106,16 @@ export class InvitationsController {
     @Post('accept')
     async accept(@Request() req, @Body() dto: AcceptInvitationDto) {
         await this.service.accept(dto.token, req.user.userId);
+        return { message: 'Invitation accepted.' };
+    }
+
+    // Public — for an invitee with no account yet: creates their user (email taken
+    // from the invitation token) and joins them to the tenant. The frontend then
+    // logs in with the same password. Throttled like other unauthenticated routes.
+    @Throttle({ default: { ttl: 60_000, limit: 10 } })
+    @Post('accept-signup')
+    async acceptSignup(@Body() dto: AcceptSignupDto) {
+        await this.service.acceptWithSignup(dto.token, dto.name, dto.mobile, dto.password, dto.mobile_country_code);
         return { message: 'Invitation accepted.' };
     }
 }

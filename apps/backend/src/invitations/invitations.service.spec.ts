@@ -15,7 +15,7 @@ import { syncMemberPermissionsFromRole } from '../team/role-sync.util';
 
 const db = {
     tenant: { findUnique: jest.fn() },
-    user: { findUnique: jest.fn() },
+    user: { findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
     tenantRole: { findFirst: jest.fn() },
     userInvitation: {
         findUnique: jest.fn(),
@@ -214,5 +214,81 @@ describe('InvitationsService', () => {
         });
         db.user.findUnique.mockResolvedValue({ id: 'u2', email: 'wrong@example.com' });
         await expect(service.accept(rawToken, 'u2')).rejects.toThrow(BadRequestException);
+    });
+
+    it('getInfo reports whether the invited email already has an account', async () => {
+        const rawToken = 'info-token';
+        const hash = crypto.createHash('sha256').update(rawToken).digest('hex');
+        db.userInvitation.findUnique.mockResolvedValue({
+            token_hash: hash,
+            email: 'invitee@example.com',
+            accepted_at: null,
+            expires_at: new Date(Date.now() + 86400_000),
+            tenant: { name: 'Acme' },
+            tenantRole: { name: 'Cashier' },
+        });
+
+        db.user.findUnique.mockResolvedValueOnce(null);
+        await expect(service.getInfo(rawToken)).resolves.toMatchObject({ hasAccount: false });
+
+        db.user.findUnique.mockResolvedValueOnce({ id: 'u9' });
+        await expect(service.getInfo(rawToken)).resolves.toMatchObject({ hasAccount: true });
+    });
+
+    it('acceptWithSignup creates the invited user and grants membership', async () => {
+        const rawToken = 'signup-token';
+        const hash = crypto.createHash('sha256').update(rawToken).digest('hex');
+        db.userInvitation.findUnique.mockResolvedValue({
+            id: 'inv1',
+            token_hash: hash,
+            email: 'newbie@example.com',
+            accepted_at: null,
+            expires_at: new Date(Date.now() + 86400_000),
+            tenant_id: 't1',
+            tenant_role_id: 'role-cashier',
+            invited_by: 'owner',
+            tenantRole: { permissions: [{ permission: StorePermission.CREATE_SALE }] },
+        });
+        db.user.findUnique.mockResolvedValue(null); // no existing account
+        db.user.findFirst.mockResolvedValue(null); // mobile not taken
+        db.user.create.mockResolvedValue({ id: 'new-user' });
+        db.store.findFirst.mockResolvedValue({ id: 'store-1' });
+
+        await service.acceptWithSignup(rawToken, 'New Bie', '01712345678', 'supersecret');
+
+        expect(db.user.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: expect.objectContaining({ email: 'newbie@example.com', mobile: '+8801712345678' }),
+            }),
+        );
+        expect(db.tenantUser.create).toHaveBeenCalledWith(
+            expect.objectContaining({ data: expect.objectContaining({ user_id: 'new-user', tenant_id: 't1' }) }),
+        );
+        expect(db.userInvitation.update).toHaveBeenCalledWith({
+            where: { id: 'inv1' },
+            data: { accepted_at: expect.any(Date) },
+        });
+    });
+
+    it('acceptWithSignup rejects when an account already exists for the email', async () => {
+        const rawToken = 'dupe-token';
+        const hash = crypto.createHash('sha256').update(rawToken).digest('hex');
+        db.userInvitation.findUnique.mockResolvedValue({
+            id: 'inv1',
+            token_hash: hash,
+            email: 'exists@example.com',
+            accepted_at: null,
+            expires_at: new Date(Date.now() + 86400_000),
+            tenant_id: 't1',
+            tenant_role_id: 'role-cashier',
+            invited_by: 'owner',
+            tenantRole: { permissions: [] },
+        });
+        db.user.findUnique.mockResolvedValue({ id: 'existing', email: 'exists@example.com' });
+
+        await expect(
+            service.acceptWithSignup(rawToken, 'Dupe', '01712345678', 'supersecret'),
+        ).rejects.toThrow(ConflictException);
+        expect(db.user.create).not.toHaveBeenCalled();
     });
 });

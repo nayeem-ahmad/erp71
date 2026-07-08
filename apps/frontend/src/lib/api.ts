@@ -1966,6 +1966,21 @@ export const api = {
         body: JSON.stringify({ token }),
         headers: { 'Content-Type': 'application/json' },
     }),
+    // Public — creates an account for an invitee with no existing user, then joins
+    // them to the inviting tenant. Caller logs in afterward with the same password.
+    acceptInvitationSignup: (data: { token: string; name: string; mobile: string; password: string }) =>
+        fetch(`${API_BASE}/invitations/accept-signup`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }).then(async res => {
+            const body = await res.json().catch(() => null);
+            if (!res.ok) {
+                const raw = body?.error?.message || body?.message;
+                throw new Error(Array.isArray(raw) ? raw[0] : (raw || 'Could not create your account'));
+            }
+            return body && 'data' in body ? body.data : body;
+        }),
     getAiUsage: () => fetchWithAuth('/ai/usage'),
     aiNarrateReport: (data: { reportType: string; reportData: Record<string, unknown>; locale?: string }) =>
         fetchWithAuth('/ai/narrate-report', {
