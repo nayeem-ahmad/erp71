@@ -117,9 +117,21 @@ function removeStorage(key: string): void {
     sessionStorage.removeItem(key);
 }
 
+/**
+ * Sidebar rail/menu open-state persisted for a returning session. Cleared on
+ * login so every login starts with a fully-collapsed sidebar at default width.
+ */
+export function clearSidebarLayoutState(): void {
+    removeStorage('sidebar-open-groups');
+    removeStorage('sidebar-collapsed');
+    removeStorage('sidebar-width');
+}
+
 export async function storeAuthResponse(res: any, rememberMe = false): Promise<StoreAuthResult> {
     const data = res.data ? res.data : res;
     setStorage('access_token', data.access_token, rememberMe);
+    // Fresh login → start from a collapsed, default-width sidebar.
+    clearSidebarLayoutState();
 
     if (data.is_demo) {
         localStorage.setItem('demo_session', '1');

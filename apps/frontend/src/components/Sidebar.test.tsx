@@ -320,4 +320,48 @@ describe('Sidebar — Story 30.1', () => {
         expect(screen.queryByRole('link', { name: /^Sales$/ })).not.toBeInTheDocument();
         expect(screen.queryByText('Trial Balance')).not.toBeInTheDocument();
     });
+
+    it('opening one subgroup closes a sibling subgroup (accordion)', async () => {
+        render(<Sidebar canAccessAccounting canAccessInventoryReports canAccessAccountingAdvanced />);
+
+        await waitFor(() => {
+            expect(screen.getByText('Transactions & Funds')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByText('Transactions & Funds'));
+        expect(screen.getByText('Expense Categories')).toBeInTheDocument();
+
+        // Opening Reports must collapse Transactions & Funds.
+        fireEvent.click(screen.getByText('Reports'));
+        expect(screen.getByText('Trial Balance')).toBeInTheDocument();
+        expect(screen.queryByText('Expense Categories')).not.toBeInTheDocument();
+    });
+
+    it('opening one top-level module closes another top-level module (accordion)', () => {
+        render(<Sidebar canAccessAccounting canAccessInventoryReports canAccessAccountingAdvanced />);
+
+        fireEvent.click(screen.getByText('Inventory'));
+        expect(screen.getByText('Inventory Reports')).toBeInTheDocument();
+
+        // Opening Purchase must collapse Inventory.
+        fireEvent.click(screen.getByText('Purchase'));
+        expect(screen.getByText('Purchase Reports')).toBeInTheDocument();
+        expect(screen.queryByText('Inventory Reports')).not.toBeInTheDocument();
+    });
+
+    it('persists the single open subgroup to localStorage', async () => {
+        render(<Sidebar canAccessAccounting canAccessInventoryReports canAccessAccountingAdvanced />);
+
+        await waitFor(() => {
+            expect(screen.getByText('Reports')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByText('Reports'));
+
+        const saved = JSON.parse(localStorage.getItem('sidebar-open-groups') ?? '{}');
+        const openKeys = Object.entries(saved).filter(([, v]) => v).map(([k]) => k);
+        // Only the Reports subgroup chain (parent + subgroup) should be open.
+        expect(openKeys.some((k) => k.endsWith(':reports'))).toBe(true);
+        expect(openKeys.filter((k) => k.includes(':')).length).toBe(1);
+    });
 });

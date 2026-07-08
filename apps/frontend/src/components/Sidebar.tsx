@@ -20,6 +20,8 @@ import { useBranding } from '@/lib/branding';
 import { useI18n } from '@/lib/i18n';
 import { buildNavModulesFromLayout, type ResolvedNavChild, type ResolvedNavModule } from '@/lib/nav-resolver';
 import {
+    accordionCloseState,
+    accordionOpenState,
     buildOpenGroupsState,
     collectNavGroupKeys,
     filterNavModules,
@@ -323,6 +325,11 @@ export default function Sidebar({
         }
     }, []);
 
+    // Tracks the last pathname we auto-opened a section for, so re-renders that
+    // change `modules` (locale switch, async nav-layout load, permission change)
+    // don't clobber a section the user manually opened on the current page.
+    const lastAutoOpenPathRef = useRef<string | null>(null);
+
     // auto-expand the module and any nested subgroup that contains the current page
     useEffect(() => {
         const toOpen: Record<string, boolean> = {};
@@ -347,18 +354,21 @@ export default function Sidebar({
 
         if (Object.keys(toOpen).length === 0) return;
 
+        // Auto-open applies once per distinct route (real navigation), not on
+        // every re-render that rebuilds `modules`.
+        if (lastAutoOpenPathRef.current === pathname) return;
+        lastAutoOpenPathRef.current = pathname;
+
         setOpenGroups((prev) => {
-            let changed = false;
-            const next = { ...prev };
-            for (const [key, value] of Object.entries(toOpen)) {
-                if (value && !next[key]) {
-                    next[key] = true;
-                    changed = true;
-                }
-            }
-            if (!changed) return prev;
-            localStorage.setItem('sidebar-open-groups', JSON.stringify(next));
-            return next;
+            const prevKeys = Object.keys(prev).filter((key) => prev[key]);
+            const nextKeys = Object.keys(toOpen);
+            // Already showing exactly this chain? Return prev to skip a redundant write/re-render.
+            const unchanged =
+                prevKeys.length === nextKeys.length &&
+                nextKeys.every((key) => prev[key]);
+            if (unchanged) return prev;
+            localStorage.setItem('sidebar-open-groups', JSON.stringify(toOpen));
+            return toOpen;
         });
     }, [canAccessAccounting, pathname, modules]);
 
@@ -457,7 +467,9 @@ export default function Sidebar({
 
     const toggleGroup = (key: string) => {
         setOpenGroups((prev) => {
-            const next = { ...prev, [key]: !prev[key] };
+            const next = prev[key]
+                ? accordionCloseState(prev, key)
+                : accordionOpenState(key);
             localStorage.setItem('sidebar-open-groups', JSON.stringify(next));
             return next;
         });

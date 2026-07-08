@@ -2,9 +2,13 @@ import { Injectable, NotFoundException, ConflictException, BadRequestException, 
 import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
-import { UserRole } from '@erp71/shared-types';
+import { UserRole, normalizeMobileToE164, DEFAULT_MOBILE_COUNTRY_CODE } from '@erp71/shared-types';
 import { syncMemberPermissionsFromRole } from '../team/role-sync.util';
 import * as crypto from 'crypto';
+import * as bcrypt from 'bcrypt';
+import { Prisma } from '@prisma/client';
+
+type ValidInvitation = Awaited<ReturnType<InvitationsService['loadValidInvitation']>>;
 
 const CAN_INVITE_ROLES: string[] = [UserRole.OWNER, UserRole.MANAGER];
 
@@ -16,7 +20,9 @@ export class InvitationsService {
         private planEntitlements: PlanEntitlementsService,
     ) {}
 
-    async getInfo(rawToken: string): Promise<{ tenantName: string; email: string; roleName: string; expiresAt: Date }> {
+    async getInfo(
+        rawToken: string,
+    ): Promise<{ tenantName: string; email: string; roleName: string; expiresAt: Date; hasAccount: boolean }> {
         const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
         const invitation = await this.db.userInvitation.findUnique({
             where: { token_hash: tokenHash },
@@ -27,11 +33,20 @@ export class InvitationsService {
             throw new BadRequestException('Invalid or expired invitation');
         }
 
+        // Lets the accept page decide between an inline sign-in (existing account)
+        // and an inline create-account form (new invitee). Just a boolean for an
+        // email the caller already possesses via the invite link — no PII leak.
+        const existingUser = await this.db.user.findUnique({
+            where: { email: invitation.email },
+            select: { id: true },
+        });
+
         return {
             tenantName: invitation.tenant.name,
             email: invitation.email,
             roleName: invitation.tenantRole.name,
             expiresAt: invitation.expires_at,
+            hasAccount: Boolean(existingUser),
         };
     }
 
@@ -231,7 +246,9 @@ export class InvitationsService {
         await this.email.sendInvitation(inviteeEmail, tenant.name, inviter.name ?? inviter.email, rawToken);
     }
 
-    async accept(rawToken: string, acceptingUserId: string): Promise<void> {
+    // Validates a raw invitation token and returns the invitation with the role
+    // permissions needed to provision membership. Shared by accept + acceptWithSignup.
+    private async loadValidInvitation(rawToken: string) {
         const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
         const invitation = await this.db.userInvitation.findUnique({
             where: { token_hash: tokenHash },
@@ -242,6 +259,58 @@ export class InvitationsService {
             throw new BadRequestException('Invalid or expired invitation');
         }
 
+        return invitation;
+    }
+
+    // Grants tenant membership, store access, and role permissions to a user, then
+    // marks the invitation accepted. Runs inside a caller-supplied transaction so the
+    // user creation (signup path) and membership grant commit atomically.
+    private async grantMembershipTx(
+        tx: Prisma.TransactionClient,
+        invitation: ValidInvitation,
+        userId: string,
+    ): Promise<void> {
+        await tx.tenantUser.create({
+            data: {
+                tenant_id: invitation.tenant_id,
+                user_id: userId,
+                role: UserRole.CASHIER,
+                tenant_role_id: invitation.tenant_role_id,
+            },
+        });
+
+        const store = await tx.store.findFirst({ where: { tenant_id: invitation.tenant_id } });
+        if (store) {
+            await tx.userStoreAccess.create({
+                data: {
+                    user_id: userId,
+                    store_id: store.id,
+                    tenant_id: invitation.tenant_id,
+                    access_level: 'STORE_ONLY',
+                },
+            });
+
+            const permissions = invitation.tenantRole.permissions.map((p) => p.permission);
+            if (permissions.length > 0) {
+                await tx.userStorePermission.createMany({
+                    data: permissions.map((permission) => ({
+                        user_id: userId,
+                        store_id: store.id,
+                        tenant_id: invitation.tenant_id,
+                        permission,
+                        granted_by: invitation.invited_by,
+                    })),
+                    skipDuplicates: true,
+                });
+            }
+        }
+
+        await tx.userInvitation.update({ where: { id: invitation.id }, data: { accepted_at: new Date() } });
+    }
+
+    async accept(rawToken: string, acceptingUserId: string): Promise<void> {
+        const invitation = await this.loadValidInvitation(rawToken);
+
         const user = await this.db.user.findUnique({ where: { id: acceptingUserId } });
         if (!user) throw new NotFoundException('User not found');
 
@@ -249,43 +318,53 @@ export class InvitationsService {
             throw new BadRequestException('This invitation was sent to a different email address');
         }
 
+        await this.db.$transaction((tx) => this.grantMembershipTx(tx, invitation, acceptingUserId));
+    }
+
+    // Public accept path for an invitee who has no account yet: creates their user
+    // (email taken from the invitation, never client input) and joins them to the
+    // inviting tenant in one atomic step. The email is marked verified because
+    // possession of the invite token proves ownership of that mailbox.
+    async acceptWithSignup(
+        rawToken: string,
+        name: string,
+        mobile: string,
+        password: string,
+        mobileCountryCode?: string,
+    ): Promise<void> {
+        const invitation = await this.loadValidInvitation(rawToken);
+
+        const existingUser = await this.db.user.findUnique({ where: { email: invitation.email } });
+        if (existingUser) {
+            throw new ConflictException('An account already exists for this email. Please sign in to accept.');
+        }
+
+        const countryCode = mobileCountryCode?.trim() || DEFAULT_MOBILE_COUNTRY_CODE;
+        const normalizedMobile = normalizeMobileToE164(countryCode, mobile);
+        if (!normalizedMobile) {
+            throw new BadRequestException('Please enter a valid mobile number including country code.');
+        }
+
+        const mobileTaken = await this.db.user.findFirst({ where: { mobile: normalizedMobile } });
+        if (mobileTaken) {
+            throw new ConflictException('Mobile number already in use');
+        }
+
+        const passwordHash = await bcrypt.hash(password, 10);
+
         await this.db.$transaction(async (tx) => {
-            await tx.tenantUser.create({
+            const user = await tx.user.create({
                 data: {
-                    tenant_id: invitation.tenant_id,
-                    user_id: acceptingUserId,
-                    role: UserRole.CASHIER,
-                    tenant_role_id: invitation.tenant_role_id,
+                    email: invitation.email,
+                    passwordHash,
+                    name,
+                    mobile: normalizedMobile,
+                    mobile_country_code: countryCode,
+                    email_verified_at: new Date(),
                 },
             });
 
-            const store = await tx.store.findFirst({ where: { tenant_id: invitation.tenant_id } });
-            if (store) {
-                await tx.userStoreAccess.create({
-                    data: {
-                        user_id: acceptingUserId,
-                        store_id: store.id,
-                        tenant_id: invitation.tenant_id,
-                        access_level: 'STORE_ONLY',
-                    },
-                });
-
-                const permissions = invitation.tenantRole.permissions.map((p) => p.permission);
-                if (permissions.length > 0) {
-                    await tx.userStorePermission.createMany({
-                        data: permissions.map((permission) => ({
-                            user_id: acceptingUserId,
-                            store_id: store.id,
-                            tenant_id: invitation.tenant_id,
-                            permission,
-                            granted_by: invitation.invited_by,
-                        })),
-                        skipDuplicates: true,
-                    });
-                }
-            }
-
-            await tx.userInvitation.update({ where: { id: invitation.id }, data: { accepted_at: new Date() } });
+            await this.grantMembershipTx(tx, invitation, user.id);
         });
     }
 }
