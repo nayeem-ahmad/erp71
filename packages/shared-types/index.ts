@@ -120,6 +120,25 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
   ],
 };
 
+/**
+ * Maps a system TenantRole's display name to its coarse UserRole enum. The
+ * granular `tenant_role_id` is the source of truth for permissions, but the
+ * coarse `TenantUser.role` enum still drives role display and the OWNER/MANAGER
+ * authorization gates (`request.userRole`), so the two must be kept in lockstep.
+ * Custom (non-system) roles have no coarse equivalent and fall back to CASHIER
+ * (least privilege). Keyed by the same names seeded in `seedDefaultTenantRoles`.
+ */
+export const SYSTEM_TENANT_ROLE_TO_USER_ROLE: Record<string, UserRole> = {
+  Manager: UserRole.MANAGER,
+  Cashier: UserRole.CASHIER,
+  Accountant: UserRole.ACCOUNTANT,
+};
+
+/** Resolve the coarse UserRole enum for an assigned TenantRole name (default CASHIER). */
+export function resolveBaseUserRole(tenantRoleName: string | null | undefined): UserRole {
+  return SYSTEM_TENANT_ROLE_TO_USER_ROLE[(tenantRoleName ?? "").trim()] ?? UserRole.CASHIER;
+}
+
 /** Human-readable labels for each store permission (used by the team management UI). */
 export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.VIEW_PRODUCT_CATALOG]: "View product catalog",

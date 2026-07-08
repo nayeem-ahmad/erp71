@@ -6,7 +6,7 @@ import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { bootstrapDefaultAccountingForTenant } from './bootstrap-accounting';
 import { seedDemoAccount, DEMO_ACCOUNT_EMAIL } from './seed-demo';
-import { ROLE_DEFAULT_PERMISSIONS, UserRole } from '@erp71/shared-types';
+import { ROLE_DEFAULT_PERMISSIONS, UserRole, resolveBaseUserRole, SYSTEM_TENANT_ROLE_TO_USER_ROLE } from '@erp71/shared-types';
 import { seedDefaultTenantRoles } from './tenant-role.seed';
 
 const prisma = new PrismaClient();
@@ -1381,6 +1381,29 @@ async function main() {
     const accountCount     = await prisma.account.count({ where: { tenant_id: tenant.id } });
     const warehouseCount   = await prisma.warehouse.count({ where: { tenant_id: tenant.id } });
     const postingRuleCount = await prisma.postingRule.count({ where: { tenant_id: tenant.id } });
+
+    // Backfill: keep each member's coarse TenantUser.role enum in lockstep with the
+    // system TenantRole they're assigned. The invitation-accept path historically
+    // hardcoded CASHIER, so previously-invited Managers/Accountants display and
+    // authorize as Cashier. Idempotent, and only reconciles members on a *system*
+    // role (custom roles have no coarse equivalent and are left untouched).
+    const membersToReconcile = await prisma.tenantUser.findMany({
+        where: { tenant_role_id: { not: null }, role: { not: UserRole.OWNER } },
+        select: { id: true, role: true, tenantRole: { select: { name: true } } },
+    });
+    let roleEnumFixes = 0;
+    for (const member of membersToReconcile) {
+        const roleName = member.tenantRole?.name ?? '';
+        if (!SYSTEM_TENANT_ROLE_TO_USER_ROLE[roleName]) continue; // skip custom roles
+        const expected = resolveBaseUserRole(roleName);
+        if (expected !== member.role) {
+            await prisma.tenantUser.update({ where: { id: member.id }, data: { role: expected } });
+            roleEnumFixes++;
+        }
+    }
+    if (roleEnumFixes > 0) {
+        console.log(`\n🔧  Reconciled ${roleEnumFixes} member role enum(s) with their assigned TenantRole`);
+    }
 
     console.log('\n✅  Seed complete');
     console.log('─────────────────────────────────────');

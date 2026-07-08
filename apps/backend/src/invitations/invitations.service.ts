@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, ConflictException, BadRequestException, 
 import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
-import { UserRole, normalizeMobileToE164, DEFAULT_MOBILE_COUNTRY_CODE } from '@erp71/shared-types';
+import { UserRole, normalizeMobileToE164, DEFAULT_MOBILE_COUNTRY_CODE, resolveBaseUserRole } from '@erp71/shared-types';
 import { syncMemberPermissionsFromRole } from '../team/role-sync.util';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
@@ -151,7 +151,7 @@ export class InvitationsService {
             throw new ForbiddenException('Cannot change the workspace owner\'s role');
         }
 
-        await this.getTenantRole(tenantId, tenantRoleId);
+        const role = await this.getTenantRole(tenantId, tenantRoleId);
 
         if (membership.tenant_role_id === tenantRoleId) {
             return { user_id: targetUserId, tenantRoleId };
@@ -160,7 +160,9 @@ export class InvitationsService {
         await this.db.$transaction(async (tx) => {
             await tx.tenantUser.update({
                 where: { tenant_id_user_id: { tenant_id: tenantId, user_id: targetUserId } },
-                data: { tenant_role_id: tenantRoleId },
+                // Update the coarse role enum in lockstep so the session's displayed role
+                // and the OWNER/MANAGER authorization gates match the new TenantRole.
+                data: { tenant_role_id: tenantRoleId, role: resolveBaseUserRole(role.name) },
             });
 
             await syncMemberPermissionsFromRole(tx, {
@@ -252,7 +254,11 @@ export class InvitationsService {
         const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
         const invitation = await this.db.userInvitation.findUnique({
             where: { token_hash: tokenHash },
-            include: { tenantRole: { include: { permissions: { select: { permission: true } } } } },
+            include: {
+                tenantRole: {
+                    select: { name: true, permissions: { select: { permission: true } } },
+                },
+            },
         });
 
         if (!invitation || invitation.accepted_at || invitation.expires_at < new Date()) {
@@ -274,7 +280,9 @@ export class InvitationsService {
             data: {
                 tenant_id: invitation.tenant_id,
                 user_id: userId,
-                role: UserRole.CASHIER,
+                // Keep the coarse role enum in lockstep with the assigned TenantRole —
+                // it drives role display and the OWNER/MANAGER authorization gates.
+                role: resolveBaseUserRole(invitation.tenantRole.name),
                 tenant_role_id: invitation.tenant_role_id,
             },
         });
