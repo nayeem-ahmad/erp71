@@ -157,9 +157,10 @@ describe('InvitationsService', () => {
         );
 
         expect(result).toEqual({ user_id: 'cashier-1', tenantRoleId: 'role-manager' });
+        // Coarse role enum must move in lockstep with the granular tenant_role_id.
         expect(db.tenantUser.update).toHaveBeenCalledWith({
             where: { tenant_id_user_id: { tenant_id: 't1', user_id: 'cashier-1' } },
-            data: { tenant_role_id: 'role-manager' },
+            data: { tenant_role_id: 'role-manager', role: UserRole.MANAGER },
         });
         expect(syncMemberPermissionsFromRole).toHaveBeenCalledWith(
             db,
@@ -245,9 +246,9 @@ describe('InvitationsService', () => {
             accepted_at: null,
             expires_at: new Date(Date.now() + 86400_000),
             tenant_id: 't1',
-            tenant_role_id: 'role-cashier',
+            tenant_role_id: 'role-manager',
             invited_by: 'owner',
-            tenantRole: { permissions: [{ permission: StorePermission.CREATE_SALE }] },
+            tenantRole: { name: 'Manager', permissions: [{ permission: StorePermission.CREATE_SALE }] },
         });
         db.user.findUnique.mockResolvedValue(null); // no existing account
         db.user.findFirst.mockResolvedValue(null); // mobile not taken
@@ -261,8 +262,11 @@ describe('InvitationsService', () => {
                 data: expect.objectContaining({ email: 'newbie@example.com', mobile: '+8801712345678' }),
             }),
         );
+        // The coarse role enum must reflect the invited role (Manager), not a hardcoded CASHIER.
         expect(db.tenantUser.create).toHaveBeenCalledWith(
-            expect.objectContaining({ data: expect.objectContaining({ user_id: 'new-user', tenant_id: 't1' }) }),
+            expect.objectContaining({
+                data: expect.objectContaining({ user_id: 'new-user', tenant_id: 't1', role: UserRole.MANAGER }),
+            }),
         );
         expect(db.userInvitation.update).toHaveBeenCalledWith({
             where: { id: 'inv1' },
