@@ -1,5 +1,7 @@
 export type PlanCode = 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
 
+export type DiscountType = 'PERCENTAGE' | 'FIXED';
+
 export type SecondaryLocale = 'bn' | 'ms';
 
 export type TenantRecord = {
@@ -27,6 +29,8 @@ export type TenantRecord = {
         current_period_end: string;
         cancel_at_period_end: boolean;
         provider_name?: string | null;
+        discount_type?: DiscountType | null;
+        discount_value?: number | null;
         plan: {
             code: PlanCode;
             name: string;
@@ -62,6 +66,8 @@ export type CreateDraft = {
     address: string;
     businessType: string;
     planCode: PlanCode;
+    discountMode: 'NONE' | DiscountType;
+    discountValue: string;
 };
 
 export function emptyCreateDraft(): CreateDraft {
@@ -75,5 +81,7 @@ export function emptyCreateDraft(): CreateDraft {
         address: '',
         businessType: '',
         planCode: 'FREE',
+        discountMode: 'NONE',
+        discountValue: '',
     };
 }

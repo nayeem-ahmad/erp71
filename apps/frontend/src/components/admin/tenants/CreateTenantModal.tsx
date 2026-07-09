@@ -59,6 +59,17 @@ export default function CreateTenantModal({ open, onClose, onCreated }: Props) {
             };
             if (createDraft.address) payload.address = createDraft.address;
             if (createDraft.businessType) payload.businessType = createDraft.businessType;
+            if (createDraft.discountMode !== 'NONE') {
+                const value = Number(createDraft.discountValue);
+                if (!Number.isFinite(value) || value <= 0) {
+                    throw new Error(mc.discountInvalid);
+                }
+                if (createDraft.discountMode === 'PERCENTAGE' && value > 100) {
+                    throw new Error(mc.discountPercentInvalid);
+                }
+                payload.discountType = createDraft.discountMode;
+                payload.discountValue = value;
+            }
             if (createMode === 'new') {
                 payload.ownerEmail = createDraft.ownerEmail;
                 if (createDraft.ownerName) payload.ownerName = createDraft.ownerName;
@@ -208,6 +219,32 @@ export default function CreateTenantModal({ open, onClose, onCreated }: Props) {
                             <option value="STANDARD">Standard</option>
                             <option value="PREMIUM">Premium</option>
                         </select>
+                    </div>
+
+                    <div className="space-y-3">
+                        <p className="text-xs font-medium text-gray-500">{mc.discount}</p>
+                        <div className="flex gap-2">
+                            <select
+                                value={createDraft.discountMode}
+                                onChange={(e) => setCreateDraft((d) => ({ ...d, discountMode: e.target.value as CreateDraft['discountMode'] }))}
+                                className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm font-medium outline-none"
+                            >
+                                <option value="NONE">{mc.discountNone}</option>
+                                <option value="PERCENTAGE">{mc.discountPercent}</option>
+                                <option value="FIXED">{mc.discountFixed}</option>
+                            </select>
+                            {createDraft.discountMode !== 'NONE' && (
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={createDraft.discountValue}
+                                    onChange={(e) => setCreateDraft((d) => ({ ...d, discountValue: e.target.value }))}
+                                    placeholder={createDraft.discountMode === 'PERCENTAGE' ? '%' : '৳'}
+                                    className="flex-1 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none"
+                                />
+                            )}
+                        </div>
                     </div>
                 </div>
 

@@ -5,7 +5,7 @@ import { Building2, Loader2, LogIn, RotateCcw, ShieldCheck, Trash2, UserX, Users
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
-import type { PlanCode, SecondaryLocale, TenantRecord } from './types';
+import type { DiscountType, PlanCode, SecondaryLocale, TenantRecord } from './types';
 
 type Props = {
     tenantId: string | null;
@@ -31,6 +31,7 @@ function InfoCard({ icon: Icon, label, value }: { icon: React.ComponentType<{ cl
 export default function TenantDetailModal({ tenantId, onClose, onChanged, onToast }: Props) {
     const { t } = useI18n();
     const m = t.admin.tenants;
+    const sc = m.subscriptionControls;
     const lc = m.localizationControls;
     const nc = m.navLayoutControls;
 
@@ -47,12 +48,20 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
 
     const subscriptionForm = useMemo(() => {
         if (!tenant?.subscription) {
-            return { planCode: 'FREE' as PlanCode, status: 'ACTIVE' as const, cancelAtPeriodEnd: false };
+            return {
+                planCode: 'FREE' as PlanCode,
+                status: 'ACTIVE' as const,
+                cancelAtPeriodEnd: false,
+                discountMode: 'NONE' as 'NONE' | DiscountType,
+                discountValue: '',
+            };
         }
         return {
             planCode: tenant.subscription.plan.code,
             status: tenant.subscription.status,
             cancelAtPeriodEnd: tenant.subscription.cancel_at_period_end,
+            discountMode: (tenant.subscription.discount_type ?? 'NONE') as 'NONE' | DiscountType,
+            discountValue: tenant.subscription.discount_value != null ? String(tenant.subscription.discount_value) : '',
         };
     }, [tenant]);
 
@@ -103,6 +112,21 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
 
     const saveSubscription = async () => {
         if (!tenant) return;
+        let discountType: DiscountType | null = null;
+        let discountValue: number | null = null;
+        if (draft.discountMode !== 'NONE') {
+            const value = Number(draft.discountValue);
+            if (!Number.isFinite(value) || value <= 0) {
+                setError(sc.discountInvalid);
+                return;
+            }
+            if (draft.discountMode === 'PERCENTAGE' && value > 100) {
+                setError(sc.discountPercentInvalid);
+                return;
+            }
+            discountType = draft.discountMode;
+            discountValue = value;
+        }
         setIsSaving(true);
         setError('');
         try {
@@ -110,6 +134,8 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                 planCode: draft.planCode,
                 status: draft.status,
                 cancelAtPeriodEnd: draft.cancelAtPeriodEnd,
+                discountType,
+                discountValue,
             });
             await loadTenant(tenant.id);
             onChanged();
@@ -323,6 +349,32 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                             className="h-4 w-4"
                                         />
                                     </label>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-medium text-blue-700/80 mb-1.5">{sc.discountLabel}</p>
+                                    <div className="flex gap-3">
+                                        <select
+                                            value={draft.discountMode}
+                                            onChange={(event) => setDraft((current) => ({ ...current, discountMode: event.target.value as 'NONE' | DiscountType }))}
+                                            className="rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm font-medium outline-none"
+                                        >
+                                            <option value="NONE">{sc.discountNone}</option>
+                                            <option value="PERCENTAGE">{sc.discountPercent}</option>
+                                            <option value="FIXED">{sc.discountFixed}</option>
+                                        </select>
+                                        {draft.discountMode !== 'NONE' && (
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={draft.discountValue}
+                                                onChange={(event) => setDraft((current) => ({ ...current, discountValue: event.target.value }))}
+                                                placeholder={draft.discountMode === 'PERCENTAGE' ? '%' : '৳'}
+                                                className="flex-1 rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none"
+                                            />
+                                        )}
+                                    </div>
+                                    <p className="mt-1.5 text-xs text-blue-700/70">{sc.discountHint}</p>
                                 </div>
                                 <button
                                     type="button"

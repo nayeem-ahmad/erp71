@@ -312,6 +312,7 @@ export const coreMessages = {
                 tenants: "টেন্যান্ট",
                 tenantPayments: "টেন্যান্ট পেমেন্ট",
                 tenantLedger: "টেন্যান্ট লেজার",
+                tenantReminders: "পেমেন্ট রিমাইন্ডার",
                 users: "প্ল্যাটফর্ম ব্যবহারকারী",
                 referrals: "রেফারেল",
                 feedback: "ফিডব্যাক",

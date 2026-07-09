@@ -39,6 +39,11 @@ export class AdminTenantsController {
         return this.adminTenantsService.listTenantLedger(query);
     }
 
+    @Get('reminders')
+    listReminders(@Query() query: ListAdminTenantLedgerQueryDto) {
+        return this.adminTenantsService.listTenantReminders(query);
+    }
+
     @Get(':tenantId')
     getTenant(@Param('tenantId') tenantId: string) {
         return this.adminTenantsService.getTenant(tenantId);

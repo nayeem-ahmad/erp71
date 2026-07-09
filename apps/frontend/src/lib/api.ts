@@ -1214,6 +1214,8 @@ export const api = {
         address?: string;
         businessType?: string;
         planCode: string;
+        discountType?: 'PERCENTAGE' | 'FIXED';
+        discountValue?: number;
     }) => fetchWithAuth('/admin/tenants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1225,6 +1227,12 @@ export const api = {
         if (params?.tenantId) query.set('tenantId', params.tenantId);
         const suffix = query.toString() ? `?${query.toString()}` : '';
         return fetchWithAuth(`/admin/tenants/ledger${suffix}`);
+    },
+    getAdminTenantReminders: (params?: { tenantId?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.tenantId) query.set('tenantId', params.tenantId);
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return fetchWithAuth(`/admin/tenants/reminders${suffix}`);
     },
     recordTenantPayment: (tenantId: string, data: { amount: number; notes?: string; method?: string }) =>
         fetchWithAuth(`/admin/tenants/${tenantId}/payments`, {

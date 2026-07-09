@@ -1995,7 +1995,11 @@ model TenantSubscription {
   provider_name      String?
   provider_customer_ref String?
   provider_subscription_ref String?
-  
+  // Admin-granted subscription discount applied to future subscription fees.
+  // discount_type: 'PERCENTAGE' (value = percent off) | 'FIXED' (value = amount off in BDT).
+  discount_type      String?
+  discount_value     Decimal?           @db.Decimal(12, 2)
+
   // Relations
   tenant             Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   plan               SubscriptionPlan   @relation(fields: [plan_id], references: [id])
