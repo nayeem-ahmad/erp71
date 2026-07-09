@@ -313,6 +313,7 @@ export const coreMessages = {
             tenants: 'Tenants',
             tenantPayments: 'Tenant Payments',
             tenantLedger: 'Tenant Ledger',
+            tenantReminders: 'Payment Reminders',
             users: 'Platform Users',
             referrals: 'Referrals',
             feedback: 'Feedback',

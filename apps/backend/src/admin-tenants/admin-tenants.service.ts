@@ -21,6 +21,8 @@ import { getPlatformAdminEmails, isPlatformAdminEmail } from '../auth/platform-a
 import { NotificationsService } from '../notifications/notifications.service';
 import { SmsCreditService } from '../sms/sms-credit.service';
 import { ledgerEventDelta } from './ledger-balance.util';
+import { REMINDER_EVENT_TYPES } from './reminder-event-types';
+import { applySubscriptionDiscount } from '../billing/discount.util';
 import { seedDefaultTenantRoles } from '@erp71/database';
 import {
     ListAdminTenantsQueryDto,
@@ -339,6 +341,34 @@ export class AdminTenantsService {
             providerSubscriptionRef: existing?.provider_subscription_ref ?? `admin_${tenantId}_${Date.now()}`,
         });
 
+        // Persist a discount change (applies to future billing cycles only). Passing
+        // discountType null/'' clears the discount. applySubscriptionChange leaves these
+        // fields untouched, so this update is safe to run afterwards.
+        if (dto.discountType !== undefined || dto.discountValue !== undefined) {
+            const clearing = dto.discountType === null || dto.discountType === '';
+            const nextType = clearing ? null : (dto.discountType ?? existing?.discount_type ?? null);
+            const nextValue = clearing
+                ? null
+                : dto.discountValue ?? (existing?.discount_value != null ? Number(existing.discount_value) : null);
+
+            if (nextType && (nextValue == null || nextValue <= 0)) {
+                throw new BadRequestException('A discount value is required when a discount type is set.');
+            }
+            if (nextType === 'PERCENTAGE' && (nextValue as number) > 100) {
+                throw new BadRequestException('A percentage discount cannot exceed 100%.');
+            }
+
+            await this.db.tenantSubscription.update({
+                where: { tenant_id: tenantId },
+                data: { discount_type: nextType, discount_value: nextValue },
+            });
+
+            await this.auditService.log('tenant.subscription.discount', 'TenantSubscription', {}, tenantId, {
+                discount_type: nextType,
+                discount_value: nextValue,
+            });
+        }
+
         return result;
     }
 
@@ -534,6 +564,17 @@ export class AdminTenantsService {
         const plan = await this.db.subscriptionPlan.findUnique({ where: { code: dto.planCode } });
         if (!plan?.is_active) throw new BadRequestException('Selected subscription plan is not available.');
 
+        const discountType = dto.discountType ?? null;
+        const discountValue = discountType ? dto.discountValue ?? null : null;
+        if (discountType && (discountValue == null || discountValue <= 0)) {
+            throw new BadRequestException('A discount value is required when a discount type is set.');
+        }
+        if (discountType === 'PERCENTAGE' && (discountValue as number) > 100) {
+            throw new BadRequestException('A percentage discount cannot exceed 100%.');
+        }
+
+        const now = new Date();
+
         const { tenant } = await this.db.$transaction(async (tx: any) => {
             if (dto.ownerMode === 'new') {
                 // Create the user inside the transaction so it rolls back on any failure.
@@ -584,11 +625,43 @@ export class AdminTenantsService {
                     tenant_id: tenant.id,
                     plan_id: plan.id,
                     status: 'PAST_DUE',
-                    current_period_start: new Date(),
-                    current_period_end: new Date(),
+                    current_period_start: now,
+                    current_period_end: now,
                     provider_name: 'manual',
+                    discount_type: discountType,
+                    discount_value: discountValue,
                 },
             });
+
+            // Post the first subscription fee immediately (net of any discount) so the ledger
+            // reflects the charge at creation. Reuses the cron's idempotency key
+            // (`subscription_fee:{tenantId}:{periodKey}`) so the daily fee-posting job won't
+            // double-post for this same period. Zero-price / FREE plans post nothing.
+            const baseFee = Number(plan.monthly_price ?? 0);
+            const netFee = applySubscriptionDiscount(baseFee, discountType, discountValue);
+            if (netFee > 0) {
+                const periodKey = now.toISOString().slice(0, 10);
+                await tx.billingEvent.create({
+                    data: {
+                        tenant_id: tenant.id,
+                        provider_name: 'manual',
+                        external_event_id: `subscription_fee:${tenant.id}:${periodKey}`,
+                        event_type: 'subscription_fee',
+                        status: 'posted',
+                        amount: netFee,
+                        currency: 'BDT',
+                        reference_id: plan.code,
+                        payload: {
+                            period_end: now.toISOString(),
+                            plan_code: plan.code,
+                            plan_name: plan.name,
+                            base_amount: baseFee,
+                            discount_type: discountType,
+                            discount_value: discountValue,
+                        },
+                    },
+                });
+            }
 
             await tx.userStoreAccess.create({
                 data: {
@@ -967,6 +1040,8 @@ export class AdminTenantsService {
             where: {
                 ...(query.tenantId ? { tenant_id: query.tenantId } : {}),
                 tenant: ACTIVE_TENANT_FILTER,
+                // Payment reminders are not transactions — keep them out of the ledger.
+                event_type: { notIn: [...REMINDER_EVENT_TYPES] },
             },
             orderBy: { created_at: 'desc' },
             include: {
@@ -997,6 +1072,35 @@ export class AdminTenantsService {
         if (!tenant) throw new NotFoundException('Tenant not found');
 
         return this.listTenantLedger({ tenantId });
+    }
+
+    /** Payment reminder log — the reminder BillingEvents that are excluded from the ledger. */
+    async listTenantReminders(query: { tenantId?: string }) {
+        const events = await this.db.billingEvent.findMany({
+            where: {
+                ...(query.tenantId ? { tenant_id: query.tenantId } : {}),
+                tenant: ACTIVE_TENANT_FILTER,
+                event_type: { in: [...REMINDER_EVENT_TYPES] },
+            },
+            orderBy: { created_at: 'desc' },
+            include: {
+                tenant: { select: { id: true, name: true } },
+            },
+        });
+
+        return events.map((e) => ({
+            id: e.id,
+            tenant_id: e.tenant_id,
+            tenant_name: e.tenant.name,
+            event_type: e.event_type,
+            status: e.status,
+            provider_name: e.provider_name,
+            amount: e.amount !== null ? Number(e.amount) : null,
+            currency: e.currency,
+            reference_id: e.reference_id,
+            payload: e.payload,
+            created_at: e.created_at,
+        }));
     }
 
     async recordPayment(tenantId: string, dto: RecordTenantPaymentDto, adminUserId: string) {
@@ -1206,6 +1310,10 @@ export class AdminTenantsService {
                       current_period_end: tenant.subscription.current_period_end,
                       cancel_at_period_end: tenant.subscription.cancel_at_period_end,
                       provider_name: tenant.subscription.provider_name,
+                      discount_type: tenant.subscription.discount_type ?? null,
+                      discount_value: tenant.subscription.discount_value != null
+                          ? Number(tenant.subscription.discount_value)
+                          : null,
                       plan: {
                           code: tenant.subscription.plan.code,
                           name: tenant.subscription.plan.name,

@@ -6,6 +6,7 @@ import { AuditService } from '../audit/audit.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 import { JOB_NAMES } from '../system-health/jobs/job-names';
 import { NotificationsService } from '../notifications/notifications.service';
+import { applySubscriptionDiscount } from './discount.util';
 
 @Injectable()
 export class BillingSchedulerService {
@@ -325,7 +326,15 @@ export class BillingSchedulerService {
 
         for (const sub of dueSubscriptions) {
             try {
-                const amount = Number(sub.plan?.monthly_price ?? 0);
+                const baseAmount = Number(sub.plan?.monthly_price ?? 0);
+                if (baseAmount <= 0) continue;
+
+                // Apply any admin-granted discount to this (and every future) cycle.
+                const amount = applySubscriptionDiscount(
+                    baseAmount,
+                    sub.discount_type,
+                    sub.discount_value != null ? Number(sub.discount_value) : null,
+                );
                 if (amount <= 0) continue;
 
                 const periodKey = sub.current_period_end.toISOString().slice(0, 10);
@@ -355,6 +364,9 @@ export class BillingSchedulerService {
                             period_end: sub.current_period_end.toISOString(),
                             plan_code: sub.plan?.code ?? null,
                             plan_name: sub.plan?.name ?? null,
+                            base_amount: baseAmount,
+                            discount_type: sub.discount_type ?? null,
+                            discount_value: sub.discount_value != null ? Number(sub.discount_value) : null,
                         },
                     },
                 });

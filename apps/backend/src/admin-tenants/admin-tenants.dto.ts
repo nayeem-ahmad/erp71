@@ -16,6 +16,19 @@ export class UpdateAdminTenantSubscriptionDto {
     @IsOptional() @IsString() status?: 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'TRIALING';
     @IsOptional() @IsString() billingCycle?: 'MONTHLY' | 'YEARLY';
     @IsOptional() cancelAtPeriodEnd?: boolean;
+
+    // Discount edit: pass discountType=null (or empty string) with the value to clear a discount.
+    @IsOptional()
+    @ValidateIf((o) => o.discountType !== null && o.discountType !== '')
+    @IsIn(['PERCENTAGE', 'FIXED'])
+    discountType?: 'PERCENTAGE' | 'FIXED' | null | '';
+
+    @IsOptional()
+    @ValidateIf((o) => o.discountValue !== null)
+    @Type(() => Number)
+    @IsNumber()
+    @IsPositive()
+    discountValue?: number | null;
 }
 
 export class UpdateAdminTenantLocalizationDto {
@@ -87,6 +100,16 @@ export class CreateAdminTenantDto {
 
     @IsIn(['FREE', 'BASIC', 'ACCOUNTING', 'STANDARD', 'PREMIUM'])
     planCode: 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
+
+    @IsOptional()
+    @IsIn(['PERCENTAGE', 'FIXED'])
+    discountType?: 'PERCENTAGE' | 'FIXED';
+
+    @ValidateIf((o) => o.discountType != null)
+    @Type(() => Number)
+    @IsNumber()
+    @IsPositive()
+    discountValue?: number;
 }
 
 export class RecordTenantPaymentDto {

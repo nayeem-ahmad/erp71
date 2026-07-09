@@ -164,6 +164,8 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   crm: { id: 'crm', kind: 'module', icon: 'Users', labelKey: 'sidebar.modules.crm', moduleKey: 'crm' },
   'crm.overview': { id: 'crm.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/crm', exact: true },
   'crm.leads': { id: 'crm.leads', kind: 'link', icon: 'UserPlus', labelKey: 'sidebar.items.crmLeads', href: '/crm/leads', premiumOnly: true },
+  'crm.tasks': { id: 'crm.tasks', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.crmTasks', href: '/crm/tasks', premiumOnly: true },
+  'crm.campaigns': { id: 'crm.campaigns', kind: 'link', icon: 'Megaphone', labelKey: 'sidebar.items.crmCampaigns', href: '/crm/campaigns', premiumOnly: true },
   'crm.customers': { id: 'crm.customers', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.crmCustomers', href: '/crm/customers' },
 
   hr: { id: 'hr', kind: 'module', icon: 'UserCog', labelKey: 'sidebar.modules.hr', moduleKey: 'hr' },
@@ -202,6 +204,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'admin.tenant-management': { id: 'admin.tenant-management', kind: 'subgroup', icon: 'Crown', labelKey: 'sidebar.sections.tenantManagement' },
   'admin.tenant-management.tenants': { id: 'admin.tenant-management.tenants', kind: 'link', icon: 'Building2', labelKey: 'sidebar.items.tenants', href: '/admin/tenants' },
   'admin.tenant-management.ledger': { id: 'admin.tenant-management.ledger', kind: 'link', icon: 'BookOpen', labelKey: 'sidebar.items.tenantLedger', href: '/admin/tenants/ledger' },
+  'admin.tenant-management.reminders': { id: 'admin.tenant-management.reminders', kind: 'link', icon: 'BellRing', labelKey: 'sidebar.items.tenantReminders', href: '/admin/tenants/reminders' },
   'admin.users': { id: 'admin.users', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.users', href: '/admin/users' },
   'admin.referrals': { id: 'admin.referrals', kind: 'link', icon: 'Gift', labelKey: 'sidebar.items.referrals', href: '/admin/referrals' },
   'admin.feedback': { id: 'admin.feedback', kind: 'link', icon: 'MessageSquare', labelKey: 'sidebar.items.feedback', href: '/admin/feedback' },
@@ -336,7 +339,9 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('crm', null, 5),
   layoutNode('crm.overview', 'crm', 0),
   layoutNode('crm.leads', 'crm', 1),
-  layoutNode('crm.customers', 'crm', 2),
+  layoutNode('crm.tasks', 'crm', 2),
+  layoutNode('crm.campaigns', 'crm', 3),
+  layoutNode('crm.customers', 'crm', 4),
 
   layoutNode('manufacturing', null, 6),
 
@@ -376,6 +381,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.tenant-management', 'admin', 1),
   layoutNode('admin.tenant-management.tenants', 'admin.tenant-management', 0),
   layoutNode('admin.tenant-management.ledger', 'admin.tenant-management', 1),
+  layoutNode('admin.tenant-management.reminders', 'admin.tenant-management', 2),
   layoutNode('admin.users', 'admin', 2),
   layoutNode('admin.feedback', 'admin', 3),
   layoutNode('admin.support', 'admin', 4),
@@ -389,6 +395,7 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.tenant-management', 'admin', 1),
   layoutNode('admin.tenant-management.tenants', 'admin.tenant-management', 0),
   layoutNode('admin.tenant-management.ledger', 'admin.tenant-management', 1),
+  layoutNode('admin.tenant-management.reminders', 'admin.tenant-management', 2),
   layoutNode('admin.users', 'admin', 2),
   layoutNode('admin.referrals', 'admin', 3),
   layoutNode('admin.feedback', 'admin', 4),

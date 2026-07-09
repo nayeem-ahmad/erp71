@@ -312,6 +312,7 @@ export const coreMessages = {
                 tenants: "Penyewa",
                 tenantPayments: "Pembayaran Penyewa",
                 tenantLedger: "Lejar Penyewa",
+                tenantReminders: "Peringatan Pembayaran",
                 users: "Pengguna Platform",
                 referrals: "Rujukan",
                 feedback: "Maklum Balas",
