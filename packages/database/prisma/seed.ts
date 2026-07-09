@@ -160,7 +160,7 @@ async function main() {
             maxSkus: 20000,
             premiumAccounting: true,
             premiumInventoryReports: true,
-            premiumCrm: false,
+            premiumCrm: true,
             multiStore: true,
             apiAccess: false,
             accountingOnly: false,

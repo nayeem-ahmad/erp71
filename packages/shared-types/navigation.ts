@@ -164,6 +164,8 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   crm: { id: 'crm', kind: 'module', icon: 'Users', labelKey: 'sidebar.modules.crm', moduleKey: 'crm' },
   'crm.overview': { id: 'crm.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/crm', exact: true },
   'crm.leads': { id: 'crm.leads', kind: 'link', icon: 'UserPlus', labelKey: 'sidebar.items.crmLeads', href: '/crm/leads', premiumOnly: true },
+  'crm.tasks': { id: 'crm.tasks', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.crmTasks', href: '/crm/tasks', premiumOnly: true },
+  'crm.campaigns': { id: 'crm.campaigns', kind: 'link', icon: 'Megaphone', labelKey: 'sidebar.items.crmCampaigns', href: '/crm/campaigns', premiumOnly: true },
   'crm.customers': { id: 'crm.customers', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.crmCustomers', href: '/crm/customers' },
 
   hr: { id: 'hr', kind: 'module', icon: 'UserCog', labelKey: 'sidebar.modules.hr', moduleKey: 'hr' },
@@ -337,7 +339,9 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('crm', null, 5),
   layoutNode('crm.overview', 'crm', 0),
   layoutNode('crm.leads', 'crm', 1),
-  layoutNode('crm.customers', 'crm', 2),
+  layoutNode('crm.tasks', 'crm', 2),
+  layoutNode('crm.campaigns', 'crm', 3),
+  layoutNode('crm.customers', 'crm', 4),
 
   layoutNode('manufacturing', null, 6),
 

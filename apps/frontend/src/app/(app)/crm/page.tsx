@@ -68,7 +68,10 @@ export default function CrmHubPage() {
 
     const sections: HubSectionConfig[] = useMemo(() => {
         const pipelineLinks = canAccessPremiumCrm
-            ? [{ href: routes.crm.leads, key: 'leads', icon: UserPlus, accent: 'bg-violet-50 text-violet-700 border-violet-100' }]
+            ? [
+                { href: routes.crm.leads, key: 'leads', icon: UserPlus, accent: 'bg-violet-50 text-violet-700 border-violet-100' },
+                { href: routes.crm.tasks, key: 'crmTasks', icon: ListChecks, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
+            ]
             : [];
         const result: HubSectionConfig[] = [];
         if (pipelineLinks.length > 0) {
@@ -80,12 +83,14 @@ export default function CrmHubPage() {
                 { href: routes.crm.customers, key: 'customers', icon: Users, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
             ],
         });
-        result.push({
-            sectionKey: 'engagement',
-            links: [
-                { href: routes.crm.campaigns, key: 'crmCampaigns', icon: Megaphone, accent: 'bg-rose-50 text-rose-700 border-rose-100' },
-            ],
-        });
+        if (canAccessPremiumCrm) {
+            result.push({
+                sectionKey: 'engagement',
+                links: [
+                    { href: routes.crm.campaigns, key: 'crmCampaigns', icon: Megaphone, accent: 'bg-rose-50 text-rose-700 border-rose-100' },
+                ],
+            });
+        }
         return result;
     }, [canAccessPremiumCrm]);
 

@@ -2,11 +2,14 @@ import { Controller, Post, Get, Patch, Delete, Body, Param, Query, UseGuards, Us
 import { CrmTasksService } from './crm-tasks.service';
 import { CreateCrmTaskDto, UpdateCrmTaskDto } from './crm-tasks.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
+import { RequiresFeature } from '../auth/subscription-access.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 
 @Controller('crm/tasks')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionAccessGuard)
+@RequiresFeature('premiumCrm')
 @UseInterceptors(TenantInterceptor)
 export class CrmTasksController {
     constructor(private readonly service: CrmTasksService) {}
