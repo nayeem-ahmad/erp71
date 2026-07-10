@@ -45,6 +45,7 @@ export const StorePermission = {
   // User Management
   MANAGE_USERS: "MANAGE_USERS",
   MANAGE_USER_STORE_ACCESS: "MANAGE_USER_STORE_ACCESS",
+  MANAGE_STORES: "MANAGE_STORES",
 
   // POS Counters
   MANAGE_COUNTERS: "MANAGE_COUNTERS",
@@ -164,6 +165,7 @@ export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.VIEW_CONSOLIDATED_REPORTS]: "View consolidated reports",
   [StorePermission.MANAGE_USERS]: "Manage team members",
   [StorePermission.MANAGE_USER_STORE_ACCESS]: "Manage branch access",
+  [StorePermission.MANAGE_STORES]: "Rename stores",
   [StorePermission.MANAGE_COUNTERS]: "Manage POS counters",
   [StorePermission.VIEW_CRM_INTERACTIONS]: "View CRM interactions",
   [StorePermission.CREATE_CRM_INTERACTIONS]: "Log CRM interactions",
@@ -247,6 +249,7 @@ export const STORE_PERMISSION_GROUPS: { label: string; permissions: StorePermiss
     permissions: [
       StorePermission.MANAGE_USERS,
       StorePermission.MANAGE_USER_STORE_ACCESS,
+      StorePermission.MANAGE_STORES,
       StorePermission.MANAGE_COUNTERS,
     ],
   },

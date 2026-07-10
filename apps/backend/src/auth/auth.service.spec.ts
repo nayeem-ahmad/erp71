@@ -83,6 +83,7 @@ describe('AuthService', () => {
             help: false,
             voice: false,
         }),
+        getRawValue: jest.fn().mockResolvedValue('STANDARD'),
     };
 
     const referralsService = {
@@ -152,6 +153,7 @@ describe('AuthService', () => {
             help: false,
             voice: false,
         });
+        platformSettings.getRawValue.mockResolvedValue('STANDARD');
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -486,5 +488,91 @@ describe('AuthService', () => {
                 userId,
             );
         });
+    });
+});
+
+describe('AuthService.getSignupDefaults', () => {
+    const platformSettings = { getRawValue: jest.fn() };
+    const service = new AuthService(
+        {} as any, {} as any, {} as any, {} as any, {} as any,
+        {} as any, platformSettings as any, {} as any, {} as any,
+    );
+
+    beforeEach(() => jest.clearAllMocks());
+
+    it('returns the configured self-serve plan', async () => {
+        platformSettings.getRawValue.mockResolvedValue('STANDARD');
+        await expect(service.getSignupDefaults()).resolves.toEqual({ defaultPlanCode: 'STANDARD' });
+    });
+
+    it('falls back to STANDARD when the setting is not a self-serve plan', async () => {
+        platformSettings.getRawValue.mockResolvedValue('FREE');
+        await expect(service.getSignupDefaults()).resolves.toEqual({ defaultPlanCode: 'STANDARD' });
+    });
+});
+
+describe('AuthService.signup', () => {
+    let createdUser: any;
+
+    const tx = {
+        user: { create: jest.fn(async ({ data }: any) => { createdUser = { id: 'u1', ...data }; return createdUser; }) },
+    };
+    const db = {
+        user: { findUnique: jest.fn(async () => null), findFirst: jest.fn(async () => null) },
+        $transaction: jest.fn(async (cb: any) => cb(tx)),
+    };
+    const email = { sendWelcome: jest.fn(async () => {}) };
+    const audit = { log: jest.fn(async () => {}) };
+    const platformSettings = { getRawValue: jest.fn(async () => 'STANDARD') };
+
+    const makeService = () => {
+        const svc = new AuthService(
+            db as any, {} as any, email as any, audit as any, {} as any,
+            {} as any, platformSettings as any, {} as any, {} as any,
+        );
+        // Isolate signup(): stub provisioning and post-signup side effects.
+        jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({ tenant: { id: 't1' } });
+        jest.spyOn(svc as any, 'generateAuthResponse').mockResolvedValue({ access_token: 'x', tenants: [] });
+        jest.spyOn(svc as any, 'sendVerificationEmail').mockResolvedValue(undefined);
+        return svc;
+    };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        createdUser = undefined;
+        // The outer `AuthService` describe's beforeEach calls jest.resetAllMocks(), which
+        // strips the initial jest.fn(impl) implementations from these file-scoped mocks
+        // (resetAllMocks is global, not scoped to the describe block that calls it). Restore
+        // them here so this block is self-contained regardless of run order.
+        db.user.findUnique.mockResolvedValue(null);
+        db.user.findFirst.mockResolvedValue(null);
+        db.$transaction.mockImplementation(async (cb: any) => cb(tx));
+        tx.user.create.mockImplementation(async ({ data }: any) => {
+            createdUser = { id: 'u1', ...data };
+            return createdUser;
+        });
+        email.sendWelcome.mockResolvedValue(undefined);
+        audit.log.mockResolvedValue(undefined);
+        platformSettings.getRawValue.mockResolvedValue('STANDARD');
+    });
+
+    it('creates account with only org name + email + password', async () => {
+        const svc = makeService();
+        await svc.signup({ email: 'owner@shop.com', password: 'password1', tenantName: 'Dhaka Retail Co.' } as any);
+        expect(createdUser.name).toBe('owner');            // email local-part
+        expect(createdUser.mobile).toBeNull();             // no mobile provided
+        expect(db.user.findFirst).not.toHaveBeenCalled();  // no mobile uniqueness lookup
+        // store-name default is passed into provisioning
+        expect((svc as any).provisionTenant).toHaveBeenCalledWith(
+            expect.anything(), 'u1',
+            expect.objectContaining({ storeName: 'Main Store', planCode: 'STANDARD' }),
+        );
+    });
+
+    it('accepts a duplicate mobile (no uniqueness check)', async () => {
+        const svc = makeService();
+        await svc.signup({ email: 'a@b.com', password: 'password1', tenantName: 'Org', mobile: '01712345678' } as any);
+        expect(createdUser.mobile).toBe('+8801712345678');
+        expect(db.user.findFirst).not.toHaveBeenCalled();
     });
 });

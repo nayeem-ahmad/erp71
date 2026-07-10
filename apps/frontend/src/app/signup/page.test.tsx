@@ -1,11 +1,15 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import SignupPage from './page';
+import { api } from '../../lib/api';
 
 const pushMock = jest.fn();
+// A stable object reference (like the real next/navigation ReadonlyURLSearchParams)
+// so effects with `[searchParams]` deps don't re-fire on every render.
+let currentSearchParams = new URLSearchParams();
 
 jest.mock('next/navigation', () => ({
     useRouter: () => ({ push: pushMock }),
-    useSearchParams: () => ({ get: () => null }),
+    useSearchParams: () => currentSearchParams,
 }));
 
 jest.mock('../../lib/api', () => ({
@@ -14,6 +18,7 @@ jest.mock('../../lib/api', () => ({
             { code: 'BASIC', name: 'Basic', description: 'Core operations', monthly_price: 499 },
             { code: 'STANDARD', name: 'Standard', description: 'Growth plan', monthly_price: 999 },
         ]),
+        getSignupDefaults: jest.fn().mockResolvedValue({ defaultPlanCode: 'STANDARD' }),
         signup: jest.fn().mockResolvedValue({
             access_token: 'token-1',
             tenants: [{ id: 'tenant-1', stores: [{ id: 'store-1' }], subscription: { plan: { code: 'BASIC' } } }],
@@ -25,30 +30,52 @@ describe('SignupPage', () => {
     beforeEach(() => {
         localStorage.clear();
         pushMock.mockReset();
+        currentSearchParams = new URLSearchParams();
+        (api.signup as jest.Mock).mockClear();
+        (api.getSignupDefaults as jest.Mock).mockClear().mockResolvedValue({ defaultPlanCode: 'STANDARD' });
+        (api.getSubscriptionPlans as jest.Mock).mockClear();
     });
 
-    it('submits workspace signup and stores tenant context', async () => {
-        const { api } = require('../../lib/api');
+    it('submits with org name, email and password only', async () => {
+        render(<SignupPage />);
+        fireEvent.change(screen.getByLabelText(/organization name/i), { target: { value: 'Dhaka Retail Co.' } });
+        fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'owner@shop.com' } });
+        fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'password1' } });
+        fireEvent.click(screen.getByRole('button', { name: /create workspace/i }));
+        await waitFor(() => expect(api.signup).toHaveBeenCalled());
+        const payload = (api.signup as jest.Mock).mock.calls[0][0];
+        expect(payload.tenantName).toBe('Dhaka Retail Co.');
+    });
+
+    it('pre-selects the fetched default plan when no ?plan= param is present', async () => {
         render(<SignupPage />);
 
-        fireEvent.change(screen.getByPlaceholderText(/Nayeem Ahmed/i), { target: { value: 'Nayeem' } });
-        fireEvent.change(screen.getByPlaceholderText(/owner@company.com/i), { target: { value: 'owner@example.com' } });
-        fireEvent.change(screen.getByPlaceholderText(/At least 8 characters/i), { target: { value: 'password123' } });
-        fireEvent.change(screen.getByPlaceholderText(/01XXXXXXXXX/i), { target: { value: '01712345678' } });
-        fireEvent.change(screen.getByPlaceholderText(/Dhaka Retail Co./i), { target: { value: 'Tenant One' } });
-        fireEvent.change(screen.getByPlaceholderText(/Gulshan Branch/i), { target: { value: 'Main Store' } });
+        await waitFor(() => expect(api.getSignupDefaults).toHaveBeenCalled());
 
+        fireEvent.change(screen.getByLabelText(/organization name/i), { target: { value: 'Dhaka Retail Co.' } });
+        fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'owner@shop.com' } });
+        fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'password1' } });
         fireEvent.click(screen.getByRole('button', { name: /create workspace/i }));
 
-        expect(api.signup).toHaveBeenCalledWith({
-            name: 'Nayeem',
-            email: 'owner@example.com',
-            password: 'password123',
-            mobile: '01712345678',
-            mobile_country_code: 'BD',
-            tenantName: 'Tenant One',
-            storeName: 'Main Store',
-            planCode: 'BASIC',
-        });
+        await waitFor(() => expect(api.signup).toHaveBeenCalled());
+        const payload = (api.signup as jest.Mock).mock.calls[0][0];
+        expect(payload.planCode).toBe('STANDARD');
+    });
+
+    it('keeps the ?plan= override and does not let the async default overwrite it', async () => {
+        currentSearchParams = new URLSearchParams({ plan: 'basic' });
+        render(<SignupPage />);
+
+        // Wait for the async default-plan effect to resolve so the race is actually exercised.
+        await waitFor(() => expect(api.getSignupDefaults).toHaveBeenCalled());
+
+        fireEvent.change(screen.getByLabelText(/organization name/i), { target: { value: 'Dhaka Retail Co.' } });
+        fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'owner@shop.com' } });
+        fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'password1' } });
+        fireEvent.click(screen.getByRole('button', { name: /create workspace/i }));
+
+        await waitFor(() => expect(api.signup).toHaveBeenCalled());
+        const payload = (api.signup as jest.Mock).mock.calls[0][0];
+        expect(payload.planCode).toBe('BASIC');
     });
 });

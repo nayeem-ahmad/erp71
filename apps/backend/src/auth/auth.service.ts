@@ -58,36 +58,38 @@ export class AuthService {
             throw new ConflictException('Email already exists');
         }
 
-        const mobileCountryCode = dto.mobile_country_code?.trim() || DEFAULT_MOBILE_COUNTRY_CODE;
-        const normalizedMobile = normalizeMobileToE164(mobileCountryCode, dto.mobile);
-        if (!normalizedMobile) {
-            throw new BadRequestException('Please enter a valid mobile number including country code.');
-        }
-
-        const mobileTaken = await this.db.user.findFirst({ where: { mobile: normalizedMobile } });
-        if (mobileTaken) {
-            throw new ConflictException('Mobile number already in use');
+        let normalizedMobile: string | null = null;
+        let mobileCountryCode: string | null = null;
+        if (dto.mobile?.trim()) {
+            mobileCountryCode = dto.mobile_country_code?.trim() || DEFAULT_MOBILE_COUNTRY_CODE;
+            normalizedMobile = normalizeMobileToE164(mobileCountryCode, dto.mobile);
+            if (!normalizedMobile) {
+                throw new BadRequestException('Please enter a valid mobile number including country code.');
+            }
+            // Duplicate mobiles are allowed (one person may own multiple businesses) — no uniqueness check.
         }
 
         const passwordHash = await bcrypt.hash(dto.password, 10);
+        const displayName = dto.name?.trim() || dto.email.split('@')[0];
+        const defaultPlan = dto.planCode ?? (await this.getSignupDefaults()).defaultPlanCode;
 
         const user = await this.db.$transaction(async (tx) => {
             const createdUser = await tx.user.create({
                 data: {
                     email: dto.email,
                     passwordHash,
-                    name: dto.name,
+                    name: displayName,
                     mobile: normalizedMobile,
-                    mobile_country_code: mobileCountryCode,
+                    mobile_country_code: mobileCountryCode ?? DEFAULT_MOBILE_COUNTRY_CODE,
                 },
             });
 
-            if (dto.tenantName?.trim() && dto.storeName?.trim()) {
+            if (dto.tenantName?.trim()) {
                 await this.provisionTenant(tx, createdUser.id, {
                     tenantName: dto.tenantName,
-                    storeName: dto.storeName,
+                    storeName: dto.storeName?.trim() || 'Main Store',
                     address: dto.address,
-                    planCode: dto.planCode,
+                    planCode: defaultPlan,
                     referralCode: dto.referralCode,
                 });
             }
@@ -265,6 +267,12 @@ export class AuthService {
                     ? plan.marketing_features_json.filter((item): item is string => typeof item === 'string')
                     : [],
             }));
+    }
+
+    async getSignupDefaults(): Promise<{ defaultPlanCode: 'BASIC' | 'ACCOUNTING' | 'STANDARD' }> {
+        const configured = await this.platformSettings.getRawValue('general', 'default_signup_plan');
+        const code = configured && isSelfServeSubscriptionPlan(configured as any) ? configured : 'STANDARD';
+        return { defaultPlanCode: code as 'BASIC' | 'ACCOUNTING' | 'STANDARD' };
     }
 
     private async generateAuthResponse(userId: string) {

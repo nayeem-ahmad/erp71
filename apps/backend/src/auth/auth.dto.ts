@@ -17,8 +17,9 @@ export class SignupDto {
     @IsString({ message: 'Organization name is required.' })
     tenantName: string;
 
-    @IsString({ message: 'Store name is required.' })
-    storeName: string;
+    @IsOptional()
+    @IsString()
+    storeName?: string;
 
     @IsOptional()
     @IsString()
@@ -32,8 +33,9 @@ export class SignupDto {
     @IsString()
     referralCode?: string;
 
-    @IsString({ message: 'Mobile number is required.' })
-    mobile: string;
+    @IsOptional()
+    @IsString()
+    mobile?: string;
 
     @IsOptional()
     @IsString()
