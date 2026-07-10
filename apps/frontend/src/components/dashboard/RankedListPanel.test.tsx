@@ -21,4 +21,15 @@ describe('RankedListPanel', () => {
         render(<RankedListPanel title="Top customers" emptyLabel="No customers yet" items={[]} />);
         expect(screen.getByText('No customers yet')).toBeInTheDocument();
     });
+
+    it('renders a colored avatar with initials when avatarInitials is provided', () => {
+        render(
+            <RankedListPanel
+                title="Top customers"
+                emptyLabel="No customers yet"
+                items={[{ id: 'c1', name: 'Shirin Islam', meta: '3 orders', amount: '৳4.2k', avatarInitials: 'SI' }]}
+            />,
+        );
+        expect(screen.getByText('SI')).toBeInTheDocument();
+    });
 });

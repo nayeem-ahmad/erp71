@@ -1197,6 +1197,7 @@ export const coreMessages = {
         kpiCashInHand: 'Cash in hand',
         kpiReceivables: 'Receivables due',
         attnOverdue: '{count} invoices overdue',
+        attnReceivablesOutstanding: 'Receivables outstanding',
         attnLowStock: '{count} products low on stock',
         attnDeliveries: '{count} orders awaiting delivery',
         attnRenewal: 'Plan renews in {days} days',

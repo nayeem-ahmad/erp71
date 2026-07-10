@@ -1197,6 +1197,7 @@ export const coreMessages = {
             kpiCashInHand: "হাতে নগদ",
             kpiReceivables: "বকেয়া প্রাপ্য",
             attnOverdue: "{count}টি চালান বকেয়া",
+            attnReceivablesOutstanding: "বকেয়া প্রাপ্য",
             attnLowStock: "{count}টি পণ্যের স্টক কম",
             attnDeliveries: "{count}টি অর্ডার ডেলিভারির অপেক্ষায়",
             attnRenewal: "{days} দিনে প্ল্যান নবায়ন",

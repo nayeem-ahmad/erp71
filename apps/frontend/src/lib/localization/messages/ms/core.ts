@@ -1198,6 +1198,7 @@ export const coreMessages = {
             kpiCashInHand: "Tunai di tangan",
             kpiReceivables: "Belum terima",
             attnOverdue: "{count} invois tertunggak",
+            attnReceivablesOutstanding: "Belum terima tertunggak",
             attnLowStock: "{count} produk stok rendah",
             attnDeliveries: "{count} pesanan menunggu penghantaran",
             attnRenewal: "Pelan diperbaharui dalam {days} hari",

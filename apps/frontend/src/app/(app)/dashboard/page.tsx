@@ -193,6 +193,14 @@ export default function DashboardPage() {
             setProductReport(productRepRes.status === 'fulfilled' ? (productRepRes.value?.rows ?? []) : []);
             setCustomerReport(customerRepRes.status === 'fulfilled' ? (customerRepRes.value?.rows ?? []) : []);
 
+            if (includeRetailPanels && (categoryRes.status === 'rejected' || productRepRes.status === 'rejected' || customerRepRes.status === 'rejected')) {
+                console.error('Failed to fetch dashboard retail data:', {
+                    category: categoryRes.status === 'rejected' ? categoryRes.reason : null,
+                    products: productRepRes.status === 'rejected' ? productRepRes.reason : null,
+                    customers: customerRepRes.status === 'rejected' ? customerRepRes.reason : null,
+                });
+            }
+
             setIsFinancialLoading(false);
             setIsRetailLoading(false);
         };
@@ -222,7 +230,6 @@ export default function DashboardPage() {
     const cashSeries = financialTrends.map((point) => point.net_cash_movement);
 
     const receivable = financialKpis.accounts_receivable;
-    const overdueCount = sales.filter((sale) => Number(sale.total_amount) - Number(sale.amount_paid ?? 0) > 0).length;
     const deliveryPendingCount = sales.filter((sale) => DELIVERY_PENDING_STATUSES.has(String(sale.status ?? '').toUpperCase())).length;
     const renewalDays = renewalEnd ? Math.ceil((new Date(renewalEnd).getTime() - Date.now()) / 86_400_000) : null;
 
@@ -242,7 +249,7 @@ export default function DashboardPage() {
             id: 'receivables',
             tone: 'red',
             value: formatBDT(receivable, { locale }),
-            label: formatMessage(copy.attnOverdue, { count: overdueCount }),
+            label: copy.attnReceivablesOutstanding,
             href: '/sales',
             cta: copy.viewAll,
         });
