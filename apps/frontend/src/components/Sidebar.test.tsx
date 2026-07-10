@@ -142,41 +142,41 @@ describe('Sidebar — Story 30.1', () => {
         expect(screen.queryByText('Inventory')).not.toBeInTheDocument();
     });
 
-    it('trims the Admin menu to accounting-relevant links in accounting-only mode', () => {
+    it('keeps the core Admin links in accounting-only mode', () => {
         render(<Sidebar canAccessAccounting accountingOnlyMode canManageBilling canManageTeam />);
 
         fireEvent.click(screen.getByText('Admin'));
 
-        // Accounting-relevant links stay
-        expect(screen.getByText('My Account')).toBeInTheDocument();
+        // After the menu reorg the tenant Admin sidebar is a slim set of direct links;
+        // the long tail of settings pages lives on the /settings hub. In accounting-only
+        // mode the core links (profile, team, billing) remain reachable.
+        expect(screen.getByText('My Profile')).toBeInTheDocument();
         expect(screen.getByText('Team & Permissions')).toBeInTheDocument();
-        expect(screen.getByText('Audit Logs')).toBeInTheDocument();
-        expect(screen.getByText('Localization')).toBeInTheDocument();
-        expect(screen.getByText('Tax / VAT')).toBeInTheDocument();
-        expect(screen.getByText('Data Management')).toBeInTheDocument();
         expect(screen.getByText('Billing')).toBeInTheDocument();
 
-        // Retail / marketing links are hidden
+        // The moved settings pages are not in the sidebar (they render on the hub,
+        // which itself hides retail cards under accounting-only mode).
+        expect(screen.queryByText('Audit Logs')).not.toBeInTheDocument();
+        expect(screen.queryByText('Localization')).not.toBeInTheDocument();
         expect(screen.queryByText('Loyalty Program')).not.toBeInTheDocument();
-        expect(screen.queryByText('POS Counters')).not.toBeInTheDocument();
-        expect(screen.queryByText('Discount Codes')).not.toBeInTheDocument();
         expect(screen.queryByText('Payment Methods')).not.toBeInTheDocument();
-        expect(screen.queryByText('Sales Settings')).not.toBeInTheDocument();
-        expect(screen.queryByText('SMS Notifications')).not.toBeInTheDocument();
-        expect(screen.queryByText('Report Emails')).not.toBeInTheDocument();
         expect(screen.queryByText('Branding')).not.toBeInTheDocument();
-        expect(screen.queryByText('SMS Credits')).not.toBeInTheDocument();
-        expect(screen.queryByText('AI Credits')).not.toBeInTheDocument();
     });
 
-    it('keeps the full Admin menu when not in accounting-only mode', () => {
+    it('shows the slimmed Admin menu with direct links (settings tail lives on the hub)', () => {
         render(<Sidebar canAccessAccounting canManageBilling canManageTeam />);
 
         fireEvent.click(screen.getByText('Admin'));
 
-        expect(screen.getByText('Loyalty Program')).toBeInTheDocument();
-        expect(screen.getByText('Payment Methods')).toBeInTheDocument();
-        expect(screen.getByText('Branding')).toBeInTheDocument();
+        // Direct links that remain in the sidebar after the menu reorg.
+        expect(screen.getByText('My Profile')).toBeInTheDocument();
+        expect(screen.getByText('Team & Permissions')).toBeInTheDocument();
+        expect(screen.getByText('Billing')).toBeInTheDocument();
+
+        // The long tail of settings pages moved to the /settings hub — not the sidebar.
+        expect(screen.queryByText('Loyalty Program')).not.toBeInTheDocument();
+        expect(screen.queryByText('Payment Methods')).not.toBeInTheDocument();
+        expect(screen.queryByText('Branding')).not.toBeInTheDocument();
     });
 
     it('shows full platform admin navigation in platform admin mode', () => {
@@ -190,9 +190,13 @@ describe('Sidebar — Story 30.1', () => {
         fireEvent.click(screen.getByText('Tenant Management'));
         expect(screen.getByText('Tenant Ledger')).toBeInTheDocument();
 
-        fireEvent.click(screen.getByText('Platform Settings'));
-        expect(screen.getByText('SMS Gateway')).toBeInTheDocument();
-        expect(screen.getByText('Subscription Plans')).toBeInTheDocument();
+        // Platform Settings is now a single leaf link to the platform-settings hub
+        // (the former SMS Gateway / Subscription Plans children live on that hub page).
+        expect(screen.getByText('Platform Settings').closest('a')).toHaveAttribute(
+            'href',
+            '/admin/platform-settings',
+        );
+        expect(screen.queryByText('SMS Gateway')).not.toBeInTheDocument();
     });
 
     it('shows platform admin and billing items when enabled', () => {
