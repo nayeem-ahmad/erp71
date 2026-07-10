@@ -42,24 +42,32 @@ jest.mock('@/lib/api', () => ({
         getSales: jest.fn(),
         getFinancialKpis: jest.fn(),
         getFinancialTrends: jest.fn(),
+        getSalesByCategory: jest.fn(),
+        getSalesByProduct: jest.fn(),
+        getSalesByCustomer: jest.fn(),
     },
 }));
 
-describe('DashboardPage — Story 34.3', () => {
+const EMPTY_CATEGORY = { summary: { totalRevenue: 0, categoryCount: 0 }, rows: [] };
+const EMPTY_PRODUCT_REPORT = { summary: { totalRevenue: 0, totalUnitsSold: 0, productCount: 0 }, rows: [] };
+const EMPTY_CUSTOMER_REPORT = { summary: { totalRevenue: 0, totalOrders: 0, customerCount: 0, avgOrderValue: 0 }, rows: [] };
+
+describe('DashboardPage — Business Monitor v2', () => {
     beforeEach(() => {
         jest.resetAllMocks();
         (api.getMe as jest.Mock).mockResolvedValue({
+            name: 'Ada',
             tenants: [{ name: 'Northwind Retail' }],
         });
         (api.getProducts as jest.Mock).mockResolvedValue([
-            { id: 'product-1', name: 'Coffee Beans', price: 15.5, stocks: [{ quantity: 12 }] },
+            { id: 'product-1', name: 'Coffee Beans', price: 15.5, stock_quantity: 2, reorder_level: 5, stocks: [{ quantity: 2 }] },
         ]);
         (api.getSales as jest.Mock).mockResolvedValue([
-            { id: 'sale-1', serial_number: 'S-001', total_amount: 125, created_at: '2026-03-21T09:00:00.000Z' },
+            { id: 'sale-1', serial_number: 'S-001', total_amount: 125, amount_paid: 0, status: 'COMPLETED', created_at: '2026-03-21T09:00:00.000Z' },
         ]);
-    });
-
-    it('renders financial KPI tiles from the accounting API', async () => {
+        (api.getSalesByCategory as jest.Mock).mockResolvedValue(EMPTY_CATEGORY);
+        (api.getSalesByProduct as jest.Mock).mockResolvedValue(EMPTY_PRODUCT_REPORT);
+        (api.getSalesByCustomer as jest.Mock).mockResolvedValue(EMPTY_CUSTOMER_REPORT);
         (api.getFinancialKpis as jest.Mock).mockResolvedValue({
             filters: { from: '2026-03-01', to: '2026-03-31' },
             kpis: {
@@ -104,28 +112,37 @@ describe('DashboardPage — Story 34.3', () => {
                 gross_margin_reason: 'Sale-time cost basis is not tracked in the current data model.',
             },
         });
+    });
 
+    it('renders the v2 dashboard sections', async () => {
+        render(<DashboardPage />);
+        expect(await screen.findByText('Business health')).toBeInTheDocument();
+        expect(await screen.findByText('Needs your attention')).toBeInTheDocument();
+        expect(await screen.findByText('Sales by category')).toBeInTheDocument();
+        expect(await screen.findByText('Top selling products')).toBeInTheDocument();
+        expect(await screen.findByText('Top customers')).toBeInTheDocument();
+    });
+
+    it('renders the greeting and range toggle and fetches financial data', async () => {
         render(<DashboardPage />);
 
-        await waitFor(() => {
-            expect(screen.getAllByText('Business Monitor').length).toBeGreaterThan(0);
-            expect(screen.getByText('Sales Entry')).toBeInTheDocument();
-            expect(screen.getByText('Accounting KPIs')).toBeInTheDocument();
-            expect(screen.getByText('Cash Flow Movement')).toBeInTheDocument();
-            expect(screen.getByText('Net Profit')).toBeInTheDocument();
-            expect(screen.queryByText('Net Profit vs Gross Margin')).not.toBeInTheDocument();
-            expect(screen.queryByText('Tax Liability')).not.toBeInTheDocument();
-            expect(screen.getAllByText('175.00').length).toBeGreaterThan(0);
-            expect(screen.getAllByText('300.00').length).toBeGreaterThan(0);
-            expect(screen.getAllByText('125.00').length).toBeGreaterThan(0);
-            expect(screen.getByText('90.00')).toBeInTheDocument();
-            expect(screen.getByText('20.00')).toBeInTheDocument();
-        });
+        expect(await screen.findByText(/Northwind Retail/)).toBeInTheDocument();
+        // Health KPI titles
+        expect(await screen.findByText('Net profit')).toBeInTheDocument();
+        expect(screen.getAllByText('Sales').length).toBeGreaterThan(0);
+        expect(screen.getByText('Cash in hand')).toBeInTheDocument();
+        expect(screen.getByText('Receivables due')).toBeInTheDocument();
+        // Range toggle labels
+        expect(screen.getByText('This week')).toBeInTheDocument();
+        expect(screen.getByText('Month')).toBeInTheDocument();
 
-        expect(screen.getByText('Northwind Retail • Last updated: Today')).toBeInTheDocument();
-        expect(screen.getByText('Sale S-001')).toBeInTheDocument();
-        expect(api.getFinancialKpis).toHaveBeenCalled();
-        expect(api.getFinancialTrends).toHaveBeenCalled();
+        await waitFor(() => {
+            expect(api.getFinancialKpis).toHaveBeenCalled();
+            expect(api.getFinancialTrends).toHaveBeenCalled();
+            expect(api.getSalesByCategory).toHaveBeenCalled();
+            expect(api.getSalesByProduct).toHaveBeenCalled();
+            expect(api.getSalesByCustomer).toHaveBeenCalled();
+        });
     });
 
     it('shows chart empty-state handling without breaking the dashboard', async () => {
@@ -167,17 +184,13 @@ describe('DashboardPage — Story 34.3', () => {
 
         render(<DashboardPage />);
 
-        await waitFor(() => {
-            expect(screen.getByText('No accounting movement')).toBeInTheDocument();
-            expect(screen.getByText('Net Profit')).toBeInTheDocument();
-        });
-
-        expect(screen.getAllByText('Business Monitor').length).toBeGreaterThan(0);
-        expect(screen.getByText('Inventory Overview')).toBeInTheDocument();
+        expect(await screen.findByText('No accounting movement')).toBeInTheDocument();
+        expect(screen.getByText('Business health')).toBeInTheDocument();
     });
 
-    it('shows accounting quick links and hides retail panels for accounting-only plans', async () => {
+    it('hides retail sections for accounting-only plans', async () => {
         (api.getMe as jest.Mock).mockResolvedValue({
+            name: 'Ledger Admin',
             tenants: [{
                 name: 'Ledger Co',
                 subscription: {
@@ -219,15 +232,18 @@ describe('DashboardPage — Story 34.3', () => {
         await waitFor(() => {
             expect(screen.getByText('Voucher Entry')).toBeInTheDocument();
             expect(screen.getByText('Profit & Loss')).toBeInTheDocument();
-            expect(screen.getByText('Accounting KPIs')).toBeInTheDocument();
+            expect(screen.getByText('Business health')).toBeInTheDocument();
         });
 
         expect(screen.queryByText('Sales Entry')).not.toBeInTheDocument();
-        expect(screen.queryByText('Customer Payment')).not.toBeInTheDocument();
-        expect(screen.queryByText('Supplier Payment')).not.toBeInTheDocument();
-        expect(screen.queryByText('Total Sales')).not.toBeInTheDocument();
-        expect(screen.queryByText('Inventory Overview')).not.toBeInTheDocument();
+        expect(screen.queryByText('Needs your attention')).not.toBeInTheDocument();
+        expect(screen.queryByText('Sales by category')).not.toBeInTheDocument();
+        expect(screen.queryByText('Top selling products')).not.toBeInTheDocument();
+        expect(screen.queryByText('Top customers')).not.toBeInTheDocument();
         expect(api.getProducts).not.toHaveBeenCalled();
         expect(api.getSales).not.toHaveBeenCalled();
+        expect(api.getSalesByCategory).not.toHaveBeenCalled();
+        expect(api.getSalesByProduct).not.toHaveBeenCalled();
+        expect(api.getSalesByCustomer).not.toHaveBeenCalled();
     });
 });
