@@ -7,7 +7,7 @@ import { RequireStorePermission } from '../auth/store-permission.decorator';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
-import { GetBranchReportDto, GetConsolidatedReportDto, GetMonthlySalesByCustomerDto, GetSalesByCustomerDto, GetSalesByProductDto, GetSalesSummaryDto } from './sales-reports.dto';
+import { GetBranchReportDto, GetConsolidatedReportDto, GetMonthlySalesByCustomerDto, GetSalesByCategoryDto, GetSalesByCustomerDto, GetSalesByProductDto, GetSalesSummaryDto } from './sales-reports.dto';
 import { SalesReportsService } from './sales-reports.service';
 
 @Controller('sales-reports')
@@ -25,6 +25,11 @@ export class SalesReportsController {
     @Get('by-product')
     getSalesByProduct(@Tenant() tenant: TenantContext, @Query() query: GetSalesByProductDto) {
         return this.service.getSalesByProduct(tenant.tenantId, query);
+    }
+
+    @Get('by-category')
+    getSalesByCategory(@Tenant() tenant: TenantContext, @Query() query: GetSalesByCategoryDto) {
+        return this.service.getSalesByCategory(tenant.tenantId, query);
     }
 
     @Get('consolidated')
