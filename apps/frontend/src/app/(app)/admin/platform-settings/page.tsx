@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { MessageSquare, Mail, CreditCard, Settings, ChevronRight, Sparkles, LayoutList, BadgePercent, MessageCircle, ToggleLeft, PackagePlus, Bot, Gift } from 'lucide-react';
+import { MessageSquare, Mail, Landmark, Cog, ChevronRight, Sparkles, LayoutList, BadgePercent, MessageCircle, ToggleLeft, PackagePlus, Bot, Share2, Lightbulb } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -42,7 +42,7 @@ export default function PlatformSettingsIndexPage() {
                 },
                 {
                     href: '/admin/platform-settings/payments',
-                    icon: CreditCard,
+                    icon: Landmark,
                     label: m.sections.payments.label,
                     description: m.sections.payments.description,
                     color: 'text-violet-600',
@@ -78,7 +78,7 @@ export default function PlatformSettingsIndexPage() {
             sections: [
                 {
                     href: '/admin/platform-settings/general',
-                    icon: Settings,
+                    icon: Cog,
                     label: m.sections.general.label,
                     description: m.sections.general.description,
                     color: 'text-amber-600',
@@ -124,7 +124,7 @@ export default function PlatformSettingsIndexPage() {
             sections: [
                 {
                     href: '/admin/referrals',
-                    icon: Gift,
+                    icon: Share2,
                     label: m.sections.referrals.label,
                     description: m.sections.referrals.description,
                     color: 'text-pink-600',
@@ -132,7 +132,7 @@ export default function PlatformSettingsIndexPage() {
                 },
                 {
                     href: '/admin/feedback',
-                    icon: MessageSquare,
+                    icon: Lightbulb,
                     label: m.sections.feedback.label,
                     description: m.sections.feedback.description,
                     color: 'text-cyan-600',

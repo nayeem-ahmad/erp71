@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import {
   Palette, Globe, Receipt, Monitor, ShoppingBag, CreditCard, Tag, Gift,
-  MessageSquare, BarChart3, Sparkles, ScrollText, Database,
+  Bell, Mail, HandCoins, Sparkles, FileSearch, Database,
 } from 'lucide-react';
 import CompactLinkGrid from '@/components/ui/compact/CompactLinkGrid';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -33,15 +33,15 @@ const SECTIONS: Section[] = [
     { href: routes.settings.loyalty, key: 'loyalty', icon: Gift, accent: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-100' },
   ]},
   { key: 'communications', cards: [
-    { href: routes.settings.sms, key: 'sms', icon: MessageSquare, accent: 'bg-green-50 text-green-700 border-green-100' },
-    { href: routes.settings.reports, key: 'reportEmails', icon: BarChart3, accent: 'bg-teal-50 text-teal-700 border-teal-100' },
+    { href: routes.settings.sms, key: 'sms', icon: Bell, accent: 'bg-green-50 text-green-700 border-green-100' },
+    { href: routes.settings.reports, key: 'reportEmails', icon: Mail, accent: 'bg-teal-50 text-teal-700 border-teal-100' },
   ]},
   { key: 'billingCredits', cards: [
-    { href: '/sms-credits', key: 'smsCredits', icon: MessageSquare, accent: 'bg-green-50 text-green-700 border-green-100' },
+    { href: '/sms-credits', key: 'smsCredits', icon: HandCoins, accent: 'bg-green-50 text-green-700 border-green-100' },
     { href: '/ai-credits', key: 'aiCredits', icon: Sparkles, accent: 'bg-purple-50 text-purple-700 border-purple-100' },
   ]},
   { key: 'advanced', cards: [
-    { href: routes.settings.auditLogs, key: 'auditLogs', icon: ScrollText, accent: 'bg-gray-50 text-gray-700 border-gray-200' },
+    { href: routes.settings.auditLogs, key: 'auditLogs', icon: FileSearch, accent: 'bg-gray-50 text-gray-700 border-gray-200' },
     { href: routes.settings.data, key: 'data', icon: Database, accent: 'bg-slate-50 text-slate-700 border-slate-200' },
   ]},
 ];
