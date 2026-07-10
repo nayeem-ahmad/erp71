@@ -50,10 +50,10 @@ plan picker and an optional mobile field.
 
 ### 2. Backend — `signup()` (`apps/backend/src/auth/auth.service.ts`)
 
-- **Mobile handling:** the normalize + uniqueness block (currently ~lines 61–70) runs
-  **only when a non-empty mobile is provided.** When absent, `mobile` /
-  `mobile_country_code` are left null and no uniqueness check runs. When present, keep the
-  existing normalization, E.164 validation, and uniqueness check.
+- **Mobile handling:** the normalize block (currently ~lines 61–70) runs **only when a
+  non-empty mobile is provided.** When absent, `mobile` / `mobile_country_code` are left
+  null. When present, keep the existing normalization and E.164 validation, but **remove
+  the uniqueness check** — duplicate mobiles are now allowed (see section 6).
 - **Name default:** when `dto.name` is empty, default `User.name` to the email local-part
   (the substring before `@`).
 - **Tenant provisioning:** call `provisionTenant` whenever `dto.tenantName` is present
@@ -103,6 +103,20 @@ Because the store is now auto-named `"Main Store"`, users need a way to rename i
 - **Frontend:** signup form uses `defaultPlanCode` as the initial selected plan.
 - **Backend fallback:** `signup()` uses the same setting when `dto.planCode` is absent.
 
+### 6. Allow duplicate mobile numbers
+
+One person may own multiple businesses and reuse the same mobile across separate accounts,
+so mobile is no longer unique.
+
+- **Schema:** drop `@unique` from `User.mobile` (`packages/database/prisma/schema.prisma:202`
+  → `mobile String?`).
+- **Migration:** a Prisma migration that drops the unique index on `User.mobile`
+  (`npm run db:migrate` in `packages/database`).
+- **Code:** remove the `findFirst({ where: { mobile } })` duplicate check in `signup()`
+  (currently ~lines 67–70). Normalization/validation of a provided mobile stays.
+- The tenant-scoped `@@unique([tenant_id, mobile])` on the other model
+  (`schema.prisma:1411`) is unrelated and stays as-is.
+
 ## Out of Scope / Notes
 
 - Making mobile optional means no guaranteed mobile-for-OTP/recovery at signup. Email
@@ -115,9 +129,9 @@ Because the store is now auto-named `"Main Store"`, users need a way to rename i
 - Signup with only org name + email + password succeeds; creates User (name = email
   local-part), Tenant (name = org name), Store (name = "Main Store"), and a subscription
   on the configured default plan.
-- Signup with a mobile provided still normalizes + enforces uniqueness; duplicate mobile
-  rejected.
-- Signup with no mobile leaves mobile null and does not trip uniqueness.
+- Signup with a mobile provided still normalizes/validates it; a **duplicate mobile is
+  now accepted** (two accounts can share one mobile).
+- Signup with no mobile leaves mobile null.
 - Plan picker pre-selects the platform-settings default; `?plan=` overrides it.
 - `PATCH /stores/:id` renames a store within the caller's tenant; cross-tenant rename is
   rejected; unauthorized role without `MANAGE_STORES` is rejected.
