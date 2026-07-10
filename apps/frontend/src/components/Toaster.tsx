@@ -60,7 +60,7 @@ export default function Toaster() {
 
     return (
         <div
-            className="fixed top-16 right-4 z-[60] flex flex-col gap-2 pointer-events-none"
+            className="fixed top-16 right-4 bottom-24 z-[70] flex flex-col gap-2 overflow-y-auto pointer-events-none"
             aria-label="Notifications"
         >
             {toasts.map((item) => (

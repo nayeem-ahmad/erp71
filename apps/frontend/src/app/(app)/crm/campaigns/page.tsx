@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { Megaphone, Plus, Send, Eye, Trash2, RefreshCw, Users, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Megaphone, Plus, Send, Eye, Trash2, RefreshCw, Users, CheckCircle2, XCircle, Clock, Search } from 'lucide-react';
+import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { DataTable } from '@/components/data-table';
 
 interface Campaign {
     id: string;
@@ -28,6 +30,9 @@ interface Campaign {
 
 const SEGMENTS = ['ALL', 'VIP', 'At-Risk', 'Regular', 'New'];
 const CHANNELS = ['SMS', 'WHATSAPP', 'EMAIL'];
+const STATUSES = ['DRAFT', 'SCHEDULED', 'SENDING', 'COMPLETED', 'CANCELLED'];
+
+const columnHelper = createColumnHelper<Campaign>();
 
 const statusColors: Record<string, string> = {
     DRAFT: 'bg-gray-100 text-gray-600',
@@ -53,6 +58,9 @@ export default function CrmCampaignsPage() {
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [loading, setLoading] = useState(true);
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState('');
+    const [channelFilter, setChannelFilter] = useState('');
 
     // Create modal state
     const [showCreate, setShowCreate] = useState(false);
@@ -156,6 +164,114 @@ export default function CrmCampaignsPage() {
     const charCount = form.message.length;
     const smsPages = Math.ceil(charCount / 160) || 0;
 
+    const filtered = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        return campaigns.filter((c) => {
+            if (statusFilter && c.status !== statusFilter) return false;
+            if (channelFilter && c.channel !== channelFilter) return false;
+            if (q && !(`${c.name} ${c.subject ?? ''} ${c.message}`.toLowerCase().includes(q))) return false;
+            return true;
+        });
+    }, [campaigns, search, statusFilter, channelFilter]);
+
+    const columns: ColumnDef<Campaign, unknown>[] = useMemo(() => [
+        columnHelper.accessor('name', {
+            header: m.columns.name,
+            cell: (info) => {
+                const c = info.row.original;
+                return (
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => void handleSelect(c)}
+                                className="font-semibold text-gray-900 hover:text-violet-600 truncate text-left"
+                            >
+                                {c.name}
+                            </button>
+                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{c.channel}</span>
+                        </div>
+                        {c.channel === 'EMAIL' && c.subject && (
+                            <p className="text-xs text-gray-600 font-medium truncate">{c.subject}</p>
+                        )}
+                        <p className="text-xs text-gray-400 truncate">{c.message}</p>
+                    </div>
+                );
+            },
+        }),
+        columnHelper.accessor((row) => row.target_segment ?? 'ALL', {
+            id: 'segment',
+            header: m.columns.segment,
+            cell: (info) => <span className="text-sm text-gray-600">{info.getValue()}</span>,
+        }),
+        columnHelper.accessor('recipient_count', {
+            header: m.columns.recipients,
+            cell: (info) => {
+                const c = info.row.original;
+                return (
+                    <div className="text-sm">
+                        <span className="inline-flex items-center gap-1 text-gray-700">
+                            <Users className="w-3.5 h-3.5 text-gray-400" /> {c.recipient_count}
+                        </span>
+                        {c.status === 'COMPLETED' && (
+                            <div className="text-xs mt-0.5">
+                                <span className="text-emerald-600 font-medium">{c.delivered_count} delivered</span>
+                                {c.failed_count > 0 && <span className="text-rose-500 ml-2">{c.failed_count} failed</span>}
+                            </div>
+                        )}
+                    </div>
+                );
+            },
+        }),
+        columnHelper.accessor('status', {
+            header: m.columns.status,
+            cell: (info) => {
+                const status = info.getValue();
+                return (
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${statusColors[status] ?? 'bg-gray-100 text-gray-600'}`}>
+                        {status}
+                    </span>
+                );
+            },
+        }),
+        columnHelper.accessor('created_at', {
+            header: m.columns.created,
+            cell: (info) => <span className="text-sm text-gray-500">{formatDate(info.getValue())}</span>,
+        }),
+        columnHelper.display({
+            id: 'actions',
+            header: t.common.actions,
+            cell: (info) => {
+                const c = info.row.original;
+                return (
+                    <div className="flex items-center justify-end gap-1">
+                        <button
+                            onClick={() => void handleSelect(c)}
+                            className="p-1.5 text-gray-400 hover:text-violet-600 rounded-lg hover:bg-violet-50"
+                            title={m.viewSend}
+                        >
+                            <Eye className="w-4 h-4" />
+                        </button>
+                        {c.status === 'DRAFT' && (
+                            <button
+                                onClick={() => void handleDelete(c.id)}
+                                className="p-1.5 text-gray-400 hover:text-rose-500 rounded-lg hover:bg-rose-50"
+                                title={t.common.delete}
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+                );
+            },
+            enableSorting: false,
+            enableColumnFilter: false,
+            enableResizing: false,
+            size: 90,
+        }),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    ], [m, t.common]);
+
     return (
         <div className="p-6 w-full">
             {toast && <Toast {...toast} onClose={() => setToast(null)} />}
@@ -180,71 +296,36 @@ export default function CrmCampaignsPage() {
                 </div>
             </div>
 
-            {/* Campaign list */}
-            {loading ? (
-                <div className="py-16 text-center text-gray-400 font-medium uppercase tracking-widest text-sm">Loading...</div>
-            ) : campaigns.length === 0 ? (
-                <div className="py-20 text-center">
-                    <Megaphone className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-                    <p className="text-gray-400 font-medium">{m.emptyMessage}</p>
-                    <button onClick={() => setShowCreate(true)} className="mt-3 text-sm text-violet-600 hover:underline">
-                        {m.newCampaign}
-                    </button>
+            {/* Filters */}
+            <div className="flex flex-wrap gap-3 mb-4 items-center">
+                <div className="relative flex-1 min-w-[200px] max-w-sm">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder={m.searchPlaceholder}
+                        className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm"
+                    />
                 </div>
-            ) : (
-                <div className="space-y-3">
-                    {campaigns.map((c) => (
-                        <div key={c.id} className="bg-white border border-gray-200 rounded-xl p-5 flex items-start gap-4 hover:border-gray-300 transition-colors">
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${statusColors[c.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                                        {c.status}
-                                    </span>
-                                    <span className="text-xs text-gray-400 font-medium uppercase">{c.channel}</span>
-                                    {c.target_segment && c.target_segment !== 'ALL' && (
-                                        <span className="text-xs bg-violet-50 text-violet-600 px-2 py-0.5 rounded-full font-medium">
-                                            {c.target_segment}
-                                        </span>
-                                    )}
-                                </div>
-                                <h3 className="font-semibold text-gray-900">{c.name}</h3>
-                                {c.channel === 'EMAIL' && c.subject && (
-                                    <p className="text-sm text-gray-600 mt-0.5 font-medium">{c.subject}</p>
-                                )}
-                                <p className="text-sm text-gray-500 mt-0.5 line-clamp-1">{c.message}</p>
-                                <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
-                                    <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {c.recipient_count} recipients</span>
-                                    {c.status === 'COMPLETED' && (
-                                        <>
-                                            <span className="text-emerald-600 font-medium">{c.delivered_count} delivered</span>
-                                            {c.failed_count > 0 && <span className="text-rose-500">{c.failed_count} failed</span>}
-                                        </>
-                                    )}
-                                    <span>{formatDate(c.created_at)}</span>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                                <button
-                                    onClick={() => handleSelect(c)}
-                                    className="p-2 text-gray-400 hover:text-violet-600 rounded-lg hover:bg-violet-50"
-                                    title={m.viewSend}
-                                >
-                                    <Eye className="w-4 h-4" />
-                                </button>
-                                {c.status === 'DRAFT' && (
-                                    <button
-                                        onClick={() => handleDelete(c.id)}
-                                        className="p-2 text-gray-400 hover:text-rose-500 rounded-lg hover:bg-rose-50"
-                                        title={t.common.delete}
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
+                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                    <option value="">{m.allStatuses}</option>
+                    {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <select value={channelFilter} onChange={(e) => setChannelFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                    <option value="">{m.allChannels}</option>
+                    {CHANNELS.map((ch) => <option key={ch} value={ch}>{ch}</option>)}
+                </select>
+            </div>
+
+            <DataTable<Campaign>
+                tableId="crm-campaigns"
+                title={m.title}
+                data={filtered}
+                columns={columns}
+                isLoading={loading}
+                emptyMessage={m.emptyMessage}
+                emptyIcon={<Megaphone className="w-10 h-10 text-gray-200" />}
+            />
 
             {/* Create modal */}
             {showCreate && (
