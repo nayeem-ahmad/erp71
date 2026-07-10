@@ -88,12 +88,18 @@ function SignupPageContent() {
     useEffect(() => {
         api.getSignupDefaults()
             .then((defaults: { defaultPlanCode?: Plan['code'] }) => {
+                const requested = searchParams.get('plan');
+                const requestedCode = requested ? PLAN_QUERY_TO_CODE[requested.toLowerCase()] : undefined;
+                const hasValidQueryPlan = !!requestedCode
+                    && isSelfServeSubscriptionPlan(requestedCode)
+                    && !isComingSoonSubscriptionPlan(requestedCode);
+                if (hasValidQueryPlan) return; // ?plan= wins
                 if (defaults?.defaultPlanCode) {
                     setForm((current) => ({ ...current, planCode: defaults.defaultPlanCode as Plan['code'] }));
                 }
             })
             .catch(() => null);
-    }, []);
+    }, [searchParams]);
 
     useEffect(() => {
         const requestedPlan = searchParams.get('plan');
