@@ -203,7 +203,7 @@ export default function FundTransfersPage() {
     ], [t.accountingShared.date, m, receivingId]);
 
     return (
-        <AccountingPageShell maxWidth="wide">
+        <AccountingPageShell maxWidth="full">
             <PageHeader
                 title={m.title}
                 subtitle={m.subtitle}

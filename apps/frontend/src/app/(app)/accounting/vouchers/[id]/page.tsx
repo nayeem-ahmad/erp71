@@ -93,7 +93,7 @@ export default function VoucherDetailPage() {
     const creditTotal = voucher?.details.reduce((sum, row) => sum + Number(row.credit_amount || 0), 0) ?? 0;
 
     return (
-        <AccountingPageShell maxWidth="wide">
+        <AccountingPageShell maxWidth="full">
             <PageHeader
                 title={voucher?.voucher_number ?? t.journal.detail.voucherDetail}
                 subtitle="Inspect the full debit and credit composition of a single posted voucher."

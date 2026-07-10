@@ -62,7 +62,7 @@ export default function SettingsHubPage() {
   [s, features, accountingOnly]);
 
   return (
-    <PageShell maxWidth="wide">
+    <PageShell maxWidth="full">
       <PageHeader
         title={s.title}
         subtitle={s.subtitle}

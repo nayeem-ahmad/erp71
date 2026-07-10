@@ -125,7 +125,7 @@ export default function ExpenseReportsPage() {
     const maxTrend = Math.max(...(summary?.monthlyTrend.map((row) => row.amount) ?? [1]), 1);
 
     return (
-        <AccountingPageShell maxWidth="wide">
+        <AccountingPageShell maxWidth="full">
             <PageHeader
                 title={t.accounting.links.expenseReports.title}
                 subtitle={t.expenses.reportsDescription}

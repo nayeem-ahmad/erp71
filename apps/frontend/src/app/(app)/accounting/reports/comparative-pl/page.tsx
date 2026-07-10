@@ -73,7 +73,7 @@ export default function ComparativePLPage() {
     };
 
     return (
-        <AccountingPageShell maxWidth="wide">
+        <AccountingPageShell maxWidth="full">
             <PageHeader
                 title={t.accounting.reports.comparativePl.title}
                 subtitle={t.accounting.reports.comparativePl.subtitle}

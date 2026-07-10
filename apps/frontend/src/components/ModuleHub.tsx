@@ -81,7 +81,7 @@ export default function ModuleHub({
     );
 
     return (
-        <PageShell maxWidth="wide">
+        <PageShell maxWidth="full">
             <PageHeader title={title} subtitle={subtitle} breadcrumbs={breadcrumbs} />
 
             {children}
