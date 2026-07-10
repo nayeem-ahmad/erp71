@@ -86,3 +86,17 @@ export class GetBranchReportDto {
     @IsString()
     to?: string;
 }
+
+export class GetSalesByCategoryDto {
+    @IsOptional()
+    @IsUUID()
+    storeId?: string;
+
+    @IsOptional()
+    @IsString()
+    from?: string;
+
+    @IsOptional()
+    @IsString()
+    to?: string;
+}

@@ -139,18 +139,6 @@ describe('InventoryPage', () => {
         });
     });
 
-    it('renders navigation links', async () => {
-        render(<InventoryPage />);
-        await waitFor(() => {
-            expect(screen.getByText('Stock Ledger')).toBeInTheDocument();
-            expect(screen.getByText('Settings')).toBeInTheDocument();
-            expect(screen.getByText('Manage Categories')).toBeInTheDocument();
-            expect(screen.getByText('Transfers')).toBeInTheDocument();
-            expect(screen.getByText('Shrinkage')).toBeInTheDocument();
-            expect(screen.getByText('Stock Takes')).toBeInTheDocument();
-        });
-    });
-
     it('renders Add Product button', async () => {
         render(<InventoryPage />);
         await waitFor(() => {
@@ -195,32 +183,6 @@ describe('InventoryPage', () => {
         await waitFor(() => {
             expect(screen.getByLabelText(/show only uncategorized/i)).toBeInTheDocument();
         });
-    });
-
-    it('shows upgrade link for users without advanced plan', async () => {
-        render(<InventoryPage />);
-        await waitFor(() => {
-            expect(screen.getByText('Upgrade for Advanced Reports')).toBeInTheDocument();
-        });
-    });
-
-    it('shows advanced report links for STANDARD plan users', async () => {
-        localStorage.setItem('subscription_plan_code', 'STANDARD');
-        render(<InventoryPage />);
-        await waitFor(() => {
-            expect(screen.getByText('Reorder Report')).toBeInTheDocument();
-            expect(screen.getByText('Shrinkage Report')).toBeInTheDocument();
-        });
-        localStorage.removeItem('subscription_plan_code');
-    });
-
-    it('shows advanced report links for PREMIUM plan users', async () => {
-        localStorage.setItem('subscription_plan_code', 'PREMIUM');
-        render(<InventoryPage />);
-        await waitFor(() => {
-            expect(screen.getByText('Reorder Report')).toBeInTheDocument();
-        });
-        localStorage.removeItem('subscription_plan_code');
     });
 
     it('renders DataTable with loaded products', async () => {

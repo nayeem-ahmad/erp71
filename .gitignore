@@ -54,3 +54,6 @@ next-env.d.ts
 
 /src/generated/prisma
 .getaibd/
+
+# Brainstorming visual companion
+.superpowers/
