@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, BookOpen, ClipboardCheck, MoreHorizontal, Package, Pencil, Plus, Settings2, ShoppingBasket, Tag, Trash2, Truck, TrendingUp, Upload } from 'lucide-react';
+import { Package, Pencil, Plus, ShoppingBasket, Trash2, Truck, Upload } from 'lucide-react';
 import { api, fetchWithAuth } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -47,8 +47,6 @@ export default function InventoryPage() {
     const [importStatus, setImportStatus] = useState<string | null>(null);
     const [isImporting, setIsImporting] = useState(false);
     const csvInputRef = useRef<HTMLInputElement>(null);
-    const mobileActionsRef = useRef<HTMLDivElement>(null);
-    const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -58,7 +56,6 @@ export default function InventoryPage() {
     const [selectedGroupId, setSelectedGroupId] = useState('');
     const [selectedSubgroupId, setSelectedSubgroupId] = useState('');
     const [showUncategorized, setShowUncategorized] = useState(false);
-    const [hasAdvancedInventoryReports, setHasAdvancedInventoryReports] = useState(false);
 
     useEffect(() => {
         void Promise.all([loadProducts(), loadCategoryOptions()]);
@@ -67,35 +64,6 @@ export default function InventoryPage() {
     useEffect(() => {
         void loadProducts();
     }, [selectedGroupId, selectedSubgroupId, showUncategorized]);
-
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const planCode = localStorage.getItem('subscription_plan_code');
-            setHasAdvancedInventoryReports(planCode === 'STANDARD' || planCode === 'PREMIUM');
-        }
-    }, []);
-
-    useEffect(() => {
-        if (!mobileActionsOpen) return;
-
-        const onKey = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') setMobileActionsOpen(false);
-        };
-        const onPointer = (event: MouseEvent) => {
-            if (mobileActionsRef.current && !mobileActionsRef.current.contains(event.target as Node)) {
-                setMobileActionsOpen(false);
-            }
-        };
-
-        window.addEventListener('keydown', onKey);
-        const id = window.setTimeout(() => document.addEventListener('mousedown', onPointer), 0);
-
-        return () => {
-            window.removeEventListener('keydown', onKey);
-            window.clearTimeout(id);
-            document.removeEventListener('mousedown', onPointer);
-        };
-    }, [mobileActionsOpen]);
 
     const loadProducts = async () => {
         try {
@@ -432,133 +400,9 @@ export default function InventoryPage() {
                         >
                             <Upload className="w-4 h-4" />
                         </button>
-                        <div ref={mobileActionsRef} className="relative">
-                            <button
-                                type="button"
-                                onClick={() => setMobileActionsOpen((open) => !open)}
-                                className="min-h-11 min-w-11 flex items-center justify-center bg-white border border-gray-200 text-gray-700 rounded-xl transition-all hover:border-blue-300 hover:text-blue-700"
-                                aria-label={t.common.actions}
-                                aria-expanded={mobileActionsOpen}
-                            >
-                                <MoreHorizontal className="w-5 h-5" />
-                            </button>
-                            {mobileActionsOpen ? (
-                                <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-2xl border border-gray-200 bg-white py-2 shadow-xl">
-                                    <Link href="/inventory/ledger" onClick={() => setMobileActionsOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                                        <BookOpen className="w-4 h-4" />
-                                        {t.inventory.stockLedger}
-                                    </Link>
-                                    <Link href="/inventory/settings" onClick={() => setMobileActionsOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                                        <Settings2 className="w-4 h-4" />
-                                        {t.inventory.settings}
-                                    </Link>
-                                    <Link href="/inventory/categories" onClick={() => setMobileActionsOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                                        <Tag className="w-4 h-4" />
-                                        {t.inventory.manageCategories}
-                                    </Link>
-                                    <Link href="/inventory/transfers" onClick={() => setMobileActionsOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                                        <Truck className="w-4 h-4" />
-                                        {t.inventory.transfers}
-                                    </Link>
-                                    <Link href="/inventory/shrinkage" onClick={() => setMobileActionsOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                                        <AlertTriangle className="w-4 h-4" />
-                                        {t.inventory.shrinkage}
-                                    </Link>
-                                    <Link href="/inventory/stock-takes" onClick={() => setMobileActionsOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                                        <ClipboardCheck className="w-4 h-4" />
-                                        {t.inventory.stockTakes}
-                                    </Link>
-                                    {hasAdvancedInventoryReports ? (
-                                        <>
-                                            <Link href="/inventory/reports/reorder" onClick={() => setMobileActionsOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                                                <TrendingUp className="w-4 h-4" />
-                                                {t.inventory.reorderReport}
-                                            </Link>
-                                            <Link href="/inventory/reports/shrinkage" onClick={() => setMobileActionsOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                                                <AlertTriangle className="w-4 h-4" />
-                                                {t.inventory.shrinkageReport}
-                                            </Link>
-                                        </>
-                                    ) : (
-                                        <Link href="/billing" onClick={() => setMobileActionsOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-50">
-                                            <TrendingUp className="w-4 h-4" />
-                                            {t.inventory.upgradeReports}
-                                        </Link>
-                                    )}
-                                </div>
-                            ) : null}
-                        </div>
                     </div>
 
                     <div className="hidden md:flex flex-wrap items-center justify-end gap-3">
-                        <Link
-                            href="/inventory/ledger"
-                            className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
-                        >
-                            <BookOpen className="w-4 h-4 mr-2" />
-                            {t.inventory.stockLedger}
-                        </Link>
-                        <Link
-                            href="/inventory/settings"
-                            className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
-                        >
-                            <Settings2 className="w-4 h-4 mr-2" />
-                            {t.inventory.settings}
-                        </Link>
-                        <Link
-                            href="/inventory/categories"
-                            className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
-                        >
-                            <Tag className="w-4 h-4 mr-2" />
-                            {t.inventory.manageCategories}
-                        </Link>
-                        <Link
-                            href="/inventory/transfers"
-                            className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
-                        >
-                            <Truck className="w-4 h-4 mr-2" />
-                            {t.inventory.transfers}
-                        </Link>
-                        <Link
-                            href="/inventory/shrinkage"
-                            className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
-                        >
-                            <AlertTriangle className="w-4 h-4 mr-2" />
-                            {t.inventory.shrinkage}
-                        </Link>
-                        <Link
-                            href="/inventory/stock-takes"
-                            className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
-                        >
-                            <ClipboardCheck className="w-4 h-4 mr-2" />
-                            {t.inventory.stockTakes}
-                        </Link>
-                        {hasAdvancedInventoryReports ? (
-                            <>
-                                <Link
-                                    href="/inventory/reports/reorder"
-                                    className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
-                                >
-                                    <TrendingUp className="w-4 h-4 mr-2" />
-                                    {t.inventory.reorderReport}
-                                </Link>
-                                <Link
-                                    href="/inventory/reports/shrinkage"
-                                    className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
-                                >
-                                    <AlertTriangle className="w-4 h-4 mr-2" />
-                                    {t.inventory.shrinkageReport}
-                                </Link>
-                            </>
-                        ) : (
-                            <Link
-                                href="/billing"
-                                className="bg-amber-50 border border-amber-200 text-amber-800 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-amber-300 hover:bg-amber-100"
-                            >
-                                <TrendingUp className="w-4 h-4 mr-2" />
-                                {t.inventory.upgradeReports}
-                            </Link>
-                        )}
                         <button
                             onClick={() => csvInputRef.current?.click()}
                             disabled={isImporting}

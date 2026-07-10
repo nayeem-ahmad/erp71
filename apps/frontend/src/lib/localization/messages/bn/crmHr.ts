@@ -214,6 +214,9 @@ export const crmHrMessages = {
             sendConfirm: "\"{name}\" এখন {count} প্রাপককে পাঠাবেন?",
             deleteConfirm: "এই ক্যাম্পেইন মুছবেন?",
             viewSend: "দেখুন / পাঠান",
+            searchPlaceholder: "ক্যাম্পেইন খুঁজুন...",
+            allStatuses: "সব অবস্থা",
+            allChannels: "সব চ্যানেল",
             placeholders: {
                 name: "ক্যাম্পেইনের নাম *",
                 message: "আপনার বার্তার টেক্সট...",

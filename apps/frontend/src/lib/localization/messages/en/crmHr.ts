@@ -214,6 +214,9 @@ export const crmHrMessages = {
         "sendConfirm": "Send \"{name}\" to {count} recipients now?",
         "deleteConfirm": "Delete this campaign?",
         "viewSend": "View / Send",
+        "searchPlaceholder": "Search campaigns...",
+        "allStatuses": "All Statuses",
+        "allChannels": "All Channels",
         "placeholders": {
             "name": "Campaign name *",
             "message": "Your message text...",

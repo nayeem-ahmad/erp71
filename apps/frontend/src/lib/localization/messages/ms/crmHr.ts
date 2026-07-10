@@ -214,6 +214,9 @@ export const crmHrMessages = {
         sendConfirm: "Hantar \"{name}\" kepada {count} penerima sekarang?",
         deleteConfirm: "Padam kempen ini?",
         viewSend: "Lihat / Hantar",
+        searchPlaceholder: "Cari kempen...",
+        allStatuses: "Semua Status",
+        allChannels: "Semua Saluran",
         placeholders: {
             name: "Nama kempen *",
             message: "Teks mesej anda...",
