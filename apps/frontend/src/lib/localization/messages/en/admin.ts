@@ -371,7 +371,21 @@ export const adminMessages = {
             description: 'Manage global infrastructure credentials shared across all tenants.',
             securityNotice: 'Security notice:',
             securityBody: 'Secret values (API keys, passwords) are encrypted at rest. Changes take effect within 60 seconds as the in-memory cache expires.',
+            groups: {
+                channels: 'Channels',
+                plans: 'Plans & Billing',
+                config: 'Platform Config',
+                growth: 'Growth',
+            },
             sections: {
+                referrals: {
+                    label: 'Referrals',
+                    description: 'Referral program, referrer rewards, and signup tracking.',
+                },
+                feedback: {
+                    label: 'Feedback',
+                    description: 'Tenant feedback inbox and roadmap voting.',
+                },
                 sms: {
                     label: 'SMS Gateway',
                     description: 'API key, sender ID, and provider URL for outbound SMS.',

@@ -371,7 +371,21 @@ export const adminMessages = {
                 description: 'Urus kelayakan infrastruktur global yang dikongsi merentas semua penyewa.',
                 securityNotice: 'Notis keselamatan:',
                 securityBody: 'Nilai rahsia (kunci API, kata laluan) disulitkan semasa berehat. Perubahan berkuat kuasa dalam masa 60 saat apabila cache dalam memori tamat tempoh.',
+                groups: {
+                    channels: 'Saluran',
+                    plans: 'Pelan & Bil',
+                    config: 'Konfigurasi Platform',
+                    growth: 'Pertumbuhan',
+                },
                 sections: {
+                    referrals: {
+                        label: 'Rujukan',
+                        description: 'Program rujukan, ganjaran perujuk, dan penjejakan pendaftaran.',
+                    },
+                    feedback: {
+                        label: 'Maklum Balas',
+                        description: 'Peti masuk maklum balas penyewa dan pengundian roadmap.',
+                    },
                     sms: {
                         label: 'Get Laluan SMS',
                         description: 'Kunci API, ID penghantar, dan URL penyedia untuk SMS keluar.',
