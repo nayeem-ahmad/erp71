@@ -353,11 +353,6 @@ export class InvitationsService {
             throw new BadRequestException('Please enter a valid mobile number including country code.');
         }
 
-        const mobileTaken = await this.db.user.findFirst({ where: { mobile: normalizedMobile } });
-        if (mobileTaken) {
-            throw new ConflictException('Mobile number already in use');
-        }
-
         const passwordHash = await bcrypt.hash(password, 10);
 
         await this.db.$transaction(async (tx) => {

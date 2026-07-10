@@ -862,10 +862,6 @@ export class AdminTenantsService {
         }
 
         const mobileFields = this.resolveMobileFields(dto.mobile, dto.mobile_country_code);
-        if (mobileFields.mobile) {
-            const mobileTaken = await this.db.user.findFirst({ where: { mobile: mobileFields.mobile } });
-            if (mobileTaken) throw new ConflictException('Mobile number already in use');
-        }
 
         const passwordHash = await bcrypt.hash(dto.password, 10);
         const user = await this.db.user.create({
@@ -923,10 +919,6 @@ export class AdminTenantsService {
                     dto.mobile,
                     dto.mobile_country_code ?? user.mobile_country_code,
                 );
-                const mobileTaken = await this.db.user.findFirst({
-                    where: { mobile: mobileFields.mobile, id: { not: userId } },
-                });
-                if (mobileTaken) throw new ConflictException('Mobile number already in use');
                 data.mobile = mobileFields.mobile;
                 data.mobile_country_code = mobileFields.mobile_country_code;
             }
