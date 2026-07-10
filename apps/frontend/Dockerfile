@@ -27,10 +27,16 @@ RUN npm run generate --workspace=@erp71/database
 # Build the frontend with debug info
 ARG NEXT_PUBLIC_API_BASE
 ARG NEXT_PUBLIC_API_URL
+# Server-side target for the next.config.js /api/v1 rewrite. In production the
+# frontend and backend run as separate containers, so this must resolve to the
+# backend service on the compose network, not localhost. Baked at build time
+# because Next.js compiles rewrite destinations into the routes manifest.
+ARG BACKEND_URL=http://backend:4000
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_OPTIONS="--max-old-space-size=1536"
 ENV NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE}
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV BACKEND_URL=${BACKEND_URL}
 RUN npm run build --workspace=@erp71/frontend
 
 # Runner stage
