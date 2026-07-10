@@ -16,6 +16,12 @@ test.describe('Authentication', () => {
         await loginViaApi(page);
         await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
         await expect(page).toHaveURL(/dashboard/, { timeout: 15_000 });
+
+        // Business Monitor v2 redesign: the redesigned section headings render
+        // (read-only — assertions only, no data mutation).
+        await expect(page.getByText('Business health')).toBeVisible({ timeout: 15_000 });
+        await expect(page.getByText('Sales by category')).toBeVisible({ timeout: 15_000 });
+        await expect(page.getByText('Top customers')).toBeVisible({ timeout: 15_000 });
     });
 
     test('successful UI login redirects to dashboard', async ({ page }) => {
