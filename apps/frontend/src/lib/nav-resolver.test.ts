@@ -25,7 +25,7 @@ describe('nav-resolver', () => {
         expect(labels).toContain('Settings');
     });
 
-    it('builds platform admin sidebar with platform settings subgroup', () => {
+    it('builds platform admin sidebar with platform settings link', () => {
         const modules = buildNavModulesFromLayout(
             DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT,
             enMessages as Record<string, unknown>,
@@ -45,7 +45,6 @@ describe('nav-resolver', () => {
         expect(labels).toContain('Tenant Management');
         expect(labels).not.toContain('Tenant Payments');
         expect(labels).toContain('Platform Settings');
-        expect(labels).toContain('SMS Gateway');
-        expect(labels).toContain('Subscription Plans');
+        expect(labels).not.toContain('SMS Gateway');
     });
 });
