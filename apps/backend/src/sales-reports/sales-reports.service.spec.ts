@@ -336,6 +336,35 @@ describe('SalesReportsService', () => {
         });
     });
 
+    // ── getSalesByCategory ────────────────────────────────────────────────────
+
+    describe('getSalesByCategory', () => {
+        it('aggregates revenue by product group with shares and an Other rollup', async () => {
+            const saleItems = [
+                { quantity: 2, price_at_sale: 100, product: { group_id: 'g1', group: { id: 'g1', name: 'Electronics' } } },
+                { quantity: 1, price_at_sale: 300, product: { group_id: 'g2', group: { id: 'g2', name: 'Lighting' } } },
+                { quantity: 1, price_at_sale: 100, product: { group_id: null, group: null } },
+            ];
+            db.saleItem.findMany.mockResolvedValue(saleItems);
+
+            const result = await service.getSalesByCategory('tenant-1', {});
+
+            expect(result.summary.totalRevenue).toBe(600);
+            expect(result.summary.categoryCount).toBe(3);
+            const electronics = result.rows.find((r: any) => r.categoryName === 'Electronics');
+            expect(electronics).toMatchObject({ categoryId: 'g1', revenue: 200 });
+            expect(electronics!.share).toBeCloseTo(33.333, 2);
+            const uncategorized = result.rows.find((r: any) => r.categoryName === 'Uncategorized');
+            expect(uncategorized).toMatchObject({ categoryId: null, revenue: 100 });
+        });
+
+        it('returns empty rows and zero total when there are no sales', async () => {
+            db.saleItem.findMany.mockResolvedValue([]);
+            const result = await service.getSalesByCategory('tenant-1', {});
+            expect(result).toEqual({ summary: { totalRevenue: 0, categoryCount: 0 }, rows: [] });
+        });
+    });
+
     // ── getConsolidatedReport ─────────────────────────────────────────────────
 
     describe('getConsolidatedReport', () => {

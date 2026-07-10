@@ -1,25 +1,19 @@
 'use client';
 
-import {
-    Package,
-    TrendingUp,
-    Clock,
-    MoreVertical,
-    Landmark,
-    Wallet,
-    ReceiptText,
-} from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
-import { formatBDT, formatDate } from '@/lib/format';
+import { formatBDT } from '@/lib/format';
 import { isAccountingOnlyPlan } from '@/lib/plan-entitlements';
 import { formatMessage, useI18n } from '@/lib/i18n';
+import { rangeToWindow } from '@/lib/dashboard-range';
 import FrequentQuickLinks from '@/components/dashboard/FrequentQuickLinks';
-import { FinancialKpiTile, StatKpiTile } from '@/components/dashboard/KpiTile';
-import PageHeader from '@/components/ui/compact/PageHeader';
+import { DashboardHeader, type DashboardRange } from '@/components/dashboard/DashboardHeader';
+import { HealthKpiTile } from '@/components/dashboard/HealthKpiTile';
+import { AttentionStrip, type AttentionItem } from '@/components/dashboard/AttentionStrip';
+import { SalesByCategoryDonut, type CategoryRow } from '@/components/dashboard/SalesByCategoryDonut';
+import { RankedListPanel, type RankedItem } from '@/components/dashboard/RankedListPanel';
 import PageShell from '@/components/ui/compact/PageShell';
-import { compactDensity } from '@/lib/ui/compact-density';
-import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
 type FinancialKpis = {
     cash_inflow: number;
@@ -33,10 +27,7 @@ type FinancialKpis = {
 };
 
 type FinancialKpiResponse = {
-    filters: {
-        from: string;
-        to: string;
-    };
+    filters: { from: string; to: string };
     kpis: FinancialKpis;
 };
 
@@ -51,10 +42,7 @@ type FinancialTrendPoint = {
 };
 
 type FinancialTrendResponse = {
-    filters: {
-        from: string;
-        to: string;
-    };
+    filters: { from: string; to: string };
     granularity: 'day';
     has_activity: boolean;
     points: FinancialTrendPoint[];
@@ -64,6 +52,39 @@ type FinancialTrendResponse = {
         gross_margin_status: 'unavailable';
         gross_margin_reason: string;
     };
+};
+
+type CategoryResponse = {
+    summary: { totalRevenue: number; categoryCount: number };
+    rows: CategoryRow[];
+};
+
+type ProductReportRow = {
+    product: { id: string; name: string };
+    unitsSold: number;
+    revenue: number;
+    revenueShare: number;
+};
+
+type CustomerReportRow = {
+    customer: { id: string | null; name: string };
+    orderCount: number;
+    revenue: number;
+    avgOrderValue: number;
+};
+
+type SaleRow = {
+    id: string;
+    serial_number: string;
+    total_amount: number | string;
+    amount_paid?: number | string;
+    status?: string;
+    created_at: string;
+};
+
+type ProductRow = {
+    reorder_level?: number | null;
+    stock_quantity?: number;
 };
 
 const EMPTY_KPIS: FinancialKpis = {
@@ -77,318 +98,400 @@ const EMPTY_KPIS: FinancialKpis = {
     tax_liability: null,
 };
 
+// Sale statuses that indicate an order still awaiting delivery. The current sales
+// pipeline only emits COMPLETED, so this degrades to a count of 0 (item omitted).
+const DELIVERY_PENDING_STATUSES = new Set(['DELIVERY_PENDING', 'AWAITING_DELIVERY', 'PENDING_DELIVERY']);
+
 export default function DashboardPage() {
     const { t, locale } = useI18n();
     const copy = t.dashboardHome;
-    const [user, setUser] = useState<any>(null);
-    const [sales, setSales] = useState<any[]>([]);
-    const [products, setProducts] = useState<any[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+
+    const [range, setRange] = useState<DashboardRange>('week');
+    const [accountingOnlyMode, setAccountingOnlyMode] = useState(false);
+    const [greetingName, setGreetingName] = useState('');
+    const [tenantName, setTenantName] = useState('');
+    const [renewalEnd, setRenewalEnd] = useState<string | null>(null);
+
     const [financialSnapshot, setFinancialSnapshot] = useState<FinancialKpiResponse | null>(null);
     const [financialTrendSnapshot, setFinancialTrendSnapshot] = useState<FinancialTrendResponse | null>(null);
+    const [categoryData, setCategoryData] = useState<CategoryResponse | null>(null);
+    const [productReport, setProductReport] = useState<ProductReportRow[]>([]);
+    const [customerReport, setCustomerReport] = useState<CustomerReportRow[]>([]);
+    const [sales, setSales] = useState<SaleRow[]>([]);
+    const [lowStockCount, setLowStockCount] = useState(0);
+
     const [isFinancialLoading, setIsFinancialLoading] = useState(true);
+    const [isRetailLoading, setIsRetailLoading] = useState(true);
     const [financialError, setFinancialError] = useState('');
     const [financialTrendError, setFinancialTrendError] = useState('');
-    const [lowStockCount, setLowStockCount] = useState<number | null>(null);
-    const [accountingOnlyMode, setAccountingOnlyMode] = useState(false);
 
     useEffect(() => {
+        let cancelled = false;
+
         const fetchData = async () => {
+            setIsFinancialLoading(true);
+            setIsRetailLoading(true);
+            setFinancialError('');
+            setFinancialTrendError('');
+
             let includeRetailPanels = true;
 
             try {
                 const me = await api.getMe();
-                setUser(me);
-                const tenantId = localStorage.getItem('tenant_id');
-                const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === tenantId)
-                    || me?.tenants?.[0];
+                if (cancelled) return;
+                const tenantId = typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null;
+                const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === tenantId) || me?.tenants?.[0];
                 const planCode = tenant?.subscription?.plan?.code || null;
                 const features = (tenant?.subscription?.plan?.features_json || {}) as Record<string, unknown>;
                 includeRetailPanels = !isAccountingOnlyPlan(planCode, features);
                 setAccountingOnlyMode(!includeRetailPanels);
+                setGreetingName(me?.name || '');
+                setTenantName(tenant?.name || copy.yourBusiness);
+                setRenewalEnd(tenant?.subscription?.current_period_end || null);
             } catch (reason) {
                 console.error('Failed to fetch dashboard user context:', reason);
             }
 
-            const [productsRes, salesRes, financialRes, trendRes] = await Promise.allSettled([
+            const win = rangeToWindow(range);
+
+            const [kpisRes, trendRes, productsRes, salesRes, categoryRes, productRepRes, customerRepRes] = await Promise.allSettled([
+                api.getFinancialKpis(win),
+                api.getFinancialTrends(win),
                 includeRetailPanels ? api.getProducts() : Promise.resolve([]),
                 includeRetailPanels ? api.getSales() : Promise.resolve([]),
-                api.getFinancialKpis(),
-                api.getFinancialTrends(),
+                includeRetailPanels ? api.getSalesByCategory(win) : Promise.resolve(null),
+                includeRetailPanels ? api.getSalesByProduct(win) : Promise.resolve({ rows: [] }),
+                includeRetailPanels ? api.getSalesByCustomer(win) : Promise.resolve({ rows: [] }),
             ]);
 
-            if (productsRes.status === 'fulfilled') {
-                const fetchedProducts = productsRes.value;
-                setProducts(fetchedProducts);
-                const lowStock = (Array.isArray(fetchedProducts) ? fetchedProducts : fetchedProducts?.data ?? [])
-                    .filter((p: any) => p.reorder_level != null && p.stock_quantity <= p.reorder_level).length;
-                setLowStockCount(lowStock);
-            }
+            if (cancelled) return;
 
-            if (salesRes.status === 'fulfilled') {
-                setSales(salesRes.value);
-            }
-
-            if (financialRes.status === 'fulfilled') {
-                setFinancialSnapshot(financialRes.value);
+            if (kpisRes.status === 'fulfilled') {
+                setFinancialSnapshot(kpisRes.value);
             } else {
-                setFinancialError(financialRes.reason instanceof Error ? financialRes.reason.message : copy.financialKpisUnavailable);
+                setFinancialSnapshot(null);
+                setFinancialError(kpisRes.reason instanceof Error ? kpisRes.reason.message : copy.financialKpisUnavailable);
             }
 
             if (trendRes.status === 'fulfilled') {
                 setFinancialTrendSnapshot(trendRes.value);
             } else {
+                setFinancialTrendSnapshot(null);
                 setFinancialTrendError(trendRes.reason instanceof Error ? trendRes.reason.message : copy.financialTrendsUnavailable);
             }
 
-            if (includeRetailPanels && (productsRes.status === 'rejected' || salesRes.status === 'rejected')) {
+            if (productsRes.status === 'fulfilled') {
+                const fetchedProducts = productsRes.value;
+                const list: ProductRow[] = Array.isArray(fetchedProducts) ? fetchedProducts : fetchedProducts?.data ?? [];
+                setLowStockCount(list.filter((p) => p.reorder_level != null && (p.stock_quantity ?? 0) <= p.reorder_level).length);
+            } else {
+                setLowStockCount(0);
+            }
+
+            setSales(salesRes.status === 'fulfilled' ? (salesRes.value ?? []) : []);
+            setCategoryData(categoryRes.status === 'fulfilled' ? categoryRes.value : null);
+            setProductReport(productRepRes.status === 'fulfilled' ? (productRepRes.value?.rows ?? []) : []);
+            setCustomerReport(customerRepRes.status === 'fulfilled' ? (customerRepRes.value?.rows ?? []) : []);
+
+            if (includeRetailPanels && (categoryRes.status === 'rejected' || productRepRes.status === 'rejected' || customerRepRes.status === 'rejected')) {
                 console.error('Failed to fetch dashboard retail data:', {
-                    products: productsRes.status === 'rejected' ? productsRes.reason : null,
-                    sales: salesRes.status === 'rejected' ? salesRes.reason : null,
+                    category: categoryRes.status === 'rejected' ? categoryRes.reason : null,
+                    products: productRepRes.status === 'rejected' ? productRepRes.reason : null,
+                    customers: customerRepRes.status === 'rejected' ? customerRepRes.reason : null,
                 });
             }
 
-            setIsLoading(false);
             setIsFinancialLoading(false);
+            setIsRetailLoading(false);
         };
 
         void fetchData();
-    }, [copy.financialKpisUnavailable, copy.financialTrendsUnavailable]);
 
-    const totalSalesAmount = sales.reduce((acc, sale) => acc + Number(sale.total_amount), 0);
-    const activeOrdersCount = sales.length;
-    const displayedProducts = products.slice(0, 4);
+        return () => {
+            cancelled = true;
+        };
+    }, [range, copy.yourBusiness, copy.financialKpisUnavailable, copy.financialTrendsUnavailable]);
+
+    const greeting = useMemo(() => {
+        const hour = new Date().getHours();
+        const base = hour < 12 ? copy.greetingMorning : hour < 17 ? copy.greetingAfternoon : copy.greetingEvening;
+        return greetingName ? `${base}, ${greetingName} 👋` : `${base} 👋`;
+    }, [copy, greetingName]);
+
+    const resolvedTenantName = tenantName || copy.yourBusiness;
+
     const financialKpis = financialSnapshot?.kpis ?? EMPTY_KPIS;
     const financialTrends = financialTrendSnapshot?.points ?? [];
-    const financialComparison = financialTrendSnapshot?.comparison ?? {
-        net_profit: financialKpis.gross_revenue - financialKpis.operating_expense,
-        gross_margin: null,
-        gross_margin_status: 'unavailable' as const,
-        gross_margin_reason: copy.grossMarginReasonDefault,
-    };
-    const financialDateRange = financialSnapshot?.filters
-        ? `${formatDate(financialSnapshot.filters.from, locale)} - ${formatDate(financialSnapshot.filters.to, locale)}`
-        : copy.currentMonth;
-    const lowStockTrend = lowStockCount === null
-        ? copy.loadingTrend
-        : lowStockCount === 0
-            ? copy.allSufficientlyStocked
-            : formatMessage(
-                lowStockCount === 1 ? copy.lowStockItemSingular : copy.lowStockItemsPlural,
-                { count: lowStockCount },
-            );
-    const tenantName = user?.tenants?.[0]?.name || copy.yourBusiness;
+    const netProfit = financialTrendSnapshot?.comparison?.net_profit
+        ?? (financialKpis.gross_revenue - financialKpis.operating_expense);
 
-    const financialTiles = useMemo(() => [
+    const salesSeries = financialTrends.map((point) => point.gross_revenue);
+    const profitSeries = financialTrends.map((point) => point.net_profit);
+    const cashSeries = financialTrends.map((point) => point.net_cash_movement);
+
+    const receivable = financialKpis.accounts_receivable;
+    const deliveryPendingCount = sales.filter((sale) => DELIVERY_PENDING_STATUSES.has(String(sale.status ?? '').toUpperCase())).length;
+    const renewalDays = renewalEnd ? Math.ceil((new Date(renewalEnd).getTime() - Date.now()) / 86_400_000) : null;
+
+    const attentionItems: AttentionItem[] = [];
+    if (lowStockCount > 0) {
+        attentionItems.push({
+            id: 'low-stock',
+            tone: 'amber',
+            value: String(lowStockCount),
+            label: formatMessage(copy.attnLowStock, { count: lowStockCount }),
+            href: '/inventory',
+            cta: copy.viewAll,
+        });
+    }
+    if (receivable != null && receivable > 0) {
+        attentionItems.push({
+            id: 'receivables',
+            tone: 'red',
+            value: formatBDT(receivable, { locale }),
+            label: copy.attnReceivablesOutstanding,
+            href: '/sales',
+            cta: copy.viewAll,
+        });
+    }
+    if (deliveryPendingCount > 0) {
+        attentionItems.push({
+            id: 'deliveries',
+            tone: 'blue',
+            value: String(deliveryPendingCount),
+            label: formatMessage(copy.attnDeliveries, { count: deliveryPendingCount }),
+            href: '/sales',
+            cta: copy.viewAll,
+        });
+    }
+    if (renewalDays != null && renewalDays >= 0 && renewalDays <= 30) {
+        attentionItems.push({
+            id: 'renewal',
+            tone: 'violet',
+            value: String(renewalDays),
+            label: formatMessage(copy.attnRenewal, { days: renewalDays }),
+            href: '/billing',
+            cta: copy.viewAll,
+        });
+    }
+
+    const categoryRows: CategoryRow[] = (categoryData?.rows ?? []).map((row) => ({
+        ...row,
+        categoryName: row.categoryName === 'Other'
+            ? copy.otherCategory
+            : row.categoryName === 'Uncategorized'
+                ? copy.uncategorized
+                : row.categoryName,
+    }));
+    const categoryTotal = categoryData?.summary?.totalRevenue ?? 0;
+
+    const topProducts: RankedItem[] = productReport.slice(0, 4).map((row) => ({
+        id: row.product.id,
+        name: row.product.name,
+        meta: formatMessage(copy.unitsSold, { count: row.unitsSold }),
+        amount: formatBDT(row.revenue, { locale }),
+    }));
+
+    const topCustomers: RankedItem[] = customerReport.slice(0, 4).map((row, index) => ({
+        id: row.customer.id ?? `customer-${index}`,
+        name: row.customer.name,
+        meta: formatMessage(copy.ordersCount, { count: row.orderCount }),
+        amount: formatBDT(row.revenue, { locale }),
+        avatarInitials: initialsOf(row.customer.name),
+    }));
+
+    const healthTiles = [
         {
-            title: copy.netCashMovement,
-            value: formatCurrency(financialKpis.net_cash_movement),
-            helper: formatMessage(copy.cashFlowHelper, {
-                inflow: formatCurrency(financialKpis.cash_inflow),
-                outflow: formatCurrency(financialKpis.cash_outflow),
-            }),
-            tone: financialKpis.net_cash_movement >= 0 ? 'positive' : 'negative',
-            icon: Wallet,
+            key: 'sales',
+            title: copy.kpiSales,
+            value: formatBDT(financialKpis.gross_revenue, { locale }),
+            series: salesSeries,
+            delta: trendDelta(salesSeries),
         },
         {
-            title: copy.grossRevenue,
-            value: formatCurrency(financialKpis.gross_revenue),
-            helper: copy.postedRevenueAccounts,
-            tone: 'positive',
-            icon: TrendingUp,
+            key: 'net-profit',
+            title: copy.kpiNetProfit,
+            value: formatBDT(netProfit, { locale }),
+            series: profitSeries,
+            delta: trendDelta(profitSeries),
         },
         {
-            title: copy.operatingExpense,
-            value: formatCurrency(financialKpis.operating_expense),
-            helper: copy.postedExpenseAccounts,
-            tone: 'neutral',
-            icon: ReceiptText,
+            key: 'cash',
+            title: copy.kpiCashInHand,
+            value: formatBDT(financialKpis.net_cash_movement, { locale }),
+            series: cashSeries,
+            delta: trendDelta(cashSeries),
         },
         {
-            title: copy.receivables,
-            value: formatOptionalCurrency(financialKpis.accounts_receivable, copy.notConfigured),
-            helper: financialKpis.accounts_receivable === null ? copy.noReceivableConfigured : copy.openReceivableBalance,
-            tone: 'neutral',
-            icon: Landmark,
+            key: 'receivables',
+            title: copy.kpiReceivables,
+            value: receivable == null ? copy.notConfigured : formatBDT(receivable, { locale }),
+            series: [] as number[],
+            // Receivables are money owed to the business; a positive balance isn't a "down"
+            // signal, so the tile's delta is always rendered as neutral/positive (not red).
+            delta: { label: '—', positive: true },
         },
-        {
-            title: copy.payables,
-            value: formatOptionalCurrency(financialKpis.accounts_payable, copy.notConfigured),
-            helper: financialKpis.accounts_payable === null ? copy.noPayableConfigured : copy.outstandingSupplierObligations,
-            tone: 'neutral',
-            icon: Package,
-        },
-        {
-            title: copy.netProfit,
-            value: formatCurrency(financialComparison.net_profit),
-            helper: copy.netProfitHelper,
-            tone: financialComparison.net_profit >= 0 ? 'positive' : 'negative',
-            icon: TrendingUp,
-        },
-    ] as const, [copy, financialKpis, financialComparison]);
+    ];
 
     return (
         <PageShell maxWidth="full">
-            <div className="space-y-3">
-                <PageHeader
-                    title={copy.businessMonitor}
-                    subtitle={formatMessage(copy.tenantSubtitle, { tenant: tenantName })}
-                    breadcrumbs={modulePageBreadcrumbs(
-                        copy.breadcrumbHome,
-                        copy.businessMonitor,
-                        copy.businessMonitor,
-                        'dashboard',
-                    )}
+            <div className="space-y-4">
+                <DashboardHeader
+                    greeting={greeting}
+                    tenantName={resolvedTenantName}
+                    subtitle={copy.dashboardSubtitle}
+                    range={range}
+                    onRangeChange={setRange}
+                    labels={{ today: copy.rangeToday, week: copy.rangeWeek, month: copy.rangeMonth }}
                 />
+
                 <FrequentQuickLinks accountingOnlyMode={accountingOnlyMode} />
-            </div>
 
-            {!accountingOnlyMode ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-                    <StatKpiTile
-                        title={copy.totalSales}
-                        value={`${totalSalesAmount.toLocaleString()}`}
-                        trend={copy.trendFromLastMonth}
-                        isPositive={true}
-                        tone="blue"
-                    />
-                    <StatKpiTile
-                        title={copy.activeOrders}
-                        value={activeOrdersCount.toString()}
-                        trend={copy.realTimeData}
-                        isPositive={true}
-                        tone="green"
-                    />
-                    <StatKpiTile
-                        title={copy.products}
-                        value={products.length.toString()}
-                        trend={copy.inInventory}
-                        isPositive={true}
-                        tone="purple"
-                    />
-                    <StatKpiTile
-                        title={copy.lowStockItems}
-                        value={lowStockCount === null ? '—' : lowStockCount.toString()}
-                        trend={lowStockTrend}
-                        isPositive={lowStockCount !== null && lowStockCount === 0}
-                        tone={lowStockCount !== null && lowStockCount > 0 ? 'peach' : 'green'}
-                    />
-                </div>
-            ) : null}
-
-            <section className={`${compactDensity.card}`}>
-                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 pb-3 mb-3">
-                    <div>
-                        <p className={compactDensity.sectionLabel}>{copy.financialSnapshot}</p>
-                        <h2 className="mt-0.5 text-base font-bold tracking-tight text-gray-900">{copy.accountingKpis}</h2>
-                        <p className={`${compactDensity.pageSubtitle} mt-0.5`}>{financialDateRange}</p>
-                    </div>
-                    {financialError ? (
-                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                            {financialError}
-                        </div>
-                    ) : null}
-                </div>
-
-                {isFinancialLoading ? (
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                            {Array.from({ length: 6 }).map((_, index) => (
-                                <div key={index} className="rounded-lg border border-gray-100 bg-gray-50 p-3 animate-pulse">
-                                    <div className="h-3 w-24 rounded bg-gray-200" />
-                                    <div className="mt-3 h-6 w-28 rounded bg-gray-200" />
-                                    <div className="mt-2 h-3 w-36 rounded bg-gray-200" />
+                <section>
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">{copy.sectionHealth}</p>
+                    {isFinancialLoading ? (
+                        <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
+                            {Array.from({ length: 4 }).map((_, index) => (
+                                <div key={index} className="rounded-xl border border-[#eef2f7] bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] animate-pulse">
+                                    <div className="h-3 w-16 rounded bg-slate-200" />
+                                    <div className="mt-2 h-6 w-24 rounded bg-slate-200" />
+                                    <div className="mt-2 h-3 w-12 rounded bg-slate-200" />
+                                    <div className="mt-3 h-5 w-full rounded bg-slate-100" />
                                 </div>
                             ))}
                         </div>
-                        <div className="rounded-lg border border-gray-100 bg-gray-50 p-3 animate-pulse">
-                            <div className="h-3 w-32 rounded bg-gray-200" />
-                            <div className="mt-4 h-36 rounded-lg bg-gray-200" />
-                        </div>
-                    </div>
-                ) : (
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                            {financialTiles.map((tile) => (
-                                <FinancialKpiTile
-                                    key={tile.title}
-                                    title={tile.title}
-                                    value={tile.value}
-                                    helper={tile.helper}
-                                    tone={tile.tone}
-                                    Icon={tile.icon}
-                                />
-                            ))}
-                        </div>
-
-                        <section className={`${compactDensity.cardFlat} space-y-3`}>
-                            <div className="flex flex-wrap items-start justify-between gap-2">
-                                <div>
-                                    <p className={compactDensity.sectionLabel}>{copy.cashFlowMovement}</p>
-                                    <h3 className="mt-0.5 text-base font-bold tracking-tight text-gray-950">{copy.inflowVsOutflow}</h3>
+                    ) : (
+                        <div className="space-y-2">
+                            {financialError ? (
+                                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                                    {financialError}
                                 </div>
+                            ) : null}
+                            <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
+                                {healthTiles.map((tile) => (
+                                    <HealthKpiTile
+                                        key={tile.key}
+                                        title={tile.title}
+                                        value={tile.value}
+                                        delta={tile.delta.label}
+                                        deltaPositive={tile.delta.positive}
+                                        points={tile.series}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </section>
+
+                {!accountingOnlyMode ? (
+                    <section>
+                        <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">{copy.sectionAttention}</p>
+                        {isRetailLoading ? (
+                            <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
+                                {Array.from({ length: 4 }).map((_, index) => (
+                                    <div key={index} className="h-16 rounded-xl border border-[#eef2f7] bg-white p-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] animate-pulse">
+                                        <div className="h-5 w-12 rounded bg-slate-200" />
+                                        <div className="mt-2 h-3 w-20 rounded bg-slate-100" />
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <AttentionStrip items={attentionItems} allClearLabel={copy.attnAllClear} />
+                        )}
+                    </section>
+                ) : null}
+
+                <section>
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">{copy.sectionMoney}</p>
+                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-[3fr_2fr]">
+                        <div className="rounded-xl border border-[#eef2f7] bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                            <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                                <h3 className="text-xs font-bold text-slate-900">{copy.cashFlowMovement}</h3>
                                 {financialTrendError ? (
-                                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-semibold text-amber-800">
                                         {financialTrendError}
                                     </div>
                                 ) : null}
                             </div>
-                            <CashFlowChart points={financialTrends} locale={locale} />
-                        </section>
-                    </div>
-                )}
-            </section>
-
-            {!accountingOnlyMode ? (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                    <div className={`${compactDensity.card} overflow-hidden !p-0`}>
-                        <div className="px-3 py-2.5 border-b border-gray-100 flex items-center justify-between">
-                            <h2 className="text-sm font-bold text-gray-900 tracking-tight">{copy.recentActivity}</h2>
-                            <button className="text-gray-400 hover:text-gray-600 font-medium text-xs">
-                                {copy.viewAll}
-                            </button>
-                        </div>
-                        <div>
-                            {sales.length > 0 ? (
-                                sales.slice(0, 5).map((sale) => (
-                                    <ActivityItem
-                                        key={sale.id}
-                                        title={formatMessage(copy.saleTitle, { serial: sale.serial_number })}
-                                        description={formatMessage(copy.amountLabel, { amount: formatBDT(Number(sale.total_amount), { locale }) })}
-                                        time={new Date(sale.created_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
-                                    />
-                                ))
+                            {isFinancialLoading ? (
+                                <div className="h-40 animate-pulse rounded-lg bg-slate-100" />
                             ) : (
-                                <div className="p-6 text-center text-gray-400 text-xs">{isLoading ? copy.loadingRecentActivity : copy.noRecentActivity}</div>
+                                <CashFlowChart points={financialTrends} locale={locale} />
                             )}
                         </div>
-                    </div>
 
-                    <div className={compactDensity.card}>
-                        <div className="flex items-center justify-between mb-3">
-                            <h2 className="text-sm font-bold text-gray-900 tracking-tight">{copy.inventoryOverview}</h2>
-                            <MoreVertical className="w-4 h-4 text-gray-400 cursor-pointer" />
-                        </div>
-                        <div className="space-y-2">
-                            {displayedProducts.length > 0 ? (
-                                displayedProducts.map((product) => (
-                                    <ProductRow
-                                        key={product.id}
-                                        name={product.name}
-                                        price={formatBDT(Number(product.price), { locale })}
-                                        sales={product.stocks?.[0]?.quantity?.toString() || '0'}
-                                        salesLabel={copy.stock}
+                        {!accountingOnlyMode ? (
+                            <div className="rounded-xl border border-[#eef2f7] bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                                <h3 className="mb-2 text-xs font-bold text-slate-900">{copy.salesByCategory}</h3>
+                                {isRetailLoading ? (
+                                    <div className="h-24 animate-pulse rounded-lg bg-slate-100" />
+                                ) : (
+                                    <SalesByCategoryDonut
+                                        rows={categoryRows}
+                                        totalLabel={formatBDT(categoryTotal, { locale })}
+                                        emptyLabel={copy.salesByCategoryEmpty}
                                     />
-                                ))
-                            ) : (
-                                <div className="text-center text-gray-400 text-xs py-3">{isLoading ? copy.loadingProducts : copy.noProductsFound}</div>
-                            )}
-                        </div>
+                                )}
+                            </div>
+                        ) : null}
                     </div>
-                </div>
-            ) : null}
+                </section>
+
+                {!accountingOnlyMode ? (
+                    <section>
+                        <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">{copy.sectionDrivers}</p>
+                        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                            <RankedListPanel title={copy.topProducts} items={topProducts} emptyLabel={copy.noProductsFound} />
+                            <RankedListPanel title={copy.topCustomers} items={topCustomers} emptyLabel={copy.noRecentActivity} />
+                            <div className="rounded-xl border border-[#eef2f7] bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                                <h3 className="mb-2 text-xs font-bold text-slate-900">{copy.recentActivity}</h3>
+                                {sales.length > 0 ? (
+                                    <div>
+                                        {sales.slice(0, 5).map((sale) => (
+                                            <ActivityItem
+                                                key={sale.id}
+                                                title={formatMessage(copy.saleTitle, { serial: sale.serial_number })}
+                                                description={formatMessage(copy.amountLabel, { amount: formatBDT(Number(sale.total_amount), { locale }) })}
+                                                time={new Date(sale.created_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
+                                            />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="py-4 text-center text-[11px] text-slate-400">
+                                        {isRetailLoading ? copy.loadingRecentActivity : copy.noRecentActivity}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    </section>
+                ) : null}
+            </div>
         </PageShell>
     );
+}
+
+function trendDelta(series: number[]): { label: string; positive: boolean } {
+    const filtered = series.filter((value) => Number.isFinite(value));
+    if (filtered.length < 2) {
+        return { label: '—', positive: true };
+    }
+    const first = filtered[0];
+    const last = filtered[filtered.length - 1];
+    const diff = last - first;
+    const positive = diff >= 0;
+    const pct = first !== 0
+        ? Math.round((diff / Math.abs(first)) * 100)
+        : (last !== 0 ? 100 : 0);
+    return { label: `${positive ? '▲' : '▼'} ${Math.abs(pct)}%`, positive };
+}
+
+function initialsOf(name: string): string {
+    return name
+        .trim()
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((part) => part.charAt(0).toUpperCase())
+        .join('') || '?';
 }
 
 function CashFlowChart({ points, locale }: { points: FinancialTrendPoint[]; locale: string }) {
@@ -450,52 +553,17 @@ function CashFlowChart({ points, locale }: { points: FinancialTrendPoint[]; loca
     );
 }
 
-function formatCurrency(value: number) {
-    const absolute = Math.abs(Number(value || 0)).toLocaleString(undefined, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    });
-
-    return `${value < 0 ? '-' : ''}${absolute}`;
-}
-
-function formatOptionalCurrency(value: number | null, notConfiguredLabel: string) {
-    if (value === null) {
-        return notConfiguredLabel;
-    }
-
-    return formatCurrency(value);
-}
-
-function ActivityItem({ title, description, time }: { title: string, description: string, time: string }) {
+function ActivityItem({ title, description, time }: { title: string; description: string; time: string }) {
     return (
-        <div className="px-3 py-2.5 flex items-start space-x-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 cursor-pointer group">
-            <div className="mt-1 h-2 w-2 rounded-full flex-shrink-0 bg-blue-400" />
-            <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-gray-900 tracking-tight truncate">{title}</p>
-                <p className="text-[11px] text-gray-500 mt-0.5">{description}</p>
+        <div className="flex items-start space-x-3 border-b border-slate-50 py-2 last:border-0">
+            <div className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-blue-400" />
+            <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold tracking-tight text-gray-900">{title}</p>
+                <p className="mt-0.5 text-[11px] text-gray-500">{description}</p>
             </div>
-            <div className="flex items-center space-x-1 text-[10px] font-medium text-gray-400 self-center whitespace-nowrap group-hover:text-gray-600 transition-colors">
-                <Clock className="w-3 h-3" />
+            <div className="flex items-center space-x-1 self-center whitespace-nowrap text-[10px] font-medium text-gray-400">
+                <Clock className="h-3 w-3" />
                 <span>{time}</span>
-            </div>
-        </div>
-    );
-}
-
-function ProductRow({ name, price, sales, salesLabel }: { name: string, price: string, sales: string, salesLabel: string }) {
-    return (
-        <div className="flex items-center justify-between group cursor-pointer hover:bg-gray-50 px-2 py-1.5 -mx-2 rounded-lg transition-colors">
-            <div className="flex items-center space-x-2.5 min-w-0">
-                <div className="w-8 h-8 bg-gray-100 rounded-md flex-shrink-0" />
-                <div className="min-w-0">
-                    <p className="text-xs font-semibold text-gray-900 tracking-tight truncate">{name}</p>
-                    <p className="text-[11px] text-gray-500">{price}</p>
-                </div>
-            </div>
-            <div className="text-right flex-shrink-0 ml-2">
-                <p className="text-xs font-semibold tracking-tight">{sales}</p>
-                <p className="text-[10px] text-gray-400">{salesLabel}</p>
             </div>
         </div>
     );

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { GetBranchReportDto, GetConsolidatedReportDto, GetMonthlySalesByCustomerDto, GetSalesByCustomerDto, GetSalesByProductDto, GetSalesSummaryDto } from './sales-reports.dto';
+import { GetBranchReportDto, GetConsolidatedReportDto, GetMonthlySalesByCustomerDto, GetSalesByCategoryDto, GetSalesByCustomerDto, GetSalesByProductDto, GetSalesSummaryDto } from './sales-reports.dto';
 
 @Injectable()
 export class SalesReportsService {
@@ -193,6 +193,63 @@ export class SalesReportsService {
                 };
             }),
         };
+    }
+
+    async getSalesByCategory(tenantId: string, query: GetSalesByCategoryDto) {
+        const dateFilter = buildDateWindow(query.from, query.to);
+
+        const saleItems = await this.db.saleItem.findMany({
+            where: {
+                sale: {
+                    tenant_id: tenantId,
+                    status: 'COMPLETED',
+                    ...(query.storeId ? { store_id: query.storeId } : {}),
+                    ...dateFilter,
+                },
+            },
+            select: {
+                quantity: true,
+                price_at_sale: true,
+                product: {
+                    select: {
+                        group_id: true,
+                        group: { select: { id: true, name: true } },
+                    },
+                },
+            },
+        });
+
+        const catMap = new Map<string, { categoryId: string | null; categoryName: string; revenue: number }>();
+        for (const item of saleItems) {
+            const groupId = item.product?.group_id ?? null;
+            const key = groupId ?? '__uncategorized__';
+            const name = item.product?.group?.name ?? 'Uncategorized';
+            const existing = catMap.get(key) ?? { categoryId: groupId, categoryName: name, revenue: 0 };
+            existing.revenue += item.quantity * Number(item.price_at_sale);
+            catMap.set(key, existing);
+        }
+
+        const sorted = Array.from(catMap.values()).sort((a, b) => b.revenue - a.revenue);
+        const totalRevenue = sorted.reduce((sum, r) => sum + r.revenue, 0);
+
+        const TOP_N = 5;
+        const rows = sorted.slice(0, TOP_N).map((r) => ({
+            ...r,
+            share: totalRevenue > 0 ? (r.revenue / totalRevenue) * 100 : 0,
+        }));
+
+        const rest = sorted.slice(TOP_N);
+        if (rest.length > 0) {
+            const otherRevenue = rest.reduce((sum, r) => sum + r.revenue, 0);
+            rows.push({
+                categoryId: null,
+                categoryName: 'Other',
+                revenue: otherRevenue,
+                share: totalRevenue > 0 ? (otherRevenue / totalRevenue) * 100 : 0,
+            });
+        }
+
+        return { summary: { totalRevenue, categoryCount: sorted.length }, rows };
     }
 
     async getConsolidatedReport(tenantId: string, query: GetConsolidatedReportDto) {
