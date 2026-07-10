@@ -42,6 +42,7 @@ import { routes } from '@/lib/routes';
  */
 const ACCOUNTING_ONLY_ADMIN_LINK_HREFS: ReadonlySet<string> = new Set([
     routes.settings.root, // My Account
+    routes.profile, // My Profile
     routes.team, // Team & Permissions
     routes.settings.auditLogs, // Audit Logs
     routes.settings.localization, // Localization

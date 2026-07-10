@@ -13,6 +13,8 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
 import { isItemVisible } from '@/lib/nav-visibility';
+import { isAccountingOnlyBlockedPath } from '@/lib/accounting-only-paths';
+import { isAccountingOnlyPlan } from '@/lib/plan-entitlements';
 
 type Card = { href: string; key: string; icon: any; accent: string; entitlement?: string };
 type Section = { key: string; cards: Card[] };
@@ -46,17 +48,18 @@ const SECTIONS: Section[] = [
 
 export default function SettingsHubPage() {
   const { t } = useI18n();
-  const { features, ready } = useTenantPlanFeatures();
+  const { planCode, features, ready } = useTenantPlanFeatures();
   const s = t.settings.hub;
+  const accountingOnly = isAccountingOnlyPlan(planCode, features);
 
   const grids = useMemo(() =>
     SECTIONS.map((section) => ({
       label: s.sections[section.key],
       links: section.cards
-        .filter((c) => isItemVisible(c, features))
+        .filter((c) => isItemVisible(c, features) && !(accountingOnly && isAccountingOnlyBlockedPath(c.href)))
         .map((c) => ({ href: c.href, title: s.links[c.key], icon: c.icon, accent: c.accent })),
     })).filter((g) => g.links.length > 0),
-  [s, features]);
+  [s, features, accountingOnly]);
 
   return (
     <PageShell maxWidth="wide">
