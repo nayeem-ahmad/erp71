@@ -51,7 +51,7 @@ export default function AccountingPage() {
     const setupLinks = useMemo(() => mapLinks(ACCOUNTING_SETUP_LINKS), [t]);
 
     return (
-        <AccountingPageShell maxWidth="wide">
+        <AccountingPageShell maxWidth="full">
             <PageHeader
                 title={t.accounting.title}
                 subtitle={t.accounting.subtitle}

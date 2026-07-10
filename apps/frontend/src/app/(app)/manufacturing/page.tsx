@@ -232,7 +232,7 @@ export default function ManufacturingPage() {
     ];
 
     return (
-        <div className="p-6 space-y-6">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px] space-y-4">
             <PageHeader
                 title={t.manufacturing.title}
                 subtitle={t.manufacturing.subtitle}

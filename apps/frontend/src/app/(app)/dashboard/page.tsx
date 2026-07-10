@@ -228,7 +228,7 @@ export default function DashboardPage() {
     ] as const, [copy, financialKpis, financialComparison]);
 
     return (
-        <PageShell maxWidth="wide">
+        <PageShell maxWidth="full">
             <div className="space-y-3">
                 <PageHeader
                     title={copy.businessMonitor}

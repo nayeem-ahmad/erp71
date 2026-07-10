@@ -249,7 +249,7 @@ export default function PostingRulesPage() {
     );
 
     return (
-        <AccountingPageShell maxWidth="wide">
+        <AccountingPageShell maxWidth="full">
             <PageHeader
                 title={t.postingRules.title}
                 subtitle="Configure how operational events automatically create accounting vouchers."

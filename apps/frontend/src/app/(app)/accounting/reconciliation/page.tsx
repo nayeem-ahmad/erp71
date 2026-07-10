@@ -232,7 +232,7 @@ export default function PostingExceptionsPage() {
     const totalPages = Math.max(1, Math.ceil(pagination.total / pagination.limit));
 
     return (
-        <AccountingPageShell maxWidth="wide">
+        <AccountingPageShell maxWidth="full">
             <PageHeader
                 title={t.postingExceptions.title}
                 subtitle={t.postingExceptions.subtitle}
