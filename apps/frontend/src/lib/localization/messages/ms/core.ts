@@ -1124,6 +1124,7 @@ export const coreMessages = {
                 expenseEntry: "Entri Perbelanjaan",
             },
             tenantSubtitle: "{tenant} • Kemas kini terakhir: Hari ini",
+            dashboardSubtitle: 'Beginilah prestasi kedai anda',
             yourBusiness: "Perniagaan Anda",
             totalSales: "Jumlah Jualan",
             activeOrders: "Pesanan Aktif",

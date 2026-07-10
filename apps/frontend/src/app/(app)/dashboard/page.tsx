@@ -100,7 +100,7 @@ const EMPTY_KPIS: FinancialKpis = {
 
 // Sale statuses that indicate an order still awaiting delivery. The current sales
 // pipeline only emits COMPLETED, so this degrades to a count of 0 (item omitted).
-const DELIVERY_PENDING_STATUSES = new Set(['DELIVERY_PENDING', 'AWAITING_DELIVERY', 'PENDING_DELIVERY', 'PENDING']);
+const DELIVERY_PENDING_STATUSES = new Set(['DELIVERY_PENDING', 'AWAITING_DELIVERY', 'PENDING_DELIVERY']);
 
 export default function DashboardPage() {
     const { t, locale } = useI18n();
@@ -320,7 +320,9 @@ export default function DashboardPage() {
             title: copy.kpiReceivables,
             value: receivable == null ? copy.notConfigured : formatBDT(receivable, { locale }),
             series: [] as number[],
-            delta: { label: '—', positive: receivable == null || receivable <= 0 },
+            // Receivables are money owed to the business; a positive balance isn't a "down"
+            // signal, so the tile's delta is always rendered as neutral/positive (not red).
+            delta: { label: '—', positive: true },
         },
     ];
 
@@ -330,7 +332,7 @@ export default function DashboardPage() {
                 <DashboardHeader
                     greeting={greeting}
                     tenantName={resolvedTenantName}
-                    subtitle={formatMessage(copy.tenantSubtitle, { tenant: resolvedTenantName })}
+                    subtitle={copy.dashboardSubtitle}
                     range={range}
                     onRangeChange={setRange}
                     labels={{ today: copy.rangeToday, week: copy.rangeWeek, month: copy.rangeMonth }}

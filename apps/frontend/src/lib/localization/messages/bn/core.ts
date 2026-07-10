@@ -1123,6 +1123,7 @@ export const coreMessages = {
                 expenseEntry: "খরচ এন্ট্রি",
             },
             tenantSubtitle: "{tenant} • সর্বশেষ আপডেট: আজ",
+            dashboardSubtitle: 'আপনার দোকান কেমন চলছে',
             yourBusiness: "আপনার ব্যবসা",
             totalSales: "মোট বিক্রয়",
             activeOrders: "সক্রিয় অর্ডার",

@@ -1123,6 +1123,7 @@ export const coreMessages = {
             expenseEntry: 'Expense Entry',
         },
         tenantSubtitle: '{tenant} • Last updated: Today',
+        dashboardSubtitle: "Here's how your shop is doing",
         yourBusiness: 'Your Business',
         totalSales: 'Total Sales',
         activeOrders: 'Active Orders',
