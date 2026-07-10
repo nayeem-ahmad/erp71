@@ -1134,6 +1134,11 @@ export const api = {
         if (!res.ok) throw new Error(body?.message || 'Failed to load plans');
         return body && 'data' in body ? body.data : body;
     }),
+    getSignupDefaults: () => fetch(`${API_BASE}/auth/signup-defaults`).then(async res => {
+        const body = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(body?.message || 'Failed to load signup defaults');
+        return body && 'data' in body ? body.data : body;
+    }),
     validateReferralCode: (code: string) => fetch(`${API_BASE}/auth/referral-code/${encodeURIComponent(code.trim())}`).then(async res => {
         const body = await res.json().catch(() => null);
         if (!res.ok) throw new Error(body?.message || 'Failed to validate referral code');

@@ -398,7 +398,7 @@ export const coreMessages = {
         },
         signup: {
             title: 'Create your ERP71 workspace',
-            description: 'Set up your organization, first store, and plan in one flow',
+            description: 'Set up your organization and plan in one flow',
             nameLabel: 'Your name',
             emailLabel: 'Email address',
             passwordLabel: 'Password',

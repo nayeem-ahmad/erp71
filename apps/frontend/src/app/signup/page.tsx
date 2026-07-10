@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowRight, Building2, Gift, Loader2, Lock, Mail, Store } from 'lucide-react';
+import { ArrowRight, Building2, Gift, Loader2, Lock, Mail } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
@@ -61,14 +61,12 @@ function SignupPageContent() {
     })();
     const [plans, setPlans] = useState<Plan[]>([]);
     const [form, setForm] = useState({
-        name: '',
         email: '',
         password: '',
         mobile: '',
         mobile_country_code: DEFAULT_MOBILE_COUNTRY_CODE,
         tenantName: '',
-        storeName: '',
-        planCode: 'BASIC' as Plan['code'],
+        planCode: 'STANDARD' as Plan['code'],
         referralCode: '',
     });
     const [isLoading, setIsLoading] = useState(false);
@@ -83,6 +81,16 @@ function SignupPageContent() {
                 const paidPlans = (Array.isArray(loadedPlans) ? loadedPlans : [])
                     .filter((plan: Plan) => isSelfServeSubscriptionPlan(plan.code, plan.monthly_price));
                 setPlans(paidPlans);
+            })
+            .catch(() => null);
+    }, []);
+
+    useEffect(() => {
+        api.getSignupDefaults()
+            .then((defaults: { defaultPlanCode?: Plan['code'] }) => {
+                if (defaults?.defaultPlanCode) {
+                    setForm((current) => ({ ...current, planCode: defaults.defaultPlanCode as Plan['code'] }));
+                }
             })
             .catch(() => null);
     }, []);
@@ -147,10 +155,6 @@ function SignupPageContent() {
         e.preventDefault();
         setError(null);
 
-        if (!form.name.trim()) {
-            setError(t.auth.signup.nameRequired);
-            return;
-        }
         if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
             setError(t.auth.signup.emailInvalid);
             return;
@@ -163,15 +167,7 @@ function SignupPageContent() {
             setError(t.auth.signup.orgNameRequired);
             return;
         }
-        if (!form.storeName.trim()) {
-            setError(t.auth.signup.storeNameRequired);
-            return;
-        }
-        if (!form.mobile.trim()) {
-            setError(t.auth.signup.mobileRequired);
-            return;
-        }
-        if (!normalizeMobileToE164(form.mobile_country_code, form.mobile)) {
+        if (form.mobile.trim() && !normalizeMobileToE164(form.mobile_country_code, form.mobile)) {
             setError(t.auth.signup.mobileInvalid);
             return;
         }
@@ -243,14 +239,6 @@ function SignupPageContent() {
 
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div className="space-y-2">
-                            <label htmlFor="signup-name" className="text-sm font-medium text-gray-700 ml-1">{t.auth.signup.nameLabel}</label>
-                            <div className="relative">
-                                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                                <input id="signup-name" value={form.name} onChange={(e) => handleChange('name', e.target.value)} required className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="Nayeem Ahmed" />
-                            </div>
-                        </div>
-
-                        <div className="space-y-2">
                             <label htmlFor="signup-email" className="text-sm font-medium text-gray-700 ml-1">{t.auth.signup.emailLabel}</label>
                             <div className="relative">
                                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -267,7 +255,6 @@ function SignupPageContent() {
                                 countryLabel={t.auth.signup.countryLabel}
                                 mobileLabel={t.auth.signup.mobileLabel}
                                 mobilePlaceholder={t.auth.signup.mobilePlaceholder}
-                                required
                                 idPrefix="signup"
                             />
                         </div>
@@ -314,14 +301,6 @@ function SignupPageContent() {
                             {referralStatus === 'invalid' && form.referralCode.trim() && (
                                 <p className="text-xs font-medium text-red-600 ml-1">{t.auth.signup.referralCodeInvalid}</p>
                             )}
-                        </div>
-
-                        <div className="space-y-2 md:col-span-2">
-                            <label htmlFor="signup-store" className="text-sm font-medium text-gray-700 ml-1">{t.auth.signup.storeLabel}</label>
-                            <div className="relative">
-                                <Store className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                                <input id="signup-store" value={form.storeName} onChange={(e) => handleChange('storeName', e.target.value)} required className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" placeholder="Gulshan Branch" />
-                            </div>
                         </div>
 
                         <div className="md:col-span-2 space-y-3">

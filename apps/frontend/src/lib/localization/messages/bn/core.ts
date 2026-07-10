@@ -398,7 +398,7 @@ export const coreMessages = {
             },
             signup: {
                 title: "আপনার ERP71 ওয়ার্কস্পেস তৈরি করুন",
-                description: "এক ধাপে আপনার প্রতিষ্ঠান, প্রথম স্টোর এবং প্ল্যান সেট করুন",
+                description: "এক ধাপে আপনার প্রতিষ্ঠান এবং প্ল্যান সেট করুন",
                 nameLabel: "আপনার নাম",
                 emailLabel: "ইমেইল ঠিকানা",
                 passwordLabel: "পাসওয়ার্ড",

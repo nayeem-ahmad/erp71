@@ -398,7 +398,7 @@ export const coreMessages = {
             },
             signup: {
                 title: "Cipta ruang kerja ERP71 anda",
-                description: "Sediakan organisasi, kedai pertama, dan pelan anda dalam satu aliran",
+                description: "Sediakan organisasi dan pelan anda dalam satu aliran",
                 nameLabel: "Nama anda",
                 emailLabel: "Alamat emel",
                 passwordLabel: "Kata laluan",
