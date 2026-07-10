@@ -28,6 +28,7 @@ export interface NavRegistryEntry {
   exact?: boolean;
   advancedOnly?: boolean;
   premiumOnly?: boolean;
+  entitlement?: string;
   soon?: boolean;
   /** Used by Sidebar permission / feature filters */
   moduleKey?: string;

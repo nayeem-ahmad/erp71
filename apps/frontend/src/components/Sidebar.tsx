@@ -18,6 +18,7 @@ import { useIsMdUp } from '@/hooks/useMediaQuery';
 import { useNavLayouts } from '@/contexts/NavLayoutContext';
 import { useBranding } from '@/lib/branding';
 import { useI18n } from '@/lib/i18n';
+import { isItemVisible } from '@/lib/nav-visibility';
 import { buildNavModulesFromLayout, type ResolvedNavChild, type ResolvedNavModule } from '@/lib/nav-resolver';
 import {
     accordionCloseState,
@@ -87,6 +88,7 @@ function filterModuleNavChildren(
     canAccessInventoryReports: boolean,
     canAccessAccountingAdvanced: boolean,
     canAccessPremiumCrm = false,
+    planFeatures: Record<string, unknown> = {},
 ): NavChild[] {
     const canAccessAdvanced = canAccessModuleAdvancedReports(
         moduleKey,
@@ -97,11 +99,14 @@ function filterModuleNavChildren(
         .map((child) => {
             if (!isNavSubgroup(child)) {
                 if (child.premiumOnly && !canAccessPremiumCrm) return null;
+                if (child.entitlement && !isItemVisible(child, planFeatures)) return null;
                 return !child.advancedOnly || canAccessAdvanced ? child : null;
             }
             if (child.advancedOnly && !canAccessAdvanced) return null;
+            if (child.entitlement && !isItemVisible(child, planFeatures)) return null;
             const filteredLinks = child.children.filter((link) => {
                 if (link.premiumOnly && !canAccessPremiumCrm) return false;
+                if (link.entitlement && !isItemVisible(link, planFeatures)) return false;
                 return !link.advancedOnly || canAccessAdvanced;
             });
             if (filteredLinks.length === 0) return null;
@@ -142,6 +147,7 @@ export default function Sidebar({
     compactNav = false,
     isOpen = false,
     onClose,
+    planFeatures = {},
 }: {
     canAccessAccounting?: boolean;
     canAccessInventoryReports?: boolean;
@@ -168,6 +174,8 @@ export default function Sidebar({
     isOpen?: boolean;
     /** Called when mobile overlay should close */
     onClose?: () => void;
+    /** Active tenant plan features, used for per-item entitlement gating */
+    planFeatures?: Record<string, unknown>;
 }) {
     const pathname = usePathname();
     const isMdUp = useIsMdUp();
@@ -243,6 +251,7 @@ export default function Sidebar({
                         canAccessInventoryReports,
                         canAccessAccountingAdvanced,
                         canAccessPremiumCrm,
+                        planFeatures,
                     );
                     return {
                         ...module,
@@ -261,6 +270,7 @@ export default function Sidebar({
                             true,
                             true,
                             canAccessPremiumCrm,
+                            planFeatures,
                         ),
                     };
                 }
@@ -286,6 +296,7 @@ export default function Sidebar({
         helpEnabled,
         supportEnabled,
         posEnabled,
+        planFeatures,
     ]);
 
     const normalizedSearchQuery = normalizeNavSearchQuery(searchQuery);
