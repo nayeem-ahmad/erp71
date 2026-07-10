@@ -85,7 +85,7 @@ export default function AiCreditsPage() {
     const periodLabel = `${new Date(summary.period_start).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} – ${new Date(summary.period_end).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`;
 
     return (
-        <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px] space-y-4">
             <PageHeader
                 title="AI Credits"
                 subtitle="Track your monthly AI usage and credit balance"

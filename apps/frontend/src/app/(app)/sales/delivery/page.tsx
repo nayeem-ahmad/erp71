@@ -158,7 +158,7 @@ export default function DeliveryPage() {
     ];
 
     return (
-        <div className="p-6 space-y-6">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px] space-y-4">
             <PageHeader
                 title={
                     <span className="inline-flex items-center gap-2">
@@ -181,7 +181,7 @@ export default function DeliveryPage() {
                         </button>
                         <button
                             onClick={openCreate}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                         >
                             <Plus className="h-4 w-4" />
                             {t.delivery.newDelivery}

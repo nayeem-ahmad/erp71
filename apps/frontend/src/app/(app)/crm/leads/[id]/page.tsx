@@ -245,7 +245,7 @@ export default function LeadDetailPage() {
     ].filter((l) => l.url);
 
     return (
-        <div className="overflow-y-auto h-full p-8 bg-[#f9fafb] space-y-6">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px] space-y-4">
             <PageHeader
                 title={lead.name}
                 breadcrumbs={nestedPageBreadcrumbs(

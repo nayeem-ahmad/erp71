@@ -97,7 +97,7 @@ export default function SmsSettingsPage() {
     }
 
     return (
-        <div className="p-6 max-w-2xl space-y-6">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px] space-y-4">
             <PageHeader
                 title={(
                     <span className="inline-flex items-center gap-2">

@@ -734,8 +734,8 @@ export default function TeamPage() {
     }, [isOwner, activeTab]);
 
     return (
-        <div className="h-full overflow-y-auto bg-[#f9fafb]">
-            <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+            <div className="w-full space-y-4">
                 <PageHeader
                     title={tm.title}
                     subtitle={tm.description}
