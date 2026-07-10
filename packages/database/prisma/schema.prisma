@@ -199,7 +199,7 @@ model User {
   token_version     Int       @default(0)
   is_platform_admin Boolean   @default(false)
   mobile_country_code String  @default("BD")
-  mobile              String? @unique
+  mobile              String?
   email_verified_at DateTime?
   avatar_url        String?
   totp_secret       String?
