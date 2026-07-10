@@ -87,8 +87,8 @@ export default function StorefrontSettingsPage() {
         isBrowser && slug ? `${globalThis.window.location.origin}/store/${slug}` : null;
 
     return (
-        <div className="h-full overflow-auto p-6">
-            <div className="max-w-2xl mx-auto space-y-6">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+            <div className="w-full space-y-4">
                 {/* Header */}
                 <PageHeader
                     title={m.title}

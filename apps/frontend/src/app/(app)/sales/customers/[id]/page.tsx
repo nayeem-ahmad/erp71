@@ -232,7 +232,7 @@ export default function CustomerProfile() {
         'bg-gray-100 text-gray-600';
 
     return (
-        <div className="overflow-y-auto h-full p-8 bg-[#f9fafb] space-y-6">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px] space-y-4">
             <PageHeader
                 title={customer.name}
                 breadcrumbs={nestedPageBreadcrumbs(

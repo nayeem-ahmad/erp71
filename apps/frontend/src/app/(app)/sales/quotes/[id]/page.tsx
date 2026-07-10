@@ -204,7 +204,7 @@ function QuoteDetailsPageContent() {
     const totalAmount = Number(quote.total_amount);
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f9fafb]">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             {isEditMode && (
                 <div className="px-8 pt-6">
                     <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-center justify-between">

@@ -251,8 +251,8 @@ export default function PaymentMethodsSettingsPage() {
         PAYMENT_TYPES.find((pt) => pt.value === type)?.label ?? type;
 
     return (
-        <div className="h-full overflow-y-auto">
-            <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+            <div className="w-full space-y-4">
                 <PageHeader
                     title={(
                         <span className="inline-flex items-center gap-3">
