@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Users, RefreshCw, ExternalLink } from 'lucide-react';
+import { RefreshCw, ExternalLink } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -9,6 +9,8 @@ import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
 import { routes } from '@/lib/routes';
+import { PageShell, PageHeader, Button } from '@/components/ui/compact';
+import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
 interface Customer {
     id: string;
@@ -84,22 +86,22 @@ export default function CrmCustomersPage() {
     );
 
     return (
-        <div className="p-6 w-full">
-            <div className="flex items-center justify-between mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                        <Users className="w-7 h-7 text-blue-600" />
-                        {m.title}
-                    </h1>
-                    <p className="text-gray-500 text-sm mt-1">{m.subtitle}</p>
-                </div>
-                <button
-                    onClick={loadCustomers}
-                    className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
-                >
-                    <RefreshCw className="w-4 h-4" /> Refresh
-                </button>
-            </div>
+        <PageShell>
+            <PageHeader
+                title={m.title}
+                subtitle={m.subtitle}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.crm,
+                    m.title,
+                    'crm',
+                )}
+                actions={
+                    <Button variant="secondary" onClick={loadCustomers} leftIcon={<RefreshCw className="w-4 h-4" />}>
+                        {t.common.refresh}
+                    </Button>
+                }
+            />
 
             <DataTable<Customer>
                 tableId="crm-customers"
@@ -109,6 +111,6 @@ export default function CrmCustomersPage() {
                 isLoading={loading}
                 emptyMessage={t.customers.emptyMessage}
             />
-        </div>
+        </PageShell>
     );
 }

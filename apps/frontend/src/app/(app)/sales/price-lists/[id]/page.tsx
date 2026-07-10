@@ -212,10 +212,9 @@ export default function PriceListDetailPage() {
     );
 
     return (
-        <div className="min-h-screen bg-gray-50/50 p-6 md:p-10">
-            <div className="max-w-6xl mx-auto">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+            <div className="w-full space-y-4">
                 <PageHeader
-                    className="mb-8"
                     title={listName || t.priceLists.detailTitle}
                     subtitle={t.priceLists.subtitle}
                     breadcrumbs={nestedPageBreadcrumbs(

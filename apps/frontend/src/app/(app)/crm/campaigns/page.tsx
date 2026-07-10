@@ -7,6 +7,8 @@ import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { DataTable } from '@/components/data-table';
+import { PageShell, PageHeader, Button } from '@/components/ui/compact';
+import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
 interface Campaign {
     id: string;
@@ -273,31 +275,30 @@ export default function CrmCampaignsPage() {
     ], [m, t.common]);
 
     return (
-        <div className="p-6 w-full">
+        <PageShell>
             {toast && <Toast {...toast} onClose={() => setToast(null)} />}
 
-            <div className="flex items-center justify-between mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                        <Megaphone className="w-6 h-6 text-violet-600" /> {m.title}
-                    </h1>
-                    <p className="text-gray-500 text-sm mt-1">{m.subtitle}</p>
-                </div>
-                <div className="flex gap-2">
-                    <button onClick={loadCampaigns} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
-                        <RefreshCw className="w-4 h-4 text-gray-500" />
-                    </button>
-                    <button
-                        onClick={() => setShowCreate(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700"
-                    >
-                        <Plus className="w-4 h-4" /> {m.newCampaign}
-                    </button>
-                </div>
-            </div>
+            <PageHeader
+                title={m.title}
+                subtitle={m.subtitle}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.crm,
+                    m.title,
+                    'crm',
+                )}
+                actions={
+                    <>
+                        <Button variant="secondary" onClick={loadCampaigns} leftIcon={<RefreshCw className="w-4 h-4" />} />
+                        <Button onClick={() => setShowCreate(true)} leftIcon={<Plus className="w-4 h-4" />}>
+                            {m.newCampaign}
+                        </Button>
+                    </>
+                }
+            />
 
             {/* Filters */}
-            <div className="flex flex-wrap gap-3 mb-4 items-center">
+            <div className="flex flex-wrap gap-3 items-center">
                 <div className="relative flex-1 min-w-[200px] max-w-sm">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
@@ -510,6 +511,6 @@ export default function CrmCampaignsPage() {
                     </div>
                 </div>
             )}
-        </div>
+        </PageShell>
     );
 }

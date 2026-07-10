@@ -211,7 +211,7 @@ export default function AdminUsersPage() {
                         <button
                             type="button"
                             onClick={openCreate}
-                            className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-200 hover:bg-blue-700 shrink-0"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors shrink-0"
                         >
                             <Plus className="w-4 h-4" /> {m.addUser}
                         </button>

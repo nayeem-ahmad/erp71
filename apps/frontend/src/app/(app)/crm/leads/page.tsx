@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
-import { UserPlus, Plus, RefreshCw, Search, Eye, Trash2, ListChecks, Upload } from 'lucide-react';
+import { Plus, RefreshCw, Search, Eye, Trash2, ListChecks, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -10,6 +10,9 @@ import { routes } from '@/lib/routes';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
+import { PageShell, PageHeader, Button } from '@/components/ui/compact';
+import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { compactDensity } from '@/lib/ui/compact-density';
 import {
     LEAD_CATEGORIES,
     LEAD_PRIORITIES,
@@ -193,35 +196,33 @@ export default function LeadsPage() {
     ], [m, c, statusLabel, categoryLabel, priorityLabel, deleteLead]);
 
     return (
-        <div className="p-6 w-full">
-            <div className="flex items-center justify-between mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                        <UserPlus className="w-7 h-7 text-violet-600" />
-                        {m.title}
-                    </h1>
-                    <p className="text-gray-500 text-sm mt-1">{m.subtitle}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                    <button onClick={loadLeads} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
-                        <RefreshCw className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={() => setImportOpen(true)}
-                        className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm font-semibold hover:bg-gray-50"
-                    >
-                        <Upload className="w-4 h-4" /> Import
-                    </button>
-                    <Link
-                        href={routes.crm.leadNew}
-                        className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-semibold hover:bg-violet-700"
-                    >
-                        <Plus className="w-4 h-4" /> {m.newLead}
-                    </Link>
-                </div>
-            </div>
+        <PageShell>
+            <PageHeader
+                title={m.title}
+                subtitle={m.subtitle}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.crm,
+                    m.title,
+                    'crm',
+                )}
+                actions={
+                    <>
+                        <Button variant="secondary" onClick={loadLeads} leftIcon={<RefreshCw className="w-4 h-4" />} />
+                        <Button variant="secondary" onClick={() => setImportOpen(true)} leftIcon={<Upload className="w-4 h-4" />}>
+                            Import
+                        </Button>
+                        <Link
+                            href={routes.crm.leadNew}
+                            className={`${compactDensity.btnPrimary} bg-blue-600 text-white hover:bg-blue-700`}
+                        >
+                            <Plus className="w-4 h-4" /> {m.newLead}
+                        </Link>
+                    </>
+                }
+            />
 
-            <div className="flex flex-wrap gap-3 mb-4 items-center">
+            <div className="flex flex-wrap gap-3 items-center">
                 <button
                     type="button"
                     onClick={() => setMyTodaysActions((v) => !v)}
@@ -274,6 +275,6 @@ export default function LeadsPage() {
                 importFn={(rows, mode) => api.importLeads(rows, mode)}
                 onSuccess={() => void loadLeads()}
             />
-        </div>
+        </PageShell>
     );
 }

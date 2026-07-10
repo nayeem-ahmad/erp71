@@ -254,9 +254,9 @@ export default function WarrantyClaimsPage() {
     );
 
     return (
-        <div className="p-6 max-w-7xl mx-auto">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <PageHeader
-                className="mb-6"
+                className="mb-4"
                 title={
                     <span className="inline-flex items-center gap-3">
                         <ShieldCheck className="w-6 h-6 text-indigo-600" />
@@ -273,7 +273,7 @@ export default function WarrantyClaimsPage() {
                 actions={
                     <button
                         onClick={() => setIsModalOpen(true)}
-                        className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                     >
                         <Plus className="w-4 h-4" />
                         {t.warrantyClaims.newClaim}
