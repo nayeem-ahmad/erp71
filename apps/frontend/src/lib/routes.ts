@@ -172,6 +172,7 @@ export const routes = {
         counters: '/settings/counters',
         localization: '/settings/localization',
         data: '/settings/data',
+        stores: '/settings/stores',
     },
 
     admin: {
