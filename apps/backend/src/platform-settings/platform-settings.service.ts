@@ -56,6 +56,7 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
         help_enabled:     { isSecret: false, default: 'false' },
         voice_enabled:    { isSecret: false, default: 'false' },
         manufacturing_enabled: { isSecret: false, default: 'true' },
+        default_signup_plan:   { isSecret: false, default: 'STANDARD' },
     },
     navigation: {
         tenant_layout: { isSecret: false },

@@ -267,6 +267,12 @@ export class AuthService {
             }));
     }
 
+    async getSignupDefaults(): Promise<{ defaultPlanCode: 'BASIC' | 'ACCOUNTING' | 'STANDARD' }> {
+        const configured = await this.platformSettings.getRawValue('general', 'default_signup_plan');
+        const code = configured && isSelfServeSubscriptionPlan(configured as any) ? configured : 'STANDARD';
+        return { defaultPlanCode: code as 'BASIC' | 'ACCOUNTING' | 'STANDARD' };
+    }
+
     private async generateAuthResponse(userId: string) {
         const user = await this.db.user.findUnique({
             where: { id: userId },

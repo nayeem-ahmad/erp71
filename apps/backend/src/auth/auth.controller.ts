@@ -43,6 +43,11 @@ export class AuthController {
         return this.authService.getPlans();
     }
 
+    @Get('signup-defaults')
+    async getSignupDefaults() {
+        return this.authService.getSignupDefaults();
+    }
+
     @Get('referral-code/:code')
     async validateReferralCode(@Param('code') code: string) {
         return this.authService.validateReferralCode(code);

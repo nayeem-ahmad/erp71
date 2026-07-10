@@ -488,3 +488,23 @@ describe('AuthService', () => {
         });
     });
 });
+
+describe('AuthService.getSignupDefaults', () => {
+    const platformSettings = { getRawValue: jest.fn() };
+    const service = new AuthService(
+        {} as any, {} as any, {} as any, {} as any, {} as any,
+        {} as any, platformSettings as any, {} as any, {} as any,
+    );
+
+    beforeEach(() => jest.clearAllMocks());
+
+    it('returns the configured self-serve plan', async () => {
+        platformSettings.getRawValue.mockResolvedValue('STANDARD');
+        await expect(service.getSignupDefaults()).resolves.toEqual({ defaultPlanCode: 'STANDARD' });
+    });
+
+    it('falls back to STANDARD when the setting is not a self-serve plan', async () => {
+        platformSettings.getRawValue.mockResolvedValue('FREE');
+        await expect(service.getSignupDefaults()).resolves.toEqual({ defaultPlanCode: 'STANDARD' });
+    });
+});
