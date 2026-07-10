@@ -14,6 +14,7 @@ export interface ResolvedNavLink {
     section?: boolean;
     advancedOnly?: boolean;
     premiumOnly?: boolean;
+    entitlement?: string;
     exact?: boolean;
 }
 
@@ -23,6 +24,7 @@ export interface ResolvedNavSubgroup {
     icon: LucideIcon;
     label: string;
     advancedOnly?: boolean;
+    entitlement?: string;
     children: ResolvedNavLink[];
 }
 
@@ -81,6 +83,7 @@ function buildChildren(
                 icon: resolveNavIcon(entry.icon),
                 label: resolveLabel(messages, entry.labelKey),
                 advancedOnly: entry.advancedOnly,
+                entitlement: entry.entitlement,
                 children: subgroupChildren,
             });
             continue;
@@ -95,6 +98,7 @@ function buildChildren(
             exact: entry.exact,
             advancedOnly: entry.advancedOnly,
             premiumOnly: entry.premiumOnly,
+            entitlement: entry.entitlement,
         });
     }
 

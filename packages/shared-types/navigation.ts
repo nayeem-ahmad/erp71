@@ -28,6 +28,7 @@ export interface NavRegistryEntry {
   exact?: boolean;
   advancedOnly?: boolean;
   premiumOnly?: boolean;
+  entitlement?: string;
   soon?: boolean;
   /** Used by Sidebar permission / feature filters */
   moduleKey?: string;
@@ -180,7 +181,8 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'hr.operations.salary-payments': { id: 'hr.operations.salary-payments', kind: 'link', icon: 'Banknote', labelKey: 'sidebar.items.salaryPayments', href: '/hr/salary-payments' },
 
   'account-settings': { id: 'account-settings', kind: 'module', icon: 'Building2', labelKey: 'sidebar.modules.accountSettings', moduleKey: 'account-settings' },
-  'account-settings.overview': { id: 'account-settings.overview', kind: 'link', icon: 'UserCog', labelKey: 'sidebar.items.myAccount', href: '/settings', exact: true },
+  'account-settings.overview': { id: 'account-settings.overview', kind: 'link', icon: 'UserCog', labelKey: 'sidebar.items.settingsHub', href: '/settings', exact: true },
+  'account-settings.profile': { id: 'account-settings.profile', kind: 'link', icon: 'UserCog', labelKey: 'sidebar.items.myProfile', href: '/profile' },
   'account-settings.team': { id: 'account-settings.team', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.teamPermissions', href: '/team', teamGated: true },
   'account-settings.audit-logs': { id: 'account-settings.audit-logs', kind: 'link', icon: 'ScrollText', labelKey: 'sidebar.items.auditLogs', href: '/settings/audit-logs', teamGated: true },
   'account-settings.localization': { id: 'account-settings.localization', kind: 'link', icon: 'Globe', labelKey: 'sidebar.items.localization', href: '/settings/localization' },
@@ -211,7 +213,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'admin.support': { id: 'admin.support', kind: 'link', icon: 'MessageSquare', labelKey: 'sidebar.items.adminSupport', href: '/admin/support' },
   'admin.system-health': { id: 'admin.system-health', kind: 'link', icon: 'Activity', labelKey: 'sidebar.items.systemHealth', href: '/admin/system-health' },
   'admin.status': { id: 'admin.status', kind: 'link', icon: 'Globe', labelKey: 'sidebar.items.platformStatus', href: '/status' },
-  'admin.platform-settings': { id: 'admin.platform-settings', kind: 'subgroup', icon: 'Settings', labelKey: 'sidebar.sections.platformSettings' },
+  'admin.platform-settings': { id: 'admin.platform-settings', kind: 'link', icon: 'Settings', labelKey: 'sidebar.sections.platformSettings', href: '/admin/platform-settings' },
   'admin.platform-settings.sms': { id: 'admin.platform-settings.sms', kind: 'link', icon: 'MessageSquare', labelKey: 'sidebar.items.platformSettingsSms', href: '/admin/platform-settings/sms' },
   'admin.platform-settings.email': { id: 'admin.platform-settings.email', kind: 'link', icon: 'Mail', labelKey: 'sidebar.items.platformSettingsEmail', href: '/admin/platform-settings/email' },
   'admin.platform-settings.whatsapp': { id: 'admin.platform-settings.whatsapp', kind: 'link', icon: 'MessageCircle', labelKey: 'sidebar.items.platformSettingsWhatsapp', href: '/admin/platform-settings/whatsapp' },
@@ -358,22 +360,9 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
 
   layoutNode('account-settings', null, 8),
   layoutNode('account-settings.overview', 'account-settings', 0),
-  layoutNode('account-settings.team', 'account-settings', 1),
-  layoutNode('account-settings.audit-logs', 'account-settings', 2),
-  layoutNode('account-settings.localization', 'account-settings', 3),
-  layoutNode('account-settings.branding', 'account-settings', 4),
-  layoutNode('account-settings.tax', 'account-settings', 5),
-  layoutNode('account-settings.loyalty', 'account-settings', 6),
-  layoutNode('account-settings.sms', 'account-settings', 7),
-  layoutNode('account-settings.report-emails', 'account-settings', 8),
-  layoutNode('account-settings.counters', 'account-settings', 9),
-  layoutNode('account-settings.sales', 'account-settings', 10),
-  layoutNode('account-settings.payment-methods', 'account-settings', 11),
-  layoutNode('account-settings.discount-codes', 'account-settings', 12),
-  layoutNode('account-settings.data', 'account-settings', 13),
-  layoutNode('account-settings.billing', 'account-settings', 14),
-  layoutNode('account-settings.sms-credits', 'account-settings', 15),
-  layoutNode('account-settings.ai-credits', 'account-settings', 16),
+  layoutNode('account-settings.profile', 'account-settings', 1),
+  layoutNode('account-settings.team', 'account-settings', 2),
+  layoutNode('account-settings.billing', 'account-settings', 3),
 
   layoutNode('support', null, 9),
   layoutNode('admin', null, 10),
@@ -397,23 +386,10 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.tenant-management.ledger', 'admin.tenant-management', 1),
   layoutNode('admin.tenant-management.reminders', 'admin.tenant-management', 2),
   layoutNode('admin.users', 'admin', 2),
-  layoutNode('admin.referrals', 'admin', 3),
-  layoutNode('admin.feedback', 'admin', 4),
-  layoutNode('admin.support', 'admin', 5),
-  layoutNode('admin.system-health', 'admin', 6),
-  layoutNode('admin.status', 'admin', 7),
-  layoutNode('admin.platform-settings', 'admin', 8),
-  layoutNode('admin.platform-settings.sms', 'admin.platform-settings', 0),
-  layoutNode('admin.platform-settings.email', 'admin.platform-settings', 1),
-  layoutNode('admin.platform-settings.whatsapp', 'admin.platform-settings', 2),
-  layoutNode('admin.platform-settings.payments', 'admin.platform-settings', 3),
-  layoutNode('admin.platform-settings.general', 'admin.platform-settings', 4),
-  layoutNode('admin.platform-settings.tenant-features', 'admin.platform-settings', 5),
-  layoutNode('admin.platform-settings.ai', 'admin.platform-settings', 6),
-  layoutNode('admin.platform-settings.navigation', 'admin.platform-settings', 7),
-  layoutNode('admin.platform-settings.plans', 'admin.platform-settings', 8),
-  layoutNode('admin.platform-settings.addons', 'admin.platform-settings', 9),
-  layoutNode('admin.platform-settings.feedback-automation', 'admin.platform-settings', 10),
+  layoutNode('admin.support', 'admin', 3),
+  layoutNode('admin.system-health', 'admin', 4),
+  layoutNode('admin.status', 'admin', 5),
+  layoutNode('admin.platform-settings', 'admin', 6),
   layoutNode('help', null, 1),
 ];
 
