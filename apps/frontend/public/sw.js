@@ -1,5 +1,5 @@
 // Service Worker for Retail POS Offline Support
-const CACHE_NAME = 'retail-pos-v2';
+const CACHE_NAME = 'retail-pos-v3';
 const STATIC_ASSETS = ['/', '/dashboard/pos'];
 
 // ── Install ─────────────────────────────────────────────────────────────────
@@ -37,6 +37,19 @@ self.addEventListener('fetch', (event) => {
 
   // Next.js internal assets — never intercept, let browser handle directly
   if (url.pathname.startsWith('/_next/')) {
+    return;
+  }
+
+  // Next.js App Router navigation data (React Server Component payloads and
+  // route prefetches) is fetched from the route URL itself — not under /_next/.
+  // These MUST reach the network untouched: serving a cached payload from a
+  // previous deployment makes the client router detect a build mismatch and
+  // fall back to a full page reload on every navigation. Never cache them.
+  if (
+    request.headers.get('RSC') === '1' ||
+    request.headers.get('Next-Router-Prefetch') === '1' ||
+    url.searchParams.has('_rsc')
+  ) {
     return;
   }
 
