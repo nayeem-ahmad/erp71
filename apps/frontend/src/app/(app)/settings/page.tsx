@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import {
   Palette, Globe, Receipt, Monitor, ShoppingBag, CreditCard, Tag, Gift,
-  Bell, Mail, HandCoins, Sparkles, FileSearch, Database,
+  Bell, Mail, HandCoins, Sparkles, FileSearch, Database, Store,
 } from 'lucide-react';
 import CompactLinkGrid from '@/components/ui/compact/CompactLinkGrid';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -24,6 +24,7 @@ const SECTIONS: Section[] = [
     { href: routes.settings.branding, key: 'branding', icon: Palette, accent: 'bg-violet-50 text-violet-700 border-violet-100' },
     { href: routes.settings.localization, key: 'localization', icon: Globe, accent: 'bg-sky-50 text-sky-700 border-sky-100' },
     { href: routes.settings.tax, key: 'tax', icon: Receipt, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
+    { href: routes.settings.stores, key: 'stores', icon: Store, accent: 'bg-orange-50 text-orange-700 border-orange-100' },
   ]},
   { key: 'salesPos', cards: [
     { href: routes.settings.counters, key: 'counters', icon: Monitor, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
