@@ -713,6 +713,14 @@ export const coreMessages = {
                     details: "Butiran",
                 },
             },
+            storeSettings: {
+                title: "Kedai",
+                description: "Tukar nama kedai anda.",
+                nameLabel: "Nama kedai",
+                save: "Simpan",
+                saved: "Nama kedai dikemas kini.",
+                error: "Tidak dapat mengemas kini nama kedai.",
+            },
         },
         pos: {
             title: "Terminal POS",

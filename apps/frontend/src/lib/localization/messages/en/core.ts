@@ -712,6 +712,14 @@ export const coreMessages = {
                 details: 'Details',
             },
         },
+        storeSettings: {
+            title: 'Stores',
+            description: 'Rename your stores.',
+            nameLabel: 'Store name',
+            save: 'Save',
+            saved: 'Store name updated.',
+            error: 'Could not update the store name.',
+        },
     },
     pos: {
         title: 'POS Terminal',

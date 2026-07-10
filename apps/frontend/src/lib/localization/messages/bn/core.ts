@@ -712,6 +712,14 @@ export const coreMessages = {
                     details: "বিবরণ",
                 },
             },
+            storeSettings: {
+                title: "দোকানসমূহ",
+                description: "আপনার দোকানের নাম পরিবর্তন করুন।",
+                nameLabel: "দোকানের নাম",
+                save: "সংরক্ষণ করুন",
+                saved: "দোকানের নাম আপডেট করা হয়েছে।",
+                error: "দোকানের নাম আপডেট করা যায়নি।",
+            },
         },
         pos: {
             title: "পস টার্মিনাল",

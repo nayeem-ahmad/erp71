@@ -815,6 +815,12 @@ export const api = {
             return tenant?.stores ?? [];
         });
     },
+    updateStore: (id: string, data: { name: string }) =>
+        fetchWithAuth(`/stores/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     exportAccountingLedger: (params: { format: 'tally' | 'quickbooks'; from?: string; to?: string }) => {
         const query = new URLSearchParams();
         query.set('format', params.format);
