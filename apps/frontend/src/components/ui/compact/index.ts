@@ -1,4 +1,5 @@
 export { default as PageShell } from './PageShell';
+export { default as Button } from './Button';
 export { default as PageHeader } from './PageHeader';
 export { default as PageBreadcrumb } from './PageBreadcrumb';
 export { default as PageToolbar } from './PageToolbar';

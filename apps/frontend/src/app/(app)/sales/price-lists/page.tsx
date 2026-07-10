@@ -147,10 +147,9 @@ export default function PriceListsPage() {
     );
 
     return (
-        <div className="min-h-screen bg-gray-50/50 p-6 md:p-10">
-            <div className="max-w-6xl mx-auto">
+        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+            <div className="w-full space-y-4">
                 <PageHeader
-                    className="mb-8"
                     title={t.priceLists.title}
                     subtitle={t.priceLists.subtitle}
                     breadcrumbs={modulePageBreadcrumbs(
@@ -168,8 +167,8 @@ export default function PriceListsPage() {
                                 <Upload className="w-4 h-4 mr-1.5" />
                                 Import
                             </button>
-                            <button onClick={() => { setEditingList(null); setIsFormOpen(true); }} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0">
-                                <Plus className="w-4 h-4 mr-2" /> {t.priceLists.newList}
+                            <button onClick={() => { setEditingList(null); setIsFormOpen(true); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors">
+                                <Plus className="w-4 h-4" /> {t.priceLists.newList}
                             </button>
                         </>
                     }

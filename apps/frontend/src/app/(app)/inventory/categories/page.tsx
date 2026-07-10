@@ -285,9 +285,9 @@ export default function InventoryCategoriesPage() {
                                     setEditingGroup(null);
                                     setGroupFormOpen(true);
                                 }}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                             >
-                                <Plus className="w-4 h-4 mr-2" />
+                                <Plus className="w-4 h-4" />
                                 {t.inventoryCategories.newGroup}
                             </button>
                         </div>

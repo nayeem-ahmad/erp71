@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { ListChecks, RefreshCw, CheckCircle2, Eye, AlertTriangle } from 'lucide-react';
+import { RefreshCw, CheckCircle2, Eye, AlertTriangle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { DataTable } from '@/components/data-table';
+import { PageShell, PageHeader, Button } from '@/components/ui/compact';
+import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
 interface CrmTask {
     id: string;
@@ -201,25 +203,26 @@ export default function CrmTasksPage() {
     ], [m, markDone]);
 
     return (
-        <div className="p-6 w-full">
-            <div className="flex items-center justify-between mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                        <ListChecks className="w-7 h-7 text-amber-600" />
-                        {m.title}
-                    </h1>
-                    <p className="text-gray-500 text-sm mt-1">{m.subtitle}</p>
-                </div>
-                <button
-                    type="button"
-                    onClick={() => { void loadTasks(); loadSummary(); }}
-                    className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
-                >
-                    <RefreshCw className="w-4 h-4" />
-                </button>
-            </div>
+        <PageShell>
+            <PageHeader
+                title={m.title}
+                subtitle={m.subtitle}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.crm,
+                    m.title,
+                    'crm',
+                )}
+                actions={
+                    <Button
+                        variant="secondary"
+                        onClick={() => { void loadTasks(); loadSummary(); }}
+                        leftIcon={<RefreshCw className="w-4 h-4" />}
+                    />
+                }
+            />
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <StatCard label={m.dueToday} value={summary?.dueToday ?? 0} tone={summary && summary.dueToday > 0 ? 'warn' : 'ok'} />
                 <StatCard label={m.overdue} value={summary?.overdue ?? 0} tone={summary && summary.overdue > 0 ? 'bad' : 'ok'} />
                 <StatCard label={m.total} value={summary?.total ?? 0} tone="neutral" />
@@ -267,7 +270,7 @@ export default function CrmTasksPage() {
                     emptyMessage={m.emptyMessage}
                 />
             )}
-        </div>
+        </PageShell>
     );
 }
 
