@@ -19,6 +19,7 @@ import { AuthModule } from './auth/auth.module';
 import { PasswordResetModule } from './password-reset/password-reset.module';
 import { InvitationsModule } from './invitations/invitations.module';
 import { TeamModule } from './team/team.module';
+import { StoresModule } from './stores/stores.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ProductsModule } from './products/products.module';
 import { AssetsModule } from './assets/assets.module';
@@ -112,6 +113,7 @@ import { ReferralsModule } from './referrals/referrals.module';
         PasswordResetModule,
         InvitationsModule,
         TeamModule,
+        StoresModule,
         NotificationsModule,
         ProductsModule,
         AssetsModule,

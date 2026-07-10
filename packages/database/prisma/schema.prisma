@@ -117,6 +117,7 @@ enum StorePermission {
   // User Management
   MANAGE_USERS
   MANAGE_USER_STORE_ACCESS
+  MANAGE_STORES
 
   // POS Counters
   MANAGE_COUNTERS
