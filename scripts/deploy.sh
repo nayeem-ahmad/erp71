@@ -30,7 +30,13 @@ bash "$REPO_ROOT/scripts/sync-erp71-env-urls.sh" "$ENV_FILE"
 # initializes with default credentials.
 COMPOSE_PROJECT="${COMPOSE_PROJECT:-erp71}"
 
-echo "==> Building and starting the stack (project: $COMPOSE_PROJECT)"
+# Bake the deployed commit into the images (backend GIT_SHA build arg) so the
+# running app can report exactly what is live. Shell env overrides --env-file
+# for Compose interpolation, so this wins without touching .env.production.
+GIT_SHA="$(git rev-parse HEAD)"
+export GIT_SHA
+
+echo "==> Building and starting the stack (project: $COMPOSE_PROJECT, commit: $GIT_SHA)"
 docker compose -p "$COMPOSE_PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build
 
 # Shared-host VPS: Hermes Caddy must share the compose network to reach

@@ -8,6 +8,18 @@ import { PlatformSettingsService } from '../platform-settings/platform-settings.
 
 const execFileAsync = promisify(execFile);
 
+/** The workflow filename dispatched by the in-app "Deploy to Production" button. */
+const DEPLOY_WORKFLOW_FILE = 'deploy-vps.yml';
+
+export interface DeployRun {
+    id: number;
+    status: string;
+    conclusion: string | null;
+    url: string;
+    createdAt: string;
+    title: string;
+}
+
 export interface RepoWorkspace {
     /** Absolute path to the cloned working tree, checked out on `baseBranch`. */
     dir: string;
@@ -66,11 +78,13 @@ export class FeedbackGithubService {
 
     constructor(private readonly platformSettings: PlatformSettingsService) {}
 
-    private async getConfig(): Promise<{ token: string; owner: string; repo: string; baseBranch: string }> {
+    private async getConfig(): Promise<{ token: string; owner: string; repo: string; baseBranch: string; productionBranch: string }> {
         const settings = await this.platformSettings.getRawGroup('feedback_automation');
         const token = settings.github_token;
         const repoFull = settings.github_repo ?? 'nayeem-ahmad/erp71';
         const baseBranch = settings.github_base_branch ?? 'dev';
+        // Where the auto-promotion lands and what the in-app deploy button ships.
+        const productionBranch = settings.github_production_branch ?? 'main';
         if (!token) {
             throw new InternalServerErrorException('Feedback automation is not configured: set a GitHub token.');
         }
@@ -78,7 +92,13 @@ export class FeedbackGithubService {
         if (!owner || !repo) {
             throw new InternalServerErrorException(`Invalid github_repo setting: "${repoFull}" (expected "owner/repo").`);
         }
-        return { token, owner, repo, baseBranch };
+        return { token, owner, repo, baseBranch, productionBranch };
+    }
+
+    /** The configured integration (`dev`) and production (`main`) branch names, for callers orchestrating promotion/deploy. */
+    async getBranches(): Promise<{ baseBranch: string; productionBranch: string }> {
+        const { baseBranch, productionBranch } = await this.getConfig();
+        return { baseBranch, productionBranch };
     }
 
     /** Clones a shallow, disposable working tree of the configured repo/base branch. */
@@ -289,6 +309,75 @@ export class FeedbackGithubService {
         }
 
         return { total, passed, failed, pending, allPassed: total > 0 && failed === 0 && pending === 0 };
+    }
+
+    /** How many commits `head` is ahead of `base`, plus both tip SHAs (via the compare API). */
+    async compareBranches(base: string, head: string): Promise<{ aheadBy: number; baseSha: string; headSha: string }> {
+        const { token, owner, repo } = await this.getConfig();
+        const cmp = await this.githubGet<{ ahead_by?: number; base_commit?: { sha?: string }; commits?: Array<{ sha?: string }> }>(
+            `/repos/${owner}/${repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`,
+            token,
+        );
+        const commits = cmp.commits ?? [];
+        return {
+            aheadBy: cmp.ahead_by ?? 0,
+            baseSha: cmp.base_commit?.sha ?? '',
+            headSha: commits.length ? (commits[commits.length - 1].sha ?? '') : (cmp.base_commit?.sha ?? ''),
+        };
+    }
+
+    /** Returns the number of an already-open PR for `head`→`base`, or null if none is open. Avoids opening duplicates. */
+    async findOpenPullRequest(head: string, base: string): Promise<number | null> {
+        const { token, owner, repo } = await this.getConfig();
+        const prs = await this.githubGet<Array<{ number?: number }>>(
+            `/repos/${owner}/${repo}/pulls?state=open&base=${encodeURIComponent(base)}&head=${encodeURIComponent(`${owner}:${head}`)}`,
+            token,
+        );
+        return prs.length && prs[0].number ? prs[0].number : null;
+    }
+
+    /** Dispatches the "Deploy to VPS" workflow (deploy-vps.yml) for the given branch. Requires a token with `actions: write`. */
+    async triggerDeployWorkflow(branch: string): Promise<void> {
+        const { token, owner, repo, productionBranch } = await this.getConfig();
+        const response = await fetch(
+            `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${DEPLOY_WORKFLOW_FILE}/dispatches`,
+            {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: 'application/vnd.github+json',
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'erp71-feedback-agent',
+                },
+                // `ref` = which branch the workflow definition runs from; `inputs.branch` = what deploy.sh checks out.
+                body: JSON.stringify({ ref: productionBranch, inputs: { branch } }),
+            },
+        );
+        if (!response.ok) {
+            const json = (await response.json().catch(() => ({}))) as { message?: string };
+            const hint = response.status === 403 || response.status === 404
+                ? ' (the GitHub token likely lacks the "actions: write" scope required to dispatch workflows)'
+                : '';
+            throw new InternalServerErrorException(`Failed to trigger deploy workflow: ${json.message ?? response.status}${hint}`);
+        }
+    }
+
+    /** The most recent "Deploy to VPS" run, or null if the workflow has never run. */
+    async getLatestDeployRun(): Promise<DeployRun | null> {
+        const { token, owner, repo } = await this.getConfig();
+        const json = await this.githubGet<{
+            workflow_runs?: Array<{ id?: number; status?: string; conclusion?: string | null; html_url?: string; created_at?: string; display_title?: string }>;
+        }>(`/repos/${owner}/${repo}/actions/workflows/${DEPLOY_WORKFLOW_FILE}/runs?per_page=1`, token);
+        const run = json.workflow_runs?.[0];
+        if (!run) return null;
+        return {
+            id: run.id ?? 0,
+            status: run.status ?? 'unknown',
+            conclusion: run.conclusion ?? null,
+            url: run.html_url ?? '',
+            createdAt: run.created_at ?? '',
+            title: run.display_title ?? '',
+        };
     }
 
     private async githubGet<T>(pathname: string, token: string): Promise<T> {

@@ -18,6 +18,8 @@ services:
     build:
       context: .
       dockerfile: apps/backend/Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     env_file:
       - .env.production
     environment:
