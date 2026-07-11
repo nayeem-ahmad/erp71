@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Receipt, Eye, Edit2, Plus, ShoppingCart } from 'lucide-react';
+import { Receipt, Eye, Edit2, ShoppingCart } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import Link from 'next/link';
@@ -229,13 +229,6 @@ export default function SalesPage() {
                     )}
                     actions={
                         <>
-                            <Link
-                                href={routes.sales.new}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                            >
-                                <Plus className="w-4 h-4 mr-2" />
-                                {t.sidebar.items.newSalesEntry}
-                            </Link>
                             {posEnabled ? (
                                 <Link
                                     href={routes.sales.pos}
