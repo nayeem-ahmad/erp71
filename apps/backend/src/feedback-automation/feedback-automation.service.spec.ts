@@ -378,6 +378,52 @@ describe('FeedbackAutomationService', () => {
         });
     });
 
+    describe('refreshPrStatus', () => {
+        const green = {
+            state: 'open', mergeable: true, headSha: 'sha1', merged: false, mergeCommitSha: null,
+            checks: { total: 2, passed: 2, failed: 0, pending: 0, allPassed: true }, green: true,
+        };
+        let promoteSpy: jest.SpyInstance;
+
+        beforeEach(() => {
+            promoteSpy = jest.spyOn(service, 'promoteDevToMain').mockResolvedValue({ promoted: false });
+        });
+
+        it('triggers dev→main promotion when it detects a PR merged outside the app', async () => {
+            // The panel poller path: the PR was merged on GitHub, not via the Merge button.
+            db.feedback.findUnique.mockResolvedValue({ id: 'fb-1', status: 'PR_OPENED', prNumber: 42 });
+            github.getPrReadiness.mockResolvedValue({ ...green, merged: true, mergeCommitSha: 'ext-merge-sha' });
+
+            await service.refreshPrStatus('fb-1');
+            await Promise.resolve(); // let the fire-and-forget promotion kick off
+
+            expect(db.feedback.update).toHaveBeenCalledWith({
+                where: { id: 'fb-1' },
+                data: { status: 'MERGED', mergeCommitSha: 'ext-merge-sha' },
+            });
+            expect(promoteSpy).toHaveBeenCalled();
+        });
+
+        it('does not re-trigger promotion when the feedback is already MERGED', async () => {
+            db.feedback.findUnique.mockResolvedValue({ id: 'fb-1', status: 'MERGED', prNumber: 42 });
+            github.getPrReadiness.mockResolvedValue({ ...green, merged: true, mergeCommitSha: 'ext-merge-sha' });
+
+            await service.refreshPrStatus('fb-1');
+
+            expect(db.feedback.update).not.toHaveBeenCalled();
+            expect(promoteSpy).not.toHaveBeenCalled();
+        });
+
+        it('does not trigger promotion while the PR is still open', async () => {
+            db.feedback.findUnique.mockResolvedValue({ id: 'fb-1', status: 'PR_OPENED', prNumber: 42 });
+            github.getPrReadiness.mockResolvedValue(green);
+
+            await service.refreshPrStatus('fb-1');
+
+            expect(promoteSpy).not.toHaveBeenCalled();
+        });
+    });
+
     describe('generateRollbackPr', () => {
         it('rejects when the feedback has no merged commit yet', async () => {
             db.feedback.findUnique.mockResolvedValue({ id: 'fb-1', mergeCommitSha: null });
