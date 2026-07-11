@@ -17,6 +17,7 @@ type Settings = {
     github_token: string;
     github_repo: string;
     github_base_branch: string;
+    github_production_branch: string;
 };
 
 const DEFAULTS: Settings = {
@@ -28,6 +29,7 @@ const DEFAULTS: Settings = {
     github_token: '',
     github_repo: 'nayeem-ahmad/erp71',
     github_base_branch: 'dev',
+    github_production_branch: 'main',
 };
 
 // Curated for the coding agent: reliable tool-calling on a provider without an aggressive
@@ -100,6 +102,7 @@ export default function FeedbackAutomationSettingsPage() {
                     github_token: d.github_token === '••••••••' ? '' : (d.github_token ?? ''),
                     github_repo: d.github_repo ?? DEFAULTS.github_repo,
                     github_base_branch: d.github_base_branch ?? DEFAULTS.github_base_branch,
+                    github_production_branch: d.github_production_branch ?? DEFAULTS.github_production_branch,
                 });
             })
             .catch(() => setToast({ type: 'error', message: 'Failed to load feedback automation settings.' }))
@@ -117,6 +120,7 @@ export default function FeedbackAutomationSettingsPage() {
                 require_migration_signoff: settings.require_migration_signoff,
                 github_repo: settings.github_repo,
                 github_base_branch: settings.github_base_branch,
+                github_production_branch: settings.github_production_branch,
             };
             if (settings.github_token) payload.github_token = settings.github_token;
 
@@ -238,7 +242,7 @@ export default function FeedbackAutomationSettingsPage() {
                             </select>
                         </Field>
 
-                        <Field label="GitHub token" hint="Fine-grained personal access token or GitHub App installation token, scoped only to the target repo, with contents + pull-requests write access. Leave blank to keep existing value.">
+                        <Field label="GitHub token" hint="Fine-grained personal access token or GitHub App installation token, scoped only to the target repo, with contents + pull-requests write access. For the in-app Deploy to Production button, also grant actions:write (to dispatch the deploy workflow). Leave blank to keep existing value.">
                             <input
                                 type="password"
                                 autoComplete="new-password"
@@ -257,10 +261,18 @@ export default function FeedbackAutomationSettingsPage() {
                             />
                         </Field>
 
-                        <Field label="Base branch" hint="Branch the agent clones and opens PRs against.">
+                        <Field label="Base branch" hint="Branch the agent clones and opens PRs against (the integration branch).">
                             <input
                                 value={settings.github_base_branch}
                                 onChange={(e) => setSettings((s) => ({ ...s, github_base_branch: e.target.value }))}
+                                className={inputCls}
+                            />
+                        </Field>
+
+                        <Field label="Production branch" hint="Where a merged feedback PR is auto-promoted, and what the Deploy to Production button ships. The promotion only fires after a Feedback Automation merge, and only once its dev→main PR is green.">
+                            <input
+                                value={settings.github_production_branch}
+                                onChange={(e) => setSettings((s) => ({ ...s, github_production_branch: e.target.value }))}
                                 className={inputCls}
                             />
                         </Field>
