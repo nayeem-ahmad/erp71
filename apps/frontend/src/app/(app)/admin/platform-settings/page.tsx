@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { MessageSquare, Mail, Landmark, Cog, ChevronRight, Sparkles, LayoutList, BadgePercent, MessageCircle, ToggleLeft, PackagePlus, Bot, Share2, Lightbulb } from 'lucide-react';
+import { MessageSquare, Mail, Landmark, Cog, ChevronRight, Sparkles, LayoutList, BadgePercent, MessageCircle, ToggleLeft, PackagePlus, Bot, Share2, Lightbulb, Rocket } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -115,6 +115,14 @@ export default function PlatformSettingsIndexPage() {
                     description: 'Experimental: let an agent propose implementation plans for approved tenant feedback and open a PR once you approve.',
                     color: 'text-fuchsia-600',
                     bg: 'bg-fuchsia-50',
+                },
+                {
+                    href: '/admin/platform-settings/deploy',
+                    icon: Rocket,
+                    label: 'Production Deploy',
+                    description: 'Ship the latest green main to the production VPS, and see what is live vs. pending. Feedback Automation auto-promotes to main; this button deploys it.',
+                    color: 'text-emerald-600',
+                    bg: 'bg-emerald-50',
                 },
             ],
         },

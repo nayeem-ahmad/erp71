@@ -50,6 +50,11 @@ EXPOSE 4000
 ENV PORT=4000
 ENV HOSTNAME="0.0.0.0"
 
+# Git commit this image was built from, surfaced at runtime (health check + deploy status)
+# so the app can report exactly what is live in production.
+ARG GIT_SHA=unknown
+ENV GIT_SHA=$GIT_SHA
+
 # Sync schema and seed before starting the app.
 # DIRECT_URL is overridden with DATABASE_URL so prisma db push uses the
 # internal Render hostname, bypassing the IP allowlist that blocks external

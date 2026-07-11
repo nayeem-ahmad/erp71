@@ -13,12 +13,18 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEK_MS = 7 * DAY_MS;
 const BATCH_SIZE = 20;
 
+// dev→main auto-promotion: how long to wait for the promotion PR's CI to go green before giving up.
+const PROMOTE_POLL_MS = 30_000;
+const PROMOTE_MAX_POLLS = 30; // ~15 minutes
+
 /** Crude, deliberately conservative static scan — a real destructive change should never slip past a false negative here. */
 const DESTRUCTIVE_SQL_PATTERN = /\b(DROP\s+(COLUMN|TABLE)|ALTER\s+COLUMN\s+"?\w+"?\s+(TYPE|SET\s+NOT\s+NULL)|TRUNCATE)\b/i;
 
 @Injectable()
 export class FeedbackAutomationService {
     private readonly logger = new Logger(FeedbackAutomationService.name);
+    /** In-process guard so concurrent feedback merges don't each open a dev→main promotion PR. */
+    private promoting = false;
 
     constructor(
         private readonly db: DatabaseService,
@@ -292,6 +298,7 @@ export class FeedbackAutomationService {
                 where: { id: feedbackId },
                 data: { status: 'MERGED', mergeCommitSha: readiness.mergeCommitSha },
             });
+            this.triggerPromotion();
             return { ...updated, readiness };
         }
         if (!readiness.green) {
@@ -307,7 +314,79 @@ export class FeedbackAutomationService {
             data: { status: 'MERGED', mergeCommitSha: result.sha ?? readiness.mergeCommitSha },
         });
         await this.audit.log('feedback_automation.pr_merged', 'Feedback', { userId: adminUserId }, feedbackId, { prNumber: feedback.prNumber, mergeCommitSha: result.sha });
+        this.triggerPromotion();
         return { ...updated, readiness: { ...readiness, merged: true, mergeCommitSha: result.sha ?? readiness.mergeCommitSha } };
+    }
+
+    /** Fire-and-forget kick of the dev→main promotion after a feedback PR lands on dev. Never throws into the caller. */
+    private triggerPromotion(): void {
+        this.promoteDevToMain().catch((err) => {
+            this.logger.error(`dev→main promotion failed: ${err instanceof Error ? err.message : String(err)}`);
+        });
+    }
+
+    /**
+     * Promotes the integration branch (dev) to production (main) once the promotion PR is green.
+     * Triggered only by a feedback PR merging to dev — manual/experimental dev commits never trigger it.
+     * Idempotent: no-ops when main is already up to date and reuses an already-open promotion PR.
+     * Serialized in-process so concurrent feedback merges don't open duplicate promotion PRs.
+     */
+    async promoteDevToMain(): Promise<{ promoted: boolean; reason?: string; prNumber?: number; mergeCommitSha?: string | null }> {
+        if (this.promoting) return { promoted: false, reason: 'a promotion is already in progress' };
+        this.promoting = true;
+        try {
+            const { baseBranch, productionBranch } = await this.github.getBranches();
+            const cmp = await this.github.compareBranches(productionBranch, baseBranch);
+            if (cmp.aheadBy === 0) {
+                return { promoted: false, reason: `${productionBranch} is already up to date with ${baseBranch}` };
+            }
+
+            let prNumber = await this.github.findOpenPullRequest(baseBranch, productionBranch);
+            if (!prNumber) {
+                const pr = await this.github.openPullRequest({
+                    title: `Release: promote ${baseBranch} → ${productionBranch}`,
+                    body: `Automated promotion of ${cmp.aheadBy} commit(s) from \`${baseBranch}\` to \`${productionBranch}\`, ` +
+                        `triggered by a Feedback Automation merge. Merges automatically once CI is green.`,
+                    head: baseBranch,
+                    base: productionBranch,
+                });
+                prNumber = pr.number;
+            }
+
+            const readiness = await this.waitForPrGreen(prNumber);
+            if (readiness.merged) {
+                await this.audit.log('feedback_automation.promoted_to_main', 'Feedback', {}, undefined, { prNumber, mergeCommitSha: readiness.mergeCommitSha });
+                return { promoted: true, prNumber, mergeCommitSha: readiness.mergeCommitSha };
+            }
+            if (!readiness.green) {
+                const reason = readiness.checks.failed > 0 ? 'promotion PR CI failed' : 'timed out waiting for promotion PR CI to go green';
+                this.logger.warn(`dev→main promotion halted (PR #${prNumber}): ${reason}`);
+                await this.audit.log('feedback_automation.promotion_halted', 'Feedback', {}, undefined, { prNumber, reason });
+                return { promoted: false, reason, prNumber };
+            }
+
+            const result = await this.github.mergePullRequest(prNumber);
+            await this.audit.log('feedback_automation.promoted_to_main', 'Feedback', {}, undefined, { prNumber, mergeCommitSha: result.sha });
+            return { promoted: true, prNumber, mergeCommitSha: result.sha };
+        } finally {
+            this.promoting = false;
+        }
+    }
+
+    /** Polls a PR's readiness until it is green, merged, or a check has failed — or the poll budget is exhausted. */
+    private async waitForPrGreen(prNumber: number) {
+        let readiness = await this.github.getPrReadiness(prNumber);
+        for (let i = 0; i < PROMOTE_MAX_POLLS; i++) {
+            if (readiness.merged || readiness.green || readiness.checks.failed > 0) return readiness;
+            await this.sleep(PROMOTE_POLL_MS);
+            readiness = await this.github.getPrReadiness(prNumber);
+        }
+        return readiness;
+    }
+
+    /** Overridable in tests so the poll loop runs instantly. */
+    private sleep(ms: number): Promise<void> {
+        return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
     async generateRollbackPr(feedbackId: string, adminUserId: string) {
