@@ -277,6 +277,10 @@ export class FeedbackAutomationService {
                 where: { id: feedbackId },
                 data: { status: 'MERGED', mergeCommitSha: readiness.mergeCommitSha },
             });
+            // A feedback PR can reach MERGED two ways: the explicit Merge button (mergeFeedbackPr)
+            // or being merged on GitHub directly, which this poller detects. Promotion must fire on
+            // either — the status guard above makes this run exactly once per feedback.
+            this.triggerPromotion();
             return { ...updated, readiness };
         }
         // Surface CI/mergeability alongside the feedback so the panel can gate the Merge button.
