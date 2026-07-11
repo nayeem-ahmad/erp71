@@ -370,6 +370,24 @@ Only after you have written all the files with write_file, respond with a short 
 
     private async toolWriteFile(repoDir: string, relativePath: string, content: string): Promise<string> {
         const full = this.resolveSafe(repoDir, relativePath);
+
+        // Guard against the corruption mode seen in the field: a whole-file rewrite whose
+        // `content` argument arrived empty (a JSON-serialization failure on large payloads)
+        // truncated a tracked file to zero bytes, and empty scratch files were created. Both
+        // look like a successful write otherwise, so reject them here with actionable text so
+        // the model can recover within the run instead of committing the wreckage.
+        let existedNonEmpty = false;
+        try {
+            const stat = await fs.stat(full);
+            existedNonEmpty = stat.isFile() && stat.size > 0;
+        } catch {
+            // File does not exist yet — this is a fresh create.
+        }
+        const rejection = rejectDestructiveWrite(existedNonEmpty, content);
+        if (rejection) {
+            return `Error: ${rejection}`;
+        }
+
         await fs.mkdir(path.dirname(full), { recursive: true });
         await fs.writeFile(full, content, 'utf8');
         return `Wrote ${relativePath} (${content.length} chars).`;
@@ -504,6 +522,24 @@ Only after you have written all the files with write_file, respond with a short 
 
 /** Marks an OpenRouter failure that must not be retried (e.g. bad API key or model). */
 class NonRetryableAgentError extends Error {}
+
+/**
+ * Guards a write_file call against the destructive corruption seen in the field: an empty
+ * (or whitespace-only) `content` payload — typically a JSON-serialization failure on a large
+ * whole-file rewrite — that truncates an existing tracked file to nothing, or creates an empty
+ * junk file. Returns an actionable error message when the write should be rejected, or null when
+ * it is safe to apply.
+ */
+export function rejectDestructiveWrite(existedNonEmpty: boolean, content: string): string | null {
+    if (content.trim().length > 0) {
+        return null;
+    }
+    if (existedNonEmpty) {
+        return 'refusing to overwrite an existing non-empty file with empty content. ' +
+            'If you meant to edit it, re-send the write with the complete new file contents in the "content" argument.';
+    }
+    return 'refusing to create an empty file. Provide the full intended file contents in the "content" argument.';
+}
 
 /** True when a provider error is a content guardrail (prompt-injection / moderation / safety) that retrying won't fix. */
 export function isContentGuardrailBlock(message: string): boolean {

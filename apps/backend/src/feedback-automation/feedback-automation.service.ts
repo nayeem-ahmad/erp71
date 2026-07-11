@@ -198,6 +198,17 @@ export class FeedbackAutomationService {
                 );
             }
 
+            // Structural sanity gate: catch the corruption mode where the agent truncated a
+            // tracked file to nothing (renders as a mass deletion) or created an empty junk file.
+            // CI would eventually flag it, but this stops an obviously-broken PR from ever opening.
+            const emptyFile = await this.firstEmptyChangedFile(result.workspace.dir, result.filesChanged);
+            if (emptyFile) {
+                throw new Error(
+                    `The agent left "${emptyFile}" empty, which corrupts the file rather than editing it. ` +
+                    'Aborted before opening a PR — retry the implementation, or switch to a stronger model in Feedback Automation settings.',
+                );
+            }
+
             const migrationFiles = result.filesChanged.filter((f) => f.includes('prisma/migrations/'));
             if (migrationFiles.length > 0) {
                 const destructive = await this.anyFileMatches(result.workspace.dir, migrationFiles, DESTRUCTIVE_SQL_PATTERN);
@@ -326,6 +337,30 @@ export class FeedbackAutomationService {
         } finally {
             await workspace.cleanup();
         }
+    }
+
+    /**
+     * Returns the first changed file that now exists but is empty/whitespace-only, or null if
+     * none are. A file that reads as `''` was truncated (the corruption we guard against); a file
+     * that can't be read (e.g. an intentional deletion) is skipped — only surviving-but-empty files
+     * are treated as corruption. Never blocks on a read it can't interpret.
+     */
+    private async firstEmptyChangedFile(repoDir: string, relativeFiles: string[]): Promise<string | null> {
+        const fs = await import('node:fs/promises');
+        const path = await import('node:path');
+        for (const file of relativeFiles) {
+            let content: unknown;
+            try {
+                content = await fs.readFile(path.join(repoDir, file), 'utf8');
+            } catch {
+                // Unreadable (e.g. a genuine deletion) — not our corruption case; skip.
+                continue;
+            }
+            if (typeof content === 'string' && content.trim().length === 0) {
+                return file;
+            }
+        }
+        return null;
     }
 
     private async anyFileMatches(repoDir: string, relativeFiles: string[], pattern: RegExp): Promise<boolean> {

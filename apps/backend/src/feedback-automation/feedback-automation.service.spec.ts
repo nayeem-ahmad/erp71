@@ -199,6 +199,27 @@ describe('FeedbackAutomationService', () => {
             expect(workspace.cleanup).toHaveBeenCalled();
         });
 
+        it('aborts without opening a PR when a changed file was left empty', async () => {
+            // Reproduces the field incident: the agent truncated a tracked file to nothing.
+            // The empty-file gate must stop it before commit/push, even with no migration involved.
+            (fsPromises.readFile as jest.Mock).mockResolvedValue('   \n  ');
+            runner.implementPlan.mockResolvedValue({
+                summary: 'done',
+                filesChanged: ['packages/shared-types/navigation.ts'],
+                tokensUsed: 1000,
+                workspace,
+            });
+
+            await expect((service as any).runImplementation('fb-1', 'plan-1')).rejects.toThrow(/empty/i);
+
+            expect(github.commitAndPush).not.toHaveBeenCalled();
+            expect(db.feedback.update).toHaveBeenCalledWith({
+                where: { id: 'fb-1' },
+                data: { status: 'PLAN_APPROVED', lastError: expect.stringContaining('empty') },
+            });
+            expect(workspace.cleanup).toHaveBeenCalled();
+        });
+
         it('aborts without opening a PR when a generated migration is destructive', async () => {
             (fsPromises.readFile as jest.Mock).mockResolvedValue('ALTER TABLE "x" DROP COLUMN "y";');
             runner.implementPlan.mockResolvedValue({
