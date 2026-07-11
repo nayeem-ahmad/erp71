@@ -20,6 +20,8 @@ export class HealthController {
         return {
             status,
             db: dbOk ? 'ok' : 'unreachable',
+            // Git SHA baked into the image at build time — identifies exactly what is deployed.
+            commit: process.env.GIT_SHA ?? 'unknown',
             uptime: Math.floor(process.uptime()),
             latency_ms: Date.now() - start,
             timestamp: new Date().toISOString(),

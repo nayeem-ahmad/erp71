@@ -35,7 +35,13 @@ describe('FeedbackAutomationService', () => {
             getRawGroup: jest.fn().mockResolvedValue({}),
         };
         runner = { proposePlan: jest.fn(), implementPlan: jest.fn() };
-        github = { createWorkspace: jest.fn(), commitAndPush: jest.fn(), openPullRequest: jest.fn(), revertCommit: jest.fn(), getPullRequestStatus: jest.fn(), getPrReadiness: jest.fn(), mergePullRequest: jest.fn() };
+        github = {
+            createWorkspace: jest.fn(), commitAndPush: jest.fn(), openPullRequest: jest.fn(), revertCommit: jest.fn(),
+            getPullRequestStatus: jest.fn(), getPrReadiness: jest.fn(), mergePullRequest: jest.fn(),
+            getBranches: jest.fn().mockResolvedValue({ baseBranch: 'dev', productionBranch: 'main' }),
+            compareBranches: jest.fn().mockResolvedValue({ aheadBy: 0, baseSha: 'x', headSha: 'x' }), findOpenPullRequest: jest.fn().mockResolvedValue(null),
+            triggerDeployWorkflow: jest.fn(), getLatestDeployRun: jest.fn(),
+        };
         audit = { log: jest.fn().mockResolvedValue(undefined) };
         jobTracker = { track: jest.fn((_name: string, fn: () => Promise<unknown>) => fn()) };
 
@@ -238,6 +244,80 @@ describe('FeedbackAutomationService', () => {
                 data: { status: 'PLAN_APPROVED', lastError: expect.stringContaining('destructive') },
             });
             expect(workspace.cleanup).toHaveBeenCalled();
+        });
+    });
+
+    describe('promoteDevToMain', () => {
+        const greenReadiness = {
+            state: 'open', mergeable: true, headSha: 'sha1', merged: false, mergeCommitSha: null,
+            checks: { total: 2, passed: 2, failed: 0, pending: 0, allPassed: true }, green: true,
+        };
+
+        beforeEach(() => {
+            // Make the poll loop instant.
+            jest.spyOn(service as any, 'sleep').mockResolvedValue(undefined);
+        });
+
+        it('skips when main is already up to date with dev', async () => {
+            github.compareBranches.mockResolvedValue({ aheadBy: 0, baseSha: 'x', headSha: 'x' });
+
+            const result = await service.promoteDevToMain();
+
+            expect(result.promoted).toBe(false);
+            expect(github.openPullRequest).not.toHaveBeenCalled();
+            expect(github.mergePullRequest).not.toHaveBeenCalled();
+        });
+
+        it('opens a dev→main PR and merges it once green', async () => {
+            github.compareBranches.mockResolvedValue({ aheadBy: 3, baseSha: 'main1', headSha: 'dev1' });
+            github.findOpenPullRequest.mockResolvedValue(null);
+            github.openPullRequest.mockResolvedValue({ number: 99, url: 'https://github.com/x/y/pull/99' });
+            github.getPrReadiness.mockResolvedValue(greenReadiness);
+            github.mergePullRequest.mockResolvedValue({ merged: true, sha: 'merged-sha' });
+
+            const result = await service.promoteDevToMain();
+
+            expect(github.openPullRequest).toHaveBeenCalledWith(expect.objectContaining({ head: 'dev', base: 'main' }));
+            expect(github.mergePullRequest).toHaveBeenCalledWith(99);
+            expect(result).toEqual(expect.objectContaining({ promoted: true, prNumber: 99, mergeCommitSha: 'merged-sha' }));
+        });
+
+        it('reuses an already-open dev→main PR instead of opening a duplicate', async () => {
+            github.compareBranches.mockResolvedValue({ aheadBy: 1, baseSha: 'main1', headSha: 'dev1' });
+            github.findOpenPullRequest.mockResolvedValue(42);
+            github.getPrReadiness.mockResolvedValue(greenReadiness);
+            github.mergePullRequest.mockResolvedValue({ merged: true, sha: 'merged-sha' });
+
+            await service.promoteDevToMain();
+
+            expect(github.openPullRequest).not.toHaveBeenCalled();
+            expect(github.mergePullRequest).toHaveBeenCalledWith(42);
+        });
+
+        it('does not merge when the promotion PR CI fails', async () => {
+            github.compareBranches.mockResolvedValue({ aheadBy: 1, baseSha: 'main1', headSha: 'dev1' });
+            github.openPullRequest.mockResolvedValue({ number: 7, url: 'u' });
+            github.getPrReadiness.mockResolvedValue({
+                ...greenReadiness, green: false, checks: { total: 2, passed: 1, failed: 1, pending: 0, allPassed: false },
+            });
+
+            const result = await service.promoteDevToMain();
+
+            expect(github.mergePullRequest).not.toHaveBeenCalled();
+            expect(result.promoted).toBe(false);
+        });
+
+        it('times out (without merging) when CI never goes green', async () => {
+            github.compareBranches.mockResolvedValue({ aheadBy: 1, baseSha: 'main1', headSha: 'dev1' });
+            github.openPullRequest.mockResolvedValue({ number: 8, url: 'u' });
+            github.getPrReadiness.mockResolvedValue({
+                ...greenReadiness, green: false, checks: { total: 2, passed: 0, failed: 0, pending: 2, allPassed: false },
+            });
+
+            const result = await service.promoteDevToMain();
+
+            expect(github.mergePullRequest).not.toHaveBeenCalled();
+            expect(result.promoted).toBe(false);
         });
     });
 
