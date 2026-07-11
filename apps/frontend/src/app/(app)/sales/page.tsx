@@ -37,7 +37,6 @@ const SALES_HUB_SECTIONS: HubSectionConfig[] = [
             { href: routes.sales.returns, key: 'returns', icon: ArrowLeftRight, accent: 'bg-orange-50 text-orange-700 border-orange-100' },
             { href: routes.sales.customerPayments, key: 'customerPayments', icon: Wallet, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
             { href: routes.sales.pos, key: 'pos', icon: ShoppingCart, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
-            { href: routes.sales.new, key: 'newSale', icon: FileText, accent: 'bg-sky-50 text-sky-700 border-sky-100' },
         ],
     },
     {
