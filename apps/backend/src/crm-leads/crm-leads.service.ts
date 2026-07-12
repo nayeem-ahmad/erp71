@@ -4,8 +4,10 @@ import {
     Injectable,
     NotFoundException,
 } from '@nestjs/common';
+import { CustomFieldEntity } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { CustomersService } from '../customers/customers.service';
+import { CustomFieldsService } from '../custom-fields/custom-fields.service';
 import { CreateLeadDto, LeadCategory, LeadPriority, LeadSource, LeadStatus, UpdateLeadDto } from './crm-leads.dto';
 import { paginate } from '../common/pagination.dto';
 import { computeLeadScore } from './lead-scoring.util';
@@ -23,10 +25,12 @@ export class CrmLeadsService {
     constructor(
         private db: DatabaseService,
         private customersService: CustomersService,
+        private customFields: CustomFieldsService,
     ) {}
 
     private mapLeadData(dto: CreateLeadDto | UpdateLeadDto) {
-        const data: Record<string, unknown> = { ...dto };
+        const { custom_fields: _ignoredCustomFields, ...rest } = dto as any;
+        const data: Record<string, unknown> = { ...rest };
         if ('next_step_date' in dto && dto.next_step_date) {
             data.next_step_date = new Date(dto.next_step_date);
         }
@@ -60,6 +64,12 @@ export class CrmLeadsService {
             0,
         );
 
+        const customFields = await this.customFields.sanitizeValues(
+            tenantId,
+            CustomFieldEntity.LEAD,
+            dto.custom_fields,
+        );
+
         return this.db.lead.create({
             data: {
                 tenant_id: tenantId,
@@ -84,6 +94,7 @@ export class CrmLeadsService {
                 assigned_to: dto.assigned_to,
                 store_id: dto.store_id,
                 created_by: userId,
+                custom_fields: customFields ?? undefined,
             },
             include: leadIncludes,
         });
@@ -172,6 +183,15 @@ export class CrmLeadsService {
         }
 
         const data = this.mapLeadData(dto);
+
+        const customFields = await this.customFields.sanitizeValues(
+            tenantId,
+            CustomFieldEntity.LEAD,
+            dto.custom_fields,
+        );
+        if (customFields !== undefined) {
+            data.custom_fields = customFields;
+        }
 
         const nextStatus = dto.status ?? existing.status;
         if (nextStatus === LeadStatus.LOST) {
