@@ -324,6 +324,17 @@ export class CrmLeadsService {
                         ? (this.resolveEnum(raw.source, Object.values(LeadSource) as string[]) ?? LeadSource.OTHER)
                         : undefined,
                     status: rawStatus,
+                    linkedin_url: raw.linkedin_url ? String(raw.linkedin_url).trim() || null : null,
+                    fb_url: raw.fb_url ? String(raw.fb_url).trim() || null : null,
+                    x_url: raw.x_url ? String(raw.x_url).trim() || null : null,
+                    website_url: raw.website_url ? String(raw.website_url).trim() || null : null,
+                    next_step: raw.next_step ? String(raw.next_step).trim() || null : null,
+                    next_step_date: (() => {
+                        const v = raw.next_step_date;
+                        if (v == null || String(v).trim() === '') return null;
+                        const d = new Date(String(v).trim());
+                        return isNaN(d.getTime()) ? null : d;
+                    })(),
                     custom_fields: defs.reduce<Record<string, string>>((acc, def) => {
                         const target = def.label.trim().toLowerCase();
                         const matchKey = Object.keys(raw).find(
@@ -352,7 +363,7 @@ export class CrmLeadsService {
                         source: row.source ?? LeadSource.OTHER as any,
                         priority: row.priority ?? LeadPriority.MEDIUM as any,
                         last_contacted_at: null,
-                        next_step_date: null,
+                        next_step_date: row.next_step_date ?? null,
                     },
                     0,
                 );
@@ -368,6 +379,12 @@ export class CrmLeadsService {
                         priority: row.priority ?? LeadPriority.MEDIUM,
                         source: row.source ?? LeadSource.OTHER,
                         status: row.status ?? LeadStatus.NEW,
+                        linkedin_url: row.linkedin_url ?? undefined,
+                        fb_url: row.fb_url ?? undefined,
+                        x_url: row.x_url ?? undefined,
+                        website_url: row.website_url ?? undefined,
+                        next_step: row.next_step ?? undefined,
+                        next_step_date: row.next_step_date ?? undefined,
                         score,
                         custom_fields: Object.keys(row.custom_fields ?? {}).length
                             ? row.custom_fields
@@ -388,6 +405,12 @@ export class CrmLeadsService {
                         ...(row.priority !== undefined ? { priority: row.priority } : {}),
                         ...(row.source   !== undefined ? { source: row.source }     : {}),
                         ...(row.status   !== undefined ? { status: row.status }     : {}),
+                        ...(row.linkedin_url !== null ? { linkedin_url: row.linkedin_url } : {}),
+                        ...(row.fb_url       !== null ? { fb_url: row.fb_url }             : {}),
+                        ...(row.x_url        !== null ? { x_url: row.x_url }               : {}),
+                        ...(row.website_url  !== null ? { website_url: row.website_url }   : {}),
+                        ...(row.next_step    !== null ? { next_step: row.next_step }       : {}),
+                        ...(row.next_step_date !== null ? { next_step_date: row.next_step_date } : {}),
                         ...(Object.keys(row.custom_fields ?? {}).length
                             ? { custom_fields: row.custom_fields }
                             : {}),

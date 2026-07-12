@@ -60,6 +60,12 @@ const LEAD_IMPORT_FIELDS: ImportField[] = [
     { key: 'source', label: 'Source', required: false },
     { key: 'status', label: 'Status', required: false },
     { key: 'remarks', label: 'Remarks', required: false },
+    { key: 'linkedin_url', label: 'LinkedIn URL', required: false },
+    { key: 'fb_url', label: 'Facebook URL', required: false },
+    { key: 'x_url', label: 'X (Twitter) URL', required: false },
+    { key: 'website_url', label: 'Website', required: false },
+    { key: 'next_step', label: 'Next Step', required: false },
+    { key: 'next_step_date', label: 'Next Step Date', required: false },
 ];
 
 export default function LeadsPage() {
