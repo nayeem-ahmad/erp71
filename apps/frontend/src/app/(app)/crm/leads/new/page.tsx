@@ -34,7 +34,6 @@ export default function NewLeadPage() {
         if (!code) return null;
         if (code === 'INVALID_EMAIL') return m.validation?.invalidEmail ?? 'Please enter a valid email address.';
         if (code === 'NAME_REQUIRED') return `${m.columns.name} is required.`;
-        if (code === 'MOBILE_REQUIRED') return `${m.fields.mobile} is required.`;
         return m.createFailed;
     };
 

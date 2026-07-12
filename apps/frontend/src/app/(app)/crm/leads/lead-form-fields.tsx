@@ -104,7 +104,6 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function validateLeadForm(form: LeadFormState): string | null {
     if (!form.name.trim()) return 'NAME_REQUIRED';
-    if (!form.mobile.trim()) return 'MOBILE_REQUIRED';
     const email = form.email.trim();
     if (email && !EMAIL_RE.test(email)) return 'INVALID_EMAIL';
     if (form.status === 'LOST' && !form.lost_reason.trim()) return 'LOST_REASON_REQUIRED';
@@ -114,8 +113,9 @@ export function validateLeadForm(form: LeadFormState): string | null {
 export function leadFormToPayload(form: LeadFormState) {
     const payload: Record<string, string> = {
         name: form.name.trim(),
-        mobile: form.mobile.trim(),
     };
+    const mobile = form.mobile.trim();
+    if (mobile) payload.mobile = mobile;
     const email = form.email.trim();
     if (email) payload.email = email;
     if (form.category) payload.category = form.category;

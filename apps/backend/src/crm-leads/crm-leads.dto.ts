@@ -42,8 +42,9 @@ export class CreateLeadDto {
     @IsString()
     name: string;
 
+    @IsOptional()
     @IsString()
-    mobile: string;
+    mobile?: string;
 
     @IsOptional()
     @Transform(emptyToUndefined)
