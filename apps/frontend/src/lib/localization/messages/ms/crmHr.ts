@@ -74,6 +74,7 @@ export const crmHrMessages = {
                 socialLinks: 'Sosial & Web',
                 saveChanges: 'Simpan Perubahan',
                 editLead: 'Edit Prospek',
+                customFields: 'Medan Tersuai',
             },
             columns: {
                 name: 'Nama',
