@@ -260,6 +260,7 @@ export const coreMessages = {
                 crmTasks: "টাস্ক ও ফলো-আপ",
                 crmCampaigns: "ক্যাম্পেইন",
                 crmLeads: "লিড",
+                crmCustomFields: "কাস্টম ফিল্ড",
                 crmCustomers: "গ্রাহক",
                 salesSettings: "বিক্রয় সেটিংস",
                 smsCredits: "SMS ক্রেডিট",

@@ -139,6 +139,7 @@ export const routes = {
         leadDetail: (id: string) => `/crm/leads/${id}` as const,
         tasks: '/crm/tasks',
         campaigns: '/crm/campaigns',
+        customFields: '/crm/settings/custom-fields',
     },
 
     hr: {

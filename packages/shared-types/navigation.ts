@@ -168,6 +168,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'crm.tasks': { id: 'crm.tasks', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.crmTasks', href: '/crm/tasks', premiumOnly: true },
   'crm.campaigns': { id: 'crm.campaigns', kind: 'link', icon: 'Megaphone', labelKey: 'sidebar.items.crmCampaigns', href: '/crm/campaigns', premiumOnly: true },
   'crm.customers': { id: 'crm.customers', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.crmCustomers', href: '/crm/customers' },
+  'crm.custom-fields': { id: 'crm.custom-fields', kind: 'link', icon: 'Settings', labelKey: 'sidebar.items.crmCustomFields', href: '/crm/settings/custom-fields', premiumOnly: true },
 
   hr: { id: 'hr', kind: 'module', icon: 'UserCog', labelKey: 'sidebar.modules.hr', moduleKey: 'hr' },
   'hr.overview': { id: 'hr.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/hr', exact: true },
@@ -343,6 +344,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('crm.tasks', 'crm', 2),
   layoutNode('crm.campaigns', 'crm', 3),
   layoutNode('crm.customers', 'crm', 4),
+  layoutNode('crm.custom-fields', 'crm', 5),
 
   layoutNode('manufacturing', null, 6),
 
