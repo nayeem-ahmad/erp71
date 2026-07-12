@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsString, IsOptional, IsEnum, IsUUID, IsEmail, IsDateString, IsObject } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsUUID, IsEmail, IsDateString, IsObject, IsArray, ArrayNotEmpty } from 'class-validator';
 
 // Define enums locally since Prisma enums aren't exported at runtime
 export enum LeadStatus {
@@ -204,4 +204,24 @@ export class UpdateLeadDto {
     @IsOptional()
     @IsObject()
     custom_fields?: Record<string, string>;
+}
+
+export enum LeadBulkAction {
+    DELETE = 'delete',
+    STATUS = 'status',
+    ASSIGN = 'assign',
+}
+
+export class BulkLeadActionDto {
+    @IsArray()
+    @ArrayNotEmpty()
+    @IsString({ each: true })
+    ids: string[];
+
+    @IsEnum(LeadBulkAction)
+    action: LeadBulkAction;
+
+    @IsOptional()
+    @IsString()
+    value?: string;
 }

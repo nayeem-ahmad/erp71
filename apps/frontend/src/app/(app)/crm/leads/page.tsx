@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
-import { Plus, RefreshCw, Search, Eye, Trash2, ListChecks, Upload } from 'lucide-react';
+import { Plus, RefreshCw, Search, Eye, Trash2, ListChecks, Upload, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -76,9 +76,14 @@ export default function LeadsPage() {
     const [myTodaysActions, setMyTodaysActions] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
     const [customFieldDefs, setCustomFieldDefs] = useState<{ key: string; label: string }[]>([]);
+    const [selectedLeads, setSelectedLeads] = useState<Lead[]>([]);
+    const [teamMembers, setTeamMembers] = useState<any[]>([]);
+    const [selectionEpoch, setSelectionEpoch] = useState(0);
+    const [bulkBusy, setBulkBusy] = useState(false);
 
     useEffect(() => {
         api.getCustomFields('LEAD').then((d: any[]) => setCustomFieldDefs(Array.isArray(d) ? d : [])).catch(() => setCustomFieldDefs([]));
+        api.getTeamMembers().then((d: any) => setTeamMembers(Array.isArray(d) ? d : [])).catch(() => setTeamMembers([]));
     }, []);
 
     const loadLeads = useCallback(async () => {
@@ -112,11 +117,63 @@ export default function LeadsPage() {
         }
     }, [m, loadLeads]);
 
+    const clearSelection = useCallback(() => {
+        setSelectedLeads([]);
+        setSelectionEpoch((e) => e + 1);
+    }, []);
+
+    const runBulkAction = useCallback(async (action: 'delete' | 'status' | 'assign', value?: string) => {
+        const ids = selectedLeads.map((l) => l.id);
+        if (!ids.length) return;
+        setBulkBusy(true);
+        try {
+            await api.bulkLeadAction(ids, action, value);
+            await loadLeads();
+            clearSelection();
+        } catch (err: unknown) {
+            alert(err instanceof Error ? err.message : (m as any).actionFailed ?? 'Action failed');
+        } finally {
+            setBulkBusy(false);
+        }
+    }, [selectedLeads, loadLeads, clearSelection, m]);
+
+    const bulkDelete = useCallback(() => {
+        if (!confirm(((m as any).bulkDeleteConfirm ?? 'Delete {count} selected lead(s)? This cannot be undone.').replace('{count}', String(selectedLeads.length)))) return;
+        void runBulkAction('delete');
+    }, [runBulkAction, selectedLeads.length, m]);
+
     const statusLabel = (status: string) => (m.statuses as Record<string, string>)[status] ?? status;
     const categoryLabel = (category: string) => (m.categories as Record<string, string>)[category] ?? category;
     const priorityLabel = (priority: string) => (m.priorities as Record<string, string>)[priority] ?? priority;
 
     const columns: ColumnDef<Lead, any>[] = useMemo(() => [
+        columnHelper.display({
+            id: 'select',
+            header: ({ table }) => (
+                <input
+                    type="checkbox"
+                    aria-label="Select all"
+                    className="h-4 w-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 cursor-pointer"
+                    checked={table.getIsAllPageRowsSelected()}
+                    ref={(el) => { if (el) el.indeterminate = table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected(); }}
+                    onChange={table.getToggleAllPageRowsSelectedHandler()}
+                />
+            ),
+            cell: ({ row }) => (
+                <input
+                    type="checkbox"
+                    aria-label="Select row"
+                    className="h-4 w-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 cursor-pointer"
+                    checked={row.getIsSelected()}
+                    onChange={row.getToggleSelectedHandler()}
+                    onClick={(e) => e.stopPropagation()}
+                />
+            ),
+            enableSorting: false,
+            enableColumnFilter: false,
+            enableResizing: false,
+            size: 40,
+        }),
         columnHelper.accessor('name', {
             header: m.columns.name,
             cell: (info) => (
@@ -279,12 +336,67 @@ export default function LeadsPage() {
                 </select>
             </div>
 
+            {selectedLeads.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
+                    <span className="text-sm font-semibold text-violet-800">
+                        {((m as any).selectedCount ?? '{count} selected').replace('{count}', String(selectedLeads.length))}
+                    </span>
+                    <div className="flex-1" />
+                    <select
+                        value=""
+                        disabled={bulkBusy}
+                        onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) void runBulkAction('status', v); }}
+                        className="border border-violet-200 bg-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
+                    >
+                        <option value="">{(m as any).bulkSetStatus ?? 'Set status…'}</option>
+                        {(['NEW', 'CONTACTED', 'QUALIFIED'] as const).map((s) => (
+                            <option key={s} value={s}>{statusLabel(s)}</option>
+                        ))}
+                    </select>
+                    <select
+                        value=""
+                        disabled={bulkBusy}
+                        onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) void runBulkAction('assign', v === '__unassign__' ? '' : v); }}
+                        className="border border-violet-200 bg-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
+                    >
+                        <option value="">{(m as any).bulkAssign ?? 'Assign to…'}</option>
+                        <option value="__unassign__">{(m as any).bulkUnassign ?? '— Unassigned —'}</option>
+                        {teamMembers.map((mem) => {
+                            const id = mem.userId ?? mem.user_id ?? mem.user?.id;
+                            const label = mem.name ?? mem.user?.name ?? mem.email ?? mem.user?.email ?? id;
+                            return id ? <option key={id} value={id}>{label}</option> : null;
+                        })}
+                    </select>
+                    <button
+                        type="button"
+                        onClick={bulkDelete}
+                        disabled={bulkBusy}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50"
+                    >
+                        <Trash2 className="w-4 h-4" /> {c.delete}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={clearSelection}
+                        disabled={bulkBusy}
+                        className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-sm text-gray-600 hover:bg-white disabled:opacity-50"
+                        title={(c as any).clear ?? 'Clear'}
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+            )}
+
             <DataTable<Lead>
+                key={selectionEpoch}
                 tableId="crm-leads"
                 title={m.title}
                 data={leads}
                 columns={columns}
                 isLoading={loading}
+                enableRowSelection
+                onRowSelectionChange={setSelectedLeads}
+                getRowId={(l) => l.id}
                 emptyMessage={myTodaysActions ? m.myTodaysActionsEmpty : m.emptyMessage}
             />
 

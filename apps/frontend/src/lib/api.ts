@@ -513,6 +513,12 @@ export const api = {
     }),
     convertLead: (id: string) => fetchWithAuth(`/crm/leads/${id}/convert`, { method: 'POST' }),
     deleteLead: (id: string) => fetchWithAuth(`/crm/leads/${id}`, { method: 'DELETE' }),
+    bulkLeadAction: (ids: string[], action: 'delete' | 'status' | 'assign', value?: string) =>
+        fetchWithAuth('/crm/leads/bulk-actions', {
+            method: 'POST',
+            body: JSON.stringify({ ids, action, ...(value !== undefined ? { value } : {}) }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     importLeads: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert') =>
         fetchWithAuth('/crm/leads/import', {
             method: 'POST',
