@@ -1,0 +1,1 @@
+export const accountingMessages = { hub: { expenses: "Expenses" } };
