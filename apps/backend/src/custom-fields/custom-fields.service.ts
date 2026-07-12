@@ -55,6 +55,11 @@ export class CustomFieldsService {
       }
       seen.add(norm);
     }
+    for (const f of inputs) {
+      if (f.key && !CUSTOM_FIELD_SLOTS.includes(f.key)) {
+        throw new BadRequestException(`Invalid custom field key: ${f.key}`);
+      }
+    }
 
     const existing = await this.db.customFieldDefinition.findMany({
       where: { tenant_id: tenantId, entity },
@@ -62,7 +67,12 @@ export class CustomFieldsService {
     const usedKeys = new Set(
       inputs.map((f) => f.key).filter((k): k is string => Boolean(k)),
     );
-    const freeSlots = CUSTOM_FIELD_SLOTS.filter((s) => !usedKeys.has(s));
+    const activeExistingKeys = new Set(
+      existing.filter((e) => e.is_active).map((e) => e.key),
+    );
+    const freeSlots = CUSTOM_FIELD_SLOTS.filter(
+      (s) => !usedKeys.has(s) && !activeExistingKeys.has(s),
+    );
 
     // Assign a slot to each new (keyless) input.
     const resolved = inputs.map((f, idx) => {

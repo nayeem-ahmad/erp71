@@ -64,4 +64,29 @@ describe('CustomFieldsService', () => {
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  it('does not reuse a dropped active slot for a new field and deactivates it', async () => {
+    db.customFieldDefinition.findMany.mockResolvedValue([
+      { key: 'cf_1', label: 'Region', order: 0, is_active: true },
+      { key: 'cf_2', label: 'Old', order: 1, is_active: true },
+    ]);
+    const result = await service.saveDefinitions(tenantId, CustomFieldEntity.LEAD, {
+      fields: [{ key: 'cf_1', label: 'Region' }, { label: 'Budget' }],
+    });
+    const budget = result.find((r) => r.label === 'Budget');
+    expect(budget?.key).toBe('cf_3');
+
+    const updateManyCall = db.customFieldDefinition.updateMany.mock.calls.find(
+      (call: any[]) => call[0]?.where?.key?.in?.includes('cf_2'),
+    );
+    expect(updateManyCall).toBeDefined();
+  });
+
+  it('rejects a client-supplied key outside the cf_1..cf_10 slots', async () => {
+    await expect(
+      service.saveDefinitions(tenantId, CustomFieldEntity.LEAD, {
+        fields: [{ key: 'bogus', label: 'X' }],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
 });
