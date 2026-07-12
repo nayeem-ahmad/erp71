@@ -32,6 +32,7 @@ interface Lead {
     next_step_date: string | null;
     last_contacted_at: string | null;
     nextStepAssignee: { id: string; name: string } | null;
+    custom_fields: Record<string, string> | null;
 }
 
 const columnHelper = createColumnHelper<Lead>();
@@ -74,6 +75,11 @@ export default function LeadsPage() {
     const [priorityFilter, setPriorityFilter] = useState('');
     const [myTodaysActions, setMyTodaysActions] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
+    const [customFieldDefs, setCustomFieldDefs] = useState<{ key: string; label: string }[]>([]);
+
+    useEffect(() => {
+        api.getCustomFields('LEAD').then((d: any[]) => setCustomFieldDefs(Array.isArray(d) ? d : [])).catch(() => setCustomFieldDefs([]));
+    }, []);
 
     const loadLeads = useCallback(async () => {
         setLoading(true);
@@ -193,7 +199,14 @@ export default function LeadsPage() {
             enableResizing: false,
             size: 90,
         }),
-    ], [m, c, statusLabel, categoryLabel, priorityLabel, deleteLead]);
+        ...customFieldDefs.map((def) =>
+            columnHelper.accessor((row) => row.custom_fields?.[def.key] ?? '', {
+                id: `cf_${def.key}`,
+                header: def.label,
+                cell: (info) => <span className="text-gray-700">{info.getValue() as string}</span>,
+            }),
+        ),
+    ], [m, c, statusLabel, categoryLabel, priorityLabel, deleteLead, customFieldDefs]);
 
     return (
         <PageShell>
