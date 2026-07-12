@@ -260,6 +260,7 @@ export const coreMessages = {
             crmTasks: 'Tasks & Follow-ups',
             crmCampaigns: 'Campaigns',
             crmLeads: 'Leads',
+            crmCustomFields: 'Custom Fields',
             crmCustomers: 'Customers',
             salesSettings: 'Sales Settings',
             smsCredits: 'SMS Credits',

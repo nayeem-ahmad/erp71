@@ -4,8 +4,10 @@ import {
     Injectable,
     NotFoundException,
 } from '@nestjs/common';
+import { CustomFieldEntity } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { CustomersService } from '../customers/customers.service';
+import { CustomFieldsService } from '../custom-fields/custom-fields.service';
 import { CreateLeadDto, LeadCategory, LeadPriority, LeadSource, LeadStatus, UpdateLeadDto } from './crm-leads.dto';
 import { paginate } from '../common/pagination.dto';
 import { computeLeadScore } from './lead-scoring.util';
@@ -23,10 +25,12 @@ export class CrmLeadsService {
     constructor(
         private db: DatabaseService,
         private customersService: CustomersService,
+        private customFields: CustomFieldsService,
     ) {}
 
     private mapLeadData(dto: CreateLeadDto | UpdateLeadDto) {
-        const data: Record<string, unknown> = { ...dto };
+        const { custom_fields: _ignoredCustomFields, ...rest } = dto as any;
+        const data: Record<string, unknown> = { ...rest };
         if ('next_step_date' in dto && dto.next_step_date) {
             data.next_step_date = new Date(dto.next_step_date);
         }
@@ -60,6 +64,12 @@ export class CrmLeadsService {
             0,
         );
 
+        const customFields = await this.customFields.sanitizeValues(
+            tenantId,
+            CustomFieldEntity.LEAD,
+            dto.custom_fields,
+        );
+
         return this.db.lead.create({
             data: {
                 tenant_id: tenantId,
@@ -84,6 +94,7 @@ export class CrmLeadsService {
                 assigned_to: dto.assigned_to,
                 store_id: dto.store_id,
                 created_by: userId,
+                custom_fields: customFields ?? undefined,
             },
             include: leadIncludes,
         });
@@ -173,6 +184,15 @@ export class CrmLeadsService {
 
         const data = this.mapLeadData(dto);
 
+        const customFields = await this.customFields.sanitizeValues(
+            tenantId,
+            CustomFieldEntity.LEAD,
+            dto.custom_fields,
+        );
+        if (customFields !== undefined) {
+            data.custom_fields = customFields;
+        }
+
         const nextStatus = dto.status ?? existing.status;
         if (nextStatus === LeadStatus.LOST) {
             const reason = dto.lost_reason ?? existing.lost_reason;
@@ -244,6 +264,10 @@ export class CrmLeadsService {
         rows: Record<string, unknown>[],
         mode: 'skip' | 'upsert',
     ): Promise<ImportResult> {
+        const defs = await this.customFields.listDefinitions(
+            tenantId,
+            CustomFieldEntity.LEAD,
+        );
         return runImport(rows, mode, tenantId, {
             requiredFields: ['name'],
             castRow: (raw) => {
@@ -267,6 +291,17 @@ export class CrmLeadsService {
                         ? (this.resolveEnum(raw.source, Object.values(LeadSource) as string[]) ?? LeadSource.OTHER)
                         : undefined,
                     status: rawStatus,
+                    custom_fields: defs.reduce<Record<string, string>>((acc, def) => {
+                        const target = def.label.trim().toLowerCase();
+                        const matchKey = Object.keys(raw).find(
+                            (k) => k === def.key || k.trim().toLowerCase() === target,
+                        );
+                        const raw2 = matchKey !== undefined ? raw[matchKey] : undefined;
+                        if (raw2 !== undefined && raw2 !== null && String(raw2).trim() !== '') {
+                            acc[def.key] = String(raw2).trim().slice(0, 500);
+                        }
+                        return acc;
+                    }, {}),
                 };
             },
             findDuplicate: async (row) => {
@@ -301,6 +336,9 @@ export class CrmLeadsService {
                         source: row.source ?? LeadSource.OTHER,
                         status: row.status ?? LeadStatus.NEW,
                         score,
+                        custom_fields: Object.keys(row.custom_fields ?? {}).length
+                            ? row.custom_fields
+                            : undefined,
                     } as any,
                 });
             },
@@ -317,6 +355,9 @@ export class CrmLeadsService {
                         ...(row.priority !== undefined ? { priority: row.priority } : {}),
                         ...(row.source   !== undefined ? { source: row.source }     : {}),
                         ...(row.status   !== undefined ? { status: row.status }     : {}),
+                        ...(Object.keys(row.custom_fields ?? {}).length
+                            ? { custom_fields: row.custom_fields }
+                            : {}),
                     } as any,
                 });
             },

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { CrmLeadsService } from './crm-leads.service';
 import { CustomersService } from '../customers/customers.service';
+import { CustomFieldsService } from '../custom-fields/custom-fields.service';
 import { DatabaseService } from '../database/database.service';
 import { LeadStatus } from './crm-leads.dto';
 
@@ -9,6 +10,7 @@ describe('CrmLeadsService', () => {
     let service: CrmLeadsService;
     let db: any;
     let customersService: any;
+    let customFieldsService: any;
 
     beforeEach(async () => {
         db = {
@@ -29,12 +31,17 @@ describe('CrmLeadsService', () => {
         customersService = {
             create: jest.fn(),
         };
+        customFieldsService = {
+            sanitizeValues: jest.fn().mockResolvedValue(undefined),
+            listDefinitions: jest.fn().mockResolvedValue([]),
+        };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CrmLeadsService,
                 { provide: DatabaseService, useValue: db },
                 { provide: CustomersService, useValue: customersService },
+                { provide: CustomFieldsService, useValue: customFieldsService },
             ],
         }).compile();
 
@@ -130,6 +137,31 @@ describe('CrmLeadsService', () => {
         });
     });
 
+    describe('create() — custom_fields', () => {
+        it('persists the sanitized custom_fields object, not the raw dto value', async () => {
+            db.lead.findUnique.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-20' });
+            customFieldsService.sanitizeValues.mockResolvedValueOnce({ cf_1: 'Gold' });
+
+            await service.create('tenant-1', 'user-1', {
+                name: 'Custom Field Lead',
+                mobile: '01733333333',
+                custom_fields: { cf_1: 'gold  ', unknown_key: 'nope' },
+            } as any);
+
+            expect(customFieldsService.sanitizeValues).toHaveBeenCalledWith(
+                'tenant-1',
+                'LEAD',
+                { cf_1: 'gold  ', unknown_key: 'nope' },
+            );
+            expect(db.lead.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ custom_fields: { cf_1: 'Gold' } }),
+                }),
+            );
+        });
+    });
+
     describe('update() — lost_reason validation', () => {
         const existing = {
             id: 'lead-3',
@@ -167,6 +199,49 @@ describe('CrmLeadsService', () => {
                     data: expect.objectContaining({ lost_reason: 'Price too high', score: 0 }),
                 }),
             );
+        });
+    });
+
+    describe('update() — custom_fields', () => {
+        const existing = {
+            id: 'lead-4',
+            tenant_id: 'tenant-1',
+            mobile: '01744444444',
+            status: LeadStatus.CONTACTED,
+            source: 'REFERRAL',
+            priority: 'HIGH',
+            last_contacted_at: null,
+            next_step_date: null,
+            lost_reason: null,
+        };
+
+        it('persists the sanitized custom_fields object and strips the raw value from mapLeadData', async () => {
+            db.lead.findFirst.mockResolvedValueOnce(existing);
+            customFieldsService.sanitizeValues.mockResolvedValueOnce({ cf_1: 'Gold' });
+            db.lead.update.mockResolvedValueOnce({ ...existing });
+
+            await service.update('tenant-1', 'lead-4', {
+                custom_fields: { cf_1: 'gold  ', unknown_key: 'nope' },
+            } as any);
+
+            expect(customFieldsService.sanitizeValues).toHaveBeenCalledWith(
+                'tenant-1',
+                'LEAD',
+                { cf_1: 'gold  ', unknown_key: 'nope' },
+            );
+            const updateCall = db.lead.update.mock.calls[0][0];
+            expect(updateCall.data.custom_fields).toEqual({ cf_1: 'Gold' });
+        });
+
+        it('does not touch custom_fields when sanitizeValues returns undefined', async () => {
+            db.lead.findFirst.mockResolvedValueOnce(existing);
+            customFieldsService.sanitizeValues.mockResolvedValueOnce(undefined);
+            db.lead.update.mockResolvedValueOnce({ ...existing });
+
+            await service.update('tenant-1', 'lead-4', { remarks: 'hi' } as any);
+
+            const updateCall = db.lead.update.mock.calls[0][0];
+            expect(updateCall.data).not.toHaveProperty('custom_fields');
         });
     });
 
@@ -286,7 +361,7 @@ describe('CrmLeadsService', () => {
             ], 'skip');
 
             expect(result.created).toBe(1);
-            expect(result.errors).toEqual(['Row 2: missing required field(s): name, mobile']);
+            expect(result.errors).toEqual(['Row 2: missing required field(s): name']);
         });
 
         it('falls back to defaults for an invalid enum value instead of erroring', async () => {
@@ -315,6 +390,63 @@ describe('CrmLeadsService', () => {
                 'Row 2: status LOST requires a lost_reason, which import does not support — set status after import instead',
             ]);
             expect(db.lead.create).not.toHaveBeenCalled();
+        });
+
+        it('maps a CSV column matching a custom field label into custom_fields on create', async () => {
+            customFieldsService.listDefinitions.mockResolvedValueOnce([
+                { key: 'cf_1', label: 'Region', order: 0 },
+            ]);
+            db.lead.findUnique.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-13' });
+
+            const result = await service.importRows('tenant-1', [
+                { name: 'Farah', mobile: '01800000006', Region: 'Dhaka' },
+            ], 'skip');
+
+            expect(result.created).toBe(1);
+            expect(db.lead.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ custom_fields: { cf_1: 'Dhaka' } }),
+                }),
+            );
+        });
+
+        it('matches a custom field label case-insensitively regardless of header casing', async () => {
+            customFieldsService.listDefinitions.mockResolvedValueOnce([
+                { key: 'cf_1', label: 'Region', order: 0 },
+            ]);
+            db.lead.findUnique.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-14' });
+
+            const result = await service.importRows('tenant-1', [
+                { name: 'Alice', mobile: '01900000001', REGION: 'Dhaka' },
+            ], 'skip');
+
+            expect(result.created).toBe(1);
+            expect(db.lead.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ custom_fields: { cf_1: 'Dhaka' } }),
+                }),
+            );
+        });
+
+        it('maps a row keyed by the custom field key (as emitted by ImportDialog) into custom_fields on create', async () => {
+            customFieldsService.listDefinitions.mockResolvedValueOnce([
+                { key: 'cf_1', label: 'Region', order: 0 },
+            ]);
+            db.lead.findUnique.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-15' });
+
+            const result = await service.importRows('tenant-1', [
+                { name: 'Alice', mobile: '01900000002', cf_1: 'Dhaka' },
+            ], 'skip');
+
+            expect(result.created).toBe(1);
+            expect(db.lead.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ custom_fields: { cf_1: 'Dhaka' } }),
+                }),
+            );
         });
     });
 });

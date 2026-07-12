@@ -78,6 +78,7 @@ import { CrmTasksModule } from './crm-tasks/crm-tasks.module';
 import { CrmCampaignsModule } from './crm-campaigns/crm-campaigns.module';
 import { CrmLeadsModule } from './crm-leads/crm-leads.module';
 import { CrmLeadConversationsModule } from './crm-lead-conversations/crm-lead-conversations.module';
+import { CustomFieldsModule } from './custom-fields/custom-fields.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { LoansModule } from './loans/loans.module';
 import { FundTransfersModule } from './fund-transfers/fund-transfers.module';
@@ -167,6 +168,7 @@ import { ReferralsModule } from './referrals/referrals.module';
         CrmCampaignsModule,
         CrmLeadsModule,
         CrmLeadConversationsModule,
+        CustomFieldsModule,
         ExpensesModule,
         LoansModule,
         FundTransfersModule,

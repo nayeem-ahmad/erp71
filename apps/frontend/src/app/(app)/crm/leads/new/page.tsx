@@ -25,9 +25,16 @@ export default function NewLeadPage() {
     const [form, setForm] = useState(emptyLeadForm());
     const [saving, setSaving] = useState(false);
     const [teamMembers, setTeamMembers] = useState<any[]>([]);
+    const [customFieldDefs, setCustomFieldDefs] = useState<{ key: string; label: string }[]>([]);
 
     useEffect(() => {
         api.getTeamMembers().then((data) => setTeamMembers(Array.isArray(data) ? data : [])).catch(() => null);
+    }, []);
+
+    useEffect(() => {
+        api.getCustomFields('LEAD')
+            .then((d: any[]) => setCustomFieldDefs(Array.isArray(d) ? d : []))
+            .catch(() => setCustomFieldDefs([]));
     }, []);
 
     const formErrorMessage = (code: string | null) => {
@@ -79,7 +86,7 @@ export default function NewLeadPage() {
             />
 
             <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 max-w-3xl">
-                <LeadFormFields form={form} onChange={setForm} teamMembers={teamMembers} showStatus={false} />
+                <LeadFormFields form={form} onChange={setForm} teamMembers={teamMembers} showStatus={false} customFieldDefs={customFieldDefs} />
 
                 <div className="flex justify-end gap-2 pt-6 mt-6 border-t border-gray-100">
                     <Link href={routes.crm.leads} className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50">

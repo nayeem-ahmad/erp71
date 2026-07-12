@@ -81,9 +81,16 @@ export default function LeadDetailPage() {
     const [editForm, setEditForm] = useState<LeadFormState | null>(null);
     const [savingLead, setSavingLead] = useState(false);
     const [teamMembers, setTeamMembers] = useState<any[]>([]);
+    const [customFieldDefs, setCustomFieldDefs] = useState<{ key: string; label: string }[]>([]);
 
     useEffect(() => {
         api.getTeamMembers().then((data) => setTeamMembers(Array.isArray(data) ? data : [])).catch(() => null);
+    }, []);
+
+    useEffect(() => {
+        api.getCustomFields('LEAD')
+            .then((d: any[]) => setCustomFieldDefs(Array.isArray(d) ? d : []))
+            .catch(() => setCustomFieldDefs([]));
     }, []);
 
     const loadLead = useCallback(async () => {
@@ -341,10 +348,26 @@ export default function LeadDetailPage() {
                 )}
             </div>
 
+            {customFieldDefs.some((def) => (lead.custom_fields as Record<string, string> | null)?.[def.key]) && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                    <h2 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{m.fields.customFields}</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2">
+                        {customFieldDefs
+                            .filter((def) => (lead.custom_fields as Record<string, string> | null)?.[def.key])
+                            .map((def) => (
+                                <div key={def.key} className="flex justify-between text-sm">
+                                    <span className="text-gray-500">{def.label}</span>
+                                    <span className="text-gray-900 font-medium">{(lead.custom_fields as Record<string, string>)[def.key]}</span>
+                                </div>
+                            ))}
+                    </div>
+                </div>
+            )}
+
             {showEditForm && editForm && !isConverted && (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
                     <h2 className="text-lg font-bold text-gray-900">{m.fields.editLead}</h2>
-                    <LeadFormFields form={editForm} onChange={setEditForm} teamMembers={teamMembers} />
+                    <LeadFormFields form={editForm} onChange={setEditForm} teamMembers={teamMembers} customFieldDefs={customFieldDefs} />
                     <div className="flex gap-2 pt-2">
                         <button onClick={saveLead} disabled={savingLead} className="px-4 py-2 bg-violet-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
                             {savingLead ? <Loader2 className="w-4 h-4 animate-spin" /> : m.detail.saveLead}

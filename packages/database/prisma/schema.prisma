@@ -440,6 +440,7 @@ model Tenant {
   crmTasks            CrmTask[]
   leads               Lead[]
   leadConversations   LeadConversation[]
+  customFieldDefinitions CustomFieldDefinition[]
   customerCreditTransactions CustomerCreditTransaction[]
   supplierCreditTransactions SupplierCreditTransaction[]
   crmCampaigns        CrmCampaign[]
@@ -1378,6 +1379,7 @@ model Lead {
   store_id                String?
   name                    String
   mobile                  String?
+  custom_fields           Json?
   email                   String?
   address                 String?
   category                LeadCategory?
@@ -1415,6 +1417,27 @@ model Lead {
   @@index([tenant_id, priority])
   @@index([tenant_id, assigned_to])
   @@index([tenant_id, next_step_date])
+}
+
+enum CustomFieldEntity {
+  LEAD
+}
+
+model CustomFieldDefinition {
+  id         String            @id @default(uuid())
+  tenant_id  String
+  entity     CustomFieldEntity
+  key        String
+  label      String
+  order      Int               @default(0)
+  is_active  Boolean           @default(true)
+  created_at DateTime          @default(now())
+  updated_at DateTime          @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, entity, key])
+  @@index([tenant_id, entity])
 }
 
 model LeadConversation {

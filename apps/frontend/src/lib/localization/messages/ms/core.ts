@@ -260,6 +260,7 @@ export const coreMessages = {
             crmTasks: "Tugas & Susulan",
             crmCampaigns: "Kempen",
             crmLeads: "Prospek",
+            crmCustomFields: "Medan Tersuai",
             crmCustomers: "Pelanggan",
                 salesSettings: "Tetapan Jualan",
                 smsCredits: "Kredit SMS",
