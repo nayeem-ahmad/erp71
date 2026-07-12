@@ -169,6 +169,13 @@ export default function LeadsPage() {
             header: m.fields.nextStepAssignedTo,
             cell: (info) => info.getValue()?.name ?? '—',
         }),
+        ...customFieldDefs.map((def) =>
+            columnHelper.accessor((row) => row.custom_fields?.[def.key] ?? '', {
+                id: `cf_${def.key}`,
+                header: def.label,
+                cell: (info) => <span className="text-gray-700">{info.getValue() as string}</span>,
+            }),
+        ),
         columnHelper.display({
             id: 'actions',
             header: c.actions,
@@ -199,14 +206,15 @@ export default function LeadsPage() {
             enableResizing: false,
             size: 90,
         }),
-        ...customFieldDefs.map((def) =>
-            columnHelper.accessor((row) => row.custom_fields?.[def.key] ?? '', {
-                id: `cf_${def.key}`,
-                header: def.label,
-                cell: (info) => <span className="text-gray-700">{info.getValue() as string}</span>,
-            }),
-        ),
     ], [m, c, statusLabel, categoryLabel, priorityLabel, deleteLead, customFieldDefs]);
+
+    const importFields: ImportField[] = useMemo(
+        () => [
+            ...LEAD_IMPORT_FIELDS,
+            ...customFieldDefs.map((def) => ({ key: def.key, label: def.label, required: false })),
+        ],
+        [customFieldDefs],
+    );
 
     return (
         <PageShell>
@@ -284,7 +292,7 @@ export default function LeadsPage() {
                 open={importOpen}
                 onClose={() => setImportOpen(false)}
                 entityLabel="Leads"
-                fields={LEAD_IMPORT_FIELDS}
+                fields={importFields}
                 importFn={(rows, mode) => api.importLeads(rows, mode)}
                 onSuccess={() => void loadLeads()}
             />

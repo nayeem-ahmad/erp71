@@ -293,7 +293,9 @@ export class CrmLeadsService {
                     status: rawStatus,
                     custom_fields: defs.reduce<Record<string, string>>((acc, def) => {
                         const target = def.label.trim().toLowerCase();
-                        const matchKey = Object.keys(raw).find((k) => k.trim().toLowerCase() === target);
+                        const matchKey = Object.keys(raw).find(
+                            (k) => k === def.key || k.trim().toLowerCase() === target,
+                        );
                         const raw2 = matchKey !== undefined ? raw[matchKey] : undefined;
                         if (raw2 !== undefined && raw2 !== null && String(raw2).trim() !== '') {
                             acc[def.key] = String(raw2).trim().slice(0, 500);

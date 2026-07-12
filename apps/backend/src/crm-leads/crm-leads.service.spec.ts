@@ -429,5 +429,24 @@ describe('CrmLeadsService', () => {
                 }),
             );
         });
+
+        it('maps a row keyed by the custom field key (as emitted by ImportDialog) into custom_fields on create', async () => {
+            customFieldsService.listDefinitions.mockResolvedValueOnce([
+                { key: 'cf_1', label: 'Region', order: 0 },
+            ]);
+            db.lead.findUnique.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-15' });
+
+            const result = await service.importRows('tenant-1', [
+                { name: 'Alice', mobile: '01900000002', cf_1: 'Dhaka' },
+            ], 'skip');
+
+            expect(result.created).toBe(1);
+            expect(db.lead.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ custom_fields: { cf_1: 'Dhaka' } }),
+                }),
+            );
+        });
     });
 });
