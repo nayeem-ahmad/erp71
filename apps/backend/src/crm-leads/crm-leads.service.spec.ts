@@ -33,6 +33,7 @@ describe('CrmLeadsService', () => {
         };
         customFieldsService = {
             sanitizeValues: jest.fn().mockResolvedValue(undefined),
+            listDefinitions: jest.fn().mockResolvedValue([]),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -360,7 +361,7 @@ describe('CrmLeadsService', () => {
             ], 'skip');
 
             expect(result.created).toBe(1);
-            expect(result.errors).toEqual(['Row 2: missing required field(s): name, mobile']);
+            expect(result.errors).toEqual(['Row 2: missing required field(s): name']);
         });
 
         it('falls back to defaults for an invalid enum value instead of erroring', async () => {
@@ -389,6 +390,25 @@ describe('CrmLeadsService', () => {
                 'Row 2: status LOST requires a lost_reason, which import does not support — set status after import instead',
             ]);
             expect(db.lead.create).not.toHaveBeenCalled();
+        });
+
+        it('maps a CSV column matching a custom field label into custom_fields on create', async () => {
+            customFieldsService.listDefinitions.mockResolvedValueOnce([
+                { key: 'cf_1', label: 'Region', order: 0 },
+            ]);
+            db.lead.findUnique.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-13' });
+
+            const result = await service.importRows('tenant-1', [
+                { name: 'Farah', mobile: '01800000006', Region: 'Dhaka' },
+            ], 'skip');
+
+            expect(result.created).toBe(1);
+            expect(db.lead.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ custom_fields: { cf_1: 'Dhaka' } }),
+                }),
+            );
         });
     });
 });

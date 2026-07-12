@@ -264,6 +264,10 @@ export class CrmLeadsService {
         rows: Record<string, unknown>[],
         mode: 'skip' | 'upsert',
     ): Promise<ImportResult> {
+        const defs = await this.customFields.listDefinitions(
+            tenantId,
+            CustomFieldEntity.LEAD,
+        );
         return runImport(rows, mode, tenantId, {
             requiredFields: ['name'],
             castRow: (raw) => {
@@ -287,6 +291,13 @@ export class CrmLeadsService {
                         ? (this.resolveEnum(raw.source, Object.values(LeadSource) as string[]) ?? LeadSource.OTHER)
                         : undefined,
                     status: rawStatus,
+                    custom_fields: defs.reduce<Record<string, string>>((acc, def) => {
+                        const raw2 = raw[def.label] ?? raw[def.label.toLowerCase()];
+                        if (raw2 !== undefined && raw2 !== null && String(raw2).trim() !== '') {
+                            acc[def.key] = String(raw2).trim().slice(0, 500);
+                        }
+                        return acc;
+                    }, {}),
                 };
             },
             findDuplicate: async (row) => {
@@ -321,6 +332,9 @@ export class CrmLeadsService {
                         source: row.source ?? LeadSource.OTHER,
                         status: row.status ?? LeadStatus.NEW,
                         score,
+                        custom_fields: Object.keys(row.custom_fields ?? {}).length
+                            ? row.custom_fields
+                            : undefined,
                     } as any,
                 });
             },
@@ -337,6 +351,9 @@ export class CrmLeadsService {
                         ...(row.priority !== undefined ? { priority: row.priority } : {}),
                         ...(row.source   !== undefined ? { source: row.source }     : {}),
                         ...(row.status   !== undefined ? { status: row.status }     : {}),
+                        ...(Object.keys(row.custom_fields ?? {}).length
+                            ? { custom_fields: row.custom_fields }
+                            : {}),
                     } as any,
                 });
             },
