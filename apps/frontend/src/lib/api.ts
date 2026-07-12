@@ -130,6 +130,8 @@ export type ReportScopeParams = {
     includeCompanyBucket?: boolean;
 };
 
+export type CustomFieldDef = { key: string; label: string; order: number };
+
 function appendReportScopeParams(query: URLSearchParams, params?: ReportScopeParams) {
     if (params?.scope) query.set('scope', params.scope);
     if (params?.storeId) query.set('storeId', params.storeId);
@@ -516,6 +518,14 @@ export const api = {
             method: 'POST',
             body: JSON.stringify({ rows, mode }),
             headers: { 'Content-Type': 'application/json' },
+        }),
+    // Custom Fields
+    getCustomFields: (entity: string) =>
+        fetchWithAuth(`/custom-fields?entity=${encodeURIComponent(entity)}`),
+    saveCustomFields: (entity: string, fields: { key?: string; label: string; order?: number }[]) =>
+        fetchWithAuth(`/custom-fields?entity=${encodeURIComponent(entity)}`, {
+            method: 'PUT',
+            body: JSON.stringify({ fields }),
         }),
     // CRM Lead Conversations
     getLeadConversations: (params?: { leadId?: string; page?: number; limit?: number }) => {
