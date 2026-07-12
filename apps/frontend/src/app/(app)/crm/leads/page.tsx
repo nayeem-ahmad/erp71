@@ -51,7 +51,7 @@ function scoreBadgeColor(score: number): string {
 
 const LEAD_IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
-    { key: 'mobile', label: 'Mobile', required: true },
+    { key: 'mobile', label: 'Mobile', required: false },
     { key: 'email', label: 'Email', required: false },
     { key: 'address', label: 'Address', required: false },
     { key: 'category', label: 'Category', required: false },

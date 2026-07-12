@@ -37,12 +37,14 @@ export class CrmLeadsService {
     }
 
     async create(tenantId: string, userId: string, dto: CreateLeadDto) {
-        const existing = await this.db.lead.findUnique({
-            where: { tenant_id_mobile: { tenant_id: tenantId, mobile: dto.mobile } },
-            select: { id: true },
-        });
-        if (existing) {
-            throw new BadRequestException('A lead with this mobile number already exists.');
+        if (dto.mobile) {
+            const existing = await this.db.lead.findUnique({
+                where: { tenant_id_mobile: { tenant_id: tenantId, mobile: dto.mobile } },
+                select: { id: true },
+            });
+            if (existing) {
+                throw new BadRequestException('A lead with this mobile number already exists.');
+            }
         }
 
         const status = dto.status ?? LeadStatus.NEW;
@@ -243,7 +245,7 @@ export class CrmLeadsService {
         mode: 'skip' | 'upsert',
     ): Promise<ImportResult> {
         return runImport(rows, mode, tenantId, {
-            requiredFields: ['name', 'mobile'],
+            requiredFields: ['name'],
             castRow: (raw) => {
                 const rawStatus = raw.status != null && String(raw.status).trim() !== ''
                     ? (this.resolveEnum(raw.status, Object.values(LeadStatus) as string[]) ?? LeadStatus.NEW)
@@ -253,7 +255,7 @@ export class CrmLeadsService {
                 }
                 return {
                     name: String(raw.name ?? '').trim(),
-                    mobile: String(raw.mobile ?? '').trim(),
+                    mobile: String(raw.mobile ?? '').trim() || null,
                     email: raw.email ? String(raw.email).trim() || null : null,
                     address: raw.address ? String(raw.address).trim() || null : null,
                     remarks: raw.remarks ? String(raw.remarks).trim() || null : null,
@@ -268,6 +270,7 @@ export class CrmLeadsService {
                 };
             },
             findDuplicate: async (row) => {
+                if (!row.mobile) return null;
                 const existing = await this.db.lead.findUnique({
                     where: { tenant_id_mobile: { tenant_id: tenantId, mobile: row.mobile } },
                     select: { id: true },
@@ -289,7 +292,7 @@ export class CrmLeadsService {
                     data: {
                         tenant_id: tenantId,
                         name: row.name,
-                        mobile: row.mobile,
+                        mobile: row.mobile ?? undefined,
                         email: row.email ?? undefined,
                         address: row.address ?? undefined,
                         remarks: row.remarks ?? undefined,

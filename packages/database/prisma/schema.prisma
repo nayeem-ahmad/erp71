@@ -1377,7 +1377,7 @@ model Lead {
   tenant_id               String
   store_id                String?
   name                    String
-  mobile                  String
+  mobile                  String?
   email                   String?
   address                 String?
   category                LeadCategory?
