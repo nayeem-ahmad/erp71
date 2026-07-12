@@ -57,6 +57,7 @@ export type LeadFormState = {
     next_step: string;
     next_step_date: string;
     next_step_assigned_to: string;
+    custom_fields: Record<string, string>;
 };
 
 export const emptyLeadForm = (): LeadFormState => ({
@@ -76,6 +77,7 @@ export const emptyLeadForm = (): LeadFormState => ({
     next_step: '',
     next_step_date: '',
     next_step_assigned_to: '',
+    custom_fields: {},
 });
 
 export function leadToFormState(lead: Record<string, unknown>): LeadFormState {
@@ -97,6 +99,7 @@ export function leadToFormState(lead: Record<string, unknown>): LeadFormState {
         next_step: String(lead.next_step ?? ''),
         next_step_date: nextStepDate ? nextStepDate.slice(0, 16) : '',
         next_step_assigned_to: String((lead.next_step_assigned_to as string) ?? ''),
+        custom_fields: (lead.custom_fields as Record<string, string>) ?? {},
     };
 }
 
@@ -139,6 +142,14 @@ export function leadFormToPayload(form: LeadFormState) {
         payload.next_step_date = new Date(form.next_step_date).toISOString();
     }
     if (form.next_step_assigned_to) payload.next_step_assigned_to = form.next_step_assigned_to;
+    const customFields = Object.entries(form.custom_fields ?? {}).reduce<Record<string, string>>((acc, [k, v]) => {
+        const val = String(v ?? '').trim();
+        if (val) acc[k] = val;
+        return acc;
+    }, {});
+    if (Object.keys(customFields).length) {
+        (payload as Record<string, unknown>).custom_fields = customFields;
+    }
     return payload;
 }
 
@@ -166,9 +177,10 @@ type LeadFormFieldsProps = {
     onChange: (form: LeadFormState) => void;
     teamMembers?: TeamMember[];
     showStatus?: boolean;
+    customFieldDefs?: { key: string; label: string }[];
 };
 
-export function LeadFormFields({ form, onChange, teamMembers = [], showStatus = true }: LeadFormFieldsProps) {
+export function LeadFormFields({ form, onChange, teamMembers = [], showStatus = true, customFieldDefs = [] }: LeadFormFieldsProps) {
     const { t } = useI18n();
     const m = t.crm.leads;
     const set = (key: keyof LeadFormState, value: string) => onChange({ ...form, [key]: value });
@@ -255,6 +267,17 @@ export function LeadFormFields({ form, onChange, teamMembers = [], showStatus = 
                 onChange={(next) => onChange({ ...form, ...next })}
                 teamMembers={teamMembers}
             />
+            {customFieldDefs.map((def) => (
+                <div key={def.key}>
+                    <label className={labelClass}>{def.label}</label>
+                    <input
+                        value={form.custom_fields?.[def.key] ?? ''}
+                        onChange={(e) => onChange({ ...form, custom_fields: { ...form.custom_fields, [def.key]: e.target.value } })}
+                        className={inputClass}
+                        maxLength={500}
+                    />
+                </div>
+            ))}
         </div>
     );
 }
