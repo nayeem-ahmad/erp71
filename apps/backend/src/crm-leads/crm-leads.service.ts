@@ -8,7 +8,7 @@ import { CustomFieldEntity } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { CustomersService } from '../customers/customers.service';
 import { CustomFieldsService } from '../custom-fields/custom-fields.service';
-import { CreateLeadDto, LeadCategory, LeadPriority, LeadSource, LeadStatus, UpdateLeadDto } from './crm-leads.dto';
+import { BulkLeadActionDto, CreateLeadDto, LeadBulkAction, LeadCategory, LeadPriority, LeadSource, LeadStatus, UpdateLeadDto } from './crm-leads.dto';
 import { paginate } from '../common/pagination.dto';
 import { computeLeadScore } from './lead-scoring.util';
 import { runImport, ImportResult } from '../common/import.util';
@@ -231,6 +231,39 @@ export class CrmLeadsService {
         if (!existing) throw new NotFoundException('Lead not found');
         await this.db.lead.delete({ where: { id } });
         return { success: true };
+    }
+
+    /** Apply a single action to many leads at once. All operations are tenant-scoped. */
+    async bulkAction(tenantId: string, dto: BulkLeadActionDto) {
+        const { ids, action, value } = dto;
+        const where = { tenant_id: tenantId, id: { in: ids } };
+
+        if (action === LeadBulkAction.DELETE) {
+            const res = await this.db.lead.deleteMany({ where });
+            return { count: res.count };
+        }
+
+        if (action === LeadBulkAction.ASSIGN) {
+            const assignee = value && value.trim() ? value.trim() : null;
+            const res = await this.db.lead.updateMany({ where, data: { assigned_to: assignee } });
+            return { count: res.count };
+        }
+
+        if (action === LeadBulkAction.STATUS) {
+            const status = value as LeadStatus;
+            if (!status || !Object.values(LeadStatus).includes(status)) {
+                throw new BadRequestException('Invalid status.');
+            }
+            if (status === LeadStatus.LOST || status === LeadStatus.CONVERTED) {
+                throw new BadRequestException(
+                    'Bulk status change to LOST or CONVERTED is not supported — edit those leads individually.',
+                );
+            }
+            const res = await this.db.lead.updateMany({ where, data: { status } });
+            return { count: res.count };
+        }
+
+        throw new BadRequestException('Unsupported bulk action.');
     }
 
     /** Counts of leads per pipeline stage, for the CRM hub dashboard. */

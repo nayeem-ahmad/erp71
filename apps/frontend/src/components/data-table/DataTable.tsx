@@ -88,6 +88,8 @@ export interface DataTableProps<T> {
     enableRowSelection?: boolean;
     /** Callback when row selection changes */
     onRowSelectionChange?: (rows: T[]) => void;
+    /** Stable row id accessor — keeps selection correct across data reloads (defaults to row index) */
+    getRowId?: (row: T, index: number) => string;
     /** Custom toolbar actions (rendered after built-in buttons) */
     toolbarActions?: React.ReactNode;
     /** Search placeholder text */
@@ -168,6 +170,7 @@ export default function DataTable<T>({
     emptyIcon,
     enableRowSelection = false,
     onRowSelectionChange,
+    getRowId,
     toolbarActions,
     searchPlaceholder,
     filterPresets,
@@ -253,6 +256,7 @@ export default function DataTable<T>({
         onColumnOrderChange: setColumnOrder,
         onColumnSizingChange: setColumnSizing,
         onRowSelectionChange: setRowSelection,
+        getRowId,
         getCoreRowModel: getCoreRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
         getSortedRowModel: getSortedRowModel(),
