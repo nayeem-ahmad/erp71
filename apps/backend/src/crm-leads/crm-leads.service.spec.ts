@@ -410,5 +410,24 @@ describe('CrmLeadsService', () => {
                 }),
             );
         });
+
+        it('matches a custom field label case-insensitively regardless of header casing', async () => {
+            customFieldsService.listDefinitions.mockResolvedValueOnce([
+                { key: 'cf_1', label: 'Region', order: 0 },
+            ]);
+            db.lead.findUnique.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-14' });
+
+            const result = await service.importRows('tenant-1', [
+                { name: 'Alice', mobile: '01900000001', REGION: 'Dhaka' },
+            ], 'skip');
+
+            expect(result.created).toBe(1);
+            expect(db.lead.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ custom_fields: { cf_1: 'Dhaka' } }),
+                }),
+            );
+        });
     });
 });
