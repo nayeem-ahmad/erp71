@@ -127,6 +127,15 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## IMPORTANT — First month after launch
 
+### UI Design System (per `docs/ui-design-guidelines.md` — PROPOSED, awaiting approval; do not start until instructed)
+- [ ] Phase 1 — Foundation: Tailwind semantic tokens (primary/success/warning/danger/canvas, z-index ladder, radius aliases); load Inter + Noto Sans Bengali via `next/font`; replace arbitrary hex (`bg-[#f3f4f6]` etc.) with tokens
+- [ ] Phase 2 — Primitives: shared Input/Select/Field/FormFooter, Button variants, StatusBadge, Alert; ModalHeader/ModalFooter; DataTable-owned selection checkbox column + standard bulk-action bar; single global Toaster
+- [ ] Phase 3 — Mechanical adoption: replace ~35 hand-copied `PageShell` wrapper strings (settings/admin/sales/purchases/hr/inventory); migrate 27 hand-rolled `fixed inset-0` modals to ModalShell; delete ~20 page-local toasts
+- [ ] Phase 4 — Color normalization: retire per-module accents (CRM violet, dashboard/admin indigo, purchases emerald, expenses rose) → semantic tokens
+- [ ] Phase 5 — Surface polish: compact detail-page headers + tabs; move FeedbackWidget from floating dock into header/sidebar; POS mobile cart FAB → bottom summary bar; admin restyle to compact system
+- [ ] Phase 6 — Supersede stale `docs/front-end-spec.md` (green/Roboto spec matches nothing built) with ratified guidelines
+- [ ] Quick wins (independent): POS `$` literal on product cards → `formatBDT` (`sales/pos/page.tsx:629,846`); CRM leads duplicate search box; remove dead `--color-primary` branding var (or wire it up); remove unused `KpiTile.tsx`; shared `useDismissable` hook for duplicated outside-click/Escape logic
+
 ### Mobile Responsiveness
 - [x] Add viewport meta tag to root layout (`apps/frontend/src/app/layout.tsx`) — added `export const viewport: Viewport` with `width: 'device-width', initialScale: 1, maximumScale: 5` — done 2026-06-13
 - [x] Mobile sidebar: hide sidebar completely on small screens, add hamburger toggle button to header (`apps/frontend/src/app/dashboard/layout.tsx` + `Sidebar.tsx`) — sidebar now uses `fixed` on mobile with `translate-x` animation; hamburger button in header on `md:hidden` — done 2026-06-13
@@ -407,6 +416,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Added "UI Rules (frontend)" section to CLAUDE.md — 12 non-negotiables distilled from `docs/ui-design-guidelines.md` so every Claude Code session enforces them; other enforcement (theme restriction, ESLint rules, CI ratchet) deferred — done 2026-07-14
+- [x] Full UI review across all surfaces (shell, lists, forms/modals, dashboard, POS, storefront, auth, settings, admin) + proposed design guidelines written to `docs/ui-design-guidelines.md` (PROPOSED — no UI changed; migration phases added under IMPORTANT → UI Design System) — done 2026-07-14
 - [x] CRM Leads list: multi-row checkbox selection + bulk actions (delete with confirmation, set status to NEW/CONTACTED/QUALIFIED, assign/unassign to team member). New `POST /crm/leads/bulk-actions` (`BulkLeadActionDto`, tenant-scoped deleteMany/updateMany; rejects bulk LOST/CONVERTED); `api.bulkLeadAction`; `DataTable` gained a `getRowId` prop (selection stable across reloads); leads page got a `select` checkbox column + bulk action bar. Bulk labels use English fallbacks via `(m as any)` — i18n keys are a follow-up. Note: bulk status uses `updateMany` and does not recompute the advisory `score`. — done 2026-07-12
 - [x] CRM Leads: make only `name` required; all other fields (including `mobile`) optional — frontend `validateLeadForm`/`leadFormToPayload` (mobile no longer required, sent only if present), backend `CreateLeadDto.mobile` now `@IsOptional()`, service duplicate-mobile check guarded to run only when mobile provided, Prisma `Lead.mobile` → `String?` with migration `20260712120000_lead_mobile_optional`, removed dead `MOBILE_REQUIRED` error mapping. CSV import also updated: `LEAD_IMPORT_FIELDS` mobile `required: false`, import `requiredFields` → `['name']`, castRow empty mobile → `null`, `findDuplicate` skips dedupe when no mobile — done 2026-07-12
 - [x] Redesign owner dashboard (Business Monitor v2): Clean & Airy layout, health KPIs w/ sparklines, attention strip, sales-by-category donut, top products & customers; new `GET /sales-reports/by-category` — done 2026-07-10 (Tasks 1–11 below; started 2026-07-10, finished 2026-07-11)

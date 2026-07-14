@@ -68,6 +68,24 @@ Emergency override (use sparingly): `ALLOW_MAIN_COMMIT=1` / `ALLOW_MAIN_PUSH=1`.
 
 ---
 
+## UI Rules (frontend)
+
+Full spec: `docs/ui-design-guidelines.md`. Non-negotiables for all new/changed UI:
+
+- Every `(app)` page uses `PageShell` + `PageHeader` — never hand-copy the page wrapper class string
+- Every modal uses `ModalShell` (bottom sheet on mobile) — never hand-roll `fixed inset-0` overlays
+- Use shared UI primitives from `@/components/ui` (Button, form controls, etc.) where they exist; extend them rather than forking styles locally
+- One accent color: `blue-600` for all primary actions/links in every module — no violet/indigo/emerald/rose accents
+- Semantic colors: emerald = success, amber = warning, red = danger (not green/rose)
+- No arbitrary hex Tailwind classes (`bg-[#f3f4f6]`); no `rounded-2xl`/`rounded-3xl`, no `font-black uppercase tracking-widest` in app code
+- Compact density: `text-sm`/`text-xs` body, `p-3 md:p-4` page padding, `space-y-4` sections
+- Notifications go through the global `Toaster` store only — no page-local toasts; validation errors are inline per field, never `alert()`
+- No floating action buttons hiding features — persistent actions live in the header, sidebar, or `PageHeader` actions
+- Mobile: ≥44px touch targets (`min-h-touch`), `hideOnMobile` on secondary columns of wide tables, no horizontal body scroll at 360px
+- Money always via `formatBDT()` — never a literal `$`
+
+---
+
 ## Key Conventions
 
 - All backend modules live in `apps/backend/src/<module>/`
