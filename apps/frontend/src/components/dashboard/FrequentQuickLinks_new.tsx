@@ -36,7 +36,7 @@ export default function FrequentQuickLinks({ accountingOnlyMode = false }: Frequ
         { key: 'sales', href: '/sales', label: copy.quickLinks.sales, icon: TrendingUp, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
         { key: 'customer-payment', href: '/sales/customer-payments', label: copy.quickLinks.customerPayment, icon: Wallet, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
         { key: 'supplier-payment', href: '/purchases/supplier-payments', label: copy.quickLinks.supplierPayment, icon: Wallet, accent: 'bg-violet-50 text-violet-700 border-violet-100' },
-        { key: 'customer-ledger', href: '/sales/customer-ledger', label: copy.quickLinks.customerLedger, icon: BookOpen, accent: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+        { key: 'customer-ledger', href: '/sales/customer-ledger', label: copy.quickLinks.customerLedger, icon: BookOpen, accent: 'bg-primary-light text-blue-700 border-primary-border' },
         { key: 'expense-entry', href: '/accounting/expenses?new=1', label: copy.quickLinks.expenseEntry, icon: ReceiptText, accent: 'bg-rose-50 text-rose-700 border-rose-100' },
     ];
 
