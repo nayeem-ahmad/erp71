@@ -246,14 +246,14 @@ export default function BalanceSheetPage() {
                                 </CompactSection>
 
                                 <CompactSection className="space-y-3">
-                                    <BSSection groups={data.equity?.groups ?? []} label={t.accounting.reports.equity} colorClass="bg-violet-50 text-violet-700" />
+                                    <BSSection groups={data.equity?.groups ?? []} label={t.accounting.reports.equity} colorClass="bg-primary-light text-blue-700" />
                                     <div className="flex justify-between items-center px-5 py-1 text-sm text-gray-600">
                                         <span>Current Period Net Profit</span>
                                         <span className={(data.equity?.net_profit ?? 0) >= 0 ? 'text-emerald-700 font-semibold' : 'text-red-600 font-semibold'}>
                                             {formatBDT(data.equity?.net_profit ?? 0, { locale })}
                                         </span>
                                     </div>
-                                    <div className="flex justify-between items-center px-3 py-2 bg-violet-50 rounded-lg font-semibold text-sm text-violet-800 border border-violet-100">
+                                    <div className="flex justify-between items-center px-3 py-2 bg-primary-light rounded-lg font-semibold text-sm text-blue-800 border border-primary-border">
                                         <span>Total Equity</span>
                                         <span>{formatBDT(data.equity?.total ?? 0, { locale })}</span>
                                     </div>

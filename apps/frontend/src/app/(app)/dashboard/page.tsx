@@ -514,7 +514,7 @@ function CashFlowChart({ points, locale }: { points: FinancialTrendPoint[]; loca
         <div>
             <div className="flex items-center gap-3 text-xs font-medium text-gray-500">
                 <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />{copy.inflow}</span>
-                <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-rose-500" />{copy.outflow}</span>
+                <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-danger" />{copy.outflow}</span>
             </div>
             <div className="w-full rounded-lg border border-gray-100 bg-gray-50/60 p-3">
                 <div className="flex h-40 w-full items-end gap-px sm:gap-1">
@@ -535,7 +535,7 @@ function CashFlowChart({ points, locale }: { points: FinancialTrendPoint[]; loca
                                     />
                                     <div
                                         aria-label={formatMessage(copy.cashOutflowAria, { date: point.date })}
-                                        className="w-[42%] max-w-3 rounded-t-sm bg-rose-500 transition-all"
+                                        className="w-[42%] max-w-3 rounded-t-sm bg-danger transition-all"
                                         style={{ height: `${Math.max((point.cash_outflow / peak) * 100, point.cash_outflow > 0 ? 6 : 0)}%` }}
                                     />
                                 </div>

@@ -134,7 +134,7 @@ export default function AdminTenantsPage() {
                         <button
                             type="button"
                             onClick={() => { setSellCreditsTenant(tenant); setSellCreditsKind('ai'); }}
-                            className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2 text-gray-600 hover:border-violet-300 hover:text-violet-600"
+                            className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2 text-gray-600 hover:border-primary-border hover:text-blue-700"
                             title={m.actions.sellAiCredits}
                             aria-label={m.actions.sellAiCredits}
                         >

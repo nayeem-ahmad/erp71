@@ -88,7 +88,7 @@ export default function CrmHubPage() {
             result.push({
                 sectionKey: 'engagement',
                 links: [
-                    { href: routes.crm.campaigns, key: 'crmCampaigns', icon: Megaphone, accent: 'bg-rose-50 text-rose-700 border-rose-100' },
+                    { href: routes.crm.campaigns, key: 'crmCampaigns', icon: Megaphone, accent: 'bg-danger-light text-danger-text border-red-200' },
                 ],
             });
         }

@@ -146,7 +146,7 @@ export default function CrmTasksPage() {
                 const row = info.row.original;
                 const overdue = new Date(row.due_at) < new Date() && row.status === 'PENDING';
                 return (
-                    <span className={`inline-flex items-center gap-1 ${overdue ? 'font-bold text-rose-600' : 'text-gray-600'}`}>
+                    <span className={`inline-flex items-center gap-1 ${overdue ? 'font-bold text-danger' : 'text-gray-600'}`}>
                         {overdue && <AlertTriangle className="w-3 h-3" />}
                         {formatDate(row.due_at)}
                     </span>
@@ -277,7 +277,7 @@ function StatCard({ label, value, tone }: { label: string; value: number; tone: 
     const toneClasses: Record<string, string> = {
         ok: 'text-emerald-700',
         warn: 'text-amber-700',
-        bad: 'text-rose-700',
+        bad: 'text-danger',
         neutral: 'text-gray-900',
     };
     return (

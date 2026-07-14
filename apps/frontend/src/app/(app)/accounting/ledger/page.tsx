@@ -216,7 +216,7 @@ function AccountingLedgerPageContent() {
             }),
             columnHelper.accessor('voucher_type', {
                 header: t.accountingShared.type,
-                cell: (info) => <span className="text-xs font-semibold text-violet-700">{info.getValue().replaceAll('_', ' ')}</span>,
+                cell: (info) => <span className="text-xs font-semibold text-primary">{info.getValue().replaceAll('_', ' ')}</span>,
                 size: 150,
             }),
             columnHelper.accessor((row) => row.narration || row.description, {

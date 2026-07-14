@@ -43,9 +43,9 @@ const EVENT_TYPE_BADGE: Record<string, string> = {
     sale_return: 'bg-amber-50 text-amber-700 border-amber-200',
     purchase: 'bg-sky-50 text-sky-700 border-sky-200',
     purchase_return: 'bg-orange-50 text-orange-700 border-orange-200',
-    inventory_adjustment: 'bg-violet-50 text-violet-700 border-violet-200',
+    inventory_adjustment: 'bg-primary-light text-blue-700 border-primary-border',
     fund_movement: 'bg-gray-50 text-gray-700 border-gray-200',
-    loan_disbursement: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    loan_disbursement: 'bg-primary-light text-blue-700 border-primary-border',
     loan_repayment: 'bg-teal-50 text-teal-700 border-teal-200',
 };
 
@@ -239,7 +239,7 @@ export default function PostingRulesPage() {
                 cell: ({ row }) => (
                     <button
                         onClick={() => openEdit(row.original)}
-                        className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                        className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary-hover font-medium"
                     >
                         <Edit2 className="w-3.5 h-3.5" />
                         Edit
@@ -374,7 +374,7 @@ export default function PostingRulesPage() {
                                             type="checkbox"
                                             checked={form.isActive}
                                             onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
-                                            className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                            className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary/40"
                                         />
                                         <span className={`${compactDensity.formLabel} inline-flex items-center gap-1.5`}>
                                             Active
@@ -401,7 +401,6 @@ export default function PostingRulesPage() {
                                 onClick={handleSave}
                                 loading={saving}
                                 disabled={!form.debitAccountId || !form.creditAccountId}
-                                className="bg-indigo-600 hover:bg-indigo-700"
                             >
                                 Save Rule
                             </Button>

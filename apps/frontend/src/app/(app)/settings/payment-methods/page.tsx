@@ -216,8 +216,8 @@ export default function PaymentMethodsSettingsPage() {
             <PageHeader
                 title={(
                     <span className="inline-flex items-center gap-3">
-                        <span className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
-                            <CreditCard className="w-5 h-5 text-indigo-600" />
+                        <span className="w-10 h-10 rounded-lg bg-primary-light flex items-center justify-center">
+                            <CreditCard className="w-5 h-5 text-primary" />
                         </span>
                         {pageTitle}
                     </span>
@@ -277,8 +277,8 @@ export default function PaymentMethodsSettingsPage() {
                                 ) : (
                                     <div className="bg-white rounded-lg border border-gray-200 px-5 py-4 flex items-center justify-between">
                                         <div className="flex items-center gap-4">
-                                            <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0">
-                                                <CreditCard className="w-4 h-4 text-indigo-600" />
+                                            <div className="w-9 h-9 rounded-lg bg-primary-light flex items-center justify-center flex-shrink-0">
+                                                <CreditCard className="w-4 h-4 text-primary" />
                                             </div>
                                             <div>
                                                 <div className="flex items-center gap-2">
@@ -298,7 +298,7 @@ export default function PaymentMethodsSettingsPage() {
                                         <div className="flex items-center gap-1">
                                             <button
                                                 onClick={() => { setEditingId(method.id); setShowCreate(false); }}
-                                                className="p-2 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                                className="p-2 rounded-lg text-gray-400 hover:text-primary hover:bg-primary-light transition-colors"
                                                 title="Edit"
                                             >
                                                 <Edit2 className="w-4 h-4" />

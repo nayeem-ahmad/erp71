@@ -41,10 +41,10 @@ const typeIcons: Record<string, string> = {
 };
 
 const priorityColors: Record<string, string> = {
-    LOW: 'bg-slate-50 text-slate-600',
+    LOW: 'bg-gray-50 text-gray-600',
     MEDIUM: 'bg-blue-50 text-blue-700',
     HIGH: 'bg-amber-50 text-amber-700',
-    URGENT: 'bg-rose-50 text-rose-700',
+    URGENT: 'bg-danger-light text-danger-text',
 };
 
 function scoreBadgeColor(score: number): string {
@@ -295,7 +295,7 @@ export default function LeadDetailPage() {
                             )}
                         </div>
                         {lead.status === 'LOST' && lead.lost_reason && (
-                            <p className="text-xs text-rose-600 mt-2 font-medium">{m.fields.lostReason}: {lead.lost_reason}</p>
+                            <p className="text-xs text-danger mt-2 font-medium">{m.fields.lostReason}: {lead.lost_reason}</p>
                         )}
                         <div className="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-xs text-gray-500">
                             <div className="flex items-center">

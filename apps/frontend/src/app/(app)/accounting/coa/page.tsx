@@ -465,7 +465,7 @@ function AccountForm({ groups, subgroups, onSuccess }: { groups: AccountGroup[];
                     </select>
                 </label>
             </div>
-            <button type="submit" disabled={saving} className={`${compactDensity.btnPrimary} bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-60`}>
+            <button type="submit" disabled={saving} className={`${compactDensity.btnPrimary} bg-primary text-white hover:bg-primary-hover disabled:opacity-60`}>
                 <Plus className="w-3.5 h-3.5" />
                 {saving ? t.coa.creating : t.coa.createAccount}
             </button>

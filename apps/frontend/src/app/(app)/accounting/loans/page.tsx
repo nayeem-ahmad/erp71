@@ -248,7 +248,7 @@ export default function LoansPage() {
                     <button
                         type="button"
                         onClick={() => openDetail(info.row.original)}
-                        className="text-sm font-bold text-indigo-700 hover:underline text-left"
+                        className="text-sm font-bold text-primary hover:underline text-left"
                     >
                         {info.getValue()}
                     </button>
@@ -289,7 +289,7 @@ export default function LoansPage() {
             columnHelper.accessor('status', {
                 header: t.loans.status,
                 cell: (info) => (
-                    <span className={`text-[10px] font-semibold ${info.getValue() === 'CLOSED' ? 'text-gray-400' : 'text-indigo-600'}`}>
+                    <span className={`text-[10px] font-semibold ${info.getValue() === 'CLOSED' ? 'text-gray-400' : 'text-primary'}`}>
                         {info.getValue() === 'CLOSED' ? t.loans.closed : t.loans.active}
                     </span>
                 ),
@@ -335,7 +335,7 @@ export default function LoansPage() {
                     'accounting',
                 )}
                 actions={(
-                    <button type="button" onClick={openCreate} className={`${compactDensity.btnPrimary} bg-indigo-600 text-white hover:bg-indigo-700`}>
+                    <button type="button" onClick={openCreate} className={`${compactDensity.btnPrimary} bg-primary text-white hover:bg-primary-hover`}>
                         <Plus className="w-3.5 h-3.5" />
                         {t.loans.addLoan}
                     </button>
@@ -402,7 +402,7 @@ export default function LoansPage() {
                                             type="button"
                                             key={dir}
                                             onClick={() => setForm((f) => ({ ...f, direction: dir }))}
-                                            className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${form.direction === dir ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500'}`}
+                                            className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${form.direction === dir ? 'border-primary bg-primary-light text-primary' : 'border-gray-200 text-gray-500'}`}
                                         >
                                             {dir === 'PAYABLE' ? t.loans.payable : t.loans.receivable}
                                         </button>
@@ -461,7 +461,7 @@ export default function LoansPage() {
                         <ModalHeader
                             title={(
                                 <span className="inline-flex items-center gap-2">
-                                    <Wallet className="w-4 h-4 text-indigo-600" />
+                                    <Wallet className="w-4 h-4 text-primary" />
                                     {detail.counterparty}
                                 </span>
                             )}
@@ -480,7 +480,7 @@ export default function LoansPage() {
                                 <button
                                     type="button"
                                     onClick={() => toggleStatus(detail)}
-                                    className="text-xs font-bold text-indigo-600 hover:underline"
+                                    className="text-xs font-bold text-primary hover:underline"
                                 >
                                     {detail.status === 'CLOSED' ? t.loans.markActive : t.loans.markClosed}
                                 </button>
@@ -515,7 +515,7 @@ export default function LoansPage() {
                                         </select>
                                         <input value={payForm.notes} onChange={(e) => setPayForm((f) => ({ ...f, notes: e.target.value }))} placeholder={t.loans.notes} className={compactDensity.formField} />
                                     </div>
-                                    <button type="submit" disabled={paying} className={`${compactDensity.btnPrimary} w-full bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50`}>
+                                    <button type="submit" disabled={paying} className={`${compactDensity.btnPrimary} w-full bg-primary text-white hover:bg-primary-hover disabled:opacity-50`}>
                                         {paying ? t.common.loading : t.loans.addPayment}
                                     </button>
                                 </form>

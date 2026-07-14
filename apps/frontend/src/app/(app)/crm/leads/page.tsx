@@ -38,10 +38,10 @@ interface Lead {
 const columnHelper = createColumnHelper<Lead>();
 
 const priorityColors: Record<string, string> = {
-    LOW: 'bg-slate-50 text-slate-600',
+    LOW: 'bg-gray-50 text-gray-600',
     MEDIUM: 'bg-blue-50 text-blue-700',
     HIGH: 'bg-amber-50 text-amber-700',
-    URGENT: 'bg-rose-50 text-rose-700',
+    URGENT: 'bg-danger-light text-danger-text',
 };
 
 function scoreBadgeColor(score: number): string {
@@ -244,7 +244,7 @@ export default function LeadsPage() {
                         <button
                             type="button"
                             onClick={() => void deleteLead(lead)}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-danger hover:bg-danger-light transition-colors"
                             title={c.delete}
                         >
                             <Trash2 className="w-4 h-4" />

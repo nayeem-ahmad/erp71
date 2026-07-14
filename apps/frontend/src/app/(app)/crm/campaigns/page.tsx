@@ -207,7 +207,7 @@ export default function CrmCampaignsPage() {
                         {c.status === 'COMPLETED' && (
                             <div className="text-xs mt-0.5">
                                 <span className="text-emerald-600 font-medium">{c.delivered_count} delivered</span>
-                                {c.failed_count > 0 && <span className="text-rose-500 ml-2">{c.failed_count} failed</span>}
+                                {c.failed_count > 0 && <span className="text-danger ml-2">{c.failed_count} failed</span>}
                             </div>
                         )}
                     </div>
@@ -246,7 +246,7 @@ export default function CrmCampaignsPage() {
                         {c.status === 'DRAFT' && (
                             <button
                                 onClick={() => void handleDelete(c.id)}
-                                className="p-1.5 text-gray-400 hover:text-rose-500 rounded-lg hover:bg-rose-50"
+                                className="p-1.5 text-gray-400 hover:text-danger rounded-lg hover:bg-danger-light"
                                 title={t.common.delete}
                             >
                                 <Trash2 className="w-4 h-4" />
@@ -419,7 +419,7 @@ export default function CrmCampaignsPage() {
                             {selected.status === 'COMPLETED' && (
                                 <>
                                     <div><span className="text-gray-400">Delivered:</span> <span className="font-medium text-emerald-600">{selected.delivered_count}</span></div>
-                                    <div><span className="text-gray-400">Failed:</span> <span className={`font-medium ${selected.failed_count > 0 ? 'text-rose-500' : 'text-gray-600'}`}>{selected.failed_count}</span></div>
+                                    <div><span className="text-gray-400">Failed:</span> <span className={`font-medium ${selected.failed_count > 0 ? 'text-danger' : 'text-gray-600'}`}>{selected.failed_count}</span></div>
                                     <div><span className="text-gray-400">Sent at:</span> <span className="font-medium">{selected.sent_at ? formatDate(selected.sent_at) : '—'}</span></div>
                                     {(selected.attributed_orders ?? 0) > 0 && (
                                         <>
