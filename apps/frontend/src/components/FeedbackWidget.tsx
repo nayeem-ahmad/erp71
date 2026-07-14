@@ -1,9 +1,10 @@
 'use client';
 
 import { useI18n } from '@/lib/i18n';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
+import { useDismissable } from '@/hooks/useDismissable';
 
 type FeedbackType = 'bug' | 'feature' | 'general';
 
@@ -24,31 +25,8 @@ export default function FeedbackWidget() {
     const [errorMsg, setErrorMsg] = useState('');
     const panelRef = useRef<HTMLDivElement>(null);
 
-    // Close on Escape
-    useEffect(() => {
-        if (!open) return;
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') closeWidget();
-        };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [open]);
-
-    // Close on click outside
-    useEffect(() => {
-        if (!open) return;
-        const onPointer = (e: MouseEvent) => {
-            if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-                closeWidget();
-            }
-        };
-        // Use setTimeout to avoid immediately closing when the button click opens the panel
-        const id = setTimeout(() => document.addEventListener('mousedown', onPointer), 0);
-        return () => {
-            clearTimeout(id);
-            document.removeEventListener('mousedown', onPointer);
-        };
-    }, [open]);
+    // Close on outside click / Escape
+    useDismissable(panelRef, () => closeWidget(), open);
 
     function closeWidget() {
         setOpen(false);

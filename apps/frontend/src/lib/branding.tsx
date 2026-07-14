@@ -21,25 +21,8 @@ const defaultBranding: Branding = {
 
 const BrandingContext = createContext<Branding>(defaultBranding);
 
-function darkenHex(hex: string): string {
-    try {
-        const clean = hex.replace('#', '');
-        const full = clean.length === 3
-            ? clean.split('').map((c) => c + c).join('')
-            : clean;
-        const r = Math.round(parseInt(full.slice(0, 2), 16) * 0.85);
-        const g = Math.round(parseInt(full.slice(2, 4), 16) * 0.85);
-        const b = Math.round(parseInt(full.slice(4, 6), 16) * 0.85);
-        return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-    } catch {
-        return '#1d4ed8';
-    }
-}
-
 function applyBrandingToDom(branding: Branding) {
     if (typeof document === 'undefined') return;
-    document.documentElement.style.setProperty('--color-primary', branding.primaryColor);
-    document.documentElement.style.setProperty('--color-primary-dark', darkenHex(branding.primaryColor));
 
     // Update favicon if set
     if (branding.faviconUrl) {

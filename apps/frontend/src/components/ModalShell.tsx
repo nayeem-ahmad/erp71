@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 
 type ModalShellSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl';
@@ -26,6 +26,15 @@ export default function ModalShell({
     className = '',
     onBackdropClick,
 }: ModalShellProps) {
+    useEffect(() => {
+        if (!onBackdropClick) return;
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') onBackdropClick();
+        };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [onBackdropClick]);
+
     return (
         <div
             className="fixed inset-0 z-modal flex items-end sm:items-center justify-center bg-black/50 p-0 backdrop-blur-sm sm:p-4"

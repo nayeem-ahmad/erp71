@@ -50,6 +50,26 @@ describe('ModalShell', () => {
         expect(onBackdropClick).toHaveBeenCalledTimes(1);
     });
 
+    it('calls onBackdropClick when Escape is pressed', () => {
+        const onBackdropClick = jest.fn();
+        render(
+            <ModalShell onBackdropClick={onBackdropClick}>
+                <div>content</div>
+            </ModalShell>
+        );
+        fireEvent.keyDown(document, { key: 'Escape' });
+        expect(onBackdropClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not error on Escape when onBackdropClick is not provided', () => {
+        render(
+            <ModalShell>
+                <div>content</div>
+            </ModalShell>
+        );
+        expect(() => fireEvent.keyDown(document, { key: 'Escape' })).not.toThrow();
+    });
+
     it('applies size classes and merges custom className', () => {
         render(
             <ModalShell size="lg" className="my-extra-class">

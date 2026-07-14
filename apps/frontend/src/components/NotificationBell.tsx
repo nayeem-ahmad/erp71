@@ -7,6 +7,7 @@ import { Bell, Check, CheckCheck, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { NotificationIcon } from '@/components/NotificationIcon';
+import { useDismissable } from '@/hooks/useDismissable';
 
 interface Notification {
     id: string;
@@ -55,17 +56,8 @@ export default function NotificationBell() {
         return () => clearInterval(interval);
     }, [fetchCount]);
 
-    // Close on outside click
-    useEffect(() => {
-        if (!open) return;
-        const handler = (e: MouseEvent) => {
-            if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-                setOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, [open]);
+    // Close on outside click / Escape
+    useDismissable(panelRef, () => setOpen(false), open);
 
     const handleOpen = async () => {
         if (open) { setOpen(false); return; }
