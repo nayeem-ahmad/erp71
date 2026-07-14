@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
     ArrayMinSize,
     IsArray,
+    IsDateString,
     IsNotEmpty,
     IsNumber,
     IsOptional,
@@ -59,6 +60,10 @@ export class CreateSaleDto {
     @IsOptional()
     @IsString()
     referenceNumber?: string; // User-editable reference number
+
+    @IsOptional()
+    @IsDateString()
+    saleDate?: string;
 
     @IsNumber()
     totalAmount: number;
@@ -136,6 +141,10 @@ export class UpdateSaleDto {
     @IsOptional()
     @IsString()
     note?: string;
+
+    @IsOptional()
+    @IsDateString()
+    saleDate?: string;
 
     @IsOptional()
     @IsArray()

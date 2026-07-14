@@ -329,6 +329,23 @@ describe('SalesService', () => {
       });
     });
 
+    it('persists a provided saleDate into sale_date', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-9' });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 20,
+        amountPaid: 20,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 20 }],
+        saleDate: '2026-01-15T10:00:00.000Z',
+      });
+
+      const createArg = tx.sale.create.mock.calls[0][0];
+      expect(createArg.data.sale_date).toEqual(new Date('2026-01-15T10:00:00.000Z'));
+    });
+
     it('should process multiple items atomically', async () => {
       tx.sale.create.mockResolvedValue({ id: 'sale-7' });
       tx.saleItem.create.mockResolvedValue({});
