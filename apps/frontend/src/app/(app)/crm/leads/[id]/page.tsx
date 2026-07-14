@@ -270,47 +270,48 @@ export default function LeadDetailPage() {
                 )}
             />
 
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
-                <div className="flex flex-col lg:flex-row lg:items-start gap-6">
-                    <div className="w-20 h-20 bg-primary rounded-2xl shadow-sm flex items-center justify-center text-white font-black text-3xl uppercase shrink-0">
+            <div className="rounded-lg border border-gray-100 bg-white p-4">
+                <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                    <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center text-white font-semibold text-sm uppercase shrink-0">
                         {lead.name.substring(0, 2)}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-base font-semibold text-gray-900">{lead.name}</p>
+                        <div className="flex flex-wrap items-center gap-2 mt-1.5">
                             <StatusBadge tone={leadStatusTone[lead.status] ?? 'neutral'}>{statusLabel}</StatusBadge>
-                            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-700">{sourceLabel}</span>
+                            <StatusBadge tone="neutral">{sourceLabel}</StatusBadge>
                             {categoryLabel && (
-                                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700">{categoryLabel}</span>
+                                <StatusBadge tone="info">{categoryLabel}</StatusBadge>
                             )}
                             {lead.priority && (
-                                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${priorityColors[lead.priority] ?? 'bg-gray-100 text-gray-700'}`}>
+                                <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${priorityColors[lead.priority] ?? 'bg-gray-100 text-gray-700'}`}>
                                     {priorityLabel}
                                 </span>
                             )}
                             {typeof lead.score === 'number' && (
-                                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${scoreBadgeColor(lead.score)}`}>
+                                <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${scoreBadgeColor(lead.score)}`}>
                                     {m.fields.score}: {lead.score}
                                 </span>
                             )}
                         </div>
                         {lead.status === 'LOST' && lead.lost_reason && (
-                            <p className="text-sm text-rose-600 mt-2 font-medium">{m.fields.lostReason}: {lead.lost_reason}</p>
+                            <p className="text-xs text-rose-600 mt-2 font-medium">{m.fields.lostReason}: {lead.lost_reason}</p>
                         )}
-                        <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4">
-                            <div className="flex items-center text-sm text-gray-600 font-medium">
-                                <Phone className="w-4 h-4 mr-2 text-gray-400" /> {lead.mobile ?? lead.phone}
+                        <div className="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-xs text-gray-500">
+                            <div className="flex items-center">
+                                <Phone className="w-3.5 h-3.5 mr-1.5 text-gray-400" /> {lead.mobile ?? lead.phone}
                             </div>
                             {lead.email && (
-                                <div className="flex items-center text-sm text-gray-600 font-medium">
-                                    <Mail className="w-4 h-4 mr-2 text-gray-400" /> {lead.email}
+                                <div className="flex items-center">
+                                    <Mail className="w-3.5 h-3.5 mr-1.5 text-gray-400" /> {lead.email}
                                 </div>
                             )}
                         </div>
                         {(lead.remarks ?? lead.notes) && (
-                            <p className="text-sm text-gray-500 mt-4">{lead.remarks ?? lead.notes}</p>
+                            <p className="text-xs text-gray-500 mt-2">{lead.remarks ?? lead.notes}</p>
                         )}
                         {socialLinks.length > 0 && (
-                            <div className="flex flex-wrap gap-3 mt-3">
+                            <div className="flex flex-wrap gap-3 mt-2">
                                 {socialLinks.map((link) => (
                                     <a key={link.label} href={link.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold">
                                         <ExternalLink className="w-3 h-3" /> {link.label}
@@ -321,28 +322,28 @@ export default function LeadDetailPage() {
                     </div>
                     <div className="flex flex-wrap gap-2 shrink-0">
                         {!isConverted && (
-                            <button type="button" onClick={startEditing} className="inline-flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-semibold hover:bg-gray-50">
-                                <Pencil className="w-4 h-4" /> {m.fields.editLead}
-                            </button>
+                            <Button variant="secondary" onClick={startEditing} icon={<Pencil className="w-4 h-4" />}>
+                                {m.fields.editLead}
+                            </Button>
                         )}
-                        <button type="button" onClick={removeLead} className="inline-flex items-center gap-2 px-4 py-2 border border-rose-200 text-rose-700 rounded-lg text-sm font-semibold hover:bg-rose-50">
-                            <Trash2 className="w-4 h-4" /> {t.common.delete}
-                        </button>
+                        <Button variant="danger" onClick={removeLead} icon={<Trash2 className="w-4 h-4" />}>
+                            {t.common.delete}
+                        </Button>
                         {isConverted && lead.convertedCustomer ? (
-                            <Link href={routes.sales.customerDetail(lead.convertedCustomer.id)} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-semibold">
+                            <Link href={routes.sales.customerDetail(lead.convertedCustomer.id)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-md text-xs font-semibold">
                                 <UserCheck className="w-4 h-4" /> {m.viewCustomer}
                             </Link>
                         ) : (
-                            <button type="button" onClick={convertLead} disabled={converting} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50">
-                                <UserCheck className="w-4 h-4" /> {m.convert}
-                            </button>
+                            <Button onClick={convertLead} loading={converting} icon={<UserCheck className="w-4 h-4" />} className="bg-emerald-600 hover:bg-emerald-700">
+                                {m.convert}
+                            </Button>
                         )}
                     </div>
                 </div>
 
                 {(lead.next_step || lead.next_step_date || lead.nextStepAssignee) && (
-                    <div className="mt-6 p-4 bg-primary-light rounded-xl border border-primary-border">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-blue-700 mb-2">{m.fields.nextStepSection}</p>
+                    <div className="mt-4 p-4 bg-primary-light rounded-lg border border-primary-border">
+                        <p className="text-xs font-semibold text-blue-700 mb-2">{m.fields.nextStepSection}</p>
                         {lead.next_step && <p className="text-sm font-medium text-gray-800">{lead.next_step}</p>}
                         <div className="flex flex-wrap gap-4 mt-2 text-xs text-gray-600 font-semibold">
                             {lead.next_step_date && (
@@ -355,8 +356,8 @@ export default function LeadDetailPage() {
             </div>
 
             {customFieldDefs.some((def) => (lead.custom_fields as Record<string, string> | null)?.[def.key]) && (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                    <h2 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{m.fields.customFields}</h2>
+                <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+                    <h2 className="text-sm font-semibold text-gray-900 mb-3">{m.fields.customFields}</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2">
                         {customFieldDefs
                             .filter((def) => (lead.custom_fields as Record<string, string> | null)?.[def.key])
@@ -371,8 +372,8 @@ export default function LeadDetailPage() {
             )}
 
             {showEditForm && editForm && !isConverted && (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
-                    <h2 className="text-lg font-bold text-gray-900">{m.fields.editLead}</h2>
+                <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 space-y-4">
+                    <h2 className="text-sm font-semibold text-gray-900">{m.fields.editLead}</h2>
                     <LeadFormFields form={editForm} onChange={setEditForm} teamMembers={teamMembers} customFieldDefs={customFieldDefs} errors={editFormErrors} />
                     {saveLeadError && <p role="alert" className="text-xs text-danger">{saveLeadError}</p>}
                     <FormFooter className="border-t-0 pt-0">
@@ -386,11 +387,11 @@ export default function LeadDetailPage() {
                 </div>
             )}
 
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4 flex-wrap">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-4 flex-wrap">
                     <div className="flex items-center gap-2">
                         <MessageSquare className="w-5 h-5 text-primary" />
-                        <h2 className="text-sm font-bold text-gray-800">{m.detail.conversations}</h2>
+                        <h2 className="text-sm font-semibold text-gray-900">{m.detail.conversations}</h2>
                     </div>
                     {!isConverted && (
                         <div className="flex gap-2 flex-wrap">
@@ -412,10 +413,10 @@ export default function LeadDetailPage() {
                     )}
                 </div>
 
-                <div className="p-6 space-y-4">
+                <div className="p-4 space-y-4">
                     {showDraftPanel && !isConverted && (
-                        <div className="bg-primary-light rounded-xl p-4 space-y-3 border border-primary-border">
-                            <p className="text-xs font-black uppercase tracking-widest text-blue-700">AI Message Drafter</p>
+                        <div className="bg-primary-light rounded-lg p-4 space-y-3 border border-primary-border">
+                            <p className="text-xs font-semibold text-blue-700">AI Message Drafter</p>
                             <div className="grid grid-cols-2 gap-3">
                                 <select value={draftChannel} onChange={(e) => setDraftChannel(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
                                     {LEAD_CONVERSATION_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
