@@ -467,6 +467,7 @@ model PaymentMethod {
   name        String   // e.g. "Cash Register", "bKash Account", "Bank A/C"
   account_id  String?  // Links to Account for posting
   is_active   Boolean  @default(true)
+  show_on_entry Boolean @default(true)
   sort_order  Int      @default(0)
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
@@ -1209,6 +1210,7 @@ model Sale {
   note           String?
   created_by     String?
   created_at     DateTime @default(now())
+  sale_date      DateTime @default(now())
 
   // Relations
   tenant         Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -1225,6 +1227,7 @@ model Sale {
   @@unique([tenant_id, serial_number])
   @@unique([tenant_id, reference_number])
   @@index([tenant_id, created_at])
+  @@index([tenant_id, sale_date])
   @@index([tenant_id, store_id])
   @@index([tenant_id, customer_id])
   @@index([tenant_id, counter_id])

@@ -49,8 +49,15 @@ describe('SalesHubPage', () => {
     it('shows daily operation entry points', async () => {
         render(<SalesHubPage />);
         await waitFor(() => {
-            expect(screen.getByRole('link', { name: /Point of Sale/i })).toHaveAttribute('href', '/sales/pos');
+            expect(screen.getByRole('link', { name: /New Sales Entry/i })).toHaveAttribute('href', '/sales/new');
             expect(screen.getByRole('link', { name: /^Sales$/i })).toHaveAttribute('href', '/sales/list');
+        });
+    });
+
+    it('does not show a Point of Sale link', async () => {
+        render(<SalesHubPage />);
+        await waitFor(() => {
+            expect(screen.queryByRole('link', { name: /Point of Sale/i })).toBeNull();
         });
     });
 

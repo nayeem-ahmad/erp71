@@ -63,13 +63,13 @@ export class SegmentsService {
                 ...(tenantId ? { tenant_id: tenantId } : {}),
                 customer_id: { not: null },
             },
-            _max: { created_at: true },
+            _max: { sale_date: true },
         });
 
         const lastPurchaseMap = new Map<string, Date>();
         for (const row of lastSaleRows) {
-            if (row.customer_id && row._max.created_at) {
-                lastPurchaseMap.set(row.customer_id, row._max.created_at);
+            if (row.customer_id && row._max.sale_date) {
+                lastPurchaseMap.set(row.customer_id, row._max.sale_date);
             }
         }
 

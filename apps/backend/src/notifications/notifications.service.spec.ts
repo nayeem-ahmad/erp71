@@ -492,7 +492,7 @@ describe('NotificationsService', () => {
   describe('sendWeeklyReports', () => {
     const makeSale = (daysAgo: number, amount: number) => ({
       total_amount: { toNumber: () => amount },
-      created_at: new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000),
+      sale_date: new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000),
       customer_id: 'c-1',
       items: [],
     });
@@ -525,6 +525,10 @@ describe('NotificationsService', () => {
           subject: expect.stringContaining('Weekly Sales Report'),
         }),
       );
+      const saleArgs = db.sale.findMany.mock.calls[0][0];
+      expect(saleArgs.where).toHaveProperty('sale_date');
+      expect(saleArgs.where.created_at).toBeUndefined();
+      expect(saleArgs.select).toHaveProperty('sale_date', true);
     });
 
     it('falls back to owner email when report_email is null', async () => {

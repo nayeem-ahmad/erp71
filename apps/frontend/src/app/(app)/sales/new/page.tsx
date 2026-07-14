@@ -5,7 +5,7 @@ import { ChevronLeft, Printer, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { formatBDT } from '@/lib/format';
+import { formatBDT, toDatetimeLocal } from '@/lib/format';
 import CustomerSelection from './components/CustomerSelection';
 import ProductSearch from './components/ProductSearch';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
@@ -44,6 +44,7 @@ export default function NewSalePage() {
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [showPaperMenu, setShowPaperMenu] = useState(false);
     const [paperSize, setPaperSize] = useState<PaperSize>('A4');
+    const [saleDate, setSaleDate] = useState<string>(() => toDatetimeLocal(new Date()));
     const printMenuRef = useRef<HTMLDivElement>(null);
     const [adjustments, setAdjustments] = useState({
         discountPercent: 0,
@@ -108,7 +109,7 @@ export default function NewSalePage() {
         printSalesInvoice(
             {
                 referenceNumber: refNumber || '—',
-                date: new Date().toLocaleDateString('en-BD'),
+                date: new Date(saleDate).toLocaleDateString('en-BD'),
                 companyName: currentUser?.store?.name || salesSettings?.tenant?.business_name,
                 customerName: customer?.name,
                 customerPhone: customer?.phone,
@@ -220,6 +221,7 @@ export default function NewSalePage() {
                 amountPaid: payments.reduce((sum, p) => sum + p.amount, 0),
                 discountAmount: totals.discount > 0 ? totals.discount : undefined,
                 note: description || undefined,
+                saleDate: saleDate ? new Date(saleDate).toISOString() : undefined,
                 payments: payments.map((p) => ({
                     paymentMethod: p.method,
                     amount: p.amount,
@@ -263,6 +265,8 @@ export default function NewSalePage() {
                     refNumber={refNumber}
                     setRefNumber={setRefNumber}
                     currentUser={currentUser}
+                    saleDate={saleDate}
+                    setSaleDate={setSaleDate}
                 />
             </div>
 

@@ -209,7 +209,7 @@ export class CustomersService {
                 territory: true,
                 sales: {
                     include: { items: { include: { product: true } } },
-                    orderBy: { created_at: 'desc' }
+                    orderBy: { sale_date: 'desc' }
                 }
             }
         });
@@ -235,16 +235,16 @@ export class CustomersService {
 
         const where: any = { customer_id: id };
         if (params?.from || params?.to) {
-            where.created_at = {};
-            if (params?.from) where.created_at.gte = new Date(params.from);
-            if (params?.to) where.created_at.lte = new Date(params.to);
+            where.sale_date = {};
+            if (params?.from) where.sale_date.gte = new Date(params.from);
+            if (params?.to) where.sale_date.lte = new Date(params.to);
         }
 
         const [total, sales] = await Promise.all([
             this.db.sale.count({ where }),
             this.db.sale.findMany({
                 where,
-                orderBy: { created_at: 'desc' },
+                orderBy: { sale_date: 'desc' },
                 skip,
                 take: limit,
                 include: {
@@ -338,15 +338,15 @@ export class CustomersService {
             this.db.sale.count({ where: { customer_id: id } }),
             this.db.sale.findFirst({
                 where: { customer_id: id },
-                orderBy: { created_at: 'desc' },
-                select: { created_at: true, total_amount: true },
+                orderBy: { sale_date: 'desc' },
+                select: { sale_date: true, total_amount: true },
             }),
         ]);
 
         const totalSpent = Number(customer.total_spent);
         const avgOrderValue = salesCount > 0 ? totalSpent / salesCount : 0;
         const daysSinceLastPurchase = lastSale
-            ? Math.floor((Date.now() - lastSale.created_at.getTime()) / 86_400_000)
+            ? Math.floor((Date.now() - lastSale.sale_date.getTime()) / 86_400_000)
             : null;
 
         return {
@@ -354,7 +354,7 @@ export class CustomersService {
             total_spent: totalSpent,
             order_count: salesCount,
             avg_order_value: avgOrderValue,
-            last_purchase_date: lastSale?.created_at ?? null,
+            last_purchase_date: lastSale?.sale_date ?? null,
             days_since_last_purchase: daysSinceLastPurchase,
             loyalty_points: customer.loyalty_points,
             due_balance: Number(customer.due_balance),

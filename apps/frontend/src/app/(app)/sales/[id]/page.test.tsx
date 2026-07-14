@@ -26,11 +26,16 @@ jest.mock('@/lib/api', () => ({
         updateSale: jest.fn(),
         getCustomers: jest.fn(),
         getProducts: jest.fn(),
+        getPaymentMethods: jest.fn(),
     },
 }));
 
 jest.mock('@/lib/format', () => ({
     formatBDT: (n: number) => `৳${n.toFixed(2)}`,
+    toDatetimeLocal: (date: Date) => {
+        const pad = (n: number) => String(n).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    },
 }));
 
 jest.mock('@/lib/pos-receipt-printer', () => ({
@@ -103,6 +108,15 @@ const mockSale = {
 };
 
 const getApi = () => require('@/lib/api').api;
+
+// Mirrors the mocked `toDatetimeLocal` above, kept independent of the host
+// machine's timezone so the expected string always matches what the
+// component renders regardless of where the test runs.
+const expectedDatetimeLocal = (iso: string) => {
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 
 describe('SaleDetailPage', () => {
     beforeEach(() => {
@@ -264,6 +278,7 @@ describe('SaleDetailPage - edit mode', () => {
         api.getProducts.mockResolvedValue([
             { id: 'prod-2', name: 'Widget Z', sku: 'WID-Z', price: '800' },
         ]);
+        api.getPaymentMethods.mockResolvedValue([]);
         api.updateSale.mockResolvedValue({});
         setEditMode(false);
     });
@@ -323,5 +338,75 @@ describe('SaleDetailPage - edit mode', () => {
         await waitFor(() => {
             expect(screen.getAllByRole('button', { name: /save changes/i }).length).toBeGreaterThan(0);
         });
+    });
+
+    it('shows a date input seeded from created_at when the sale has no sale_date', async () => {
+        setEditMode(true);
+        render(<SaleDetailPage />);
+        await waitFor(() => {
+            expect(screen.getByDisplayValue(expectedDatetimeLocal(mockSale.created_at))).toBeInTheDocument();
+        });
+    });
+
+    it('seeds the date input from sale_date in preference to created_at', async () => {
+        // sale_date on a distinct day from created_at proves sale_date wins
+        // (a reversed `created_at ?? sale_date` would seed from created_at).
+        getApi().getSale.mockResolvedValue({
+            ...mockSale,
+            sale_date: '2026-02-20T09:00:00Z',
+            created_at: '2026-01-15T12:00:00Z',
+        });
+        setEditMode(true);
+        render(<SaleDetailPage />);
+        await waitFor(() => {
+            expect(
+                screen.getByDisplayValue(expectedDatetimeLocal('2026-02-20T09:00:00Z')),
+            ).toBeInTheDocument();
+        });
+        // And definitely not seeded from created_at.
+        expect(
+            screen.queryByDisplayValue(expectedDatetimeLocal('2026-01-15T12:00:00Z')),
+        ).not.toBeInTheDocument();
+    });
+
+    it('saves the edited sale date via api.updateSale', async () => {
+        setEditMode(true);
+        render(<SaleDetailPage />);
+
+        const dateInput = await waitFor(() => screen.getByDisplayValue(expectedDatetimeLocal(mockSale.created_at)));
+        fireEvent.change(dateInput, { target: { value: '2026-02-20T09:30' } });
+
+        const saveButtons = screen.getAllByRole('button', { name: /save changes/i });
+        fireEvent.click(saveButtons[0]);
+
+        await waitFor(() => {
+            expect(getApi().updateSale).toHaveBeenCalledWith(
+                'test-sale-1',
+                expect.objectContaining({
+                    saleDate: new Date('2026-02-20T09:30').toISOString(),
+                }),
+            );
+        });
+    });
+
+    it('uses tenant-defined payment methods in the payment method select, sorted with show_on_entry first', async () => {
+        getApi().getPaymentMethods.mockResolvedValue([
+            { id: 'pm-1', name: 'Prime Bank', type: 'BANK', is_active: true, show_on_entry: false, sort_order: 1 },
+            { id: 'pm-2', name: 'Till Cash', type: 'CASH', is_active: true, show_on_entry: true, sort_order: 2 },
+            { id: 'pm-3', name: 'bKash', type: 'MOBILE_WALLET', is_active: true, show_on_entry: true, sort_order: 1 },
+            { id: 'pm-4', name: 'Retired Method', type: 'CARD', is_active: false, show_on_entry: true, sort_order: 0 },
+        ]);
+        setEditMode(true);
+        render(<SaleDetailPage />);
+
+        await waitFor(() => {
+            expect(screen.getByText('bKash')).toBeInTheDocument();
+        });
+        expect(screen.getByText('Till Cash')).toBeInTheDocument();
+        expect(screen.getByText('Prime Bank')).toBeInTheDocument();
+        expect(screen.queryByText('Retired Method')).not.toBeInTheDocument();
+
+        // The existing saved payment's raw value ('CASH') round-trips as a selectable option.
+        expect(screen.getByDisplayValue('CASH')).toBeInTheDocument();
     });
 });

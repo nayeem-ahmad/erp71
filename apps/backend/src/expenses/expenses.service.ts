@@ -288,14 +288,14 @@ export class ExpensesService {
         if (storeId) where.store_id = storeId;
 
         if (from || to) {
-            where.created_at = {};
+            where.sale_date = {};
             if (from) {
                 const date = new Date(from);
-                if (!Number.isNaN(date.getTime())) where.created_at.gte = date;
+                if (!Number.isNaN(date.getTime())) where.sale_date.gte = date;
             }
             if (to) {
                 const date = new Date(to);
-                if (!Number.isNaN(date.getTime())) where.created_at.lte = date;
+                if (!Number.isNaN(date.getTime())) where.sale_date.lte = date;
             }
         }
 

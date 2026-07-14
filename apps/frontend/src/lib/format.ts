@@ -110,3 +110,9 @@ export function formatNumber(
 export function resolveLocaleForFormatting(locale?: SupportedLocaleCode | string | null): SupportedLocaleCode {
     return resolveSupportedLocale(resolveFormatterLocale(locale));
 }
+
+// Formats a Date as a `datetime-local` input value (`yyyy-MM-ddTHH:mm`) in local time.
+export function toDatetimeLocal(date: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}

@@ -7,26 +7,27 @@ export class SalesReportsService {
     constructor(private db: DatabaseService) {}
 
     async getSalesSummary(tenantId: string, query: GetSalesSummaryDto) {
-        const dateFilter = buildDateWindow(query.from, query.to);
+        const saleDateFilter = buildSaleDateWindow(query.from, query.to);
+        const returnDateFilter = buildReturnDateWindow(query.from, query.to);
 
         const saleFilter = {
             tenant_id: tenantId,
             status: 'COMPLETED',
             ...(query.storeId ? { store_id: query.storeId } : {}),
-            ...dateFilter,
+            ...saleDateFilter,
         };
 
         const [sales, returns, saleItems] = await Promise.all([
             this.db.sale.findMany({
                 where: saleFilter,
-                select: { id: true, total_amount: true, created_at: true },
-                orderBy: { created_at: 'asc' },
+                select: { id: true, total_amount: true, sale_date: true },
+                orderBy: { sale_date: 'asc' },
             }),
             this.db.salesReturn.findMany({
                 where: {
                     tenant_id: tenantId,
                     ...(query.storeId ? { store_id: query.storeId } : {}),
-                    ...dateFilter,
+                    ...returnDateFilter,
                 },
                 select: { total_refund: true, created_at: true },
             }),
@@ -35,7 +36,7 @@ export class SalesReportsService {
                 select: {
                     quantity: true,
                     unit_cost_at_sale: true,
-                    sale: { select: { created_at: true } },
+                    sale: { select: { sale_date: true } },
                 },
             }),
         ]);
@@ -55,7 +56,7 @@ export class SalesReportsService {
         const dayMap = new Map<string, { transactions: number; grossRevenue: number; returns: number; cogs: number }>();
 
         for (const sale of sales) {
-            const day = sale.created_at.toISOString().slice(0, 10);
+            const day = sale.sale_date.toISOString().slice(0, 10);
             const existing = dayMap.get(day) ?? { transactions: 0, grossRevenue: 0, returns: 0, cogs: 0 };
             existing.transactions += 1;
             existing.grossRevenue += Number(sale.total_amount);
@@ -70,7 +71,7 @@ export class SalesReportsService {
         }
 
         for (const item of (saleItems ?? [])) {
-            const day = item.sale.created_at.toISOString().slice(0, 10);
+            const day = item.sale.sale_date.toISOString().slice(0, 10);
             const existing = dayMap.get(day) ?? { transactions: 0, grossRevenue: 0, returns: 0, cogs: 0 };
             existing.cogs += item.unit_cost_at_sale !== null ? Number(item.unit_cost_at_sale) * item.quantity : 0;
             dayMap.set(day, existing);
@@ -108,7 +109,7 @@ export class SalesReportsService {
     }
 
     async getSalesByProduct(tenantId: string, query: GetSalesByProductDto) {
-        const dateFilter = buildDateWindow(query.from, query.to);
+        const dateFilter = buildSaleDateWindow(query.from, query.to);
 
         const saleItems = await this.db.saleItem.findMany({
             where: {
@@ -196,7 +197,7 @@ export class SalesReportsService {
     }
 
     async getSalesByCategory(tenantId: string, query: GetSalesByCategoryDto) {
-        const dateFilter = buildDateWindow(query.from, query.to);
+        const dateFilter = buildSaleDateWindow(query.from, query.to);
 
         const saleItems = await this.db.saleItem.findMany({
             where: {
@@ -253,7 +254,7 @@ export class SalesReportsService {
     }
 
     async getConsolidatedReport(tenantId: string, query: GetConsolidatedReportDto) {
-        const dateFilter = buildDateWindow(query.from, query.to);
+        const dateFilter = buildSaleDateWindow(query.from, query.to);
 
         // Fetch all completed sales in the period with store and items
         const sales = await this.db.sale.findMany({
@@ -361,7 +362,7 @@ export class SalesReportsService {
         };
     }
     async getSalesByCustomer(tenantId: string, query: GetSalesByCustomerDto) {
-        const dateFilter = buildDateWindow(query.from, query.to);
+        const dateFilter = buildSaleDateWindow(query.from, query.to);
 
         const sales = await this.db.sale.findMany({
             where: {
@@ -420,7 +421,8 @@ export class SalesReportsService {
     }
 
     async getBranchReport(tenantId: string, query: GetBranchReportDto) {
-        const dateFilter = buildDateWindow(query.from, query.to);
+        const saleDateFilter = buildSaleDateWindow(query.from, query.to);
+        const returnDateFilter = buildReturnDateWindow(query.from, query.to);
 
         const store = await this.db.store.findFirst({
             where: { id: query.storeId, tenant_id: tenantId },
@@ -432,21 +434,21 @@ export class SalesReportsService {
 
         const [branchSales, branchReturns, companyTotals, saleItems] = await Promise.all([
             this.db.sale.findMany({
-                where: { tenant_id: tenantId, status: 'COMPLETED', store_id: query.storeId, ...dateFilter },
-                select: { id: true, total_amount: true, created_at: true },
+                where: { tenant_id: tenantId, status: 'COMPLETED', store_id: query.storeId, ...saleDateFilter },
+                select: { id: true, total_amount: true, sale_date: true },
             }),
             this.db.salesReturn.findMany({
-                where: { tenant_id: tenantId, store_id: query.storeId, ...dateFilter },
+                where: { tenant_id: tenantId, store_id: query.storeId, ...returnDateFilter },
                 select: { total_refund: true, created_at: true },
             }),
             this.db.sale.aggregate({
-                where: { tenant_id: tenantId, status: 'COMPLETED', ...dateFilter },
+                where: { tenant_id: tenantId, status: 'COMPLETED', ...saleDateFilter },
                 _sum: { total_amount: true },
                 _count: { id: true },
             }),
             this.db.saleItem.findMany({
                 where: {
-                    sale: { tenant_id: tenantId, status: 'COMPLETED', store_id: query.storeId, ...dateFilter },
+                    sale: { tenant_id: tenantId, status: 'COMPLETED', store_id: query.storeId, ...saleDateFilter },
                 },
                 select: {
                     product_id: true,
@@ -492,7 +494,7 @@ export class SalesReportsService {
 
         const dayMap = new Map<string, { transactions: number; grossRevenue: number; returns: number }>();
         for (const sale of branchSales) {
-            const day = sale.created_at.toISOString().slice(0, 10);
+            const day = sale.sale_date.toISOString().slice(0, 10);
             const existing = dayMap.get(day) ?? { transactions: 0, grossRevenue: 0, returns: 0 };
             existing.transactions += 1;
             existing.grossRevenue += Number(sale.total_amount);
@@ -538,7 +540,7 @@ export class SalesReportsService {
     }
 
     async getMonthlySalesByCustomer(tenantId: string, query: GetMonthlySalesByCustomerDto) {
-        const dateFilter = buildDateWindow(query.from, query.to);
+        const dateFilter = buildSaleDateWindow(query.from, query.to);
 
         const sales = await this.db.sale.findMany({
             where: {
@@ -551,10 +553,10 @@ export class SalesReportsService {
                 id: true,
                 total_amount: true,
                 customer_id: true,
-                created_at: true,
+                sale_date: true,
                 customer: { select: { id: true, name: true, phone: true } },
             },
-            orderBy: { created_at: 'asc' },
+            orderBy: { sale_date: 'asc' },
         });
 
         const monthSet = new Set<string>();
@@ -564,7 +566,7 @@ export class SalesReportsService {
         }>();
 
         for (const sale of sales) {
-            const monthKey = sale.created_at.toISOString().slice(0, 7);
+            const monthKey = sale.sale_date.toISOString().slice(0, 7);
             monthSet.add(monthKey);
 
             const customerKey = sale.customer_id ?? '__walkin__';
@@ -597,17 +599,25 @@ export class SalesReportsService {
     }
 }
 
-function buildDateWindow(from?: string, to?: string) {
+export function buildSaleDateWindow(from?: string, to?: string) {
+    return buildWindow('sale_date', from, to);
+}
+
+export function buildReturnDateWindow(from?: string, to?: string) {
+    return buildWindow('created_at', from, to);
+}
+
+function buildWindow(field: 'sale_date' | 'created_at', from?: string, to?: string) {
     const where: Record<string, any> = {};
     if (from || to) {
-        where.created_at = {};
+        where[field] = {};
         if (from) {
             const date = new Date(from);
-            if (!Number.isNaN(date.getTime())) where.created_at.gte = date;
+            if (!Number.isNaN(date.getTime())) where[field].gte = date;
         }
         if (to) {
             const date = new Date(to);
-            if (!Number.isNaN(date.getTime())) where.created_at.lte = date;
+            if (!Number.isNaN(date.getTime())) where[field].lte = date;
         }
     }
     return where;

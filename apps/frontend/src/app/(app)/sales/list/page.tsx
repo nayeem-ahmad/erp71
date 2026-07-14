@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Receipt, Eye, Edit2, ShoppingCart } from 'lucide-react';
+import { Receipt, Eye, Edit2, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import Link from 'next/link';
@@ -11,7 +11,6 @@ import { PostingBadge } from '@/components/PostingBadge';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { isPosEnabled } from '@/lib/sales-settings';
 import { routes } from '@/lib/routes';
 import { PageShell } from '@/components/ui';
 
@@ -19,6 +18,7 @@ interface Sale {
     id: string;
     serial_number: string;
     created_at: string;
+    sale_date?: string | null;
     items: any[];
     total_amount: string;
     amount_paid: string;
@@ -42,13 +42,9 @@ export default function SalesPage() {
     const { t, locale } = useI18n();
     const [sales, setSales] = useState<Sale[]>([]);
     const [loading, setLoading] = useState(true);
-    const [posEnabled, setPosEnabled] = useState(true);
 
     useEffect(() => {
         loadSales();
-        api.getSalesSettings()
-            .then((settings) => setPosEnabled(isPosEnabled(settings)))
-            .catch(() => setPosEnabled(true));
     }, []);
 
     const loadSales = async () => {
@@ -74,10 +70,13 @@ export default function SalesPage() {
             columnHelper.accessor('created_at', {
                 header: t.sales.columns.date,
                 cell: (info) => {
-                    const d = new Date(info.getValue());
+                    // Display the (possibly back-dated) sale_date to agree with reports;
+                    // ordering stays on created_at for cursor-pagination stability.
+                    const displayDate = info.row.original.sale_date ?? info.getValue();
+                    const d = new Date(displayDate);
                     return (
                         <div>
-                            <span className="text-sm text-gray-600">{formatDate(info.getValue(), locale)}</span>
+                            <span className="text-sm text-gray-600">{formatDate(displayDate, locale)}</span>
                             <span className="text-xs text-gray-400 block">{d.toLocaleTimeString()}</span>
                         </div>
                     );
@@ -228,17 +227,13 @@ export default function SalesPage() {
                         'sales',
                     )}
                     actions={
-                        <>
-                            {posEnabled ? (
-                                <Link
-                                    href={routes.sales.pos}
-                                    className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-colors"
-                                >
-                                    <ShoppingCart className="w-4 h-4 mr-2" />
-                                    {t.sidebar.items.pos}
-                                </Link>
-                            ) : null}
-                        </>
+                        <Link
+                            href={routes.sales.new}
+                            className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-colors"
+                        >
+                            <FileText className="w-4 h-4 mr-2" />
+                            {t.sidebar.items.newSalesEntry}
+                        </Link>
                     }
                 />
 

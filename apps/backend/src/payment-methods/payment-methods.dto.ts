@@ -25,6 +25,10 @@ export class CreatePaymentMethodDto {
   @IsOptional()
   @IsInt()
   sort_order?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  show_on_entry?: boolean;
 }
 
 export class UpdatePaymentMethodDto {
@@ -47,6 +51,10 @@ export class UpdatePaymentMethodDto {
   @IsOptional()
   @IsInt()
   sort_order?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  show_on_entry?: boolean;
 }
 
 export class PaymentMethodResponseDto {
@@ -57,6 +65,7 @@ export class PaymentMethodResponseDto {
   account_id?: string;
   is_active: boolean;
   sort_order: number;
+  show_on_entry: boolean;
   created_at: Date;
   updated_at: Date;
 }

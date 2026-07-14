@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Printer, Save, Package, CreditCard, FileText, Pencil, Plus, Trash2, X, Search, User, Download } from 'lucide-react';
 import { api } from '@/lib/api';
-import { formatBDT } from '@/lib/format';
+import { formatBDT, toDatetimeLocal } from '@/lib/format';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
 import Link from 'next/link';
 import { useI18n, formatMessage } from '@/lib/i18n';
@@ -29,6 +29,19 @@ interface EditPayment {
 const PAYMENT_METHODS = ['CASH', 'CARD', 'BANK_TRANSFER', 'MOBILE_PAYMENT', 'OTHER'];
 const SALE_STATUSES = ['COMPLETED', 'REFUNDED', 'PARTIAL_REFUND'];
 
+// Backend classifies a payment for accounting by substring-matching the method
+// string (bank/card/wallet/credit → "bank", else "cash") on the sale CREATE
+// path. Keep the submitted value canonical per payment-method `type` so
+// accounting classification stays correct if/when the update path adopts the
+// same posting logic (mirrors sales/new/components/PaymentSection.tsx).
+const TYPE_TO_CANONICAL: Record<string, string> = {
+    CASH: 'Cash',
+    MOBILE_WALLET: 'Mobile Wallet',
+    CARD: 'Card',
+    BANK: 'Bank',
+};
+const canonicalFor = (type: string) => TYPE_TO_CANONICAL[type] ?? 'Cash';
+
 function SaleDetailPageContent() {
     const { t, locale } = useI18n();
     const params = useParams();
@@ -44,12 +57,14 @@ function SaleDetailPageContent() {
     const [editCustomerId, setEditCustomerId] = useState<string | null>(null);
     const [editStatus, setEditStatus] = useState('');
     const [editNote, setEditNote] = useState('');
+    const [editSaleDate, setEditSaleDate] = useState('');
     const [editItems, setEditItems] = useState<EditItem[]>([]);
     const [editPayments, setEditPayments] = useState<EditPayment[]>([]);
 
     // Lookups
     const [customers, setCustomers] = useState<any[]>([]);
     const [products, setProducts] = useState<any[]>([]);
+    const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
     const [productSearch, setProductSearch] = useState('');
     const [showProductDropdown, setShowProductDropdown] = useState(false);
 
@@ -64,6 +79,7 @@ function SaleDetailPageContent() {
         if (isEditMode) {
             api.getCustomers().then(setCustomers).catch(() => {});
             api.getProducts().then(setProducts).catch(() => {});
+            api.getPaymentMethods().then(setPaymentMethods).catch(() => {});
         }
     }, [isEditMode]);
 
@@ -73,6 +89,7 @@ function SaleDetailPageContent() {
             setEditCustomerId(sale.customer_id || null);
             setEditStatus(sale.status);
             setEditNote(sale.note || '');
+            setEditSaleDate(toDatetimeLocal(new Date(sale.sale_date ?? sale.created_at)));
             setEditItems(
                 (sale.items || []).map((item: any) => ({
                     productId: item.product_id,
@@ -110,6 +127,7 @@ function SaleDetailPageContent() {
                 customerId: editCustomerId,
                 status: editStatus,
                 note: editNote,
+                saleDate: editSaleDate ? new Date(editSaleDate).toISOString() : undefined,
                 items: editItems.map(i => ({
                     productId: i.productId,
                     quantity: i.quantity,
@@ -173,6 +191,46 @@ function SaleDetailPageContent() {
 
     const editTotal = editItems.reduce((s, i) => s + i.quantity * i.priceAtSale, 0);
     const editPaid = editPayments.reduce((s, p) => s + p.amount, 0);
+
+    // Payment method options for the edit-row selects: tenant-defined methods
+    // (active, sorted by sort_order, show_on_entry first), submitted as the
+    // canonical classification string with the method name as the label.
+    // Falls back to the generic hardcoded list when no active methods are
+    // defined. Any value already saved on the sale (legacy or custom) is kept
+    // selectable so existing payments round-trip unchanged.
+    const paymentMethodOptions = useMemo(() => {
+        const active = paymentMethods.filter((m: any) => m.is_active);
+        const sorted = active.slice().sort((a: any, b: any) => {
+            const aVisible = a.show_on_entry ? 0 : 1;
+            const bVisible = b.show_on_entry ? 0 : 1;
+            if (aVisible !== bVisible) return aVisible - bVisible;
+            return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+        });
+        const rawOptions: { value: string; label: string }[] = sorted.length > 0
+            ? sorted.map((m: any) => ({ value: canonicalFor(m.type), label: m.name }))
+            : PAYMENT_METHODS.map(m => ({ value: m, label: m.replace(/_/g, ' ') }));
+
+        // Multiple tenant-defined methods can share a `type` (e.g. two bank
+        // accounts), which collapses to the same canonical value — dedupe so
+        // the <select> doesn't offer indistinguishable duplicate options.
+        const options: { value: string; label: string }[] = [];
+        const seen = new Set<string>();
+        for (const o of rawOptions) {
+            if (seen.has(o.value)) continue;
+            seen.add(o.value);
+            options.push(o);
+        }
+
+        // Preserve any already-saved values not present among the fetched/derived options.
+        const known = new Set(options.map(o => o.value));
+        for (const p of editPayments) {
+            if (p.paymentMethod && !known.has(p.paymentMethod)) {
+                known.add(p.paymentMethod);
+                options.push({ value: p.paymentMethod, label: p.paymentMethod.replace(/_/g, ' ') });
+            }
+        }
+        return options;
+    }, [paymentMethods, editPayments]);
 
     const filteredProducts = products.filter(p =>
         p.name?.toLowerCase().includes(productSearch.toLowerCase()) ||
@@ -342,7 +400,7 @@ function SaleDetailPageContent() {
 
                 {/* Status & Summary (edit or view) */}
                 {isEditMode ? (
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="bg-white p-4 rounded-lg shadow-sm">
                             <label className="text-xs font-medium text-gray-500 block mb-2">{t.common.status}</label>
                             <select
@@ -356,6 +414,15 @@ function SaleDetailPageContent() {
                                     </option>
                                 ))}
                             </select>
+                        </div>
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
+                            <label className="text-xs font-medium text-gray-500 block mb-2">{t.common.date}</label>
+                            <input
+                                type="datetime-local"
+                                value={editSaleDate}
+                                onChange={e => setEditSaleDate(e.target.value)}
+                                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300"
+                            />
                         </div>
                         <div className="bg-white p-4 rounded-lg shadow-sm">
                             <label className="text-xs font-medium text-gray-500 block mb-2">{t.common.customer}</label>
@@ -645,8 +712,8 @@ function SaleDetailPageContent() {
                                             onChange={e => updatePayment(idx, 'paymentMethod', e.target.value)}
                                             className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-blue-500/20 w-48"
                                         >
-                                            {PAYMENT_METHODS.map(m => (
-                                                <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>
+                                            {paymentMethodOptions.map((m, i) => (
+                                                <option key={`${m.value}-${i}`} value={m.value}>{m.label}</option>
                                             ))}
                                         </select>
                                         <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 flex-1">

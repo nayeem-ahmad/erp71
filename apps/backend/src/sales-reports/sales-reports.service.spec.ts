@@ -1,7 +1,26 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { SalesReportsService } from './sales-reports.service';
+import { SalesReportsService, buildSaleDateWindow, buildReturnDateWindow } from './sales-reports.service';
 import { DatabaseService } from '../database/database.service';
 import { NotFoundException } from '@nestjs/common';
+
+describe('buildSaleDateWindow / buildReturnDateWindow', () => {
+    it('builds a sale_date window for sales', () => {
+        expect(buildSaleDateWindow('2026-01-01', '2026-01-31')).toEqual({
+            sale_date: { gte: new Date('2026-01-01'), lte: new Date('2026-01-31') },
+        });
+    });
+
+    it('keeps created_at window for returns', () => {
+        expect(buildReturnDateWindow('2026-01-01', undefined)).toEqual({
+            created_at: { gte: new Date('2026-01-01') },
+        });
+    });
+
+    it('returns an empty object when no from/to provided', () => {
+        expect(buildSaleDateWindow()).toEqual({});
+        expect(buildReturnDateWindow()).toEqual({});
+    });
+});
 
 describe('SalesReportsService', () => {
     let service: SalesReportsService;
@@ -78,7 +97,7 @@ describe('SalesReportsService', () => {
         const makeSale = (date: string, amount: number) => ({
             id: `sale-${date}`,
             total_amount: amount,
-            created_at: new Date(date),
+            sale_date: new Date(date),
         });
 
         const makeReturn = (date: string, refund: number) => ({
@@ -196,7 +215,7 @@ describe('SalesReportsService', () => {
             expect(db.sale.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
                     where: expect.objectContaining({
-                        created_at: expect.objectContaining({
+                        sale_date: expect.objectContaining({
                             gte: expect.any(Date),
                             lte: expect.any(Date),
                         }),
@@ -218,6 +237,30 @@ describe('SalesReportsService', () => {
             expect(result.rows[0].date).toBe('2026-01-05');
             expect(result.rows[0].returns).toBe(300);
             expect(result.rows[0].transactions).toBe(0);
+        });
+
+        it('filters sales summary by sale_date, not created_at', async () => {
+            db.sale.findMany.mockResolvedValue([]);
+            db.salesReturn.findMany.mockResolvedValue([]);
+            db.saleItem.findMany.mockResolvedValue([]);
+
+            await service.getSalesSummary(tenantId, { from: '2026-01-01', to: '2026-01-31' } as any);
+
+            const whereArg = db.sale.findMany.mock.calls[0][0].where;
+            expect(whereArg).toHaveProperty('sale_date');
+            expect(whereArg).not.toHaveProperty('created_at');
+        });
+
+        it('keeps salesReturn query filtered by created_at, not sale_date', async () => {
+            db.sale.findMany.mockResolvedValue([]);
+            db.salesReturn.findMany.mockResolvedValue([]);
+            db.saleItem.findMany.mockResolvedValue([]);
+
+            await service.getSalesSummary(tenantId, { from: '2026-01-01', to: '2026-01-31' } as any);
+
+            const whereArg = db.salesReturn.findMany.mock.calls[0][0].where;
+            expect(whereArg).toHaveProperty('created_at');
+            expect(whereArg).not.toHaveProperty('sale_date');
         });
     });
 
@@ -635,8 +678,8 @@ describe('SalesReportsService', () => {
         it('calculates branch revenue and returns', async () => {
             db.store.findFirst.mockResolvedValue(mockStore);
             db.sale.findMany.mockResolvedValue([
-                { id: 'sale-1', total_amount: 1000, created_at: new Date('2026-01-01') },
-                { id: 'sale-2', total_amount: 500, created_at: new Date('2026-01-02') },
+                { id: 'sale-1', total_amount: 1000, sale_date: new Date('2026-01-01') },
+                { id: 'sale-2', total_amount: 500, sale_date: new Date('2026-01-02') },
             ]);
             db.salesReturn.findMany.mockResolvedValue([
                 { total_refund: 200, created_at: new Date('2026-01-01') },
@@ -656,7 +699,7 @@ describe('SalesReportsService', () => {
         it('calculates revenue share vs company', async () => {
             db.store.findFirst.mockResolvedValue(mockStore);
             db.sale.findMany.mockResolvedValue([
-                { id: 'sale-1', total_amount: 500, created_at: new Date('2026-01-01') },
+                { id: 'sale-1', total_amount: 500, sale_date: new Date('2026-01-01') },
             ]);
             db.salesReturn.findMany.mockResolvedValue([]);
             db.sale.aggregate.mockResolvedValue({ _sum: { total_amount: 2000 }, _count: { id: 4 } });
@@ -702,8 +745,8 @@ describe('SalesReportsService', () => {
         it('builds daily breakdown for branch', async () => {
             db.store.findFirst.mockResolvedValue(mockStore);
             db.sale.findMany.mockResolvedValue([
-                { id: 'sale-1', total_amount: 1000, created_at: new Date('2026-01-01') },
-                { id: 'sale-2', total_amount: 500, created_at: new Date('2026-01-01') },
+                { id: 'sale-1', total_amount: 1000, sale_date: new Date('2026-01-01') },
+                { id: 'sale-2', total_amount: 500, sale_date: new Date('2026-01-01') },
             ]);
             db.salesReturn.findMany.mockResolvedValue([
                 { total_refund: 100, created_at: new Date('2026-01-01') },
@@ -748,6 +791,13 @@ describe('SalesReportsService', () => {
             expect(db.sale.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
                     where: expect.objectContaining({
+                        sale_date: expect.objectContaining({ gte: expect.any(Date) }),
+                    }),
+                }),
+            );
+            expect(db.salesReturn.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
                         created_at: expect.objectContaining({ gte: expect.any(Date) }),
                     }),
                 }),
@@ -775,14 +825,14 @@ describe('SalesReportsService', () => {
                     id: 'sale-1',
                     total_amount: 1000,
                     customer_id: 'cust-1',
-                    created_at: new Date('2026-01-15'),
+                    sale_date: new Date('2026-01-15'),
                     customer: { id: 'cust-1', name: 'Alice', phone: '01700000001' },
                 },
                 {
                     id: 'sale-2',
                     total_amount: 500,
                     customer_id: 'cust-1',
-                    created_at: new Date('2026-02-10'),
+                    sale_date: new Date('2026-02-10'),
                     customer: { id: 'cust-1', name: 'Alice', phone: '01700000001' },
                 },
             ]);
@@ -798,21 +848,21 @@ describe('SalesReportsService', () => {
                     id: 'sale-1',
                     total_amount: 1000,
                     customer_id: 'cust-1',
-                    created_at: new Date('2026-01-15'),
+                    sale_date: new Date('2026-01-15'),
                     customer: { id: 'cust-1', name: 'Alice', phone: '01700000001' },
                 },
                 {
                     id: 'sale-2',
                     total_amount: 300,
                     customer_id: 'cust-1',
-                    created_at: new Date('2026-01-20'),
+                    sale_date: new Date('2026-01-20'),
                     customer: { id: 'cust-1', name: 'Alice', phone: '01700000001' },
                 },
                 {
                     id: 'sale-3',
                     total_amount: 500,
                     customer_id: 'cust-1',
-                    created_at: new Date('2026-02-05'),
+                    sale_date: new Date('2026-02-05'),
                     customer: { id: 'cust-1', name: 'Alice', phone: '01700000001' },
                 },
             ]);
@@ -836,14 +886,14 @@ describe('SalesReportsService', () => {
                     id: 'sale-1',
                     total_amount: 200,
                     customer_id: 'cust-1',
-                    created_at: new Date('2026-01-01'),
+                    sale_date: new Date('2026-01-01'),
                     customer: { id: 'cust-1', name: 'Alice', phone: null },
                 },
                 {
                     id: 'sale-2',
                     total_amount: 800,
                     customer_id: 'cust-2',
-                    created_at: new Date('2026-01-05'),
+                    sale_date: new Date('2026-01-05'),
                     customer: { id: 'cust-2', name: 'Bob', phone: null },
                 },
             ]);
@@ -858,7 +908,7 @@ describe('SalesReportsService', () => {
                     id: 'sale-1',
                     total_amount: 500,
                     customer_id: null,
-                    created_at: new Date('2026-01-01'),
+                    sale_date: new Date('2026-01-01'),
                     customer: null,
                 },
             ]);
@@ -875,14 +925,14 @@ describe('SalesReportsService', () => {
                     id: 'sale-1',
                     total_amount: 1000,
                     customer_id: 'cust-1',
-                    created_at: new Date('2026-01-01'),
+                    sale_date: new Date('2026-01-01'),
                     customer: { id: 'cust-1', name: 'Alice', phone: null },
                 },
                 {
                     id: 'sale-2',
                     total_amount: 200,
                     customer_id: 'cust-2',
-                    created_at: new Date('2026-02-01'),
+                    sale_date: new Date('2026-02-01'),
                     customer: { id: 'cust-2', name: 'Bob', phone: null },
                 },
             ]);

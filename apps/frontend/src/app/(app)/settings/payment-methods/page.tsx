@@ -29,6 +29,8 @@ interface PaymentMethod {
     account_id?: string;
     account?: Account;
     is_active: boolean;
+    show_on_entry: boolean;
+    sort_order: number;
 }
 
 const PAYMENT_TYPES = [
@@ -50,6 +52,8 @@ function MethodForm({ initial, accounts, onSave, onCancel }: MethodFormProps) {
     const [type, setType] = useState(initial?.type ?? 'CASH');
     const [accountId, setAccountId] = useState(initial?.account_id ?? '');
     const [isActive, setIsActive] = useState(initial?.is_active ?? true);
+    const [showOnEntry, setShowOnEntry] = useState(initial?.show_on_entry ?? true);
+    const [serial, setSerial] = useState<number>(initial?.sort_order ?? 0);
     const [saving, setSaving] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -62,6 +66,8 @@ function MethodForm({ initial, accounts, onSave, onCancel }: MethodFormProps) {
                 type,
                 account_id: accountId || undefined,
                 is_active: isActive,
+                show_on_entry: showOnEntry,
+                sort_order: Number(serial) || 0,
             });
         } finally {
             setSaving(false);
@@ -90,6 +96,16 @@ function MethodForm({ initial, accounts, onSave, onCancel }: MethodFormProps) {
                             <option key={pt.value} value={pt.value}>{pt.label}</option>
                         ))}
                     </Select>
+                </Field>
+
+                <Field label="Serial">
+                    <Input
+                        type="number"
+                        min={0}
+                        value={serial}
+                        onChange={(e) => setSerial(parseInt(e.target.value, 10) || 0)}
+                        placeholder="e.g. 1"
+                    />
                 </Field>
 
                 <Field
@@ -127,6 +143,23 @@ function MethodForm({ initial, accounts, onSave, onCancel }: MethodFormProps) {
                         />
                     </button>
                     <span className="text-sm font-semibold text-gray-700">Active</span>
+                </div>
+
+                <div className="flex items-center gap-3 pt-6">
+                    <button
+                        type="button"
+                        onClick={() => setShowOnEntry((v) => !v)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                            showOnEntry ? 'bg-blue-600' : 'bg-gray-200'
+                        }`}
+                    >
+                        <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                                showOnEntry ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                        />
+                    </button>
+                    <span className="text-sm font-semibold text-gray-700">Show on Entry UI</span>
                 </div>
             </div>
 
@@ -265,7 +298,7 @@ export default function PaymentMethodsSettingsPage() {
                     </div>
                 ) : (
                     <div className="space-y-3">
-                        {methods.map((method) => (
+                        {[...methods].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)).map((method) => (
                             <div key={method.id}>
                                 {editingId === method.id ? (
                                     <MethodForm
