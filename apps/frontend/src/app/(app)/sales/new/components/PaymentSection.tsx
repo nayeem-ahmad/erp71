@@ -105,18 +105,20 @@ export default function PaymentSection({ payments, total, customer, onPaymentCha
             .map(toPick),
         [definedMethods],
     );
-    const hasDefined = definedMethods.length > 0;
+    // Fall back to generic methods whenever there are no *usable* (active) methods —
+    // not only when zero are defined — so an all-inactive tenant can still take payment.
+    const hasUsableMethods = activeSorted.length > 0;
     const visibleMethods = useMemo(() => {
-        if (!hasDefined) return genericPicks; // fresh tenant fallback
+        if (!hasUsableMethods) return genericPicks; // no active methods → generic fallback
         const base = defaultVisible;
         const extra = activeSorted.filter((m) => added.includes(m.key) && !base.some((b) => b.key === m.key));
         return [...base, ...extra];
-    }, [hasDefined, defaultVisible, activeSorted, added]);
+    }, [hasUsableMethods, defaultVisible, activeSorted, added]);
     const addableMethods = useMemo(
         () => activeSorted.filter((m) => !visibleMethods.some((v) => v.key === m.key)),
         [activeSorted, visibleMethods],
     );
-    const allMethods = useMemo(() => (hasDefined ? activeSorted : genericPicks), [hasDefined, activeSorted]);
+    const allMethods = useMemo(() => (hasUsableMethods ? activeSorted : genericPicks), [hasUsableMethods, activeSorted]);
 
     const emitPayments = useCallback(
         (nextAmounts: Record<string, number>) => {
