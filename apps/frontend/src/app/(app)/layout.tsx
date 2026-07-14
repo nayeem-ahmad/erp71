@@ -368,7 +368,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <PlatformFeaturesProvider features={effectivePlatformFeatures}>
         <TenantLocaleProvider tenant={tenantLocaleConfig}>
         <TenantLocaleSync tenant={tenantLocaleConfig} />
-        <div className="flex h-dvh min-h-dvh bg-[#f9fafb] font-sans text-[#111827]">
+        <div className="flex h-dvh min-h-dvh bg-canvas font-sans text-gray-900">
             <Sidebar
                 canAccessAccounting={canAccessAccounting}
                 canAccessInventoryReports={canAccessInventoryReports}

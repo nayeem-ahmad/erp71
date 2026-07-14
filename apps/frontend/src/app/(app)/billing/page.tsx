@@ -247,7 +247,7 @@ function BillingPageContent() {
     };
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="max-w-6xl mx-auto space-y-6">
                 <PageHeader
                     title={copy.title}
@@ -559,7 +559,7 @@ function BillingPageFallback() {
     const copy = t.billing;
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="max-w-6xl mx-auto">
                 <div className="rounded-3xl border border-gray-100 bg-white p-8 flex items-center justify-center text-gray-500">
                     <Loader2 className="w-5 h-5 animate-spin mr-2" /> {copy.loadingWorkspace}

@@ -133,7 +133,7 @@ export default function SupportPage() {
     };
 
     return (
-        <div className="h-full flex flex-col bg-[#f3f4f6] overflow-hidden">
+        <div className="h-full flex flex-col bg-canvas overflow-hidden">
             <div className="flex-1 flex overflow-hidden p-4 gap-4 min-h-0">
                 {/* Thread list */}
                 <div className="w-72 shrink-0 flex flex-col gap-3 overflow-hidden">

@@ -44,7 +44,7 @@ export default function CustomFieldsSettingsPage() {
     if (!loaded) return <div className="p-4 text-sm text-gray-500">Loading…</div>;
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px] space-y-4">
+        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px] space-y-4">
             <h1 className="text-lg font-semibold">Lead Custom Fields</h1>
             <p className="text-xs text-gray-500">Define up to {MAX_FIELDS} extra fields for your leads. Text only.</p>
             <div className="space-y-2 max-w-lg">

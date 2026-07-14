@@ -9,7 +9,7 @@ export default function NotFound() {
     const m = t.marketing.notFound;
 
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-[#f3f4f6] font-sans text-gray-900 px-4">
+        <div className="min-h-screen flex flex-col items-center justify-center bg-canvas font-sans text-gray-900 px-4">
             <div className="text-center space-y-6 max-w-lg">
                 <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gray-100 border border-gray-200">
                     <SearchX className="w-10 h-10 text-gray-400" />

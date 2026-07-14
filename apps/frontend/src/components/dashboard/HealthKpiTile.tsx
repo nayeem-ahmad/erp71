@@ -16,7 +16,7 @@ export function HealthKpiTile({
     points: number[];
 }) {
     return (
-        <div className="rounded-xl border border-[#eef2f7] bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
             <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{title}</p>
             <p className="mt-1 text-xl font-extrabold tracking-tight text-slate-900">{value}</p>
             <p className={`mt-0.5 text-[10px] font-bold ${deltaPositive ? 'text-[#16a34a]' : 'text-[#dc2626]'}`}>{delta}</p>

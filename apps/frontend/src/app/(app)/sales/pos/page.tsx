@@ -542,7 +542,7 @@ export default function POSPage() {
     );
 
     return (
-        <div className="flex h-full bg-[#f3f4f6] font-sans text-gray-900 overflow-hidden flex-col">
+        <div className="flex h-full bg-canvas font-sans text-gray-900 overflow-hidden flex-col">
             {/* Offline banner */}
             {!isOnline && (
                 <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-2.5 flex items-center justify-between gap-4 flex-shrink-0">

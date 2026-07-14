@@ -91,7 +91,7 @@ export default function SmsCreditsPage() {
     }, [balance, summary?.low_balance]);
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="max-w-6xl mx-auto space-y-6">
                 <PageHeader
                     title="SMS Credits"

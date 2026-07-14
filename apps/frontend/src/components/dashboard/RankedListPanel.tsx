@@ -20,7 +20,7 @@ export function RankedListPanel({
     emptyLabel: string;
 }) {
     return (
-        <div className="rounded-xl border border-[#eef2f7] bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
             <h3 className="mb-2 text-xs font-bold text-slate-900">{title}</h3>
             {items.length === 0 ? (
                 <p className="py-4 text-center text-[11px] text-slate-400">{emptyLabel}</p>

@@ -76,7 +76,7 @@ export default function InventoryTransferDetailPage() {
     ].filter(Boolean) as Array<{ label: string; at: string; tone: string }>;
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="max-w-[1100px] mx-auto space-y-6">
                 <PageHeader
                     title={formatMessage(t.inventoryTransferDetail.transferTitle, { number: transfer.transfer_number })}

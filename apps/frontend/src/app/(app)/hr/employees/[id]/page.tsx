@@ -157,7 +157,7 @@ export default function EmployeeDetailPage() {
 
     if (loading) {
         return (
-            <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px] flex items-center justify-center">
+            <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px] flex items-center justify-center">
                 <p className="text-gray-400 font-bold">{t.employees.detail.loading}</p>
             </div>
         );
@@ -165,14 +165,14 @@ export default function EmployeeDetailPage() {
 
     if (!employee) {
         return (
-            <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px] flex items-center justify-center">
+            <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px] flex items-center justify-center">
                 <p className="text-red-500 font-bold">{t.employees.detail.notFound}</p>
             </div>
         );
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="max-w-3xl mx-auto space-y-6">
                 <PageHeader
                     title={employee.name}

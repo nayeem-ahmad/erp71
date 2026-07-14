@@ -155,7 +155,7 @@ function ReturnDetailPageContent() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-full bg-[#f3f4f6]">
+            <div className="flex items-center justify-center h-full bg-canvas">
                 <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">{t.shared.loading.return}</p>
             </div>
         );
@@ -163,14 +163,14 @@ function ReturnDetailPageContent() {
 
     if (!ret) {
         return (
-            <div className="flex items-center justify-center h-full bg-[#f3f4f6]">
+            <div className="flex items-center justify-center h-full bg-canvas">
                 <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">{t.shared.notFound.return}</p>
             </div>
         );
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="max-w-4xl mx-auto space-y-6">
                 {/* Edit Mode Banner */}
                 {isEditMode && (

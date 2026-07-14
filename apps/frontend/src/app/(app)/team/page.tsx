@@ -734,7 +734,7 @@ export default function TeamPage() {
     }, [isOwner, activeTab]);
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
             <div className="w-full space-y-4">
                 <PageHeader
                     title={tm.title}
@@ -873,7 +873,7 @@ export default function TeamPage() {
                                 )}
                             </div>
 
-                            <div className="rounded-2xl border border-gray-200 bg-[#f9fafb] p-5 min-h-[300px]">
+                            <div className="rounded-2xl border border-gray-200 bg-canvas p-5 min-h-[300px]">
                                 {selected ? (
                                     <MemberPanel
                                         userId={selected}
