@@ -95,6 +95,10 @@ export default function LeadsPage() {
     const [teamMembers, setTeamMembers] = useState<any[]>([]);
     const [selectionEpoch, setSelectionEpoch] = useState(0);
     const [bulkBusy, setBulkBusy] = useState(false);
+    const [total, setTotal] = useState(0);
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(20);
+    const [sort, setSort] = useState<{ id: string; desc: boolean } | null>(null);
 
     useEffect(() => {
         api.getCustomFields('LEAD').then((d: any[]) => setCustomFieldDefs(Array.isArray(d) ? d : [])).catch(() => setCustomFieldDefs([]));
@@ -116,17 +120,27 @@ export default function LeadsPage() {
                 category: categoryFilter || undefined,
                 priority: priorityFilter || undefined,
                 myActionsToday: myTodaysActions || undefined,
-                limit: 100,
+                page,
+                limit: pageSize,
+                sortBy: sort?.id,
+                sortDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
             });
             setLeads(data?.items ?? data ?? []);
+            setTotal(data?.total ?? (Array.isArray(data) ? data.length : 0));
         } catch {
             setLeads([]);
+            setTotal(0);
         } finally {
             setLoading(false);
         }
-    }, [debouncedSearch, statusFilter, categoryFilter, priorityFilter, myTodaysActions]);
+    }, [debouncedSearch, statusFilter, categoryFilter, priorityFilter, myTodaysActions, page, pageSize, sort]);
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
+
+    // Any change to filters/search/sort returns to the first page.
+    useEffect(() => {
+        setPage(1);
+    }, [debouncedSearch, statusFilter, categoryFilter, priorityFilter, myTodaysActions, sort]);
 
     const deleteLead = useCallback(async (lead: Lead) => {
         if (!confirm(m.deleteConfirm)) return;
@@ -179,7 +193,7 @@ export default function LeadsPage() {
                 </Link>
             ),
         }),
-        columnHelper.accessor('mobile', { header: m.fields.mobile }),
+        columnHelper.accessor('mobile', { header: m.fields.mobile, enableSorting: false }),
         columnHelper.accessor('category', {
             header: m.fields.category,
             cell: (info) => info.getValue() ? categoryLabel(info.getValue() as string) : '—',
@@ -211,6 +225,7 @@ export default function LeadsPage() {
         columnHelper.accessor('next_step', {
             header: m.fields.nextStep,
             cell: (info) => info.getValue() ?? '—',
+            enableSorting: false,
         }),
         columnHelper.accessor('next_step_date', {
             header: m.fields.nextStepDate,
@@ -219,12 +234,14 @@ export default function LeadsPage() {
         columnHelper.accessor('nextStepAssignee', {
             header: m.fields.nextStepAssignedTo,
             cell: (info) => info.getValue()?.name ?? '—',
+            enableSorting: false,
         }),
         ...customFieldDefs.map((def) =>
             columnHelper.accessor((row) => row.custom_fields?.[def.key] ?? '', {
                 id: `cf_${def.key}`,
                 header: def.label,
                 cell: (info) => <span className="text-gray-700">{info.getValue() as string}</span>,
+                enableSorting: false,
             }),
         ),
         columnHelper.display({
@@ -349,6 +366,15 @@ export default function LeadsPage() {
                 columns={columns}
                 isLoading={loading}
                 showSearch={false}
+                serverPagination={{
+                    total,
+                    page,
+                    pageSize,
+                    onPageChange: setPage,
+                    onPageSizeChange: (size) => { setPageSize(size); setPage(1); },
+                    sort,
+                    onSortChange: setSort,
+                }}
                 enableRowSelection
                 onRowSelectionChange={setSelectedLeads}
                 getRowId={(l) => l.id}
