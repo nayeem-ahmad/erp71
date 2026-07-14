@@ -400,7 +400,7 @@ function SaleDetailPageContent() {
 
                 {/* Status & Summary (edit or view) */}
                 {isEditMode ? (
-                    <div className="grid grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="bg-white p-4 rounded-lg shadow-sm">
                             <label className="text-xs font-medium text-gray-500 block mb-2">{t.common.status}</label>
                             <select

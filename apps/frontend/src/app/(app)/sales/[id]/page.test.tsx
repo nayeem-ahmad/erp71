@@ -340,12 +340,33 @@ describe('SaleDetailPage - edit mode', () => {
         });
     });
 
-    it('shows a date input seeded from the sale date in edit mode', async () => {
+    it('shows a date input seeded from created_at when the sale has no sale_date', async () => {
         setEditMode(true);
         render(<SaleDetailPage />);
         await waitFor(() => {
             expect(screen.getByDisplayValue(expectedDatetimeLocal(mockSale.created_at))).toBeInTheDocument();
         });
+    });
+
+    it('seeds the date input from sale_date in preference to created_at', async () => {
+        // sale_date on a distinct day from created_at proves sale_date wins
+        // (a reversed `created_at ?? sale_date` would seed from created_at).
+        getApi().getSale.mockResolvedValue({
+            ...mockSale,
+            sale_date: '2026-02-20T09:00:00Z',
+            created_at: '2026-01-15T12:00:00Z',
+        });
+        setEditMode(true);
+        render(<SaleDetailPage />);
+        await waitFor(() => {
+            expect(
+                screen.getByDisplayValue(expectedDatetimeLocal('2026-02-20T09:00:00Z')),
+            ).toBeInTheDocument();
+        });
+        // And definitely not seeded from created_at.
+        expect(
+            screen.queryByDisplayValue(expectedDatetimeLocal('2026-01-15T12:00:00Z')),
+        ).not.toBeInTheDocument();
     });
 
     it('saves the edited sale date via api.updateSale', async () => {
