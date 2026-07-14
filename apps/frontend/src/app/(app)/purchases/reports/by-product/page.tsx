@@ -6,6 +6,7 @@ import { Package } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
+import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
@@ -145,8 +146,7 @@ export default function PurchasesByProductPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.purchaseReports.byProduct.title}
                     subtitle={t.purchaseReports.byProduct.subtitle}
@@ -159,27 +159,27 @@ export default function PurchasesByProductPage() {
                 />
 
                 <div className="grid md:grid-cols-3 gap-4">
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.purchaseReports.byProduct.totalSpend}</div>
-                        <div className="text-2xl font-black text-blue-700 mt-2">
+                        <div className="text-2xl font-bold text-blue-700 mt-2">
                             {formatBDT(Number(summary?.totalSpend ?? 0), { locale })}
                         </div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.purchaseReports.byProduct.totalUnits}</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">
+                        <div className="text-2xl font-bold text-gray-900 mt-2">
                             {summary?.totalUnits ?? 0}
                         </div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.purchaseReports.byProduct.products}</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">
+                        <div className="text-2xl font-bold text-gray-900 mt-2">
                             {summary?.productCount ?? 0}
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap gap-3 items-end">
+                <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
                     <select
                         value={groupId}
                         onChange={(e) => { setGroupId(e.target.value); setSubgroupId(''); }}
@@ -230,7 +230,6 @@ export default function PurchasesByProductPage() {
                     emptyIcon={<Package className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.purchaseReports.byProduct.searchPlaceholder}
                 />
-            </div>
-        </div>
+    </PageShell>
     );
 }

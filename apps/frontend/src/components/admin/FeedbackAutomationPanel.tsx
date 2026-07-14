@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { X, Loader2, Sparkles, CheckCircle2, XCircle, RotateCcw, ExternalLink, AlertTriangle, GitMerge } from 'lucide-react';
+import { Loader2, Sparkles, CheckCircle2, XCircle, RotateCcw, ExternalLink, AlertTriangle, GitMerge } from 'lucide-react';
 import { api } from '@/lib/api';
+import ModalShell, { ModalHeader } from '@/components/ModalShell';
 
 type PrReadiness = {
     state: string;
@@ -140,11 +141,11 @@ export default function FeedbackAutomationPanel({ feedbackId, onClose }: { feedb
 
     if (!detail) {
         return (
-            <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl p-8">
+            <ModalShell size="md" onBackdropClick={onClose}>
+                <div className="p-8">
                     <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
                 </div>
-            </div>
+            </ModalShell>
         );
     }
 
@@ -156,20 +157,20 @@ export default function FeedbackAutomationPanel({ feedbackId, onClose }: { feedb
     const canRollback = !!detail.mergeCommitSha && detail.status !== 'ROLLED_BACK';
 
     return (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+        <ModalShell size="md" onBackdropClick={onClose}>
+            <ModalHeader
+                title={
+                    <span className="flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-purple-600" />
-                        <h2 className="text-sm font-black text-gray-900">Feedback automation</h2>
-                        <StatusBadge status={detail.status} />
-                    </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
+                        Feedback automation
+                    </span>
+                }
+                onClose={onClose}
+            >
+                <StatusBadge status={detail.status} />
+            </ModalHeader>
 
-                <div className="p-5 space-y-5">
+            <div className="p-5 space-y-5 overflow-y-auto">
                     <div className="rounded-xl bg-gray-50 border border-gray-100 p-3 text-sm text-gray-700 whitespace-pre-wrap">
                         {detail.message}
                     </div>
@@ -218,7 +219,7 @@ export default function FeedbackAutomationPanel({ feedbackId, onClose }: { feedb
                     {latestPlan && (
                         <div className="rounded-xl border border-gray-200">
                             <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
-                                <span className="text-xs font-black text-gray-700">Plan v{latestPlan.version}</span>
+                                <span className="text-xs font-semibold text-gray-700">Plan v{latestPlan.version}</span>
                                 <div className="flex items-center gap-2">
                                     {latestPlan.hasMigration && (
                                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
@@ -365,8 +366,7 @@ export default function FeedbackAutomationPanel({ feedbackId, onClose }: { feedb
                             </div>
                         </details>
                     )}
-                </div>
             </div>
-        </div>
+        </ModalShell>
     );
 }

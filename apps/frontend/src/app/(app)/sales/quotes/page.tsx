@@ -11,6 +11,7 @@ import CreateQuotationModal from './CreateQuotationModal';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell, Button } from '@/components/ui';
 
 interface Quotation {
     id: string;
@@ -30,7 +31,7 @@ const statusColors: Record<string, string> = {
     SENT: 'bg-blue-50 text-blue-700 border-blue-200',
     ACCEPTED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     REJECTED: 'bg-red-50 text-red-700 border-red-200',
-    CONVERTED: 'bg-violet-50 text-violet-700 border-violet-200',
+    CONVERTED: 'bg-success-light text-success-text border-emerald-200',
     REVISED: 'bg-amber-50 text-amber-700 border-amber-200',
     EXPIRED: 'bg-gray-100 text-gray-500 border-gray-200',
 };
@@ -117,8 +118,8 @@ export default function QuotesPage() {
                 header: t.quotes.columns.quoteNumber,
                 cell: (info) => (
                     <div>
-                        <span className="text-sm font-black text-gray-900">{info.getValue()}</span>
-                        <span className="ml-2 inline-flex rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-gray-500">
+                        <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>
+                        <span className="ml-2 inline-flex rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
                             {formatMessage(t.shared.version, { version: info.row.original.version })}
                         </span>
                     </div>
@@ -174,7 +175,7 @@ export default function QuotesPage() {
             columnHelper.accessor('total_amount', {
                 header: t.quotes.columns.total,
                 cell: (info) => (
-                    <span className="text-sm font-black text-blue-600">{formatBDT(parseFloat(info.getValue()), { locale })}</span>
+                    <span className="text-sm font-bold text-blue-600">{formatBDT(parseFloat(info.getValue()), { locale })}</span>
                 ),
                 sortingFn: (a, b) => parseFloat(a.getValue('total_amount')) - parseFloat(b.getValue('total_amount')),
                 size: 110,
@@ -184,7 +185,7 @@ export default function QuotesPage() {
                 cell: (info) => {
                     const status = info.getValue();
                     return (
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${statusColors[status] ?? 'bg-gray-50 text-gray-700 border-gray-200'}`}>
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${statusColors[status] ?? 'bg-gray-50 text-gray-700 border-gray-200'}`}>
                             {t.shared.statuses.quote[status as keyof typeof t.shared.statuses.quote] ?? status}
                         </span>
                     );
@@ -249,8 +250,7 @@ export default function QuotesPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.quotes.title}
                     subtitle={t.quotes.subtitle}
@@ -261,13 +261,9 @@ export default function QuotesPage() {
                         'sales',
                     )}
                     actions={
-                        <button
-                            onClick={() => setIsModalOpen(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                        >
-                            <Plus className="w-4 h-4 mr-2" />
+                        <Button type="button" variant="primary" size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setIsModalOpen(true)}>
                             {t.quotes.newQuotation}
-                        </button>
+                        </Button>
                     }
                 />
 
@@ -283,9 +279,8 @@ export default function QuotesPage() {
                     emptyIcon={<FileText className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.quotes.dataTable.searchPlaceholder}
                     filterPresets={filterPresets}
-                    enableRowSelection
                 />
-            </div>
-        </div>
+            
+        </PageShell>
     );
 }

@@ -104,13 +104,13 @@ export default function BankbookPage() {
         }),
         columnHelper.accessor('payments', {
             header: t.accounting.reports.bankbook.withdrawals,
-            cell: (info) => info.getValue() > 0 ? <span className="text-rose-600 font-bold">{formatBDT(Number(info.getValue()), { locale })}</span> : <span className="text-gray-300">—</span>,
+            cell: (info) => info.getValue() > 0 ? <span className="text-danger font-bold">{formatBDT(Number(info.getValue()), { locale })}</span> : <span className="text-gray-300">—</span>,
             size: 130,
         }),
         columnHelper.accessor('running_balance', {
             header: t.accounting.reports.cashbook.balance,
             cell: (info) => (
-                <span className="font-black text-blue-700">
+                <span className="font-bold text-blue-700">
                     {formatBDT(Number(info.getValue()), { locale })}
                     <span className="ml-1 text-xs font-normal text-gray-400">{info.row.original.running_balance_side}</span>
                 </span>

@@ -238,9 +238,9 @@ export default function ProfitLossPage() {
                             <span>{formatBDT(data.revenue.total, { locale })}</span>
                         </div>
 
-                        <AccountSection groups={data.expenses.groups} label={t.accounting.reports.expenses} colorClass="bg-rose-50 text-rose-700" locale={locale} />
+                        <AccountSection groups={data.expenses.groups} label={t.accounting.reports.expenses} colorClass="bg-danger-light text-danger-text" locale={locale} />
 
-                        <div className="flex justify-between items-center px-3 py-2 bg-rose-50 rounded-lg font-semibold text-sm text-rose-800 border border-rose-100">
+                        <div className="flex justify-between items-center px-3 py-2 bg-danger-light rounded-lg font-semibold text-sm text-danger-text border border-red-100">
                             <span>{t.accounting.reports.totalExpenses}</span>
                             <span>{formatBDT(data.expenses.total, { locale })}</span>
                         </div>

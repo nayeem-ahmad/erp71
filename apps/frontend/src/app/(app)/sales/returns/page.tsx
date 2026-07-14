@@ -12,6 +12,7 @@ import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell, Button } from '@/components/ui';
 
 interface SalesReturn {
     id: string;
@@ -110,7 +111,7 @@ export default function ReturnsPage() {
             columnHelper.accessor('return_number', {
                 header: t.returns.columns.returnNumber,
                 cell: (info) => (
-                    <span className="text-sm font-black text-gray-900">{info.getValue()}</span>
+                    <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>
                 ),
                 size: 140,
             }),
@@ -125,7 +126,7 @@ export default function ReturnsPage() {
             columnHelper.accessor('total_refund', {
                 header: t.returns.columns.refundAmount,
                 cell: (info) => (
-                    <span className="text-sm font-black text-rose-600">
+                    <span className="text-sm font-bold text-danger">
                         {formatBDT(parseFloat(info.getValue()), { locale })}
                     </span>
                 ),
@@ -164,7 +165,7 @@ export default function ReturnsPage() {
                     const status = info.getValue();
                     return (
                         <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${
                                 statusColors[status] ?? 'bg-gray-50 text-gray-700 border-gray-200'
                             }`}
                         >
@@ -241,8 +242,7 @@ export default function ReturnsPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.returns.title}
                     subtitle={t.returns.subtitle}
@@ -253,13 +253,9 @@ export default function ReturnsPage() {
                         'sales',
                     )}
                     actions={
-                        <button
-                            onClick={() => setIsModalOpen(true)}
-                            className="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-rose-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                        >
-                            <Plus className="w-4 h-4 mr-2" />
+                        <Button type="button" variant="danger" size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setIsModalOpen(true)}>
                             {t.returns.processReturn}
-                        </button>
+                        </Button>
                     }
                 />
 
@@ -275,9 +271,8 @@ export default function ReturnsPage() {
                     emptyIcon={<RotateCcw className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.returns.dataTable.searchPlaceholder}
                     filterPresets={filterPresets}
-                    enableRowSelection
                 />
-            </div>
-        </div>
+            
+        </PageShell>
     );
 }

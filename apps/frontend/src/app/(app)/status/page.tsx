@@ -7,6 +7,7 @@ import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { routes } from '@/lib/routes';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell } from '@/components/ui';
 
 export default function StatusPage() {
     const { t } = useI18n();
@@ -14,14 +15,14 @@ export default function StatusPage() {
     const admin = t.admin.systemHealth;
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="w-full max-w-5xl mx-auto space-y-8">
                 <PageHeader
                     title={m.title}
                     subtitle={(
                         <>
                             <span>{m.description}</span>
-                            <span className="block mt-2 text-xs font-semibold text-indigo-600">{m.adminOnly}</span>
+                            <span className="block mt-2 text-xs font-semibold text-primary">{m.adminOnly}</span>
                         </>
                     )}
                     breadcrumbs={modulePageBreadcrumbs(
@@ -33,7 +34,7 @@ export default function StatusPage() {
                     actions={(
                         <Link
                             href={routes.admin.systemHealth}
-                            className="inline-flex items-center gap-2 self-start rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-50"
+                            className="inline-flex items-center gap-2 self-start rounded-xl border border-primary-border bg-white px-4 py-2 text-sm font-bold text-primary hover:bg-primary-light"
                         >
                             <Activity className="w-4 h-4" />
                             {m.openFullDashboard}
@@ -43,6 +44,6 @@ export default function StatusPage() {
 
                 <SystemHealthPanel />
             </div>
-        </div>
+        </PageShell>
     );
 }

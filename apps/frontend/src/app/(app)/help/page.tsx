@@ -8,6 +8,7 @@ import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { routes } from '@/lib/routes';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell } from '@/components/ui';
 
 export default function HelpPage() {
     const { t } = useI18n();
@@ -54,7 +55,7 @@ export default function HelpPage() {
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px] space-y-4">
+        <PageShell>
             <PageHeader
                 title={h.title}
                 subtitle={h.description}
@@ -163,6 +164,6 @@ export default function HelpPage() {
                     {h.footerLink}
                 </a>
             </div>
-        </div>
+        </PageShell>
     );
 }

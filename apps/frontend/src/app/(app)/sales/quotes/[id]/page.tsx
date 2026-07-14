@@ -9,6 +9,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { PageShell } from '@/components/ui';
 
 interface EditQuoteItem {
     productId: string;
@@ -198,16 +199,16 @@ function QuoteDetailsPageContent() {
     }
 
     if (!quote) {
-        return <div className="p-8 font-bold text-rose-500">{t.shared.notFound.quote}</div>;
+        return <div className="p-8 font-bold text-danger">{t.shared.notFound.quote}</div>;
     }
 
     const totalAmount = Number(quote.total_amount);
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             {isEditMode && (
                 <div className="px-8 pt-6">
-                    <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-center justify-between">
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-3 flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                             <Pencil className="w-4 h-4 text-amber-600" />
                             <span className="text-sm font-bold text-amber-800">
@@ -243,13 +244,13 @@ function QuoteDetailsPageContent() {
                                 <FileText className="w-8 h-8 text-purple-600" />
                                 <span>
                                     {quote.quote_number}{' '}
-                                    <span className="text-lg bg-gray-100 text-gray-500 px-2 rounded-lg font-black ml-1">v{quote.version}</span>
+                                    <span className="text-lg bg-gray-100 text-gray-500 px-2 rounded-lg font-bold ml-1">v{quote.version}</span>
                                 </span>
                             </span>
                         }
                         subtitle={
                             <span className="inline-flex items-center gap-3">
-                                <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-gray-100 text-gray-800">
+                                <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-800">
                                     {formatMessage(t.quotes.detail.statusLabel, {
                                         status: t.shared.statuses.quote[quote.status as keyof typeof t.shared.statuses.quote] ?? quote.status,
                                     })}
@@ -314,7 +315,7 @@ function QuoteDetailsPageContent() {
                                     </button>
                                 )}
                                 {quote.status !== 'REVISED' && quote.status !== 'CONVERTED' && (
-                                    <button onClick={handleConvertToOrder} disabled={actionLoading} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm flex items-center hover:bg-blue-700 shadow-xl shadow-blue-500/20 transition-all">
+                                    <button onClick={handleConvertToOrder} disabled={actionLoading} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm flex items-center hover:bg-blue-700 shadow-sm transition-all">
                                         <ClipboardList className="w-4 h-4 mr-2" />
                                         {t.quotes.detail.convertToOrder}
                                     </button>
@@ -328,7 +329,7 @@ function QuoteDetailsPageContent() {
             <div className="p-8 max-w-5xl mx-auto space-y-8 print:p-0 print:block">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 print:block print:w-full">
                     <div className="lg:col-span-2 space-y-8">
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden print:shadow-none print:border-none">
+                        <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden print:shadow-none print:border-none">
                             <div className="p-6 border-b border-gray-100 print:px-0">
                                 <h2 className="font-bold tracking-tight">{t.quotes.detail.proposedItems}</h2>
                             </div>
@@ -407,7 +408,7 @@ function QuoteDetailsPageContent() {
                                                             className="w-full text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
                                                         />
                                                     </td>
-                                                    <td className="py-3 text-right text-sm font-black text-blue-600">
+                                                    <td className="py-3 text-right text-sm font-bold text-blue-600">
                                                         {formatBDT(item.quantity * item.unitPrice, { locale })}
                                                     </td>
                                                     <td className="py-3 text-center">
@@ -434,7 +435,7 @@ function QuoteDetailsPageContent() {
                                                 </div>
                                             </div>
                                             <div className="text-right">
-                                                <p className="font-black">{formatBDT(Number(item.unit_price) * item.quantity, { locale })}</p>
+                                                <p className="font-bold">{formatBDT(Number(item.unit_price) * item.quantity, { locale })}</p>
                                                 <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase">{formatBDT(Number(item.unit_price), { locale })}{t.shared.perEa}</p>
                                             </div>
                                         </div>
@@ -443,7 +444,7 @@ function QuoteDetailsPageContent() {
                             )}
                         </div>
 
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 print:shadow-none print:border-none print:px-0">
+                        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 print:shadow-none print:border-none print:px-0">
                             <h2 className="font-bold tracking-tight mb-4">{t.quotes.detail.targetAccount}</h2>
                             {isEditMode ? (
                                 <div className="space-y-4 print:hidden">
@@ -481,7 +482,7 @@ function QuoteDetailsPageContent() {
                                 </div>
                             ) : quote.customer ? (
                                 <div className="bg-purple-50 border border-purple-100 rounded-xl p-4">
-                                    <p className="font-black text-lg text-purple-900">{quote.customer.name}</p>
+                                    <p className="font-bold text-lg text-purple-900">{quote.customer.name}</p>
                                     <p className="text-sm font-bold text-purple-600 uppercase tracking-widest mt-1">{quote.customer.phone}</p>
                                 </div>
                             ) : (
@@ -490,28 +491,28 @@ function QuoteDetailsPageContent() {
                         </div>
                         
                         {!isEditMode && quote.notes && (
-                            <div className="bg-yellow-50 text-yellow-800 p-6 rounded-2xl text-sm font-medium italic">
+                            <div className="bg-yellow-50 text-yellow-800 p-6 rounded-lg text-sm font-medium italic">
                                 &quot;{quote.notes}&quot;
                             </div>
                         )}
                     </div>
 
                     <div className="space-y-8">
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden print:shadow-none print:border border-gray-400 print:mt-12">
+                        <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden print:shadow-none print:border border-gray-400 print:mt-12">
                             <div className="p-6 border-b border-gray-100 bg-gray-900 text-white print:bg-white print:text-black print:border-b-2">
                                 <h2 className="font-bold tracking-tight uppercase tracking-widest text-sm">{t.quotes.detail.quoteNetWrapUp}</h2>
                             </div>
                             <div className="p-6 space-y-4">
                                 <div className="pt-2 flex justify-between items-center text-gray-900">
                                     <span className="text-xs font-bold uppercase tracking-widest text-gray-400">{t.quotes.detail.grandTotal}</span>
-                                    <span className="font-black text-3xl tracking-tight">{formatBDT(isEditMode ? editTotalAmount : totalAmount, { locale })}</span>
+                                    <span className="font-bold text-3xl tracking-tight">{formatBDT(isEditMode ? editTotalAmount : totalAmount, { locale })}</span>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </PageShell>
     );
 }
 

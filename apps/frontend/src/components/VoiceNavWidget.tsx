@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { HelpCircle, Mic, MicOff, X } from 'lucide-react';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
+import { useDismissable } from '@/hooks/useDismissable';
 import {
     classifySpeechRecognitionError,
     extractBestTranscript,
@@ -39,24 +40,7 @@ export default function VoiceNavWidget() {
         setSupported(isSpeechRecognitionSupported());
     }, []);
 
-    useEffect(() => {
-        if (!hintOpen) return;
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') setHintOpen(false);
-        };
-        const onPointer = (e: MouseEvent) => {
-            if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-                setHintOpen(false);
-            }
-        };
-        window.addEventListener('keydown', onKey);
-        const id = setTimeout(() => document.addEventListener('mousedown', onPointer), 0);
-        return () => {
-            window.removeEventListener('keydown', onKey);
-            clearTimeout(id);
-            document.removeEventListener('mousedown', onPointer);
-        };
-    }, [hintOpen]);
+    useDismissable(rootRef, () => setHintOpen(false), hintOpen);
 
     const clearListenTimeout = useCallback(() => {
         if (timeoutRef.current) {

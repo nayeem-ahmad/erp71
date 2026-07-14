@@ -21,7 +21,7 @@ type Section = { key: string; cards: Card[] };
 
 const SECTIONS: Section[] = [
   { key: 'businessProfile', cards: [
-    { href: routes.settings.branding, key: 'branding', icon: Palette, accent: 'bg-violet-50 text-violet-700 border-violet-100' },
+    { href: routes.settings.branding, key: 'branding', icon: Palette, accent: 'bg-primary-light text-blue-700 border-primary-border' },
     { href: routes.settings.localization, key: 'localization', icon: Globe, accent: 'bg-sky-50 text-sky-700 border-sky-100' },
     { href: routes.settings.tax, key: 'tax', icon: Receipt, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
     { href: routes.settings.stores, key: 'stores', icon: Store, accent: 'bg-orange-50 text-orange-700 border-orange-100' },
@@ -29,8 +29,8 @@ const SECTIONS: Section[] = [
   { key: 'salesPos', cards: [
     { href: routes.settings.counters, key: 'counters', icon: Monitor, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
     { href: routes.settings.sales, key: 'sales', icon: ShoppingBag, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
-    { href: routes.settings.paymentMethods, key: 'paymentMethods', icon: CreditCard, accent: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
-    { href: routes.settings.discountCodes, key: 'discountCodes', icon: Tag, accent: 'bg-rose-50 text-rose-700 border-rose-100' },
+    { href: routes.settings.paymentMethods, key: 'paymentMethods', icon: CreditCard, accent: 'bg-primary-light text-blue-700 border-primary-border' },
+    { href: routes.settings.discountCodes, key: 'discountCodes', icon: Tag, accent: 'bg-danger-light text-danger-text border-red-200' },
     { href: routes.settings.loyalty, key: 'loyalty', icon: Gift, accent: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-100' },
   ]},
   { key: 'communications', cards: [

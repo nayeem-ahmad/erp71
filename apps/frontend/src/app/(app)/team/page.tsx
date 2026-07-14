@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
     Loader2, UserPlus, Mail, Trash2, ShieldCheck, Store as StoreIcon,
-    ChevronRight, CheckCircle, XCircle, X, Users, Plus, Pencil,
+    ChevronRight, Users, Plus, Pencil, X,
 } from 'lucide-react';
 import {
     STORE_PERMISSION_GROUPS,
@@ -15,6 +15,8 @@ import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell } from '@/components/ui';
+import { toast } from '@/lib/toast';
 
 /* ------------------------------- Types -------------------------------- */
 
@@ -65,22 +67,11 @@ type TeamTab = 'members' | 'roles';
 const OWNER_BADGE_STYLE = 'bg-purple-100 text-purple-700';
 const ROLE_BADGE_STYLE = 'bg-gray-100 text-gray-700';
 
-/* ------------------------------- Toast -------------------------------- */
-
-function Toast({ toast, onDismiss }: { toast: ToastState; onDismiss: () => void }) {
-    useEffect(() => {
-        if (!toast) return;
-        const t = setTimeout(onDismiss, 4000);
-        return () => clearTimeout(t);
-    }, [toast, onDismiss]);
-    if (!toast) return null;
-    const ok = toast.type === 'success';
-    return (
-        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl px-4 py-3 shadow-lg border text-sm font-semibold ${ok ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
-            {ok ? <CheckCircle className="w-4 h-4 text-green-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
-            {toast.message}
-        </div>
-    );
+/** Forwards local `{type, message}` toast payloads to the global toast store. */
+function showToast(state: ToastState) {
+    if (!state) return;
+    if (state.type === 'success') toast.success(state.message);
+    else toast.error(state.message);
 }
 
 /* --------------------------- Permission matrix ------------------------ */
@@ -96,7 +87,7 @@ function PermissionMatrix({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
             {STORE_PERMISSION_GROUPS.map((group) => (
                 <div key={group.label}>
-                    <p className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-2">{group.label}</p>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-2">{group.label}</p>
                     <div className="space-y-1.5">
                         {group.permissions.map((perm) => (
                             <label key={perm} className="flex items-center gap-2.5 text-sm text-gray-700 cursor-pointer">
@@ -256,7 +247,7 @@ function RolesPanel({
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between gap-4">
-                <p className="text-sm font-black text-gray-800">{tr.title}</p>
+                <p className="text-sm font-bold text-gray-800">{tr.title}</p>
                 <button
                     onClick={startCreate}
                     disabled={creating}
@@ -267,8 +258,8 @@ function RolesPanel({
             </div>
 
             {creating && (
-                <div className="rounded-2xl border border-blue-200 bg-white p-5 space-y-4">
-                    <p className="text-sm font-black text-gray-800">{tr.createRole}</p>
+                <div className="rounded-lg border border-blue-200 bg-white p-5 space-y-4">
+                    <p className="text-sm font-bold text-gray-800">{tr.createRole}</p>
                     <div>
                         <label className="block text-xs font-bold uppercase tracking-widest text-gray-500 mb-1.5">{tr.nameLabel}</label>
                         <input
@@ -292,21 +283,21 @@ function RolesPanel({
             )}
 
             {loading ? (
-                <div className="rounded-2xl border border-gray-200 bg-white p-8 flex items-center justify-center text-sm text-gray-400">
+                <div className="rounded-lg border border-gray-200 bg-white p-8 flex items-center justify-center text-sm text-gray-400">
                     <Loader2 className="w-4 h-4 animate-spin mr-2" /> {t.teamManagement.loading}
                 </div>
             ) : roles.length === 0 ? (
-                <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-400">{tr.noRoles}</div>
+                <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-400">{tr.noRoles}</div>
             ) : (
                 <div className="space-y-3">
                     {roles.map((role) => {
                         const isEditing = editingId === role.id;
                         const inUse = (role.member_count ?? 0) > 0;
                         return (
-                            <div key={role.id} className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                            <div key={role.id} className="rounded-lg border border-gray-200 bg-white overflow-hidden">
                                 {isEditing ? (
                                     <div className="p-5 space-y-4">
-                                        <p className="text-sm font-black text-gray-800">{tr.editRole}</p>
+                                        <p className="text-sm font-bold text-gray-800">{tr.editRole}</p>
                                         <div>
                                             <label className="block text-xs font-bold uppercase tracking-widest text-gray-500 mb-1.5">{tr.nameLabel}</label>
                                             <input
@@ -333,7 +324,7 @@ function RolesPanel({
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <p className="text-sm font-bold text-gray-900">{role.name}</p>
                                                 {role.is_system && (
-                                                    <span className="rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-600">
+                                                    <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-600">
                                                         {tr.systemRole}
                                                     </span>
                                                 )}
@@ -504,11 +495,11 @@ function MemberPanel({
         <div className="space-y-6">
             <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-11 h-11 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-black border border-blue-200">
+                    <div className="w-11 h-11 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold border border-blue-200">
                         {(detail.name || detail.email).slice(0, 2).toUpperCase()}
                     </div>
                     <div className="min-w-0">
-                        <p className="font-black text-gray-900 truncate">{detail.name || '—'}</p>
+                        <p className="font-bold text-gray-900 truncate">{detail.name || '—'}</p>
                         <p className="text-xs text-gray-500 truncate">{detail.email}</p>
                     </div>
                 </div>
@@ -518,10 +509,10 @@ function MemberPanel({
             </div>
 
             <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4 space-y-3">
-                <p className="text-sm font-black text-gray-800">{tm.role}</p>
+                <p className="text-sm font-bold text-gray-800">{tm.role}</p>
                 {isOwner ? (
                     <div className="flex items-center gap-2">
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-black uppercase tracking-wider ${OWNER_BADGE_STYLE}`}>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wider ${OWNER_BADGE_STYLE}`}>
                             {detail.roleName}
                         </span>
                         <p className="text-xs text-gray-400">{tm.ownerUnrestricted}</p>
@@ -551,13 +542,13 @@ function MemberPanel({
             </div>
 
             <div className="space-y-4">
-                <p className="text-sm font-black text-gray-800">{tm.branchAccessTitle}</p>
+                <p className="text-sm font-bold text-gray-800">{tm.branchAccessTitle}</p>
                 {detail.stores.map((s) => {
                     const draft = drafts[s.storeId] ?? new Set<string>();
                     const original = new Set(s.permissions);
                     const dirty = draft.size !== original.size || Array.from(draft).some((p) => !original.has(p));
                     return (
-                        <div key={s.storeId} className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                        <div key={s.storeId} className="rounded-lg border border-gray-200 bg-white overflow-hidden">
                             <div className="flex items-center justify-between gap-3 px-5 py-3.5 bg-gray-50 border-b border-gray-100">
                                 <div className="flex items-center gap-2.5 min-w-0">
                                     <StoreIcon className="w-4 h-4 text-gray-400 shrink-0" />
@@ -578,7 +569,7 @@ function MemberPanel({
                                     <button
                                         onClick={() => toggleAccess(s)}
                                         disabled={busyStore === s.storeId}
-                                        className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-black disabled:opacity-50 ${s.hasAccess ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
+                                        className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold disabled:opacity-50 ${s.hasAccess ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
                                     >
                                         {busyStore === s.storeId ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
                                         {s.hasAccess ? tm.removeAccess : tm.grantAccess}
@@ -595,7 +586,7 @@ function MemberPanel({
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
                                                 {STORE_PERMISSION_GROUPS.map((group) => (
                                                     <div key={group.label}>
-                                                        <p className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-2">{group.label}</p>
+                                                        <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-2">{group.label}</p>
                                                         <div className="space-y-1.5">
                                                             {group.permissions.map((perm) => (
                                                                 <label key={perm} className="flex items-center gap-2.5 text-sm text-gray-700 cursor-pointer">
@@ -658,7 +649,6 @@ export default function TeamPage() {
     const [invitations, setInvitations] = useState<Invitation[]>([]);
     const [loading, setLoading] = useState(true);
     const [selected, setSelected] = useState<string | null>(null);
-    const [toast, setToast] = useState<ToastState>(null);
 
     const [inviteEmail, setInviteEmail] = useState('');
     const [inviteTenantRoleId, setInviteTenantRoleId] = useState('');
@@ -693,7 +683,7 @@ export default function TeamPage() {
             setInvitations(inv ?? []);
             await loadRoles();
         } catch (err: any) {
-            setToast({ type: 'error', message: err?.message || tm.loadFailed });
+            showToast({ type: 'error', message: err?.message || tm.loadFailed });
         } finally {
             setLoading(false);
         }
@@ -706,11 +696,11 @@ export default function TeamPage() {
         setInviting(true);
         try {
             await api.sendTeamInvitation({ email: inviteEmail.trim(), tenantRoleId: inviteTenantRoleId });
-            setToast({ type: 'success', message: formatMessage(tm.inviteSent, { email: inviteEmail.trim() }) });
+            showToast({ type: 'success', message: formatMessage(tm.inviteSent, { email: inviteEmail.trim() }) });
             setInviteEmail('');
             await load();
         } catch (err: any) {
-            setToast({ type: 'error', message: err?.message || tm.inviteFailed });
+            showToast({ type: 'error', message: err?.message || tm.inviteFailed });
         } finally {
             setInviting(false);
         }
@@ -719,10 +709,10 @@ export default function TeamPage() {
     const revokeInvite = async (id: string, email: string) => {
         try {
             await api.revokeTeamInvitation(id);
-            setToast({ type: 'success', message: formatMessage(tm.inviteRevoked, { email }) });
+            showToast({ type: 'success', message: formatMessage(tm.inviteRevoked, { email }) });
             await load();
         } catch (err: any) {
-            setToast({ type: 'error', message: err?.message || tm.revokeFailed });
+            showToast({ type: 'error', message: err?.message || tm.revokeFailed });
         }
     };
 
@@ -734,8 +724,7 @@ export default function TeamPage() {
     }, [isOwner, activeTab]);
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={tm.title}
                     subtitle={tm.description}
@@ -773,7 +762,7 @@ export default function TeamPage() {
                 </div>
 
                 {activeTab === 'roles' ? (
-                    <RolesPanel onToast={setToast} />
+                    <RolesPanel onToast={showToast} />
                 ) : (
                     <>
                         <form onSubmit={sendInvite} className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
@@ -819,7 +808,7 @@ export default function TeamPage() {
                                             <div className="flex items-center gap-2 min-w-0">
                                                 <Mail className="w-4 h-4 text-gray-400 shrink-0" />
                                                 <span className="font-semibold text-gray-700 truncate">{inv.email}</span>
-                                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${ROLE_BADGE_STYLE}`}>
+                                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${ROLE_BADGE_STYLE}`}>
                                                     {inv.roleName}
                                                 </span>
                                             </div>
@@ -831,10 +820,10 @@ export default function TeamPage() {
                         </form>
 
                         <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6">
-                            <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden self-start">
+                            <div className="rounded-lg border border-gray-200 bg-white overflow-hidden self-start">
                                 <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-2">
                                     <Users className="w-4 h-4 text-gray-400" />
-                                    <span className="text-sm font-black text-gray-800">{tm.members}</span>
+                                    <span className="text-sm font-bold text-gray-800">{tm.members}</span>
                                     <span className="text-xs text-gray-400">· {members.length}</span>
                                 </div>
                                 {loading ? (
@@ -862,7 +851,7 @@ export default function TeamPage() {
                                                     </p>
                                                 </div>
                                                 <div className="flex items-center gap-2 shrink-0">
-                                                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${m.isOwner ? OWNER_BADGE_STYLE : ROLE_BADGE_STYLE}`}>
+                                                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${m.isOwner ? OWNER_BADGE_STYLE : ROLE_BADGE_STYLE}`}>
                                                         {m.roleName}
                                                     </span>
                                                     <ChevronRight className="w-4 h-4 text-gray-300" />
@@ -873,12 +862,12 @@ export default function TeamPage() {
                                 )}
                             </div>
 
-                            <div className="rounded-2xl border border-gray-200 bg-[#f9fafb] p-5 min-h-[300px]">
+                            <div className="rounded-lg border border-gray-200 bg-canvas p-5 min-h-[300px]">
                                 {selected ? (
                                     <MemberPanel
                                         userId={selected}
                                         tenantRoles={tenantRoles}
-                                        onToast={setToast}
+                                        onToast={showToast}
                                         onChanged={load}
                                         onClose={() => setSelected(null)}
                                     />
@@ -892,9 +881,6 @@ export default function TeamPage() {
                         </div>
                     </>
                 )}
-            </div>
-
-            <Toast toast={toast} onDismiss={() => setToast(null)} />
-        </div>
+        </PageShell>
     );
 }

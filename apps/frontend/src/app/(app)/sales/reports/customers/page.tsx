@@ -9,6 +9,7 @@ import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell } from '@/components/ui';
 
 interface CustomerRow {
     customer: {
@@ -95,8 +96,7 @@ export default function SalesByCustomerPage() {
     ], [t, locale]);
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.salesReports.customers.title}
                     subtitle={t.salesReports.customers.subtitle}
@@ -109,25 +109,25 @@ export default function SalesByCustomerPage() {
                 />
 
                 <div className="grid md:grid-cols-4 gap-4">
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.totalRevenue}</div>
-                        <div className="text-2xl font-black text-blue-700 mt-2">{formatBDT(Number(summary?.totalRevenue ?? 0), { locale })}</div>
+                        <div className="text-2xl font-bold text-blue-700 mt-2">{formatBDT(Number(summary?.totalRevenue ?? 0), { locale })}</div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.totalOrders}</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">{summary?.totalOrders ?? 0}</div>
+                        <div className="text-2xl font-bold text-gray-900 mt-2">{summary?.totalOrders ?? 0}</div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.customers}</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">{summary?.customerCount ?? 0}</div>
+                        <div className="text-2xl font-bold text-gray-900 mt-2">{summary?.customerCount ?? 0}</div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.avgOrderValue}</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">{formatBDT(Number(summary?.avgOrderValue ?? 0), { locale })}</div>
+                        <div className="text-2xl font-bold text-gray-900 mt-2">{formatBDT(Number(summary?.avgOrderValue ?? 0), { locale })}</div>
                     </div>
                 </div>
 
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap gap-3 items-end">
+                <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
                     <div className="flex flex-col gap-1">
                         <span className="text-xs font-medium text-gray-500">{t.salesReports.common.from}</span>
                         <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
@@ -150,7 +150,7 @@ export default function SalesByCustomerPage() {
                     emptyIcon={<Users className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.salesReports.customers.searchPlaceholder}
                 />
-            </div>
-        </div>
+            
+        </PageShell>
     );
 }

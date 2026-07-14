@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import VoiceNavWidget from '@/components/VoiceNavWidget';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { usePlatformFeatures } from '@/contexts/PlatformFeaturesContext';
 import { useTenantLocales } from '@/contexts/TenantLocaleContext';
 import { useI18n } from '@/lib/i18n';
+import { useDismissable } from '@/hooks/useDismissable';
 
 export default function AppHeaderMobileMenu() {
     const { t } = useI18n();
@@ -15,27 +16,7 @@ export default function AppHeaderMobileMenu() {
     const [open, setOpen] = useState(false);
     const rootRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        if (!open) return;
-
-        const onKey = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') setOpen(false);
-        };
-        const onPointer = (event: MouseEvent) => {
-            if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
-                setOpen(false);
-            }
-        };
-
-        window.addEventListener('keydown', onKey);
-        const id = window.setTimeout(() => document.addEventListener('mousedown', onPointer), 0);
-
-        return () => {
-            window.removeEventListener('keydown', onKey);
-            window.clearTimeout(id);
-            document.removeEventListener('mousedown', onPointer);
-        };
-    }, [open]);
+    useDismissable(rootRef, () => setOpen(false), open);
 
     return (
         <div ref={rootRef} className="relative md:hidden">

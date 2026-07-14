@@ -6,6 +6,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell } from '@/components/ui';
 
 type AiUsageLogEntry = {
     id: string;
@@ -85,7 +86,7 @@ export default function AiCreditsPage() {
     const periodLabel = `${new Date(summary.period_start).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} – ${new Date(summary.period_end).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`;
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px] space-y-4">
+        <PageShell>
             <PageHeader
                 title="AI Credits"
                 subtitle="Track your monthly AI usage and credit balance"
@@ -201,6 +202,6 @@ export default function AiCreditsPage() {
                     </div>
                 )}
             </div>
-        </div>
+        </PageShell>
     );
 }

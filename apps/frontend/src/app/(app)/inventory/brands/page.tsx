@@ -2,11 +2,14 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { Tag, Plus, Pencil, Trash2, X, Upload } from 'lucide-react';
+import { Tag, Plus, Pencil, Trash2, Upload } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
+import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import { Button, Field, Alert } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
@@ -126,7 +129,7 @@ export default function BrandsPage() {
             columnHelper.accessor('name', {
                 header: t.brands.columns.brand,
                 cell: (info) => (
-                    <span className="text-sm font-black text-gray-900">{info.getValue()}</span>
+                    <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>
                 ),
                 size: 200,
             }),
@@ -192,8 +195,7 @@ export default function BrandsPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.brands.title}
                     subtitle={t.brands.subtitle}
@@ -205,20 +207,12 @@ export default function BrandsPage() {
                     )}
                     actions={(
                         <>
-                            <button
-                                onClick={() => setImportOpen(true)}
-                                className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
-                            >
-                                <Upload className="w-4 h-4 mr-1.5" />
+                            <Button variant="secondary" onClick={() => setImportOpen(true)} icon={<Upload className="w-4 h-4" />}>
                                 Import
-                            </button>
-                            <button
-                                onClick={openCreate}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                            >
-                                <Plus className="w-4 h-4 mr-2" />
+                            </Button>
+                            <Button onClick={openCreate} icon={<Plus className="w-4 h-4" />}>
                                 {t.brands.newBrand}
-                            </button>
+                            </Button>
                         </>
                     )}
                 />
@@ -233,73 +227,55 @@ export default function BrandsPage() {
                     emptyIcon={<Tag className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.brands.searchPlaceholder}
                 />
-            </div>
 
             {modalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                    <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl">
-                        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                            <h2 className="text-lg font-black tracking-tight">
-                                {editTarget ? t.brands.editBrand : t.brands.newBrand}
-                            </h2>
-                            <button onClick={closeModal} className="p-2 hover:bg-gray-50 rounded-xl text-gray-400">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            {error && (
-                                <div className="p-3 bg-red-50 text-red-600 rounded-xl text-sm font-bold">{error}</div>
-                            )}
-                            <div>
-                                <label className="text-xs font-black uppercase tracking-widest text-gray-500 block mb-1.5">
-                                    {t.common.name} <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    value={form.name}
-                                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                                    placeholder={t.brands.placeholders.name}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 outline-none"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-xs font-black uppercase tracking-widest text-gray-500 block mb-1.5">{t.common.description}</label>
-                                <textarea
-                                    value={form.description}
-                                    onChange={(e) => setForm({ ...form, description: e.target.value })}
-                                    placeholder={t.brands.placeholders.description}
-                                    rows={2}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 outline-none resize-none"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-xs font-black uppercase tracking-widest text-gray-500 block mb-1.5">{t.brands.columns.website}</label>
-                                <input
-                                    type="url"
-                                    value={form.website_url}
-                                    onChange={(e) => setForm({ ...form, website_url: e.target.value })}
-                                    placeholder={t.brands.placeholders.website}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 outline-none"
-                                />
-                            </div>
-                        </div>
-                        <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
-                            <button
-                                onClick={closeModal}
-                                className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gray-50"
-                            >
-                                {t.common.cancel}
-                            </button>
-                            <button
-                                onClick={handleSave}
-                                disabled={saving}
-                                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-md disabled:opacity-50"
-                            >
-                                {saving ? t.brands.saving : editTarget ? t.common.saveChanges : t.common.create}
-                            </button>
-                        </div>
+                <ModalShell size="sm" onBackdropClick={closeModal}>
+                    <ModalHeader
+                        title={editTarget ? t.brands.editBrand : t.brands.newBrand}
+                        onClose={closeModal}
+                    />
+                    <div className="p-6 space-y-4 overflow-y-auto">
+                        {error && <Alert tone="danger">{error}</Alert>}
+                        <Field label={t.common.name} required htmlFor="brand-name">
+                            <input
+                                id="brand-name"
+                                type="text"
+                                value={form.name}
+                                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                                placeholder={t.brands.placeholders.name}
+                                className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white"
+                            />
+                        </Field>
+                        <Field label={t.common.description} htmlFor="brand-description">
+                            <textarea
+                                id="brand-description"
+                                value={form.description}
+                                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                                placeholder={t.brands.placeholders.description}
+                                rows={2}
+                                className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white resize-none"
+                            />
+                        </Field>
+                        <Field label={t.brands.columns.website} htmlFor="brand-website">
+                            <input
+                                id="brand-website"
+                                type="url"
+                                value={form.website_url}
+                                onChange={(e) => setForm({ ...form, website_url: e.target.value })}
+                                placeholder={t.brands.placeholders.website}
+                                className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white"
+                            />
+                        </Field>
                     </div>
-                </div>
+                    <ModalFooter>
+                        <Button variant="secondary" onClick={closeModal}>
+                            {t.common.cancel}
+                        </Button>
+                        <Button onClick={handleSave} disabled={saving} loading={saving}>
+                            {editTarget ? t.common.saveChanges : t.common.create}
+                        </Button>
+                    </ModalFooter>
+                </ModalShell>
             )}
 
             <ImportDialog
@@ -312,29 +288,23 @@ export default function BrandsPage() {
             />
 
             {deleteId && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                    <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 space-y-4">
-                        <h2 className="text-lg font-black tracking-tight">{t.brands.deleteTitle}</h2>
+                <ModalShell size="sm" onBackdropClick={() => setDeleteId(null)}>
+                    <ModalHeader title={t.brands.deleteTitle} onClose={() => setDeleteId(null)} />
+                    <div className="p-6">
                         <p className="text-sm text-gray-500">
                             {t.brands.deleteDescription}
                         </p>
-                        <div className="flex justify-end gap-3 pt-2">
-                            <button
-                                onClick={() => setDeleteId(null)}
-                                className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gray-50"
-                            >
-                                {t.common.cancel}
-                            </button>
-                            <button
-                                onClick={() => handleDelete(deleteId)}
-                                className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-md"
-                            >
-                                {t.common.delete}
-                            </button>
-                        </div>
                     </div>
-                </div>
+                    <ModalFooter>
+                        <Button variant="secondary" onClick={() => setDeleteId(null)}>
+                            {t.common.cancel}
+                        </Button>
+                        <Button variant="danger" onClick={() => handleDelete(deleteId)}>
+                            {t.common.delete}
+                        </Button>
+                    </ModalFooter>
+                </ModalShell>
             )}
-        </div>
+        </PageShell>
     );
 }

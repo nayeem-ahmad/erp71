@@ -26,6 +26,11 @@ jest.mock('lucide-react', () => ({
     Calculator: () => <span data-testid="icon-calculator" />,
     TrendingUp: () => <span data-testid="icon-trending-up" />,
     TrendingDown: () => <span data-testid="icon-trending-down" />,
+    // Used by shared ui primitives (Alert, Button loading spinner) rendered by this page's modals.
+    AlertTriangle: () => <span data-testid="icon-alert-triangle" />,
+    Info: () => <span data-testid="icon-info" />,
+    XCircle: () => <span data-testid="icon-xcircle" />,
+    Loader2: () => <span data-testid="icon-loader" />,
 }));
 
 // fetchWithAuth already parses the response and unwraps the `{ data: T }`

@@ -50,6 +50,7 @@ export const crmHrMessages = {
             cannotEditConverted: "রূপান্তরিত লিড সম্পাদনা করা যায় না।",
             deleteConfirm: "এই লিড মুছবেন?",
             validation: {
+                nameRequired: "নাম আবশ্যক।",
                 invalidEmail: "সঠিক ইমেইল ঠিকানা দিন।",
                 lostReasonRequired: "এই লিড হারানোর কারণ উল্লেখ করুন।",
             },

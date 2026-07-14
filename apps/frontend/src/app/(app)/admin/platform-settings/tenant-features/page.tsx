@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell, Button } from '@/components/ui';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { fetchWithAuth } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 
 type FeatureSettings = {
@@ -67,24 +69,6 @@ function FeatureSwitch({
     );
 }
 
-type Toast = { type: 'success' | 'error'; message: string } | null;
-
-function ToastBanner({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
-    useEffect(() => {
-        if (!toast) return;
-        const t = setTimeout(onDismiss, 4000);
-        return () => clearTimeout(t);
-    }, [toast, onDismiss]);
-    if (!toast) return null;
-    const isOk = toast.type === 'success';
-    return (
-        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl px-4 py-3 shadow-lg border text-sm font-semibold ${isOk ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
-            {isOk ? <CheckCircle className="w-4 h-4 text-green-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
-            {toast.message}
-        </div>
-    );
-}
-
 export default function PlatformTenantFeaturesPage() {
     const { t } = useI18n();
     const m = t.admin.platformSettings.tenantFeatures;
@@ -92,7 +76,6 @@ export default function PlatformTenantFeaturesPage() {
     const [settings, setSettings] = useState<FeatureSettings>(DEFAULTS);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [toast, setToast] = useState<Toast>(null);
 
     useEffect(() => {
         fetchWithAuth('/admin/platform-settings/general')
@@ -105,7 +88,7 @@ export default function PlatformTenantFeaturesPage() {
                     manufacturing_enabled: d.manufacturing_enabled ?? DEFAULTS.manufacturing_enabled,
                 });
             })
-            .catch(() => setToast({ type: 'error', message: c.loadFailed }))
+            .catch(() => toast.error(c.loadFailed))
             .finally(() => setLoading(false));
     }, [c.loadFailed]);
 
@@ -121,16 +104,16 @@ export default function PlatformTenantFeaturesPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ settings }),
             });
-            setToast({ type: 'success', message: m.saved });
+            toast.success(m.saved);
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message ?? c.saveFailed });
+            toast.error(e.message ?? c.saveFailed);
         } finally {
             setSaving(false);
         }
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-2xl mx-auto space-y-6">
                 <PageHeader
                     title={m.title}
@@ -149,7 +132,7 @@ export default function PlatformTenantFeaturesPage() {
                         <Loader2 className="w-4 h-4 animate-spin" /> {c.loading}
                     </div>
                 ) : (
-                    <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
+                    <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-5">
                         <p className="text-xs text-gray-500">{m.hint}</p>
                         {FEATURE_TOGGLES.map(({ key, labelKey }) => {
                             const feature = m[labelKey];
@@ -166,20 +149,14 @@ export default function PlatformTenantFeaturesPage() {
                         })}
 
                         <div className="pt-2">
-                            <button
-                                onClick={handleSave}
-                                disabled={saving}
-                                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
-                            >
-                                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                            <Button onClick={handleSave} loading={saving} size="md">
                                 {saving ? c.saving : c.saveSettings}
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 )}
             </div>
 
-            <ToastBanner toast={toast} onDismiss={() => setToast(null)} />
-        </div>
+        </PageShell>
     );
 }

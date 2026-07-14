@@ -7,6 +7,7 @@ import { ArrowRightLeft, Plus, Truck } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { PostingBadge } from '@/components/PostingBadge';
+import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
@@ -125,7 +126,7 @@ export default function InventoryTransfersPage() {
         () => [
             columnHelper.accessor('transfer_number', {
                 header: t.inventoryTransfers.columns.transferNumber,
-                cell: (info) => <span className="text-sm font-black text-gray-900">{info.getValue()}</span>,
+                cell: (info) => <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>,
                 size: 150,
             }),
             columnHelper.accessor((row) => row.sourceWarehouse?.name || '-', {
@@ -140,7 +141,7 @@ export default function InventoryTransfersPage() {
             }),
             columnHelper.accessor('status', {
                 header: t.common.status,
-                cell: (info) => <span className="text-xs font-black uppercase tracking-widest text-blue-700">{info.getValue()}</span>,
+                cell: (info) => <span className="text-xs font-bold uppercase tracking-widest text-blue-700">{info.getValue()}</span>,
                 size: 140,
             }),
             columnHelper.accessor((row) => row.items.map((item) => item.product?.name).filter(Boolean).join(', '), {
@@ -174,7 +175,7 @@ export default function InventoryTransfersPage() {
                 id: 'actions',
                 header: t.common.actions,
                 cell: (info) => (
-                    <Link href={`/inventory/transfers/${info.row.original.id}`} className="text-sm font-black text-blue-700 hover:text-blue-900">
+                    <Link href={`/inventory/transfers/${info.row.original.id}`} className="text-sm font-bold text-blue-700 hover:text-blue-900">
                         {t.common.view}
                     </Link>
                 ),
@@ -185,8 +186,7 @@ export default function InventoryTransfersPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.inventoryTransfers.title}
                     subtitle={t.inventoryTransfers.subtitle}
@@ -207,7 +207,7 @@ export default function InventoryTransfersPage() {
                     )}
                 />
 
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 grid md:grid-cols-5 gap-3 items-end">
+                <div className="bg-white border border-gray-100 rounded-lg p-4 grid md:grid-cols-5 gap-3 items-end">
                     <select value={sourceWarehouseId} onChange={(e) => setSourceWarehouseId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                         <option value="">{t.inventoryTransfers.allSources}</option>
                         {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
@@ -224,10 +224,10 @@ export default function InventoryTransfersPage() {
                     <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" />
                 </div>
 
-                <form onSubmit={handleCreate} className="bg-white border border-gray-100 rounded-2xl p-6 space-y-4">
+                <form onSubmit={handleCreate} className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
                     <div className="flex items-center gap-2">
                         <Truck className="w-5 h-5 text-blue-600" />
-                        <h2 className="font-black text-lg">{t.inventoryTransfers.newTransfer}</h2>
+                        <h2 className="font-bold text-lg">{t.inventoryTransfers.newTransfer}</h2>
                     </div>
                     {message ? <div className="text-sm font-bold text-gray-700 bg-gray-50 rounded-xl px-4 py-3">{message}</div> : null}
                     <div className="grid md:grid-cols-4 gap-4">
@@ -283,7 +283,7 @@ export default function InventoryTransfersPage() {
                         <button type="button" onClick={() => setForm((current: any) => ({ ...current, items: [...current.items, { productId: '', quantity: 1 }] }))} className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center">
                             <Plus className="w-4 h-4 mr-2" /> {t.inventoryTransfers.addLine}
                         </button>
-                        <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200">
+                        <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-sm">
                             <ArrowRightLeft className="w-4 h-4 mr-2" /> {t.inventoryTransfers.createTransfer}
                         </button>
                     </div>
@@ -299,7 +299,6 @@ export default function InventoryTransfersPage() {
                     emptyIcon={<Truck className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.inventoryTransfers.searchPlaceholder}
                 />
-            </div>
-        </div>
+    </PageShell>
     );
 }

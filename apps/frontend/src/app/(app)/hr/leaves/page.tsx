@@ -9,6 +9,8 @@ import { DataTable } from '@/components/data-table';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell, Button, Field, Input, Select, FormFooter, Alert } from '@/components/ui';
+import ModalShell, { ModalHeader } from '@/components/ModalShell';
 
 interface Employee { id: string; name: string; employee_code: string; }
 interface LeaveType { id: string; name: string; days_per_year: number; }
@@ -192,7 +194,7 @@ export default function LeavesPage() {
                     const req = info.row.original;
                     return (
                         <div>
-                            <span className="block text-sm font-black text-gray-900">{req.employee?.name ?? '—'}</span>
+                            <span className="block text-sm font-bold text-gray-900">{req.employee?.name ?? '—'}</span>
                             <span className="block text-xs text-gray-400 font-mono">{req.employee?.employee_code ?? ''}</span>
                         </div>
                     );
@@ -232,7 +234,7 @@ export default function LeavesPage() {
                     const status = info.getValue();
                     const cls = REQUEST_STATUS_COLORS[status] ?? 'bg-gray-100 text-gray-500 border-gray-200';
                     return (
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${cls}`}>
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${cls}`}>
                             {status}
                         </span>
                     );
@@ -298,8 +300,7 @@ export default function LeavesPage() {
     ], [t]);
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.leaves.title}
                     subtitle={t.leaves.subtitle}
@@ -310,13 +311,9 @@ export default function LeavesPage() {
                         'hr',
                     )}
                     actions={tab === 'requests' ? (
-                        <button
-                            onClick={() => setShowRequestModal(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                        >
-                            <Plus className="w-4 h-4 mr-2" />
+                        <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setShowRequestModal(true)}>
                             {t.leaves.newRequest}
-                        </button>
+                        </Button>
                     ) : undefined}
                 />
 
@@ -326,9 +323,9 @@ export default function LeavesPage() {
                         <button
                             key={tabKey}
                             onClick={() => setTab(tabKey)}
-                            className={`px-4 py-2.5 text-sm font-black uppercase tracking-widest border-b-2 transition-colors ${
+                            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
                                 tab === tabKey
-                                    ? 'border-blue-600 text-blue-600'
+                                    ? 'border-primary text-primary'
                                     : 'border-transparent text-gray-400 hover:text-gray-700'
                             }`}
                         >
@@ -341,7 +338,7 @@ export default function LeavesPage() {
                 {tab === 'requests' && (
                     <>
                         {/* Filters */}
-                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                        <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-4">
                             <div className="flex flex-wrap gap-3 items-end">
                                 <div className="space-y-1">
                                     <label className="text-xs font-medium text-gray-500 block">{t.leaves.columns.status}</label>
@@ -393,51 +390,42 @@ export default function LeavesPage() {
                 {tab === 'types' && (
                     <div className="space-y-6">
                         {/* Add leave type form */}
-                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                            <h2 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-4">{t.leaves.addLeaveType}</h2>
-                            {typeError && (
-                                <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-sm font-bold border border-red-100">
-                                    {typeError}
-                                </div>
-                            )}
+                        <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-4">
+                            <h2 className="text-sm font-semibold text-gray-900 mb-4">{t.leaves.addLeaveType}</h2>
+                            {typeError && <Alert tone="danger" className="mb-4">{typeError}</Alert>}
                             <form onSubmit={handleCreateType} className="flex gap-3 items-end">
-                                <div className="flex-1 space-y-1.5">
-                                    <label className="text-xs font-black uppercase tracking-widest text-gray-400 block">{t.leaves.name}</label>
-                                    <input
-                                        required
-                                        type="text"
-                                        value={typeForm.name}
-                                        onChange={(e) => setTypeForm({ ...typeForm, name: e.target.value })}
-                                        placeholder={t.leaves.placeholders.leaveTypeName}
-                                        className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 text-sm font-bold text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
-                                    />
+                                <div className="flex-1">
+                                    <Field label={t.leaves.name} required>
+                                        <Input
+                                            required
+                                            type="text"
+                                            value={typeForm.name}
+                                            onChange={(e) => setTypeForm({ ...typeForm, name: e.target.value })}
+                                            placeholder={t.leaves.placeholders.leaveTypeName}
+                                        />
+                                    </Field>
                                 </div>
-                                <div className="w-40 space-y-1.5">
-                                    <label className="text-xs font-black uppercase tracking-widest text-gray-400 block">{t.leaves.columns.daysPerYear}</label>
-                                    <input
-                                        required
-                                        type="number"
-                                        min="0"
-                                        step="0.5"
-                                        value={typeForm.days_per_year}
-                                        onChange={(e) => setTypeForm({ ...typeForm, days_per_year: e.target.value })}
-                                        placeholder={t.leaves.placeholders.daysPerYear}
-                                        className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 text-sm font-bold text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
-                                    />
+                                <div className="w-40">
+                                    <Field label={t.leaves.columns.daysPerYear} required>
+                                        <Input
+                                            required
+                                            type="number"
+                                            min="0"
+                                            step="0.5"
+                                            value={typeForm.days_per_year}
+                                            onChange={(e) => setTypeForm({ ...typeForm, days_per_year: e.target.value })}
+                                            placeholder={t.leaves.placeholders.daysPerYear}
+                                        />
+                                    </Field>
                                 </div>
-                                <button
-                                    type="submit"
-                                    disabled={submittingType}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-xl font-bold text-sm flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 disabled:opacity-50"
-                                >
-                                    <Plus className="w-4 h-4 mr-1.5" />
+                                <Button type="submit" variant="primary" loading={submittingType} icon={<Plus className="w-4 h-4" />}>
                                     {t.leaves.add}
-                                </button>
+                                </Button>
                             </form>
                         </div>
 
                         {/* Leave types list */}
-                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
                             {loadingTypes ? (
                                 <div className="p-8 text-center text-gray-400 font-bold text-sm">{t.common.loading}</div>
                             ) : leaveTypes.length === 0 ? (
@@ -476,127 +464,99 @@ export default function LeavesPage() {
                         </div>
                     </div>
                 )}
-            </div>
 
             {/* New Leave Request Modal */}
             {showRequestModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
-                        <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-black tracking-tight">{t.leaves.newLeaveRequest}</h2>
-                            <button
-                                onClick={() => { setShowRequestModal(false); setRequestForm(EMPTY_REQUEST_FORM); setReqError(''); }}
-                                className="text-gray-400 hover:text-gray-700 transition-colors text-xl font-bold leading-none"
+                <ModalShell size="sm" onBackdropClick={() => { setShowRequestModal(false); setRequestForm(EMPTY_REQUEST_FORM); setReqError(''); }}>
+                    <ModalHeader
+                        title={t.leaves.newLeaveRequest}
+                        onClose={() => { setShowRequestModal(false); setRequestForm(EMPTY_REQUEST_FORM); setReqError(''); }}
+                    />
+
+                    <form onSubmit={handleCreateRequest} className="p-4 space-y-4 overflow-y-auto">
+                        {reqError && <Alert tone="danger">{reqError}</Alert>}
+
+                        <Field label={t.leaves.columns.employee} required>
+                            <Select
+                                required
+                                value={requestForm.employee_id}
+                                onChange={(e) => setRequestForm({ ...requestForm, employee_id: e.target.value })}
                             >
-                                ×
-                            </button>
+                                <option value="">{t.leaves.selectEmployee}</option>
+                                {employees.map((emp) => (
+                                    <option key={emp.id} value={emp.id}>{emp.name} ({emp.employee_code})</option>
+                                ))}
+                            </Select>
+                        </Field>
+
+                        <Field label={t.leaves.columns.leaveType} required>
+                            <Select
+                                required
+                                value={requestForm.leave_type_id}
+                                onChange={(e) => setRequestForm({ ...requestForm, leave_type_id: e.target.value })}
+                            >
+                                <option value="">{t.leaves.selectLeaveType}</option>
+                                {leaveTypes.map((lt) => (
+                                    <option key={lt.id} value={lt.id}>{lt.name} ({lt.days_per_year} {t.leaves.daysPerYearSuffix})</option>
+                                ))}
+                            </Select>
+                        </Field>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <Field label={t.leaves.columns.startDate} required>
+                                <Input
+                                    required
+                                    type="date"
+                                    value={requestForm.start_date}
+                                    onChange={(e) => setRequestForm({ ...requestForm, start_date: e.target.value })}
+                                />
+                            </Field>
+                            <Field label={t.leaves.columns.endDate} required>
+                                <Input
+                                    required
+                                    type="date"
+                                    value={requestForm.end_date}
+                                    onChange={(e) => setRequestForm({ ...requestForm, end_date: e.target.value })}
+                                />
+                            </Field>
                         </div>
 
-                        {reqError && (
-                            <div className="p-3 bg-red-50 text-red-600 rounded-xl text-sm font-bold border border-red-100">
-                                {reqError}
-                            </div>
-                        )}
+                        <Field label={t.leaves.numberOfDays} required>
+                            <Input
+                                required
+                                type="number"
+                                min="0.5"
+                                step="0.5"
+                                value={requestForm.days}
+                                onChange={(e) => setRequestForm({ ...requestForm, days: e.target.value })}
+                                placeholder={t.leaves.placeholders.numberOfDays}
+                            />
+                        </Field>
 
-                        <form onSubmit={handleCreateRequest} className="space-y-4">
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-black uppercase tracking-widest text-gray-400 block">{t.leaves.columns.employee}</label>
-                                <select
-                                    required
-                                    value={requestForm.employee_id}
-                                    onChange={(e) => setRequestForm({ ...requestForm, employee_id: e.target.value })}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 text-sm font-bold text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
-                                >
-                                    <option value="">{t.leaves.selectEmployee}</option>
-                                    {employees.map((emp) => (
-                                        <option key={emp.id} value={emp.id}>{emp.name} ({emp.employee_code})</option>
-                                    ))}
-                                </select>
-                            </div>
+                        <Field label={t.leaves.columns.reason} hint={`(${t.common.optional})`}>
+                            <Input
+                                type="text"
+                                value={requestForm.reason}
+                                onChange={(e) => setRequestForm({ ...requestForm, reason: e.target.value })}
+                                placeholder={t.common.notes}
+                            />
+                        </Field>
 
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-black uppercase tracking-widest text-gray-400 block">{t.leaves.columns.leaveType}</label>
-                                <select
-                                    required
-                                    value={requestForm.leave_type_id}
-                                    onChange={(e) => setRequestForm({ ...requestForm, leave_type_id: e.target.value })}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 text-sm font-bold text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
-                                >
-                                    <option value="">{t.leaves.selectLeaveType}</option>
-                                    {leaveTypes.map((lt) => (
-                                        <option key={lt.id} value={lt.id}>{lt.name} ({lt.days_per_year} {t.leaves.daysPerYearSuffix})</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-black uppercase tracking-widest text-gray-400 block">{t.leaves.columns.startDate}</label>
-                                    <input
-                                        required
-                                        type="date"
-                                        value={requestForm.start_date}
-                                        onChange={(e) => setRequestForm({ ...requestForm, start_date: e.target.value })}
-                                        className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 text-sm font-bold text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-black uppercase tracking-widest text-gray-400 block">{t.leaves.columns.endDate}</label>
-                                    <input
-                                        required
-                                        type="date"
-                                        value={requestForm.end_date}
-                                        onChange={(e) => setRequestForm({ ...requestForm, end_date: e.target.value })}
-                                        className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 text-sm font-bold text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-black uppercase tracking-widest text-gray-400 block">{t.leaves.numberOfDays}</label>
-                                <input
-                                    required
-                                    type="number"
-                                    min="0.5"
-                                    step="0.5"
-                                    value={requestForm.days}
-                                    onChange={(e) => setRequestForm({ ...requestForm, days: e.target.value })}
-                                    placeholder={t.leaves.placeholders.numberOfDays}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 text-sm font-bold text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
-                                />
-                            </div>
-
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-black uppercase tracking-widest text-gray-400 block">{t.leaves.columns.reason} <span className="text-gray-300 font-normal normal-case">({t.common.optional})</span></label>
-                                <input
-                                    type="text"
-                                    value={requestForm.reason}
-                                    onChange={(e) => setRequestForm({ ...requestForm, reason: e.target.value })}
-                                    placeholder={t.common.notes}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 text-sm text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
-                                />
-                            </div>
-
-                            <div className="pt-2 flex gap-3 justify-end">
-                                <button
-                                    type="button"
-                                    onClick={() => { setShowRequestModal(false); setRequestForm(EMPTY_REQUEST_FORM); setReqError(''); }}
-                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-100 transition-all"
-                                >
-                                    {t.common.cancel}
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={submittingReq}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 disabled:opacity-50"
-                                >
-                                    {submittingReq ? t.leaves.submittingRequest : t.leaves.submitRequest}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+                        <FormFooter>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => { setShowRequestModal(false); setRequestForm(EMPTY_REQUEST_FORM); setReqError(''); }}
+                            >
+                                {t.common.cancel}
+                            </Button>
+                            <Button type="submit" variant="primary" loading={submittingReq}>
+                                {submittingReq ? t.leaves.submittingRequest : t.leaves.submitRequest}
+                            </Button>
+                        </FormFooter>
+                    </form>
+                </ModalShell>
             )}
-        </div>
+        </PageShell>
     );
 }

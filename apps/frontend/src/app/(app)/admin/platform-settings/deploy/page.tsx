@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, CheckCircle, XCircle, Rocket, RefreshCw } from 'lucide-react';
+import { Loader2, CheckCircle, Rocket, RefreshCw } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell, Button } from '@/components/ui';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { fetchWithAuth } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 
 type DeployRun = {
@@ -25,28 +27,9 @@ type DeployStatus = {
     lastRun: DeployRun | null;
 };
 
-type Toast = { type: 'success' | 'error'; message: string } | null;
-
 /** A deploy run that is still in flight (no terminal conclusion yet). */
 function isRunActive(run: DeployRun | null): boolean {
     return !!run && run.status !== 'completed';
-}
-
-function ToastBanner({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
-    useEffect(() => {
-        if (!toast) return;
-        const t = setTimeout(onDismiss, 4000);
-        return () => clearTimeout(t);
-    }, [toast, onDismiss]);
-
-    if (!toast) return null;
-    const isOk = toast.type === 'success';
-    return (
-        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl px-4 py-3 shadow-lg border text-sm font-semibold ${isOk ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
-            {isOk ? <CheckCircle className="w-4 h-4 text-green-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
-            {toast.message}
-        </div>
-    );
 }
 
 function sha(short: string | null): string {
@@ -65,14 +48,13 @@ export default function ProductionDeployPage() {
     const [status, setStatus] = useState<DeployStatus | null>(null);
     const [loading, setLoading] = useState(true);
     const [deploying, setDeploying] = useState(false);
-    const [toast, setToast] = useState<Toast>(null);
 
     const load = useCallback(async () => {
         try {
             const d = (await fetchWithAuth('/admin/deploy/status')) as DeployStatus;
             setStatus(d);
         } catch {
-            setToast({ type: 'error', message: 'Failed to load deploy status.' });
+            toast.error('Failed to load deploy status.');
         } finally {
             setLoading(false);
         }
@@ -98,11 +80,11 @@ export default function ProductionDeployPage() {
         setDeploying(true);
         try {
             await fetchWithAuth('/admin/deploy', { method: 'POST' });
-            setToast({ type: 'success', message: 'Production deploy triggered.' });
+            toast.success('Production deploy triggered.');
             // Give GitHub a moment to register the run, then refresh.
             setTimeout(load, 2500);
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message ?? 'Failed to trigger deploy.' });
+            toast.error(e.message ?? 'Failed to trigger deploy.');
         } finally {
             setDeploying(false);
         }
@@ -114,9 +96,8 @@ export default function ProductionDeployPage() {
     const upToDate = ahead === 0;
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="max-w-2xl mx-auto space-y-6">
-                <PageHeader
+        <PageShell maxWidth="narrow">
+            <PageHeader
                     title="Production Deploy"
                     breadcrumbs={nestedPageBreadcrumbs(
                         t.dashboardHome.breadcrumbHome,
@@ -127,7 +108,7 @@ export default function ProductionDeployPage() {
                     )}
                 />
 
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                     <strong>Ships to real users.</strong> This rebuilds and restarts the production stack on the VPS from the
                     latest <code>{status?.productionBranch ?? 'main'}</code>. Feedback Automation auto-promotes green work to{' '}
                     <code>{status?.productionBranch ?? 'main'}</code>, but it never deploys — that is this button.
@@ -138,7 +119,7 @@ export default function ProductionDeployPage() {
                         <Loader2 className="w-4 h-4 animate-spin" /> Loading…
                     </div>
                 ) : (
-                    <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
+                    <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-5">
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Live in production</p>
@@ -185,26 +166,21 @@ export default function ProductionDeployPage() {
                         </div>
 
                         <div className="flex items-center gap-3 pt-1">
-                            <button
+                            <Button
                                 onClick={handleDeploy}
                                 disabled={deploying || active}
-                                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
+                                loading={deploying || active}
+                                icon={!(deploying || active) ? <Rocket className="w-4 h-4" /> : undefined}
+                                size="md"
                             >
-                                {deploying || active ? <Loader2 className="w-4 h-4 animate-spin" /> : <Rocket className="w-4 h-4" />}
                                 {active ? 'Deploy running…' : deploying ? 'Triggering…' : 'Deploy to Production'}
-                            </button>
-                            <button
-                                onClick={load}
-                                className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-gray-600 hover:border-gray-300 transition-colors"
-                            >
-                                <RefreshCw className="w-4 h-4" /> Refresh
-                            </button>
+                            </Button>
+                            <Button onClick={load} variant="secondary" icon={<RefreshCw className="w-4 h-4" />} size="md">
+                                Refresh
+                            </Button>
                         </div>
                     </div>
                 )}
-            </div>
-
-            <ToastBanner toast={toast} onDismiss={() => setToast(null)} />
-        </div>
+        </PageShell>
     );
 }

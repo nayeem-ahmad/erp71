@@ -8,6 +8,7 @@ import { HelpTooltip } from '@/components/HelpTooltip';
 import { STOCK_TAKES_FIELD_HELP, STOCK_TAKE_DETAIL_HELP } from '@/lib/help/contextual-help';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
+import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
@@ -111,7 +112,7 @@ export default function StockTakeDetailPage() {
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-[1300px] mx-auto space-y-6">
                 <PageHeader
                     title={(
@@ -145,7 +146,7 @@ export default function StockTakeDetailPage() {
                                     {t.inventoryStockTakeDetail.returnToCounting}
                                 </button>
                             ) : null}
-                            <button disabled={!canPost} onClick={() => void handlePost()} className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-emerald-200 disabled:shadow-none">
+                            <button disabled={!canPost} onClick={() => void handlePost()} className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-sm disabled:shadow-none">
                                 <CheckCircle2 className="w-4 h-4 mr-2" />
                                 <span className="inline-flex items-center gap-1.5">
                                     {t.inventoryStockTakeDetail.postSession}
@@ -161,38 +162,38 @@ export default function StockTakeDetailPage() {
                 <ContextualHelpPanel {...STOCK_TAKE_DETAIL_HELP} />
 
                 <div className="grid md:grid-cols-4 gap-4">
-                    <div className="bg-white border border-gray-100 rounded-2xl p-4">
+                    <div className="bg-white border border-gray-100 rounded-lg p-4">
                         <div className="text-xs font-medium text-gray-500">{t.inventoryStockTakeDetail.approvalThreshold}</div>
-                        <div className="mt-2 text-2xl font-black text-gray-900">{session.summary?.approvalThreshold ?? 0}</div>
+                        <div className="mt-2 text-2xl font-bold text-gray-900">{session.summary?.approvalThreshold ?? 0}</div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-4">
+                    <div className="bg-white border border-gray-100 rounded-lg p-4">
                         <div className="text-xs font-medium text-gray-500">{t.inventoryStockTakeDetail.maxVariance}</div>
-                        <div className="mt-2 text-2xl font-black text-gray-900">{session.summary?.maxVariance ?? 0}</div>
+                        <div className="mt-2 text-2xl font-bold text-gray-900">{session.summary?.maxVariance ?? 0}</div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-4">
+                    <div className="bg-white border border-gray-100 rounded-lg p-4">
                         <div className="text-xs font-medium text-gray-500">{t.inventoryStockTakeDetail.netQuantityImpact}</div>
-                        <div className={`mt-2 text-2xl font-black ${(session.summary?.netQuantityImpact ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{session.summary?.netQuantityImpact ?? 0}</div>
+                        <div className={`mt-2 text-2xl font-bold ${(session.summary?.netQuantityImpact ?? 0) >= 0 ? 'text-emerald-600' : 'text-danger'}`}>{session.summary?.netQuantityImpact ?? 0}</div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-4">
+                    <div className="bg-white border border-gray-100 rounded-lg p-4">
                         <div className="text-xs font-medium text-gray-500">{t.inventoryStockTakeDetail.estimatedValueImpact}</div>
-                        <div className={`mt-2 text-2xl font-black ${(session.summary?.netValueImpact ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatBDT(Number(session.summary?.netValueImpact ?? 0))}</div>
+                        <div className={`mt-2 text-2xl font-bold ${(session.summary?.netValueImpact ?? 0) >= 0 ? 'text-emerald-600' : 'text-danger'}`}>{formatBDT(Number(session.summary?.netValueImpact ?? 0))}</div>
                     </div>
                 </div>
 
                 {requiresReview ? (
-                    <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-sm font-bold text-amber-900">
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm font-bold text-amber-900">
                         {t.inventoryStockTakeDetail.reviewRequired}
                     </div>
                 ) : null}
 
-                <div className="bg-white border border-gray-100 rounded-2xl p-6 space-y-3">
+                <div className="bg-white border border-gray-100 rounded-lg p-6 space-y-3">
                     {session.lines.map((line: any) => {
                         const values = draftCounts[line.product_id] || { countedQuantity: '', reasonId: '', note: '' };
                         const variance = values.countedQuantity === '' ? line.variance_quantity : Number(values.countedQuantity) - line.expected_quantity;
                         return (
                             <div key={line.id} className="grid lg:grid-cols-[1.3fr_140px_140px_220px_1fr] gap-4 items-center rounded-xl bg-gray-50 px-4 py-3">
                                 <div>
-                                    <div className="text-sm font-black text-gray-900">{line.product?.name}</div>
+                                    <div className="text-sm font-bold text-gray-900">{line.product?.name}</div>
                                     <div className="text-xs text-gray-500">
                                         {formatMessage(t.inventoryStockTakeDetail.expected, { qty: line.expected_quantity })}
                                     </div>
@@ -206,7 +207,7 @@ export default function StockTakeDetailPage() {
                                     {reasons.map((reason) => <option key={reason.id} value={reason.id}>{reason.label}</option>)}
                                 </select>
                                 <div className="space-y-2">
-                                    <div className={`text-sm font-black ${variance === 0 ? 'text-gray-500' : variance > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                    <div className={`text-sm font-bold ${variance === 0 ? 'text-gray-500' : variance > 0 ? 'text-emerald-600' : 'text-danger'}`}>
                                         {formatMessage(t.inventoryStockTakeDetail.variance, { value: Number.isFinite(variance) ? variance : '-' })}
                                     </div>
                                     <input value={values.note} onChange={(event) => setDraftCounts((current) => ({ ...current, [line.product_id]: { ...values, note: event.target.value } }))} className="w-full bg-white border border-gray-200 rounded-xl py-2.5 px-4 text-sm font-medium" placeholder={t.inventoryStockTakeDetail.note} />
@@ -216,6 +217,6 @@ export default function StockTakeDetailPage() {
                     })}
                 </div>
             </div>
-        </div>
+    </PageShell>
     );
 }

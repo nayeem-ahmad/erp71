@@ -8,7 +8,7 @@ import AvatarDropdown from '@/components/AvatarDropdown';
 import Sidebar from '@/components/Sidebar';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import DemoSandboxBanner from '@/components/DemoSandboxBanner';
-import FloatingAssistDock from '@/components/FloatingAssistDock';
+import FeedbackWidget from '@/components/FeedbackWidget';
 import VoiceNavWidget from '@/components/VoiceNavWidget';
 import AppHeaderMobileMenu from '@/components/AppHeaderMobileMenu';
 import Toaster from '@/components/Toaster';
@@ -368,7 +368,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <PlatformFeaturesProvider features={effectivePlatformFeatures}>
         <TenantLocaleProvider tenant={tenantLocaleConfig}>
         <TenantLocaleSync tenant={tenantLocaleConfig} />
-        <div className="flex h-dvh min-h-dvh bg-[#f9fafb] font-sans text-[#111827]">
+        <div className="flex h-dvh min-h-dvh bg-canvas font-sans text-gray-900">
             <Sidebar
                 canAccessAccounting={canAccessAccounting}
                 canAccessInventoryReports={canAccessInventoryReports}
@@ -437,6 +437,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                             <LanguageSwitcher />
                         </div>
                         <AppHeaderMobileMenu />
+                        {platformFeatures.feedback ? <FeedbackWidget /> : null}
                         <NotificationBell />
                         <div className="h-8 w-px bg-gray-200 hidden sm:block" />
                         <AvatarDropdown
@@ -532,7 +533,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
 
             <Toaster />
-            {platformFeatures.feedback ? <FloatingAssistDock /> : null}
             <ServiceWorkerRegistrar />
         </div>
         </TenantLocaleProvider>

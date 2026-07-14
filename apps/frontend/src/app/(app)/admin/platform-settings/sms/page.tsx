@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { MessageSquare, Loader2, CheckCircle, XCircle, Send } from 'lucide-react';
+import { Loader2, Send } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell, Button } from '@/components/ui';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { fetchWithAuth } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { useI18n, formatMessage } from '@/lib/i18n';
 
 type SmsSettings = {
@@ -21,25 +23,6 @@ const DEFAULTS: SmsSettings = {
     sender_id: '8809617621294',
     base_url: 'http://bulksmsbd.net/api/smsapi',
 };
-
-type Toast = { type: 'success' | 'error'; message: string } | null;
-
-function ToastBanner({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
-    useEffect(() => {
-        if (!toast) return;
-        const t = setTimeout(onDismiss, 4000);
-        return () => clearTimeout(t);
-    }, [toast, onDismiss]);
-
-    if (!toast) return null;
-    const isOk = toast.type === 'success';
-    return (
-        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl px-4 py-3 shadow-lg border text-sm font-semibold ${isOk ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
-            {isOk ? <CheckCircle className="w-4 h-4 text-green-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
-            {toast.message}
-        </div>
-    );
-}
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
     return (
@@ -60,7 +43,6 @@ export default function PlatformSmsSeetingsPage() {
     const [saving, setSaving] = useState(false);
     const [testPhone, setTestPhone] = useState('');
     const [testing, setTesting] = useState(false);
-    const [toast, setToast] = useState<Toast>(null);
 
     useEffect(() => {
         fetchWithAuth('/admin/platform-settings/sms')
@@ -72,7 +54,7 @@ export default function PlatformSmsSeetingsPage() {
                     base_url: d.base_url ?? DEFAULTS.base_url,
                 });
             })
-            .catch(() => setToast({ type: 'error', message: m.loadFailed }))
+            .catch(() => toast.error(m.loadFailed))
             .finally(() => setLoading(false));
     }, []);
 
@@ -93,9 +75,9 @@ export default function PlatformSmsSeetingsPage() {
                 body: JSON.stringify({ settings: payload }),
             });
             setSettings((prev) => ({ ...prev, api_key: '' }));
-            setToast({ type: 'success', message: m.saved });
+            toast.success(m.saved);
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message ?? c.saveFailed });
+            toast.error(e.message ?? c.saveFailed);
         } finally {
             setSaving(false);
         }
@@ -110,9 +92,9 @@ export default function PlatformSmsSeetingsPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ phone: testPhone }),
             });
-            setToast({ type: 'success', message: formatMessage(m.test.success, { phone: testPhone }) });
+            toast.success(formatMessage(m.test.success, { phone: testPhone }));
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message ?? m.test.failed });
+            toast.error(e.message ?? m.test.failed);
         } finally {
             setTesting(false);
         }
@@ -121,7 +103,7 @@ export default function PlatformSmsSeetingsPage() {
     const inputCls = 'w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition';
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-2xl mx-auto space-y-6">
                 <PageHeader
                     title={m.title}
@@ -139,7 +121,7 @@ export default function PlatformSmsSeetingsPage() {
                         <Loader2 className="w-4 h-4 animate-spin" /> {c.loading}
                     </div>
                 ) : (
-                    <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
+                    <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-5">
                         <Field label={m.provider.label} hint={m.provider.hint}>
                             <select
                                 value={settings.provider}
@@ -183,20 +165,15 @@ export default function PlatformSmsSeetingsPage() {
                         </Field>
 
                         <div className="pt-2 flex gap-3">
-                            <button
-                                onClick={handleSave}
-                                disabled={saving}
-                                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
-                            >
-                                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                            <Button onClick={handleSave} loading={saving} size="md">
                                 {saving ? c.saving : c.saveSettings}
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 )}
 
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
-                    <h2 className="text-sm font-black uppercase tracking-widest text-gray-400">{m.test.title}</h2>
+                <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
+                    <h2 className="text-sm font-medium text-gray-500">{m.test.title}</h2>
                     <div className="flex gap-3">
                         <input
                             type="tel"
@@ -205,20 +182,20 @@ export default function PlatformSmsSeetingsPage() {
                             onChange={(e) => setTestPhone(e.target.value)}
                             className="flex-1 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                         />
-                        <button
+                        <Button
                             onClick={handleTest}
-                            disabled={testing || !testPhone.trim()}
-                            className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
+                            disabled={!testPhone.trim()}
+                            loading={testing}
+                            icon={!testing ? <Send className="w-4 h-4" /> : undefined}
+                            size="md"
                         >
-                            {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                             {testing ? c.sending : c.send}
-                        </button>
+                        </Button>
                     </div>
                     <p className="text-xs text-gray-400">{c.testHint}</p>
                 </div>
             </div>
 
-            <ToastBanner toast={toast} onDismiss={() => setToast(null)} />
-        </div>
+        </PageShell>
     );
 }

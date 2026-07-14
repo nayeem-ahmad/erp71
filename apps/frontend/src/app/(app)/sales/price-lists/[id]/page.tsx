@@ -11,6 +11,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { formatBDT } from '@/lib/format';
+import { PageShell } from '@/components/ui';
 
 interface PriceListItem {
     id: string;
@@ -140,7 +141,7 @@ export default function PriceListDetailPage() {
                     const item = info.row.original;
                     return (
                         <div>
-                            <span className="block text-sm font-black text-gray-900">{item.product.name}</span>
+                            <span className="block text-sm font-bold text-gray-900">{item.product.name}</span>
                             {item.product.sku && <span className="block text-xs text-gray-400">{item.product.sku}</span>}
                         </div>
                     );
@@ -196,7 +197,7 @@ export default function PriceListDetailPage() {
             }),
             columnHelper.accessor('final_price', {
                 header: t.priceLists.finalPrice,
-                cell: (info) => <span className="text-sm font-black text-gray-900">{formatBDT(info.getValue())}</span>,
+                cell: (info) => <span className="text-sm font-bold text-gray-900">{formatBDT(info.getValue())}</span>,
             }),
             columnHelper.display({
                 id: 'actions',
@@ -212,8 +213,7 @@ export default function PriceListDetailPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={listName || t.priceLists.detailTitle}
                     subtitle={t.priceLists.subtitle}
@@ -241,7 +241,7 @@ export default function PriceListDetailPage() {
                     emptyMessage={t.priceLists.emptyMessage}
                     searchPlaceholder={t.priceLists.searchPlaceholder}
                 />
-            </div>
-        </div>
+            
+        </PageShell>
     );
 }

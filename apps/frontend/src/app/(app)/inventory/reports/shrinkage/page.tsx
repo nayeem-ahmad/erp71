@@ -6,6 +6,7 @@ import { AlertTriangle } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
+import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
@@ -90,7 +91,7 @@ export default function ShrinkageReportPage() {
             columnHelper.accessor('quantity', { header: t.inventoryReports.shrinkage.columns.quantityLost, size: 120 }),
             columnHelper.accessor('value', {
                 header: t.inventoryReports.shrinkage.columns.estimatedValue,
-                cell: (info) => <span className="text-sm font-black text-rose-600">{formatBDT(Number(info.getValue()))}</span>,
+                cell: (info) => <span className="text-sm font-bold text-danger">{formatBDT(Number(info.getValue()))}</span>,
                 size: 150,
             }),
         ],
@@ -98,8 +99,7 @@ export default function ShrinkageReportPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.inventoryReports.shrinkage.title}
                     subtitle={t.inventoryReports.shrinkage.subtitleTrack}
@@ -112,22 +112,22 @@ export default function ShrinkageReportPage() {
                 />
 
                 <div className="grid md:grid-cols-3 gap-4">
-                    <div className="bg-white border border-gray-100 rounded-2xl p-4">
+                    <div className="bg-white border border-gray-100 rounded-lg p-4">
                         <div className="text-xs font-medium text-gray-500">{t.inventoryReports.shrinkage.totalUnitsLost}</div>
-                        <div className="mt-2 text-2xl font-black text-gray-900">{report.summary?.totalQuantity ?? 0}</div>
+                        <div className="mt-2 text-2xl font-bold text-gray-900">{report.summary?.totalQuantity ?? 0}</div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-4">
+                    <div className="bg-white border border-gray-100 rounded-lg p-4">
                         <div className="text-xs font-medium text-gray-500">{t.inventoryReports.shrinkage.estimatedValueLost}</div>
-                        <div className="mt-2 text-2xl font-black text-rose-600">{formatBDT(Number(report.summary?.totalValue ?? 0))}</div>
+                        <div className="mt-2 text-2xl font-bold text-danger">{formatBDT(Number(report.summary?.totalValue ?? 0))}</div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-4">
+                    <div className="bg-white border border-gray-100 rounded-lg p-4">
                         <div className="text-xs font-medium text-gray-500">{t.inventoryReports.shrinkage.topDriver}</div>
-                        <div className="mt-2 text-lg font-black text-gray-900">{report.summary?.topReasons?.[0]?.reasonLabel || t.inventoryReports.shrinkage.noShrinkageLogged}</div>
+                        <div className="mt-2 text-lg font-bold text-gray-900">{report.summary?.topReasons?.[0]?.reasonLabel || t.inventoryReports.shrinkage.noShrinkageLogged}</div>
                         <div className="text-sm text-gray-500">{report.summary?.topReasons?.[0]?.warehouseName || t.inventoryReports.shrinkage.allWarehousesLabel}</div>
                     </div>
                 </div>
 
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 grid md:grid-cols-6 gap-3 items-end">
+                <div className="bg-white border border-gray-100 rounded-lg p-4 grid md:grid-cols-6 gap-3 items-end">
                     <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                         <option value="">{t.inventoryReports.reorder.allWarehouses}</option>
                         {warehouses.map((warehouse: any) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
@@ -158,7 +158,6 @@ export default function ShrinkageReportPage() {
                     emptyIcon={<AlertTriangle className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.inventoryReports.shrinkage.searchPlaceholder}
                 />
-            </div>
-        </div>
+    </PageShell>
     );
 }

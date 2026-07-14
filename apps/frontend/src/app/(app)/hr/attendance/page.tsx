@@ -9,6 +9,8 @@ import { DataTable } from '@/components/data-table';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell, Button, Field, Input, Select, FormGrid, FormFooter, Alert } from '@/components/ui';
+import ModalShell, { ModalHeader } from '@/components/ModalShell';
 
 interface Employee {
     id: string;
@@ -151,7 +153,7 @@ export default function AttendancePage() {
                     const rec = info.row.original;
                     return (
                         <div>
-                            <span className="block text-sm font-black text-gray-900">{rec.employee?.name ?? '—'}</span>
+                            <span className="block text-sm font-bold text-gray-900">{rec.employee?.name ?? '—'}</span>
                             <span className="block text-xs text-gray-400 font-mono">{rec.employee?.employee_code ?? ''}</span>
                         </div>
                     );
@@ -171,7 +173,7 @@ export default function AttendancePage() {
                     const status = info.getValue();
                     const cls = STATUS_COLORS[status] ?? 'bg-gray-100 text-gray-500 border-gray-200';
                     return (
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${cls}`}>
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${cls}`}>
                             {statusLabels[status] ?? status.replace('_', ' ')}
                         </span>
                     );
@@ -215,8 +217,7 @@ export default function AttendancePage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.attendance.title}
                     subtitle={t.attendance.pageSubtitle}
@@ -227,18 +228,14 @@ export default function AttendancePage() {
                         'hr',
                     )}
                     actions={(
-                        <button
-                            onClick={() => setShowModal(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                        >
-                            <Plus className="w-4 h-4 mr-2" />
+                        <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>
                             {t.attendance.logAttendance}
-                        </button>
+                        </Button>
                     )}
                 />
 
                 {/* Filters */}
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-4">
                     <div className="flex flex-wrap gap-3 items-end">
                         <div className="space-y-1">
                             <label className="text-xs font-medium text-gray-500 block">{t.attendance.filters.from}</label>
@@ -287,123 +284,97 @@ export default function AttendancePage() {
                     emptyIcon={<Clock className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.attendance.searchPlaceholder}
                 />
-            </div>
 
             {/* {t.attendance.logAttendance} Modal */}
             {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
-                        <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-black tracking-tight">{t.attendance.logAttendance}</h2>
-                            <button
-                                onClick={() => { setShowModal(false); setForm(EMPTY_FORM); setError(''); }}
-                                className="text-gray-400 hover:text-gray-700 transition-colors text-xl font-bold leading-none"
-                            >
-                                ×
-                            </button>
-                        </div>
+                <ModalShell size="sm" onBackdropClick={() => { setShowModal(false); setForm(EMPTY_FORM); setError(''); }}>
+                    <ModalHeader
+                        title={t.attendance.logAttendance}
+                        onClose={() => { setShowModal(false); setForm(EMPTY_FORM); setError(''); }}
+                    />
 
+                    <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto">
                         {error && (
-                            <div className="p-3 bg-red-50 text-red-600 rounded-xl text-sm font-bold border border-red-100">
-                                {error}
-                            </div>
+                            <Alert tone="danger">{error}</Alert>
                         )}
 
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-black uppercase tracking-widest text-gray-400 block">{t.attendance.modal.employee}</label>
-                                <select
-                                    required
-                                    value={form.employee_id}
-                                    onChange={(e) => setForm({ ...form, employee_id: e.target.value })}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 text-sm font-bold text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
-                                >
-                                    <option value="">{t.attendance.modal.selectEmployee}</option>
-                                    {employees.map((emp) => (
-                                        <option key={emp.id} value={emp.id}>
-                                            {emp.name} ({emp.employee_code})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                        <Field label={t.attendance.modal.employee} required>
+                            <Select
+                                required
+                                value={form.employee_id}
+                                onChange={(e) => setForm({ ...form, employee_id: e.target.value })}
+                            >
+                                <option value="">{t.attendance.modal.selectEmployee}</option>
+                                {employees.map((emp) => (
+                                    <option key={emp.id} value={emp.id}>
+                                        {emp.name} ({emp.employee_code})
+                                    </option>
+                                ))}
+                            </Select>
+                        </Field>
 
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-black uppercase tracking-widest text-gray-400 block">{t.attendance.modal.date}</label>
-                                <input
-                                    required
-                                    type="date"
-                                    value={form.date}
-                                    onChange={(e) => setForm({ ...form, date: e.target.value })}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 text-sm font-bold text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
+                        <Field label={t.attendance.modal.date} required>
+                            <Input
+                                required
+                                type="date"
+                                value={form.date}
+                                onChange={(e) => setForm({ ...form, date: e.target.value })}
+                            />
+                        </Field>
+
+                        <Field label={t.attendance.modal.status}>
+                            <Select
+                                value={form.status}
+                                onChange={(e) => setForm({ ...form, status: e.target.value })}
+                            >
+                                <option value="PRESENT">{t.attendance.statuses.present}</option>
+                                <option value="ABSENT">{t.attendance.statuses.absent}</option>
+                                <option value="HALF_DAY">{t.attendance.statuses.halfDay}</option>
+                                <option value="HOLIDAY">{t.attendance.statuses.holiday}</option>
+                            </Select>
+                        </Field>
+
+                        <FormGrid>
+                            <Field label={t.attendance.modal.clockIn}>
+                                <Input
+                                    type="time"
+                                    value={form.clock_in}
+                                    onChange={(e) => setForm({ ...form, clock_in: e.target.value })}
                                 />
-                            </div>
-
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-black uppercase tracking-widest text-gray-400 block">{t.attendance.modal.status}</label>
-                                <select
-                                    value={form.status}
-                                    onChange={(e) => setForm({ ...form, status: e.target.value })}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 text-sm font-bold text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
-                                >
-                                    <option value="PRESENT">{t.attendance.statuses.present}</option>
-                                    <option value="ABSENT">{t.attendance.statuses.absent}</option>
-                                    <option value="HALF_DAY">{t.attendance.statuses.halfDay}</option>
-                                    <option value="HOLIDAY">{t.attendance.statuses.holiday}</option>
-                                </select>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-black uppercase tracking-widest text-gray-400 block">{t.attendance.modal.clockIn}</label>
-                                    <input
-                                        type="time"
-                                        value={form.clock_in}
-                                        onChange={(e) => setForm({ ...form, clock_in: e.target.value })}
-                                        className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 text-sm font-bold text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-black uppercase tracking-widest text-gray-400 block">{t.attendance.modal.clockOut}</label>
-                                    <input
-                                        type="time"
-                                        value={form.clock_out}
-                                        onChange={(e) => setForm({ ...form, clock_out: e.target.value })}
-                                        className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 text-sm font-bold text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-black uppercase tracking-widest text-gray-400 block">{t.attendance.modal.notes}</label>
-                                <input
-                                    type="text"
-                                    value={form.notes}
-                                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                                    placeholder={t.attendance.modal.notesPlaceholder}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 text-sm text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
+                            </Field>
+                            <Field label={t.attendance.modal.clockOut}>
+                                <Input
+                                    type="time"
+                                    value={form.clock_out}
+                                    onChange={(e) => setForm({ ...form, clock_out: e.target.value })}
                                 />
-                            </div>
+                            </Field>
+                        </FormGrid>
 
-                            <div className="flex justify-end gap-3 pt-1">
-                                <button
-                                    type="button"
-                                    onClick={() => { setShowModal(false); setForm(EMPTY_FORM); setError(''); }}
-                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-100 transition-colors"
-                                >
-                                    {t.common.cancel}
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={submitting}
-                                    className="px-5 py-2.5 rounded-xl font-black text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:translate-y-0"
-                                >
-                                    {submitting ? t.attendance.modal.submitting : t.common.save}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+                        <Field label={t.attendance.modal.notes}>
+                            <Input
+                                type="text"
+                                value={form.notes}
+                                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                                placeholder={t.attendance.modal.notesPlaceholder}
+                            />
+                        </Field>
+
+                        <FormFooter>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => { setShowModal(false); setForm(EMPTY_FORM); setError(''); }}
+                            >
+                                {t.common.cancel}
+                            </Button>
+                            <Button type="submit" variant="primary" loading={submitting}>
+                                {submitting ? t.attendance.modal.submitting : t.common.save}
+                            </Button>
+                        </FormFooter>
+                    </form>
+                </ModalShell>
             )}
-        </div>
+        </PageShell>
     );
 }

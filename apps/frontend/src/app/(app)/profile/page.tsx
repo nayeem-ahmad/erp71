@@ -2,43 +2,24 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Camera, CheckCircle, Eye, EyeOff, Loader2, ShieldCheck, ShieldOff, XCircle } from 'lucide-react';
+import { Camera, Eye, EyeOff, Loader2, ShieldCheck, ShieldOff } from 'lucide-react';
 import { api, fetchWithAuth } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import AvatarCropModal from '@/components/AvatarCropModal';
+import { PageShell } from '@/components/ui';
+import { toast } from '@/lib/toast';
 
 type ToastState = { type: 'success' | 'error'; message: string } | null;
 
 type Tab = 'profile' | 'password' | '2fa' | 'privacy';
 
-function Toast({ toast, onDismiss }: { toast: ToastState; onDismiss: () => void }) {
-    useEffect(() => {
-        if (!toast) return;
-        const timer = setTimeout(onDismiss, 4000);
-        return () => clearTimeout(timer);
-    }, [toast, onDismiss]);
-
-    if (!toast) return null;
-
-    const isSuccess = toast.type === 'success';
-    return (
-        <div
-            className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl px-4 py-3 shadow-lg border text-sm font-semibold ${
-                isSuccess
-                    ? 'bg-green-50 border-green-200 text-green-800'
-                    : 'bg-red-50 border-red-200 text-red-800'
-            }`}
-        >
-            {isSuccess ? (
-                <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-            ) : (
-                <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-            )}
-            {toast.message}
-        </div>
-    );
+/** Forwards local `{type, message}` toast payloads to the global toast store. */
+function showToast(state: ToastState) {
+    if (!state) return;
+    if (state.type === 'success') toast.success(state.message);
+    else toast.error(state.message);
 }
 
 /* ------------------------------------------------------------------ */
@@ -95,7 +76,7 @@ function PrivacyTab({ onToast }: { onToast: (t: ToastState) => void }) {
                     type="button"
                     onClick={handleExport}
                     disabled={exporting}
-                    className="rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 text-left hover:border-blue-300 transition-colors disabled:opacity-60"
+                    className="rounded-lg border border-gray-200 bg-gray-50 px-5 py-4 text-left hover:border-blue-300 transition-colors disabled:opacity-60"
                 >
                     <p className="text-sm font-bold text-gray-900">{t.settings.privacy.downloadData}</p>
                     <p className="mt-1 text-xs text-gray-500">{t.settings.privacy.downloadDesc}</p>
@@ -104,10 +85,10 @@ function PrivacyTab({ onToast }: { onToast: (t: ToastState) => void }) {
                     type="button"
                     onClick={handleDeletionRequest}
                     disabled={requestingDeletion}
-                    className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-left hover:border-rose-300 transition-colors disabled:opacity-60"
+                    className="rounded-lg border border-red-200 bg-danger-light px-5 py-4 text-left hover:border-red-300 transition-colors disabled:opacity-60"
                 >
-                    <p className="text-sm font-bold text-rose-800">{t.settings.privacy.requestDeletion}</p>
-                    <p className="mt-1 text-xs text-rose-700">{t.settings.privacy.deletionDesc}</p>
+                    <p className="text-sm font-bold text-danger-text">{t.settings.privacy.requestDeletion}</p>
+                    <p className="mt-1 text-xs text-danger-text">{t.settings.privacy.deletionDesc}</p>
                 </button>
             </div>
         </div>
@@ -425,7 +406,7 @@ function TwoFATab({
             {/* Step 1 */}
             <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-black flex items-center justify-center flex-shrink-0">
+                    <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
                         1
                     </span>
                     <span className="text-sm font-semibold text-gray-700">{t.settings.twoFactor.step1}</span>
@@ -478,7 +459,7 @@ function TwoFATab({
             {setup && (
                 <div className="space-y-3">
                     <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-black flex items-center justify-center flex-shrink-0">
+                        <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
                             2
                         </span>
                         <span className="text-sm font-semibold text-gray-700">{t.settings.twoFactor.step2}</span>
@@ -528,7 +509,6 @@ export default function ProfilePage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
-    const [toast, setToast] = useState<ToastState>(null);
     const [cropSrc, setCropSrc] = useState<string | null>(null);
     const [cropOpen, setCropOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<Tab>('profile');
@@ -568,7 +548,7 @@ export default function ProfilePage() {
         const file = event.target.files?.[0];
         if (!file) return;
         if (!file.type.startsWith('image/')) {
-            setToast({ type: 'error', message: t.profile.uploadFailed });
+            showToast({ type: 'error', message: t.profile.uploadFailed });
             return;
         }
         const reader = new FileReader();
@@ -588,9 +568,9 @@ export default function ProfilePage() {
             const result: { avatarUrl?: string } = await api.updateProfileAvatar(formData);
             const nextUrl = result?.avatarUrl ?? null;
             setAvatarUrl(nextUrl);
-            setToast({ type: 'success', message: t.profile.uploadSuccess });
+            showToast({ type: 'success', message: t.profile.uploadSuccess });
         } catch (err: any) {
-            setToast({ type: 'error', message: err?.message || t.profile.uploadFailed });
+            showToast({ type: 'error', message: err?.message || t.profile.uploadFailed });
         } finally {
             setUploading(false);
             setCropSrc(null);
@@ -600,7 +580,7 @@ export default function ProfilePage() {
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
         if (!name.trim()) {
-            setToast({ type: 'error', message: t.profile.nameRequired });
+            showToast({ type: 'error', message: t.profile.nameRequired });
             return;
         }
         setSaving(true);
@@ -611,20 +591,24 @@ export default function ProfilePage() {
                 headers: { 'Content-Type': 'application/json' },
             });
             setUser((current: any) => ({ ...current, name: name.trim() }));
-            setToast({ type: 'success', message: t.profile.profileUpdated });
+            showToast({ type: 'success', message: t.profile.profileUpdated });
         } catch (err: any) {
-            setToast({ type: 'error', message: err?.message || t.profile.profileFailed });
+            showToast({ type: 'error', message: err?.message || t.profile.profileFailed });
         } finally {
             setSaving(false);
         }
     };
 
     if (loading) {
-        return <div className="p-8 text-sm text-gray-500">{t.settings.loading}</div>;
+        return (
+            <PageShell>
+                <p className="text-sm text-gray-500">{t.settings.loading}</p>
+            </PageShell>
+        );
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-2xl mx-auto space-y-6">
                 <PageHeader
                     title={t.profile.pageTitle}
@@ -647,7 +631,7 @@ export default function ProfilePage() {
                                     className="w-24 h-24 rounded-full object-cover ring-4 ring-white shadow-md"
                                 />
                             ) : (
-                                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-black ring-4 ring-white shadow-md">
+                                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white text-2xl font-bold ring-4 ring-white shadow-md">
                                     {initials}
                                 </div>
                             )}
@@ -681,7 +665,7 @@ export default function ProfilePage() {
                 </div>
 
                 {/* Tabbed account controls card */}
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
                     {/* Tab bar */}
                     <div className="flex items-center border-b border-gray-100 px-6 gap-1">
                         {tabs.map(({ key, label }) => (
@@ -746,17 +730,17 @@ export default function ProfilePage() {
                             </form>
                         )}
                         {activeTab === 'password' && (
-                            <PasswordTab onToast={setToast} />
+                            <PasswordTab onToast={showToast} />
                         )}
                         {activeTab === '2fa' && (
                             <TwoFATab
                                 twoFAEnabled={twoFAEnabled === true}
-                                onToast={setToast}
+                                onToast={showToast}
                                 onStatusChange={(enabled) => setTwoFAEnabled(enabled)}
                             />
                         )}
                         {activeTab === 'privacy' && (
-                            <PrivacyTab onToast={setToast} />
+                            <PrivacyTab onToast={showToast} />
                         )}
                     </div>
                 </div>
@@ -776,8 +760,6 @@ export default function ProfilePage() {
                     onConfirm={handleCropConfirm}
                 />
             )}
-
-            <Toast toast={toast} onDismiss={() => setToast(null)} />
-        </div>
+        </PageShell>
     );
 }

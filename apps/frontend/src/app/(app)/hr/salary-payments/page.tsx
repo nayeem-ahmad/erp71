@@ -9,6 +9,9 @@ import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { formatBDT, formatDate } from '@/lib/format';
+import { PageShell, Button, Field, Input, Select } from '@/components/ui';
+import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import { toast } from '@/lib/toast';
 
 interface Employee {
     id: string;
@@ -56,7 +59,6 @@ export default function SalaryPaymentsPage() {
     const [employeeFilter, setEmployeeFilter] = useState('');
     const [showForm, setShowForm] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
     const [formEmployeeId, setFormEmployeeId] = useState('');
     const [formAmount, setFormAmount] = useState('');
@@ -112,7 +114,7 @@ export default function SalaryPaymentsPage() {
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formEmployeeId || !formAmount || !formPayPeriod) {
-            setToast({ type: 'error', message: 'Employee, amount and pay period are required.' });
+            toast.error('Employee, amount and pay period are required.');
             return;
         }
         setSaving(true);
@@ -125,12 +127,12 @@ export default function SalaryPaymentsPage() {
                 paymentMethod: formPaymentMethod,
                 notes: formNotes.trim() || undefined,
             });
-            setToast({ type: 'success', message: 'Salary payment recorded.' });
+            toast.success('Salary payment recorded.');
             setShowForm(false);
             resetForm();
             await loadData();
         } catch (error: any) {
-            setToast({ type: 'error', message: error?.message || t.common.error });
+            toast.error(error?.message || t.common.error);
         } finally {
             setSaving(false);
         }
@@ -140,10 +142,10 @@ export default function SalaryPaymentsPage() {
         if (!globalThis.confirm('Delete this salary payment?')) return;
         try {
             await api.deleteSalaryPayment(payment.id);
-            setToast({ type: 'success', message: 'Salary payment deleted.' });
+            toast.success('Salary payment deleted.');
             await loadData();
         } catch (error: any) {
-            setToast({ type: 'error', message: error?.message || t.common.error });
+            toast.error(error?.message || t.common.error);
         }
     };
 
@@ -177,7 +179,7 @@ export default function SalaryPaymentsPage() {
             columnHelper.accessor('payment_method', {
                 header: 'Method',
                 cell: (info) => (
-                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">{info.getValue()}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{info.getValue()}</span>
                 ),
                 size: 100,
             }),
@@ -189,7 +191,7 @@ export default function SalaryPaymentsPage() {
             columnHelper.accessor('amount', {
                 header: t.common.amount,
                 cell: (info) => (
-                    <span className="text-sm font-black text-emerald-600">{formatBDT(Number(info.getValue()))}</span>
+                    <span className="text-sm font-bold text-emerald-600">{formatBDT(Number(info.getValue()))}</span>
                 ),
                 sortingFn: (a, b) => Number(a.getValue('amount')) - Number(b.getValue('amount')),
                 size: 120,
@@ -201,7 +203,7 @@ export default function SalaryPaymentsPage() {
                     <button
                         type="button"
                         onClick={() => handleDelete(row.original)}
-                        className="p-2 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50"
+                        className="p-2 rounded-lg text-gray-400 hover:text-danger hover:bg-red-50"
                         title={t.common.delete}
                     >
                         <Trash2 className="w-4 h-4" />
@@ -217,8 +219,7 @@ export default function SalaryPaymentsPage() {
     const totalAmount = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={(
                         <span className="inline-flex items-center gap-2">
@@ -234,27 +235,16 @@ export default function SalaryPaymentsPage() {
                         'hr',
                     )}
                     actions={(
-                        <button
-                            type="button"
-                            onClick={() => { resetForm(); setShowForm(true); }}
-                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-black hover:bg-emerald-700"
-                        >
-                            <Plus className="w-4 h-4" />
+                        <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => { resetForm(); setShowForm(true); }}>
                             Pay Salary
-                        </button>
+                        </Button>
                     )}
                 />
-
-                {toast && (
-                    <div className={`rounded-xl px-4 py-3 text-sm font-semibold ${toast.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'}`}>
-                        {toast.message}
-                    </div>
-                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
                         <p className="text-xs font-medium text-gray-500">Period Total</p>
-                        <p className="text-2xl font-black text-emerald-600 mt-1">{formatBDT(totalAmount)}</p>
+                        <p className="text-2xl font-bold text-emerald-600 mt-1">{formatBDT(totalAmount)}</p>
                         <p className="text-xs text-gray-400 mt-1">{payments.length} payment(s)</p>
                     </div>
                     <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4 sm:col-span-2">
@@ -295,68 +285,64 @@ export default function SalaryPaymentsPage() {
                         emptyMessage={employees.length === 0 ? 'Add an employee first to record salary payments.' : t.common.noData}
                     />
                 )}
-            </div>
 
             {showForm && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <form onSubmit={handleCreate} className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
-                        <div className="p-6 border-b border-gray-100">
-                            <h2 className="text-xl font-black">Pay Salary</h2>
-                        </div>
-                        <div className="p-6 space-y-4">
+                <ModalShell size="sm" onBackdropClick={() => setShowForm(false)}>
+                    <ModalHeader title="Pay Salary" onClose={() => setShowForm(false)} />
+                    <form onSubmit={handleCreate} className="contents">
+                        <div className="p-4 space-y-4 overflow-y-auto">
                             {employees.length === 0 ? (
-                                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-3">
                                     Add an employee first to record salary payments.
                                 </p>
                             ) : (
                                 <>
-                                    <label className="block space-y-1">
-                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Employee</span>
-                                        <select value={formEmployeeId} onChange={(e) => handleEmployeeChange(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm" required>
+                                    <Field label="Employee" required>
+                                        <Select value={formEmployeeId} onChange={(e) => handleEmployeeChange(e.target.value)} required>
                                             <option value="">Select employee…</option>
                                             {employees.map((emp) => (
                                                 <option key={emp.id} value={emp.id}>{emp.name} ({emp.employee_code})</option>
                                             ))}
-                                        </select>
-                                    </label>
-                                    <label className="block space-y-1">
-                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Pay Period (month)</span>
-                                        <input type="month" value={formPayPeriod} onChange={(e) => setFormPayPeriod(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm" required />
-                                    </label>
-                                    <label className="block space-y-1">
-                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{t.common.amount}</span>
-                                        <input type="number" min="0.01" step="0.01" value={formAmount} onChange={(e) => setFormAmount(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm" required />
-                                    </label>
-                                    <label className="block space-y-1">
-                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Payment {t.common.date}</span>
-                                        <input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm" required />
-                                    </label>
-                                    <label className="block space-y-1">
-                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Payment Method</span>
-                                        <select value={formPaymentMethod} onChange={(e) => setFormPaymentMethod(e.target.value as typeof formPaymentMethod)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm">
+                                        </Select>
+                                    </Field>
+                                    <Field label="Pay Period (month)" required>
+                                        <Input type="month" value={formPayPeriod} onChange={(e) => setFormPayPeriod(e.target.value)} required />
+                                    </Field>
+                                    <Field label={t.common.amount} required>
+                                        <Input type="number" min="0.01" step="0.01" value={formAmount} onChange={(e) => setFormAmount(e.target.value)} required />
+                                    </Field>
+                                    <Field label={`Payment ${t.common.date}`} required>
+                                        <Input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} required />
+                                    </Field>
+                                    <Field label="Payment Method">
+                                        <Select value={formPaymentMethod} onChange={(e) => setFormPaymentMethod(e.target.value as typeof formPaymentMethod)}>
                                             {PAYMENT_METHODS.map((method) => (
                                                 <option key={method} value={method}>{method}</option>
                                             ))}
-                                        </select>
-                                    </label>
-                                    <label className="block space-y-1">
-                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Notes</span>
-                                        <textarea value={formNotes} onChange={(e) => setFormNotes(e.target.value)} rows={2} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm" />
-                                    </label>
+                                        </Select>
+                                    </Field>
+                                    <Field label="Notes">
+                                        <textarea
+                                            value={formNotes}
+                                            onChange={(e) => setFormNotes(e.target.value)}
+                                            rows={2}
+                                            className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white"
+                                        />
+                                    </Field>
                                 </>
                             )}
                         </div>
-                        <div className="p-6 border-t border-gray-100 flex gap-3">
-                            <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-3 rounded-2xl font-bold text-gray-500 hover:bg-gray-50">
+                        <ModalFooter>
+                            <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>
                                 {t.common.cancel}
-                            </button>
-                            <button type="submit" disabled={saving || employees.length === 0} className="flex-1 py-3 rounded-2xl font-black bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">
+                            </Button>
+                            <Button type="submit" variant="primary" loading={saving} disabled={employees.length === 0}>
                                 {saving ? t.common.loading : t.common.save}
-                            </button>
-                        </div>
+                            </Button>
+                        </ModalFooter>
                     </form>
-                </div>
+                </ModalShell>
             )}
-        </div>
+        </PageShell>
     );
 }

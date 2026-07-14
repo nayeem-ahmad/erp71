@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { ArrowLeft, CheckCircle, Loader2, Plus } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell, Button, StatusBadge } from '@/components/ui';
 import { DataTable } from '@/components/data-table';
 import RefereePaymentModal from '@/components/admin/referrals/RefereePaymentModal';
 import type { RefereeLedger, ReferralCommission, RefereePayment } from '@/components/admin/referrals/types';
@@ -13,6 +14,7 @@ import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { toast } from '@/lib/toast';
 
 const commissionHelper = createColumnHelper<ReferralCommission>();
 const paymentHelper = createColumnHelper<RefereePayment>();
@@ -25,7 +27,6 @@ export default function AdminRefereeDetailPage() {
     const d = m.detail;
     const [ledger, setLedger] = useState<RefereeLedger | null>(null);
     const [error, setError] = useState('');
-    const [toast, setToast] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [paymentOpen, setPaymentOpen] = useState(false);
 
@@ -46,11 +47,6 @@ export default function AdminRefereeDetailPage() {
         void load();
     }, [load]);
 
-    const showToast = (msg: string) => {
-        setToast(msg);
-        setTimeout(() => setToast(''), 3500);
-    };
-
     const commissionColumns: ColumnDef<ReferralCommission, unknown>[] = useMemo(() => [
         commissionHelper.accessor((row) => row.tenant?.name ?? row.tenant_id, {
             id: 'tenant',
@@ -61,12 +57,8 @@ export default function AdminRefereeDetailPage() {
             header: d.commissionColumns.status,
             cell: (info) => {
                 const status = info.getValue();
-                const color = status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : status === 'EARNED' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600';
-                return (
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${color}`}>
-                        {d.status[status]}
-                    </span>
-                );
+                const tone = status === 'PAID' ? 'success' : status === 'EARNED' ? 'warning' : 'neutral';
+                return <StatusBadge tone={tone}>{d.status[status]}</StatusBadge>;
             },
         }),
         commissionHelper.accessor('discount_pct', {
@@ -127,8 +119,7 @@ export default function AdminRefereeDetailPage() {
     ] : [];
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
             <PageHeader
                 title={ledger ? `${d.title}: ${ledger.referee.name}` : d.title}
                 subtitle={ledger?.referee.referral_code}
@@ -141,38 +132,30 @@ export default function AdminRefereeDetailPage() {
                 )}
                 actions={(
                     <div className="flex items-center gap-2">
-                        <Link href="/admin/referrals" className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                        <Link href="/admin/referrals" className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
                             <ArrowLeft className="w-4 h-4" />
                             {d.back}
                         </Link>
-                        <button
-                            type="button"
+                        <Button
+                            variant="primary"
                             onClick={() => setPaymentOpen(true)}
                             disabled={!ledger || ledger.summary.earned === 0 || Boolean(ledger?.referee.deleted_at)}
-                            className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                         >
                             <Plus className="w-4 h-4" />
                             {d.recordPayment}
-                        </button>
+                        </Button>
                     </div>
                 )}
             />
 
-            {toast && (
-                <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
-                    <CheckCircle className="w-4 h-4" />
-                    {toast}
-                </div>
-            )}
-
             {error && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                <div className="rounded-md border border-danger bg-danger-light px-4 py-3 text-sm font-semibold text-danger-text">
                     {error}
                 </div>
             )}
 
             {ledger?.referee.deleted_at && (
-                <div className="rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
+                <div className="rounded-md border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
                     {d.archivedBanner}
                 </div>
             )}
@@ -187,16 +170,16 @@ export default function AdminRefereeDetailPage() {
                         {summaryCards.map((card) => (
                             <div
                                 key={card.label}
-                                className={`rounded-2xl border p-4 ${card.highlight ? 'border-amber-200 bg-amber-50' : 'border-gray-100 bg-white'}`}
+                                className={`rounded-lg border p-4 ${card.highlight ? 'border-warning bg-warning-light' : 'border-gray-100 bg-white'}`}
                             >
                                 <p className="text-xs font-medium uppercase tracking-wider text-gray-500">{card.label}</p>
-                                <p className={`mt-2 text-xl font-black ${card.highlight ? 'text-amber-700' : 'text-gray-900'}`}>{card.value}</p>
+                                <p className={`mt-2 text-xl font-bold ${card.highlight ? 'text-warning-text' : 'text-gray-900'}`}>{card.value}</p>
                             </div>
                         ))}
                     </div>
 
                     <div className="space-y-3">
-                        <h2 className="text-lg font-black text-gray-900">{d.commissionsTitle}</h2>
+                        <h2 className="text-lg font-bold text-gray-900">{d.commissionsTitle}</h2>
                         <DataTable
                             tableId="admin-referral-commissions"
                             data={ledger.commissions}
@@ -207,7 +190,7 @@ export default function AdminRefereeDetailPage() {
                     </div>
 
                     <div className="space-y-3">
-                        <h2 className="text-lg font-black text-gray-900">{d.paymentsTitle}</h2>
+                        <h2 className="text-lg font-bold text-gray-900">{d.paymentsTitle}</h2>
                         <DataTable
                             tableId="admin-referral-payments"
                             data={ledger.payments}
@@ -225,11 +208,10 @@ export default function AdminRefereeDetailPage() {
                 defaultAmount={ledger?.summary.balance_due}
                 onClose={() => setPaymentOpen(false)}
                 onSuccess={(message) => {
-                    showToast(message);
+                    toast.success(message);
                     void load();
                 }}
             />
-            </div>
-        </div>
+        </PageShell>
     );
 }

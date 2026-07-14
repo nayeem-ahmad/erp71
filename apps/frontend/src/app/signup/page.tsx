@@ -226,7 +226,7 @@ function SignupPageContent() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-[#f9fafb] p-4 font-sans text-[#111827]">
+        <div className="min-h-screen flex items-center justify-center bg-canvas p-4 font-sans text-gray-900">
             <div className="w-full max-w-2xl">
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 md:p-10">
                     <div className="flex flex-col items-center mb-8">

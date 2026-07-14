@@ -57,6 +57,7 @@ import { useIsMdUp } from '@/hooks/useMediaQuery';
 import { dataTableDensity, type UiDensity } from '@/lib/ui/compact-density';
 import { useTablePreferences } from './useTablePreferences';
 import { exportToCSV, exportToExcel, exportToPDF, printTable } from './export-utils';
+import BulkActionBar, { type BulkAction } from './BulkActionBar';
 
 declare module '@tanstack/react-table' {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -90,10 +91,20 @@ export interface DataTableProps<T> {
     onRowSelectionChange?: (rows: T[]) => void;
     /** Stable row id accessor — keeps selection correct across data reloads (defaults to row index) */
     getRowId?: (row: T, index: number) => string;
+    /** Bump this value to programmatically clear the current row selection (e.g. after a bulk action completes) */
+    clearSelectionSignal?: number;
+    /** Bulk actions rendered in the bulk action bar shown above the table once rows are selected */
+    bulkActions?: BulkAction<T>[];
+    /** Extra custom content rendered in the bulk action bar (e.g. bulk status/assign selects) */
+    renderBulkExtra?: (selectedRows: T[]) => React.ReactNode;
+    /** Disables bulk action buttons and the clear button (e.g. while a bulk action is in flight) */
+    bulkActionsDisabled?: boolean;
     /** Custom toolbar actions (rendered after built-in buttons) */
     toolbarActions?: React.ReactNode;
     /** Search placeholder text */
     searchPlaceholder?: string;
+    /** Show the built-in global search input in the toolbar (default: true). Set false when the caller renders its own (e.g. server-side) search box. */
+    showSearch?: boolean;
     /** Predefined filter presets */
     filterPresets?: { label: string; filters: ColumnFiltersState }[];
     /** Table density — defaults to CompactUiContext when inside accounting module */
@@ -171,8 +182,13 @@ export default function DataTable<T>({
     enableRowSelection = false,
     onRowSelectionChange,
     getRowId,
+    clearSelectionSignal,
+    bulkActions,
+    renderBulkExtra,
+    bulkActionsDisabled = false,
     toolbarActions,
     searchPlaceholder,
+    showSearch = true,
     filterPresets,
     density,
 }: DataTableProps<T>) {
@@ -187,6 +203,47 @@ export default function DataTable<T>({
     const savedPrefs = prefs.getPreferences(tableId);
     const isMdUp = useIsMdUp();
 
+    // Inject a checkbox selection column when the caller hasn't supplied their own `id: 'select'` column
+    const hasCallerSelectColumn = useMemo(
+        () => columns.some((c) => (c as { id?: string }).id === 'select'),
+        [columns],
+    );
+
+    const effectiveColumns = useMemo<ColumnDef<T, any>[]>(() => {
+        if (!enableRowSelection || hasCallerSelectColumn) return columns;
+        const selectColumn: ColumnDef<T, any> = {
+            id: 'select',
+            header: ({ table }) => (
+                <input
+                    type="checkbox"
+                    aria-label="Select all"
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/40 cursor-pointer"
+                    checked={table.getIsAllPageRowsSelected()}
+                    ref={(el) => {
+                        if (el) el.indeterminate = table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected();
+                    }}
+                    onChange={table.getToggleAllPageRowsSelectedHandler()}
+                />
+            ),
+            cell: ({ row }) => (
+                <input
+                    type="checkbox"
+                    aria-label="Select row"
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/40 cursor-pointer"
+                    checked={row.getIsSelected()}
+                    onChange={row.getToggleSelectedHandler()}
+                    onClick={(e) => e.stopPropagation()}
+                />
+            ),
+            enableSorting: false,
+            enableColumnFilter: false,
+            enableResizing: false,
+            enableHiding: false,
+            size: 36,
+        };
+        return [selectColumn, ...columns];
+    }, [columns, enableRowSelection, hasCallerSelectColumn]);
+
     // State
     const [sorting, setSorting] = useState<SortingState>([]);
     const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -195,7 +252,7 @@ export default function DataTable<T>({
         savedPrefs?.columnVisibility ?? {},
     );
     const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(
-        savedPrefs?.columnOrder ?? columns.map((c) => (c as any).accessorKey ?? (c as any).id ?? ''),
+        savedPrefs?.columnOrder ?? effectiveColumns.map((c) => (c as any).accessorKey ?? (c as any).id ?? ''),
     );
     const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(
         savedPrefs?.columnWidths ?? {},
@@ -225,7 +282,7 @@ export default function DataTable<T>({
         if (isMdUp) return columnVisibility;
 
         const mobileOverrides: VisibilityState = {};
-        columns.forEach((column) => {
+        effectiveColumns.forEach((column) => {
             const id = column.id ?? (column as { accessorKey?: string }).accessorKey;
             if (id && column.meta?.hideOnMobile) {
                 mobileOverrides[id] = false;
@@ -233,12 +290,12 @@ export default function DataTable<T>({
         });
 
         return { ...columnVisibility, ...mobileOverrides };
-    }, [columnVisibility, columns, isMdUp]);
+    }, [columnVisibility, effectiveColumns, isMdUp]);
 
     // Table instance
     const table = useReactTable({
         data,
-        columns,
+        columns: effectiveColumns,
         state: {
             sorting,
             columnFilters,
@@ -293,6 +350,15 @@ export default function DataTable<T>({
             onRowSelectionChange(selectedRows);
         }
     }, [rowSelection]);
+
+    // Programmatic selection clear — bump `clearSelectionSignal` to reset selection (e.g. after a bulk action)
+    const prevClearSelectionSignal = useRef(clearSelectionSignal);
+    useEffect(() => {
+        if (clearSelectionSignal !== undefined && clearSelectionSignal !== prevClearSelectionSignal.current) {
+            setRowSelection({});
+        }
+        prevClearSelectionSignal.current = clearSelectionSignal;
+    }, [clearSelectionSignal]);
 
     useEffect(() => {
         const element = tableScrollRef.current;
@@ -379,30 +445,38 @@ export default function DataTable<T>({
 
     const toolbarBtnBase = `${d.toolbarBtn} ${d.toolbarBtnIdle}`;
 
+    const selectedRows = useMemo(
+        () => table.getSelectedRowModel().rows.map((r: Row<T>) => r.original),
+        [rowSelection, data],
+    );
+    const clearSelection = useCallback(() => setRowSelection({}), []);
+
     return (
         <div className={`bg-white ${d.wrapper} shadow-sm border border-gray-100 overflow-hidden`}>
             {/* ── Toolbar ─────────────────────────────────────────── */}
             <div className={d.toolbar}>
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                     {/* Search */}
-                    <div className="relative flex-1 min-w-[200px] max-w-md">
-                        <Search className={`absolute top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 ${isCompact ? 'left-2.5' : 'left-3'}`} />
-                        <input
-                            type="text"
-                            placeholder={resolvedSearchPlaceholder}
-                            className={d.searchInput}
-                            value={globalFilter}
-                            onChange={(e) => setGlobalFilter(e.target.value)}
-                        />
-                        {globalFilter && (
-                            <button
-                                onClick={() => setGlobalFilter('')}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                            >
-                                <X className="w-3.5 h-3.5" />
-                            </button>
-                        )}
-                    </div>
+                    {showSearch && (
+                        <div className="relative flex-1 min-w-[200px] max-w-md">
+                            <Search className={`absolute top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 ${isCompact ? 'left-2.5' : 'left-3'}`} />
+                            <input
+                                type="text"
+                                placeholder={resolvedSearchPlaceholder}
+                                className={d.searchInput}
+                                value={globalFilter}
+                                onChange={(e) => setGlobalFilter(e.target.value)}
+                            />
+                            {globalFilter && (
+                                <button
+                                    onClick={() => setGlobalFilter('')}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                        </div>
+                    )}
 
                     {/* Toolbar buttons */}
                     <div className="flex items-center gap-2 flex-wrap">
@@ -572,6 +646,18 @@ export default function DataTable<T>({
                             ))}
                         </div>
                     </div>
+                )}
+
+                {/* Bulk action bar */}
+                {enableRowSelection && selectedRows.length > 0 && (
+                    <BulkActionBar<T>
+                        count={selectedRows.length}
+                        selectedRows={selectedRows}
+                        actions={bulkActions ?? []}
+                        onClear={clearSelection}
+                        extra={renderBulkExtra?.(selectedRows)}
+                        disabled={bulkActionsDisabled}
+                    />
                 )}
             </div>
 

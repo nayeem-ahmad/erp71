@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { MessageSquare, Mail, Landmark, Cog, ChevronRight, Sparkles, LayoutList, BadgePercent, MessageCircle, ToggleLeft, PackagePlus, Bot, Share2, Lightbulb, Rocket } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
@@ -45,8 +46,8 @@ export default function PlatformSettingsIndexPage() {
                     icon: Landmark,
                     label: m.sections.payments.label,
                     description: m.sections.payments.description,
-                    color: 'text-violet-600',
-                    bg: 'bg-violet-50',
+                    color: 'text-blue-700',
+                    bg: 'bg-primary-light',
                 },
             ],
         },
@@ -59,8 +60,8 @@ export default function PlatformSettingsIndexPage() {
                     icon: BadgePercent,
                     label: m.sections.plans.label,
                     description: m.sections.plans.description,
-                    color: 'text-rose-600',
-                    bg: 'bg-rose-50',
+                    color: 'text-danger-text',
+                    bg: 'bg-danger-light',
                 },
                 {
                     href: '/admin/platform-settings/addons',
@@ -89,8 +90,8 @@ export default function PlatformSettingsIndexPage() {
                     icon: ToggleLeft,
                     label: m.sections.tenantFeatures.label,
                     description: m.sections.tenantFeatures.description,
-                    color: 'text-indigo-600',
-                    bg: 'bg-indigo-50',
+                    color: 'text-blue-700',
+                    bg: 'bg-primary-light',
                 },
                 {
                     href: '/admin/platform-settings/ai',
@@ -151,7 +152,7 @@ export default function PlatformSettingsIndexPage() {
     ];
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-3xl mx-auto space-y-6">
                 <PageHeader
                     title={m.title}
@@ -164,7 +165,7 @@ export default function PlatformSettingsIndexPage() {
                     )}
                 />
 
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                     <strong>{m.securityNotice}</strong> {m.securityBody}
                 </div>
 
@@ -176,7 +177,7 @@ export default function PlatformSettingsIndexPage() {
                                 <Link
                                     key={href}
                                     href={href}
-                                    className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white px-5 py-4 hover:border-blue-300 hover:shadow-sm transition-all group"
+                                    className="flex items-center gap-4 rounded-lg border border-gray-200 bg-white px-5 py-4 hover:border-blue-300 hover:shadow-sm transition-all group"
                                 >
                                     <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center flex-shrink-0`}>
                                         <Icon className={`w-5 h-5 ${color}`} />
@@ -192,6 +193,6 @@ export default function PlatformSettingsIndexPage() {
                     </div>
                 ))}
             </div>
-        </div>
+        </PageShell>
     );
 }

@@ -1,41 +1,20 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, CheckCircle, XCircle, RotateCcw } from 'lucide-react';
+import { Loader2, RotateCcw } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell, Button } from '@/components/ui';
 import NavLayoutEditor from '@/components/admin/NavLayoutEditor';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { api } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import {
     getDefaultNavLayout,
     type NavLayoutNode,
     type NavScope,
 } from '@erp71/shared-types';
-
-type Toast = { type: 'success' | 'error'; message: string } | null;
-
-function ToastBanner({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
-    useEffect(() => {
-        if (!toast) return;
-        const timer = setTimeout(onDismiss, 4000);
-        return () => clearTimeout(timer);
-    }, [toast, onDismiss]);
-
-    if (!toast) return null;
-
-    return (
-        <div className={`rounded-2xl border px-4 py-3 text-sm flex items-center gap-2 ${
-            toast.type === 'success'
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                : 'border-rose-200 bg-rose-50 text-rose-800'
-        }`}>
-            {toast.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-            <span>{toast.message}</span>
-        </div>
-    );
-}
 
 export default function PlatformNavigationSettingsPage() {
     const { t } = useI18n();
@@ -47,7 +26,6 @@ export default function PlatformNavigationSettingsPage() {
     const [saving, setSaving] = useState(false);
     const [resetting, setResetting] = useState(false);
     const [isDefault, setIsDefault] = useState(true);
-    const [toast, setToast] = useState<Toast>(null);
     const [tenantOverrides, setTenantOverrides] = useState<Array<{
         tenantId: string;
         tenantName: string;
@@ -67,7 +45,7 @@ export default function PlatformNavigationSettingsPage() {
             setIsDefault(Boolean(data?.isDefault ?? true));
         } catch {
             setLayout(getDefaultNavLayout(nextScope));
-            setToast({ type: 'error', message: t.admin.platformSettings.common.loadFailed });
+            toast.error(t.admin.platformSettings.common.loadFailed);
         } finally {
             setLoading(false);
         }
@@ -99,9 +77,9 @@ export default function PlatformNavigationSettingsPage() {
             await api.saveAdminNavLayout(scope, layout);
             setIsDefault(false);
             window.dispatchEvent(new CustomEvent('erp71:nav-layout-updated'));
-            setToast({ type: 'success', message: t.admin.platformSettings.common.saved });
+            toast.success(t.admin.platformSettings.common.saved);
         } catch {
-            setToast({ type: 'error', message: t.admin.platformSettings.common.saveFailed });
+            toast.error(t.admin.platformSettings.common.saveFailed);
         } finally {
             setSaving(false);
         }
@@ -114,9 +92,9 @@ export default function PlatformNavigationSettingsPage() {
             setLayout(defaults ?? getDefaultNavLayout(scope));
             setIsDefault(true);
             window.dispatchEvent(new CustomEvent('erp71:nav-layout-updated'));
-            setToast({ type: 'success', message: m.resetSuccess });
+            toast.success(m.resetSuccess);
         } catch {
-            setToast({ type: 'error', message: m.resetFailed });
+            toast.error(m.resetFailed);
         } finally {
             setResetting(false);
         }
@@ -129,15 +107,14 @@ export default function PlatformNavigationSettingsPage() {
             const result = await api.resetAllAdminTenantNavLayouts();
             await loadTenantOverrides();
             window.dispatchEvent(new CustomEvent('erp71:nav-layout-updated'));
-            setToast({
-                type: 'success',
-                message: tenantOverrideCopy.resetAllSuccess.replace(
+            toast.success(
+                tenantOverrideCopy.resetAllSuccess.replace(
                     '{count}',
                     String(result?.resetCount ?? 0),
                 ),
-            });
+            );
         } catch {
-            setToast({ type: 'error', message: tenantOverrideCopy.resetAllFailed });
+            toast.error(tenantOverrideCopy.resetAllFailed);
         } finally {
             setResettingAllTenants(false);
         }
@@ -150,7 +127,7 @@ export default function PlatformNavigationSettingsPage() {
     };
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-4xl mx-auto space-y-6">
                 <PageHeader
                     title={m.title}
@@ -164,13 +141,12 @@ export default function PlatformNavigationSettingsPage() {
                     )}
                 />
 
-                <ToastBanner toast={toast} onDismiss={() => setToast(null)} />
 
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                     {m.notice}
                 </div>
 
-                <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-4">
+                <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
                     <div className="flex flex-wrap items-center gap-2">
                         {([
                             { id: 'tenant' as NavScope, label: m.scopes.tenant },
@@ -210,42 +186,43 @@ export default function PlatformNavigationSettingsPage() {
                     )}
 
                     <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-100">
-                        <button
+                        <Button
                             type="button"
                             onClick={handleSave}
-                            disabled={saving || loading}
-                            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                            disabled={loading}
+                            loading={saving}
                         >
-                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                             {saving ? t.admin.platformSettings.common.saving : t.admin.platformSettings.common.saveSettings}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                             type="button"
+                            variant="secondary"
                             onClick={handleReset}
-                            disabled={resetting || loading}
-                            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                            disabled={loading}
+                            loading={resetting}
+                            icon={!resetting ? <RotateCcw className="w-4 h-4" /> : undefined}
                         >
-                            {resetting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
                             {m.resetToDefaults}
-                        </button>
+                        </Button>
                     </div>
                 </div>
 
-                <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-4">
+                <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                             <h2 className="text-base font-bold text-gray-900">{tenantOverrideCopy.title}</h2>
                             <p className="mt-1 text-sm text-gray-500">{tenantOverrideCopy.description}</p>
                         </div>
-                        <button
+                        <Button
                             type="button"
+                            variant="secondary"
                             onClick={handleResetAllTenants}
-                            disabled={resettingAllTenants || loadingOverrides}
-                            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                            disabled={loadingOverrides}
+                            loading={resettingAllTenants}
+                            icon={!resettingAllTenants ? <RotateCcw className="w-4 h-4" /> : undefined}
                         >
-                            {resettingAllTenants ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
                             {tenantOverrideCopy.resetAll}
-                        </button>
+                        </Button>
                     </div>
 
                     {loadingOverrides ? (
@@ -285,6 +262,6 @@ export default function PlatformNavigationSettingsPage() {
                     )}
                 </div>
             </div>
-        </div>
+        </PageShell>
     );
 }

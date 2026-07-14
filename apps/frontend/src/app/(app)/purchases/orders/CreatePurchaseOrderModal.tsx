@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Search, Trash2, X } from 'lucide-react';
+import { Search, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
-import ModalShell from '@/components/ModalShell';
+import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import { Button } from '@/components/ui';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
@@ -151,17 +152,11 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
 
     return (
         <ModalShell size="xl" onBackdropClick={onClose}>
-                <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                    <div>
-                        <h2 className="text-xl font-black tracking-tight">{t.purchaseOrders.modal.title}</h2>
-                        <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-0.5">
-                            {t.purchaseOrders.modal.subtitle}
-                        </p>
-                    </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-50 rounded-xl text-gray-400">
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
+                <ModalHeader
+                    title={t.purchaseOrders.modal.title}
+                    subtitle={t.purchaseOrders.modal.subtitle}
+                    onClose={onClose}
+                />
 
                 <div className="p-6 overflow-y-auto space-y-6">
                     {error && <div className="p-3 bg-red-50 text-red-600 rounded-xl text-sm font-bold">{error}</div>}
@@ -170,7 +165,7 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                         {/* Left: products */}
                         <div className="space-y-4">
                             <div>
-                                <label className="text-xs font-black uppercase tracking-widest text-gray-500 block mb-2">{t.purchaseShared.addProducts}</label>
+                                <label className="text-xs font-semibold text-gray-500 block mb-2">{t.purchaseShared.addProducts}</label>
                                 <VoiceEntryInput entryType="purchase_order" onResult={handleVoiceOrder} inline>
                                     <div className="relative">
                                         <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
@@ -230,7 +225,7 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                                                         onChange={(e) => updateItem(idx, 'unitCost', Number(e.target.value) || 0)}
                                                         className="w-full text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold" />
                                                 </td>
-                                                <td className="py-3 text-right text-sm font-black text-blue-600">
+                                                <td className="py-3 text-right text-sm font-bold text-blue-600">
                                                     {formatBDT(item.quantity * item.unitCost, { locale })}
                                                 </td>
                                                 <td className="py-3 text-center">
@@ -247,8 +242,8 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
 
                         {/* Right: supplier + adjustments */}
                         <div className="space-y-5">
-                            <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 space-y-3">
-                                <h3 className="text-sm font-black tracking-tight">{t.common.supplier}</h3>
+                            <div className="rounded-lg border border-gray-100 bg-gray-50/70 p-4 space-y-3">
+                                <h3 className="text-sm font-bold tracking-tight">{t.common.supplier}</h3>
                                 <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}
                                     className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20">
                                     <option value="">{t.purchaseShared.noSupplier}</option>
@@ -263,8 +258,8 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                                 </div>
                             </div>
 
-                            <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 space-y-3">
-                                <h3 className="text-sm font-black tracking-tight">{t.purchaseShared.costAdjustments}</h3>
+                            <div className="rounded-lg border border-gray-100 bg-gray-50/70 p-4 space-y-3">
+                                <h3 className="text-sm font-bold tracking-tight">{t.purchaseShared.costAdjustments}</h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     {[ [t.common.tax, taxAmount, setTaxAmount], [t.common.discount, discountAmount, setDiscountAmount], [t.purchaseShared.freight, freightAmount, setFreightAmount] ].map(([label, val, setter]) => (
                                         <div key={label as string}>
@@ -279,7 +274,7 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                                     rows={2} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500/20" />
                             </div>
 
-                            <div className="rounded-2xl bg-blue-950 text-white p-5 space-y-2">
+                            <div className="rounded-lg bg-blue-950 text-white p-5 space-y-2">
                                 <div className="flex justify-between text-sm font-bold text-blue-100">
                                     <span>{t.common.subtotal}</span><span>{formatBDT(subtotal, { locale })}</span>
                                 </div>
@@ -293,24 +288,22 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                                     <span>{t.common.discount}</span><span>-{formatBDT(discount, { locale })}</span>
                                 </div>
                                 <div className="border-t border-blue-800 pt-2 flex justify-between">
-                                    <span className="text-xs font-black uppercase tracking-widest text-blue-200">{t.purchaseShared.poTotal}</span>
-                                    <span className="text-2xl font-black">{formatBDT(total, { locale })}</span>
+                                    <span className="text-xs font-semibold text-blue-200">{t.purchaseShared.poTotal}</span>
+                                    <span className="text-2xl font-bold">{formatBDT(total, { locale })}</span>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
-                    <button onClick={onClose}
-                        className="px-6 py-3 bg-white border border-gray-200 text-gray-700 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gray-50">
+                <ModalFooter>
+                    <Button variant="secondary" onClick={onClose}>
                         Cancel
-                    </button>
-                    <button onClick={handleSubmit} disabled={loading || items.length === 0}
-                        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-md disabled:opacity-50">
-                        {loading ? t.purchaseOrders.modal.creating : t.purchaseOrders.modal.createPo}
-                    </button>
-                </div>
+                    </Button>
+                    <Button onClick={handleSubmit} disabled={loading || items.length === 0} loading={loading}>
+                        {t.purchaseOrders.modal.createPo}
+                    </Button>
+                </ModalFooter>
         </ModalShell>
     );
 }

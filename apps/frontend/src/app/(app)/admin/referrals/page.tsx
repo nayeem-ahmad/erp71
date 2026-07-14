@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { BookOpen, CheckCircle, Loader2, Mail, Pencil, Plus, Trash2 } from 'lucide-react';
+import { BookOpen, Loader2, Mail, Pencil, Plus, Trash2 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell, Button, StatusBadge } from '@/components/ui';
 import { DataTable } from '@/components/data-table';
 import RefereeFormModal from '@/components/admin/referrals/RefereeFormModal';
 import RefereeDeleteModal from '@/components/admin/referrals/RefereeDeleteModal';
@@ -13,6 +14,7 @@ import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { toast } from '@/lib/toast';
 
 const columnHelper = createColumnHelper<RefereeRecord>();
 
@@ -22,7 +24,6 @@ export default function AdminReferralsPage() {
     const [referees, setReferees] = useState<RefereeRecord[]>([]);
     const [search, setSearch] = useState('');
     const [error, setError] = useState('');
-    const [toast, setToast] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [formOpen, setFormOpen] = useState(false);
     const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
@@ -49,11 +50,6 @@ export default function AdminReferralsPage() {
         void load();
     }, [load]);
 
-    const showToast = (msg: string) => {
-        setToast(msg);
-        setTimeout(() => setToast(''), 3500);
-    };
-
     const hasLedger = (referee: RefereeRecord) =>
         referee.stats.pending_signups + referee.stats.earned_count + referee.stats.paid_count > 0
         || referee.stats.earned_amount > 0
@@ -65,7 +61,7 @@ export default function AdminReferralsPage() {
         setError('');
         try {
             const result = await api.deleteAdminReferee(deleteTarget.id);
-            showToast(result?.archived
+            toast.success(result?.archived
                 ? formatMessage(m.archivedToast, { name: deleteTarget.name })
                 : formatMessage(m.deletedToast, { name: deleteTarget.name }));
             setDeleteOpen(false);
@@ -83,7 +79,7 @@ export default function AdminReferralsPage() {
         setError('');
         try {
             await api.sendAdminRefereeInvite(referee.id);
-            showToast(formatMessage(m.inviteSent, { email: referee.email }));
+            toast.success(formatMessage(m.inviteSent, { email: referee.email }));
             await load();
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : m.inviteFailed);
@@ -147,17 +143,11 @@ export default function AdminReferralsPage() {
             cell: (info) => {
                 const row = info.row.original;
                 if (row.deleted_at) {
-                    return (
-                        <span className="inline-flex rounded-full bg-slate-200 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-700">
-                            {m.archived}
-                        </span>
-                    );
+                    return <StatusBadge tone="neutral">{m.archived}</StatusBadge>;
                 }
                 return (
                     <div className="flex flex-col gap-1">
-                        <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${info.getValue() ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
-                            {info.getValue() ? m.active : m.inactive}
-                        </span>
+                        <StatusBadge tone={info.getValue() ? 'success' : 'neutral'}>{info.getValue() ? m.active : m.inactive}</StatusBadge>
                         <span className="text-[10px] font-semibold text-gray-500">
                             {row.user_id ? m.loginStatus.linked : m.loginStatus.pending}
                         </span>
@@ -225,8 +215,7 @@ export default function AdminReferralsPage() {
     ], [invitingId, m]);
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
             <PageHeader
                 title={m.title}
                 subtitle={m.subtitle}
@@ -237,30 +226,22 @@ export default function AdminReferralsPage() {
                     'admin',
                 )}
                 actions={(
-                    <button
-                        type="button"
+                    <Button
+                        variant="primary"
                         onClick={() => {
                             setFormMode('create');
                             setSelectedReferee(null);
                             setFormOpen(true);
                         }}
-                        className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
                     >
                         <Plus className="w-4 h-4" />
                         {m.addReferee}
-                    </button>
+                    </Button>
                 )}
             />
 
-            {toast && (
-                <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
-                    <CheckCircle className="w-4 h-4" />
-                    {toast}
-                </div>
-            )}
-
             {error && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                <div className="rounded-md border border-danger bg-danger-light px-4 py-3 text-sm font-semibold text-danger-text">
                     {error}
                 </div>
             )}
@@ -270,12 +251,12 @@ export default function AdminReferralsPage() {
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder={m.searchPlaceholder}
-                    className="w-full rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm outline-none"
+                    className="w-full rounded-md border border-gray-100 bg-white px-4 py-3 text-sm outline-none"
                 />
             </div>
 
             {isLoading ? (
-                <div className="flex items-center gap-2 rounded-3xl border border-gray-100 bg-white p-8 text-sm text-gray-500">
+                <div className="flex items-center gap-2 rounded-lg border border-gray-100 bg-white p-8 text-sm text-gray-500">
                     <Loader2 className="w-4 h-4 animate-spin" /> {m.loading}
                 </div>
             ) : (
@@ -294,7 +275,7 @@ export default function AdminReferralsPage() {
                 referee={selectedReferee}
                 onClose={() => setFormOpen(false)}
                 onSaved={(message) => {
-                    showToast(message);
+                    toast.success(message);
                     void load();
                 }}
             />
@@ -312,7 +293,6 @@ export default function AdminReferralsPage() {
                 }}
                 onConfirm={() => void confirmDelete()}
             />
-            </div>
-        </div>
+        </PageShell>
     );
 }

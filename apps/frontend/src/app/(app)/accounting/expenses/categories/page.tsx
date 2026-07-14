@@ -11,6 +11,8 @@ import { routes } from '@/lib/routes';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { compactDensity } from '@/lib/ui/compact-density';
+import { Button } from '@/components/ui';
+import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 
 interface ExpenseCategory {
     id: string;
@@ -107,7 +109,7 @@ export default function ExpenseCategoriesPage() {
         () => [
             columnHelper.accessor('name', {
                 header: t.expenses.category,
-                cell: (info) => <span className="text-sm font-black text-gray-900">{info.getValue()}</span>,
+                cell: (info) => <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>,
                 size: 200,
             }),
             columnHelper.accessor('description', {
@@ -129,7 +131,7 @@ export default function ExpenseCategoriesPage() {
                         <button type="button" onClick={() => openEdit(row.original)} className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50">
                             <Pencil className="w-4 h-4" />
                         </button>
-                        <button type="button" onClick={() => handleDelete(row.original)} className="p-2 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50">
+                        <button type="button" onClick={() => handleDelete(row.original)} className="p-2 rounded-lg text-gray-400 hover:text-danger hover:bg-red-50">
                             <Trash2 className="w-4 h-4" />
                         </button>
                     </div>
@@ -152,7 +154,7 @@ export default function ExpenseCategoriesPage() {
                     t.accounting.links.expenseCategories.title,
                 )}
                 actions={(
-                    <button type="button" onClick={openCreate} className={`${compactDensity.btnPrimary} bg-rose-600 text-white hover:bg-rose-700`}>
+                    <button type="button" onClick={openCreate} className={`${compactDensity.btnPrimary}${compactDensity.btnPrimary} bg-primary text-white hover:bg-primary-hover`}>
                         <Plus className="w-3.5 h-3.5" />
                         {t.expenses.addCategory}
                     </button>
@@ -160,7 +162,7 @@ export default function ExpenseCategoriesPage() {
             />
 
             {toast && (
-                <div className={`rounded-lg px-3 py-2 text-sm ${toast.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'}`}>
+                <div className={`rounded-lg px-3 py-2 text-sm ${toast.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-danger-light text-danger-text border border-red-200'}`}>
                     {toast.message}
                 </div>
             )}
@@ -175,12 +177,10 @@ export default function ExpenseCategoriesPage() {
             )}
 
             {showForm && (
-                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <form onSubmit={handleSubmit} className={`${compactDensity.modal} max-w-md overflow-hidden`}>
-                        <div className={`${compactDensity.modalPadding} border-b border-gray-100`}>
-                            <h2 className={compactDensity.modalTitle}>{editing ? t.expenses.editCategory : t.expenses.addCategory}</h2>
-                        </div>
-                        <div className={`${compactDensity.modalPadding} ${compactDensity.formStack}`}>
+                <ModalShell size="sm" onBackdropClick={() => setShowForm(false)}>
+                    <form onSubmit={handleSubmit} className="flex max-h-[90vh] flex-col overflow-hidden">
+                        <ModalHeader title={editing ? t.expenses.editCategory : t.expenses.addCategory} onClose={() => setShowForm(false)} />
+                        <div className={`${compactDensity.modalPadding} ${compactDensity.formStack} overflow-y-auto`}>
                             <label className="block">
                                 <span className={`${compactDensity.formLabel} block mb-1`}>{t.expenses.category}</span>
                                 <input type="text" value={name} onChange={(e) => setName(e.target.value)} className={compactDensity.formField} required />
@@ -190,14 +190,14 @@ export default function ExpenseCategoriesPage() {
                                 <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className={compactDensity.formField} />
                             </label>
                         </div>
-                        <div className={`${compactDensity.modalPadding} border-t border-gray-100 flex gap-2 justify-end`}>
-                            <button type="button" onClick={() => setShowForm(false)} className={compactDensity.btnSecondary}>{t.common.cancel}</button>
-                            <button type="submit" disabled={saving} className={`${compactDensity.btnPrimary} bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50`}>
-                                {saving ? t.common.loading : t.common.save}
-                            </button>
-                        </div>
+                        <ModalFooter>
+                            <Button variant="secondary" type="button" onClick={() => setShowForm(false)}>{t.common.cancel}</Button>
+                            <Button variant="primary" type="submit" loading={saving}>
+                                {t.common.save}
+                            </Button>
+                        </ModalFooter>
                     </form>
-                </div>
+                </ModalShell>
             )}
         </AccountingPageShell>
     );

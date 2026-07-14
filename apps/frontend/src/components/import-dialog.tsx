@@ -1,9 +1,11 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Upload, X, ChevronRight, CheckCircle, AlertCircle, RotateCcw } from 'lucide-react';
+import { Upload, ChevronRight, CheckCircle, AlertCircle, RotateCcw } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import { Button } from '@/components/ui';
 
 export interface ImportField {
   key: string;
@@ -148,209 +150,189 @@ export function ImportDialog({
   const stepIndex = STEPS.findIndex((s) => s.key === step);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="p-6 border-b border-gray-100 flex items-start justify-between shrink-0">
+    <ModalShell size="xl" onBackdropClick={onClose}>
+      <ModalHeader
+        title={`Import ${entityLabel}`}
+        onClose={onClose}
+      >
+        <div className="flex items-center gap-2">
+          {STEPS.map((s, i) => (
+            <div key={s.key} className="flex items-center gap-1.5">
+              <span className={`text-xs font-semibold uppercase ${i <= stepIndex ? 'text-primary' : 'text-gray-300'}`}>
+                {s.label}
+              </span>
+              {i < STEPS.length - 1 && <ChevronRight className="w-3 h-3 text-gray-300" />}
+            </div>
+          ))}
+        </div>
+      </ModalHeader>
+
+      {/* Body */}
+      <div className="p-4 overflow-y-auto flex-1">
+        {step === 'upload' && (
           <div>
-            <h2 className="text-lg font-black tracking-tight">Import {entityLabel}</h2>
-            <div className="flex items-center gap-2 mt-2">
-              {STEPS.map((s, i) => (
-                <div key={s.key} className="flex items-center gap-1.5">
-                  <span className={`text-xs font-black uppercase tracking-widest ${i <= stepIndex ? 'text-blue-600' : 'text-gray-300'}`}>
-                    {s.label}
-                  </span>
-                  {i < STEPS.length - 1 && <ChevronRight className="w-3 h-3 text-gray-300" />}
+            <div
+              onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) void handleFile(f); }}
+              onDragOver={(e) => e.preventDefault()}
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-gray-200 rounded-lg p-12 flex flex-col items-center justify-center cursor-pointer hover:border-primary-border hover:bg-primary-light/30 transition-colors"
+            >
+              <Upload className="w-10 h-10 text-gray-300 mb-4" />
+              <p className="font-semibold text-gray-700 text-sm">Drag & drop or click to browse</p>
+              <p className="text-xs text-gray-400 mt-1">Supports .csv and .xlsx</p>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFile(f); }}
+            />
+            {parseError && (
+              <div className="mt-4 p-3 bg-danger-light text-danger-text rounded-md text-sm font-semibold">{parseError}</div>
+            )}
+          </div>
+        )}
+
+        {step === 'map' && (
+          <div className="space-y-4">
+            <p className="text-xs text-gray-500">
+              Map your spreadsheet columns to system fields. Required fields are marked <span className="text-danger">*</span>.
+            </p>
+            <div className="space-y-3">
+              {fields.map((field) => (
+                <div key={field.key} className="flex items-center gap-3">
+                  <label className="text-xs font-semibold uppercase text-gray-700 w-44 shrink-0">
+                    {field.label}
+                    {field.required && <span className="text-danger ml-0.5">*</span>}
+                  </label>
+                  <select
+                    value={mapping[field.key] ?? ''}
+                    onChange={(e) => setMapping({ ...mapping, [field.key]: e.target.value })}
+                    className="flex-1 bg-gray-50 border border-gray-200 rounded-md px-2.5 py-1.5 text-sm font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary/40 outline-none"
+                  >
+                    <option value="">— skip —</option>
+                    {rawHeaders.map((h) => <option key={h} value={h}>{h}</option>)}
+                  </select>
                 </div>
               ))}
             </div>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-50 rounded-xl text-gray-400">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="p-6 overflow-y-auto flex-1">
-          {step === 'upload' && (
-            <div>
-              <div
-                onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) void handleFile(f); }}
-                onDragOver={(e) => e.preventDefault()}
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-gray-200 rounded-2xl p-12 flex flex-col items-center justify-center cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-colors"
-              >
-                <Upload className="w-10 h-10 text-gray-300 mb-4" />
-                <p className="font-black text-gray-700 text-sm">Drag & drop or click to browse</p>
-                <p className="text-xs text-gray-400 mt-1">Supports .csv and .xlsx</p>
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFile(f); }}
-              />
-              {parseError && (
-                <div className="mt-4 p-3 bg-red-50 text-red-600 rounded-xl text-sm font-bold">{parseError}</div>
-              )}
-            </div>
-          )}
-
-          {step === 'map' && (
-            <div className="space-y-4">
-              <p className="text-xs text-gray-500">
-                Map your spreadsheet columns to system fields. Required fields are marked <span className="text-red-500">*</span>.
-              </p>
-              <div className="space-y-3">
-                {fields.map((field) => (
-                  <div key={field.key} className="flex items-center gap-3">
-                    <label className="text-xs font-black uppercase tracking-widest text-gray-700 w-44 shrink-0">
-                      {field.label}
-                      {field.required && <span className="text-red-500 ml-0.5">*</span>}
-                    </label>
-                    <select
-                      value={mapping[field.key] ?? ''}
-                      onChange={(e) => setMapping({ ...mapping, [field.key]: e.target.value })}
-                      className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 outline-none"
-                    >
-                      <option value="">— skip —</option>
-                      {rawHeaders.map((h) => <option key={h} value={h}>{h}</option>)}
-                    </select>
-                  </div>
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-xs font-semibold uppercase text-gray-500 mb-2">Duplicate handling</p>
+              <div className="flex gap-6">
+                {(['skip', 'upsert'] as const).map((m) => (
+                  <label key={m} className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" value={m} checked={mode === m} onChange={() => setMode(m)} className="accent-primary" />
+                    <span className="text-sm font-semibold text-gray-700">
+                      {m === 'skip' ? 'Skip duplicates' : 'Update existing'}
+                    </span>
+                  </label>
                 ))}
               </div>
-              <div className="border-t border-gray-100 pt-4">
-                <p className="text-xs font-black uppercase tracking-widest text-gray-500 mb-2">Duplicate handling</p>
-                <div className="flex gap-6">
-                  {(['skip', 'upsert'] as const).map((m) => (
-                    <label key={m} className="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" value={m} checked={mode === m} onChange={() => setMode(m)} className="accent-blue-600" />
-                      <span className="text-sm font-bold text-gray-700">
-                        {m === 'skip' ? 'Skip duplicates' : 'Update existing'}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {step === 'preview' && (
-            <div>
-              <p className="text-xs text-gray-500 mb-3">
-                Showing first {previewRows.length} of {rawRows.length} rows after mapping.
-              </p>
-              <div className="overflow-x-auto rounded-xl border border-gray-200">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-gray-50">
+        {step === 'preview' && (
+          <div>
+            <p className="text-xs text-gray-500 mb-3">
+              Showing first {previewRows.length} of {rawRows.length} rows after mapping.
+            </p>
+            <div className="overflow-x-auto rounded-lg border border-gray-200">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-50">
+                    {mappedFields.map((f) => (
+                      <th key={f.key} className="px-3 py-2 text-left font-semibold uppercase text-gray-500 whitespace-nowrap">{f.label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewRows.map((row, i) => (
+                    <tr key={i} className="border-t border-gray-100">
                       {mappedFields.map((f) => (
-                        <th key={f.key} className="px-3 py-2 text-left font-black uppercase tracking-widest text-gray-500 whitespace-nowrap">{f.label}</th>
+                        <td key={f.key} className="px-3 py-2 text-gray-700 font-medium max-w-[160px] truncate">{String(row[f.key] ?? '')}</td>
                       ))}
                     </tr>
-                  </thead>
-                  <tbody>
-                    {previewRows.map((row, i) => (
-                      <tr key={i} className="border-t border-gray-100">
-                        {mappedFields.map((f) => (
-                          <td key={f.key} className="px-3 py-2 text-gray-700 font-medium max-w-[160px] truncate">{String(row[f.key] ?? '')}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
+          </div>
+        )}
 
-          {step === 'result' && result && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 p-4 bg-green-50 rounded-2xl">
-                <CheckCircle className="w-6 h-6 text-green-500 shrink-0" />
-                <p className="text-sm">
-                  <span className="font-black text-green-700">{result.created}</span> created ·{' '}
-                  <span className="font-black text-blue-700">{result.updated}</span> updated ·{' '}
-                  <span className="font-black text-gray-500">{result.skipped}</span> skipped
-                </p>
-              </div>
-              {result.errors.length > 0 && (
-                <div className="p-4 bg-red-50 rounded-2xl">
-                  <div className="flex items-center gap-2 mb-2">
-                    <AlertCircle className="w-4 h-4 text-red-500" />
-                    <span className="text-xs font-black uppercase tracking-widest text-red-600">
-                      {result.errors.length} row{result.errors.length !== 1 ? 's' : ''} skipped due to errors
-                    </span>
-                  </div>
-                  <ul className="space-y-1 max-h-48 overflow-y-auto">
-                    {result.errors.map((e, i) => (
-                      <li key={i} className="text-xs text-red-600 font-medium">{e}</li>
-                    ))}
-                  </ul>
+        {step === 'result' && result && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-4 bg-success-light rounded-lg">
+              <CheckCircle className="w-6 h-6 text-success shrink-0" />
+              <p className="text-sm">
+                <span className="font-semibold text-success-text">{result.created}</span> created ·{' '}
+                <span className="font-semibold text-blue-700">{result.updated}</span> updated ·{' '}
+                <span className="font-semibold text-gray-500">{result.skipped}</span> skipped
+              </p>
+            </div>
+            {result.errors.length > 0 && (
+              <div className="p-4 bg-danger-light rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertCircle className="w-4 h-4 text-danger" />
+                  <span className="text-xs font-semibold uppercase text-danger-text">
+                    {result.errors.length} row{result.errors.length !== 1 ? 's' : ''} skipped due to errors
+                  </span>
                 </div>
-              )}
-            </div>
+                <ul className="space-y-1 max-h-48 overflow-y-auto">
+                  {result.errors.map((e, i) => (
+                    <li key={i} className="text-xs text-danger-text font-medium">{e}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <ModalFooter className="justify-between">
+        <div>
+          {step === 'map' && (
+            <button onClick={() => setStep('upload')} className="text-sm font-semibold text-gray-400 hover:text-gray-600">
+              ← Back
+            </button>
+          )}
+          {step === 'preview' && (
+            <button onClick={() => setStep('map')} className="text-sm font-semibold text-gray-400 hover:text-gray-600">
+              ← Back
+            </button>
+          )}
+          {step === 'result' && (
+            <button onClick={reset} className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-700">
+              <RotateCcw className="w-4 h-4" />
+              Import another file
+            </button>
           )}
         </div>
-
-        {/* Footer */}
-        <div className="p-6 border-t border-gray-100 flex justify-between items-center shrink-0">
-          <div>
-            {step === 'map' && (
-              <button onClick={() => setStep('upload')} className="text-sm font-black text-gray-400 hover:text-gray-600">
-                ← Back
-              </button>
-            )}
-            {step === 'preview' && (
-              <button onClick={() => setStep('map')} className="text-sm font-black text-gray-400 hover:text-gray-600">
-                ← Back
-              </button>
-            )}
-            {step === 'result' && (
-              <button onClick={reset} className="flex items-center gap-2 text-sm font-black text-gray-500 hover:text-gray-700">
-                <RotateCcw className="w-4 h-4" />
-                Import another file
-              </button>
-            )}
-          </div>
-          <div className="flex gap-3">
-            {step !== 'result' && (
-              <button
-                onClick={onClose}
-                className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-            )}
-            {step === 'map' && (
-              <button
-                onClick={() => setStep('preview')}
-                disabled={!canProceedFromMap}
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Preview
-              </button>
-            )}
-            {step === 'preview' && (
-              <button
-                onClick={() => void handleImport()}
-                disabled={submitting}
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-md disabled:opacity-50"
-              >
-                {submitting ? 'Importing…' : `Import ${rawRows.length} rows`}
-              </button>
-            )}
-            {step === 'result' && (
-              <button
-                onClick={onClose}
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-md"
-              >
-                Done
-              </button>
-            )}
-          </div>
+        <div className="flex gap-3">
+          {step !== 'result' && (
+            <Button variant="secondary" onClick={onClose}>
+              Cancel
+            </Button>
+          )}
+          {step === 'map' && (
+            <Button onClick={() => setStep('preview')} disabled={!canProceedFromMap}>
+              Preview
+            </Button>
+          )}
+          {step === 'preview' && (
+            <Button onClick={() => void handleImport()} loading={submitting}>
+              {`Import ${rawRows.length} rows`}
+            </Button>
+          )}
+          {step === 'result' && (
+            <Button onClick={onClose}>
+              Done
+            </Button>
+          )}
         </div>
-      </div>
-    </div>
+      </ModalFooter>
+    </ModalShell>
   );
 }

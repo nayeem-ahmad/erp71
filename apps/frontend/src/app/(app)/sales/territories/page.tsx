@@ -9,6 +9,7 @@ import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
+import { PageShell } from '@/components/ui';
 
 const IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
@@ -122,7 +123,7 @@ export default function TerritoriesPage() {
                                 <MapPin className="w-4 h-4" />
                             </div>
                             <div>
-                                <span className="block text-sm font-black text-gray-900">{territory.name}</span>
+                                <span className="block text-sm font-bold text-gray-900">{territory.name}</span>
                                 <span className="block text-xs text-gray-400">{territory.description || t.customerGroups.noDescription}</span>
                             </div>
                         </div>
@@ -199,8 +200,7 @@ export default function TerritoriesPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.territories.title}
                     subtitle={t.territories.subtitle}
@@ -219,7 +219,7 @@ export default function TerritoriesPage() {
                                 <Upload className="w-4 h-4 mr-1.5" />
                                 Import
                             </button>
-                            <button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0">
+                            <button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-sm transition-all">
                                 <Plus className="w-4 h-4 mr-2" /> {t.territories.newTerritory}
                             </button>
                         </>
@@ -245,7 +245,7 @@ export default function TerritoriesPage() {
                     emptyIcon={<MapPin className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.territories.searchPlaceholder}
                 />
-            </div>
+            
 
             <ImportDialog
                 open={importOpen}
@@ -255,7 +255,7 @@ export default function TerritoriesPage() {
                 importFn={(rows, mode) => api.importTerritories(rows, mode)}
                 onSuccess={() => void loadTerritories()}
             />
-        </div>
+        </PageShell>
     );
 }
 
@@ -288,16 +288,16 @@ function TerritoryForm({ territory, territories, onSave, onCancel }: {
     };
 
     return (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 mb-8">
             <div className="flex items-center justify-between mb-4">
-                <h3 className="font-black text-sm">{territory ? t.territories.editTerritory : t.territories.newTerritory}</h3>
+                <h3 className="font-bold text-sm">{territory ? t.territories.editTerritory : t.territories.newTerritory}</h3>
                 <button onClick={onCancel} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400"><X className="w-4 h-4" /></button>
             </div>
             {error && <div className="p-3 bg-red-50 text-red-600 rounded-xl text-sm font-bold mb-4">{error}</div>}
             <form onSubmit={handleSubmit} className="flex flex-wrap gap-4 items-end">
                 <div className="flex-1 min-w-[200px]">
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">{t.common.name}</label>
-                    <input required value={name} onChange={e => setName(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-2.5 px-4 font-black text-sm focus:ring-2 focus:ring-blue-500/20" placeholder={t.territories.placeholders.name} />
+                    <input required value={name} onChange={e => setName(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-2.5 px-4 font-bold text-sm focus:ring-2 focus:ring-blue-500/20" placeholder={t.territories.placeholders.name} />
                 </div>
                 <div className="flex-1 min-w-[200px]">
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">{t.territories.parentTerritory} <span className="text-gray-300">({t.common.optional})</span></label>
@@ -312,7 +312,7 @@ function TerritoryForm({ territory, territories, onSave, onCancel }: {
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">{t.common.description} <span className="text-gray-300">({t.common.optional})</span></label>
                     <input value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-2.5 px-4 font-bold text-gray-600 text-sm focus:ring-2 focus:ring-blue-500/20" placeholder={t.territories.placeholders.description} />
                 </div>
-                <button disabled={loading} type="submit" className="px-6 py-2.5 rounded-xl font-black text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200 transition-all disabled:opacity-50">
+                <button disabled={loading} type="submit" className="px-6 py-2.5 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all disabled:opacity-50">
                     {loading ? t.territories.saving : territory ? t.common.update : t.common.create}
                 </button>
             </form>

@@ -16,6 +16,8 @@ import { POSTING_RULES_FIELD_HELP, POSTING_RULES_HELP } from '@/lib/help/context
 import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { compactDensity } from '@/lib/ui/compact-density';
+import { Button } from '@/components/ui';
+import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 
 const EVENT_TYPE_LABELS: Record<string, string> = {
     sale: 'Sale',
@@ -41,9 +43,9 @@ const EVENT_TYPE_BADGE: Record<string, string> = {
     sale_return: 'bg-amber-50 text-amber-700 border-amber-200',
     purchase: 'bg-sky-50 text-sky-700 border-sky-200',
     purchase_return: 'bg-orange-50 text-orange-700 border-orange-200',
-    inventory_adjustment: 'bg-violet-50 text-violet-700 border-violet-200',
+    inventory_adjustment: 'bg-primary-light text-blue-700 border-primary-border',
     fund_movement: 'bg-gray-50 text-gray-700 border-gray-200',
-    loan_disbursement: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    loan_disbursement: 'bg-primary-light text-blue-700 border-primary-border',
     loan_repayment: 'bg-teal-50 text-teal-700 border-teal-200',
 };
 
@@ -237,7 +239,7 @@ export default function PostingRulesPage() {
                 cell: ({ row }) => (
                     <button
                         onClick={() => openEdit(row.original)}
-                        className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                        className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary-hover font-medium"
                     >
                         <Edit2 className="w-3.5 h-3.5" />
                         Edit
@@ -290,27 +292,22 @@ export default function PostingRulesPage() {
             )}
 
             {editingRule && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-                    <div className={`${compactDensity.modal} max-w-lg`}>
-                        <div className={`${compactDensity.modalPadding} flex items-center justify-between border-b border-gray-100`}>
-                            <div>
-                                <h2 className={compactDensity.modalTitle}>Edit Posting Rule</h2>
-                                <p className="text-sm text-gray-500 mt-0.5">
+                <ModalShell size="md" onBackdropClick={() => setEditingRule(null)}>
+                    <div className="flex max-h-[90vh] flex-col overflow-hidden">
+                        <ModalHeader
+                            title="Edit Posting Rule"
+                            subtitle={(
+                                <>
                                     {EVENT_TYPE_LABELS[editingRule.eventType] ?? editingRule.eventType}
                                     {editingRule.conditionValue && (
                                         <span className="ml-1 font-mono text-xs bg-gray-100 px-1 rounded">{editingRule.conditionValue}</span>
                                     )}
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => setEditingRule(null)}
-                                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
-                            >
-                                ×
-                            </button>
-                        </div>
+                                </>
+                            )}
+                            onClose={() => setEditingRule(null)}
+                        />
 
-                        <div className={`${compactDensity.modalPadding} ${compactDensity.formStack}`}>
+                        <div className={`${compactDensity.modalPadding} ${compactDensity.formStack} overflow-y-auto`}>
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <label className={`${compactDensity.formLabel} block mb-1`}>
@@ -377,7 +374,7 @@ export default function PostingRulesPage() {
                                             type="checkbox"
                                             checked={form.isActive}
                                             onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
-                                            className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                            className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary/40"
                                         />
                                         <span className={`${compactDensity.formLabel} inline-flex items-center gap-1.5`}>
                                             Active
@@ -395,20 +392,21 @@ export default function PostingRulesPage() {
                             )}
                         </div>
 
-                        <div className={`${compactDensity.modalPadding} flex justify-end gap-2 border-t border-gray-100`}>
-                            <button onClick={() => setEditingRule(null)} className={compactDensity.btnSecondary}>
+                        <ModalFooter>
+                            <Button variant="secondary" onClick={() => setEditingRule(null)}>
                                 Cancel
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                                variant="primary"
                                 onClick={handleSave}
-                                disabled={saving || !form.debitAccountId || !form.creditAccountId}
-                                className={`${compactDensity.btnPrimary} bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50`}
+                                loading={saving}
+                                disabled={!form.debitAccountId || !form.creditAccountId}
                             >
-                                {saving ? 'Saving...' : 'Save Rule'}
-                            </button>
-                        </div>
+                                Save Rule
+                            </Button>
+                        </ModalFooter>
                     </div>
-                </div>
+                </ModalShell>
             )}
         </AccountingPageShell>
     );

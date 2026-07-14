@@ -9,6 +9,7 @@ import { DataTable } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import CreatePurchaseQuotationModal from './CreatePurchaseQuotationModal';
+import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n, formatMessage } from '@/lib/i18n';
@@ -32,7 +33,7 @@ const statusColors: Record<string, string> = {
     RECEIVED:  'bg-amber-50 text-amber-700 border-amber-200',
     ACCEPTED:  'bg-emerald-50 text-emerald-700 border-emerald-200',
     REJECTED:  'bg-red-50 text-red-700 border-red-200',
-    CONVERTED: 'bg-violet-50 text-violet-700 border-violet-200',
+    CONVERTED: 'bg-success-light text-success-text border-emerald-200',
     CANCELLED: 'bg-gray-100 text-gray-500 border-gray-200',
 };
 
@@ -83,7 +84,7 @@ export default function PurchaseQuotationsPage() {
     const columns: ColumnDef<PurchaseQuotation, any>[] = useMemo(() => [
         columnHelper.accessor('rfq_number', {
             header: t.purchaseQuotations.columns.rfqNumber,
-            cell: (info) => <span className="text-sm font-black text-gray-900">{info.getValue()}</span>,
+            cell: (info) => <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>,
             size: 130,
         }),
         columnHelper.accessor('created_at', {
@@ -123,7 +124,7 @@ export default function PurchaseQuotationsPage() {
         }),
         columnHelper.accessor('total_amount', {
             header: t.purchaseQuotations.columns.total,
-            cell: (info) => <span className="text-sm font-black text-blue-600">{formatBDT(parseFloat(info.getValue()), { locale })}</span>,
+            cell: (info) => <span className="text-sm font-bold text-blue-600">{formatBDT(parseFloat(info.getValue()), { locale })}</span>,
             size: 120,
         }),
         columnHelper.accessor('status', {
@@ -131,7 +132,7 @@ export default function PurchaseQuotationsPage() {
             cell: (info) => {
                 const s = info.getValue();
                 return (
-                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${statusColors[s] ?? 'bg-gray-50 text-gray-700 border-gray-200'}`}>
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${statusColors[s] ?? 'bg-gray-50 text-gray-700 border-gray-200'}`}>
                         {s}
                     </span>
                 );
@@ -152,7 +153,7 @@ export default function PurchaseQuotationsPage() {
                         </Link>
                         {canConvert && (
                             <button onClick={() => handleConvert(rfq)}
-                                className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors" title={t.purchaseQuotations.convertToPo}>
+                                className="p-1.5 rounded-lg text-primary hover:bg-primary-light transition-colors" title={t.purchaseQuotations.convertToPo}>
                                 <ShoppingCart className="w-4 h-4" />
                             </button>
                         )}
@@ -178,8 +179,7 @@ export default function PurchaseQuotationsPage() {
     ], []);
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.purchaseQuotations.title}
                     subtitle={t.purchaseQuotations.subtitle}
@@ -192,7 +192,7 @@ export default function PurchaseQuotationsPage() {
                     actions={(
                         <button
                             onClick={() => setIsModalOpen(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5"
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg transition-all"
                         >
                             <Plus className="w-4 h-4 mr-2" />
                             New RFQ
@@ -216,9 +216,7 @@ export default function PurchaseQuotationsPage() {
                     emptyIcon={<FileSearch className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.purchaseQuotations.searchPlaceholder}
                     filterPresets={filterPresets}
-                    enableRowSelection
                 />
-            </div>
-        </div>
+    </PageShell>
     );
 }

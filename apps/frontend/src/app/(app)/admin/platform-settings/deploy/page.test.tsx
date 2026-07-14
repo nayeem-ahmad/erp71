@@ -1,6 +1,16 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import ProductionDeployPage from './page';
+import Toaster from '@/components/Toaster';
+
+function renderPage() {
+    return render(
+        <>
+            <ProductionDeployPage />
+            <Toaster />
+        </>,
+    );
+}
 
 jest.mock('next/link', () => ({
     __esModule: true,
@@ -38,14 +48,14 @@ describe('ProductionDeployPage', () => {
     });
 
     it('loads deploy status on mount', async () => {
-        render(<ProductionDeployPage />);
+        renderPage();
         await waitFor(() => {
             expect(getFetchWithAuth()).toHaveBeenCalledWith('/admin/deploy/status');
         });
     });
 
     it('renders short live and production SHAs', async () => {
-        render(<ProductionDeployPage />);
+        renderPage();
         await waitFor(() => {
             expect(screen.getByText('abcdef1')).toBeInTheDocument();
             expect(screen.getByText('9876543')).toBeInTheDocument();
@@ -53,7 +63,7 @@ describe('ProductionDeployPage', () => {
     });
 
     it('shows how many commits are pending', async () => {
-        render(<ProductionDeployPage />);
+        renderPage();
         await waitFor(() => {
             expect(screen.getByText(/3 commits/i)).toBeInTheDocument();
         });
@@ -61,7 +71,7 @@ describe('ProductionDeployPage', () => {
 
     it('shows up-to-date state when aheadBy is 0', async () => {
         getFetchWithAuth().mockResolvedValue({ ...pending, aheadBy: 0 });
-        render(<ProductionDeployPage />);
+        renderPage();
         await waitFor(() => {
             expect(screen.getByText(/up to date/i)).toBeInTheDocument();
         });
@@ -69,7 +79,7 @@ describe('ProductionDeployPage', () => {
 
     it('triggers a deploy via POST after confirmation', async () => {
         const fetchWithAuth = getFetchWithAuth();
-        render(<ProductionDeployPage />);
+        renderPage();
         await waitFor(() => screen.getByRole('button', { name: /deploy to production/i }));
         fireEvent.click(screen.getByRole('button', { name: /deploy to production/i }));
         await waitFor(() => {
@@ -80,7 +90,7 @@ describe('ProductionDeployPage', () => {
     it('does not deploy when the confirmation is dismissed', async () => {
         (window.confirm as jest.Mock).mockReturnValue(false);
         const fetchWithAuth = getFetchWithAuth();
-        render(<ProductionDeployPage />);
+        renderPage();
         await waitFor(() => screen.getByRole('button', { name: /deploy to production/i }));
         fireEvent.click(screen.getByRole('button', { name: /deploy to production/i }));
         await new Promise((r) => setTimeout(r, 0));
@@ -88,7 +98,7 @@ describe('ProductionDeployPage', () => {
     });
 
     it('shows a success toast after triggering a deploy', async () => {
-        render(<ProductionDeployPage />);
+        renderPage();
         await waitFor(() => screen.getByRole('button', { name: /deploy to production/i }));
         fireEvent.click(screen.getByRole('button', { name: /deploy to production/i }));
         await waitFor(() => {

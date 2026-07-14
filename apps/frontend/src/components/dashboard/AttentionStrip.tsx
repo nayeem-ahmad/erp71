@@ -23,7 +23,7 @@ const BORDER: Record<AttentionTone, string> = {
 export function AttentionStrip({ items, allClearLabel }: { items: AttentionItem[]; allClearLabel: string }) {
     if (!items.length) {
         return (
-            <div className="rounded-xl border border-[#eef2f7] bg-white p-4 text-center text-xs font-semibold text-emerald-700 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+            <div className="rounded-xl border border-gray-100 bg-white p-4 text-center text-xs font-semibold text-emerald-700 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
                 {allClearLabel}
             </div>
         );
@@ -35,11 +35,11 @@ export function AttentionStrip({ items, allClearLabel }: { items: AttentionItem[
                 <Link
                     key={item.id}
                     href={item.href}
-                    className={`rounded-xl border border-[#eef2f7] border-l-[3px] ${BORDER[item.tone]} bg-white p-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-shadow hover:shadow-md`}
+                    className={`rounded-xl border border-gray-100 border-l-[3px] ${BORDER[item.tone]} bg-white p-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-shadow hover:shadow-md`}
                 >
-                    <p className="text-lg font-extrabold text-slate-900">{item.value}</p>
-                    <p className="mt-0.5 text-[10px] text-slate-600">{item.label}</p>
-                    <span className="mt-1 inline-block text-[10px] font-bold text-[#6366f1]">{item.cta} →</span>
+                    <p className="text-lg font-extrabold text-gray-900">{item.value}</p>
+                    <p className="mt-0.5 text-[10px] text-gray-600">{item.label}</p>
+                    <span className="mt-1 inline-block text-[10px] font-bold text-primary">{item.cta} →</span>
                 </Link>
             ))}
         </div>

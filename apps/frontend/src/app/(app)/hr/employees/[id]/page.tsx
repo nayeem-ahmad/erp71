@@ -9,6 +9,7 @@ import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell, Button, StatusBadge, statusToneFor } from '@/components/ui';
 
 interface Department { id: string; name: string; }
 interface Designation { id: string; name: string; }
@@ -157,22 +158,22 @@ export default function EmployeeDetailPage() {
 
     if (loading) {
         return (
-            <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px] flex items-center justify-center">
-                <p className="text-gray-400 font-bold">{t.employees.detail.loading}</p>
-            </div>
+            <PageShell className="flex items-center justify-center">
+                <p className="text-gray-400 font-semibold">{t.employees.detail.loading}</p>
+            </PageShell>
         );
     }
 
     if (!employee) {
         return (
-            <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px] flex items-center justify-center">
-                <p className="text-red-500 font-bold">{t.employees.detail.notFound}</p>
-            </div>
+            <PageShell className="flex items-center justify-center">
+                <p className="text-danger font-semibold">{t.employees.detail.notFound}</p>
+            </PageShell>
         );
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-3xl mx-auto space-y-6">
                 <PageHeader
                     title={employee.name}
@@ -186,28 +187,23 @@ export default function EmployeeDetailPage() {
                     )}
                 />
 
-                <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
-                    <div className="flex justify-end">
-                        <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${employee.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                            {employee.status}
-                        </span>
-                    </div>
-                    <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                            <p className="text-xs font-medium text-gray-500">{t.employees.detail.department}</p>
-                            <p className="font-bold mt-0.5">{employee.department?.name ?? '—'}</p>
+                <div className="rounded-lg border border-gray-100 bg-white p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                        <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center text-white font-semibold text-sm uppercase shrink-0">
+                            {employee.name.substring(0, 2)}
                         </div>
-                        <div>
-                            <p className="text-xs font-medium text-gray-500">{t.employees.detail.designation}</p>
-                            <p className="font-bold mt-0.5">{employee.designation?.name ?? '—'}</p>
-                        </div>
-                        <div>
-                            <p className="text-xs font-medium text-gray-500">{t.employees.detail.joined}</p>
-                            <p className="font-bold mt-0.5">{employee.date_of_joining ? formatDate(employee.date_of_joining) : '—'}</p>
-                        </div>
-                        <div>
-                            <p className="text-xs font-medium text-gray-500">{t.employees.detail.added}</p>
-                            <p className="font-bold mt-0.5">{formatDate(employee.created_at)}</p>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-base font-semibold text-gray-900">{employee.name}</p>
+                            <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                                <StatusBadge tone={statusToneFor(employee.status)}>{employee.status}</StatusBadge>
+                                <span className="text-xs text-gray-500">{employee.employee_code}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-xs text-gray-500">
+                                <span>{t.employees.detail.department}: {employee.department?.name ?? '—'}</span>
+                                <span>{t.employees.detail.designation}: {employee.designation?.name ?? '—'}</span>
+                                <span>{t.employees.detail.joined}: {employee.date_of_joining ? formatDate(employee.date_of_joining) : '—'}</span>
+                                <span>{t.employees.detail.added}: {formatDate(employee.created_at)}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -217,8 +213,8 @@ export default function EmployeeDetailPage() {
                 {success && <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl text-sm font-bold border border-emerald-100">{success}</div>}
 
                 {/* Edit form */}
-                <form onSubmit={handleSave} className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-4">
-                    <h2 className="text-sm font-black uppercase tracking-widest text-gray-400">{t.employees.detail.profile}</h2>
+                <form onSubmit={handleSave} className="bg-white rounded-lg border border-gray-100 p-4 shadow-sm space-y-4">
+                    <h2 className="text-sm font-semibold text-gray-900">{t.employees.detail.profile}</h2>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="col-span-2 space-y-2">
@@ -226,7 +222,7 @@ export default function EmployeeDetailPage() {
                             <div className="relative">
                                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input required type="text" value={form.name} onChange={set('name')}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-black focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" />
+                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-semibold focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" />
                             </div>
                         </div>
 
@@ -235,7 +231,7 @@ export default function EmployeeDetailPage() {
                             <div className="relative">
                                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input required type="text" value={form.phone} onChange={set('phone')}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-black focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" />
+                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-semibold focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" />
                             </div>
                         </div>
 
@@ -295,7 +291,7 @@ export default function EmployeeDetailPage() {
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.common.status}</label>
                             <select value={form.status} onChange={set('status')}
-                                className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-black text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all">
+                                className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-semibold text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all">
                                 <option value="ACTIVE">{t.employees.detail.active}</option>
                                 <option value="INACTIVE">{t.employees.detail.inactive}</option>
                             </select>
@@ -303,22 +299,20 @@ export default function EmployeeDetailPage() {
                     </div>
 
                     <div className="pt-2 flex justify-end">
-                        <button disabled={saving} type="submit"
-                            className="flex items-center gap-2 px-6 py-3 rounded-xl font-black text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 disabled:opacity-50">
-                            <Save className="w-4 h-4" />
+                        <Button type="submit" variant="primary" loading={saving} icon={<Save className="w-4 h-4" />}>
                             {saving ? t.employees.detail.saving : t.employees.detail.saveChanges}
-                        </button>
+                        </Button>
                     </div>
                 </form>
 
                 {/* System access / User link */}
-                <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-4">
-                    <h2 className="text-sm font-black uppercase tracking-widest text-gray-400">{t.employees.detail.systemAccess}</h2>
+                <div className="bg-white rounded-lg border border-gray-100 p-4 shadow-sm space-y-4">
+                    <h2 className="text-sm font-semibold text-gray-900">{t.employees.detail.systemAccess}</h2>
 
                     {employee.user ? (
                         <div className="flex items-center justify-between p-4 bg-emerald-50 border border-emerald-100 rounded-xl">
                             <div>
-                                <p className="text-sm font-black text-emerald-800">{employee.user.email}</p>
+                                <p className="text-sm font-semibold text-emerald-800">{employee.user.email}</p>
                                 {employee.user.name && <p className="text-xs text-emerald-600 mt-0.5">{employee.user.name}</p>}
                             </div>
                             <button
@@ -344,7 +338,7 @@ export default function EmployeeDetailPage() {
                                 <button
                                     onClick={handleLinkUser}
                                     disabled={!linkUserId || linkLoading}
-                                    className="flex items-center gap-2 px-4 py-3 rounded-xl font-black text-sm bg-blue-600 hover:bg-blue-700 text-white transition-all disabled:opacity-50"
+                                    className="flex items-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm bg-blue-600 hover:bg-blue-700 text-white transition-all disabled:opacity-50"
                                 >
                                     <LinkIcon className="w-4 h-4" />
                                     Link
@@ -355,6 +349,6 @@ export default function EmployeeDetailPage() {
                     )}
                 </div>
             </div>
-        </div>
+        </PageShell>
     );
 }

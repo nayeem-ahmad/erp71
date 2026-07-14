@@ -13,6 +13,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { isPosEnabled } from '@/lib/sales-settings';
 import { routes } from '@/lib/routes';
+import { PageShell } from '@/components/ui';
 
 interface Sale {
     id: string;
@@ -31,7 +32,7 @@ interface Sale {
 
 const statusColors: Record<string, string> = {
     COMPLETED: 'bg-green-50 text-green-700 border-green-200',
-    REFUNDED: 'bg-rose-50 text-rose-700 border-rose-200',
+    REFUNDED: 'bg-danger-light text-danger-text border-red-200',
     PARTIAL_REFUND: 'bg-amber-50 text-amber-700 border-amber-200',
 };
 
@@ -66,7 +67,7 @@ export default function SalesPage() {
             columnHelper.accessor('serial_number', {
                 header: t.sales.columns.serialNumber,
                 cell: (info) => (
-                    <span className="text-sm font-black text-gray-900">{info.getValue()}</span>
+                    <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>
                 ),
                 size: 140,
             }),
@@ -107,7 +108,7 @@ export default function SalesPage() {
             columnHelper.accessor('total_amount', {
                 header: t.sales.columns.total,
                 cell: (info) => (
-                    <span className="text-sm font-black text-blue-600">
+                    <span className="text-sm font-bold text-blue-600">
                         {formatBDT(parseFloat(info.getValue()), { locale })}
                     </span>
                 ),
@@ -132,7 +133,7 @@ export default function SalesPage() {
                     const status = info.getValue();
                     return (
                         <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${
                                 statusColors[status] ?? 'bg-gray-50 text-gray-700 border-gray-200'
                             }`}
                         >
@@ -216,8 +217,7 @@ export default function SalesPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.sales.list.title}
                     subtitle={t.sales.list.subtitle}
@@ -232,7 +232,7 @@ export default function SalesPage() {
                             {posEnabled ? (
                                 <Link
                                     href={routes.sales.pos}
-                                    className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:-translate-y-0.5 active:translate-y-0"
+                                    className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-colors"
                                 >
                                     <ShoppingCart className="w-4 h-4 mr-2" />
                                     {t.sidebar.items.pos}
@@ -252,9 +252,8 @@ export default function SalesPage() {
                     emptyIcon={<Receipt className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.sales.dataTable.searchPlaceholder}
                     filterPresets={filterPresets}
-                    enableRowSelection
                 />
-            </div>
-        </div>
+            
+        </PageShell>
     );
 }

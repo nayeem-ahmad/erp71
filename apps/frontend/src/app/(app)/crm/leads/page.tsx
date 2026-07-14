@@ -2,15 +2,15 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
-import { Plus, RefreshCw, Search, Eye, Trash2, ListChecks, Upload, X } from 'lucide-react';
+import { Plus, RefreshCw, Search, Eye, Trash2, ListChecks, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import { DataTable, type BulkAction } from '@/components/data-table';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
-import { PageShell, PageHeader, Button } from '@/components/ui/compact';
+import { PageShell, PageHeader, Button, Select, StatusBadge, Input, type StatusBadgeTone } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { compactDensity } from '@/lib/ui/compact-density';
 import {
@@ -38,10 +38,10 @@ interface Lead {
 const columnHelper = createColumnHelper<Lead>();
 
 const priorityColors: Record<string, string> = {
-    LOW: 'bg-slate-50 text-slate-600',
+    LOW: 'bg-gray-50 text-gray-600',
     MEDIUM: 'bg-blue-50 text-blue-700',
     HIGH: 'bg-amber-50 text-amber-700',
-    URGENT: 'bg-rose-50 text-rose-700',
+    URGENT: 'bg-danger-light text-danger-text',
 };
 
 function scoreBadgeColor(score: number): string {
@@ -49,6 +49,14 @@ function scoreBadgeColor(score: number): string {
     if (score >= 40) return 'bg-amber-50 text-amber-700';
     return 'bg-gray-100 text-gray-600';
 }
+
+const leadStatusTone: Record<string, StatusBadgeTone> = {
+    NEW: 'info',
+    CONTACTED: 'neutral',
+    QUALIFIED: 'neutral',
+    LOST: 'danger',
+    CONVERTED: 'success',
+};
 
 const LEAD_IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
@@ -76,6 +84,7 @@ export default function LeadsPage() {
     const [leads, setLeads] = useState<Lead[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('');
@@ -92,11 +101,17 @@ export default function LeadsPage() {
         api.getTeamMembers().then((d: any) => setTeamMembers(Array.isArray(d) ? d : [])).catch(() => setTeamMembers([]));
     }, []);
 
+    // Debounce free-text search before it triggers a server request
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(search), 300);
+        return () => clearTimeout(timer);
+    }, [search]);
+
     const loadLeads = useCallback(async () => {
         setLoading(true);
         try {
             const data = await api.getLeads({
-                search: search || undefined,
+                search: debouncedSearch || undefined,
                 status: statusFilter || undefined,
                 category: categoryFilter || undefined,
                 priority: priorityFilter || undefined,
@@ -109,7 +124,7 @@ export default function LeadsPage() {
         } finally {
             setLoading(false);
         }
-    }, [search, statusFilter, categoryFilter, priorityFilter, myTodaysActions]);
+    }, [debouncedSearch, statusFilter, categoryFilter, priorityFilter, myTodaysActions]);
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
 
@@ -153,39 +168,12 @@ export default function LeadsPage() {
     const priorityLabel = (priority: string) => (m.priorities as Record<string, string>)[priority] ?? priority;
 
     const columns: ColumnDef<Lead, any>[] = useMemo(() => [
-        columnHelper.display({
-            id: 'select',
-            header: ({ table }) => (
-                <input
-                    type="checkbox"
-                    aria-label="Select all"
-                    className="h-4 w-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 cursor-pointer"
-                    checked={table.getIsAllPageRowsSelected()}
-                    ref={(el) => { if (el) el.indeterminate = table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected(); }}
-                    onChange={table.getToggleAllPageRowsSelectedHandler()}
-                />
-            ),
-            cell: ({ row }) => (
-                <input
-                    type="checkbox"
-                    aria-label="Select row"
-                    className="h-4 w-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 cursor-pointer"
-                    checked={row.getIsSelected()}
-                    onChange={row.getToggleSelectedHandler()}
-                    onClick={(e) => e.stopPropagation()}
-                />
-            ),
-            enableSorting: false,
-            enableColumnFilter: false,
-            enableResizing: false,
-            size: 40,
-        }),
         columnHelper.accessor('name', {
             header: m.columns.name,
             cell: (info) => (
                 <Link
                     href={routes.crm.leadDetail(info.row.original.id)}
-                    className="font-semibold text-gray-900 hover:text-violet-600"
+                    className="font-semibold text-gray-900 hover:text-primary"
                 >
                     {info.getValue()}
                 </Link>
@@ -207,9 +195,9 @@ export default function LeadsPage() {
         columnHelper.accessor('status', {
             header: m.columns.status,
             cell: (info) => (
-                <span className="text-xs font-semibold px-2 py-1 rounded-full bg-violet-50 text-violet-700">
+                <StatusBadge tone={leadStatusTone[info.getValue()] ?? 'neutral'}>
                     {statusLabel(info.getValue())}
-                </span>
+                </StatusBadge>
             ),
         }),
         columnHelper.accessor('score', {
@@ -256,7 +244,7 @@ export default function LeadsPage() {
                         <button
                             type="button"
                             onClick={() => void deleteLead(lead)}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-danger hover:bg-danger-light transition-colors"
                             title={c.delete}
                         >
                             <Trash2 className="w-4 h-4" />
@@ -277,6 +265,18 @@ export default function LeadsPage() {
             ...customFieldDefs.map((def) => ({ key: def.key, label: def.label, required: false })),
         ],
         [customFieldDefs],
+    );
+
+    const bulkActions: BulkAction<Lead>[] = useMemo(
+        () => [
+            {
+                label: c.delete,
+                tone: 'danger',
+                icon: <Trash2 className="w-4 h-4" />,
+                onClick: bulkDelete,
+            },
+        ],
+        [c.delete, bulkDelete],
     );
 
     return (
@@ -312,7 +312,7 @@ export default function LeadsPage() {
                     onClick={() => setMyTodaysActions((v) => !v)}
                     className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
                         myTodaysActions
-                            ? 'bg-violet-600 text-white border-violet-600'
+                            ? 'bg-primary text-white border-primary hover:bg-primary-hover'
                             : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                     }`}
                 >
@@ -321,89 +321,70 @@ export default function LeadsPage() {
                 </button>
                 <div className="relative flex-1 min-w-[200px] max-w-sm">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
+                    <Input
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder={m.searchPlaceholder}
-                        className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm"
+                        className="pl-9"
                     />
                 </div>
-                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allStatuses}</option>
                     {LEAD_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
-                </select>
-                <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                </Select>
+                <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allCategories}</option>
                     {LEAD_CATEGORIES.map((cat) => <option key={cat} value={cat}>{categoryLabel(cat)}</option>)}
-                </select>
-                <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                </Select>
+                <Select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allPriorities}</option>
                     {LEAD_PRIORITIES.map((p) => <option key={p} value={p}>{priorityLabel(p)}</option>)}
-                </select>
+                </Select>
             </div>
 
-            {selectedLeads.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
-                    <span className="text-sm font-semibold text-violet-800">
-                        {((m as any).selectedCount ?? '{count} selected').replace('{count}', String(selectedLeads.length))}
-                    </span>
-                    <div className="flex-1" />
-                    <select
-                        value=""
-                        disabled={bulkBusy}
-                        onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) void runBulkAction('status', v); }}
-                        className="border border-violet-200 bg-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
-                    >
-                        <option value="">{(m as any).bulkSetStatus ?? 'Set status…'}</option>
-                        {(['NEW', 'CONTACTED', 'QUALIFIED'] as const).map((s) => (
-                            <option key={s} value={s}>{statusLabel(s)}</option>
-                        ))}
-                    </select>
-                    <select
-                        value=""
-                        disabled={bulkBusy}
-                        onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) void runBulkAction('assign', v === '__unassign__' ? '' : v); }}
-                        className="border border-violet-200 bg-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
-                    >
-                        <option value="">{(m as any).bulkAssign ?? 'Assign to…'}</option>
-                        <option value="__unassign__">{(m as any).bulkUnassign ?? '— Unassigned —'}</option>
-                        {teamMembers.map((mem) => {
-                            const id = mem.userId ?? mem.user_id ?? mem.user?.id;
-                            const label = mem.name ?? mem.user?.name ?? mem.email ?? mem.user?.email ?? id;
-                            return id ? <option key={id} value={id}>{label}</option> : null;
-                        })}
-                    </select>
-                    <button
-                        type="button"
-                        onClick={bulkDelete}
-                        disabled={bulkBusy}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50"
-                    >
-                        <Trash2 className="w-4 h-4" /> {c.delete}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={clearSelection}
-                        disabled={bulkBusy}
-                        className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-sm text-gray-600 hover:bg-white disabled:opacity-50"
-                        title={(c as any).clear ?? 'Clear'}
-                    >
-                        <X className="w-4 h-4" />
-                    </button>
-                </div>
-            )}
-
             <DataTable<Lead>
-                key={selectionEpoch}
                 tableId="crm-leads"
                 title={m.title}
                 data={leads}
                 columns={columns}
                 isLoading={loading}
+                showSearch={false}
                 enableRowSelection
                 onRowSelectionChange={setSelectedLeads}
                 getRowId={(l) => l.id}
                 emptyMessage={myTodaysActions ? m.myTodaysActionsEmpty : m.emptyMessage}
+                clearSelectionSignal={selectionEpoch}
+                bulkActions={bulkActions}
+                bulkActionsDisabled={bulkBusy}
+                renderBulkExtra={() => (
+                    <>
+                        <select
+                            value=""
+                            disabled={bulkBusy}
+                            onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) void runBulkAction('status', v); }}
+                            className="border border-primary-border bg-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
+                        >
+                            <option value="">{(m as any).bulkSetStatus ?? 'Set status…'}</option>
+                            {(['NEW', 'CONTACTED', 'QUALIFIED'] as const).map((s) => (
+                                <option key={s} value={s}>{statusLabel(s)}</option>
+                            ))}
+                        </select>
+                        <select
+                            value=""
+                            disabled={bulkBusy}
+                            onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) void runBulkAction('assign', v === '__unassign__' ? '' : v); }}
+                            className="border border-primary-border bg-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
+                        >
+                            <option value="">{(m as any).bulkAssign ?? 'Assign to…'}</option>
+                            <option value="__unassign__">{(m as any).bulkUnassign ?? '— Unassigned —'}</option>
+                            {teamMembers.map((mem) => {
+                                const id = mem.userId ?? mem.user_id ?? mem.user?.id;
+                                const label = mem.name ?? mem.user?.name ?? mem.email ?? mem.user?.email ?? id;
+                                return id ? <option key={id} value={id}>{label}</option> : null;
+                            })}
+                        </select>
+                    </>
+                )}
             />
 
             <ImportDialog

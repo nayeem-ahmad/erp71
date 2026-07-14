@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import PhoneNumberField from '@/components/PhoneNumberField';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { DEFAULT_MOBILE_COUNTRY_CODE, getMobileCountryOption } from '@erp71/shared-types';
+import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 
 function nationalMobileFromE164(e164: string | null | undefined, countryCode: string): string {
     if (!e164) return '';
@@ -85,23 +86,12 @@ export default function PlatformUserFormModal({ open, mode, user, onClose, onSav
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-            <div
-                className="w-full max-w-lg rounded-3xl bg-white shadow-2xl flex flex-col"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
-                    <h2 className="text-lg font-black tracking-tight">
-                        {mode === 'create' ? m.createTitle : m.editTitle}
-                    </h2>
-                    <button type="button" onClick={onClose} className="rounded-xl p-2 text-gray-400 hover:bg-gray-100">
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
+        <ModalShell size="sm" onBackdropClick={onClose}>
+            <ModalHeader title={mode === 'create' ? m.createTitle : m.editTitle} onClose={onClose} />
 
-                <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 overflow-y-auto">
                     {error && (
-                        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
                             {error}
                         </div>
                     )}
@@ -112,7 +102,7 @@ export default function PlatformUserFormModal({ open, mode, user, onClose, onSav
                             type="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none"
+                            className="w-full rounded-md border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none"
                         />
                     </div>
 
@@ -121,7 +111,7 @@ export default function PlatformUserFormModal({ open, mode, user, onClose, onSav
                         <input
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none"
+                            className="w-full rounded-md border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none"
                         />
                     </div>
 
@@ -133,7 +123,7 @@ export default function PlatformUserFormModal({ open, mode, user, onClose, onSav
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 minLength={8}
-                                className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none"
+                                className="w-full rounded-md border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none"
                             />
                         </div>
                     )}
@@ -148,27 +138,26 @@ export default function PlatformUserFormModal({ open, mode, user, onClose, onSav
                         mobilePlaceholder={m.mobilePlaceholder}
                         idPrefix="platform-user"
                     />
-                </div>
-
-                <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        disabled={saving}
-                        className="rounded-2xl bg-gray-100 px-5 py-2.5 text-sm font-black text-gray-700 hover:bg-gray-200 disabled:opacity-50"
-                    >
-                        {m.cancel}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => void handleSave()}
-                        disabled={saving}
-                        className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-200 hover:bg-blue-700 disabled:opacity-60"
-                    >
-                        {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> {m.saving}</> : m.save}
-                    </button>
-                </div>
             </div>
-        </div>
+
+            <ModalFooter>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    disabled={saving}
+                    className="rounded-md bg-gray-100 px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+                >
+                    {m.cancel}
+                </button>
+                <button
+                    type="button"
+                    onClick={() => void handleSave()}
+                    disabled={saving}
+                    className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
+                >
+                    {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> {m.saving}</> : m.save}
+                </button>
+            </ModalFooter>
+        </ModalShell>
     );
 }

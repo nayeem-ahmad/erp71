@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { toast } from '@/lib/toast';
+import { Button, Field, Input, PageShell } from '@/components/ui';
 
 type StoreRow = { id: string; name: string };
 
@@ -11,8 +13,6 @@ export default function StoreSettingsPage() {
     const copy = t.settings.storeSettings;
     const [stores, setStores] = useState<StoreRow[]>([]);
     const [savingId, setSavingId] = useState<string | null>(null);
-    const [message, setMessage] = useState<string | null>(null);
-    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         api.getStores()
@@ -26,48 +26,41 @@ export default function StoreSettingsPage() {
 
     const handleSave = async (store: StoreRow) => {
         setSavingId(store.id);
-        setMessage(null);
-        setError(null);
         try {
             await api.updateStore(store.id, { name: store.name.trim() });
-            setMessage(copy.saved);
+            toast.success(copy.saved);
         } catch {
-            setError(copy.error);
+            toast.error(copy.error);
         } finally {
             setSavingId(null);
         }
     };
 
     return (
-        <div className="max-w-2xl mx-auto p-6 space-y-6">
-            <div>
+        <PageShell maxWidth="narrow">
+            <div className="mb-4">
                 <h1 className="text-xl font-bold">{copy.title}</h1>
                 <p className="text-sm text-gray-500">{copy.description}</p>
             </div>
-            {message && <p className="text-sm text-emerald-600">{message}</p>}
-            {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="space-y-4">
                 {stores.map((store) => (
                     <div key={store.id} className="flex items-end gap-3">
-                        <label className="flex-1 space-y-1">
-                            <span className="text-sm font-medium text-gray-700">{copy.nameLabel}</span>
-                            <input
+                        <Field label={copy.nameLabel} htmlFor={`store-${store.id}`} className="flex-1">
+                            <Input
+                                id={`store-${store.id}`}
                                 value={store.name}
                                 onChange={(e) => handleName(store.id, e.target.value)}
-                                className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                             />
-                        </label>
-                        <button
-                            type="button"
+                        </Field>
+                        <Button
                             onClick={() => handleSave(store)}
                             disabled={savingId === store.id || !store.name.trim()}
-                            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-xl disabled:opacity-70"
                         >
                             {copy.save}
-                        </button>
+                        </Button>
                     </div>
                 ))}
             </div>
-        </div>
+        </PageShell>
     );
 }

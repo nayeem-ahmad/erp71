@@ -1,6 +1,17 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import CountersPage from './page';
+import Toaster from '@/components/Toaster';
+import { useToastStore } from '@/lib/toast';
+
+function renderPage() {
+    return render(
+        <>
+            <CountersPage />
+            <Toaster />
+        </>,
+    );
+}
 
 jest.mock('next/navigation', () => ({
     useRouter: () => ({ push: jest.fn() }),
@@ -44,13 +55,14 @@ function setupLocalStorage(storeId = 'store-1') {
 
 beforeEach(() => {
     jest.clearAllMocks();
+    useToastStore.setState({ toasts: [] });
     setupLocalStorage('store-1');
 });
 
 describe('CountersPage — no store selected', () => {
     it('shows a message when no store_id in localStorage', async () => {
         setupLocalStorage('');
-        render(<CountersPage />);
+        renderPage();
         expect(screen.getByText(/No store selected/)).toBeInTheDocument();
     });
 });
@@ -58,13 +70,13 @@ describe('CountersPage — no store selected', () => {
 describe('CountersPage — with store selected', () => {
     it('shows loading state initially', () => {
         mockApi.getCounters.mockReturnValue(new Promise(() => {}));
-        render(<CountersPage />);
+        renderPage();
         expect(screen.getByText('Loading…')).toBeInTheDocument();
     });
 
     it('renders the page heading after load', async () => {
         mockApi.getCounters.mockResolvedValue([]);
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => {
             expect(screen.getByRole('heading', { name: 'POS Counters' })).toBeInTheDocument();
         });
@@ -72,7 +84,7 @@ describe('CountersPage — with store selected', () => {
 
     it('shows empty state when no counters', async () => {
         mockApi.getCounters.mockResolvedValue([]);
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => {
             expect(screen.getByText('No counters yet')).toBeInTheDocument();
         });
@@ -80,7 +92,7 @@ describe('CountersPage — with store selected', () => {
 
     it('renders counter list', async () => {
         mockApi.getCounters.mockResolvedValue(sampleCounters);
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => {
             expect(screen.getByText('Counter 1')).toBeInTheDocument();
             expect(screen.getByText('Express Lane')).toBeInTheDocument();
@@ -89,7 +101,7 @@ describe('CountersPage — with store selected', () => {
 
     it('shows Active badge for ACTIVE counter', async () => {
         mockApi.getCounters.mockResolvedValue(sampleCounters);
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => {
             expect(screen.getByText('Active')).toBeInTheDocument();
         });
@@ -97,7 +109,7 @@ describe('CountersPage — with store selected', () => {
 
     it('shows Inactive badge for INACTIVE counter', async () => {
         mockApi.getCounters.mockResolvedValue(sampleCounters);
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => {
             expect(screen.getByText('Inactive')).toBeInTheDocument();
         });
@@ -105,7 +117,7 @@ describe('CountersPage — with store selected', () => {
 
     it('handles API returning data wrapped in .data property', async () => {
         mockApi.getCounters.mockResolvedValue({ data: sampleCounters } as any);
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => {
             expect(screen.getByText('Counter 1')).toBeInTheDocument();
         });
@@ -113,7 +125,7 @@ describe('CountersPage — with store selected', () => {
 
     it('shows error toast when load fails', async () => {
         mockApi.getCounters.mockRejectedValue(new Error('Network error'));
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => {
             expect(screen.getByText('Failed to load counters')).toBeInTheDocument();
         });
@@ -121,7 +133,7 @@ describe('CountersPage — with store selected', () => {
 
     it('opens Add Counter dialog when button is clicked', async () => {
         mockApi.getCounters.mockResolvedValue([]);
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('No counters yet')).toBeInTheDocument());
         fireEvent.click(screen.getAllByText('Add Counter')[0]);
         expect(screen.getByText('Add Counter', { selector: 'h2' })).toBeInTheDocument();
@@ -129,7 +141,7 @@ describe('CountersPage — with store selected', () => {
 
     it('shows Counter Number field only in Add mode (not Edit mode)', async () => {
         mockApi.getCounters.mockResolvedValue([]);
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('No counters yet')).toBeInTheDocument());
         fireEvent.click(screen.getAllByText('Add Counter')[0]);
         expect(screen.getByPlaceholderText('1')).toBeInTheDocument();
@@ -137,22 +149,18 @@ describe('CountersPage — with store selected', () => {
 
     it('closes Add dialog when X button clicked', async () => {
         mockApi.getCounters.mockResolvedValue([]);
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('No counters yet')).toBeInTheDocument());
         fireEvent.click(screen.getAllByText('Add Counter')[0]);
         expect(screen.getByText('Add Counter', { selector: 'h2' })).toBeInTheDocument();
-        const closeBtn = screen.getByRole('button', { name: '' });
-        // Find X close button by its parent structure
-        const allButtons = screen.getAllByRole('button');
-        // The X button is near the dialog title
-        const xBtn = allButtons.find(btn => btn.querySelector('svg') && btn.closest('[class*="bg-gray-50"]'));
-        if (xBtn) fireEvent.click(xBtn);
-        // Try using a direct approach — click the X button in the modal header
+        const closeBtn = screen.getByRole('button', { name: 'Close' });
+        fireEvent.click(closeBtn);
+        expect(screen.queryByText('Add Counter', { selector: 'h2' })).not.toBeInTheDocument();
     });
 
     it('shows validation error when saving empty form', async () => {
         mockApi.getCounters.mockResolvedValue([]);
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('No counters yet')).toBeInTheDocument());
         fireEvent.click(screen.getAllByText('Add Counter')[0]);
         fireEvent.click(screen.getByText('Create Counter'));
@@ -166,7 +174,7 @@ describe('CountersPage — with store selected', () => {
             .mockResolvedValueOnce([])
             .mockResolvedValueOnce([sampleCounters[0]]);
         mockApi.createCounter.mockResolvedValue({ id: 'c1' });
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('No counters yet')).toBeInTheDocument());
         fireEvent.click(screen.getAllByText('Add Counter')[0]);
         fireEvent.change(screen.getByPlaceholderText('e.g. Counter 1, Express Lane'), {
@@ -191,7 +199,7 @@ describe('CountersPage — with store selected', () => {
     it('shows error toast when create fails', async () => {
         mockApi.getCounters.mockResolvedValue([]);
         mockApi.createCounter.mockRejectedValue(new Error('Create failed'));
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('No counters yet')).toBeInTheDocument());
         fireEvent.click(screen.getAllByText('Add Counter')[0]);
         fireEvent.change(screen.getByPlaceholderText('e.g. Counter 1, Express Lane'), {
@@ -210,7 +218,7 @@ describe('CountersPage — with store selected', () => {
 
     it('opens Edit dialog with pre-filled values', async () => {
         mockApi.getCounters.mockResolvedValue(sampleCounters);
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('Counter 1')).toBeInTheDocument());
         // Click edit (pencil icon button) for first counter
         const editButtons = document.querySelectorAll('button[class*="hover:text-blue-600"]');
@@ -221,7 +229,7 @@ describe('CountersPage — with store selected', () => {
 
     it('shows Status dropdown in edit mode', async () => {
         mockApi.getCounters.mockResolvedValue(sampleCounters);
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('Counter 1')).toBeInTheDocument());
         const editButtons = document.querySelectorAll('button[class*="hover:text-blue-600"]');
         fireEvent.click(editButtons[0]);
@@ -233,7 +241,7 @@ describe('CountersPage — with store selected', () => {
             .mockResolvedValueOnce(sampleCounters)
             .mockResolvedValueOnce(sampleCounters);
         mockApi.updateCounter.mockResolvedValue({});
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('Counter 1')).toBeInTheDocument());
         const editButtons = document.querySelectorAll('button[class*="hover:text-blue-600"]');
         fireEvent.click(editButtons[0]);
@@ -255,7 +263,7 @@ describe('CountersPage — with store selected', () => {
             .mockResolvedValueOnce(sampleCounters)
             .mockResolvedValueOnce([sampleCounters[1]]);
         mockApi.deleteCounter.mockResolvedValue({});
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('Counter 1')).toBeInTheDocument());
         const deleteButtons = document.querySelectorAll('button[class*="hover:text-red-600"]');
         await act(async () => {
@@ -270,7 +278,7 @@ describe('CountersPage — with store selected', () => {
     it('does not delete when confirmation is cancelled', async () => {
         window.confirm = jest.fn().mockReturnValue(false);
         mockApi.getCounters.mockResolvedValue(sampleCounters);
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('Counter 1')).toBeInTheDocument());
         const deleteButtons = document.querySelectorAll('button[class*="hover:text-red-600"]');
         fireEvent.click(deleteButtons[0]);
@@ -282,7 +290,7 @@ describe('CountersPage — with store selected', () => {
             .mockResolvedValueOnce(sampleCounters)
             .mockResolvedValueOnce(sampleCounters);
         mockApi.updateCounter.mockResolvedValue({});
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('Active')).toBeInTheDocument());
         await act(async () => {
             fireEvent.click(screen.getByText('Active'));
@@ -298,7 +306,7 @@ describe('CountersPage — with store selected', () => {
             .mockResolvedValueOnce(sampleCounters)
             .mockResolvedValueOnce(sampleCounters);
         mockApi.updateCounter.mockResolvedValue({});
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('Inactive')).toBeInTheDocument());
         await act(async () => {
             fireEvent.click(screen.getByText('Inactive'));
@@ -313,7 +321,7 @@ describe('CountersPage — with store selected', () => {
         window.confirm = jest.fn().mockReturnValue(true);
         mockApi.getCounters.mockResolvedValue(sampleCounters);
         mockApi.deleteCounter.mockRejectedValue(new Error('Delete failed'));
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('Counter 1')).toBeInTheDocument());
         const deleteButtons = document.querySelectorAll('button[class*="hover:text-red-600"]');
         await act(async () => {
@@ -326,7 +334,7 @@ describe('CountersPage — with store selected', () => {
 
     it('opens Add First Counter button from empty state', async () => {
         mockApi.getCounters.mockResolvedValue([]);
-        render(<CountersPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('No counters yet')).toBeInTheDocument());
         fireEvent.click(screen.getByText('Add First Counter'));
         expect(screen.getByText('Add Counter', { selector: 'h2' })).toBeInTheDocument();

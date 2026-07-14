@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { MessageSquare, Plus, Send, CheckCircle, Loader2, X } from 'lucide-react';
+import { MessageSquare, Plus, Send, CheckCircle, Loader2 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { Button, Field, Input } from '@/components/ui';
+import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 
 type Thread = {
     id: string;
@@ -133,7 +135,7 @@ export default function SupportPage() {
     };
 
     return (
-        <div className="h-full flex flex-col bg-[#f3f4f6] overflow-hidden">
+        <div className="h-full flex flex-col bg-canvas overflow-hidden">
             <div className="flex-1 flex overflow-hidden p-4 gap-4 min-h-0">
                 {/* Thread list */}
                 <div className="w-72 shrink-0 flex flex-col gap-3 overflow-hidden">
@@ -149,7 +151,7 @@ export default function SupportPage() {
                             <button
                                 type="button"
                                 onClick={() => setShowNewForm(true)}
-                                className="inline-flex items-center gap-1 rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700"
+                                className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-hover"
                             >
                                 <Plus className="w-3 h-3" /> New
                             </button>
@@ -162,7 +164,7 @@ export default function SupportPage() {
                         </div>
                     )}
 
-                    <div className="flex-1 overflow-y-auto rounded-2xl border border-gray-100 bg-white divide-y divide-gray-100">
+                    <div className="flex-1 overflow-y-auto rounded-lg border border-gray-100 bg-white divide-y divide-gray-100">
                         {loadingThreads ? (
                             <div className="p-6 flex justify-center text-sm text-gray-400">
                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -175,11 +177,11 @@ export default function SupportPage() {
                                     key={thread.id}
                                     type="button"
                                     onClick={() => selectThread(thread.id)}
-                                    className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${activeThreadId === thread.id ? 'bg-indigo-50 border-l-2 border-indigo-500' : ''}`}
+                                    className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${activeThreadId === thread.id ? 'bg-primary-light border-l-2 border-primary' : ''}`}
                                 >
                                     <div className="flex items-center justify-between gap-2 mb-0.5">
                                         <p className="text-sm font-bold text-gray-900 truncate">{thread.subject}</p>
-                                        <span className={`shrink-0 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full ${thread.status === 'resolved' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                        <span className={`shrink-0 text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${thread.status === 'resolved' ? 'bg-success-light text-success-text' : 'bg-warning-light text-warning-text'}`}>
                                             {thread.status}
                                         </span>
                                     </div>
@@ -196,7 +198,7 @@ export default function SupportPage() {
                 </div>
 
                 {/* Message area */}
-                <div className="flex-1 flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white min-w-0">
+                <div className="flex-1 flex flex-col overflow-hidden rounded-lg border border-gray-100 bg-white min-w-0">
                     {!activeThreadId ? (
                         <div className="flex-1 flex flex-col items-center justify-center text-sm text-gray-400 gap-2">
                             <MessageSquare className="w-8 h-8 text-gray-200" />
@@ -207,7 +209,7 @@ export default function SupportPage() {
                             {/* Thread header */}
                             <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-4">
                                 <div className="min-w-0">
-                                    <p className="font-black text-sm text-gray-900 truncate">{threadInfo?.subject}</p>
+                                    <p className="font-semibold text-sm text-gray-900 truncate">{threadInfo?.subject}</p>
                                 </div>
                                 {threadInfo?.status === 'resolved' && (
                                     <span className="inline-flex items-center gap-1 text-xs font-bold text-green-700 bg-green-50 px-2 py-1 rounded-full">
@@ -229,12 +231,12 @@ export default function SupportPage() {
                                         const isOwner = msg.senderRole === 'owner';
                                         return (
                                             <div key={msg.id} className={`flex ${isOwner ? 'justify-end' : 'justify-start'}`}>
-                                                <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${isOwner ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
-                                                    <p className={`text-[10px] font-bold mb-1 ${isOwner ? 'text-indigo-200' : 'text-gray-500'}`}>
+                                                <div className={`max-w-[75%] rounded-lg px-4 py-2.5 ${isOwner ? 'bg-primary text-white' : 'bg-gray-100 text-gray-900'}`}>
+                                                    <p className={`text-[10px] font-bold mb-1 ${isOwner ? 'text-blue-100' : 'text-gray-500'}`}>
                                                         {isOwner ? 'You' : 'Platform Admin'}
                                                     </p>
                                                     <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
-                                                    <p className={`text-[10px] mt-1 ${isOwner ? 'text-indigo-300' : 'text-gray-400'}`}>
+                                                    <p className={`text-[10px] mt-1 ${isOwner ? 'text-blue-200' : 'text-gray-400'}`}>
                                                         {new Date(msg.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                                                     </p>
                                                 </div>
@@ -260,13 +262,13 @@ export default function SupportPage() {
                                             }}
                                             placeholder="Type a message… (Enter to send)"
                                             rows={2}
-                                            className="flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:bg-white"
+                                            className="flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-primary/40 focus:bg-white"
                                         />
                                         <button
                                             type="button"
                                             onClick={sendReply}
                                             disabled={sending || !replyBody.trim()}
-                                            className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40"
+                                            className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-xl bg-primary text-white hover:bg-primary-hover disabled:opacity-40"
                                         >
                                             {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                                         </button>
@@ -280,55 +282,40 @@ export default function SupportPage() {
 
             {/* New thread modal */}
             {showNewForm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-                    <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl p-6 space-y-4">
-                        <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-black text-gray-900">New Support Thread</h2>
-                            <button type="button" onClick={() => setShowNewForm(false)}>
-                                <X className="w-5 h-5 text-gray-400" />
-                            </button>
-                        </div>
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1">Subject</label>
-                                <input
-                                    value={newSubject}
-                                    onChange={(e) => setNewSubject(e.target.value)}
-                                    placeholder="Briefly describe your issue…"
-                                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:bg-white"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1">Message</label>
-                                <textarea
-                                    value={newBody}
-                                    onChange={(e) => setNewBody(e.target.value)}
-                                    placeholder="Describe in detail…"
-                                    rows={4}
-                                    className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:bg-white"
-                                />
-                            </div>
-                        </div>
-                        <div className="flex justify-end gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setShowNewForm(false)}
-                                className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={createThread}
-                                disabled={creating || !newSubject.trim() || !newBody.trim()}
-                                className="px-4 py-2 rounded-xl bg-indigo-600 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-40 inline-flex items-center gap-2"
-                            >
-                                {creating && <Loader2 className="w-3 h-3 animate-spin" />}
-                                {creating ? 'Creating…' : 'Create Thread'}
-                            </button>
-                        </div>
+                <ModalShell size="sm" onBackdropClick={() => setShowNewForm(false)}>
+                    <ModalHeader title="New Support Thread" onClose={() => setShowNewForm(false)} />
+                    <div className="p-4 space-y-3">
+                        <Field label="Subject">
+                            <Input
+                                value={newSubject}
+                                onChange={(e) => setNewSubject(e.target.value)}
+                                placeholder="Briefly describe your issue…"
+                            />
+                        </Field>
+                        <Field label="Message">
+                            <textarea
+                                value={newBody}
+                                onChange={(e) => setNewBody(e.target.value)}
+                                placeholder="Describe in detail…"
+                                rows={4}
+                                className="w-full resize-none rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white"
+                            />
+                        </Field>
                     </div>
-                </div>
+                    <ModalFooter>
+                        <Button variant="secondary" onClick={() => setShowNewForm(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="primary"
+                            onClick={createThread}
+                            loading={creating}
+                            disabled={!newSubject.trim() || !newBody.trim()}
+                        >
+                            {creating ? 'Creating…' : 'Create Thread'}
+                        </Button>
+                    </ModalFooter>
+                </ModalShell>
             )}
         </div>
     );

@@ -16,6 +16,8 @@ import { useI18n } from '@/lib/i18n';
 import { formatBDT, formatDate } from '@/lib/format';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { useReportStores } from '@/lib/accounting-report-scope';
+import { Button } from '@/components/ui';
+import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 
 interface FundTransfer {
     id: string;
@@ -267,13 +269,18 @@ export default function FundTransfersPage() {
             )}
 
             {showModal ? (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-                    <div className={`${compactDensity.modal} max-w-md w-full`}>
-                        <div className={`${compactDensity.modalPadding} border-b border-gray-100 flex items-center gap-2`}>
-                            <GitMerge className="w-4 h-4 text-teal-700" />
-                            <h2 className={compactDensity.modalTitle}>{m.create}</h2>
-                        </div>
-                        <div className={`${compactDensity.modalPadding} ${compactDensity.formStack}`}>
+                <ModalShell size="sm" onBackdropClick={() => setShowModal(false)}>
+                    <div className="flex max-h-[90vh] flex-col overflow-hidden">
+                        <ModalHeader
+                            title={(
+                                <span className="inline-flex items-center gap-2">
+                                    <GitMerge className="w-4 h-4 text-teal-700" />
+                                    {m.create}
+                                </span>
+                            )}
+                            onClose={() => setShowModal(false)}
+                        />
+                        <div className={`${compactDensity.modalPadding} ${compactDensity.formStack} overflow-y-auto`}>
                             <label className="block">
                                 <span className={`${compactDensity.formLabel} block mb-1`}>{m.fromBranch}</span>
                                 <select
@@ -332,21 +339,22 @@ export default function FundTransfersPage() {
                                 />
                             </label>
                         </div>
-                        <div className={`${compactDensity.modalPadding} flex gap-2 justify-end border-t border-gray-100`}>
-                            <button type="button" onClick={() => setShowModal(false)} className={compactDensity.btnSecondary}>
+                        <ModalFooter>
+                            <Button variant="secondary" type="button" onClick={() => setShowModal(false)}>
                                 Cancel
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                                 type="button"
                                 onClick={() => void handleCreate()}
-                                disabled={saving || !form.sourceStoreId || !form.destinationStoreId || Number(form.amount) <= 0}
-                                className={`${compactDensity.btnPrimary} bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-60`}
+                                loading={saving}
+                                disabled={!form.sourceStoreId || !form.destinationStoreId || Number(form.amount) <= 0}
+                                className="bg-gray-900 hover:bg-gray-700"
                             >
-                                {saving ? t.accountingShared.loading : m.create}
-                            </button>
-                        </div>
+                                {m.create}
+                            </Button>
+                        </ModalFooter>
                     </div>
-                </div>
+                </ModalShell>
             ) : null}
         </AccountingPageShell>
     );

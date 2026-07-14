@@ -29,9 +29,9 @@ interface BudgetVsActualData {
 
 function varianceColor(row: BudgetRow) {
     if (row.account.type === 'EXPENSE') {
-        return row.variance >= 0 ? 'text-emerald-700' : 'text-rose-700';
+        return row.variance >= 0 ? 'text-emerald-700' : 'text-danger-text';
     }
-    return row.variance >= 0 ? 'text-emerald-700' : 'text-rose-700';
+    return row.variance >= 0 ? 'text-emerald-700' : 'text-danger-text';
 }
 
 const thClass = `text-right px-3 py-2 ${compactDensity.formLabel}`;
@@ -142,7 +142,7 @@ export default function BudgetVsActualPage() {
                                 <td className="px-3 py-2 font-semibold text-sm text-gray-700" colSpan={2}>Totals</td>
                                 <td className="px-3 py-2 text-right font-semibold text-sm">{formatBDT(data.totals.budget, { locale })}</td>
                                 <td className="px-3 py-2 text-right font-semibold text-sm">{formatBDT(data.totals.actual, { locale })}</td>
-                                <td className={`px-3 py-2 text-right font-semibold text-sm ${data.totals.variance >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                <td className={`px-3 py-2 text-right font-semibold text-sm ${data.totals.variance >= 0 ? 'text-emerald-700' : 'text-danger-text'}`}>
                                     {data.totals.variance >= 0 ? '+' : ''}{formatBDT(data.totals.variance, { locale })}
                                 </td>
                                 <td />

@@ -7,8 +7,6 @@ import {
     ChevronDown,
     ChevronRight,
     Loader2,
-    CheckCircle,
-    XCircle,
     Plus,
     Minus,
 } from 'lucide-react';
@@ -17,8 +15,9 @@ import { formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-
-type ToastState = { type: 'success' | 'error'; message: string } | null;
+import { PageShell, Button } from '@/components/ui';
+import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import { toast } from '@/lib/toast';
 
 interface LoyaltyCustomer {
     id: string;
@@ -42,33 +41,6 @@ interface CustomerDetail {
     phone: string;
     loyalty_points: number;
     transactions: LoyaltyTransaction[];
-}
-
-function Toast({ toast, onDismiss }: { toast: ToastState; onDismiss: () => void }) {
-    useEffect(() => {
-        if (!toast) return;
-        const t = setTimeout(onDismiss, 4000);
-        return () => clearTimeout(t);
-    }, [toast, onDismiss]);
-
-    if (!toast) return null;
-    const isSuccess = toast.type === 'success';
-    return (
-        <div
-            className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl px-4 py-3 shadow-lg border text-sm font-semibold ${
-                isSuccess
-                    ? 'bg-green-50 border-green-200 text-green-800'
-                    : 'bg-red-50 border-red-200 text-red-800'
-            }`}
-        >
-            {isSuccess ? (
-                <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-            ) : (
-                <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-            )}
-            {toast.message}
-        </div>
-    );
 }
 
 function AdjustPointsModal({
@@ -111,15 +83,20 @@ function AdjustPointsModal({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-6 w-full max-w-md mx-4">
-                <h2 className="text-lg font-black text-gray-900 mb-1">{t.loyalty.adjustPoints}</h2>
-                <p className="text-sm text-gray-500 mb-4">
-                    {customer.name} &bull; {t.loyalty.currentBalance}{' '}
-                    <span className="font-bold text-purple-700">{customer.loyalty_points} {t.loyalty.pointsSuffix}</span>
-                </p>
+        <ModalShell size="sm" onBackdropClick={onClose}>
+            <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden">
+                <ModalHeader
+                    title={t.loyalty.adjustPoints}
+                    subtitle={
+                        <>
+                            {customer.name} &bull; {t.loyalty.currentBalance}{' '}
+                            <span className="font-bold text-purple-700">{customer.loyalty_points} {t.loyalty.pointsSuffix}</span>
+                        </>
+                    }
+                    onClose={onClose}
+                />
 
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="p-6 space-y-4 overflow-y-auto">
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-1.5">
                             {t.loyalty.pointsAdjustment}
@@ -167,27 +144,18 @@ function AdjustPointsModal({
                             {error}
                         </div>
                     )}
+                </div>
 
-                    <div className="flex gap-3 justify-end pt-2">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={saving}
-                            className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-purple-700 disabled:opacity-60 transition-colors"
-                        >
-                            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                            {saving ? t.loyalty.saving : t.loyalty.adjustPointsButton}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
+                <ModalFooter>
+                    <Button type="button" variant="secondary" size="md" onClick={onClose}>
+                        Cancel
+                    </Button>
+                    <Button type="submit" variant="primary" size="md" loading={saving}>
+                        {saving ? t.loyalty.saving : t.loyalty.adjustPointsButton}
+                    </Button>
+                </ModalFooter>
+            </form>
+        </ModalShell>
     );
 }
 
@@ -218,7 +186,6 @@ export default function LoyaltyPage() {
     const [detailMap, setDetailMap] = useState<Record<string, CustomerDetail>>({});
     const [loadingDetail, setLoadingDetail] = useState<string | null>(null);
     const [adjustCustomer, setAdjustCustomer] = useState<LoyaltyCustomer | null>(null);
-    const [toast, setToast] = useState<ToastState>(null);
 
     // Debounce search
     useEffect(() => {
@@ -233,7 +200,7 @@ export default function LoyaltyPage() {
             const data = (await fetchWithAuth(`/loyalty/customers${params}`)) as LoyaltyCustomer[];
             setCustomers(data);
         } catch (err: any) {
-            setToast({ type: 'error', message: err?.message || t.shared.errors.loadCustomers });
+            toast.error(err?.message || t.shared.errors.loadCustomers);
         } finally {
             setLoading(false);
         }
@@ -258,14 +225,14 @@ export default function LoyaltyPage() {
             )) as CustomerDetail;
             setDetailMap((prev) => ({ ...prev, [customer.id]: detail }));
         } catch (err: any) {
-            setToast({ type: 'error', message: err?.message || t.shared.errors.loadTransactions });
+            toast.error(err?.message || t.shared.errors.loadTransactions);
         } finally {
             setLoadingDetail(null);
         }
     };
 
     const handleAdjustSuccess = () => {
-        setToast({ type: 'success', message: t.shared.success.pointsAdjusted });
+        toast.success(t.shared.success.pointsAdjusted);
         // Refresh list and clear cached detail for the customer
         if (adjustCustomer) {
             setDetailMap((prev) => {
@@ -278,8 +245,7 @@ export default function LoyaltyPage() {
     };
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={
                         <span className="inline-flex items-center gap-3">
@@ -311,14 +277,14 @@ export default function LoyaltyPage() {
                 </div>
 
                 {/* Table */}
-                <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
                     {/* Table header */}
                     <div className="grid grid-cols-[1fr_140px_120px_140px_120px] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-100">
-                        <span className="text-xs font-black uppercase tracking-wider text-gray-400">{t.shared.columns.customer}</span>
-                        <span className="text-xs font-black uppercase tracking-wider text-gray-400">{t.shared.columns.phone}</span>
-                        <span className="text-xs font-black uppercase tracking-wider text-gray-400 text-right">{t.shared.columns.points}</span>
-                        <span className="text-xs font-black uppercase tracking-wider text-gray-400">{t.shared.columns.lastTransaction}</span>
-                        <span className="text-xs font-black uppercase tracking-wider text-gray-400 text-right">{t.shared.columns.actions}</span>
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-400">{t.shared.columns.customer}</span>
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-400">{t.shared.columns.phone}</span>
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-400 text-right">{t.shared.columns.points}</span>
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-400">{t.shared.columns.lastTransaction}</span>
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-400 text-right">{t.shared.columns.actions}</span>
                     </div>
 
                     {loading ? (
@@ -391,7 +357,7 @@ export default function LoyaltyPage() {
                                                     <p className="text-sm text-gray-400">{t.shared.empty.noTransactionsYet}</p>
                                                 ) : (
                                                     <div>
-                                                        <h4 className="text-xs font-black uppercase tracking-wider text-gray-400 mb-3">
+                                                        <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
                                                             {t.loyalty.recentTransactions}
                                                         </h4>
                                                         <div className="space-y-2">
@@ -434,7 +400,7 @@ export default function LoyaltyPage() {
                         </div>
                     )}
                 </div>
-            </div>
+            
 
             {adjustCustomer && (
                 <AdjustPointsModal
@@ -443,8 +409,6 @@ export default function LoyaltyPage() {
                     onSuccess={handleAdjustSuccess}
                 />
             )}
-
-            <Toast toast={toast} onDismiss={() => setToast(null)} />
-        </div>
+        </PageShell>
     );
 }

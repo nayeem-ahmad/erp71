@@ -7,6 +7,7 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { TrendingUp, ShoppingCart, BarChart3, Package } from 'lucide-react';
+import { PageShell } from '@/components/ui';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -62,7 +63,7 @@ function Skeleton({ className }: { className?: string }) {
 
 function SummaryCardSkeleton() {
     return (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-3">
+        <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-5 space-y-3">
             <Skeleton className="h-4 w-28" />
             <Skeleton className="h-7 w-36" />
         </div>
@@ -95,7 +96,7 @@ function SummaryCard({
     accent: string;
 }) {
     return (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-start gap-4">
+        <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-5 flex items-start gap-4">
             <div className={`rounded-xl p-2.5 ${accent}`}>
                 <Icon className="w-5 h-5 text-white" />
             </div>
@@ -117,7 +118,7 @@ function RevenueBarChart({ stores, title }: { stores: StoreRow[]; title: string 
     const maxRevenue = Math.max(...stores.map((s) => s.revenue), 1);
 
     return (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-6">
             <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400 mb-5">
                 {title}
             </h3>
@@ -158,7 +159,7 @@ function RevenueBarChart({ stores, title }: { stores: StoreRow[]; title: string 
 
 function StoreTable({ stores, m }: { stores: StoreRow[]; m: ReturnType<typeof useI18n>['t']['reports']['consolidated'] }) {
     return (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100">
                 <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400">
                     {m.storeBreakdown}
@@ -232,7 +233,7 @@ function StoreTable({ stores, m }: { stores: StoreRow[]; m: ReturnType<typeof us
 function EmptyState({ m }: { m: ReturnType<typeof useI18n>['t']['reports']['consolidated'] }) {
     return (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mb-4">
+            <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center mb-4">
                 <BarChart3 className="w-8 h-8 text-gray-300" />
             </div>
             <p className="text-base font-semibold text-gray-500">{m.empty.title}</p>
@@ -286,7 +287,7 @@ export default function ConsolidatedReportPage() {
     const hasData = report && report.by_store.length > 0;
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="w-full px-4 sm:px-6 py-8 space-y-6">
 
                 <PageHeader
@@ -380,7 +381,7 @@ export default function ConsolidatedReportPage() {
                                 icon={BarChart3}
                                 label={m.summary.avgOrderValue}
                                 value={formatBDT(report.overall.avg_order)}
-                                accent="bg-violet-500"
+                                accent="bg-primary"
                             />
                             <SummaryCard
                                 icon={Package}
@@ -403,6 +404,6 @@ export default function ConsolidatedReportPage() {
                     </>
                 )}
             </div>
-        </div>
+        </PageShell>
     );
 }

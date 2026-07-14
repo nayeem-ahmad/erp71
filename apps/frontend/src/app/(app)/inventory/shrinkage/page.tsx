@@ -6,6 +6,7 @@ import { AlertTriangle, Plus } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { PostingBadge } from '@/components/PostingBadge';
+import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
@@ -113,8 +114,7 @@ export default function InventoryShrinkagePage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.inventoryShrinkage.title}
                     subtitle={t.inventoryShrinkage.subtitle}
@@ -126,10 +126,10 @@ export default function InventoryShrinkagePage() {
                     )}
                 />
 
-                <form onSubmit={handleCreate} className="bg-white border border-gray-100 rounded-2xl p-6 space-y-4">
+                <form onSubmit={handleCreate} className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
                     <div className="flex items-center gap-2">
-                        <AlertTriangle className="w-5 h-5 text-rose-600" />
-                        <h2 className="font-black text-lg">{t.inventoryShrinkage.newEntry}</h2>
+                        <AlertTriangle className="w-5 h-5 text-danger" />
+                        <h2 className="font-bold text-lg">{t.inventoryShrinkage.newEntry}</h2>
                     </div>
                     {message ? <div className="text-sm font-bold text-gray-700 bg-gray-50 rounded-xl px-4 py-3">{message}</div> : null}
                     <div className="grid md:grid-cols-3 gap-4">
@@ -159,7 +159,7 @@ export default function InventoryShrinkagePage() {
                         <button type="button" onClick={() => setForm((current: any) => ({ ...current, items: [...current.items, { productId: '', quantity: 1 }] }))} className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center">
                             <Plus className="w-4 h-4 mr-2" /> {t.inventoryShrinkage.addLine}
                         </button>
-                        <button type="submit" className="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-lg shadow-rose-200">{t.inventoryShrinkage.postShrinkage}</button>
+                        <button type="submit" className="bg-danger hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-lg shadow-sm">{t.inventoryShrinkage.postShrinkage}</button>
                     </div>
                 </form>
 
@@ -173,7 +173,6 @@ export default function InventoryShrinkagePage() {
                     emptyIcon={<AlertTriangle className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.inventoryShrinkage.searchPlaceholder}
                 />
-            </div>
-        </div>
+    </PageShell>
     );
 }

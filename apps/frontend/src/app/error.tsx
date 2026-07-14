@@ -20,7 +20,7 @@ export default function Error({
     }, [error]);
 
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-[#f3f4f6] font-sans text-gray-900 px-4">
+        <div className="min-h-screen flex flex-col items-center justify-center bg-canvas font-sans text-gray-900 px-4">
             <div className="text-center space-y-6 max-w-lg">
                 <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-red-50 border border-red-100">
                     <AlertTriangle className="w-10 h-10 text-red-500" />

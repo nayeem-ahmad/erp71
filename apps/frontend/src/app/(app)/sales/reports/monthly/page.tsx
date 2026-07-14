@@ -8,6 +8,7 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { resolveLocaleForFormatting } from '@/lib/format';
+import { PageShell } from '@/components/ui';
 
 interface MonthlyRow {
     customer: { id: string | null; name: string; phone: string | null };
@@ -67,7 +68,7 @@ export default function MonthlySalesPage() {
     };
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-[1600px] mx-auto space-y-6">
                 <PageHeader
                     title={t.salesReports.monthly.title}
@@ -80,7 +81,7 @@ export default function MonthlySalesPage() {
                     )}
                 />
 
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap gap-3 items-end">
+                <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
                     <div className="flex flex-col gap-1">
                         <span className="text-xs font-medium text-gray-500">{t.salesReports.common.from}</span>
                         <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
@@ -93,29 +94,29 @@ export default function MonthlySalesPage() {
                     </div>
                 </div>
 
-                {error && <div className="rounded-2xl bg-red-50 border border-red-100 p-4 text-sm text-red-700">{error}</div>}
+                {error && <div className="rounded-lg bg-red-50 border border-red-100 p-4 text-sm text-red-700">{error}</div>}
 
                 {loading ? (
-                    <div className="bg-white border border-gray-100 rounded-2xl p-12 text-center text-gray-400 text-sm font-medium">{t.shared.loading.generic}</div>
+                    <div className="bg-white border border-gray-100 rounded-lg p-12 text-center text-gray-400 text-sm font-medium">{t.shared.loading.generic}</div>
                 ) : data && data.rows.length === 0 ? (
-                    <div className="bg-white border border-gray-100 rounded-2xl p-12 flex flex-col items-center gap-3 text-gray-400">
+                    <div className="bg-white border border-gray-100 rounded-lg p-12 flex flex-col items-center gap-3 text-gray-400">
                         <BarChart3 className="w-16 h-16 text-gray-200" />
                         <p className="text-sm font-medium">{t.salesReports.common.noSalesInPeriod}</p>
                     </div>
                 ) : data ? (
-                    <div className="bg-white border border-gray-100 rounded-2xl overflow-x-auto">
+                    <div className="bg-white border border-gray-100 rounded-lg overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-gray-100">
-                                    <th className="text-left px-4 py-3 font-black text-xs uppercase tracking-widest text-gray-400 sticky left-0 bg-white min-w-[200px]">
+                                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 sticky left-0 bg-white min-w-[200px]">
                                         {t.salesReports.common.customer}
                                     </th>
                                     {data.months.map((m) => (
-                                        <th key={m} className="text-right px-4 py-3 font-black text-xs uppercase tracking-widest text-gray-400 whitespace-nowrap min-w-[120px]">
+                                        <th key={m} className="text-right px-4 py-3 text-xs font-semibold text-gray-400 whitespace-nowrap min-w-[120px]">
                                             {formatMonth(m, locale)}
                                         </th>
                                     ))}
-                                    <th className="text-right px-4 py-3 font-black text-xs uppercase tracking-widest text-gray-400 whitespace-nowrap min-w-[130px] bg-gray-50">
+                                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 whitespace-nowrap min-w-[130px] bg-gray-50">
                                         {t.salesReports.common.total}
                                     </th>
                                 </tr>
@@ -146,14 +147,14 @@ export default function MonthlySalesPage() {
                                             </td>
                                         ))}
                                         <td className="px-4 py-3 text-right bg-gray-50">
-                                            <span className="font-black text-blue-700">{formatBDT(row.total, { locale })}</span>
+                                            <span className="font-bold text-blue-700">{formatBDT(row.total, { locale })}</span>
                                         </td>
                                     </tr>
                                 ))}
                             </tbody>
                             <tfoot>
                                 <tr className="border-t-2 border-gray-200 bg-gray-50">
-                                    <td className="px-4 py-3 font-black text-xs uppercase tracking-widest text-gray-500 sticky left-0 bg-gray-50">
+                                    <td className="px-4 py-3 text-xs font-semibold text-gray-500 sticky left-0 bg-gray-50">
                                         {t.salesReports.common.total}
                                     </td>
                                     {data.months.map((m) => {
@@ -162,12 +163,12 @@ export default function MonthlySalesPage() {
                                             return sum + (monthData?.revenue ?? 0);
                                         }, 0);
                                         return (
-                                            <td key={m} className="px-4 py-3 text-right font-black text-gray-800">
+                                            <td key={m} className="px-4 py-3 text-right font-bold text-gray-800">
                                                 {formatBDT(colTotal, { locale })}
                                             </td>
                                         );
                                     })}
-                                    <td className="px-4 py-3 text-right font-black text-blue-700">
+                                    <td className="px-4 py-3 text-right font-bold text-blue-700">
                                         {formatBDT(data.rows.reduce((sum, r) => sum + r.total, 0), { locale })}
                                     </td>
                                 </tr>
@@ -176,6 +177,6 @@ export default function MonthlySalesPage() {
                     </div>
                 ) : null}
             </div>
-        </div>
+        </PageShell>
     );
 }

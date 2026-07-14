@@ -5,6 +5,7 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { TrendingUp } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { api } from '@/lib/api';
+import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
@@ -86,7 +87,7 @@ export default function ReorderSuggestionsPage() {
             columnHelper.accessor((row) => row.targetStock ?? '-', { id: 'targetStock', header: t.inventoryReports.reorder.columns.target, size: 90 }),
             columnHelper.accessor('suggestedQuantity', {
                 header: t.inventoryReports.reorder.columns.suggestedQty,
-                cell: (info) => <span className="text-sm font-black text-rose-600">{info.getValue()}</span>,
+                cell: (info) => <span className="text-sm font-bold text-danger">{info.getValue()}</span>,
                 size: 120,
             }),
             columnHelper.accessor('shortageReason', { header: t.inventoryReports.reorder.columns.explanation, size: 320 }),
@@ -96,8 +97,7 @@ export default function ReorderSuggestionsPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.inventoryReports.reorder.title}
                     subtitle={t.inventoryReports.reorder.subtitlePrioritize}
@@ -109,7 +109,7 @@ export default function ReorderSuggestionsPage() {
                     )}
                 />
 
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap gap-3 items-end">
+                <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
                     <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[220px]">
                         <option value="">{t.inventoryReports.reorder.allWarehouses}</option>
                         {warehouses.map((warehouse: any) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
@@ -134,7 +134,6 @@ export default function ReorderSuggestionsPage() {
                     emptyIcon={<TrendingUp className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.common.search + "..."}
                 />
-            </div>
-        </div>
+    </PageShell>
     );
 }

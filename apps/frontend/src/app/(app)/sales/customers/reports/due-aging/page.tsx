@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import Link from 'next/link';
 import { useI18n } from '@/lib/i18n';
+import { PageShell } from '@/components/ui';
 
 interface AgingRow {
     customer: { id: string; name: string; phone: string };
@@ -45,7 +46,7 @@ export default function DueAgingReportPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -65,12 +66,12 @@ export default function DueAgingReportPage() {
                         { label: '0–30 days', value: totals.b0_30, color: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
                         { label: '31–60 days', value: totals.b31_60, color: 'bg-yellow-50 border-yellow-200 text-yellow-700' },
                         { label: '61–90 days', value: totals.b61_90, color: 'bg-orange-50 border-orange-200 text-orange-700' },
-                        { label: '90+ days', value: totals.b90plus, color: 'bg-rose-50 border-rose-200 text-rose-700' },
+                        { label: '90+ days', value: totals.b90plus, color: 'bg-danger-light border-red-200 text-danger-text' },
                         { label: 'Total Due', value: totals.total, color: 'bg-gray-50 border-gray-200 text-gray-800' },
                     ].map(({ label, value, color }) => (
                         <div key={label} className={`rounded-xl border p-4 ${color}`}>
                             <p className="text-xs font-bold uppercase tracking-widest opacity-70 mb-1">{label}</p>
-                            <p className="text-xl font-black">{formatBDT(value)}</p>
+                            <p className="text-xl font-bold">{formatBDT(value)}</p>
                         </div>
                     ))}
                 </div>
@@ -116,7 +117,7 @@ export default function DueAgingReportPage() {
                                     </td>
                                     <td className="px-4 py-3 text-right">
                                         {row.bucket_90_plus > 0 ? (
-                                            <span className="flex items-center justify-end gap-1 text-rose-600 font-bold">
+                                            <span className="flex items-center justify-end gap-1 text-danger font-bold">
                                                 <AlertTriangle className="w-3 h-3" />{formatBDT(row.bucket_90_plus)}
                                             </span>
                                         ) : <span className="text-gray-300">—</span>}
@@ -131,13 +132,13 @@ export default function DueAgingReportPage() {
                                 <td className="px-4 py-3 text-right">{formatBDT(totals.b0_30)}</td>
                                 <td className="px-4 py-3 text-right">{formatBDT(totals.b31_60)}</td>
                                 <td className="px-4 py-3 text-right">{formatBDT(totals.b61_90)}</td>
-                                <td className="px-4 py-3 text-right text-rose-600">{formatBDT(totals.b90plus)}</td>
+                                <td className="px-4 py-3 text-right text-danger">{formatBDT(totals.b90plus)}</td>
                                 <td className="px-4 py-3 text-right">{formatBDT(totals.total)}</td>
                             </tr>
                         </tfoot>
                     </table>
                 </div>
             )}
-        </div>
+        </PageShell>
     );
 }

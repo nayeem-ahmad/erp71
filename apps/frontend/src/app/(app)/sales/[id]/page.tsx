@@ -11,6 +11,7 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
+import { PageShell } from '@/components/ui';
 
 interface EditItem {
     productId: string;
@@ -247,7 +248,7 @@ function SaleDetailPageContent() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-full bg-[#f3f4f6]">
+            <div className="flex items-center justify-center h-full bg-canvas">
                 <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">{t.shared.loading.sale}</p>
             </div>
         );
@@ -255,18 +256,18 @@ function SaleDetailPageContent() {
 
     if (!sale) {
         return (
-            <div className="flex items-center justify-center h-full bg-[#f3f4f6]">
+            <div className="flex items-center justify-center h-full bg-canvas">
                 <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">{t.shared.notFound.sale}</p>
             </div>
         );
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-4xl mx-auto space-y-6">
                 {/* Edit Mode Banner */}
                 {isEditMode && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-center justify-between">
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-3 flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                             <Pencil className="w-4 h-4 text-amber-600" />
                             <span className="text-sm font-bold text-amber-800">
@@ -308,28 +309,28 @@ function SaleDetailPageContent() {
                             <>
                                 <button
                                     onClick={() => router.push(`/sales/${sale.id}?edit=true`)}
-                                    className="bg-white hover:bg-amber-50 text-gray-700 hover:text-amber-700 border border-gray-200 hover:border-amber-300 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-sm flex items-center space-x-2 transition-all hover:-translate-y-0.5"
+                                    className="bg-white hover:bg-amber-50 text-gray-700 hover:text-amber-700 border border-gray-200 hover:border-amber-300 px-5 py-2.5 rounded-xl text-xs font-semibold shadow-sm flex items-center space-x-2 transition-all"
                                 >
                                     <Pencil className="w-4 h-4" />
                                     <span>{t.common.edit}</span>
                                 </button>
                                 <button
                                     onClick={handlePOSPrint}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-md flex items-center space-x-2 transition-all hover:-translate-y-0.5"
+                                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 transition-all"
                                 >
                                     <Printer className="w-4 h-4" />
                                     <span>{t.sales.detail.posReceipt}</span>
                                 </button>
                                 <button
                                     onClick={handlePrint}
-                                    className="bg-gray-900 hover:bg-gray-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-md flex items-center space-x-2 transition-all hover:-translate-y-0.5"
+                                    className="bg-gray-900 hover:bg-gray-700 text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 transition-all"
                                 >
                                     <Printer className="w-4 h-4" />
                                     <span>{t.sales.detail.printPreview}</span>
                                 </button>
                                 <Link
                                     href={`/sales/${sale.id}/invoice`}
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-md flex items-center space-x-2 transition-all hover:-translate-y-0.5"
+                                    className="bg-primary hover:bg-primary-hover text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 transition-all"
                                 >
                                     <Download className="w-4 h-4" />
                                     <span>{t.sales.detail.invoicePdf}</span>
@@ -342,7 +343,7 @@ function SaleDetailPageContent() {
                 {/* Status & Summary (edit or view) */}
                 {isEditMode ? (
                     <div className="grid grid-cols-3 gap-4">
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <label className="text-xs font-medium text-gray-500 block mb-2">{t.common.status}</label>
                             <select
                                 value={editStatus}
@@ -356,7 +357,7 @@ function SaleDetailPageContent() {
                                 ))}
                             </select>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <label className="text-xs font-medium text-gray-500 block mb-2">{t.common.customer}</label>
                             <select
                                 value={editCustomerId || ''}
@@ -369,9 +370,9 @@ function SaleDetailPageContent() {
                                 ))}
                             </select>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">{t.sales.detail.newTotal}</span>
-                            <span className="text-xl font-black text-blue-600">{formatBDT(editTotal, { locale })}</span>
+                            <span className="text-xl font-bold text-blue-600">{formatBDT(editTotal, { locale })}</span>
                             {Math.abs(editPaid - editTotal) > 0.01 && (
                                 <span className={`block text-xs font-bold mt-1 ${editPaid >= editTotal ? 'text-green-600' : 'text-red-500'}`}>
                                     {t.sales.columns.paid}: {formatBDT(editPaid, { locale })} ({editPaid >= editTotal ? t.shared.ok : formatMessage(t.shared.short, { amount: formatBDT(editTotal - editPaid, { locale }) })})
@@ -381,25 +382,25 @@ function SaleDetailPageContent() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-4 gap-4">
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">{t.common.status}</span>
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${
                                 sale.status === 'COMPLETED' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-700 border-gray-200'
                             }`}>
                                 {t.shared.statuses.sale[sale.status as keyof typeof t.shared.statuses.sale] ?? sale.status}
                             </span>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">{t.common.total}</span>
-                            <span className="text-xl font-black text-blue-600">{formatBDT(parseFloat(sale.total_amount), { locale })}</span>
+                            <span className="text-xl font-bold text-blue-600">{formatBDT(parseFloat(sale.total_amount), { locale })}</span>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">{t.sales.columns.paid}</span>
-                            <span className="text-xl font-black text-gray-900">{formatBDT(parseFloat(sale.amount_paid), { locale })}</span>
+                            <span className="text-xl font-bold text-gray-900">{formatBDT(parseFloat(sale.amount_paid), { locale })}</span>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">{t.sales.columns.items}</span>
-                            <span className="text-xl font-black text-gray-900">{sale.items?.length || 0}</span>
+                            <span className="text-xl font-bold text-gray-900">{sale.items?.length || 0}</span>
                         </div>
                     </div>
                 )}
@@ -453,13 +454,13 @@ function SaleDetailPageContent() {
                 </div>
 
                 {/* Items Section */}
-                <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+                <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                     <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                             <div className="p-2 bg-blue-50 rounded-xl text-blue-600">
                                 <Package className="w-5 h-5" />
                             </div>
-                            <h2 className="text-lg font-black tracking-tight">{t.sales.detail.lineItems}</h2>
+                            <h2 className="text-lg font-bold tracking-tight">{t.sales.detail.lineItems}</h2>
                         </div>
                     </div>
 
@@ -540,7 +541,7 @@ function SaleDetailPageContent() {
                                                         className="w-full text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
                                                     />
                                                 </td>
-                                                <td className="py-3 text-right text-sm font-black text-blue-600">
+                                                <td className="py-3 text-right text-sm font-bold text-blue-600">
                                                     {formatBDT(item.quantity * item.priceAtSale, { locale })}
                                                 </td>
                                                 <td className="py-3 text-center">
@@ -556,8 +557,8 @@ function SaleDetailPageContent() {
                                     </tbody>
                                     <tfoot>
                                         <tr className="border-t-2 border-gray-200">
-                                            <td colSpan={3} className="pt-3 text-right text-sm font-black uppercase tracking-widest">{t.common.total}</td>
-                                            <td className="pt-3 text-right text-xl font-black text-blue-600">{formatBDT(editTotal, { locale })}</td>
+                                            <td colSpan={3} className="pt-3 text-right text-sm font-semibold">{t.common.total}</td>
+                                            <td className="pt-3 text-right text-xl font-bold text-blue-600">{formatBDT(editTotal, { locale })}</td>
                                             <td></td>
                                         </tr>
                                     </tfoot>
@@ -588,20 +589,20 @@ function SaleDetailPageContent() {
                                                             <Package className="w-4 h-4 text-gray-200" />
                                                         )}
                                                     </div>
-                                                    <span className="text-sm font-black text-gray-900">{item.product?.name || t.shared.unknown}</span>
+                                                    <span className="text-sm font-bold text-gray-900">{item.product?.name || t.shared.unknown}</span>
                                                 </div>
                                             </td>
                                             <td className="p-4 text-xs font-bold text-gray-400 uppercase">{item.product?.sku || t.shared.notAvailable}</td>
-                                            <td className="p-4 text-center text-sm font-black">{item.quantity}</td>
+                                            <td className="p-4 text-center text-sm font-bold">{item.quantity}</td>
                                             <td className="p-4 text-right text-sm font-bold text-gray-700">{formatBDT(parseFloat(item.price_at_sale), { locale })}</td>
-                                            <td className="p-4 text-right text-sm font-black text-blue-600">{formatBDT(item.quantity * parseFloat(item.price_at_sale), { locale })}</td>
+                                            <td className="p-4 text-right text-sm font-bold text-blue-600">{formatBDT(item.quantity * parseFloat(item.price_at_sale), { locale })}</td>
                                         </tr>
                                     ))}
                                 </tbody>
                                 <tfoot>
                                     <tr className="border-t-2 border-gray-200">
-                                        <td colSpan={4} className="p-4 text-right text-sm font-black uppercase tracking-widest">{t.common.total}</td>
-                                        <td className="p-4 text-right text-xl font-black text-blue-600">{formatBDT(parseFloat(sale.total_amount), { locale })}</td>
+                                        <td colSpan={4} className="p-4 text-right text-sm font-semibold">{t.common.total}</td>
+                                        <td className="p-4 text-right text-xl font-bold text-blue-600">{formatBDT(parseFloat(sale.total_amount), { locale })}</td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -610,13 +611,13 @@ function SaleDetailPageContent() {
                 </div>
 
                 {/* Payments Section */}
-                <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+                <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                     <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                             <div className="p-2 bg-green-50 rounded-xl text-green-600">
                                 <CreditCard className="w-5 h-5" />
                             </div>
-                            <h2 className="text-lg font-black tracking-tight">{t.sales.detail.paymentRecords}</h2>
+                            <h2 className="text-lg font-bold tracking-tight">{t.sales.detail.paymentRecords}</h2>
                         </div>
                         {isEditMode && (
                             <button
@@ -670,7 +671,7 @@ function SaleDetailPageContent() {
                             )}
                             {editPayments.length > 0 && (
                                 <div className="flex justify-end pt-2 border-t border-gray-100">
-                                    <span className="text-sm font-black">{t.sales.detail.totalPaid} <span className={editPaid >= editTotal ? 'text-green-600' : 'text-red-500'}>{formatBDT(editPaid, { locale })}</span></span>
+                                    <span className="text-sm font-bold">{t.sales.detail.totalPaid} <span className={editPaid >= editTotal ? 'text-green-600' : 'text-red-500'}>{formatBDT(editPaid, { locale })}</span></span>
                                 </div>
                             )}
                         </div>
@@ -679,17 +680,17 @@ function SaleDetailPageContent() {
                             {sale.payments?.map((payment: any, index: number) => (
                                 <div key={index} className="p-4 flex items-center justify-between">
                                     <div className="flex items-center space-x-3">
-                                        <span className="bg-gray-100 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-gray-600">
+                                        <span className="bg-gray-100 px-3 py-1 rounded-full text-[10px] font-semibold text-gray-600">
                                             {payment.payment_method}
                                         </span>
                                         <span className="text-xs text-gray-400">{new Date(payment.created_at).toLocaleString()}</span>
                                     </div>
-                                    <span className="text-sm font-black text-gray-900">{formatBDT(parseFloat(payment.amount), { locale })}</span>
+                                    <span className="text-sm font-bold text-gray-900">{formatBDT(parseFloat(payment.amount), { locale })}</span>
                                 </div>
                             ))}
                             {(!sale.payments || sale.payments.length === 0) && (
                                 <div className="p-8 text-center text-gray-300">
-                                    <p className="text-xs font-black uppercase tracking-widest">{t.shared.empty.noPaymentRecords}</p>
+                                    <p className="text-xs font-semibold">{t.shared.empty.noPaymentRecords}</p>
                                 </div>
                             )}
                         </div>
@@ -697,12 +698,12 @@ function SaleDetailPageContent() {
                 </div>
 
                 {/* Note Section */}
-                <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+                <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                     <div className="p-6 border-b border-gray-100 flex items-center space-x-3">
                         <div className="p-2 bg-amber-50 rounded-xl text-amber-600">
                             <FileText className="w-5 h-5" />
                         </div>
-                        <h2 className="text-lg font-black tracking-tight">{t.sales.detail.note}</h2>
+                        <h2 className="text-lg font-bold tracking-tight">{t.sales.detail.note}</h2>
                     </div>
                     <div className="p-6">
                         {isEditMode ? (
@@ -726,14 +727,14 @@ function SaleDetailPageContent() {
                     <div className="flex justify-end space-x-3 pb-6">
                         <button
                             onClick={() => router.push(`/sales/${sale.id}`)}
-                            className="px-6 py-3 bg-white border border-gray-200 text-gray-700 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gray-50 transition-all"
+                            className="px-6 py-3 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-50 transition-all"
                         >
                             {t.common.cancel}
                         </button>
                         <button
                             onClick={handleSave}
                             disabled={saving || editItems.length === 0}
-                            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-md flex items-center space-x-2 transition-all hover:-translate-y-0.5 disabled:opacity-50"
+                            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 transition-all disabled:opacity-50"
                         >
                             <Save className="w-4 h-4" />
                             <span>{saving ? t.sales.detail.saving : t.sales.detail.saveAllChanges}</span>
@@ -741,7 +742,7 @@ function SaleDetailPageContent() {
                     </div>
                 )}
             </div>
-        </div>
+        </PageShell>
     );
 }
 

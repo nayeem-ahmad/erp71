@@ -78,7 +78,7 @@ function SelectAccountContent() {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-[#f9fafb]">
+            <div className="min-h-screen flex items-center justify-center bg-canvas">
                 <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
             </div>
         );
@@ -87,7 +87,7 @@ function SelectAccountContent() {
     const { isPlatformAdmin, isReferee, tenants } = getLoginContexts(me);
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-[#f9fafb] p-4 font-sans text-[#111827]">
+        <div className="min-h-screen flex items-center justify-center bg-canvas p-4 font-sans text-gray-900">
             <div className="w-full max-w-md">
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 md:p-10">
                     <div className="flex flex-col items-center mb-8 text-center">
@@ -179,7 +179,7 @@ export default function SelectAccountPage() {
     return (
         <Suspense
             fallback={
-                <div className="min-h-screen flex items-center justify-center bg-[#f9fafb]">
+                <div className="min-h-screen flex items-center justify-center bg-canvas">
                     <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
                 </div>
             }

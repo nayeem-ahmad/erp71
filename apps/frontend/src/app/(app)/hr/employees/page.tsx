@@ -12,6 +12,7 @@ import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
+import { PageShell, Button } from '@/components/ui';
 
 const IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
@@ -77,7 +78,7 @@ export default function EmployeesPage() {
                     const emp = info.row.original;
                     return (
                         <div>
-                            <span className="block text-sm font-black text-gray-900">{emp.name}</span>
+                            <span className="block text-sm font-bold text-gray-900">{emp.name}</span>
                             <span className="block text-xs text-gray-400">{emp.phone}</span>
                         </div>
                     );
@@ -124,7 +125,7 @@ export default function EmployeesPage() {
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                         : 'bg-gray-100 text-gray-500 border-gray-200';
                     return (
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${cls}`}>
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${cls}`}>
                             {status}
                         </span>
                     );
@@ -161,8 +162,7 @@ export default function EmployeesPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.employees.title}
                     subtitle={t.employees.subtitle}
@@ -174,20 +174,12 @@ export default function EmployeesPage() {
                     )}
                     actions={(
                         <>
-                            <button
-                                onClick={() => setImportOpen(true)}
-                                className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
-                            >
-                                <Upload className="w-4 h-4 mr-1.5" />
+                            <Button variant="secondary" icon={<Upload className="w-4 h-4" />} onClick={() => setImportOpen(true)}>
                                 Import
-                            </button>
-                            <button
-                                onClick={() => setIsModalOpen(true)}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                            >
-                                <Plus className="w-4 h-4 mr-2" />
+                            </Button>
+                            <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setIsModalOpen(true)}>
                                 {t.employees.newEmployee}
-                            </button>
+                            </Button>
                         </>
                     )}
                 />
@@ -213,9 +205,7 @@ export default function EmployeesPage() {
                     emptyIcon={<Users className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.employees.searchPlaceholder}
                     filterPresets={filterPresets}
-                    enableRowSelection
                 />
-            </div>
-        </div>
+        </PageShell>
     );
 }

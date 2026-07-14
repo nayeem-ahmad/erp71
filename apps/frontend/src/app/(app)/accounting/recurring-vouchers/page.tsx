@@ -181,9 +181,9 @@ export default function RecurringVouchersPage() {
                         <table className="w-full text-sm border border-gray-100 rounded-xl overflow-hidden">
                             <thead>
                                 <tr className="bg-gray-50">
-                                    <th className="text-left px-3 py-2 text-xs font-black uppercase tracking-widest text-gray-400">Account</th>
-                                    <th className="text-right px-3 py-2 text-xs font-black uppercase tracking-widest text-gray-400">Debit</th>
-                                    <th className="text-right px-3 py-2 text-xs font-black uppercase tracking-widest text-gray-400">Credit</th>
+                                    <th className="text-left px-3 py-2 text-xs font-semibold text-gray-400">Account</th>
+                                    <th className="text-right px-3 py-2 text-xs font-semibold text-gray-400">Debit</th>
+                                    <th className="text-right px-3 py-2 text-xs font-semibold text-gray-400">Credit</th>
                                     <th className="w-8" />
                                 </tr>
                             </thead>
@@ -223,7 +223,7 @@ export default function RecurringVouchersPage() {
                                 className="inline-flex items-center gap-1.5 text-sm font-bold text-gray-500 hover:text-gray-900 transition">
                                 <Plus className="w-3.5 h-3.5" /> Add Line
                             </button>
-                            <span className={`text-xs font-bold ${isBalanced && totalDebit > 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                            <span className={`text-xs font-bold ${isBalanced && totalDebit > 0 ? 'text-emerald-600' : 'text-danger'}`}>
                                 {isBalanced && totalDebit > 0 ? `Balanced — ${formatBDT(totalDebit, { locale })}` : `Diff: ${formatBDT(Math.abs(totalDebit - totalCredit))}`}
                             </span>
                         </div>
@@ -249,9 +249,9 @@ export default function RecurringVouchersPage() {
                                 <div className="flex items-start justify-between gap-4">
                                     <div>
                                         <div className="flex items-center gap-2">
-                                            <span className="font-black text-gray-900">{t.name}</span>
+                                            <span className="font-bold text-gray-900">{t.name}</span>
                                             <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5">{voucherTypeLabel(t.voucher_type)}</span>
-                                            {!t.is_active && <span className="text-[10px] font-bold uppercase tracking-widest text-rose-500">Inactive</span>}
+                                            {!t.is_active && <span className="text-[10px] font-bold uppercase tracking-widest text-danger">Inactive</span>}
                                         </div>
                                         {t.description && <div className="text-sm text-gray-500 mt-0.5">{t.description}</div>}
                                         <div className="flex gap-4 mt-2 text-xs text-gray-400">
@@ -266,7 +266,7 @@ export default function RecurringVouchersPage() {
                                             <Play className="w-3 h-3" /> {posting === t.id ? 'Posting…' : 'Post Now'}
                                         </button>
                                         <button onClick={() => handleDelete(t.id)} aria-label="Delete recurring voucher"
-                                            className="inline-flex items-center gap-2 rounded-xl bg-rose-50 border border-rose-100 px-2 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 transition">
+                                            className="inline-flex items-center gap-2 rounded-xl bg-danger-light border border-red-100 px-2 py-1.5 text-xs font-bold text-danger-text hover:bg-danger-light transition">
                                             <Trash2 className="w-3 h-3" />
                                         </button>
                                     </div>

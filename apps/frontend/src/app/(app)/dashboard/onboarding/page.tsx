@@ -80,10 +80,10 @@ function StoreStep({
                     <Store className="w-10 h-10 text-blue-600" />
                 </div>
                 <div>
-                    <h2 className="text-2xl font-black text-gray-900">{copy.confirmTitle}</h2>
+                    <h2 className="text-2xl font-bold text-gray-900">{copy.confirmTitle}</h2>
                     <p className="text-gray-500 text-sm mt-2">{copy.confirmDescription}</p>
                 </div>
-                <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5 text-left space-y-2">
+                <div className="bg-gray-50 border border-gray-100 rounded-lg p-5 text-left space-y-2">
                     <p className="text-xs font-bold uppercase tracking-widest text-gray-400">{copy.tenantName}</p>
                     <p className="font-semibold text-gray-900">{existingStore.tenantName}</p>
                     <p className="text-xs font-bold uppercase tracking-widest text-gray-400 pt-2">{copy.storeName}</p>
@@ -135,7 +135,7 @@ function StoreStep({
     return (
         <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-                <h2 className="text-2xl font-black text-gray-900 mb-1">{copy.createTitle}</h2>
+                <h2 className="text-2xl font-bold text-gray-900 mb-1">{copy.createTitle}</h2>
                 <p className="text-gray-500 text-sm">{copy.createDescription}</p>
             </div>
             {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>}
@@ -264,7 +264,7 @@ function AddProductStep({ onNext }: { onNext: () => void }) {
     return (
         <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-                <h2 className="text-2xl font-black text-gray-900 mb-1">{copy.title}</h2>
+                <h2 className="text-2xl font-bold text-gray-900 mb-1">{copy.title}</h2>
                 <p className="text-gray-500 text-sm">{copy.description}</p>
             </div>
             {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>}
@@ -355,7 +355,7 @@ function PosStep({ onNext }: { onNext: () => void }) {
                     <CheckCircle2 className="w-10 h-10 text-green-600" />
                 </div>
                 <div>
-                    <h2 className="text-2xl font-black text-gray-900">{copy.saleDetected}</h2>
+                    <h2 className="text-2xl font-bold text-gray-900">{copy.saleDetected}</h2>
                     <p className="text-gray-500 text-sm mt-2">{copy.saleDetectedDescription}</p>
                 </div>
                 <button
@@ -371,10 +371,10 @@ function PosStep({ onNext }: { onNext: () => void }) {
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-2xl font-black text-gray-900 mb-1">{copy.title}</h2>
+                <h2 className="text-2xl font-bold text-gray-900 mb-1">{copy.title}</h2>
                 <p className="text-gray-500 text-sm">{copy.description}</p>
             </div>
-            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 flex items-start gap-4">
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-6 flex items-start gap-4">
                 <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
                     <Zap className="w-5 h-5 text-blue-600" />
                 </div>
@@ -415,7 +415,7 @@ function DoneStep() {
         <div className="text-center space-y-6 py-4">
             <div className="text-6xl">🎉</div>
             <div>
-                <h2 className="text-2xl font-black text-gray-900">{copy.title}</h2>
+                <h2 className="text-2xl font-bold text-gray-900">{copy.title}</h2>
                 <p className="text-gray-500 mt-2 max-w-sm mx-auto">{copy.description}</p>
             </div>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -492,13 +492,13 @@ export default function OnboardingPage() {
         <div className="h-full overflow-y-auto bg-gray-50 flex items-start justify-center pt-8 pb-12 px-4">
             <div className="w-full max-w-lg">
                 <div className="text-center mb-8">
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">{t.onboarding.title}</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 tracking-tight">{t.onboarding.title}</h1>
                     <p className="text-gray-500 mt-1">{t.onboarding.subtitle}</p>
                 </div>
 
                 <StepIndicator current={step} labels={stepLabels} />
 
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
+                <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-8">
                     {step === 'store' && <StoreStep existingStore={existingStore} onNext={advance} />}
                     {step === 'products' && <AddProductStep onNext={advance} />}
                     {step === 'pos' && <PosStep onNext={advance} />}

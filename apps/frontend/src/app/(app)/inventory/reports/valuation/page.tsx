@@ -6,6 +6,7 @@ import { Calculator } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
+import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
@@ -88,7 +89,7 @@ export default function InventoryValuationPage() {
             }),
             columnHelper.accessor('stockValue', {
                 header: t.inventoryReports.valuation.columns.stockValue,
-                cell: (info) => <span className="text-sm font-black text-blue-600">{formatBDT(Number(info.getValue() || 0))}</span>,
+                cell: (info) => <span className="text-sm font-bold text-blue-600">{formatBDT(Number(info.getValue() || 0))}</span>,
                 size: 130,
             }),
         ],
@@ -96,8 +97,7 @@ export default function InventoryValuationPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.inventoryReports.valuation.title}
                     subtitle={t.inventoryReports.valuation.subtitleMeasure}
@@ -110,25 +110,25 @@ export default function InventoryValuationPage() {
                 />
 
                 <div className="grid md:grid-cols-4 gap-4">
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.inventoryReports.valuation.totalValue}</div>
-                        <div className="text-2xl font-black text-blue-700 mt-2">{formatBDT(Number(summary?.totalStockValue || 0))}</div>
+                        <div className="text-2xl font-bold text-blue-700 mt-2">{formatBDT(Number(summary?.totalStockValue || 0))}</div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.inventoryReports.valuation.totalQuantity}</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">{summary?.totalQuantity ?? 0}</div>
+                        <div className="text-2xl font-bold text-gray-900 mt-2">{summary?.totalQuantity ?? 0}</div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.inventoryReports.valuation.productsWithStock}</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">{summary?.productCount ?? 0}</div>
+                        <div className="text-2xl font-bold text-gray-900 mt-2">{summary?.productCount ?? 0}</div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.inventoryReports.valuation.averageUnitValue}</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">{formatBDT(Number(summary?.averageUnitValue || 0))}</div>
+                        <div className="text-2xl font-bold text-gray-900 mt-2">{formatBDT(Number(summary?.averageUnitValue || 0))}</div>
                     </div>
                 </div>
 
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap gap-3 items-end">
+                <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
                     <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[220px]">
                         <option value="">{t.inventoryReports.reorder.allWarehouses}</option>
                         {warehouses.map((warehouse: any) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
@@ -153,7 +153,6 @@ export default function InventoryValuationPage() {
                     emptyIcon={<Calculator className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.inventoryReports.valuation.searchPlaceholder}
                 />
-            </div>
-        </div>
+    </PageShell>
     );
 }

@@ -11,7 +11,7 @@ import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
-import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell, PageHeader, Button, FormFooter, StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import {
     LeadFormFields,
@@ -22,20 +22,29 @@ import {
     leadToFormState,
     nextStepFromLead,
     nextStepToPayload,
-    validateLeadForm,
+    validateLeadFormErrors,
+    type LeadFormErrors,
     type LeadFormState,
     type NextStepState,
 } from '../lead-form-fields';
+
+const leadStatusTone: Record<string, StatusBadgeTone> = {
+    NEW: 'info',
+    CONTACTED: 'neutral',
+    QUALIFIED: 'neutral',
+    LOST: 'danger',
+    CONVERTED: 'success',
+};
 
 const typeIcons: Record<string, string> = {
     CALL: '📞', SMS: '💬', WHATSAPP: '🟢', EMAIL: '📧', VISIT: '🏪', ONLINE_MEETING: '💻', NOTE: '📝',
 };
 
 const priorityColors: Record<string, string> = {
-    LOW: 'bg-slate-50 text-slate-600',
+    LOW: 'bg-gray-50 text-gray-600',
     MEDIUM: 'bg-blue-50 text-blue-700',
     HIGH: 'bg-amber-50 text-amber-700',
-    URGENT: 'bg-rose-50 text-rose-700',
+    URGENT: 'bg-danger-light text-danger-text',
 };
 
 function scoreBadgeColor(score: number): string {
@@ -79,7 +88,9 @@ export default function LeadDetailPage() {
     const [draftPurpose, setDraftPurpose] = useState('follow_up');
     const [draftChannel, setDraftChannel] = useState('WHATSAPP');
     const [editForm, setEditForm] = useState<LeadFormState | null>(null);
+    const [editFormErrors, setEditFormErrors] = useState<LeadFormErrors>({});
     const [savingLead, setSavingLead] = useState(false);
+    const [saveLeadError, setSaveLeadError] = useState<string | null>(null);
     const [teamMembers, setTeamMembers] = useState<any[]>([]);
     const [customFieldDefs, setCustomFieldDefs] = useState<{ key: string; label: string }[]>([]);
 
@@ -193,21 +204,16 @@ export default function LeadDetailPage() {
 
     const startEditing = () => {
         setEditForm(leadToFormState(lead));
+        setEditFormErrors({});
         setShowEditForm(true);
     };
 
     const saveLead = async () => {
         if (!editForm) return;
-        const validationError = validateLeadForm(editForm);
-        if (validationError === 'INVALID_EMAIL') {
-            alert(m.validation?.invalidEmail ?? 'Please enter a valid email address.');
-            return;
-        }
-        if (validationError === 'LOST_REASON_REQUIRED') {
-            alert(m.validation?.lostReasonRequired ?? 'Please provide a reason for marking this lead as lost.');
-            return;
-        }
-        if (validationError) return;
+        const validationErrors = validateLeadFormErrors(editForm, m.validation ?? {});
+        setEditFormErrors(validationErrors);
+        if (Object.keys(validationErrors).length > 0) return;
+        setSaveLeadError(null);
         setSavingLead(true);
         try {
             const updated = await api.updateLead(leadId, leadFormToPayload(editForm));
@@ -215,7 +221,7 @@ export default function LeadDetailPage() {
             setShowEditForm(false);
             setEditForm(null);
         } catch (err: unknown) {
-            alert(err instanceof Error ? err.message : m.detail.saveFailed);
+            setSaveLeadError(err instanceof Error ? err.message : m.detail.saveFailed);
         } finally {
             setSavingLead(false);
         }
@@ -232,10 +238,10 @@ export default function LeadDetailPage() {
     };
 
     if (loading) {
-        return <div className="p-8 font-black uppercase tracking-widest text-gray-400">{m.workspace.loading}</div>;
+        return <div className="p-8 text-sm font-semibold uppercase text-gray-400">{m.workspace.loading}</div>;
     }
     if (!lead) {
-        return <div className="p-8 font-black text-rose-500 uppercase">{m.workspace.notFound}</div>;
+        return <div className="p-8 text-sm font-semibold uppercase text-danger">{m.workspace.notFound}</div>;
     }
 
     const isConverted = lead.status === 'CONVERTED';
@@ -252,7 +258,7 @@ export default function LeadDetailPage() {
     ].filter((l) => l.url);
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px] space-y-4">
+        <PageShell>
             <PageHeader
                 title={lead.name}
                 breadcrumbs={nestedPageBreadcrumbs(
@@ -264,47 +270,48 @@ export default function LeadDetailPage() {
                 )}
             />
 
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
-                <div className="flex flex-col lg:flex-row lg:items-start gap-6">
-                    <div className="w-20 h-20 bg-violet-600 rounded-2xl shadow-xl shadow-violet-500/20 flex items-center justify-center text-white font-black text-3xl uppercase shrink-0">
+            <div className="rounded-lg border border-gray-100 bg-white p-4">
+                <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                    <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center text-white font-semibold text-sm uppercase shrink-0">
                         {lead.name.substring(0, 2)}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-50 text-violet-700">{statusLabel}</span>
-                            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-700">{sourceLabel}</span>
+                        <p className="text-base font-semibold text-gray-900">{lead.name}</p>
+                        <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                            <StatusBadge tone={leadStatusTone[lead.status] ?? 'neutral'}>{statusLabel}</StatusBadge>
+                            <StatusBadge tone="neutral">{sourceLabel}</StatusBadge>
                             {categoryLabel && (
-                                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700">{categoryLabel}</span>
+                                <StatusBadge tone="info">{categoryLabel}</StatusBadge>
                             )}
                             {lead.priority && (
-                                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${priorityColors[lead.priority] ?? 'bg-gray-100 text-gray-700'}`}>
+                                <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${priorityColors[lead.priority] ?? 'bg-gray-100 text-gray-700'}`}>
                                     {priorityLabel}
                                 </span>
                             )}
                             {typeof lead.score === 'number' && (
-                                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${scoreBadgeColor(lead.score)}`}>
+                                <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${scoreBadgeColor(lead.score)}`}>
                                     {m.fields.score}: {lead.score}
                                 </span>
                             )}
                         </div>
                         {lead.status === 'LOST' && lead.lost_reason && (
-                            <p className="text-sm text-rose-600 mt-2 font-medium">{m.fields.lostReason}: {lead.lost_reason}</p>
+                            <p className="text-xs text-danger mt-2 font-medium">{m.fields.lostReason}: {lead.lost_reason}</p>
                         )}
-                        <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4">
-                            <div className="flex items-center text-sm text-gray-600 font-medium">
-                                <Phone className="w-4 h-4 mr-2 text-gray-400" /> {lead.mobile ?? lead.phone}
+                        <div className="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-xs text-gray-500">
+                            <div className="flex items-center">
+                                <Phone className="w-3.5 h-3.5 mr-1.5 text-gray-400" /> {lead.mobile ?? lead.phone}
                             </div>
                             {lead.email && (
-                                <div className="flex items-center text-sm text-gray-600 font-medium">
-                                    <Mail className="w-4 h-4 mr-2 text-gray-400" /> {lead.email}
+                                <div className="flex items-center">
+                                    <Mail className="w-3.5 h-3.5 mr-1.5 text-gray-400" /> {lead.email}
                                 </div>
                             )}
                         </div>
                         {(lead.remarks ?? lead.notes) && (
-                            <p className="text-sm text-gray-500 mt-4">{lead.remarks ?? lead.notes}</p>
+                            <p className="text-xs text-gray-500 mt-2">{lead.remarks ?? lead.notes}</p>
                         )}
                         {socialLinks.length > 0 && (
-                            <div className="flex flex-wrap gap-3 mt-3">
+                            <div className="flex flex-wrap gap-3 mt-2">
                                 {socialLinks.map((link) => (
                                     <a key={link.label} href={link.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold">
                                         <ExternalLink className="w-3 h-3" /> {link.label}
@@ -315,28 +322,28 @@ export default function LeadDetailPage() {
                     </div>
                     <div className="flex flex-wrap gap-2 shrink-0">
                         {!isConverted && (
-                            <button type="button" onClick={startEditing} className="inline-flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-semibold hover:bg-gray-50">
-                                <Pencil className="w-4 h-4" /> {m.fields.editLead}
-                            </button>
+                            <Button variant="secondary" onClick={startEditing} icon={<Pencil className="w-4 h-4" />}>
+                                {m.fields.editLead}
+                            </Button>
                         )}
-                        <button type="button" onClick={removeLead} className="inline-flex items-center gap-2 px-4 py-2 border border-rose-200 text-rose-700 rounded-lg text-sm font-semibold hover:bg-rose-50">
-                            <Trash2 className="w-4 h-4" /> {t.common.delete}
-                        </button>
+                        <Button variant="danger" onClick={removeLead} icon={<Trash2 className="w-4 h-4" />}>
+                            {t.common.delete}
+                        </Button>
                         {isConverted && lead.convertedCustomer ? (
-                            <Link href={routes.sales.customerDetail(lead.convertedCustomer.id)} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-semibold">
+                            <Link href={routes.sales.customerDetail(lead.convertedCustomer.id)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-md text-xs font-semibold">
                                 <UserCheck className="w-4 h-4" /> {m.viewCustomer}
                             </Link>
                         ) : (
-                            <button type="button" onClick={convertLead} disabled={converting} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50">
-                                <UserCheck className="w-4 h-4" /> {m.convert}
-                            </button>
+                            <Button onClick={convertLead} loading={converting} icon={<UserCheck className="w-4 h-4" />}>
+                                {m.convert}
+                            </Button>
                         )}
                     </div>
                 </div>
 
                 {(lead.next_step || lead.next_step_date || lead.nextStepAssignee) && (
-                    <div className="mt-6 p-4 bg-violet-50 rounded-xl border border-violet-100">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-violet-400 mb-2">{m.fields.nextStepSection}</p>
+                    <div className="mt-4 p-4 bg-primary-light rounded-lg border border-primary-border">
+                        <p className="text-xs font-semibold text-blue-700 mb-2">{m.fields.nextStepSection}</p>
                         {lead.next_step && <p className="text-sm font-medium text-gray-800">{lead.next_step}</p>}
                         <div className="flex flex-wrap gap-4 mt-2 text-xs text-gray-600 font-semibold">
                             {lead.next_step_date && (
@@ -349,8 +356,8 @@ export default function LeadDetailPage() {
             </div>
 
             {customFieldDefs.some((def) => (lead.custom_fields as Record<string, string> | null)?.[def.key]) && (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                    <h2 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{m.fields.customFields}</h2>
+                <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+                    <h2 className="text-sm font-semibold text-gray-900 mb-3">{m.fields.customFields}</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2">
                         {customFieldDefs
                             .filter((def) => (lead.custom_fields as Record<string, string> | null)?.[def.key])
@@ -365,39 +372,40 @@ export default function LeadDetailPage() {
             )}
 
             {showEditForm && editForm && !isConverted && (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
-                    <h2 className="text-lg font-bold text-gray-900">{m.fields.editLead}</h2>
-                    <LeadFormFields form={editForm} onChange={setEditForm} teamMembers={teamMembers} customFieldDefs={customFieldDefs} />
-                    <div className="flex gap-2 pt-2">
-                        <button onClick={saveLead} disabled={savingLead} className="px-4 py-2 bg-violet-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
-                            {savingLead ? <Loader2 className="w-4 h-4 animate-spin" /> : m.detail.saveLead}
-                        </button>
-                        <button onClick={() => { setShowEditForm(false); setEditForm(null); }} className="px-4 py-2 border text-sm rounded-lg">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 space-y-4">
+                    <h2 className="text-sm font-semibold text-gray-900">{m.fields.editLead}</h2>
+                    <LeadFormFields form={editForm} onChange={setEditForm} teamMembers={teamMembers} customFieldDefs={customFieldDefs} errors={editFormErrors} />
+                    {saveLeadError && <p role="alert" className="text-xs text-danger">{saveLeadError}</p>}
+                    <FormFooter className="border-t-0 pt-0">
+                        <Button variant="secondary" onClick={() => { setShowEditForm(false); setEditForm(null); }}>
                             {t.common.cancel}
-                        </button>
-                    </div>
+                        </Button>
+                        <Button onClick={saveLead} loading={savingLead}>
+                            {m.detail.saveLead}
+                        </Button>
+                    </FormFooter>
                 </div>
             )}
 
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4 flex-wrap">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-4 flex-wrap">
                     <div className="flex items-center gap-2">
-                        <MessageSquare className="w-5 h-5 text-violet-600" />
-                        <h2 className="text-sm font-bold text-gray-800">{m.detail.conversations}</h2>
+                        <MessageSquare className="w-5 h-5 text-primary" />
+                        <h2 className="text-sm font-semibold text-gray-900">{m.detail.conversations}</h2>
                     </div>
                     {!isConverted && (
                         <div className="flex gap-2 flex-wrap">
                             <button
                                 type="button"
                                 onClick={() => { setShowDraftPanel((v) => !v); setShowConvForm(false); }}
-                                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700"
+                                className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover"
                             >
                                 <Sparkles className="w-4 h-4" /> AI Draft
                             </button>
                             <button
                                 type="button"
                                 onClick={() => (showConvForm ? setShowConvForm(false) : openConversationForm())}
-                                className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700"
+                                className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover"
                             >
                                 <Plus className="w-4 h-4" /> {m.detail.logConversation}
                             </button>
@@ -405,10 +413,10 @@ export default function LeadDetailPage() {
                     )}
                 </div>
 
-                <div className="p-6 space-y-4">
+                <div className="p-4 space-y-4">
                     {showDraftPanel && !isConverted && (
-                        <div className="bg-purple-50 rounded-xl p-4 space-y-3 border border-purple-200">
-                            <p className="text-xs font-black uppercase tracking-widest text-purple-400">AI Message Drafter</p>
+                        <div className="bg-primary-light rounded-lg p-4 space-y-3 border border-primary-border">
+                            <p className="text-xs font-semibold text-blue-700">AI Message Drafter</p>
                             <div className="grid grid-cols-2 gap-3">
                                 <select value={draftChannel} onChange={(e) => setDraftChannel(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
                                     {LEAD_CONVERSATION_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
@@ -419,7 +427,7 @@ export default function LeadDetailPage() {
                                 </select>
                             </div>
                             <div className="flex gap-2">
-                                <button onClick={draftMessage} disabled={draftingMessage} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium disabled:opacity-50">
+                                <button onClick={draftMessage} disabled={draftingMessage} className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg text-sm font-medium disabled:opacity-50">
                                     {draftingMessage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                                     {draftingMessage ? 'Drafting…' : 'Generate draft'}
                                 </button>
@@ -452,7 +460,7 @@ export default function LeadDetailPage() {
                             />
                             <NextStepFields state={newConv} onChange={(next) => setNewConv({ ...newConv, ...next })} teamMembers={teamMembers} />
                             <div className="flex gap-2">
-                                <button onClick={saveConversation} disabled={savingConv || !newConv.summary.trim()} className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium disabled:opacity-50">
+                                <button onClick={saveConversation} disabled={savingConv || !newConv.summary.trim()} className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg text-sm font-medium disabled:opacity-50">
                                     <Send className="w-4 h-4" /> {m.detail.logConversation}
                                 </button>
                                 <button onClick={() => setShowConvForm(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 bg-white">
@@ -492,6 +500,6 @@ export default function LeadDetailPage() {
                     )}
                 </div>
             </div>
-        </div>
+        </PageShell>
     );
 }

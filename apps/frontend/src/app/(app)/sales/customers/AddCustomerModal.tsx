@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { X, User, Phone, Mail, MapPin, CreditCard, Percent } from 'lucide-react';
-import ModalShell from '@/components/ModalShell';
+import { User, Phone, Mail, MapPin, CreditCard, Percent } from 'lucide-react';
+import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 
@@ -66,17 +67,14 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
 
     return (
         <ModalShell size="sm" onBackdropClick={onClose}>
-                <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                    <div>
-                        <h2 className="text-xl font-black tracking-tight">{t.customers.modal.title}</h2>
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">{t.customers.modal.subtitle}</p>
-                    </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-50 rounded-xl text-gray-400 transition-all">
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
+            <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden">
+                <ModalHeader
+                    title={t.customers.modal.title}
+                    subtitle={t.customers.modal.subtitle}
+                    onClose={onClose}
+                />
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
+                <div className="p-6 space-y-4 overflow-y-auto">
                     {error && <div className="p-3 bg-red-50 text-red-600 rounded-xl text-sm font-bold">{error}</div>}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -84,7 +82,7 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.fullName}</label>
                             <div className="relative">
                                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input required type="text" value={formData.name} onChange={set('name')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-black focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.name} />
+                                <input required type="text" value={formData.name} onChange={set('name')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.name} />
                             </div>
                         </div>
 
@@ -92,7 +90,7 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.phoneNumber}</label>
                             <div className="relative">
                                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input required type="text" value={formData.phone} onChange={set('phone')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-black focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.phone} />
+                                <input required type="text" value={formData.phone} onChange={set('phone')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.phone} />
                             </div>
                         </div>
 
@@ -106,7 +104,7 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
 
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.customerType}</label>
-                            <select value={formData.customer_type} onChange={set('customer_type')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-black text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all">
+                            <select value={formData.customer_type} onChange={set('customer_type')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-bold text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all">
                                 <option value="INDIVIDUAL">{t.customers.modal.individual}</option>
                                 <option value="ORGANIZATION">{t.customers.modal.organization}</option>
                             </select>
@@ -152,13 +150,17 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <div className="pt-2">
-                        <button disabled={loading} type="submit" className="w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center transition-all bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 hover:-translate-y-0.5 disabled:opacity-50">
-                            {loading ? t.customers.modal.adding : t.customers.modal.addCustomer}
-                        </button>
-                    </div>
-                </form>
+                <ModalFooter>
+                    <Button type="button" variant="secondary" size="md" onClick={onClose}>
+                        {t.common.cancel}
+                    </Button>
+                    <Button type="submit" variant="primary" size="md" loading={loading} className="flex-1 justify-center">
+                        {loading ? t.customers.modal.adding : t.customers.modal.addCustomer}
+                    </Button>
+                </ModalFooter>
+            </form>
         </ModalShell>
     );
 }

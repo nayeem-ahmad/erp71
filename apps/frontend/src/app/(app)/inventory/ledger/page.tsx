@@ -5,6 +5,7 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { BookOpen, RefreshCw } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { api } from '@/lib/api';
+import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
@@ -85,7 +86,7 @@ export default function InventoryLedgerPage() {
                 header: t.inventoryLedger.columns.delta,
                 cell: (info) => {
                     const value = Number(info.getValue() || 0);
-                    return <span className={value >= 0 ? 'text-emerald-600 font-black' : 'text-rose-600 font-black'}>{value}</span>;
+                    return <span className={value >= 0 ? 'text-emerald-600 font-bold' : 'text-danger font-bold'}>{value}</span>;
                 },
                 size: 80,
             }),
@@ -104,8 +105,7 @@ export default function InventoryLedgerPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.inventoryLedger.title}
                     subtitle={t.inventoryLedger.subtitle}
@@ -122,7 +122,7 @@ export default function InventoryLedgerPage() {
                     )}
                 />
 
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap gap-3 items-end">
+                <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
                     <div className="min-w-[220px]">
                         <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.inventoryLedger.warehouseLabel}</label>
                         <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
@@ -148,7 +148,6 @@ export default function InventoryLedgerPage() {
                     emptyIcon={<BookOpen className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.inventoryLedger.searchPlaceholder}
                 />
-            </div>
-        </div>
+    </PageShell>
     );
 }

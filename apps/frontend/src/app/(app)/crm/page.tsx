@@ -8,13 +8,14 @@ import { FinancialKpiTile } from '@/components/dashboard/KpiTile';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { api } from '@/lib/api';
+import { StatusBadge, type StatusBadgeTone } from '@/components/ui';
 
-const statusColors: Record<string, string> = {
-    DRAFT: 'bg-gray-100 text-gray-600',
-    SCHEDULED: 'bg-blue-50 text-blue-700',
-    SENDING: 'bg-amber-50 text-amber-700',
-    COMPLETED: 'bg-emerald-50 text-emerald-700',
-    CANCELLED: 'bg-rose-50 text-rose-700',
+const campaignStatusTone: Record<string, StatusBadgeTone> = {
+    DRAFT: 'neutral',
+    SCHEDULED: 'info',
+    SENDING: 'warning',
+    COMPLETED: 'success',
+    CANCELLED: 'danger',
 };
 
 interface LeadsSummary {
@@ -69,7 +70,7 @@ export default function CrmHubPage() {
     const sections: HubSectionConfig[] = useMemo(() => {
         const pipelineLinks = canAccessPremiumCrm
             ? [
-                { href: routes.crm.leads, key: 'leads', icon: UserPlus, accent: 'bg-violet-50 text-violet-700 border-violet-100' },
+                { href: routes.crm.leads, key: 'leads', icon: UserPlus, accent: 'bg-primary-light text-blue-700 border-primary-border' },
                 { href: routes.crm.tasks, key: 'crmTasks', icon: ListChecks, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
             ]
             : [];
@@ -87,7 +88,7 @@ export default function CrmHubPage() {
             result.push({
                 sectionKey: 'engagement',
                 links: [
-                    { href: routes.crm.campaigns, key: 'crmCampaigns', icon: Megaphone, accent: 'bg-rose-50 text-rose-700 border-rose-100' },
+                    { href: routes.crm.campaigns, key: 'crmCampaigns', icon: Megaphone, accent: 'bg-danger-light text-danger-text border-red-200' },
                 ],
             });
         }
@@ -152,10 +153,10 @@ export default function CrmHubPage() {
                         )}
                     </div>
 
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
                         <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
                             <h2 className="text-sm font-bold text-gray-800">{hub.dashboard.recentCampaigns}</h2>
-                            <Link href={routes.crm.campaigns} className="text-xs font-semibold text-violet-600 hover:underline">
+                            <Link href={routes.crm.campaigns} className="text-xs font-semibold text-primary hover:underline">
                                 {hub.dashboard.viewAll}
                             </Link>
                         </div>
@@ -166,9 +167,9 @@ export default function CrmHubPage() {
                                 {recentCampaigns.map((c) => (
                                     <div key={c.id} className="px-5 py-3 flex items-center justify-between gap-3">
                                         <div className="min-w-0 flex items-center gap-2">
-                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full shrink-0 ${statusColors[c.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                                            <StatusBadge tone={campaignStatusTone[c.status] ?? 'neutral'} className="shrink-0">
                                                 {c.status}
-                                            </span>
+                                            </StatusBadge>
                                             <span className="text-sm font-medium text-gray-800 truncate">{c.name}</span>
                                         </div>
                                         <div className="text-xs text-gray-500 shrink-0">

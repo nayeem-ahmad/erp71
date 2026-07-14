@@ -10,6 +10,7 @@ import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { buildBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell } from '@/components/ui';
 
 const commissionHelper = createColumnHelper<ReferralCommission>();
 const paymentHelper = createColumnHelper<RefereePayment>();
@@ -70,7 +71,7 @@ export default function RefereePortalPage() {
                 const status = info.getValue();
                 const color = status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : status === 'EARNED' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600';
                 return (
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${color}`}>
+                    <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${color}`}>
                         {m.status[status]}
                     </span>
                 );
@@ -119,8 +120,7 @@ export default function RefereePortalPage() {
     ] : [];
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={formatMessage(m.title, { name: ledger?.referee.name ?? '' })}
                     subtitle={m.subtitle}
@@ -128,14 +128,14 @@ export default function RefereePortalPage() {
                 />
 
                 {toast && (
-                    <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+                    <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
                         <CheckCircle className="w-4 h-4" />
                         {toast}
                     </div>
                 )}
 
                 {error && (
-                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
                         {error}
                     </div>
                 )}
@@ -147,29 +147,29 @@ export default function RefereePortalPage() {
                 ) : ledger ? (
                     <>
                         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                            <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+                            <div className="rounded-lg border border-gray-100 bg-white p-6 shadow-sm">
                                 <div className="flex items-center gap-3">
-                                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
+                                    <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
                                         <Gift className="w-5 h-5" />
                                     </div>
                                     <div>
                                         <p className="text-sm font-semibold text-gray-900">{m.share.referralCode}</p>
-                                        <p className="font-mono text-lg font-black tracking-wider text-gray-900">{ledger.referee.referral_code}</p>
+                                        <p className="font-mono text-lg font-bold tracking-wider text-gray-900">{ledger.referee.referral_code}</p>
                                     </div>
                                 </div>
                                 <button
                                     type="button"
                                     onClick={() => void copyText(ledger.referee.referral_code, m.share.codeCopied)}
-                                    className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                                    className="mt-4 inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
                                 >
                                     <Copy className="w-4 h-4" />
                                     {m.share.copyCode}
                                 </button>
                             </div>
 
-                            <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+                            <div className="rounded-lg border border-gray-100 bg-white p-6 shadow-sm">
                                 <div className="flex items-center gap-3">
-                                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600">
+                                    <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary-light text-primary">
                                         <Link2 className="w-5 h-5" />
                                     </div>
                                     <div className="min-w-0">
@@ -180,7 +180,7 @@ export default function RefereePortalPage() {
                                 <button
                                     type="button"
                                     onClick={() => void copyText(signupUrl, m.share.linkCopied)}
-                                    className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                                    className="mt-4 inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
                                 >
                                     <Copy className="w-4 h-4" />
                                     {m.share.copyLink}
@@ -192,16 +192,16 @@ export default function RefereePortalPage() {
                             {summaryCards.map((card) => (
                                 <div
                                     key={card.label}
-                                    className={`rounded-2xl border p-4 ${card.highlight ? 'border-amber-200 bg-amber-50' : 'border-gray-100 bg-white'}`}
+                                    className={`rounded-lg border p-4 ${card.highlight ? 'border-amber-200 bg-amber-50' : 'border-gray-100 bg-white'}`}
                                 >
                                     <p className="text-xs font-medium uppercase tracking-wider text-gray-500">{card.label}</p>
-                                    <p className={`mt-2 text-xl font-black ${card.highlight ? 'text-amber-700' : 'text-gray-900'}`}>{card.value}</p>
+                                    <p className={`mt-2 text-xl font-bold ${card.highlight ? 'text-amber-700' : 'text-gray-900'}`}>{card.value}</p>
                                 </div>
                             ))}
                         </div>
 
                         <div className="space-y-3">
-                            <h2 className="text-lg font-black text-gray-900">{m.commissions.title}</h2>
+                            <h2 className="text-lg font-bold text-gray-900">{m.commissions.title}</h2>
                             <DataTable
                                 tableId="referee-portal-commissions"
                                 data={ledger.commissions}
@@ -212,7 +212,7 @@ export default function RefereePortalPage() {
                         </div>
 
                         <div className="space-y-3">
-                            <h2 className="text-lg font-black text-gray-900">{m.payments.title}</h2>
+                            <h2 className="text-lg font-bold text-gray-900">{m.payments.title}</h2>
                             <DataTable
                                 tableId="referee-portal-payments"
                                 data={ledger.payments}
@@ -223,7 +223,6 @@ export default function RefereePortalPage() {
                         </div>
                     </>
                 ) : null}
-            </div>
-        </div>
+        </PageShell>
     );
 }

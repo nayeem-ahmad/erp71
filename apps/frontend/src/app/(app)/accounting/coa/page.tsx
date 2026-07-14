@@ -108,7 +108,7 @@ export default function ChartOfAccountsPage() {
                 header: t.accountingShared.account,
                 cell: (info) => (
                     <div>
-                        <span className="block text-sm font-black text-gray-900">{info.row.original.name}</span>
+                        <span className="block text-sm font-bold text-gray-900">{info.row.original.name}</span>
                         <span className="block text-xs text-gray-400">{info.row.original.code || t.accountingShared.noCode}</span>
                     </div>
                 ),
@@ -286,7 +286,7 @@ function Badge({ children, tone = 'primary' }: { children: React.ReactNode; tone
         ? 'border-sky-200 bg-sky-50 text-sky-700'
         : 'border-amber-200 bg-amber-50 text-amber-700';
 
-    return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${classes}`}>{children}</span>;
+    return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold ${classes}`}>{children}</span>;
 }
 
 function AccountGroupForm({ onSuccess }: { onSuccess: () => Promise<void> }) {
@@ -370,7 +370,7 @@ function AccountSubgroupForm({ groups, onSuccess }: { groups: AccountGroup[]; on
                 <span className={`${compactDensity.formLabel} block mb-1`}>{t.coa.subgroupName}</span>
                 <input value={name} onChange={(event) => setName(event.target.value)} required className={compactDensity.formField} placeholder={t.coa.cashAndBank} />
             </label>
-            <button type="submit" disabled={saving} className={`${compactDensity.btnPrimary} bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60`}>
+            <button type="submit" disabled={saving} className={`${compactDensity.btnPrimary} bg-primary text-white hover:bg-primary-hover disabled:opacity-60`}>
                 <Plus className="w-3.5 h-3.5" />
                 {saving ? t.coa.creating : t.coa.createSubgroup}
             </button>
@@ -465,7 +465,7 @@ function AccountForm({ groups, subgroups, onSuccess }: { groups: AccountGroup[];
                     </select>
                 </label>
             </div>
-            <button type="submit" disabled={saving} className={`${compactDensity.btnPrimary} bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-60`}>
+            <button type="submit" disabled={saving} className={`${compactDensity.btnPrimary} bg-primary text-white hover:bg-primary-hover disabled:opacity-60`}>
                 <Plus className="w-3.5 h-3.5" />
                 {saving ? t.coa.creating : t.coa.createAccount}
             </button>

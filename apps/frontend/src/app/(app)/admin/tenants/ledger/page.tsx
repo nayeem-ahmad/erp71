@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { ArrowDownLeft, ArrowUpRight, CheckCircle, Loader2, Plus } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Loader2, Plus } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell, Button, StatusBadge } from '@/components/ui';
+import { toast } from '@/lib/toast';
 import { DataTable } from '@/components/data-table';
 import TenantLedgerPaymentModal from '@/components/admin/tenants/TenantLedgerPaymentModal';
 import { withRunningBalances } from '@/components/admin/tenants/ledger-utils';
@@ -25,7 +27,6 @@ export default function AdminTenantLedgerPage() {
     const [tenantFilter, setTenantFilter] = useState('');
     const [events, setEvents] = useState<LedgerEvent[]>([]);
     const [error, setError] = useState('');
-    const [toast, setToast] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [paymentModalOpen, setPaymentModalOpen] = useState(false);
 
@@ -54,11 +55,6 @@ export default function AdminTenantLedgerPage() {
         void loadLedger();
     }, [loadLedger]);
 
-    const showToast = (msg: string) => {
-        setToast(msg);
-        setTimeout(() => setToast(''), 3500);
-    };
-
     const columns: ColumnDef<LedgerEvent, unknown>[] = useMemo(() => [
         columnHelper.accessor('created_at', {
             header: ml.columns.date,
@@ -74,11 +70,12 @@ export default function AdminTenantLedgerPage() {
                 const type = info.getValue();
                 const isCredit = ['manual_payment', 'sms_credit_sale_payment', 'ai_credit_sale_payment'].includes(type);
                 const isDebit = ['manual_refund', 'subscription_fee'].includes(type);
+                const tone = isCredit ? 'success' : isDebit ? 'warning' : 'neutral';
                 return (
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${isCredit ? 'bg-emerald-100 text-emerald-700' : isDebit ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
+                    <StatusBadge tone={tone} className="gap-1">
                         {isCredit ? <ArrowDownLeft className="w-2.5 h-2.5" /> : isDebit ? <ArrowUpRight className="w-2.5 h-2.5" /> : null}
                         {(ml.eventType as Record<string, string>)[type] ?? type}
-                    </span>
+                    </StatusBadge>
                 );
             },
         }),
@@ -89,7 +86,7 @@ export default function AdminTenantLedgerPage() {
                 const isCredit = ['manual_payment', 'sms_credit_sale_payment', 'ai_credit_sale_payment'].includes(row.event_type);
                 const value = info.getValue();
                 return (
-                    <span className={`font-black ${isCredit ? 'text-emerald-700' : 'text-amber-700'}`}>
+                    <span className={`font-bold ${isCredit ? 'text-emerald-700' : 'text-amber-700'}`}>
                         {value !== null ? `৳${Number(value).toFixed(2)}` : '—'}
                     </span>
                 );
@@ -110,8 +107,7 @@ export default function AdminTenantLedgerPage() {
     ], [lp.columns, ml.columns, ml.eventType]);
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={lp.title}
                     subtitle={lp.subtitle}
@@ -123,25 +119,14 @@ export default function AdminTenantLedgerPage() {
                         lp.title,
                     )}
                     actions={(
-                        <button
-                            type="button"
-                            onClick={() => setPaymentModalOpen(true)}
-                            className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-emerald-200 hover:bg-emerald-700"
-                        >
-                            <Plus className="w-4 h-4" />
+                        <Button onClick={() => setPaymentModalOpen(true)} icon={<Plus className="w-4 h-4" />}>
                             {lp.recordPayment}
-                        </button>
+                        </Button>
                     )}
                 />
 
-                {toast && (
-                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center gap-2 text-sm font-semibold text-emerald-700">
-                        <CheckCircle className="w-4 h-4 shrink-0" /> {toast}
-                    </div>
-                )}
-
                 {error && (
-                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                    <div className="rounded-md border border-danger bg-danger-light px-4 py-3 text-sm font-semibold text-danger-text">
                         {error}
                     </div>
                 )}
@@ -150,7 +135,7 @@ export default function AdminTenantLedgerPage() {
                     <select
                         value={tenantFilter}
                         onChange={(e) => setTenantFilter(e.target.value)}
-                        className="w-full rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm font-medium outline-none"
+                        className="w-full rounded-md border border-gray-100 bg-white px-4 py-3 text-sm font-medium outline-none"
                     >
                         <option value="">{lp.allTenants}</option>
                         {tenants.map((tenant) => (
@@ -160,7 +145,7 @@ export default function AdminTenantLedgerPage() {
                 </div>
 
                 {isLoading ? (
-                    <div className="flex items-center gap-2 rounded-3xl border border-gray-100 bg-white p-8 text-sm text-gray-500">
+                    <div className="flex items-center gap-2 rounded-lg border border-gray-100 bg-white p-8 text-sm text-gray-500">
                         <Loader2 className="w-4 h-4 animate-spin" /> {m.loading}
                     </div>
                 ) : (
@@ -172,7 +157,6 @@ export default function AdminTenantLedgerPage() {
                         emptyMessage={ml.noEvents}
                     />
                 )}
-            </div>
 
             <TenantLedgerPaymentModal
                 open={paymentModalOpen}
@@ -180,10 +164,10 @@ export default function AdminTenantLedgerPage() {
                 defaultTenantId={tenantFilter}
                 onClose={() => setPaymentModalOpen(false)}
                 onSuccess={(message) => {
-                    showToast(message);
+                    toast.success(message);
                     void loadLedger();
                 }}
             />
-        </div>
+        </PageShell>
     );
 }

@@ -12,6 +12,7 @@ import { DataTable } from '@/components/data-table';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
+import { PageShell, Button } from '@/components/ui';
 
 const IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
@@ -48,8 +49,8 @@ interface SegmentStats {
 
 const segmentColors: Record<string, string> = {
     VIP: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    'AT-RISK': 'bg-rose-50 text-rose-700 border-rose-200',
-    'At-Risk': 'bg-rose-50 text-rose-700 border-rose-200',
+    'AT-RISK': 'bg-danger-light text-danger-text border-red-200',
+    'At-Risk': 'bg-danger-light text-danger-text border-red-200',
     NEW: 'bg-blue-50 text-blue-700 border-blue-200',
     LOYAL: 'bg-amber-50 text-amber-700 border-amber-200',
 };
@@ -69,7 +70,7 @@ export default function CustomersPage() {
 
     const segmentCardStyle: Record<string, { bg: string; text: string; bar: string; icon: React.ReactNode }> = useMemo(() => ({
         VIP: { bg: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700', bar: 'bg-emerald-500', icon: <Crown className="w-5 h-5 text-emerald-500" /> },
-        'At-Risk': { bg: 'bg-rose-50 border-rose-200', text: 'text-rose-700', bar: 'bg-rose-500', icon: <AlertTriangle className="w-5 h-5 text-rose-500" /> },
+        'At-Risk': { bg: 'bg-danger-light border-red-200', text: 'text-danger-text', bar: 'bg-danger', icon: <AlertTriangle className="w-5 h-5 text-danger" /> },
         Regular: { bg: 'bg-gray-50 border-gray-200', text: 'text-gray-700', bar: 'bg-gray-400', icon: <UserCheck className="w-5 h-5 text-gray-400" /> },
     }), []);
 
@@ -145,7 +146,7 @@ export default function CustomersPage() {
                     const customer = info.row.original;
                     return (
                         <div>
-                            <span className="block text-sm font-black text-gray-900">{customer.name}</span>
+                            <span className="block text-sm font-bold text-gray-900">{customer.name}</span>
                             <span className="block text-xs text-gray-400">{customer.phone}</span>
                         </div>
                     );
@@ -158,11 +159,11 @@ export default function CustomersPage() {
                     const type = info.getValue() || 'INDIVIDUAL';
                     const classes =
                         type === 'ORGANIZATION'
-                            ? 'bg-violet-50 text-violet-700 border-violet-200'
+                            ? 'bg-primary-light text-blue-700 border-primary-border'
                             : 'bg-gray-50 text-gray-700 border-gray-200';
 
                     return (
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${classes}`}>
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${classes}`}>
                             {type}
                         </span>
                     );
@@ -191,7 +192,7 @@ export default function CustomersPage() {
             columnHelper.accessor('total_spent', {
                 header: t.customers.columns.totalSpent,
                 cell: (info) => (
-                    <span className="text-sm font-black text-blue-600">
+                    <span className="text-sm font-bold text-blue-600">
                         {formatBDT(Number(info.getValue() || 0))}
                     </span>
                 ),
@@ -218,7 +219,7 @@ export default function CustomersPage() {
                 cell: (info) => {
                     const segment = info.getValue() || 'GENERAL';
                     return (
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${segmentColors[segment] ?? 'bg-gray-50 text-gray-700 border-gray-200'}`}>
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${segmentColors[segment] ?? 'bg-gray-50 text-gray-700 border-gray-200'}`}>
                             {segment}
                         </span>
                     );
@@ -270,8 +271,7 @@ export default function CustomersPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.customers.title}
                     subtitle={t.customers.subtitle}
@@ -299,32 +299,28 @@ export default function CustomersPage() {
                                 <Upload className="w-4 h-4 mr-1.5" />
                                 Import
                             </button>
-                            <button
-                                onClick={() => setIsModalOpen(true)}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                            >
-                                <Plus className="w-4 h-4 mr-2" />
+                            <Button type="button" variant="primary" size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setIsModalOpen(true)}>
                                 {t.customers.newCustomer}
-                            </button>
+                            </Button>
                         </>
                     }
                 />
 
                 {segmentStats && segmentStats.total > 0 && (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+                        <div className="bg-white border border-gray-100 rounded-lg p-5 shadow-sm">
                             <p className="text-xs font-medium text-gray-500 mb-1">{t.customers.totalCustomers}</p>
-                            <p className="text-3xl font-black text-gray-900">{segmentStats.total}</p>
+                            <p className="text-3xl font-bold text-gray-900">{segmentStats.total}</p>
                         </div>
                         {segmentStats.breakdown.map((seg) => {
                             const style = segmentCardStyle[seg.segment] ?? segmentCardStyle['Regular'];
                             return (
-                                <div key={seg.segment} className={`border rounded-2xl p-5 shadow-sm ${style.bg}`}>
+                                <div key={seg.segment} className={`border rounded-lg p-5 shadow-sm ${style.bg}`}>
                                     <div className="flex items-center justify-between mb-2">
-                                        <p className={`text-[10px] font-black uppercase tracking-widest ${style.text}`}>{seg.segment}</p>
+                                        <p className={`text-[10px] font-semibold ${style.text}`}>{seg.segment}</p>
                                         {style.icon}
                                     </div>
-                                    <p className={`text-3xl font-black ${style.text}`}>{seg.count}</p>
+                                    <p className={`text-3xl font-bold ${style.text}`}>{seg.count}</p>
                                     <div className="mt-3 bg-white/60 rounded-full h-1.5 overflow-hidden">
                                         <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${seg.percentage}%` }} />
                                     </div>
@@ -361,9 +357,8 @@ export default function CustomersPage() {
                     emptyIcon={<Users className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.customers.searchPlaceholder}
                     filterPresets={filterPresets}
-                    enableRowSelection
                 />
-            </div>
-        </div>
+            
+        </PageShell>
     );
 }

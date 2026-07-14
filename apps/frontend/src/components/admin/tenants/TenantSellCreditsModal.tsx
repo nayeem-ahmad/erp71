@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import type { TenantRecord } from './types';
 import { api } from '@/lib/api';
 import { formatMessage, useI18n } from '@/lib/i18n';
+import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 
 type CreditKind = 'sms' | 'ai';
 
@@ -70,78 +71,68 @@ export default function TenantSellCreditsModal({ open, kind, tenant, onClose, on
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-lg rounded-3xl border border-gray-100 bg-white shadow-2xl">
-                <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-                    <div>
-                        <h2 className="text-lg font-black text-gray-900">{title}</h2>
-                        <p className="text-sm text-gray-500">{tenant.name}</p>
+        <ModalShell size="sm" onBackdropClick={onClose}>
+            <ModalHeader title={title} subtitle={tenant.name} onClose={onClose} />
+
+            <div className="space-y-4 p-6 overflow-y-auto">
+                {error && (
+                    <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                        {error}
                     </div>
-                    <button type="button" onClick={onClose} className="rounded-xl p-2 text-gray-500 hover:bg-gray-100" aria-label="Close">
-                        <X className="w-4 h-4" />
-                    </button>
+                )}
+
+                <div className="space-y-2">
+                    <label className="text-xs font-medium text-gray-500">{sc.creditsLabel}</label>
+                    <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={credits}
+                        onChange={(e) => setCredits(e.target.value)}
+                        placeholder={sc.creditsPlaceholder}
+                        className="w-full rounded-md border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none"
+                    />
                 </div>
 
-                <div className="space-y-4 p-6">
-                    {error && (
-                        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-                            {error}
-                        </div>
-                    )}
-
-                    <div className="space-y-2">
-                        <label className="text-xs font-medium text-gray-500">{sc.creditsLabel}</label>
-                        <input
-                            type="number"
-                            min="1"
-                            step="1"
-                            value={credits}
-                            onChange={(e) => setCredits(e.target.value)}
-                            placeholder={sc.creditsPlaceholder}
-                            className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none"
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="text-xs font-medium text-gray-500">{sc.amountLabel}</label>
-                        <input
-                            type="number"
-                            min="0.01"
-                            step="0.01"
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            placeholder={sc.amountPlaceholder}
-                            className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none"
-                        />
-                        <p className="text-xs text-gray-400">{sc.amountHint}</p>
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="text-xs font-medium text-gray-500">{sc.notesLabel}</label>
-                        <textarea
-                            value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
-                            placeholder={sc.notesPlaceholder}
-                            rows={3}
-                            className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none resize-none"
-                        />
-                    </div>
+                <div className="space-y-2">
+                    <label className="text-xs font-medium text-gray-500">{sc.amountLabel}</label>
+                    <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder={sc.amountPlaceholder}
+                        className="w-full rounded-md border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none"
+                    />
+                    <p className="text-xs text-gray-400">{sc.amountHint}</p>
                 </div>
 
-                <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
-                    <button type="button" onClick={onClose} className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600">
-                        {sc.cancel}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => void handleSubmit()}
-                        disabled={submitting}
-                        className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white hover:bg-blue-700 disabled:opacity-60"
-                    >
-                        {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> {sc.saving}</> : sc.confirm}
-                    </button>
+                <div className="space-y-2">
+                    <label className="text-xs font-medium text-gray-500">{sc.notesLabel}</label>
+                    <textarea
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder={sc.notesPlaceholder}
+                        rows={3}
+                        className="w-full rounded-md border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none resize-none"
+                    />
                 </div>
             </div>
-        </div>
+
+            <ModalFooter>
+                <button type="button" onClick={onClose} className="rounded-md border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600">
+                    {sc.cancel}
+                </button>
+                <button
+                    type="button"
+                    onClick={() => void handleSubmit()}
+                    disabled={submitting}
+                    className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
+                >
+                    {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> {sc.saving}</> : sc.confirm}
+                </button>
+            </ModalFooter>
+        </ModalShell>
     );
 }

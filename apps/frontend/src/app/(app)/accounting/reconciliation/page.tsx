@@ -211,7 +211,7 @@ export default function PostingExceptionsPage() {
                             <button
                                 onClick={() => handleRetry(event.id)}
                                 disabled={isRetrying}
-                                className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium disabled:opacity-50"
+                                className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary-hover font-medium disabled:opacity-50"
                             >
                                 <RefreshCw className={`w-3.5 h-3.5 ${isRetrying ? 'animate-spin' : ''}`} />
                                 {isRetrying ? 'Retrying…' : 'Retry'}

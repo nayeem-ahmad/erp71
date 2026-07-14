@@ -4,6 +4,7 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import { useEffect, useState } from 'react';
 import { Search, Bug, Sparkles, MessageSquare, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell } from '@/components/ui';
 import { api } from '@/lib/api';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import FeedbackAutomationPanel from '@/components/admin/FeedbackAutomationPanel';
@@ -91,9 +92,8 @@ export default function AdminFeedbackPage() {
     };
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
-                <PageHeader
+        <PageShell>
+            <PageHeader
                     title={m.title}
                     subtitle={formatMessage(m.subtitle, { total })}
                     breadcrumbs={modulePageBreadcrumbs(
@@ -105,14 +105,14 @@ export default function AdminFeedbackPage() {
                 />
 
                 {error && (
-                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                    <div className="rounded-md border border-danger bg-danger-light px-4 py-3 text-sm font-semibold text-danger-text">
                         {error}
                     </div>
                 )}
 
-                <div className="rounded-3xl border border-gray-100 bg-white overflow-hidden">
+                <div className="rounded-lg border border-gray-100 bg-white overflow-hidden">
                     <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-3">
-                        <label className="flex-1 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-2.5 flex items-center gap-3">
+                        <label className="flex-1 rounded-md border border-gray-100 bg-gray-50 px-4 py-2.5 flex items-center gap-3">
                             <Search className="w-4 h-4 text-gray-400 shrink-0" />
                             <input
                                 value={search}
@@ -124,7 +124,7 @@ export default function AdminFeedbackPage() {
                         <select
                             value={typeFilter}
                             onChange={(e) => handleTypeFilter(e.target.value)}
-                            className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-2.5 text-sm font-semibold text-gray-700 outline-none cursor-pointer"
+                            className="rounded-md border border-gray-100 bg-gray-50 px-4 py-2.5 text-sm font-semibold text-gray-700 outline-none cursor-pointer"
                         >
                             <option value="">{m.allTypes}</option>
                             <option value="bug">{m.types.bug}</option>
@@ -154,13 +154,13 @@ export default function AdminFeedbackPage() {
                                         <div className="flex items-start justify-between gap-4">
                                             <div className="flex items-center gap-3 min-w-0">
                                                 <span
-                                                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest shrink-0 ${style.bg} ${style.text}`}
+                                                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold shrink-0 ${style.bg} ${style.text}`}
                                                 >
                                                     {style.icon}
                                                     {typeLabel(item.type)}
                                                 </span>
                                                 <div className="min-w-0">
-                                                    <p className="text-sm font-black text-gray-900 truncate">
+                                                    <p className="text-sm font-semibold text-gray-900 truncate">
                                                         {item.userName || item.userEmail}
                                                     </p>
                                                     <p className="text-xs text-gray-500 truncate">{item.userEmail}</p>
@@ -189,7 +189,7 @@ export default function AdminFeedbackPage() {
                                                     <button
                                                         type="button"
                                                         onClick={() => toggleExpand(item.id)}
-                                                        className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+                                                        className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-primary-hover"
                                                     >
                                                         {isExpanded ? (
                                                             <><ChevronUp className="w-3 h-3" /> Show less</>
@@ -213,11 +213,10 @@ export default function AdminFeedbackPage() {
                         </div>
                     )}
                 </div>
-            </div>
 
             {automationId && (
                 <FeedbackAutomationPanel feedbackId={automationId} onClose={() => setAutomationId(null)} />
             )}
-        </div>
+        </PageShell>
     );
 }

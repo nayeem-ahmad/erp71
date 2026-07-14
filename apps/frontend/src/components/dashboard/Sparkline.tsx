@@ -14,7 +14,7 @@ export function Sparkline({ points, className }: { points: number[]; className?:
 
     return (
         <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className={`h-5 w-full ${className ?? ''}`} aria-hidden="true">
-            <path d={d} fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+            <path d={d} fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
         </svg>
     );
 }

@@ -2,10 +2,12 @@
 import { useI18n, formatMessage } from '@/lib/i18n';
 
 import { useState, useEffect } from 'react';
-import { MessageSquare, CheckCircle, Info, Loader2 } from 'lucide-react';
+import { MessageSquare, Loader2 } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { toast } from '@/lib/toast';
+import { Alert, Button, PageShell } from '@/components/ui';
 
 type SmsSettings = {
     sms_enabled: boolean;
@@ -55,7 +57,6 @@ export default function SmsSettingsPage() {
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [success, setSuccess] = useState(false);
     const [error, setError] = useState('');
 
     useEffect(() => {
@@ -76,15 +77,13 @@ export default function SmsSettingsPage() {
     async function handleSave() {
         setSaving(true);
         setError('');
-        setSuccess(false);
         try {
             await fetchWithAuth('/tenants/sms-settings', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(settings),
             });
-            setSuccess(true);
-            setTimeout(() => setSuccess(false), 3000);
+            toast.success(m.saved);
         } catch (e: any) {
             setError(e.message ?? m.saveFailed);
         } finally {
@@ -97,7 +96,7 @@ export default function SmsSettingsPage() {
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px] space-y-4">
+        <PageShell maxWidth="full" className="space-y-4">
             <PageHeader
                 title={(
                     <span className="inline-flex items-center gap-2">
@@ -114,12 +113,9 @@ export default function SmsSettingsPage() {
             />
 
             {/* Info box */}
-            <div className="flex gap-3 bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
-                <Info className="h-5 w-5 flex-shrink-0 mt-0.5 text-blue-500" />
-                <div>
-                    <strong>{m.infoTitle}</strong> — {m.infoBody}
-                </div>
-            </div>
+            <Alert tone="info">
+                <strong>{m.infoTitle}</strong> — {m.infoBody}
+            </Alert>
 
             {loading ? (
                 <div className="flex items-center gap-2 text-gray-400 py-8 justify-center text-sm">
@@ -198,31 +194,15 @@ export default function SmsSettingsPage() {
                         />
                     </div>
 
-                    {error && (
-                        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
-                            {error}
-                        </div>
-                    )}
-
-                    {success && (
-                        <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 rounded-lg p-3 text-sm">
-                            <CheckCircle className="h-4 w-4 flex-shrink-0" />
-                            {m.saved}
-                        </div>
-                    )}
+                    {error && <Alert tone="danger">{error}</Alert>}
 
                     <div className="pt-2">
-                        <button
-                            onClick={handleSave}
-                            disabled={saving}
-                            className="inline-flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                        <Button onClick={handleSave} disabled={saving} loading={saving}>
                             {saving ? m.saving : m.saveButton}
-                        </button>
+                        </Button>
                     </div>
                 </div>
             )}
-        </div>
+        </PageShell>
     );
 }

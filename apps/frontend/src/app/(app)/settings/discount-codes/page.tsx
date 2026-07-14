@@ -2,11 +2,13 @@
 import { useI18n, formatMessage } from '@/lib/i18n';
 
 import { useState, useEffect } from 'react';
-import { Tag, Plus, Trash2, ToggleLeft, ToggleRight, CheckCircle, X } from 'lucide-react';
+import { Tag, Plus, Trash2, ToggleLeft, ToggleRight, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { toast } from '@/lib/toast';
+import { Alert, Button, Field, FormFooter, Input, PageShell, Select } from '@/components/ui';
 
 interface DiscountCode {
     id: string;
@@ -45,7 +47,6 @@ export default function DiscountCodesPage() {
     const [form, setForm] = useState(EMPTY_FORM);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
 
     useEffect(() => { loadCodes(); }, []);
 
@@ -79,8 +80,7 @@ export default function DiscountCodesPage() {
             });
             setShowForm(false);
             setForm(EMPTY_FORM);
-            setSuccess(m.created);
-            setTimeout(() => setSuccess(''), 3000);
+            toast.success(m.created);
             await loadCodes();
         } catch (err: any) {
             setError(err?.message ?? m.createFailed);
@@ -109,7 +109,7 @@ export default function DiscountCodesPage() {
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px] space-y-4">
+        <PageShell maxWidth="full" className="space-y-4">
             <PageHeader
                 title={(
                     <span className="inline-flex items-center gap-2">
@@ -124,32 +124,23 @@ export default function DiscountCodesPage() {
                     'settings',
                 )}
                 actions={(
-                    <button
-                        onClick={() => { setShowForm(true); setError(''); }}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-                    >
-                        <Plus className="h-4 w-4" />
+                    <Button icon={<Plus className="h-4 w-4" />} onClick={() => { setShowForm(true); setError(''); }}>
                         {m.newCode}
-                    </button>
+                    </Button>
                 )}
             />
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
-                {m.infoBanner}
-            </div>
+            <Alert tone="info">{m.infoBanner}</Alert>
 
             {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm flex items-center justify-between">
-                    <span>{error}</span>
-                    <button onClick={() => setError('')}><X className="h-4 w-4" /></button>
-                </div>
-            )}
-
-            {success && (
-                <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg p-3 text-sm flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4" />
-                    {success}
-                </div>
+                <Alert tone="danger">
+                    <div className="flex items-center justify-between gap-2">
+                        <span>{error}</span>
+                        <button onClick={() => setError('')} aria-label={t.common.close ?? 'Close'}>
+                            <X className="h-4 w-4" />
+                        </button>
+                    </div>
+                </Alert>
             )}
 
             {/* Create Form */}
@@ -163,47 +154,39 @@ export default function DiscountCodesPage() {
                     </div>
                     <form onSubmit={handleCreate} className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">{m.form.code}</label>
-                                <input
+                            <Field label={m.form.code} required>
+                                <Input
                                     required
                                     type="text"
                                     value={form.code}
                                     onChange={e => setForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
                                     placeholder={m.form.codePlaceholder}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono uppercase"
+                                    className="font-mono uppercase"
                                 />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">{m.form.name}</label>
-                                <input
+                            </Field>
+                            <Field label={m.form.name} required>
+                                <Input
                                     required
                                     type="text"
                                     value={form.name}
                                     onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                                     placeholder={m.form.namePlaceholder}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                                 />
-                            </div>
+                            </Field>
                         </div>
 
                         <div className="grid grid-cols-3 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">{m.form.type}</label>
-                                <select
+                            <Field label={m.form.type}>
+                                <Select
                                     value={form.type}
                                     onChange={e => setForm(f => ({ ...f, type: e.target.value as any }))}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                                 >
                                     <option value="PERCENTAGE">{m.form.percentage}</option>
                                     <option value="FIXED">{m.form.fixed}</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Value * {form.type === 'PERCENTAGE' ? '(%)' : '(৳)'}
-                                </label>
-                                <input
+                                </Select>
+                            </Field>
+                            <Field label={`Value * ${form.type === 'PERCENTAGE' ? '(%)' : '(৳)'}`}>
+                                <Input
                                     required
                                     type="number"
                                     min="0"
@@ -212,85 +195,66 @@ export default function DiscountCodesPage() {
                                     value={form.value}
                                     onChange={e => setForm(f => ({ ...f, value: e.target.value }))}
                                     placeholder={form.type === 'PERCENTAGE' ? '10' : '200'}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                                 />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">{m.form.minPurchase}</label>
-                                <input
+                            </Field>
+                            <Field label={m.form.minPurchase}>
+                                <Input
                                     type="number"
                                     min="0"
                                     step="0.01"
                                     value={form.min_purchase}
                                     onChange={e => setForm(f => ({ ...f, min_purchase: e.target.value }))}
                                     placeholder={m.form.minPurchasePlaceholder}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                                 />
-                            </div>
+                            </Field>
                         </div>
 
                         <div className="grid grid-cols-3 gap-4">
                             {form.type === 'PERCENTAGE' && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">{m.form.maxDiscount}</label>
-                                    <input
+                                <Field label={m.form.maxDiscount}>
+                                    <Input
                                         type="number"
                                         min="0"
                                         step="0.01"
                                         value={form.max_discount}
                                         onChange={e => setForm(f => ({ ...f, max_discount: e.target.value }))}
                                         placeholder={m.form.maxDiscountPlaceholder}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                                     />
-                                </div>
+                                </Field>
                             )}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">{m.form.usageLimit}</label>
-                                <input
+                            <Field label={m.form.usageLimit}>
+                                <Input
                                     type="number"
                                     min="1"
                                     value={form.usage_limit}
                                     onChange={e => setForm(f => ({ ...f, usage_limit: e.target.value }))}
                                     placeholder={m.form.usageLimitPlaceholder}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                                 />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">{m.form.validFrom}</label>
-                                <input
+                            </Field>
+                            <Field label={m.form.validFrom}>
+                                <Input
                                     type="datetime-local"
                                     value={form.valid_from}
                                     onChange={e => setForm(f => ({ ...f, valid_from: e.target.value }))}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                                 />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">{m.form.validUntil}</label>
-                                <input
+                            </Field>
+                            <Field label={m.form.validUntil}>
+                                <Input
                                     type="datetime-local"
                                     value={form.valid_until}
                                     onChange={e => setForm(f => ({ ...f, valid_until: e.target.value }))}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                                 />
-                            </div>
+                            </Field>
                         </div>
 
-                        <div className="flex justify-end gap-3 pt-2">
-                            <button
-                                type="button"
-                                onClick={() => setShowForm(false)}
-                                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
-                            >
+                        <FormFooter>
+                            <Button variant="ghost" type="button" onClick={() => setShowForm(false)}>
                                 Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                disabled={saving}
-                                className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-                            >
+                            </Button>
+                            <Button type="submit" disabled={saving} loading={saving}>
                                 {saving ? m.form.creating : m.form.create}
-                            </button>
-                        </div>
+                            </Button>
+                        </FormFooter>
                     </form>
                 </div>
             )}
@@ -388,6 +352,6 @@ export default function DiscountCodesPage() {
                     </table>
                 </div>
             )}
-        </div>
+        </PageShell>
     );
 }

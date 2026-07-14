@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { BellRing, Loader2 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell, StatusBadge } from '@/components/ui';
 import { DataTable } from '@/components/data-table';
 import type { LedgerEvent, TenantRecord } from '@/components/admin/tenants/types';
 import { api } from '@/lib/api';
@@ -63,10 +64,10 @@ export default function AdminTenantRemindersPage() {
             cell: (info) => {
                 const type = info.getValue();
                 return (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
+                    <StatusBadge tone="warning" className="gap-1">
                         <BellRing className="w-2.5 h-2.5" />
                         {(rp.eventType as Record<string, string>)[type] ?? type}
-                    </span>
+                    </StatusBadge>
                 );
             },
         }),
@@ -75,7 +76,7 @@ export default function AdminTenantRemindersPage() {
             cell: (info) => {
                 const value = info.getValue();
                 return (
-                    <span className="font-black text-gray-700">
+                    <span className="font-bold text-gray-700">
                         {value !== null ? `৳${Number(value).toFixed(2)}` : '—'}
                     </span>
                 );
@@ -88,8 +89,7 @@ export default function AdminTenantRemindersPage() {
     ], [rp.columns, rp.eventType]);
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={rp.title}
                     subtitle={rp.subtitle}
@@ -103,7 +103,7 @@ export default function AdminTenantRemindersPage() {
                 />
 
                 {error && (
-                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                    <div className="rounded-md border border-danger bg-danger-light px-4 py-3 text-sm font-semibold text-danger-text">
                         {error}
                     </div>
                 )}
@@ -112,7 +112,7 @@ export default function AdminTenantRemindersPage() {
                     <select
                         value={tenantFilter}
                         onChange={(e) => setTenantFilter(e.target.value)}
-                        className="w-full rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm font-medium outline-none"
+                        className="w-full rounded-md border border-gray-100 bg-white px-4 py-3 text-sm font-medium outline-none"
                     >
                         <option value="">{rp.allTenants}</option>
                         {tenants.map((tenant) => (
@@ -122,7 +122,7 @@ export default function AdminTenantRemindersPage() {
                 </div>
 
                 {isLoading ? (
-                    <div className="flex items-center gap-2 rounded-3xl border border-gray-100 bg-white p-8 text-sm text-gray-500">
+                    <div className="flex items-center gap-2 rounded-lg border border-gray-100 bg-white p-8 text-sm text-gray-500">
                         <Loader2 className="w-4 h-4 animate-spin" /> {m.loading}
                     </div>
                 ) : (
@@ -134,7 +134,6 @@ export default function AdminTenantRemindersPage() {
                         emptyMessage={rp.noReminders}
                     />
                 )}
-            </div>
-        </div>
+        </PageShell>
     );
 }

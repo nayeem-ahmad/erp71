@@ -111,7 +111,7 @@ export default function VatTaxPage() {
                         ))}
                         <div className="flex justify-between font-semibold text-sm pt-1">
                             <span>Total Output VAT</span>
-                            <span className="text-rose-700">{formatBDT(data.output_vat.total, { locale })}</span>
+                            <span className="text-danger-text">{formatBDT(data.output_vat.total, { locale })}</span>
                         </div>
                     </CompactSection>
                     <CompactSection title="Input VAT (Paid)" className="space-y-2">

@@ -9,6 +9,7 @@ import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell } from '@/components/ui';
 
 interface ProductRow {
     product: {
@@ -145,8 +146,7 @@ export default function SalesByProductPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.salesReports.products.title}
                     subtitle={t.salesReports.products.subtitle}
@@ -159,27 +159,27 @@ export default function SalesByProductPage() {
                 />
 
                 <div className="grid md:grid-cols-3 gap-4">
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.totalRevenue}</div>
-                        <div className="text-2xl font-black text-blue-700 mt-2">
+                        <div className="text-2xl font-bold text-blue-700 mt-2">
                             {formatBDT(Number(summary?.totalRevenue ?? 0), { locale })}
                         </div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.unitsSold}</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">
+                        <div className="text-2xl font-bold text-gray-900 mt-2">
                             {summary?.totalUnitsSold ?? 0}
                         </div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.productsSold}</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">
+                        <div className="text-2xl font-bold text-gray-900 mt-2">
                             {summary?.productCount ?? 0}
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap gap-3 items-end">
+                <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
                     <select
                         value={groupId}
                         onChange={(e) => { setGroupId(e.target.value); setSubgroupId(''); }}
@@ -230,7 +230,7 @@ export default function SalesByProductPage() {
                     emptyIcon={<Package className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.salesReports.products.searchPlaceholder}
                 />
-            </div>
-        </div>
+            
+        </PageShell>
     );
 }

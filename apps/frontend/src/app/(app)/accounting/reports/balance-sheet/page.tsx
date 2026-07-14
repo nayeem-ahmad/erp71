@@ -238,22 +238,22 @@ export default function BalanceSheetPage() {
 
                             <div className="space-y-3">
                                 <CompactSection className="space-y-3">
-                                    <BSSection groups={data.liabilities?.groups ?? []} label={t.accounting.reports.liabilities} colorClass="bg-rose-50 text-rose-700" />
-                                    <div className="flex justify-between items-center px-3 py-2 bg-rose-50 rounded-lg font-semibold text-sm text-rose-800 border border-rose-100">
+                                    <BSSection groups={data.liabilities?.groups ?? []} label={t.accounting.reports.liabilities} colorClass="bg-danger-light text-danger-text" />
+                                    <div className="flex justify-between items-center px-3 py-2 bg-danger-light rounded-lg font-semibold text-sm text-danger-text border border-red-100">
                                         <span>Total Liabilities</span>
                                         <span>{formatBDT(data.liabilities?.total ?? 0, { locale })}</span>
                                     </div>
                                 </CompactSection>
 
                                 <CompactSection className="space-y-3">
-                                    <BSSection groups={data.equity?.groups ?? []} label={t.accounting.reports.equity} colorClass="bg-violet-50 text-violet-700" />
+                                    <BSSection groups={data.equity?.groups ?? []} label={t.accounting.reports.equity} colorClass="bg-primary-light text-blue-700" />
                                     <div className="flex justify-between items-center px-5 py-1 text-sm text-gray-600">
                                         <span>Current Period Net Profit</span>
                                         <span className={(data.equity?.net_profit ?? 0) >= 0 ? 'text-emerald-700 font-semibold' : 'text-red-600 font-semibold'}>
                                             {formatBDT(data.equity?.net_profit ?? 0, { locale })}
                                         </span>
                                     </div>
-                                    <div className="flex justify-between items-center px-3 py-2 bg-violet-50 rounded-lg font-semibold text-sm text-violet-800 border border-violet-100">
+                                    <div className="flex justify-between items-center px-3 py-2 bg-primary-light rounded-lg font-semibold text-sm text-blue-800 border border-primary-border">
                                         <span>Total Equity</span>
                                         <span>{formatBDT(data.equity?.total ?? 0, { locale })}</span>
                                     </div>

@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Building2, Loader2, LogIn, RotateCcw, ShieldCheck, Trash2, UserX, Users, X } from 'lucide-react';
+import { Building2, Loader2, LogIn, RotateCcw, ShieldCheck, Trash2, UserX, Users } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import type { DiscountType, PlanCode, SecondaryLocale, TenantRecord } from './types';
+import ModalShell, { ModalHeader } from '@/components/ModalShell';
 
 type Props = {
     tenantId: string | null;
@@ -16,11 +17,11 @@ type Props = {
 
 function InfoCard({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
     return (
-        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+        <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
             <div className="flex items-center justify-between gap-3">
                 <div>
                     <p className="text-xs font-medium text-gray-500">{label}</p>
-                    <p className="mt-2 text-lg font-black text-gray-900">{value}</p>
+                    <p className="mt-2 text-lg font-bold text-gray-900">{value}</p>
                 </div>
                 <Icon className="w-5 h-5 text-gray-400" />
             </div>
@@ -238,34 +239,12 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
     };
 
     return (
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-            onClick={onClose}
-        >
-            <div
-                className="w-full max-w-3xl rounded-3xl bg-white shadow-2xl flex flex-col max-h-[92vh]"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5 shrink-0">
-                    <div>
-                        <p className="text-xs font-medium text-gray-500">{m.selectedTenant}</p>
-                        <h2 className="mt-1 text-lg font-bold tracking-tight text-gray-950">
-                            {tenant?.name ?? '…'}
-                        </h2>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="rounded-xl p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                        aria-label="Close"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
+        <ModalShell size="lg" onBackdropClick={onClose}>
+            <ModalHeader title={tenant?.name ?? '…'} subtitle={m.selectedTenant} onClose={onClose} />
 
-                <div className="overflow-y-auto p-6 space-y-6">
+            <div className="overflow-y-auto p-6 space-y-6">
                     {error && (
-                        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
                             {error}
                         </div>
                     )}
@@ -278,9 +257,9 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                         <>
                             <div className="flex flex-wrap items-start justify-between gap-4">
                                 <p className="text-sm text-gray-500">{formatMessage(m.created, { date: formatDate(tenant.created_at) })}</p>
-                                <div className="rounded-2xl bg-gray-50 px-4 py-3 text-right">
+                                <div className="rounded-lg bg-gray-50 px-4 py-3 text-right">
                                     <p className="text-xs font-medium text-gray-500">{m.owner}</p>
-                                    <p className="mt-1 text-sm font-black text-gray-900">{tenant.owner?.name || m.unknownOwner}</p>
+                                    <p className="mt-1 text-sm font-semibold text-gray-900">{tenant.owner?.name || m.unknownOwner}</p>
                                     <p className="text-xs text-gray-500">{tenant.owner?.email || m.noOwnerEmail}</p>
                                 </div>
                             </div>
@@ -290,7 +269,7 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                     type="button"
                                     onClick={() => void impersonate()}
                                     disabled={isImpersonating}
-                                    className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-700 disabled:opacity-60"
+                                    className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-hover disabled:opacity-60"
                                 >
                                     {isImpersonating ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
                                     {m.impersonateOwner}
@@ -299,7 +278,7 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                     type="button"
                                     onClick={() => void suspendTenant()}
                                     disabled={isSuspending || tenant.subscription?.status === 'CANCELLED'}
-                                    className="inline-flex items-center gap-2 rounded-2xl bg-red-50 px-4 py-2.5 text-sm font-black text-red-600 transition hover:bg-red-100 disabled:opacity-60"
+                                    className="inline-flex items-center gap-2 rounded-lg bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-100 disabled:opacity-60"
                                 >
                                     {isSuspending ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserX className="w-4 h-4" />}
                                     {tenant.subscription?.status === 'CANCELLED' ? m.alreadySuspended : m.suspendTenant}
@@ -308,7 +287,7 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                     type="button"
                                     onClick={() => void deleteTenant()}
                                     disabled={isDeleting}
-                                    className="inline-flex items-center gap-2 rounded-2xl bg-red-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-red-700 disabled:opacity-60"
+                                    className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
                                 >
                                     {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                                     {m.deleteTenant}
@@ -321,26 +300,26 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                 <InfoCard icon={ShieldCheck} label={m.infoCards.provider} value={tenant.subscription?.provider_name || 'manual'} />
                             </div>
 
-                            <div className="rounded-3xl border border-blue-100 bg-blue-50/70 p-5 space-y-4">
+                            <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-5 space-y-4">
                                 <div>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-400">{m.subscriptionControls.badge}</p>
-                                    <h3 className="mt-2 text-lg font-black tracking-tight text-blue-900">{m.subscriptionControls.title}</h3>
+                                    <p className="text-[10px] font-medium text-blue-400">{m.subscriptionControls.badge}</p>
+                                    <h3 className="mt-2 text-lg font-bold tracking-tight text-blue-900">{m.subscriptionControls.title}</h3>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                    <select value={draft.planCode} onChange={(event) => setDraft((current) => ({ ...current, planCode: event.target.value as PlanCode }))} className="rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm font-medium outline-none">
+                                    <select value={draft.planCode} onChange={(event) => setDraft((current) => ({ ...current, planCode: event.target.value as PlanCode }))} className="rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm font-medium outline-none">
                                         <option value="FREE">Free</option>
                                         <option value="BASIC">Basic</option>
                                         <option value="ACCOUNTING">Accounting</option>
                                         <option value="STANDARD">Standard</option>
                                         <option value="PREMIUM">Premium</option>
                                     </select>
-                                    <select value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value as TenantRecord['subscription']['status'] }))} className="rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm font-medium outline-none">
+                                    <select value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value as TenantRecord['subscription']['status'] }))} className="rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm font-medium outline-none">
                                         <option value="ACTIVE">Active</option>
                                         <option value="TRIALING">Trialing</option>
                                         <option value="PAST_DUE">Past due</option>
                                         <option value="CANCELLED">Cancelled</option>
                                     </select>
-                                    <label className="rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm font-medium flex items-center justify-between gap-3">
+                                    <label className="rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm font-medium flex items-center justify-between gap-3">
                                         <span>{m.subscriptionControls.cancelAtPeriodEnd}</span>
                                         <input
                                             type="checkbox"
@@ -356,7 +335,7 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                         <select
                                             value={draft.discountMode}
                                             onChange={(event) => setDraft((current) => ({ ...current, discountMode: event.target.value as 'NONE' | DiscountType }))}
-                                            className="rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm font-medium outline-none"
+                                            className="rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm font-medium outline-none"
                                         >
                                             <option value="NONE">{sc.discountNone}</option>
                                             <option value="PERCENTAGE">{sc.discountPercent}</option>
@@ -370,7 +349,7 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                                 value={draft.discountValue}
                                                 onChange={(event) => setDraft((current) => ({ ...current, discountValue: event.target.value }))}
                                                 placeholder={draft.discountMode === 'PERCENTAGE' ? '%' : '৳'}
-                                                className="flex-1 rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none"
+                                                className="flex-1 rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm outline-none"
                                             />
                                         )}
                                     </div>
@@ -380,20 +359,20 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                     type="button"
                                     onClick={() => void saveSubscription()}
                                     disabled={isSaving}
-                                    className="inline-flex items-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 disabled:opacity-60"
+                                    className="inline-flex items-center rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
                                 >
                                     {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                                     {m.subscriptionControls.save}
                                 </button>
                             </div>
 
-                            <div className="rounded-3xl border border-violet-100 bg-violet-50/70 p-5 space-y-4">
+                            <div className="rounded-lg border border-violet-100 bg-violet-50/70 p-5 space-y-4">
                                 <div>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-violet-400">{lc.badge}</p>
-                                    <h3 className="mt-2 text-lg font-black tracking-tight text-violet-900">{lc.title}</h3>
+                                    <p className="text-[10px] font-medium text-violet-400">{lc.badge}</p>
+                                    <h3 className="mt-2 text-lg font-bold tracking-tight text-violet-900">{lc.title}</h3>
                                     <p className="mt-1 text-xs text-violet-700/80">{lc.description}</p>
                                 </div>
-                                <label className="rounded-2xl border border-violet-100 bg-white px-4 py-3 text-sm font-medium flex items-center justify-between gap-3">
+                                <label className="rounded-lg border border-violet-100 bg-white px-4 py-3 text-sm font-medium flex items-center justify-between gap-3">
                                     <span>{lc.enabledLabel}</span>
                                     <input
                                         type="checkbox"
@@ -413,7 +392,7 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                             ...current,
                                             secondary_locale: event.target.value as SecondaryLocale | '',
                                         }))}
-                                        className="w-full rounded-2xl border border-violet-100 bg-white px-4 py-3 text-sm font-medium outline-none"
+                                        className="w-full rounded-lg border border-violet-100 bg-white px-4 py-3 text-sm font-medium outline-none"
                                     >
                                         <option value="">{lc.secondaryPlaceholder}</option>
                                         <option value="bn">বাংলা (Bangla)</option>
@@ -426,17 +405,17 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                     type="button"
                                     onClick={() => void saveLocalization()}
                                     disabled={isSavingLocalization}
-                                    className="inline-flex items-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-200 transition hover:bg-violet-700 disabled:opacity-60"
+                                    className="inline-flex items-center rounded-lg bg-violet-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:opacity-60"
                                 >
                                     {isSavingLocalization ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                                     {lc.save}
                                 </button>
                             </div>
 
-                            <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5 space-y-4">
+                            <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-5 space-y-4">
                                 <div>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{nc.badge}</p>
-                                    <h3 className="mt-2 text-lg font-black tracking-tight text-slate-900">{nc.title}</h3>
+                                    <p className="text-[10px] font-medium text-slate-400">{nc.badge}</p>
+                                    <h3 className="mt-2 text-lg font-bold tracking-tight text-slate-900">{nc.title}</h3>
                                     <p className="mt-1 text-xs text-slate-600">{nc.description}</p>
                                 </div>
                                 <p className="text-sm text-slate-700">
@@ -450,7 +429,7 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                     type="button"
                                     onClick={() => void resetTenantNavLayout()}
                                     disabled={isResettingTenantNav}
-                                    className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100 disabled:opacity-60"
+                                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-60"
                                 >
                                     {isResettingTenantNav ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
                                     {nc.reset}
@@ -458,29 +437,29 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="rounded-2xl border border-gray-100 p-4">
+                                <div className="rounded-lg border border-gray-100 p-4">
                                     <p className="text-xs font-medium text-gray-500">{m.storesSection}</p>
                                     <div className="mt-3 space-y-3">
                                         {tenant.stores.map((store) => (
-                                            <div key={store.id} className="rounded-2xl bg-gray-50 px-4 py-3">
-                                                <p className="text-sm font-black text-gray-900">{store.name}</p>
+                                            <div key={store.id} className="rounded-lg bg-gray-50 px-4 py-3">
+                                                <p className="text-sm font-semibold text-gray-900">{store.name}</p>
                                                 <p className="mt-1 text-xs text-gray-500">{store.address || m.noAddress}</p>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
-                                <div className="rounded-2xl border border-gray-100 p-4 md:col-span-2">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{t.admin.users.tenantUsers.title}</p>
-                                    <h3 className="mt-2 text-sm font-black text-gray-900">{m.usersSection}</h3>
+                                <div className="rounded-lg border border-gray-100 p-4 md:col-span-2">
+                                    <p className="text-[10px] font-medium text-gray-400">{t.admin.users.tenantUsers.title}</p>
+                                    <h3 className="mt-2 text-sm font-semibold text-gray-900">{m.usersSection}</h3>
                                     <p className="mt-1 text-xs text-gray-500">{t.admin.users.tenantUsers.description}</p>
-                                    <div className="mt-4 overflow-hidden rounded-2xl border border-gray-100">
+                                    <div className="mt-4 overflow-hidden rounded-lg border border-gray-100">
                                         <table className="w-full text-xs">
                                             <thead>
                                                 <tr className="bg-gray-50 text-left">
-                                                    <th className="px-4 py-2.5 font-black uppercase tracking-widest text-[10px] text-gray-500">{t.admin.users.tenantUsers.columns.name}</th>
-                                                    <th className="px-4 py-2.5 font-black uppercase tracking-widest text-[10px] text-gray-500">{t.admin.users.tenantUsers.columns.email}</th>
-                                                    <th className="px-4 py-2.5 font-black uppercase tracking-widest text-[10px] text-gray-500">{t.admin.users.tenantUsers.columns.role}</th>
-                                                    <th className="px-4 py-2.5 font-black uppercase tracking-widest text-[10px] text-gray-500">{t.admin.users.tenantUsers.columns.joined}</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-[10px] text-gray-500">{t.admin.users.tenantUsers.columns.name}</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-[10px] text-gray-500">{t.admin.users.tenantUsers.columns.email}</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-[10px] text-gray-500">{t.admin.users.tenantUsers.columns.role}</th>
+                                                    <th className="px-4 py-2.5 font-semibold text-[10px] text-gray-500">{t.admin.users.tenantUsers.columns.joined}</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
@@ -489,7 +468,7 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                                         <td className="px-4 py-3 font-semibold text-gray-900">{user.name || user.email}</td>
                                                         <td className="px-4 py-3 text-gray-600">{user.email}</td>
                                                         <td className="px-4 py-3">
-                                                            <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-gray-600">{user.role}</span>
+                                                            <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-semibold text-gray-600">{user.role}</span>
                                                         </td>
                                                         <td className="px-4 py-3 text-gray-500">{user.joined_at ? formatDate(user.joined_at) : '—'}</td>
                                                     </tr>
@@ -501,8 +480,7 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                             </div>
                         </>
                     ) : null}
-                </div>
             </div>
-        </div>
+        </ModalShell>
     );
 }

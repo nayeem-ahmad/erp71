@@ -3,7 +3,7 @@
 export type UiDensity = 'comfortable' | 'compact';
 
 export const compactDensity = {
-    page: 'overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]',
+    page: 'overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]',
     pageInner: 'space-y-4',
     pageInnerWide: 'max-w-[1200px] mx-auto space-y-4',
     pageInnerNarrow: 'max-w-[900px] mx-auto space-y-4',
@@ -22,7 +22,7 @@ export const compactDensity = {
     btnSecondary: 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors',
 
     formLabel: 'text-xs font-medium text-gray-500',
-    formField: 'w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all',
+    formField: 'w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all',
     formStack: 'space-y-3',
 
     modal: 'w-full rounded-xl border border-gray-200 bg-white shadow-2xl',
@@ -43,7 +43,7 @@ export const dataTableDensity = {
             'flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border',
         toolbarBtnIdle: 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50',
         searchInput:
-            'w-full bg-gray-50 border border-gray-200 rounded-xl py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all font-medium',
+            'w-full bg-gray-50 border border-gray-200 rounded-xl py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all font-medium',
         emptyState: 'p-12',
         emptyIcon: 'w-16 h-16',
         pagination: 'px-4 py-3',
@@ -60,7 +60,7 @@ export const dataTableDensity = {
             'flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all border',
         toolbarBtnIdle: 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50',
         searchInput:
-            'w-full bg-gray-50 border border-gray-200 rounded-lg py-1.5 pl-8 pr-3 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all',
+            'w-full bg-gray-50 border border-gray-200 rounded-lg py-1.5 pl-8 pr-3 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all',
         emptyState: 'p-6',
         emptyIcon: 'w-10 h-10',
         pagination: 'px-3 py-2',

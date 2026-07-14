@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Settings, Globe, ToggleLeft, ToggleRight, Save, ExternalLink } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
@@ -87,8 +88,8 @@ export default function StorefrontSettingsPage() {
         isBrowser && slug ? `${globalThis.window.location.origin}/store/${slug}` : null;
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
+            <div className="space-y-4">
                 {/* Header */}
                 <PageHeader
                     title={m.title}
@@ -107,7 +108,7 @@ export default function StorefrontSettingsPage() {
                         <div className="animate-spin w-7 h-7 border-4 border-blue-600 border-t-transparent rounded-full" />
                     </div>
                 ) : (
-                    <form onSubmit={handleSave} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
+                    <form onSubmit={handleSave} className="bg-white rounded-lg border border-gray-100 shadow-sm p-6 space-y-6">
                         {/* Enable / Disable toggle */}
                         <div className="flex items-center justify-between">
                             <div>
@@ -253,6 +254,6 @@ export default function StorefrontSettingsPage() {
                     </form>
                 )}
             </div>
-        </div>
+        </PageShell>
     );
 }

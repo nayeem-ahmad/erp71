@@ -17,7 +17,7 @@ const surfaceClasses: Record<KpiTone, string> = {
 const iconClasses: Record<KpiTone, string> = {
     positive: 'bg-white/80 text-emerald-700',
     negative: 'bg-white/80 text-rose-700',
-    neutral: 'bg-slate-50 text-slate-700',
+    neutral: 'bg-gray-50 text-gray-700',
     blue: 'bg-white/80 text-[#1e5a8a]',
     green: 'bg-white/80 text-emerald-700',
     purple: 'bg-white/80 text-[#4a3d8f]',

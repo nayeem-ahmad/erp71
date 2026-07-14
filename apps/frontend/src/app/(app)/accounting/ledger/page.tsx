@@ -208,7 +208,7 @@ function AccountingLedgerPageContent() {
             columnHelper.accessor('voucher_number', {
                 header: t.journal.columns.voucherNumber,
                 cell: (info) => (
-                    <Link href={`/accounting/vouchers/${info.row.original.voucher_id}`} className="text-sm font-black text-blue-600 hover:text-blue-800">
+                    <Link href={`/accounting/vouchers/${info.row.original.voucher_id}`} className="text-sm font-bold text-blue-600 hover:text-blue-800">
                         {info.getValue()}
                     </Link>
                 ),
@@ -216,7 +216,7 @@ function AccountingLedgerPageContent() {
             }),
             columnHelper.accessor('voucher_type', {
                 header: t.accountingShared.type,
-                cell: (info) => <span className="text-xs font-black uppercase tracking-widest text-violet-700">{info.getValue().replaceAll('_', ' ')}</span>,
+                cell: (info) => <span className="text-xs font-semibold text-primary">{info.getValue().replaceAll('_', ' ')}</span>,
                 size: 150,
             }),
             columnHelper.accessor((row) => row.narration || row.description, {
@@ -227,20 +227,20 @@ function AccountingLedgerPageContent() {
             }),
             columnHelper.accessor('debit_amount', {
                 header: t.accountingShared.debit,
-                cell: (info) => <span className="text-sm font-black text-amber-700">{formatBDT(info.getValue(), { locale })}</span>,
+                cell: (info) => <span className="text-sm font-bold text-amber-700">{formatBDT(info.getValue(), { locale })}</span>,
                 size: 120,
             }),
             columnHelper.accessor('credit_amount', {
                 header: t.accountingShared.credit,
-                cell: (info) => <span className="text-sm font-black text-sky-700">{formatBDT(info.getValue(), { locale })}</span>,
+                cell: (info) => <span className="text-sm font-bold text-sky-700">{formatBDT(info.getValue(), { locale })}</span>,
                 size: 120,
             }),
             columnHelper.accessor('running_balance', {
                 header: t.ledger.columns.runningBalance,
                 cell: (info) => (
                     <div className="flex flex-col">
-                        <span className="text-sm font-black text-gray-900">{formatBDT(info.getValue(), { locale })}</span>
-                        <span className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400">{info.row.original.running_balance_side}</span>
+                        <span className="text-sm font-bold text-gray-900">{formatBDT(info.getValue(), { locale })}</span>
+                        <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400">{info.row.original.running_balance_side}</span>
                     </div>
                 ),
                 size: 150,

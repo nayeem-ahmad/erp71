@@ -1,12 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CheckCircle, Loader2, Plus, XCircle } from 'lucide-react';
+import { Loader2, Plus } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell, Button } from '@/components/ui';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
+import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import {
     defaultPlanFeatures,
@@ -16,8 +18,6 @@ import {
     type PlanEntitlementDefinition,
     type PlanEntitlementGroup,
 } from '@erp71/shared-types';
-
-type Toast = { type: 'success' | 'error'; message: string } | null;
 
 type AdminAddon = {
     id: string;
@@ -46,27 +46,6 @@ type AddonDraft = {
 };
 
 const NEW_ADDON_ID = '__new__';
-
-function ToastBanner({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
-    useEffect(() => {
-        if (!toast) return;
-        const timer = setTimeout(onDismiss, 4000);
-        return () => clearTimeout(timer);
-    }, [toast, onDismiss]);
-
-    if (!toast) return null;
-
-    return (
-        <div className={`rounded-2xl border px-4 py-3 text-sm flex items-center gap-2 ${
-            toast.type === 'success'
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                : 'border-rose-200 bg-rose-50 text-rose-800'
-        }`}>
-            {toast.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-            <span>{toast.message}</span>
-        </div>
-    );
-}
 
 function emptyDraft(): AddonDraft {
     return {
@@ -155,7 +134,6 @@ export default function PlatformAddonModulesPage() {
     const [draft, setDraft] = useState<AddonDraft | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [toast, setToast] = useState<Toast>(null);
 
     const selectedAddon = useMemo(
         () => addons.find((addon) => addon.id === selectedId) ?? null,
@@ -174,7 +152,7 @@ export default function PlatformAddonModulesPage() {
             setAddons(nextAddons);
             setEntitlements(registryResponse?.entitlements ?? []);
         } catch {
-            setToast({ type: 'error', message: c.loadFailed });
+            toast.error(c.loadFailed);
         } finally {
             setLoading(false);
         }
@@ -217,7 +195,7 @@ export default function PlatformAddonModulesPage() {
         if (!draft) return;
 
         if (!draft.code.trim() || !draft.name.trim()) {
-            setToast({ type: 'error', message: 'Code and name are required.' });
+            toast.error('Code and name are required.');
             return;
         }
 
@@ -244,9 +222,9 @@ export default function PlatformAddonModulesPage() {
                     addon.id === selectedId ? { ...addon, ...updated } : addon
                 )));
             }
-            setToast({ type: 'success', message: c.saved });
+            toast.success(c.saved);
         } catch {
-            setToast({ type: 'error', message: c.saveFailed });
+            toast.error(c.saveFailed);
         } finally {
             setSaving(false);
         }
@@ -261,24 +239,21 @@ export default function PlatformAddonModulesPage() {
     };
 
     return (
-        <div className="overflow-y-auto h-full bg-[#f3f4f6] p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="max-w-6xl mx-auto space-y-6">
-                <PageHeader
-                    title="Add-on Modules"
-                    subtitle="Optional paid modules tenants can purchase on top of any subscription plan — priced and gated independently of the base plan."
-                    breadcrumbs={nestedPageBreadcrumbs(
-                        t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.admin,
-                        'admin',
-                        [{ label: t.admin.platformSettings.index.title, href: routes.admin.platformSettings.root }],
-                        'Add-on Modules',
-                    )}
-                />
+        <PageShell maxWidth="wide">
+            <PageHeader
+                title="Add-on Modules"
+                subtitle="Optional paid modules tenants can purchase on top of any subscription plan — priced and gated independently of the base plan."
+                breadcrumbs={nestedPageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.admin,
+                    'admin',
+                    [{ label: t.admin.platformSettings.index.title, href: routes.admin.platformSettings.root }],
+                    'Add-on Modules',
+                )}
+            />
 
-                <ToastBanner toast={toast} onDismiss={() => setToast(null)} />
-
-                <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-                    Price and entitlement changes apply to new purchases immediately. Existing tenant add-on
+            <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                Price and entitlement changes apply to new purchases immediately. Existing tenant add-on
                     subscriptions keep their current price and entitlements until they renew or repurchase.
                 </div>
 
@@ -289,7 +264,7 @@ export default function PlatformAddonModulesPage() {
                     </div>
                 ) : (
                     <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
-                        <div className="rounded-2xl border border-gray-200 bg-white p-2 space-y-1 h-fit">
+                        <div className="rounded-lg border border-gray-200 bg-white p-2 space-y-1 h-fit">
                             <button
                                 type="button"
                                 onClick={() => setSelectedId(NEW_ADDON_ID)}
@@ -313,7 +288,7 @@ export default function PlatformAddonModulesPage() {
                                         <div className="flex items-center justify-between gap-2">
                                             <span className="font-bold tracking-tight">{addon.name}</span>
                                             {!addon.is_active ? (
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                                <span className="text-[10px] font-medium text-gray-500">
                                                     Hidden
                                                 </span>
                                             ) : null}
@@ -321,7 +296,7 @@ export default function PlatformAddonModulesPage() {
                                         <p className="mt-1 text-[11px] font-medium text-gray-500">
                                             {formatBDT(addon.monthly_price)}/mo
                                         </p>
-                                        <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                                        <p className="mt-1 text-[10px] font-medium text-gray-500">
                                             {addon.subscriber_count} subscribers
                                         </p>
                                     </button>
@@ -330,30 +305,29 @@ export default function PlatformAddonModulesPage() {
                         </div>
 
                         {draft ? (
-                            <div className="rounded-2xl border border-gray-200 bg-white p-4 md:p-6 space-y-6">
+                            <div className="rounded-lg border border-gray-200 bg-white p-4 md:p-6 space-y-6">
                                 <div className="flex flex-wrap items-start justify-between gap-3">
                                     <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                        <p className="text-[10px] font-medium text-gray-500">
                                             {isCreating ? 'New' : draft.code}
                                         </p>
-                                        <h2 className="mt-1 text-lg font-black tracking-tight text-gray-900">
+                                        <h2 className="mt-1 text-lg font-bold tracking-tight text-gray-900">
                                             {isCreating ? 'Create add-on' : 'Edit add-on'}
                                         </h2>
                                     </div>
-                                    <button
+                                    <Button
                                         type="button"
                                         onClick={handleSave}
-                                        disabled={saving}
-                                        className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
+                                        loading={saving}
+                                        size="md"
                                     >
-                                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                                         {saving ? c.saving : c.saveSettings}
-                                    </button>
+                                    </Button>
                                 </div>
 
                                 <div className="grid gap-4 md:grid-cols-2">
                                     <label className="block">
-                                        <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Code</span>
+                                        <span className="text-xs font-medium text-gray-500">Code</span>
                                         <input
                                             value={draft.code}
                                             disabled={!isCreating}
@@ -364,7 +338,7 @@ export default function PlatformAddonModulesPage() {
                                     </label>
 
                                     <label className="block">
-                                        <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Name</span>
+                                        <span className="text-xs font-medium text-gray-500">Name</span>
                                         <input
                                             value={draft.name}
                                             onChange={(event) => setDraft((current) => current ? { ...current, name: event.target.value } : current)}
@@ -386,7 +360,7 @@ export default function PlatformAddonModulesPage() {
                                     </label>
 
                                     <label className="block md:col-span-2">
-                                        <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Description</span>
+                                        <span className="text-xs font-medium text-gray-500">Description</span>
                                         <textarea
                                             value={draft.description}
                                             onChange={(event) => setDraft((current) => current ? { ...current, description: event.target.value } : current)}
@@ -396,7 +370,7 @@ export default function PlatformAddonModulesPage() {
                                     </label>
 
                                     <label className="block">
-                                        <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Category</span>
+                                        <span className="text-xs font-medium text-gray-500">Category</span>
                                         <input
                                             value={draft.category}
                                             placeholder="e.g. operations"
@@ -406,7 +380,7 @@ export default function PlatformAddonModulesPage() {
                                     </label>
 
                                     <label className="block">
-                                        <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Sort order</span>
+                                        <span className="text-xs font-medium text-gray-500">Sort order</span>
                                         <input
                                             type="number"
                                             value={draft.sort_order}
@@ -416,7 +390,7 @@ export default function PlatformAddonModulesPage() {
                                     </label>
 
                                     <label className="block">
-                                        <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Monthly price (৳)</span>
+                                        <span className="text-xs font-medium text-gray-500">Monthly price (৳)</span>
                                         <input
                                             type="number"
                                             min={0}
@@ -427,7 +401,7 @@ export default function PlatformAddonModulesPage() {
                                     </label>
 
                                     <label className="block">
-                                        <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Yearly price (৳, optional)</span>
+                                        <span className="text-xs font-medium text-gray-500">Yearly price (৳, optional)</span>
                                         <input
                                             type="number"
                                             min={0}
@@ -439,14 +413,14 @@ export default function PlatformAddonModulesPage() {
                                 </div>
 
                                 <div className="space-y-5">
-                                    <h3 className="text-sm font-black uppercase tracking-widest text-gray-500">Entitlements granted</h3>
+                                    <h3 className="text-sm font-medium text-gray-500">Entitlements granted</h3>
                                     <p className="text-xs text-gray-500">
                                         Toggle exactly the entitlements this add-on should grant — a tenant on any plan who
                                         purchases it gets these on top of their plan&apos;s own entitlements.
                                     </p>
                                     {groupedEntitlements.map((group) => (
                                         <div key={group.key} className="space-y-3">
-                                            <h4 className="text-xs font-bold uppercase tracking-widest text-gray-400">
+                                            <h4 className="text-xs font-medium text-gray-500">
                                                 {group.key}
                                             </h4>
                                             <div className="grid gap-3 md:grid-cols-2">
@@ -466,7 +440,6 @@ export default function PlatformAddonModulesPage() {
                         ) : null}
                     </div>
                 )}
-            </div>
-        </div>
+        </PageShell>
     );
 }
