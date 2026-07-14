@@ -566,10 +566,11 @@ function CustomerPaymentsContent() {
 
             {viewPayment && (
                 <ModalShell size="sm" onBackdropClick={() => setViewPayment(null)}>
-                    <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                            <h2 className="text-xl font-black">{copy.viewPayment}</h2>
-                            <span className="text-xs font-mono font-bold text-gray-500">{viewPayment.payment_number}</span>
-                        </div>
+                    <ModalHeader
+                        title={copy.viewPayment}
+                        subtitle={viewPayment.payment_number}
+                        onClose={() => setViewPayment(null)}
+                    />
                         <div className="p-6 space-y-3 text-sm">
                             <div className="flex justify-between">
                                 <span className="text-gray-500">{copy.columns.direction}</span>
@@ -617,26 +618,36 @@ function CustomerPaymentsContent() {
                                 </div>
                             )}
                         </div>
-                        <div className="p-6 border-t border-gray-100 flex gap-2">
-                            <button
+                        <ModalFooter>
+                            <Button
                                 type="button"
+                                variant="secondary"
+                                size="md"
+                                className="flex-1 justify-center"
+                                icon={<Printer className="w-4 h-4" />}
                                 onClick={() => handlePrint(viewPayment)}
-                                className="flex-1 py-3 rounded-2xl font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 inline-flex items-center justify-center gap-2"
                             >
-                                <Printer className="w-4 h-4" />
                                 {viewPayment.type === 'PAYOUT' ? copy.printVoucher : copy.printReceipt}
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                                 type="button"
+                                variant="secondary"
+                                size="md"
+                                className="flex-1 justify-center"
                                 onClick={() => { setViewPayment(null); openEdit(viewPayment); }}
-                                className="flex-1 py-3 rounded-2xl font-bold text-amber-700 bg-amber-50 hover:bg-amber-100"
                             >
                                 {t.common.edit}
-                            </button>
-                            <button type="button" onClick={() => setViewPayment(null)} className="flex-1 py-3 rounded-2xl font-bold text-gray-500 hover:bg-gray-50">
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="md"
+                                className="flex-1 justify-center"
+                                onClick={() => setViewPayment(null)}
+                            >
                                 {t.common.close}
-                            </button>
-                        </div>
+                            </Button>
+                        </ModalFooter>
                 </ModalShell>
             )}
 
