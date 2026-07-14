@@ -176,7 +176,7 @@ export default function CrmCampaignsPage() {
                             <button
                                 type="button"
                                 onClick={() => void handleSelect(c)}
-                                className="font-semibold text-gray-900 hover:text-violet-600 truncate text-left"
+                                className="font-semibold text-gray-900 hover:text-primary truncate text-left"
                             >
                                 {c.name}
                             </button>
@@ -238,7 +238,7 @@ export default function CrmCampaignsPage() {
                     <div className="flex items-center justify-end gap-1">
                         <button
                             onClick={() => void handleSelect(c)}
-                            className="p-1.5 text-gray-400 hover:text-violet-600 rounded-lg hover:bg-violet-50"
+                            className="p-1.5 text-gray-400 hover:text-primary rounded-lg hover:bg-primary-light"
                             title={m.viewSend}
                         >
                             <Eye className="w-4 h-4" />
@@ -423,8 +423,8 @@ export default function CrmCampaignsPage() {
                                     <div><span className="text-gray-400">Sent at:</span> <span className="font-medium">{selected.sent_at ? formatDate(selected.sent_at) : '—'}</span></div>
                                     {(selected.attributed_orders ?? 0) > 0 && (
                                         <>
-                                            <div><span className="text-gray-400">Attributed sales:</span> <span className="font-medium text-violet-600">{selected.attributed_orders}</span></div>
-                                            <div><span className="text-gray-400">Attributed revenue:</span> <span className="font-medium text-violet-600">৳{Number(selected.attributed_revenue ?? 0).toLocaleString()}</span></div>
+                                            <div><span className="text-gray-400">Attributed sales:</span> <span className="font-medium text-emerald-600">{selected.attributed_orders}</span></div>
+                                            <div><span className="text-gray-400">Attributed revenue:</span> <span className="font-medium text-emerald-600">৳{Number(selected.attributed_revenue ?? 0).toLocaleString()}</span></div>
                                         </>
                                     )}
                                 </>
@@ -432,22 +432,22 @@ export default function CrmCampaignsPage() {
                         </div>
 
                         {selected.status === 'DRAFT' && (
-                            <div className="bg-violet-50 border border-violet-200 rounded-lg p-4">
+                            <div className="bg-primary-light border border-primary-border rounded-lg p-4">
                                 {previewLoading ? (
-                                    <div className="flex items-center gap-2 text-violet-600 text-sm">
+                                    <div className="flex items-center gap-2 text-primary text-sm">
                                         <Loader2 className="w-4 h-4 animate-spin" /> Loading recipients...
                                     </div>
                                 ) : preview ? (
                                     <div>
-                                        <p className="text-sm font-semibold text-violet-700 mb-2">
+                                        <p className="text-sm font-semibold text-blue-700 mb-2">
                                             <Users className="w-4 h-4 inline mr-1" />{preview.count} recipient{preview.count !== 1 ? 's' : ''} will receive this message
                                         </p>
                                         {preview.sample.length > 0 && (
                                             <div className="space-y-1">
                                                 {preview.sample.slice(0, 5).map((c: any) => (
-                                                    <div key={c.id} className="text-xs text-violet-600">{c.name} · {c.phone}</div>
+                                                    <div key={c.id} className="text-xs text-blue-700">{c.name} · {c.phone}</div>
                                                 ))}
-                                                {preview.count > 5 && <div className="text-xs text-violet-400">+{preview.count - 5} more</div>}
+                                                {preview.count > 5 && <div className="text-xs text-blue-700/70">+{preview.count - 5} more</div>}
                                             </div>
                                         )}
                                     </div>

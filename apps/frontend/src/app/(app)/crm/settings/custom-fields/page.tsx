@@ -63,7 +63,7 @@ export default function CustomFieldsSettingsPage() {
                     </div>
                 ))}
                 {fields.length < MAX_FIELDS && (
-                    <button onClick={addField} className="inline-flex items-center gap-1 text-sm text-violet-600">
+                    <button onClick={addField} className="inline-flex items-center gap-1 text-sm text-primary">
                         <Plus className="w-4 h-4" /> Add field
                     </button>
                 )}

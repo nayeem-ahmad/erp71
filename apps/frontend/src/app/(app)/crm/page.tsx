@@ -70,7 +70,7 @@ export default function CrmHubPage() {
     const sections: HubSectionConfig[] = useMemo(() => {
         const pipelineLinks = canAccessPremiumCrm
             ? [
-                { href: routes.crm.leads, key: 'leads', icon: UserPlus, accent: 'bg-violet-50 text-violet-700 border-violet-100' },
+                { href: routes.crm.leads, key: 'leads', icon: UserPlus, accent: 'bg-primary-light text-blue-700 border-primary-border' },
                 { href: routes.crm.tasks, key: 'crmTasks', icon: ListChecks, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
             ]
             : [];
@@ -156,7 +156,7 @@ export default function CrmHubPage() {
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                         <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
                             <h2 className="text-sm font-bold text-gray-800">{hub.dashboard.recentCampaigns}</h2>
-                            <Link href={routes.crm.campaigns} className="text-xs font-semibold text-violet-600 hover:underline">
+                            <Link href={routes.crm.campaigns} className="text-xs font-semibold text-primary hover:underline">
                                 {hub.dashboard.viewAll}
                             </Link>
                         </div>

@@ -272,7 +272,7 @@ export default function LeadDetailPage() {
 
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
                 <div className="flex flex-col lg:flex-row lg:items-start gap-6">
-                    <div className="w-20 h-20 bg-violet-600 rounded-2xl shadow-xl shadow-violet-500/20 flex items-center justify-center text-white font-black text-3xl uppercase shrink-0">
+                    <div className="w-20 h-20 bg-primary rounded-2xl shadow-sm flex items-center justify-center text-white font-black text-3xl uppercase shrink-0">
                         {lead.name.substring(0, 2)}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -341,8 +341,8 @@ export default function LeadDetailPage() {
                 </div>
 
                 {(lead.next_step || lead.next_step_date || lead.nextStepAssignee) && (
-                    <div className="mt-6 p-4 bg-violet-50 rounded-xl border border-violet-100">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-violet-400 mb-2">{m.fields.nextStepSection}</p>
+                    <div className="mt-6 p-4 bg-primary-light rounded-xl border border-primary-border">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-blue-700 mb-2">{m.fields.nextStepSection}</p>
                         {lead.next_step && <p className="text-sm font-medium text-gray-800">{lead.next_step}</p>}
                         <div className="flex flex-wrap gap-4 mt-2 text-xs text-gray-600 font-semibold">
                             {lead.next_step_date && (
@@ -389,7 +389,7 @@ export default function LeadDetailPage() {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4 flex-wrap">
                     <div className="flex items-center gap-2">
-                        <MessageSquare className="w-5 h-5 text-violet-600" />
+                        <MessageSquare className="w-5 h-5 text-primary" />
                         <h2 className="text-sm font-bold text-gray-800">{m.detail.conversations}</h2>
                     </div>
                     {!isConverted && (
@@ -397,14 +397,14 @@ export default function LeadDetailPage() {
                             <button
                                 type="button"
                                 onClick={() => { setShowDraftPanel((v) => !v); setShowConvForm(false); }}
-                                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700"
+                                className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover"
                             >
                                 <Sparkles className="w-4 h-4" /> AI Draft
                             </button>
                             <button
                                 type="button"
                                 onClick={() => (showConvForm ? setShowConvForm(false) : openConversationForm())}
-                                className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700"
+                                className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover"
                             >
                                 <Plus className="w-4 h-4" /> {m.detail.logConversation}
                             </button>
@@ -414,8 +414,8 @@ export default function LeadDetailPage() {
 
                 <div className="p-6 space-y-4">
                     {showDraftPanel && !isConverted && (
-                        <div className="bg-purple-50 rounded-xl p-4 space-y-3 border border-purple-200">
-                            <p className="text-xs font-black uppercase tracking-widest text-purple-400">AI Message Drafter</p>
+                        <div className="bg-primary-light rounded-xl p-4 space-y-3 border border-primary-border">
+                            <p className="text-xs font-black uppercase tracking-widest text-blue-700">AI Message Drafter</p>
                             <div className="grid grid-cols-2 gap-3">
                                 <select value={draftChannel} onChange={(e) => setDraftChannel(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
                                     {LEAD_CONVERSATION_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
@@ -426,7 +426,7 @@ export default function LeadDetailPage() {
                                 </select>
                             </div>
                             <div className="flex gap-2">
-                                <button onClick={draftMessage} disabled={draftingMessage} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium disabled:opacity-50">
+                                <button onClick={draftMessage} disabled={draftingMessage} className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg text-sm font-medium disabled:opacity-50">
                                     {draftingMessage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                                     {draftingMessage ? 'Drafting…' : 'Generate draft'}
                                 </button>
@@ -459,7 +459,7 @@ export default function LeadDetailPage() {
                             />
                             <NextStepFields state={newConv} onChange={(next) => setNewConv({ ...newConv, ...next })} teamMembers={teamMembers} />
                             <div className="flex gap-2">
-                                <button onClick={saveConversation} disabled={savingConv || !newConv.summary.trim()} className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium disabled:opacity-50">
+                                <button onClick={saveConversation} disabled={savingConv || !newConv.summary.trim()} className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg text-sm font-medium disabled:opacity-50">
                                     <Send className="w-4 h-4" /> {m.detail.logConversation}
                                 </button>
                                 <button onClick={() => setShowConvForm(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 bg-white">

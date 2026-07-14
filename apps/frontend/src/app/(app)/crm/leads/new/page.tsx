@@ -65,7 +65,7 @@ export default function NewLeadPage() {
             <PageHeader
                 title={(
                     <span className="inline-flex items-center gap-3">
-                        <span className="w-12 h-12 bg-violet-600 rounded-xl flex items-center justify-center text-white">
+                        <span className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center text-white">
                             <UserPlus className="w-6 h-6" />
                         </span>
                         {m.newLead}

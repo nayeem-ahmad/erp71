@@ -173,7 +173,7 @@ export default function LeadsPage() {
             cell: (info) => (
                 <Link
                     href={routes.crm.leadDetail(info.row.original.id)}
-                    className="font-semibold text-gray-900 hover:text-violet-600"
+                    className="font-semibold text-gray-900 hover:text-primary"
                 >
                     {info.getValue()}
                 </Link>
@@ -312,7 +312,7 @@ export default function LeadsPage() {
                     onClick={() => setMyTodaysActions((v) => !v)}
                     className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
                         myTodaysActions
-                            ? 'bg-violet-600 text-white border-violet-600'
+                            ? 'bg-primary text-white border-primary hover:bg-primary-hover'
                             : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                     }`}
                 >

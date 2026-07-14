@@ -41,7 +41,7 @@ const taskTypeColors: Record<string, string> = {
     FOLLOW_UP: 'bg-blue-50 text-blue-700',
     COLLECTION: 'bg-amber-50 text-amber-700',
     BIRTHDAY: 'bg-rose-50 text-rose-700',
-    REORDER_REMINDER: 'bg-violet-50 text-violet-700',
+    REORDER_REMINDER: 'bg-primary-light text-blue-700',
 };
 
 const taskStatusTone: Record<string, StatusBadgeTone> = {
@@ -107,14 +107,14 @@ export default function CrmTasksPage() {
                 const row = info.row.original;
                 if (row.customer) {
                     return (
-                        <Link href={routes.sales.customerDetail(row.customer.id)} className="font-semibold text-gray-900 hover:text-violet-600">
+                        <Link href={routes.sales.customerDetail(row.customer.id)} className="font-semibold text-gray-900 hover:text-primary">
                             {row.customer.name}
                         </Link>
                     );
                 }
                 if (row.lead) {
                     return (
-                        <Link href={routes.crm.leadDetail(row.lead.id)} className="font-semibold text-gray-900 hover:text-violet-600">
+                        <Link href={routes.crm.leadDetail(row.lead.id)} className="font-semibold text-gray-900 hover:text-primary">
                             {row.lead.name}
                         </Link>
                     );
