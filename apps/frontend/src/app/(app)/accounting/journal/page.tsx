@@ -133,7 +133,7 @@ export default function AccountingJournalPage() {
                             >
                                 <div className="min-w-0 flex-1">
                                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                                        <span className="text-sm font-black text-gray-900">{entry.voucher_number}</span>
+                                        <span className="text-sm font-bold text-gray-900">{entry.voucher_number}</span>
                                         <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
                                             {entry.voucher_type.replaceAll('_', ' ')}
                                         </span>
@@ -143,7 +143,7 @@ export default function AccountingJournalPage() {
                                         {entry.description || t.accountingShared.noNarration}
                                     </p>
                                 </div>
-                                <span className="text-sm font-black text-emerald-600 whitespace-nowrap">
+                                <span className="text-sm font-bold text-emerald-600 whitespace-nowrap">
                                     {formatBDT(Number(entry.total_amount || 0), { locale })}
                                 </span>
                             </Link>

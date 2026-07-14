@@ -45,7 +45,7 @@ const statusStyles: Record<string, string> = {
 
 const nextActions: Record<string, { label: string; next: string; color: string }[]> = {
     DRAFT:    [{ label: 'Mark as Sent', next: 'SENT', color: 'bg-blue-600 hover:bg-blue-700' }, { label: 'Cancel PO', next: 'CANCELLED', color: 'bg-red-500 hover:bg-red-600' }],
-    SENT:     [{ label: 'Mark as Received', next: 'RECEIVED', color: 'bg-emerald-600 hover:bg-emerald-700' }, { label: 'Cancel PO', next: 'CANCELLED', color: 'bg-red-500 hover:bg-red-600' }],
+    SENT:     [{ label: 'Mark as Received', next: 'RECEIVED', color: 'bg-primary hover:bg-primary-hover' }, { label: 'Cancel PO', next: 'CANCELLED', color: 'bg-red-500 hover:bg-red-600' }],
     RECEIVED: [],
     CANCELLED:[],
 };
@@ -136,7 +136,7 @@ export default function PurchaseOrderDetailPage() {
                                 {po.received_at ? ` · Received ${formatDate(po.received_at, locale)}` : ''}
                             </p>
                         </div>
-                        <span className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-widest ${statusStyles[po.status]}`}>
+                        <span className={`px-3 py-1.5 rounded-full text-xs font-semibold ${statusStyles[po.status]}`}>
                             {po.status}
                         </span>
                     </div>
@@ -161,7 +161,7 @@ export default function PurchaseOrderDetailPage() {
 
                 {/* Line items */}
                 <div className="bg-white rounded-2xl border border-gray-100 p-6">
-                    <h2 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4">{t.purchaseOrders.detail.items}</h2>
+                    <h2 className="text-xs font-semibold text-gray-400 mb-4">{t.purchaseOrders.detail.items}</h2>
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-gray-100">
@@ -192,7 +192,7 @@ export default function PurchaseOrderDetailPage() {
                             {tax > 0 && <div className="flex justify-between text-gray-600"><span>{t.common.tax}</span><span>{formatBDT(tax, { locale })}</span></div>}
                             {freight > 0 && <div className="flex justify-between text-gray-600"><span>{t.purchaseShared.freight}</span><span>{formatBDT(freight, { locale })}</span></div>}
                             {discount > 0 && <div className="flex justify-between text-gray-600"><span>{t.common.discount}</span><span className="text-red-500">−{formatBDT(discount, { locale })}</span></div>}
-                            <div className="flex justify-between font-black text-base pt-2 border-t border-gray-200">
+                            <div className="flex justify-between font-bold text-base pt-2 border-t border-gray-200">
                                 <span>{t.purchases.invoice.total}</span><span className="text-blue-700">{formatBDT(total, { locale })}</span>
                             </div>
                         </div>
@@ -208,11 +208,11 @@ export default function PurchaseOrderDetailPage() {
                 {/* Status actions */}
                 {actions.length > 0 && (
                     <div className="bg-white rounded-2xl border border-gray-100 p-6">
-                        <h2 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4">{t.purchaseQuotations.detail.actions}</h2>
+                        <h2 className="text-xs font-semibold text-gray-400 mb-4">{t.purchaseQuotations.detail.actions}</h2>
                         <div className="flex gap-3">
                             {actions.map((action) => (
                                 <button key={action.next} onClick={() => handleStatusUpdate(action.next)} disabled={updating}
-                                    className={`px-5 py-2.5 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-md disabled:opacity-50 transition-all hover:-translate-y-0.5 ${action.color}`}>
+                                    className={`px-5 py-2.5 text-white rounded-xl text-xs font-semibold shadow-md disabled:opacity-50 transition-all ${action.color}`}>
                                     {updating ? 'Updating…' : action.label}
                                 </button>
                             ))}

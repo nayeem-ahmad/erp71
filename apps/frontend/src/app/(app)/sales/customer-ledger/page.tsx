@@ -198,7 +198,7 @@ function CustomerLedgerContent() {
                 const row = info.row.original;
                 if (row.rowType === 'opening') {
                     return (
-                        <span className="text-[10px] font-black uppercase tracking-widest text-indigo-700">
+                        <span className="text-[10px] font-semibold text-indigo-700">
                             {copy.openingBalance}
                         </span>
                     );
@@ -206,8 +206,8 @@ function CustomerLedgerContent() {
                 const isPayout = info.getValue() === 'PAYOUT';
                 const isPayment = info.getValue() === 'PAYMENT';
                 return (
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${
-                        isPayout ? 'text-rose-600' : isPayment ? 'text-emerald-700' : 'text-gray-600'
+                    <span className={`text-[10px] font-semibold ${
+                        isPayout ? 'text-danger' : isPayment ? 'text-emerald-700' : 'text-gray-600'
                     }`}>
                         {directionLabel(info.getValue(), copy)}
                     </span>
@@ -234,9 +234,9 @@ function CustomerLedgerContent() {
                 const amt = Number(info.getValue() ?? 0);
                 const signed = isPayout || row.type === 'CREDIT_SALE';
                 return (
-                    <span className={`text-sm font-black ${
+                    <span className={`text-sm font-bold ${
                         isPayout || row.type === 'CREDIT_SALE'
-                            ? 'text-rose-600'
+                            ? 'text-danger'
                             : isPayment
                               ? 'text-emerald-600'
                               : 'text-gray-700'
@@ -260,7 +260,7 @@ function CustomerLedgerContent() {
             cell: (info) => {
                 const v = Number(info.getValue());
                 return (
-                    <span className={`text-sm font-black ${v > 0 ? 'text-rose-600' : v < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
+                    <span className={`text-sm font-bold ${v > 0 ? 'text-danger' : v < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
                         {formatBDT(v)}
                     </span>
                 );
@@ -291,7 +291,7 @@ function CustomerLedgerContent() {
                         customerId ? (
                             <Link
                                 href={`/sales/customer-payments?customerId=${customerId}&new=1`}
-                                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#293F75] text-white text-sm font-black hover:bg-[#1f3058]"
+                                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#293F75] text-white text-sm font-bold hover:bg-[#1f3058]"
                             >
                                 {copy.recordPayment}
                             </Link>
@@ -342,19 +342,19 @@ function CustomerLedgerContent() {
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
                             <p className="text-xs font-medium text-gray-500">{copy.openingBalance}</p>
-                            <p className={`text-2xl font-black mt-1 ${openingBalance > 0 ? 'text-rose-600' : openingBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
+                            <p className={`text-2xl font-bold mt-1 ${openingBalance > 0 ? 'text-danger' : openingBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
                                 {formatBDT(openingBalance)}
                             </p>
                         </div>
                         <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
                             <p className="text-xs font-medium text-gray-500">{copy.closingBalance}</p>
-                            <p className={`text-2xl font-black mt-1 ${closingBalance > 0 ? 'text-rose-600' : closingBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
+                            <p className={`text-2xl font-bold mt-1 ${closingBalance > 0 ? 'text-danger' : closingBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
                                 {formatBDT(closingBalance)}
                             </p>
                         </div>
                         <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
                             <p className="text-xs font-medium text-gray-500">{copy.currentDue}</p>
-                            <p className={`text-2xl font-black mt-1 ${dueBalance > 0 ? 'text-rose-600' : dueBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
+                            <p className={`text-2xl font-bold mt-1 ${dueBalance > 0 ? 'text-danger' : dueBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
                                 {formatBDT(dueBalance)}
                             </p>
                             {selectedCustomer ? (

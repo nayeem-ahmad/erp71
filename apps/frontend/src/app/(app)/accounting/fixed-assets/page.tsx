@@ -192,7 +192,7 @@ export default function FixedAssetsPage() {
                             <thead>
                                 <tr className="border-b border-gray-100">
                                     {['Code', 'Name', 'Purchase Date', 'Cost', 'Accum. Dep.', 'Net Book Value', 'Method'].map((h) => (
-                                        <th key={h} className="text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-gray-400">{h}</th>
+                                        <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-400">{h}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -203,7 +203,7 @@ export default function FixedAssetsPage() {
                                         <td className="px-4 py-3 font-bold text-gray-800">{a.name}</td>
                                         <td className="px-4 py-3 text-gray-500">{new Date(a.purchase_date).toLocaleDateString()}</td>
                                         <td className="px-4 py-3">{formatBDT(Number(a.cost), { locale })}</td>
-                                        <td className="px-4 py-3 text-rose-600">{formatBDT(Number(a.accumulated_depreciation), { locale })}</td>
+                                        <td className="px-4 py-3 text-danger">{formatBDT(Number(a.accumulated_depreciation), { locale })}</td>
                                         <td className="px-4 py-3 font-bold">{formatBDT(Number(a.cost) - Number(a.accumulated_depreciation), { locale })}</td>
                                         <td className="px-4 py-3 text-xs text-gray-400">{a.depreciation_method === 'STRAIGHT_LINE' ? 'SL' : 'DB'}</td>
                                     </tr>

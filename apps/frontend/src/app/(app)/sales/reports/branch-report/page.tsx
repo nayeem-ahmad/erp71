@@ -271,7 +271,7 @@ export default function BranchReportPage() {
                                 icon={RotateCcw}
                                 label={m.summary.returns}
                                 value={formatBDT(r.summary.returns)}
-                                accent="bg-rose-500"
+                                accent="bg-danger"
                                 sub={formatMessage(m.summary.netSub, { amount: formatBDT(r.summary.net_revenue) })}
                             />
                         </div>

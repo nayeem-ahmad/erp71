@@ -142,7 +142,7 @@ export default function OrdersPage() {
             columnHelper.accessor('order_number', {
                 header: t.orders.columns.orderNumber,
                 cell: (info) => (
-                    <span className="text-sm font-black text-gray-900">{info.getValue()}</span>
+                    <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>
                 ),
                 size: 140,
             }),
@@ -173,7 +173,7 @@ export default function OrdersPage() {
             columnHelper.accessor('total_amount', {
                 header: t.orders.columns.total,
                 cell: (info) => (
-                    <span className="text-sm font-black text-blue-600">
+                    <span className="text-sm font-bold text-blue-600">
                         {formatBDT(parseFloat(info.getValue()), { locale })}
                     </span>
                 ),
@@ -186,7 +186,7 @@ export default function OrdersPage() {
                 cell: (info) => {
                     const status = info.getValue();
                     return (
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${paymentColors[status] ?? 'bg-gray-100 text-gray-600'}`}>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${paymentColors[status] ?? 'bg-gray-100 text-gray-600'}`}>
                             {t.shared.statuses.payment[status as keyof typeof t.shared.statuses.payment] ?? status}
                         </span>
                     );
@@ -198,7 +198,7 @@ export default function OrdersPage() {
                 cell: (info) => {
                     const status = info.getValue();
                     return (
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${statusColors[status] ?? 'bg-gray-50 text-gray-700 border-gray-200'}`}>
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${statusColors[status] ?? 'bg-gray-50 text-gray-700 border-gray-200'}`}>
                             {t.shared.statuses.order[status as keyof typeof t.shared.statuses.order] ?? status}
                         </span>
                     );

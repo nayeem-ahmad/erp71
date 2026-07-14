@@ -83,7 +83,7 @@ export default function PurchaseReturnsPage() {
         () => [
             columnHelper.accessor('return_number', {
                 header: t.purchaseReturns.columns.returnNumber,
-                cell: (info) => <span className="text-sm font-black text-gray-900">{info.getValue()}</span>,
+                cell: (info) => <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>,
                 size: 150,
             }),
             columnHelper.accessor((row) => row.purchase?.purchase_number ?? '-', {
@@ -111,7 +111,7 @@ export default function PurchaseReturnsPage() {
             columnHelper.accessor('total_amount', {
                 header: t.purchaseQuotations.columns.total,
                 cell: (info) => (
-                    <span className="text-sm font-black text-emerald-600">
+                    <span className="text-sm font-bold text-emerald-600">
                         {formatBDT(Number(info.getValue() || 0), { locale })}
                     </span>
                 ),
@@ -152,7 +152,7 @@ export default function PurchaseReturnsPage() {
                         <div className="flex items-center justify-end space-x-1">
                             <button
                                 onClick={() => openCreateModal(row.purchase?.id)}
-                                className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                className="p-1.5 rounded-lg text-primary hover:bg-primary-light transition-colors"
                                 title={t.purchaseReturns.createAnother}
                             >
                                 <Plus className="w-4 h-4" />
@@ -211,7 +211,7 @@ export default function PurchaseReturnsPage() {
                     actions={(
                         <button
                             onClick={() => openCreateModal()}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-emerald-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                            className="bg-primary hover:bg-primary-hover text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg transition-all"
                         >
                             <Plus className="w-4 h-4 mr-2" />
                             New Return

@@ -82,7 +82,7 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.fullName}</label>
                             <div className="relative">
                                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input required type="text" value={formData.name} onChange={set('name')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-black focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.name} />
+                                <input required type="text" value={formData.name} onChange={set('name')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.name} />
                             </div>
                         </div>
 
@@ -90,7 +90,7 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.phoneNumber}</label>
                             <div className="relative">
                                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input required type="text" value={formData.phone} onChange={set('phone')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-black focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.phone} />
+                                <input required type="text" value={formData.phone} onChange={set('phone')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.phone} />
                             </div>
                         </div>
 
@@ -104,7 +104,7 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
 
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.customerType}</label>
-                            <select value={formData.customer_type} onChange={set('customer_type')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-black text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all">
+                            <select value={formData.customer_type} onChange={set('customer_type')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-bold text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all">
                                 <option value="INDIVIDUAL">{t.customers.modal.individual}</option>
                                 <option value="ORGANIZATION">{t.customers.modal.organization}</option>
                             </select>

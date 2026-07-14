@@ -21,7 +21,7 @@ const TASK_TYPES = ['FOLLOW_UP', 'COLLECTION', 'BIRTHDAY', 'REORDER_REMINDER'] a
 
 const taskTypeColors: Record<string, string> = {
     FOLLOW_UP: 'bg-blue-50 text-blue-700', COLLECTION: 'bg-amber-50 text-amber-700',
-    BIRTHDAY: 'bg-rose-50 text-rose-700', REORDER_REMINDER: 'bg-violet-50 text-violet-700',
+    BIRTHDAY: 'bg-danger-light text-danger-text', REORDER_REMINDER: 'bg-violet-50 text-violet-700',
 };
 
 const TASK_TYPE_KEYS: Record<string, 'followUp' | 'collection' | 'birthday' | 'reorderReminder'> = {
@@ -224,12 +224,12 @@ export default function CustomerProfile() {
         }
     };
 
-    if (loading) return <div className="p-8 font-black uppercase tracking-widest text-gray-400">{t.customers.profile.loading}</div>;
-    if (!customer) return <div className="p-8 font-black text-rose-500 uppercase">{t.customers.profile.notFound}</div>;
+    if (loading) return <div className="p-8 font-semibold text-gray-400">{t.customers.profile.loading}</div>;
+    if (!customer) return <div className="p-8 font-bold text-danger uppercase">{t.customers.profile.notFound}</div>;
 
     const segmentClass =
         customer.segment_category === 'VIP' ? 'bg-emerald-50 text-emerald-600' :
-        customer.segment_category === 'At-Risk' ? 'bg-rose-50 text-rose-600' :
+        customer.segment_category === 'At-Risk' ? 'bg-danger-light text-danger' :
         'bg-gray-100 text-gray-600';
 
     return (
@@ -247,7 +247,7 @@ export default function CustomerProfile() {
 
             {/* Profile Header */}
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex items-start space-x-6">
-                <div className="w-20 h-20 bg-blue-600 rounded-2xl shadow-sm flex items-center justify-center text-white font-black text-3xl uppercase overflow-hidden">
+                <div className="w-20 h-20 bg-blue-600 rounded-2xl shadow-sm flex items-center justify-center text-white font-bold text-3xl uppercase overflow-hidden">
                     {customer.profile_pic_url
                         ? <img src={customer.profile_pic_url} alt={customer.name} className="w-full h-full object-cover" />
                         : customer.name.substring(0, 2)}
@@ -256,11 +256,11 @@ export default function CustomerProfile() {
                     <div className="flex items-center flex-wrap gap-2">
                         <h1 className="text-lg font-bold tracking-tight text-gray-950">{customer.name}</h1>
                         <span className="font-mono text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded">{customer.customer_code}</span>
-                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-tighter ${customer.customer_type === 'ORGANIZATION' ? 'bg-purple-50 text-purple-600' : 'bg-gray-100 text-gray-600'}`}>
+                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-tighter ${customer.customer_type === 'ORGANIZATION' ? 'bg-purple-50 text-purple-600' : 'bg-gray-100 text-gray-600'}`}>
                             {customer.customer_type || t.customers.profile.individual}
                         </span>
                         {customer.segment_category && (
-                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-tighter ${segmentClass}`}>
+                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-tighter ${segmentClass}`}>
                                 {customer.segment_category}
                             </span>
                         )}
@@ -274,15 +274,15 @@ export default function CustomerProfile() {
                 <div className="text-right shrink-0 space-y-2">
                     <div>
                         <p className="text-xs font-medium text-gray-500 mb-1">{t.customers.profile.lifetimeValue}</p>
-                        <p className="text-4xl font-black text-blue-600">{formatBDT(Number(customer.total_spent))}</p>
+                        <p className="text-4xl font-bold text-blue-600">{formatBDT(Number(customer.total_spent))}</p>
                         {history && (
                             <p className="text-xs text-gray-400 font-bold mt-1">{formatMessage(history.total !== 1 ? t.customers.profile.transactionsPlural : t.customers.profile.transactions, { count: history.total })}</p>
                         )}
                     </div>
                     {Number(customer.due_balance) > 0 && (
-                        <div className="bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-rose-400 mb-0.5">{t.customers.profile.dueBalance}</p>
-                            <p className="text-xl font-black text-rose-600">{formatBDT(Number(customer.due_balance))}</p>
+                        <div className="bg-danger-light border border-red-200 rounded-xl px-3 py-2">
+                            <p className="text-[10px] font-semibold text-red-400 mb-0.5">{t.customers.profile.dueBalance}</p>
+                            <p className="text-xl font-bold text-danger">{formatBDT(Number(customer.due_balance))}</p>
                         </div>
                     )}
                 </div>
@@ -333,7 +333,7 @@ export default function CustomerProfile() {
                                         <div key={sale.id} className="p-6 hover:bg-gray-50/50">
                                             <div className="flex justify-between items-start mb-4">
                                                 <div>
-                                                    <h3 className="font-black text-sm">{sale.serial_number}</h3>
+                                                    <h3 className="font-bold text-sm">{sale.serial_number}</h3>
                                                     <p className="text-xs text-gray-500 font-medium">{new Date(sale.created_at).toLocaleString()}</p>
                                                     {sale.payments?.length > 0 && (
                                                         <div className="flex gap-1 mt-1">
@@ -346,8 +346,8 @@ export default function CustomerProfile() {
                                                     )}
                                                 </div>
                                                 <div className="text-right">
-                                                    <p className="font-black">{formatBDT(Number(sale.amount_paid))}</p>
-                                                    <p className={`text-[10px] font-black uppercase tracking-widest ${sale.status === 'COMPLETED' ? 'text-emerald-500' : 'text-gray-400'}`}>{sale.status}</p>
+                                                    <p className="font-bold">{formatBDT(Number(sale.amount_paid))}</p>
+                                                    <p className={`text-[10px] font-semibold ${sale.status === 'COMPLETED' ? 'text-emerald-500' : 'text-gray-400'}`}>{sale.status}</p>
                                                 </div>
                                             </div>
                                             <div className="bg-gray-50 rounded-xl p-4 space-y-2">
@@ -397,7 +397,7 @@ export default function CustomerProfile() {
 
                         {showDraftPanel && (
                             <div className="bg-purple-50 rounded-xl p-4 space-y-3 border border-purple-200">
-                                <p className="text-xs font-black uppercase tracking-widest text-purple-400">AI Message Drafter</p>
+                                <p className="text-xs font-semibold text-purple-400">AI Message Drafter</p>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <label className="block text-xs font-semibold text-gray-600 mb-1">Channel</label>
@@ -513,7 +513,7 @@ export default function CustomerProfile() {
                                                 </div>
                                                 <button
                                                     onClick={() => deleteInteraction(interaction.id)}
-                                                    className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-rose-500 transition-opacity ml-2"
+                                                    className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-danger transition-opacity ml-2"
                                                 >
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
@@ -538,15 +538,15 @@ export default function CustomerProfile() {
                         ) : (
                             <>
                                 <div className="grid grid-cols-3 gap-4">
-                                    <div className={`rounded-xl p-4 border ${Number(creditLedger?.due_balance) > 0 ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
-                                        <p className="text-xs font-black uppercase tracking-widest text-gray-500 mb-1">{t.customers.profile.dueBalance}</p>
-                                        <p className={`text-2xl font-black ${Number(creditLedger?.due_balance) > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                    <div className={`rounded-xl p-4 border ${Number(creditLedger?.due_balance) > 0 ? 'bg-danger-light border-red-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                                        <p className="text-xs font-semibold text-gray-500 mb-1">{t.customers.profile.dueBalance}</p>
+                                        <p className={`text-2xl font-bold ${Number(creditLedger?.due_balance) > 0 ? 'text-danger' : 'text-emerald-600'}`}>
                                             {formatBDT(creditLedger?.due_balance ?? 0)}
                                         </p>
                                     </div>
                                     <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                                        <p className="text-xs font-black uppercase tracking-widest text-gray-500 mb-1">{t.customers.profile.creditLimit}</p>
-                                        <p className="text-2xl font-black text-gray-700">
+                                        <p className="text-xs font-semibold text-gray-500 mb-1">{t.customers.profile.creditLimit}</p>
+                                        <p className="text-2xl font-bold text-gray-700">
                                             {creditLedger?.credit_limit ? formatBDT(creditLedger.credit_limit) : '—'}
                                         </p>
                                     </div>
@@ -563,7 +563,7 @@ export default function CustomerProfile() {
                                         {!showPaymentForm ? (
                                             <button
                                                 onClick={() => setShowPaymentForm(true)}
-                                                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700"
+                                                className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover"
                                             >
                                                 <CheckCircle2 className="w-4 h-4" /> {t.customers.profile.recordPayment}
                                             </button>
@@ -590,7 +590,7 @@ export default function CustomerProfile() {
                                                     <button
                                                         onClick={savePayment}
                                                         disabled={savingPayment || !paymentAmount}
-                                                        className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                                                        className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium disabled:opacity-50"
                                                     >
                                                         {t.customers.profile.confirmPayment}
                                                     </button>
@@ -623,11 +623,11 @@ export default function CustomerProfile() {
                                                         <td className="px-4 py-3">
                                                             <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                                                                 tx.type === 'PAYMENT' ? 'bg-emerald-50 text-emerald-700' :
-                                                                tx.type === 'CREDIT_SALE' ? 'bg-rose-50 text-rose-700' :
+                                                                tx.type === 'CREDIT_SALE' ? 'bg-danger-light text-danger-text' :
                                                                 'bg-gray-100 text-gray-600'
                                                             }`}>{tx.type}</span>
                                                         </td>
-                                                        <td className={`px-4 py-3 text-right font-bold ${tx.type === 'PAYMENT' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                        <td className={`px-4 py-3 text-right font-bold ${tx.type === 'PAYMENT' ? 'text-emerald-600' : 'text-danger'}`}>
                                                             {tx.type === 'PAYMENT' ? '-' : '+'}{formatBDT(Number(tx.amount))}
                                                         </td>
                                                         <td className="px-4 py-3 text-right text-gray-700 font-medium">{formatBDT(Number(tx.balance_after))}</td>
@@ -722,13 +722,13 @@ export default function CustomerProfile() {
                                 {tasks.map((task: any) => {
                                     const overdue = new Date(task.due_at) < new Date() && task.status === 'PENDING';
                                     return (
-                                        <div key={task.id} className={`flex items-start gap-3 bg-white border rounded-xl p-4 ${overdue ? 'border-rose-200' : 'border-gray-100'} ${task.status === 'DONE' ? 'opacity-60' : ''}`}>
+                                        <div key={task.id} className={`flex items-start gap-3 bg-white border rounded-xl p-4 ${overdue ? 'border-red-200' : 'border-gray-100'} ${task.status === 'DONE' ? 'opacity-60' : ''}`}>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 mb-0.5">
                                                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${taskTypeColors[task.type] ?? 'bg-gray-100 text-gray-600'}`}>
                                                         {t.crmTasks.types[TASK_TYPE_KEYS[task.type]] ?? task.type}
                                                     </span>
-                                                    {overdue && <AlertCircle className="w-3.5 h-3.5 text-rose-500" />}
+                                                    {overdue && <AlertCircle className="w-3.5 h-3.5 text-danger" />}
                                                 </div>
                                                 <p className={`text-sm font-medium text-gray-800 ${task.status === 'DONE' ? 'line-through' : ''}`}>{task.title}</p>
                                                 <p className="text-xs text-gray-400 mt-0.5">{t.customers.profile.due} {new Date(task.due_at).toLocaleString()}</p>
@@ -761,7 +761,7 @@ function InfoCard({ label, value, icon }: { label: string; value: string; icon: 
             <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center">{icon}</div>
             <div>
                 <p className="text-gray-500 font-bold text-[10px] uppercase tracking-widest">{label}</p>
-                <h3 className="text-lg font-black tracking-tight">{value}</h3>
+                <h3 className="text-lg font-bold tracking-tight">{value}</h3>
             </div>
         </div>
     );

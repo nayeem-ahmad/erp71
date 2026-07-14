@@ -84,7 +84,7 @@ export default function PurchaseQuotationsPage() {
     const columns: ColumnDef<PurchaseQuotation, any>[] = useMemo(() => [
         columnHelper.accessor('rfq_number', {
             header: t.purchaseQuotations.columns.rfqNumber,
-            cell: (info) => <span className="text-sm font-black text-gray-900">{info.getValue()}</span>,
+            cell: (info) => <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>,
             size: 130,
         }),
         columnHelper.accessor('created_at', {
@@ -124,7 +124,7 @@ export default function PurchaseQuotationsPage() {
         }),
         columnHelper.accessor('total_amount', {
             header: t.purchaseQuotations.columns.total,
-            cell: (info) => <span className="text-sm font-black text-blue-600">{formatBDT(parseFloat(info.getValue()), { locale })}</span>,
+            cell: (info) => <span className="text-sm font-bold text-blue-600">{formatBDT(parseFloat(info.getValue()), { locale })}</span>,
             size: 120,
         }),
         columnHelper.accessor('status', {
@@ -132,7 +132,7 @@ export default function PurchaseQuotationsPage() {
             cell: (info) => {
                 const s = info.getValue();
                 return (
-                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${statusColors[s] ?? 'bg-gray-50 text-gray-700 border-gray-200'}`}>
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${statusColors[s] ?? 'bg-gray-50 text-gray-700 border-gray-200'}`}>
                         {s}
                     </span>
                 );
@@ -153,7 +153,7 @@ export default function PurchaseQuotationsPage() {
                         </Link>
                         {canConvert && (
                             <button onClick={() => handleConvert(rfq)}
-                                className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors" title={t.purchaseQuotations.convertToPo}>
+                                className="p-1.5 rounded-lg text-primary hover:bg-primary-light transition-colors" title={t.purchaseQuotations.convertToPo}>
                                 <ShoppingCart className="w-4 h-4" />
                             </button>
                         )}
@@ -192,7 +192,7 @@ export default function PurchaseQuotationsPage() {
                     actions={(
                         <button
                             onClick={() => setIsModalOpen(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5"
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg transition-all"
                         >
                             <Plus className="w-4 h-4 mr-2" />
                             New RFQ

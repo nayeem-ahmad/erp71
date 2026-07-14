@@ -206,7 +206,7 @@ function SupplierLedgerContent() {
                 const row = info.row.original;
                 if (row.rowType === 'opening') {
                     return (
-                        <span className="text-[10px] font-black uppercase tracking-widest text-orange-700">
+                        <span className="text-[10px] font-semibold text-orange-700">
                             {copy.openingBalance}
                         </span>
                     );
@@ -214,8 +214,8 @@ function SupplierLedgerContent() {
                 const isPayment = info.getValue() === 'PAYMENT';
                 const isPayout = info.getValue() === 'PAYOUT';
                 return (
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${
-                        isPayment ? 'text-rose-600' : isPayout ? 'text-emerald-700' : 'text-gray-600'
+                    <span className={`text-[10px] font-semibold ${
+                        isPayment ? 'text-danger' : isPayout ? 'text-emerald-700' : 'text-gray-600'
                     }`}>
                         {directionLabel(info.getValue(), copy)}
                     </span>
@@ -242,9 +242,9 @@ function SupplierLedgerContent() {
                 const amt = Number(info.getValue() ?? 0);
                 const signed = isPayout || row.type === 'CREDIT_PURCHASE';
                 return (
-                    <span className={`text-sm font-black ${
+                    <span className={`text-sm font-bold ${
                         isPayout || row.type === 'CREDIT_PURCHASE'
-                            ? 'text-rose-600'
+                            ? 'text-danger'
                             : isPayment
                               ? 'text-emerald-600'
                               : 'text-gray-700'
@@ -276,7 +276,7 @@ function SupplierLedgerContent() {
                             ? 'bg-emerald-50 text-emerald-700'
                             : row.bill.payment_status === 'PARTIAL'
                               ? 'bg-amber-50 text-amber-700'
-                              : 'bg-rose-50 text-rose-700';
+                              : 'bg-danger-light text-danger-text';
                     return (
                         <div className="text-xs">
                             <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${tone}`}>
@@ -317,7 +317,7 @@ function SupplierLedgerContent() {
             cell: (info) => {
                 const v = Number(info.getValue());
                 return (
-                    <span className={`text-sm font-black ${v > 0 ? 'text-rose-600' : v < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
+                    <span className={`text-sm font-bold ${v > 0 ? 'text-danger' : v < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
                         {formatBDT(v)}
                     </span>
                 );
@@ -342,7 +342,7 @@ function SupplierLedgerContent() {
                     actions={supplierId ? (
                         <Link
                             href={`/purchases/supplier-payments?supplierId=${supplierId}&new=1`}
-                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#293F75] text-white text-sm font-black hover:bg-[#1f3058]"
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#293F75] text-white text-sm font-bold hover:bg-[#1f3058]"
                         >
                             {copy.recordPayment}
                         </Link>
@@ -392,19 +392,19 @@ function SupplierLedgerContent() {
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
                             <p className="text-xs font-medium text-gray-500">{copy.openingBalance}</p>
-                            <p className={`text-2xl font-black mt-1 ${openingBalance > 0 ? 'text-rose-600' : openingBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
+                            <p className={`text-2xl font-bold mt-1 ${openingBalance > 0 ? 'text-danger' : openingBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
                                 {formatBDT(openingBalance)}
                             </p>
                         </div>
                         <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
                             <p className="text-xs font-medium text-gray-500">{copy.closingBalance}</p>
-                            <p className={`text-2xl font-black mt-1 ${closingBalance > 0 ? 'text-rose-600' : closingBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
+                            <p className={`text-2xl font-bold mt-1 ${closingBalance > 0 ? 'text-danger' : closingBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
                                 {formatBDT(closingBalance)}
                             </p>
                         </div>
                         <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
                             <p className="text-xs font-medium text-gray-500">{copy.currentDue}</p>
-                            <p className={`text-2xl font-black mt-1 ${dueBalance > 0 ? 'text-rose-600' : dueBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
+                            <p className={`text-2xl font-bold mt-1 ${dueBalance > 0 ? 'text-danger' : dueBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
                                 {formatBDT(dueBalance)}
                             </p>
                             {selectedSupplier ? (

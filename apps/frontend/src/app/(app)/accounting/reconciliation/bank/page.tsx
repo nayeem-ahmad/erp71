@@ -142,7 +142,7 @@ export default function BankReconciliationPage() {
             <div className="flex items-center gap-2 text-xs">
                     {(['setup', 'import', 'match'] as const).map((s, i) => (
                         <div key={s} className="flex items-center gap-2">
-                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black ${step === s ? 'bg-gray-900 text-white' : ['setup','import','match'].indexOf(step) > i ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step === s ? 'bg-gray-900 text-white' : ['setup','import','match'].indexOf(step) > i ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
                                 {['setup','import','match'].indexOf(step) > i ? '✓' : i + 1}
                             </div>
                             <span className={`font-bold capitalize ${step === s ? 'text-gray-900' : 'text-gray-400'}`}>{s}</span>
@@ -222,11 +222,11 @@ export default function BankReconciliationPage() {
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b border-gray-100">
-                                        <th className="text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-gray-400">Date</th>
-                                        <th className="text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-gray-400">Description</th>
-                                        <th className="text-right px-4 py-3 text-xs font-black uppercase tracking-widest text-gray-400">Amount</th>
-                                        <th className="text-center px-4 py-3 text-xs font-black uppercase tracking-widest text-gray-400">Type</th>
-                                        <th className="text-center px-4 py-3 text-xs font-black uppercase tracking-widest text-gray-400">Status</th>
+                                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400">Date</th>
+                                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400">Description</th>
+                                        <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400">Amount</th>
+                                        <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400">Type</th>
+                                        <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -236,7 +236,7 @@ export default function BankReconciliationPage() {
                                             <td className="px-4 py-3 text-gray-700">{e.description ?? '—'}</td>
                                             <td className="px-4 py-3 text-right font-medium">{formatBDT(Number(e.amount), { locale })}</td>
                                             <td className="px-4 py-3 text-center">
-                                                <span className={`text-xs font-bold ${e.entry_type === 'CREDIT' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                <span className={`text-xs font-bold ${e.entry_type === 'CREDIT' ? 'text-emerald-600' : 'text-danger'}`}>
                                                     {e.entry_type}
                                                 </span>
                                             </td>

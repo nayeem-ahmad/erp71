@@ -119,7 +119,7 @@ export default function FiscalPeriodsPage() {
                                         <td className="px-3 py-2 font-semibold text-gray-800">{p.period_label}</td>
                                         <td className="px-3 py-2 text-center">
                                             {p.is_locked ? (
-                                                <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700 border border-rose-100">
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-danger-light px-2 py-0.5 text-xs font-semibold text-danger-text border border-red-100">
                                                     <Lock className="w-3 h-3" /> Locked
                                                 </span>
                                             ) : (
@@ -137,7 +137,7 @@ export default function FiscalPeriodsPage() {
                                                 disabled={isBusy}
                                                 className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition disabled:opacity-50 ${p.is_locked
                                                     ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                                    : 'bg-rose-50 text-rose-700 border border-rose-100 hover:bg-rose-100'}`}
+                                                    : 'bg-danger-light text-danger-text border border-red-100 hover:bg-danger-light'}`}
                                             >
                                                 {isBusy ? '…' : p.is_locked ? 'Unlock' : 'Lock Period'}
                                             </button>

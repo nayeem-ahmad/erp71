@@ -5,6 +5,8 @@ import { Download, ChevronDown } from 'lucide-react';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { Button } from '@/components/ui';
+import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 
 type ExportFormat = 'tally' | 'quickbooks';
 
@@ -106,21 +108,17 @@ export default function AccountingLedgerExport() {
             </div>
 
             {showDateModal && (
-                <div
-                    className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
-                    onClick={(e) => { if (e.target === e.currentTarget) setShowDateModal(false); }}
-                >
-                    <div className={`${compactDensity.modal} max-w-sm`}>
-                        <div className={`${compactDensity.modalPadding} border-b border-gray-100`}>
-                            <h2 className={compactDensity.modalTitle}>
-                                {formatMessage(t.accounting.exportModalTitle, {
-                                    format: pendingFormat === 'tally' ? t.accounting.tallyXml : t.accounting.quickbooksIif,
-                                })}
-                            </h2>
-                            <p className="text-xs text-gray-500 mt-1">{t.accounting.exportModalDescription}</p>
-                        </div>
+                <ModalShell size="sm" onBackdropClick={() => setShowDateModal(false)}>
+                    <div className="flex max-h-[90vh] flex-col overflow-hidden">
+                        <ModalHeader
+                            title={formatMessage(t.accounting.exportModalTitle, {
+                                format: pendingFormat === 'tally' ? t.accounting.tallyXml : t.accounting.quickbooksIif,
+                            })}
+                            subtitle={t.accounting.exportModalDescription}
+                            onClose={() => setShowDateModal(false)}
+                        />
 
-                        <div className={`${compactDensity.modalPadding} ${compactDensity.formStack}`}>
+                        <div className={`${compactDensity.modalPadding} ${compactDensity.formStack} overflow-y-auto`}>
                             <div>
                                 <label className={`${compactDensity.formLabel} block mb-1`}>
                                     {t.accountingShared.from}
@@ -146,26 +144,22 @@ export default function AccountingLedgerExport() {
                             {exportError && <p className="text-sm text-red-600">{exportError}</p>}
                         </div>
 
-                        <div className={`${compactDensity.modalPadding} flex gap-2 justify-end border-t border-gray-100`}>
-                            <button
-                                type="button"
-                                onClick={() => setShowDateModal(false)}
-                                className={compactDensity.btnSecondary}
-                            >
+                        <ModalFooter>
+                            <Button variant="secondary" type="button" onClick={() => setShowDateModal(false)}>
                                 {t.common.cancel}
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                                 type="button"
                                 onClick={handleExport}
-                                disabled={exporting}
-                                className={`${compactDensity.btnPrimary} bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-60`}
+                                loading={exporting}
+                                icon={<Download className="h-3.5 w-3.5" />}
+                                className="bg-gray-900 hover:bg-gray-700"
                             >
-                                <Download className="h-3.5 w-3.5" />
-                                {exporting ? t.accountingShared.downloading : t.accountingShared.download}
-                            </button>
-                        </div>
+                                {t.accountingShared.download}
+                            </Button>
+                        </ModalFooter>
                     </div>
-                </div>
+                </ModalShell>
             )}
         </>
     );

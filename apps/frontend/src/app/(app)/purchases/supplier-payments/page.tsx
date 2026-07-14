@@ -351,7 +351,7 @@ function SupplierPaymentsContent() {
                 cell: (info) => {
                     const isPayment = info.getValue() === 'PAYMENT';
                     return (
-                        <span className={`text-[10px] font-black uppercase tracking-widest ${isPayment ? 'text-rose-600' : 'text-emerald-700'}`}>
+                        <span className={`text-[10px] font-semibold ${isPayment ? 'text-danger' : 'text-emerald-700'}`}>
                             {isPayment ? copy.directionPay : copy.directionReceive}
                         </span>
                     );
@@ -391,7 +391,7 @@ function SupplierPaymentsContent() {
                 cell: (info) => {
                     const isPayment = info.row.original.type === 'PAYMENT';
                     return (
-                        <span className={`text-sm font-black ${isPayment ? 'text-rose-600' : 'text-emerald-600'}`}>
+                        <span className={`text-sm font-bold ${isPayment ? 'text-danger' : 'text-emerald-600'}`}>
                             {isPayment ? '−' : '+'}{formatBDT(Number(info.getValue()))}
                         </span>
                     );
@@ -450,7 +450,7 @@ function SupplierPaymentsContent() {
                             <button
                                 type="button"
                                 onClick={() => void handleDelete(payment)}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50"
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-danger hover:bg-red-50"
                                 title={t.common.delete}
                             >
                                 <Trash2 className="w-4 h-4" />
@@ -485,7 +485,7 @@ function SupplierPaymentsContent() {
                         <button
                             type="button"
                             onClick={() => { resetForm(); setShowForm(true); }}
-                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#293F75] text-white text-sm font-black hover:bg-[#1f3058]"
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#293F75] text-white text-sm font-bold hover:bg-[#1f3058]"
                         >
                             <Plus className="w-4 h-4" />
                             {copy.newPayment}
@@ -494,7 +494,7 @@ function SupplierPaymentsContent() {
                 />
 
                 {toast && (
-                    <div className={`rounded-xl px-4 py-3 text-sm font-semibold ${toast.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'}`}>
+                    <div className={`rounded-xl px-4 py-3 text-sm font-semibold ${toast.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-danger-light text-danger-text border border-red-200'}`}>
                         {toast.message}
                     </div>
                 )}
@@ -502,7 +502,7 @@ function SupplierPaymentsContent() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
                         <p className="text-xs font-medium text-gray-500">{copy.periodTotal}</p>
-                        <p className="text-2xl font-black text-emerald-600 mt-1">{formatBDT(totalAmount)}</p>
+                        <p className="text-2xl font-bold text-emerald-600 mt-1">{formatBDT(totalAmount)}</p>
                         <p className="text-xs text-gray-400 mt-1">{formatMessage(copy.paymentCount, { count: payments.length })}</p>
                     </div>
                     <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4 sm:col-span-2">
@@ -587,7 +587,7 @@ function SupplierPaymentsContent() {
                                             <span className="text-gray-600">
                                                 {dueBalance < 0 ? copy.advanceBalance : copy.dueBalance}:{' '}
                                             </span>
-                                            <span className={`font-black ${dueBalance > 0 ? 'text-rose-600' : dueBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
+                                            <span className={`font-bold ${dueBalance > 0 ? 'text-danger' : dueBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
                                                 {formatBDT(Math.abs(dueBalance))}
                                             </span>
                                             {formDirection === 'pay' ? (
@@ -644,7 +644,7 @@ function SupplierPaymentsContent() {
                                                     </div>
                                                 ))}
                                             </div>
-                                            <p className={`text-xs ${totalBillAllocated - (Number(formAmount) || 0) > 0.005 ? 'text-rose-600 font-bold' : 'text-gray-400'}`}>
+                                            <p className={`text-xs ${totalBillAllocated - (Number(formAmount) || 0) > 0.005 ? 'text-danger font-bold' : 'text-gray-400'}`}>
                                                 {formatMessage(copy.allocation.remainingToAllocate, {
                                                     amount: formatBDT(Math.max(0, (Number(formAmount) || 0) - totalBillAllocated)),
                                                 })}
@@ -680,7 +680,7 @@ function SupplierPaymentsContent() {
                     <div className="p-6 space-y-3 overflow-y-auto">
                             <div className="rounded-xl bg-orange-50 border border-orange-100 px-4 py-3 text-sm flex justify-between">
                                 <span className="text-gray-600">{copy.allocation.unappliedAmount}</span>
-                                <span className="font-black text-orange-700">
+                                <span className="font-bold text-orange-700">
                                     {formatBDT(allocatingPayment.unapplied_amount ?? 0)}
                                 </span>
                             </div>
@@ -707,7 +707,7 @@ function SupplierPaymentsContent() {
                                 </div>
                             )}
                             {allocateError && (
-                                <div className="rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs p-2">{allocateError}</div>
+                                <div className="rounded-xl bg-danger-light border border-red-200 text-danger-text text-xs p-2">{allocateError}</div>
                             )}
                     </div>
                     <ModalFooter>
@@ -736,7 +736,7 @@ function SupplierPaymentsContent() {
                     <div className="p-6 space-y-3 text-sm overflow-y-auto">
                             <div className="flex justify-between">
                                 <span className="text-gray-500">{copy.columns.direction}</span>
-                                <span className={`font-bold ${viewPayment.type === 'PAYMENT' ? 'text-rose-600' : 'text-emerald-700'}`}>
+                                <span className={`font-bold ${viewPayment.type === 'PAYMENT' ? 'text-danger' : 'text-emerald-700'}`}>
                                     {viewPayment.type === 'PAYMENT' ? copy.directionPay : copy.directionReceive}
                                 </span>
                             </div>
@@ -753,7 +753,7 @@ function SupplierPaymentsContent() {
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-gray-500">{copy.columns.amount}</span>
-                                <span className={`font-black ${viewPayment.type === 'PAYMENT' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                <span className={`font-bold ${viewPayment.type === 'PAYMENT' ? 'text-danger' : 'text-emerald-600'}`}>
                                     {formatBDT(Number(viewPayment.amount))}
                                 </span>
                             </div>

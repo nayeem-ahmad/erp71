@@ -118,8 +118,8 @@ export default function QuotesPage() {
                 header: t.quotes.columns.quoteNumber,
                 cell: (info) => (
                     <div>
-                        <span className="text-sm font-black text-gray-900">{info.getValue()}</span>
-                        <span className="ml-2 inline-flex rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-gray-500">
+                        <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>
+                        <span className="ml-2 inline-flex rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
                             {formatMessage(t.shared.version, { version: info.row.original.version })}
                         </span>
                     </div>
@@ -175,7 +175,7 @@ export default function QuotesPage() {
             columnHelper.accessor('total_amount', {
                 header: t.quotes.columns.total,
                 cell: (info) => (
-                    <span className="text-sm font-black text-blue-600">{formatBDT(parseFloat(info.getValue()), { locale })}</span>
+                    <span className="text-sm font-bold text-blue-600">{formatBDT(parseFloat(info.getValue()), { locale })}</span>
                 ),
                 sortingFn: (a, b) => parseFloat(a.getValue('total_amount')) - parseFloat(b.getValue('total_amount')),
                 size: 110,
@@ -185,7 +185,7 @@ export default function QuotesPage() {
                 cell: (info) => {
                     const status = info.getValue();
                     return (
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${statusColors[status] ?? 'bg-gray-50 text-gray-700 border-gray-200'}`}>
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${statusColors[status] ?? 'bg-gray-50 text-gray-700 border-gray-200'}`}>
                             {t.shared.statuses.quote[status as keyof typeof t.shared.statuses.quote] ?? status}
                         </span>
                     );

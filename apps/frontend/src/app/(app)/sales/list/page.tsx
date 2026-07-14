@@ -32,7 +32,7 @@ interface Sale {
 
 const statusColors: Record<string, string> = {
     COMPLETED: 'bg-green-50 text-green-700 border-green-200',
-    REFUNDED: 'bg-rose-50 text-rose-700 border-rose-200',
+    REFUNDED: 'bg-danger-light text-danger-text border-red-200',
     PARTIAL_REFUND: 'bg-amber-50 text-amber-700 border-amber-200',
 };
 
@@ -67,7 +67,7 @@ export default function SalesPage() {
             columnHelper.accessor('serial_number', {
                 header: t.sales.columns.serialNumber,
                 cell: (info) => (
-                    <span className="text-sm font-black text-gray-900">{info.getValue()}</span>
+                    <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>
                 ),
                 size: 140,
             }),
@@ -108,7 +108,7 @@ export default function SalesPage() {
             columnHelper.accessor('total_amount', {
                 header: t.sales.columns.total,
                 cell: (info) => (
-                    <span className="text-sm font-black text-blue-600">
+                    <span className="text-sm font-bold text-blue-600">
                         {formatBDT(parseFloat(info.getValue()), { locale })}
                     </span>
                 ),
@@ -133,7 +133,7 @@ export default function SalesPage() {
                     const status = info.getValue();
                     return (
                         <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${
                                 statusColors[status] ?? 'bg-gray-50 text-gray-700 border-gray-200'
                             }`}
                         >

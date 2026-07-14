@@ -9,6 +9,8 @@ import {
     CompactStat,
 } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { Button } from '@/components/ui';
+import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -257,7 +259,7 @@ export default function LoansPage() {
                 header: t.loans.direction,
                 cell: (info) => (
                     <span
-                        className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${info.getValue() === 'RECEIVABLE' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}
+                        className={`text-[10px] font-semibold px-2 py-1 rounded-full ${info.getValue() === 'RECEIVABLE' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}
                     >
                         {info.getValue() === 'RECEIVABLE' ? t.loans.receivable : t.loans.payable}
                     </span>
@@ -276,7 +278,7 @@ export default function LoansPage() {
             }),
             columnHelper.accessor('outstanding', {
                 header: t.loans.outstanding,
-                cell: (info) => <span className="text-sm font-black text-rose-600">{formatBDT(Number(info.getValue() || 0))}</span>,
+                cell: (info) => <span className="text-sm font-bold text-danger">{formatBDT(Number(info.getValue() || 0))}</span>,
                 size: 120,
             }),
             columnHelper.accessor('due_date', {
@@ -287,7 +289,7 @@ export default function LoansPage() {
             columnHelper.accessor('status', {
                 header: t.loans.status,
                 cell: (info) => (
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${info.getValue() === 'CLOSED' ? 'text-gray-400' : 'text-indigo-600'}`}>
+                    <span className={`text-[10px] font-semibold ${info.getValue() === 'CLOSED' ? 'text-gray-400' : 'text-indigo-600'}`}>
                         {info.getValue() === 'CLOSED' ? t.loans.closed : t.loans.active}
                     </span>
                 ),
@@ -308,7 +310,7 @@ export default function LoansPage() {
                         <button
                             type="button"
                             onClick={() => handleDelete(row.original)}
-                            className="p-2 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50"
+                            className="p-2 rounded-lg text-gray-400 hover:text-danger hover:bg-red-50"
                             title={t.common.delete}
                         >
                             <Trash2 className="w-4 h-4" />
@@ -341,7 +343,7 @@ export default function LoansPage() {
             />
 
             {toast && (
-                <div className={`rounded-lg px-3 py-2 text-sm ${toast.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'}`}>
+                <div className={`rounded-lg px-3 py-2 text-sm ${toast.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-danger-light text-danger-text border border-red-200'}`}>
                     {toast.message}
                 </div>
             )}
@@ -388,12 +390,10 @@ export default function LoansPage() {
             )}
 
             {showForm && (
-                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <form onSubmit={handleSave} className={`${compactDensity.modal} max-w-md max-h-[90vh] overflow-y-auto`}>
-                        <div className={`${compactDensity.modalPadding} border-b border-gray-100`}>
-                            <h2 className={compactDensity.modalTitle}>{editingId ? t.loans.editLoan : t.loans.addLoan}</h2>
-                        </div>
-                        <div className={`${compactDensity.modalPadding} ${compactDensity.formStack}`}>
+                <ModalShell size="sm" onBackdropClick={() => setShowForm(false)}>
+                    <form onSubmit={handleSave} className="flex max-h-[90vh] flex-col overflow-hidden">
+                        <ModalHeader title={editingId ? t.loans.editLoan : t.loans.addLoan} onClose={() => setShowForm(false)} />
+                        <div className={`${compactDensity.modalPadding} ${compactDensity.formStack} overflow-y-auto`}>
                             <label className="block">
                                 <span className={`${compactDensity.formLabel} block mb-1`}>{t.loans.direction}</span>
                                 <div className="grid grid-cols-2 gap-2">
@@ -443,35 +443,32 @@ export default function LoansPage() {
                                 <textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className={compactDensity.formField} />
                             </label>
                         </div>
-                        <div className={`${compactDensity.modalPadding} border-t border-gray-100 flex gap-2 justify-end`}>
-                            <button type="button" onClick={() => setShowForm(false)} className={compactDensity.btnSecondary}>
+                        <ModalFooter>
+                            <Button variant="secondary" type="button" onClick={() => setShowForm(false)}>
                                 {t.common.cancel}
-                            </button>
-                            <button type="submit" disabled={saving} className={`${compactDensity.btnPrimary} bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50`}>
-                                {saving ? t.common.loading : t.common.save}
-                            </button>
-                        </div>
+                            </Button>
+                            <Button variant="primary" type="submit" loading={saving} className="bg-indigo-600 hover:bg-indigo-700">
+                                {t.common.save}
+                            </Button>
+                        </ModalFooter>
                     </form>
-                </div>
+                </ModalShell>
             )}
 
             {detail && (
-                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className={`${compactDensity.modal} max-w-lg max-h-[90vh] overflow-y-auto`}>
-                        <div className={`${compactDensity.modalPadding} border-b border-gray-100 flex items-start justify-between gap-4`}>
-                            <div>
-                                <h2 className={`${compactDensity.modalTitle} inline-flex items-center gap-2`}>
+                <ModalShell size="md" onBackdropClick={() => setDetail(null)}>
+                    <div className="flex max-h-[90vh] flex-col overflow-hidden">
+                        <ModalHeader
+                            title={(
+                                <span className="inline-flex items-center gap-2">
                                     <Wallet className="w-4 h-4 text-indigo-600" />
                                     {detail.counterparty}
-                                </h2>
-                                <p className="text-xs text-gray-500 mt-0.5">
-                                    {detail.direction === 'RECEIVABLE' ? t.loans.receivable : t.loans.payable}
-                                    {detail.reference ? ` • ${detail.reference}` : ''}
-                                </p>
-                            </div>
-                            <button type="button" onClick={() => setDetail(null)} className="text-gray-400 hover:text-gray-700 text-sm font-bold">✕</button>
-                        </div>
-                        <div className={`${compactDensity.modalPadding} space-y-4`}>
+                                </span>
+                            )}
+                            subtitle={`${detail.direction === 'RECEIVABLE' ? t.loans.receivable : t.loans.payable}${detail.reference ? ` • ${detail.reference}` : ''}`}
+                            onClose={() => setDetail(null)}
+                        />
+                        <div className={`${compactDensity.modalPadding} space-y-4 overflow-y-auto`}>
                             <div className="grid grid-cols-3 gap-2 text-center">
                                 <CompactStat label={t.loans.principal} value={formatBDT(Number(detail.principal))} />
                                 <CompactStat label={t.loans.totalPaid} value={formatBDT(Number(detail.total_paid || 0))} tone="positive" />
@@ -479,7 +476,7 @@ export default function LoansPage() {
                             </div>
 
                             <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-black uppercase tracking-widest text-gray-500">{t.loans.payments}</h3>
+                                <h3 className="text-sm font-semibold text-gray-500">{t.loans.payments}</h3>
                                 <button
                                     type="button"
                                     onClick={() => toggleStatus(detail)}
@@ -497,7 +494,7 @@ export default function LoansPage() {
                                                 <p className="text-sm font-bold text-gray-700">{formatBDT(Number(p.amount))}</p>
                                                 <p className="text-[11px] text-gray-400">{formatDate(p.payment_date)} • {p.payment_method}{p.notes ? ` • ${p.notes}` : ''}</p>
                                             </div>
-                                            <button type="button" onClick={() => handleDeletePayment(p.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50">
+                                            <button type="button" onClick={() => handleDeletePayment(p.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-danger hover:bg-red-50">
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
@@ -525,7 +522,7 @@ export default function LoansPage() {
                             )}
                         </div>
                     </div>
-                </div>
+                </ModalShell>
             )}
         </AccountingPageShell>
     );

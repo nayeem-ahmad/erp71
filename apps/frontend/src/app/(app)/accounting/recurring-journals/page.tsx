@@ -151,9 +151,9 @@ export default function RecurringJournalsPage() {
                         <table className="w-full text-sm border border-gray-100 rounded-xl overflow-hidden">
                             <thead>
                                 <tr className="bg-gray-50">
-                                    <th className="text-left px-3 py-2 text-xs font-black uppercase tracking-widest text-gray-400">Account</th>
-                                    <th className="text-right px-3 py-2 text-xs font-black uppercase tracking-widest text-gray-400">Debit</th>
-                                    <th className="text-right px-3 py-2 text-xs font-black uppercase tracking-widest text-gray-400">Credit</th>
+                                    <th className="text-left px-3 py-2 text-xs font-semibold text-gray-400">Account</th>
+                                    <th className="text-right px-3 py-2 text-xs font-semibold text-gray-400">Debit</th>
+                                    <th className="text-right px-3 py-2 text-xs font-semibold text-gray-400">Credit</th>
                                     <th className="w-8" />
                                 </tr>
                             </thead>
@@ -193,7 +193,7 @@ export default function RecurringJournalsPage() {
                                 className="inline-flex items-center gap-1.5 text-sm font-bold text-gray-500 hover:text-gray-900 transition">
                                 <Plus className="w-3.5 h-3.5" /> Add Line
                             </button>
-                            <span className={`text-xs font-bold ${isBalanced && totalDebit > 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                            <span className={`text-xs font-bold ${isBalanced && totalDebit > 0 ? 'text-emerald-600' : 'text-danger'}`}>
                                 {isBalanced && totalDebit > 0 ? `Balanced — ${formatBDT(totalDebit, { locale })}` : `Diff: ${formatBDT(Math.abs(totalDebit - totalCredit))}`}
                             </span>
                         </div>
@@ -218,7 +218,7 @@ export default function RecurringJournalsPage() {
                         <CompactSection key={t.id}>
                                 <div className="flex items-start justify-between gap-4">
                                     <div>
-                                        <div className="font-black text-gray-900">{t.name}</div>
+                                        <div className="font-bold text-gray-900">{t.name}</div>
                                         {t.description && <div className="text-sm text-gray-500 mt-0.5">{t.description}</div>}
                                         <div className="flex gap-4 mt-2 text-xs text-gray-400">
                                             <span className="font-bold">{t.frequency}</span>

@@ -65,7 +65,7 @@ export default function PurchaseOrdersPage() {
             header: t.purchaseOrders.columns.poNumber,
             cell: (info) => (
                 <Link href={`/purchases/orders/${info.row.original.id}`}
-                    className="text-sm font-black text-blue-700 hover:underline">
+                    className="text-sm font-bold text-blue-700 hover:underline">
                     {info.getValue()}
                 </Link>
             ),
@@ -76,7 +76,7 @@ export default function PurchaseOrdersPage() {
             cell: (info) => {
                 const status = info.getValue() as keyof typeof t.purchaseShared.status;
                 return (
-                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${statusStyles[info.getValue()] ?? 'bg-gray-100 text-gray-600'}`}>
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold ${statusStyles[info.getValue()] ?? 'bg-gray-100 text-gray-600'}`}>
                         {t.purchaseShared.status[status] ?? info.getValue()}
                     </span>
                 );
@@ -101,7 +101,7 @@ export default function PurchaseOrdersPage() {
         columnHelper.accessor('total_amount', {
             header: t.purchaseOrders.columns.total,
             cell: (info) => (
-                <span className="text-sm font-black text-emerald-600">{formatBDT(Number(info.getValue() || 0), { locale })}</span>
+                <span className="text-sm font-bold text-emerald-600">{formatBDT(Number(info.getValue() || 0), { locale })}</span>
             ),
             size: 130,
         }),
@@ -129,7 +129,7 @@ export default function PurchaseOrdersPage() {
                         <FileText className="w-4 h-4" />
                     </Link>
                     <Link href={`/purchases/orders/${row.original.id}/invoice`}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-primary hover:bg-primary-light transition-colors"
                         title={t.purchaseOrders.print}>
                         <Printer className="w-4 h-4" />
                     </Link>
@@ -155,7 +155,7 @@ export default function PurchaseOrdersPage() {
                     actions={(
                         <button
                             onClick={() => setModalOpen(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5"
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg transition-all"
                         >
                             <Plus className="w-4 h-4 mr-2" />
                             {t.purchaseOrders.newPo}

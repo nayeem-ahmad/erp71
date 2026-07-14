@@ -89,7 +89,7 @@ export default function CustomerGroupsPage() {
                     const group = info.row.original;
                     return (
                         <div>
-                            <span className="block text-sm font-black text-gray-900">{group.name}</span>
+                            <span className="block text-sm font-bold text-gray-900">{group.name}</span>
                             <span className="block text-xs text-gray-400">{group.description || t.customerGroups.noDescription}</span>
                         </div>
                     );
@@ -120,7 +120,7 @@ export default function CustomerGroupsPage() {
                 cell: (info) => {
                     const value = Number(info.getValue() || 0);
                     return value > 0 ? (
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border bg-emerald-50 text-emerald-700 border-emerald-200">
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200">
                             {value}%
                         </span>
                     ) : (
@@ -256,14 +256,14 @@ function GroupForm({ group, onSave, onCancel }: { group: any; onSave: (d: any) =
     return (
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8">
             <div className="flex items-center justify-between mb-4">
-                <h3 className="font-black text-sm">{group ? t.customerGroups.editGroup : t.customerGroups.newGroup}</h3>
+                <h3 className="font-bold text-sm">{group ? t.customerGroups.editGroup : t.customerGroups.newGroup}</h3>
                 <button onClick={onCancel} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400"><X className="w-4 h-4" /></button>
             </div>
             {error && <div className="p-3 bg-red-50 text-red-600 rounded-xl text-sm font-bold mb-4">{error}</div>}
             <form onSubmit={handleSubmit} className="flex flex-wrap gap-4 items-end">
                 <div className="flex-1 min-w-[200px]">
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">{t.common.name}</label>
-                    <input required value={name} onChange={e => setName(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-2.5 px-4 font-black text-sm focus:ring-2 focus:ring-blue-500/20" placeholder={t.customerGroups.placeholders.name} />
+                    <input required value={name} onChange={e => setName(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-2.5 px-4 font-bold text-sm focus:ring-2 focus:ring-blue-500/20" placeholder={t.customerGroups.placeholders.name} />
                 </div>
                 <div className="flex-1 min-w-[200px]">
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">{t.common.description} <span className="text-gray-300">({t.common.optional})</span></label>
@@ -282,7 +282,7 @@ function GroupForm({ group, onSave, onCancel }: { group: any; onSave: (d: any) =
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">{t.customerGroups.discountPct}</label>
                     <input type="number" min="0" max="100" step="0.01" value={discount} onChange={e => setDiscount(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-2.5 px-4 font-bold text-gray-600 text-sm focus:ring-2 focus:ring-blue-500/20" placeholder="0" />
                 </div>
-                <button disabled={loading} type="submit" className="px-6 py-2.5 rounded-xl font-black text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all disabled:opacity-50">
+                <button disabled={loading} type="submit" className="px-6 py-2.5 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all disabled:opacity-50">
                     {loading ? t.customerGroups.saving : group ? t.common.update : t.common.create}
                 </button>
             </form>

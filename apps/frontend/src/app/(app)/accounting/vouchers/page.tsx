@@ -163,7 +163,7 @@ function AccountingVouchersListPageContent() {
         () => [
             columnHelper.accessor('voucher_number', {
                 header: t.journal.columns.voucherNumber,
-                cell: (info) => <span className="text-sm font-black text-gray-900">{info.getValue()}</span>,
+                cell: (info) => <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>,
                 size: 130,
             }),
             columnHelper.accessor('date', {
@@ -188,7 +188,7 @@ function AccountingVouchersListPageContent() {
             columnHelper.accessor('total_amount', {
                 header: t.accountingShared.amount,
                 cell: (info) => (
-                    <span className="text-sm font-black text-emerald-600">
+                    <span className="text-sm font-bold text-emerald-600">
                         {formatBDT(Number(info.getValue() || 0), { locale })}
                     </span>
                 ),
@@ -229,7 +229,7 @@ function AccountingVouchersListPageContent() {
                                 type="button"
                                 onClick={() => void handleDelete(voucher)}
                                 disabled={isSystem}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-danger hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed"
                                 title={t.common.delete}
                             >
                                 <Trash2 className="w-4 h-4" />

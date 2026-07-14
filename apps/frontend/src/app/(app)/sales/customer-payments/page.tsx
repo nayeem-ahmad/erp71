@@ -278,7 +278,7 @@ function CustomerPaymentsContent() {
                 cell: (info) => {
                     const isPayout = info.getValue() === 'PAYOUT';
                     return (
-                        <span className={`text-[10px] font-black uppercase tracking-widest ${isPayout ? 'text-rose-600' : 'text-emerald-700'}`}>
+                        <span className={`text-[10px] font-semibold ${isPayout ? 'text-danger' : 'text-emerald-700'}`}>
                             {isPayout ? copy.directionPay : copy.directionReceive}
                         </span>
                     );
@@ -318,7 +318,7 @@ function CustomerPaymentsContent() {
                 cell: (info) => {
                     const isPayout = info.row.original.type === 'PAYOUT';
                     return (
-                        <span className={`text-sm font-black ${isPayout ? 'text-rose-600' : 'text-emerald-600'}`}>
+                        <span className={`text-sm font-bold ${isPayout ? 'text-danger' : 'text-emerald-600'}`}>
                             {isPayout ? '−' : '+'}{formatBDT(Number(info.getValue()))}
                         </span>
                     );
@@ -366,7 +366,7 @@ function CustomerPaymentsContent() {
                             <button
                                 type="button"
                                 onClick={() => void handleDelete(payment)}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50"
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-danger hover:bg-red-50"
                                 title={t.common.delete}
                             >
                                 <Trash2 className="w-4 h-4" />
@@ -406,7 +406,7 @@ function CustomerPaymentsContent() {
                         <button
                             type="button"
                             onClick={() => { resetForm(); setShowForm(true); }}
-                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#293F75] text-white text-sm font-black hover:bg-[#1f3058]"
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#293F75] text-white text-sm font-bold hover:bg-[#1f3058]"
                         >
                             <Plus className="w-4 h-4" />
                             {copy.newPayment}
@@ -415,7 +415,7 @@ function CustomerPaymentsContent() {
                 />
 
                 {toast && (
-                    <div className={`rounded-xl px-4 py-3 text-sm font-semibold ${toast.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'}`}>
+                    <div className={`rounded-xl px-4 py-3 text-sm font-semibold ${toast.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-danger-light text-danger-text border border-red-200'}`}>
                         {toast.message}
                     </div>
                 )}
@@ -423,7 +423,7 @@ function CustomerPaymentsContent() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
                         <p className="text-xs font-medium text-gray-500">{copy.periodTotal}</p>
-                        <p className="text-2xl font-black text-emerald-600 mt-1">{formatBDT(totalAmount)}</p>
+                        <p className="text-2xl font-bold text-emerald-600 mt-1">{formatBDT(totalAmount)}</p>
                         <p className="text-xs text-gray-400 mt-1">{formatMessage(copy.paymentCount, { count: payments.length })}</p>
                     </div>
                     <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4 sm:col-span-2">
@@ -509,7 +509,7 @@ function CustomerPaymentsContent() {
                                             <span className="text-gray-600">
                                                 {dueBalance < 0 ? copy.advanceBalance : copy.dueBalance}:{' '}
                                             </span>
-                                            <span className={`font-black ${dueBalance > 0 ? 'text-rose-600' : dueBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
+                                            <span className={`font-bold ${dueBalance > 0 ? 'text-danger' : dueBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
                                                 {formatBDT(Math.abs(dueBalance))}
                                             </span>
                                             {formDirection === 'receive' ? (
@@ -574,7 +574,7 @@ function CustomerPaymentsContent() {
                         <div className="p-6 space-y-3 text-sm">
                             <div className="flex justify-between">
                                 <span className="text-gray-500">{copy.columns.direction}</span>
-                                <span className={`font-bold ${viewPayment.type === 'PAYOUT' ? 'text-rose-600' : 'text-emerald-700'}`}>
+                                <span className={`font-bold ${viewPayment.type === 'PAYOUT' ? 'text-danger' : 'text-emerald-700'}`}>
                                     {viewPayment.type === 'PAYOUT' ? copy.directionPay : copy.directionReceive}
                                 </span>
                             </div>
@@ -591,7 +591,7 @@ function CustomerPaymentsContent() {
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-gray-500">{copy.columns.amount}</span>
-                                <span className={`font-black ${viewPayment.type === 'PAYOUT' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                <span className={`font-bold ${viewPayment.type === 'PAYOUT' ? 'text-danger' : 'text-emerald-600'}`}>
                                     {formatBDT(Number(viewPayment.amount))}
                                 </span>
                             </div>

@@ -66,7 +66,7 @@ interface PurchaseHistory {
 
 const SEGMENT_COLORS: Record<string, string> = {
     VIP: 'bg-emerald-50 text-emerald-700',
-    'At-Risk': 'bg-rose-50 text-rose-700',
+    'At-Risk': 'bg-danger-light text-danger-text',
     New: 'bg-blue-50 text-blue-700',
     Regular: 'bg-gray-100 text-gray-600',
 };
@@ -87,8 +87,8 @@ export default function PurchaseHistoryPage() {
         }
     }, [id]);
 
-    if (loading) return <div className="p-8 font-black uppercase tracking-widest text-gray-400">{t.customers.history.loading}</div>;
-    if (!data) return <div className="p-8 font-black text-rose-500 uppercase">{t.customers.history.notAvailable}</div>;
+    if (loading) return <div className="p-8 font-semibold text-gray-400">{t.customers.history.loading}</div>;
+    if (!data) return <div className="p-8 font-bold text-danger uppercase">{t.customers.history.notAvailable}</div>;
 
     const { customer, summary, monthlyTotals, topProducts, transactions } = data;
     const maxMonthlySpend = Math.max(...monthlyTotals.map(m => m.spent), 1);
@@ -117,7 +117,7 @@ export default function PurchaseHistoryPage() {
                         <span className="font-mono text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
                             {customer.customer_code}
                         </span>
-                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-tighter ${SEGMENT_COLORS[customer.segment_category] ?? SEGMENT_COLORS.Regular}`}>
+                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-tighter ${SEGMENT_COLORS[customer.segment_category] ?? SEGMENT_COLORS.Regular}`}>
                             {customer.segment_category}
                         </span>
                     </div>
@@ -167,7 +167,7 @@ export default function PurchaseHistoryPage() {
             {/* {t.customers.history.monthlySpending} Chart */}
             {monthlyTotals.length > 0 && (
                 <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-5">{t.customers.history.monthlySpending}</p>
+                    <p className="text-xs font-semibold text-gray-400 mb-5">{t.customers.history.monthlySpending}</p>
                     <div className="space-y-3">
                         {monthlyTotals.slice(-12).map(month => (
                             <div key={month.month} className="flex items-center space-x-3">
@@ -179,7 +179,7 @@ export default function PurchaseHistoryPage() {
                                     />
                                 </div>
                                 <div className="text-right flex-shrink-0 w-32">
-                                    <span className="text-xs font-black text-gray-900">৳{month.spent.toFixed(0)}</span>
+                                    <span className="text-xs font-bold text-gray-900">৳{month.spent.toFixed(0)}</span>
                                     <span className="text-[10px] text-gray-400 ml-1">{formatMessage(t.customers.history.ordersCount, { count: month.orders })}</span>
                                 </div>
                             </div>
@@ -191,21 +191,21 @@ export default function PurchaseHistoryPage() {
             {/* Top Products */}
             {topProducts.length > 0 && (
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4 flex items-center">
+                    <p className="text-xs font-semibold text-gray-400 mb-4 flex items-center">
                         <Package className="w-4 h-4 mr-2" /> {t.customers.history.topProducts}
                     </p>
                     <div className="space-y-3">
                         {topProducts.map((item, i) => (
                             <div key={item.productId} className="flex items-center justify-between">
                                 <div className="flex items-center space-x-3">
-                                    <span className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 text-xs font-black flex items-center justify-center">
+                                    <span className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 text-xs font-bold flex items-center justify-center">
                                         {i + 1}
                                     </span>
                                     <span className="font-bold text-sm">{item.name}</span>
                                 </div>
                                 <div className="flex items-center space-x-4">
                                     <span className="text-xs text-gray-500 font-medium">{formatMessage(t.customers.history.units, { count: item.quantity })}</span>
-                                    <span className="font-black text-sm">{formatBDT(item.totalValue)}</span>
+                                    <span className="font-bold text-sm">{formatBDT(item.totalValue)}</span>
                                 </div>
                             </div>
                         ))}
@@ -216,7 +216,7 @@ export default function PurchaseHistoryPage() {
             {/* Transaction List */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
                 <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                    <h2 className="text-lg font-black flex items-center">
+                    <h2 className="text-lg font-bold flex items-center">
                         <ShoppingBag className="w-5 h-5 mr-2 text-blue-600" /> {t.customers.history.allTransactions}
                         <span className="ml-2 text-xs font-bold text-gray-400">({filteredTransactions.length})</span>
                     </h2>
@@ -241,16 +241,16 @@ export default function PurchaseHistoryPage() {
                             <div key={sale.id} className="p-6 hover:bg-gray-50/50 transition-colors">
                                 <div className="flex justify-between items-start mb-3">
                                     <div>
-                                        <h3 className="font-black text-sm">{sale.serial_number}</h3>
+                                        <h3 className="font-bold text-sm">{sale.serial_number}</h3>
                                         <p className="text-xs text-gray-500 font-medium">
                                             {new Date(sale.created_at).toLocaleString('en-BD')}
                                         </p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="font-black">{formatBDT(Number(sale.amount_paid))}</p>
-                                        <span className={`text-[10px] font-black uppercase tracking-widest ${
+                                        <p className="font-bold">{formatBDT(Number(sale.amount_paid))}</p>
+                                        <span className={`text-[10px] font-semibold ${
                                             sale.status === 'COMPLETED' ? 'text-emerald-500' :
-                                            sale.status === 'REFUNDED' ? 'text-rose-500' : 'text-gray-400'
+                                            sale.status === 'REFUNDED' ? 'text-danger' : 'text-gray-400'
                                         }`}>
                                             {sale.status}
                                         </span>
@@ -295,7 +295,7 @@ function SummaryCard({ label, value, icon, accent }: {
                 {icon}
             </div>
             <p className="text-xs font-medium text-gray-500 mb-1">{label}</p>
-            <p className="text-xl font-black tracking-tight">{value}</p>
+            <p className="text-xl font-bold tracking-tight">{value}</p>
         </div>
     );
 }

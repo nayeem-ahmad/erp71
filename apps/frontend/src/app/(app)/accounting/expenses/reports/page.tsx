@@ -87,7 +87,7 @@ export default function ExpenseReportsPage() {
             }),
             categoryHelper.accessor('amount', {
                 header: t.common.amount,
-                cell: (info) => <span className="text-sm font-black text-rose-600">{formatBDT(Number(info.getValue()))}</span>,
+                cell: (info) => <span className="text-sm font-bold text-danger">{formatBDT(Number(info.getValue()))}</span>,
                 size: 140,
             }),
             categoryHelper.accessor('sharePct', {
@@ -95,7 +95,7 @@ export default function ExpenseReportsPage() {
                 cell: (info) => (
                     <div className="flex items-center gap-2">
                         <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden max-w-[120px]">
-                            <div className="h-full bg-rose-500 rounded-full" style={{ width: `${Math.min(100, info.getValue())}%` }} />
+                            <div className="h-full bg-danger rounded-full" style={{ width: `${Math.min(100, info.getValue())}%` }} />
                         </div>
                         <span className="text-xs font-bold text-gray-500">{Number(info.getValue()).toFixed(1)}%</span>
                     </div>
@@ -115,7 +115,7 @@ export default function ExpenseReportsPage() {
             }),
             trendHelper.accessor('amount', {
                 header: t.common.amount,
-                cell: (info) => <span className="text-sm font-black text-rose-600">{formatBDT(Number(info.getValue()))}</span>,
+                cell: (info) => <span className="text-sm font-bold text-danger">{formatBDT(Number(info.getValue()))}</span>,
                 size: 140,
             }),
         ],
@@ -175,7 +175,7 @@ export default function ExpenseReportsPage() {
                                 <>
                                     <span className="text-base">{summary.byCategory[0]?.name ?? '—'}</span>
                                     {summary.byCategory[0] ? (
-                                        <span className="block text-sm font-semibold text-rose-600 mt-0.5">{formatBDT(summary.byCategory[0].amount)}</span>
+                                        <span className="block text-sm font-semibold text-danger mt-0.5">{formatBDT(summary.byCategory[0].amount)}</span>
                                     ) : null}
                                 </>
                             )}
@@ -188,7 +188,7 @@ export default function ExpenseReportsPage() {
                                 {summary.monthlyTrend.map((row) => (
                                     <div key={row.month} className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
                                         <div
-                                            className="w-full bg-rose-500 rounded-t-md transition-all"
+                                            className="w-full bg-danger rounded-t-md transition-all"
                                             style={{ height: `${Math.max(8, (row.amount / maxTrend) * 100)}%` }}
                                             title={formatBDT(row.amount)}
                                         />

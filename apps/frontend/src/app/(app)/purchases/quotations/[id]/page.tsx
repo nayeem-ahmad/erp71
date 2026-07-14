@@ -50,7 +50,7 @@ const nextActions: Record<string, { label: string; next: string; color: string }
         { label: 'Cancel RFQ', next: 'CANCELLED', color: 'bg-red-500 hover:bg-red-600' },
     ],
     RECEIVED: [
-        { label: 'Accept Quote', next: 'ACCEPTED', color: 'bg-emerald-600 hover:bg-emerald-700' },
+        { label: 'Accept Quote', next: 'ACCEPTED', color: 'bg-primary hover:bg-primary-hover' },
         { label: 'Reject Quote', next: 'REJECTED', color: 'bg-red-500 hover:bg-red-600' },
     ],
     ACCEPTED:  [],
@@ -138,7 +138,7 @@ export default function PurchaseQuotationDetailPage() {
                         <button
                             onClick={handleConvert}
                             disabled={updating}
-                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-black uppercase tracking-widest shadow-md disabled:opacity-50 transition-all hover:-translate-y-0.5"
+                            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg text-sm font-semibold shadow-md disabled:opacity-50 transition-all"
                         >
                             <ShoppingCart className="w-4 h-4" />
                             {t.purchaseQuotations.detail.convertToPo}
@@ -158,7 +158,7 @@ export default function PurchaseQuotationDetailPage() {
                                 {rfq.valid_until ? ` · Valid until ${formatDate(rfq.valid_until, locale)}` : ''}
                             </p>
                         </div>
-                        <span className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-widest ${statusStyles[rfq.status]}`}>
+                        <span className={`px-3 py-1.5 rounded-full text-xs font-semibold ${statusStyles[rfq.status]}`}>
                             {rfq.status}
                         </span>
                     </div>
@@ -183,7 +183,7 @@ export default function PurchaseQuotationDetailPage() {
 
                 {/* Line items */}
                 <div className="bg-white rounded-2xl border border-gray-100 p-6">
-                    <h2 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4">{t.purchaseQuotations.detail.requestedItems}</h2>
+                    <h2 className="text-xs font-semibold text-gray-400 mb-4">{t.purchaseQuotations.detail.requestedItems}</h2>
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-gray-100">
@@ -209,7 +209,7 @@ export default function PurchaseQuotationDetailPage() {
 
                     <div className="flex justify-end mt-4 pt-4 border-t border-gray-100">
                         <div className="w-48 text-sm">
-                            <div className="flex justify-between font-black text-base">
+                            <div className="flex justify-between font-bold text-base">
                                 <span>{t.purchases.invoice.total}</span>
                                 <span className="text-blue-700">{formatBDT(total, { locale })}</span>
                             </div>
@@ -226,11 +226,11 @@ export default function PurchaseQuotationDetailPage() {
                 {/* Status actions */}
                 {actions.length > 0 && (
                     <div className="bg-white rounded-2xl border border-gray-100 p-6">
-                        <h2 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4">{t.purchaseQuotations.detail.actions}</h2>
+                        <h2 className="text-xs font-semibold text-gray-400 mb-4">{t.purchaseQuotations.detail.actions}</h2>
                         <div className="flex gap-3">
                             {actions.map((action) => (
                                 <button key={action.next} onClick={() => handleStatusUpdate(action.next)} disabled={updating}
-                                    className={`px-5 py-2.5 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-md disabled:opacity-50 transition-all hover:-translate-y-0.5 ${action.color}`}>
+                                    className={`px-5 py-2.5 text-white rounded-xl text-xs font-semibold shadow-md disabled:opacity-50 transition-all ${action.color}`}>
                                     {updating ? t.purchaseQuotations.detail.updating : action.label}
                                 </button>
                             ))}

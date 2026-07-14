@@ -16,6 +16,8 @@ import { POSTING_RULES_FIELD_HELP, POSTING_RULES_HELP } from '@/lib/help/context
 import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { compactDensity } from '@/lib/ui/compact-density';
+import { Button } from '@/components/ui';
+import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 
 const EVENT_TYPE_LABELS: Record<string, string> = {
     sale: 'Sale',
@@ -290,27 +292,22 @@ export default function PostingRulesPage() {
             )}
 
             {editingRule && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-                    <div className={`${compactDensity.modal} max-w-lg`}>
-                        <div className={`${compactDensity.modalPadding} flex items-center justify-between border-b border-gray-100`}>
-                            <div>
-                                <h2 className={compactDensity.modalTitle}>Edit Posting Rule</h2>
-                                <p className="text-sm text-gray-500 mt-0.5">
+                <ModalShell size="md" onBackdropClick={() => setEditingRule(null)}>
+                    <div className="flex max-h-[90vh] flex-col overflow-hidden">
+                        <ModalHeader
+                            title="Edit Posting Rule"
+                            subtitle={(
+                                <>
                                     {EVENT_TYPE_LABELS[editingRule.eventType] ?? editingRule.eventType}
                                     {editingRule.conditionValue && (
                                         <span className="ml-1 font-mono text-xs bg-gray-100 px-1 rounded">{editingRule.conditionValue}</span>
                                     )}
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => setEditingRule(null)}
-                                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
-                            >
-                                ×
-                            </button>
-                        </div>
+                                </>
+                            )}
+                            onClose={() => setEditingRule(null)}
+                        />
 
-                        <div className={`${compactDensity.modalPadding} ${compactDensity.formStack}`}>
+                        <div className={`${compactDensity.modalPadding} ${compactDensity.formStack} overflow-y-auto`}>
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <label className={`${compactDensity.formLabel} block mb-1`}>
@@ -395,20 +392,22 @@ export default function PostingRulesPage() {
                             )}
                         </div>
 
-                        <div className={`${compactDensity.modalPadding} flex justify-end gap-2 border-t border-gray-100`}>
-                            <button onClick={() => setEditingRule(null)} className={compactDensity.btnSecondary}>
+                        <ModalFooter>
+                            <Button variant="secondary" onClick={() => setEditingRule(null)}>
                                 Cancel
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                                variant="primary"
                                 onClick={handleSave}
-                                disabled={saving || !form.debitAccountId || !form.creditAccountId}
-                                className={`${compactDensity.btnPrimary} bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50`}
+                                loading={saving}
+                                disabled={!form.debitAccountId || !form.creditAccountId}
+                                className="bg-indigo-600 hover:bg-indigo-700"
                             >
-                                {saving ? 'Saving...' : 'Save Rule'}
-                            </button>
-                        </div>
+                                Save Rule
+                            </Button>
+                        </ModalFooter>
                     </div>
-                </div>
+                </ModalShell>
             )}
         </AccountingPageShell>
     );

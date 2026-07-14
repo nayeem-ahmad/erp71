@@ -74,7 +74,7 @@ export default function PurchasesPage() {
             columnHelper.accessor('purchase_number', {
                 header: t.purchases.columns.purchaseNumber,
                 cell: (info) => (
-                    <span className="text-sm font-black text-gray-900">{info.getValue()}</span>
+                    <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>
                 ),
                 size: 150,
             }),
@@ -109,7 +109,7 @@ export default function PurchasesPage() {
             columnHelper.accessor('total_amount', {
                 header: t.purchases.columns.total,
                 cell: (info) => (
-                    <span className="text-sm font-black text-emerald-600">
+                    <span className="text-sm font-bold text-emerald-600">
                         {formatBDT(Number(info.getValue() || 0), { locale })}
                     </span>
                 ),
@@ -150,7 +150,7 @@ export default function PurchasesPage() {
                 cell: ({ row }) => (
                     <Link
                         href={`/purchases/${row.original.id}/invoice`}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors inline-flex"
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-primary hover:bg-primary-light transition-colors inline-flex"
                         title={t.purchases.printInvoice}
                     >
                         <Printer className="w-4 h-4" />
@@ -178,7 +178,7 @@ export default function PurchasesPage() {
                     actions={(
                         <button
                             onClick={() => setIsModalOpen(true)}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-emerald-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                            className="bg-primary hover:bg-primary-hover text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg transition-all"
                         >
                             <Plus className="w-4 h-4 mr-2" />
                             {t.purchases.recordPurchase}

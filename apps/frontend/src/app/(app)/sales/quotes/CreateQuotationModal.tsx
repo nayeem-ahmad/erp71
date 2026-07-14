@@ -294,7 +294,7 @@ export default function CreateQuotationModal({ isOpen, onClose, onSuccess }: Cre
                                                 className="w-full text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
                                             />
                                         </td>
-                                        <td className="py-3 text-right text-sm font-black text-blue-600">
+                                        <td className="py-3 text-right text-sm font-bold text-blue-600">
                                             {formatBDT(item.quantity * item.unitPrice)}
                                         </td>
                                         <td className="py-3 text-center">
@@ -307,8 +307,8 @@ export default function CreateQuotationModal({ isOpen, onClose, onSuccess }: Cre
                             </tbody>
                             <tfoot>
                                 <tr className="border-t-2 border-gray-200">
-                                    <td colSpan={3} className="pt-3 text-right text-sm font-black uppercase tracking-widest">{t.common.total}</td>
-                                    <td className="pt-3 text-right text-xl font-black text-blue-600">{formatBDT(total)}</td>
+                                    <td colSpan={3} className="pt-3 text-right text-sm font-semibold">{t.common.total}</td>
+                                    <td className="pt-3 text-right text-xl font-bold text-blue-600">{formatBDT(total)}</td>
                                     <td></td>
                                 </tr>
                             </tfoot>

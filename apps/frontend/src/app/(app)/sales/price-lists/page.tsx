@@ -86,7 +86,7 @@ export default function PriceListsPage() {
                     const list = info.row.original;
                     return (
                         <div>
-                            <Link href={`/sales/price-lists/${list.id}`} className="block text-sm font-black text-blue-600 hover:text-blue-800">
+                            <Link href={`/sales/price-lists/${list.id}`} className="block text-sm font-bold text-blue-600 hover:text-blue-800">
                                 {list.name}
                             </Link>
                             <span className="block text-xs text-gray-400">{list.description || '—'}</span>
@@ -243,14 +243,14 @@ function ListForm({ list, onSave, onCancel }: { list: PriceList | null; onSave: 
     return (
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8">
             <div className="flex items-center justify-between mb-4">
-                <h3 className="font-black text-sm">{list ? t.priceLists.editList : t.priceLists.newList}</h3>
+                <h3 className="font-bold text-sm">{list ? t.priceLists.editList : t.priceLists.newList}</h3>
                 <button onClick={onCancel} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400"><X className="w-4 h-4" /></button>
             </div>
             {error && <div className="p-3 bg-red-50 text-red-600 rounded-xl text-sm font-bold mb-4">{error}</div>}
             <form onSubmit={handleSubmit} className="flex flex-wrap gap-4 items-end">
                 <div className="flex-1 min-w-[200px]">
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">{t.common.name}</label>
-                    <input required value={name} onChange={e => setName(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-2.5 px-4 font-black text-sm focus:ring-2 focus:ring-blue-500/20" placeholder={t.priceLists.placeholders.name} />
+                    <input required value={name} onChange={e => setName(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-2.5 px-4 font-bold text-sm focus:ring-2 focus:ring-blue-500/20" placeholder={t.priceLists.placeholders.name} />
                 </div>
                 <div className="flex-1 min-w-[200px]">
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">{t.common.description}</label>
@@ -274,7 +274,7 @@ function ListForm({ list, onSave, onCancel }: { list: PriceList | null; onSave: 
                     <input type="checkbox" checked={isDefault} onChange={e => setIsDefault(e.target.checked)} className="rounded" />
                     {t.priceLists.defaultBadge}
                 </label>
-                <button disabled={loading} type="submit" className="px-6 py-2.5 rounded-xl font-black text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all disabled:opacity-50">
+                <button disabled={loading} type="submit" className="px-6 py-2.5 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all disabled:opacity-50">
                     {loading ? t.priceLists.saving : list ? t.common.update : t.common.create}
                 </button>
             </form>

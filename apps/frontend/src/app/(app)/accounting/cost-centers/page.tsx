@@ -160,7 +160,7 @@ export default function CostCentersPage() {
                                 <CompactSection title={`${selected.name} — P&L`}>
                                         {['revenue', 'expenses'].map((section) => (
                                             <div key={section}>
-                                                <div className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest mb-2 ${section === 'revenue' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                                                <div className={`px-3 py-1.5 rounded-xl text-xs font-semibold mb-2 ${section === 'revenue' ? 'bg-emerald-50 text-emerald-700' : 'bg-danger-light text-danger-text'}`}>
                                                     {section}
                                                 </div>
                                                 {plData[section]?.groups?.map((g: any) => (

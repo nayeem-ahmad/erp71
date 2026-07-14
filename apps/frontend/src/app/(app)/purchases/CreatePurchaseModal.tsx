@@ -296,7 +296,7 @@ export default function CreatePurchaseModal({
                                                         <button
                                                             key={product.id}
                                                             onClick={() => addItem(product)}
-                                                            className="w-full text-left px-4 py-3 hover:bg-emerald-50 flex items-center justify-between transition-colors"
+                                                            className="w-full text-left px-4 py-3 hover:bg-primary-light flex items-center justify-between transition-colors"
                                                         >
                                                             <div>
                                                                 <span className="text-sm font-bold">{product.name}</span>
@@ -359,7 +359,7 @@ export default function CreatePurchaseModal({
                                                                     Math.max(1, Number(event.target.value) || 1),
                                                                 )
                                                             }
-                                                            className="w-full text-center bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20"
+                                                            className="w-full text-center bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold focus:ring-2 focus:ring-primary/20"
                                                         />
                                                     )}
                                                 </td>
@@ -372,10 +372,10 @@ export default function CreatePurchaseModal({
                                                         onChange={(event) =>
                                                             updateItem(index, 'unitCost', Number(event.target.value) || 0)
                                                         }
-                                                        className="w-full text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20"
+                                                        className="w-full text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold focus:ring-2 focus:ring-primary/20"
                                                     />
                                                 </td>
-                                                <td className="py-3 text-right text-sm font-black text-emerald-600">
+                                                <td className="py-3 text-right text-sm font-bold text-emerald-600">
                                                     {formatBDT(item.quantity * item.unitCost, { locale })}
                                                 </td>
                                                 <td className="py-3 text-center">
@@ -398,7 +398,7 @@ export default function CreatePurchaseModal({
                             <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 space-y-4">
                                 <div className="flex items-center justify-between">
                                     <div>
-                                        <h3 className="text-sm font-black tracking-tight">{t.common.supplier}</h3>
+                                        <h3 className="text-sm font-bold tracking-tight">{t.common.supplier}</h3>
                                         <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-0.5">
                                             {t.purchaseShared.linkOrCreateSupplier}
                                         </p>
@@ -406,7 +406,7 @@ export default function CreatePurchaseModal({
                                     <button
                                         type="button"
                                         onClick={() => setCreateInlineSupplier((value) => !value)}
-                                        className="text-xs font-black uppercase tracking-widest text-emerald-600 hover:text-emerald-700"
+                                        className="text-xs font-semibold text-primary hover:text-primary-hover"
                                     >
                                         {createInlineSupplier ? t.purchaseShared.useExisting : t.purchaseShared.newSupplier}
                                     </button>
@@ -416,7 +416,7 @@ export default function CreatePurchaseModal({
                                     <select
                                         value={supplierId}
                                         onChange={(event) => setSupplierId(event.target.value)}
-                                        className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300"
+                                        className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-primary/20 focus:border-primary/40"
                                     >
                                         <option value="">{t.purchaseShared.noSupplier}</option>
                                         {suppliers.map((supplier) => (
@@ -434,7 +434,7 @@ export default function CreatePurchaseModal({
                                             onChange={(event) =>
                                                 setSupplierForm({ ...supplierForm, name: event.target.value })
                                             }
-                                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20"
+                                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-primary/20"
                                         />
                                         <input
                                             type="text"
@@ -443,7 +443,7 @@ export default function CreatePurchaseModal({
                                             onChange={(event) =>
                                                 setSupplierForm({ ...supplierForm, phone: event.target.value })
                                             }
-                                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20"
+                                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-primary/20"
                                         />
                                         <input
                                             type="email"
@@ -452,7 +452,7 @@ export default function CreatePurchaseModal({
                                             onChange={(event) =>
                                                 setSupplierForm({ ...supplierForm, email: event.target.value })
                                             }
-                                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20"
+                                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-primary/20"
                                         />
                                         <textarea
                                             placeholder={t.common.address}
@@ -461,14 +461,14 @@ export default function CreatePurchaseModal({
                                                 setSupplierForm({ ...supplierForm, address: event.target.value })
                                             }
                                             rows={3}
-                                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-emerald-500/20"
+                                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-primary/20"
                                         />
                                     </div>
                                 )}
                             </div>
 
                             <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 space-y-3">
-                                <h3 className="text-sm font-black tracking-tight">{t.purchaseShared.costAdjustments}</h3>
+                                <h3 className="text-sm font-bold tracking-tight">{t.purchaseShared.costAdjustments}</h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     <div>
                                         <label className="text-xs font-medium text-gray-500 block mb-1">
@@ -480,7 +480,7 @@ export default function CreatePurchaseModal({
                                             step={0.01}
                                             value={taxAmount}
                                             onChange={(event) => setTaxAmount(event.target.value)}
-                                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20"
+                                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-primary/20"
                                         />
                                     </div>
                                     <div>
@@ -493,7 +493,7 @@ export default function CreatePurchaseModal({
                                             step={0.01}
                                             value={discountAmount}
                                             onChange={(event) => setDiscountAmount(event.target.value)}
-                                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20"
+                                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-primary/20"
                                         />
                                     </div>
                                     <div>
@@ -506,7 +506,7 @@ export default function CreatePurchaseModal({
                                             step={0.01}
                                             value={freightAmount}
                                             onChange={(event) => setFreightAmount(event.target.value)}
-                                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20"
+                                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-primary/20"
                                         />
                                     </div>
                                 </div>
@@ -515,7 +515,7 @@ export default function CreatePurchaseModal({
                                     value={notes}
                                     onChange={(event) => setNotes(event.target.value)}
                                     rows={3}
-                                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-emerald-500/20"
+                                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-primary/20"
                                 />
                             </div>
 
@@ -537,10 +537,10 @@ export default function CreatePurchaseModal({
                                     <span>-{formatBDT(discount, { locale })}</span>
                                 </div>
                                 <div className="border-t border-emerald-800 pt-3 flex items-center justify-between">
-                                    <span className="text-xs font-black uppercase tracking-widest text-emerald-200">
+                                    <span className="text-xs font-semibold text-emerald-200">
                                         Purchase Total
                                     </span>
-                                    <span className="text-2xl font-black">{formatBDT(total, { locale })}</span>
+                                    <span className="text-2xl font-bold">{formatBDT(total, { locale })}</span>
                                 </div>
                             </div>
                         </div>

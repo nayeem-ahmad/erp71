@@ -17,6 +17,8 @@ import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { formatBDT, formatDate } from '@/lib/format';
 import { compactDensity } from '@/lib/ui/compact-density';
+import { Button } from '@/components/ui';
+import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 
 interface ExpenseCategory {
     id: string;
@@ -177,14 +179,14 @@ function ExpensesPageContent() {
             columnHelper.accessor('payment_method', {
                 header: t.expenses.paymentMethod,
                 cell: (info) => (
-                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">{info.getValue()}</span>
+                    <span className="text-[10px] font-semibold text-gray-500">{info.getValue()}</span>
                 ),
                 size: 100,
             }),
             columnHelper.accessor('amount', {
                 header: t.common.amount,
                 cell: (info) => (
-                    <span className="text-sm font-black text-rose-600">{formatBDT(Number(info.getValue()))}</span>
+                    <span className="text-sm font-bold text-danger">{formatBDT(Number(info.getValue()))}</span>
                 ),
                 sortingFn: (a, b) => Number(a.getValue('amount')) - Number(b.getValue('amount')),
                 size: 120,
@@ -196,7 +198,7 @@ function ExpensesPageContent() {
                     <button
                         type="button"
                         onClick={() => handleDelete(row.original)}
-                        className="p-2 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50"
+                        className="p-2 rounded-lg text-gray-400 hover:text-danger hover:bg-red-50"
                         title={t.common.delete}
                     >
                         <Trash2 className="w-4 h-4" />
@@ -234,7 +236,7 @@ function ExpensesPageContent() {
                         <button
                             type="button"
                             onClick={() => { resetForm(); setShowForm(true); }}
-                            className={`${compactDensity.btnPrimary} bg-rose-600 text-white hover:bg-rose-700`}
+                            className={`${compactDensity.btnPrimary} bg-primary text-white hover:bg-primary-hover`}
                         >
                             <Plus className="w-3.5 h-3.5" />
                             {t.expenses.addEntry}
@@ -244,7 +246,7 @@ function ExpensesPageContent() {
             />
 
             {toast && (
-                <div className={`rounded-lg px-3 py-2 text-sm ${toast.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'}`}>
+                <div className={`rounded-lg px-3 py-2 text-sm ${toast.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-danger-light text-danger-text border border-red-200'}`}>
                     {toast.message}
                 </div>
             )}
@@ -291,12 +293,10 @@ function ExpensesPageContent() {
             )}
 
             {showForm && (
-                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <form onSubmit={handleCreate} className={`${compactDensity.modal} max-w-md overflow-hidden`}>
-                        <div className={`${compactDensity.modalPadding} border-b border-gray-100`}>
-                            <h2 className={compactDensity.modalTitle}>{t.expenses.addEntry}</h2>
-                        </div>
-                        <div className={`${compactDensity.modalPadding} ${compactDensity.formStack}`}>
+                <ModalShell size="sm" onBackdropClick={() => setShowForm(false)}>
+                    <form onSubmit={handleCreate} className="flex max-h-[90vh] flex-col overflow-hidden">
+                        <ModalHeader title={t.expenses.addEntry} onClose={() => setShowForm(false)} />
+                        <div className={`${compactDensity.modalPadding} ${compactDensity.formStack} overflow-y-auto`}>
                             {categories.length === 0 ? (
                                 <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
                                     {t.expenses.noCategoriesHint}
@@ -334,16 +334,16 @@ function ExpensesPageContent() {
                                 </>
                             )}
                         </div>
-                        <div className={`${compactDensity.modalPadding} border-t border-gray-100 flex gap-2 justify-end`}>
-                            <button type="button" onClick={() => setShowForm(false)} className={compactDensity.btnSecondary}>
+                        <ModalFooter>
+                            <Button variant="secondary" type="button" onClick={() => setShowForm(false)}>
                                 {t.common.cancel}
-                            </button>
-                            <button type="submit" disabled={saving || categories.length === 0} className={`${compactDensity.btnPrimary} bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50`}>
-                                {saving ? t.common.loading : t.common.save}
-                            </button>
-                        </div>
+                            </Button>
+                            <Button variant="danger" type="submit" loading={saving} disabled={categories.length === 0}>
+                                {t.common.save}
+                            </Button>
+                        </ModalFooter>
                     </form>
-                </div>
+                </ModalShell>
             )}
         </AccountingPageShell>
     );

@@ -164,7 +164,7 @@ export default function IssueReturnModal({ isOpen, onClose, onSuccess }: IssueRe
                                         value={serialNumber}
                                         onChange={(e) => setSerialNumber(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && searchReceipt()}
-                                        className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-black text-sm"
+                                        className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold text-sm"
                                         placeholder={t.shared.form.receiptSerialPlaceholder}
                                     />
                                 </div>
@@ -184,7 +184,7 @@ export default function IssueReturnModal({ isOpen, onClose, onSuccess }: IssueRe
                         <div className="space-y-6">
                             <div className="bg-gray-50 p-4 rounded-2xl">
                                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">{t.shared.form.receiptFound}</p>
-                                <p className="font-black text-lg">{sale.serial_number}</p>
+                                <p className="font-bold text-lg">{sale.serial_number}</p>
                                 <p className="text-sm font-bold text-blue-600 mt-1">
                                     {formatBDT(Number(sale.total_amount), { locale })} {t.shared.form.totalSuffix}
                                 </p>
@@ -213,7 +213,7 @@ export default function IssueReturnModal({ isOpen, onClose, onSuccess }: IssueRe
                                                     <p className="font-bold text-sm tracking-tight">
                                                         {item.product?.name || t.shared.item}
                                                     </p>
-                                                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest">
+                                                    <p className="text-xs text-gray-400 font-semibold">
                                                         {formatBDT(Number(item.price_at_sale), { locale })} {t.shared.perEa}
                                                     </p>
                                                 </div>
@@ -230,7 +230,7 @@ export default function IssueReturnModal({ isOpen, onClose, onSuccess }: IssueRe
                                                         onChange={(e) =>
                                                             handleQuantityChange(item.id, maxQty, e.target.value)
                                                         }
-                                                        className="w-20 bg-gray-50 border border-gray-200 rounded-lg p-2 text-center font-black focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed"
+                                                        className="w-20 bg-gray-50 border border-gray-200 rounded-lg p-2 text-center font-bold focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed"
                                                         placeholder="0"
                                                     />
                                                 </div>

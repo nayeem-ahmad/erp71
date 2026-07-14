@@ -165,7 +165,7 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                         {/* Left: products */}
                         <div className="space-y-4">
                             <div>
-                                <label className="text-xs font-black uppercase tracking-widest text-gray-500 block mb-2">{t.purchaseShared.addProducts}</label>
+                                <label className="text-xs font-semibold text-gray-500 block mb-2">{t.purchaseShared.addProducts}</label>
                                 <VoiceEntryInput entryType="purchase_order" onResult={handleVoiceOrder} inline>
                                     <div className="relative">
                                         <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
@@ -225,7 +225,7 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                                                         onChange={(e) => updateItem(idx, 'unitCost', Number(e.target.value) || 0)}
                                                         className="w-full text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold" />
                                                 </td>
-                                                <td className="py-3 text-right text-sm font-black text-blue-600">
+                                                <td className="py-3 text-right text-sm font-bold text-blue-600">
                                                     {formatBDT(item.quantity * item.unitCost, { locale })}
                                                 </td>
                                                 <td className="py-3 text-center">
@@ -243,7 +243,7 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                         {/* Right: supplier + adjustments */}
                         <div className="space-y-5">
                             <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 space-y-3">
-                                <h3 className="text-sm font-black tracking-tight">{t.common.supplier}</h3>
+                                <h3 className="text-sm font-bold tracking-tight">{t.common.supplier}</h3>
                                 <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}
                                     className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20">
                                     <option value="">{t.purchaseShared.noSupplier}</option>
@@ -259,7 +259,7 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                             </div>
 
                             <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 space-y-3">
-                                <h3 className="text-sm font-black tracking-tight">{t.purchaseShared.costAdjustments}</h3>
+                                <h3 className="text-sm font-bold tracking-tight">{t.purchaseShared.costAdjustments}</h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     {[ [t.common.tax, taxAmount, setTaxAmount], [t.common.discount, discountAmount, setDiscountAmount], [t.purchaseShared.freight, freightAmount, setFreightAmount] ].map(([label, val, setter]) => (
                                         <div key={label as string}>
@@ -288,8 +288,8 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                                     <span>{t.common.discount}</span><span>-{formatBDT(discount, { locale })}</span>
                                 </div>
                                 <div className="border-t border-blue-800 pt-2 flex justify-between">
-                                    <span className="text-xs font-black uppercase tracking-widest text-blue-200">{t.purchaseShared.poTotal}</span>
-                                    <span className="text-2xl font-black">{formatBDT(total, { locale })}</span>
+                                    <span className="text-xs font-semibold text-blue-200">{t.purchaseShared.poTotal}</span>
+                                    <span className="text-2xl font-bold">{formatBDT(total, { locale })}</span>
                                 </div>
                             </div>
                         </div>

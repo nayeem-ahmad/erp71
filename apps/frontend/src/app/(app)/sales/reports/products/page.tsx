@@ -161,19 +161,19 @@ export default function SalesByProductPage() {
                 <div className="grid md:grid-cols-3 gap-4">
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.totalRevenue}</div>
-                        <div className="text-2xl font-black text-blue-700 mt-2">
+                        <div className="text-2xl font-bold text-blue-700 mt-2">
                             {formatBDT(Number(summary?.totalRevenue ?? 0), { locale })}
                         </div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.unitsSold}</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">
+                        <div className="text-2xl font-bold text-gray-900 mt-2">
                             {summary?.totalUnitsSold ?? 0}
                         </div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.productsSold}</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">
+                        <div className="text-2xl font-bold text-gray-900 mt-2">
                             {summary?.productCount ?? 0}
                         </div>
                     </div>

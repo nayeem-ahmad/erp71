@@ -79,14 +79,14 @@ export default function PurchaseSummaryPage() {
             columnHelper.accessor('returns', {
                 header: t.purchaseReports.summary.columns.returns,
                 cell: (info) => (
-                    <span className="text-rose-600">{formatBDT(Number(info.getValue()), { locale })}</span>
+                    <span className="text-danger">{formatBDT(Number(info.getValue()), { locale })}</span>
                 ),
                 size: 120,
             }),
             columnHelper.accessor('netPurchases', {
                 header: t.purchaseReports.summary.columns.netPurchases,
                 cell: (info) => (
-                    <span className="font-black text-blue-700">{formatBDT(Number(info.getValue()), { locale })}</span>
+                    <span className="font-bold text-blue-700">{formatBDT(Number(info.getValue()), { locale })}</span>
                 ),
                 size: 140,
             }),
@@ -110,31 +110,31 @@ export default function PurchaseSummaryPage() {
                 <div className="grid md:grid-cols-5 gap-4">
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-xs font-medium text-gray-500">{t.purchaseReports.summary.grossPurchases}</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">
+                        <div className="text-2xl font-bold text-gray-900 mt-2">
                             {formatBDT(Number(summary?.totalPurchases ?? 0), { locale })}
                         </div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-xs font-medium text-gray-500">{t.purchaseReports.summary.returns}</div>
-                        <div className="text-2xl font-black text-rose-600 mt-2">
+                        <div className="text-2xl font-bold text-danger mt-2">
                             {formatBDT(Number(summary?.totalReturns ?? 0), { locale })}
                         </div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-xs font-medium text-gray-500">{t.purchaseReports.summary.netPurchases}</div>
-                        <div className="text-2xl font-black text-blue-700 mt-2">
+                        <div className="text-2xl font-bold text-blue-700 mt-2">
                             {formatBDT(Number(summary?.netPurchases ?? 0), { locale })}
                         </div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-xs font-medium text-gray-500">{t.purchaseReports.summary.orders}</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">
+                        <div className="text-2xl font-bold text-gray-900 mt-2">
                             {summary?.orderCount ?? 0}
                         </div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-xs font-medium text-gray-500">{t.purchaseReports.summary.avgOrderValue}</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">
+                        <div className="text-2xl font-bold text-gray-900 mt-2">
                             {formatBDT(Number(summary?.avgOrderValue ?? 0), { locale })}
                         </div>
                     </div>

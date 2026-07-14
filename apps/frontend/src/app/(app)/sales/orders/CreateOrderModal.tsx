@@ -264,7 +264,7 @@ export default function CreateOrderModal({ isOpen, onClose, onSuccess }: CreateO
                                                 className="w-full text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
                                             />
                                         </td>
-                                        <td className="py-3 text-right text-sm font-black text-blue-600">
+                                        <td className="py-3 text-right text-sm font-bold text-blue-600">
                                             {formatBDT(item.quantity * item.priceAtOrder, { locale })}
                                         </td>
                                         <td className="py-3 text-center">
@@ -277,8 +277,8 @@ export default function CreateOrderModal({ isOpen, onClose, onSuccess }: CreateO
                             </tbody>
                             <tfoot>
                                 <tr className="border-t-2 border-gray-200">
-                                    <td colSpan={3} className="pt-3 text-right text-sm font-black uppercase tracking-widest">{t.shared.totalLabel}</td>
-                                    <td className="pt-3 text-right text-xl font-black text-blue-600">{formatBDT(total, { locale })}</td>
+                                    <td colSpan={3} className="pt-3 text-right text-sm font-semibold">{t.shared.totalLabel}</td>
+                                    <td className="pt-3 text-right text-xl font-bold text-blue-600">{formatBDT(total, { locale })}</td>
                                     <td></td>
                                 </tr>
                             </tfoot>

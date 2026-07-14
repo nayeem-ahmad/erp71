@@ -199,7 +199,7 @@ function QuoteDetailsPageContent() {
     }
 
     if (!quote) {
-        return <div className="p-8 font-bold text-rose-500">{t.shared.notFound.quote}</div>;
+        return <div className="p-8 font-bold text-danger">{t.shared.notFound.quote}</div>;
     }
 
     const totalAmount = Number(quote.total_amount);
@@ -244,13 +244,13 @@ function QuoteDetailsPageContent() {
                                 <FileText className="w-8 h-8 text-purple-600" />
                                 <span>
                                     {quote.quote_number}{' '}
-                                    <span className="text-lg bg-gray-100 text-gray-500 px-2 rounded-lg font-black ml-1">v{quote.version}</span>
+                                    <span className="text-lg bg-gray-100 text-gray-500 px-2 rounded-lg font-bold ml-1">v{quote.version}</span>
                                 </span>
                             </span>
                         }
                         subtitle={
                             <span className="inline-flex items-center gap-3">
-                                <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-gray-100 text-gray-800">
+                                <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-800">
                                     {formatMessage(t.quotes.detail.statusLabel, {
                                         status: t.shared.statuses.quote[quote.status as keyof typeof t.shared.statuses.quote] ?? quote.status,
                                     })}
@@ -408,7 +408,7 @@ function QuoteDetailsPageContent() {
                                                             className="w-full text-right bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
                                                         />
                                                     </td>
-                                                    <td className="py-3 text-right text-sm font-black text-blue-600">
+                                                    <td className="py-3 text-right text-sm font-bold text-blue-600">
                                                         {formatBDT(item.quantity * item.unitPrice, { locale })}
                                                     </td>
                                                     <td className="py-3 text-center">
@@ -435,7 +435,7 @@ function QuoteDetailsPageContent() {
                                                 </div>
                                             </div>
                                             <div className="text-right">
-                                                <p className="font-black">{formatBDT(Number(item.unit_price) * item.quantity, { locale })}</p>
+                                                <p className="font-bold">{formatBDT(Number(item.unit_price) * item.quantity, { locale })}</p>
                                                 <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase">{formatBDT(Number(item.unit_price), { locale })}{t.shared.perEa}</p>
                                             </div>
                                         </div>
@@ -482,7 +482,7 @@ function QuoteDetailsPageContent() {
                                 </div>
                             ) : quote.customer ? (
                                 <div className="bg-purple-50 border border-purple-100 rounded-xl p-4">
-                                    <p className="font-black text-lg text-purple-900">{quote.customer.name}</p>
+                                    <p className="font-bold text-lg text-purple-900">{quote.customer.name}</p>
                                     <p className="text-sm font-bold text-purple-600 uppercase tracking-widest mt-1">{quote.customer.phone}</p>
                                 </div>
                             ) : (
@@ -505,7 +505,7 @@ function QuoteDetailsPageContent() {
                             <div className="p-6 space-y-4">
                                 <div className="pt-2 flex justify-between items-center text-gray-900">
                                     <span className="text-xs font-bold uppercase tracking-widest text-gray-400">{t.quotes.detail.grandTotal}</span>
-                                    <span className="font-black text-3xl tracking-tight">{formatBDT(isEditMode ? editTotalAmount : totalAmount, { locale })}</span>
+                                    <span className="font-bold text-3xl tracking-tight">{formatBDT(isEditMode ? editTotalAmount : totalAmount, { locale })}</span>
                                 </div>
                             </div>
                         </div>

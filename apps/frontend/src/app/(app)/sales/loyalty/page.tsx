@@ -280,11 +280,11 @@ export default function LoyaltyPage() {
                 <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
                     {/* Table header */}
                     <div className="grid grid-cols-[1fr_140px_120px_140px_120px] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-100">
-                        <span className="text-xs font-black uppercase tracking-wider text-gray-400">{t.shared.columns.customer}</span>
-                        <span className="text-xs font-black uppercase tracking-wider text-gray-400">{t.shared.columns.phone}</span>
-                        <span className="text-xs font-black uppercase tracking-wider text-gray-400 text-right">{t.shared.columns.points}</span>
-                        <span className="text-xs font-black uppercase tracking-wider text-gray-400">{t.shared.columns.lastTransaction}</span>
-                        <span className="text-xs font-black uppercase tracking-wider text-gray-400 text-right">{t.shared.columns.actions}</span>
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-400">{t.shared.columns.customer}</span>
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-400">{t.shared.columns.phone}</span>
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-400 text-right">{t.shared.columns.points}</span>
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-400">{t.shared.columns.lastTransaction}</span>
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-400 text-right">{t.shared.columns.actions}</span>
                     </div>
 
                     {loading ? (
@@ -357,7 +357,7 @@ export default function LoyaltyPage() {
                                                     <p className="text-sm text-gray-400">{t.shared.empty.noTransactionsYet}</p>
                                                 ) : (
                                                     <div>
-                                                        <h4 className="text-xs font-black uppercase tracking-wider text-gray-400 mb-3">
+                                                        <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
                                                             {t.loyalty.recentTransactions}
                                                         </h4>
                                                         <div className="space-y-2">

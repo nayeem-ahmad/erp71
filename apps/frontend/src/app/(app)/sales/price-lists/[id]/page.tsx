@@ -141,7 +141,7 @@ export default function PriceListDetailPage() {
                     const item = info.row.original;
                     return (
                         <div>
-                            <span className="block text-sm font-black text-gray-900">{item.product.name}</span>
+                            <span className="block text-sm font-bold text-gray-900">{item.product.name}</span>
                             {item.product.sku && <span className="block text-xs text-gray-400">{item.product.sku}</span>}
                         </div>
                     );
@@ -197,7 +197,7 @@ export default function PriceListDetailPage() {
             }),
             columnHelper.accessor('final_price', {
                 header: t.priceLists.finalPrice,
-                cell: (info) => <span className="text-sm font-black text-gray-900">{formatBDT(info.getValue())}</span>,
+                cell: (info) => <span className="text-sm font-bold text-gray-900">{formatBDT(info.getValue())}</span>,
             }),
             columnHelper.display({
                 id: 'actions',

@@ -107,14 +107,14 @@ export default function SalesSummaryPage() {
             columnHelper.accessor('returns', {
                 header: t.salesReports.common.returns,
                 cell: (info) => (
-                    <span className="text-rose-600">{formatBDT(Number(info.getValue()), { locale })}</span>
+                    <span className="text-danger">{formatBDT(Number(info.getValue()), { locale })}</span>
                 ),
                 size: 120,
             }),
             columnHelper.accessor('netRevenue', {
                 header: t.salesReports.common.netRevenue,
                 cell: (info) => (
-                    <span className="font-black text-blue-700">{formatBDT(Number(info.getValue()), { locale })}</span>
+                    <span className="font-bold text-blue-700">{formatBDT(Number(info.getValue()), { locale })}</span>
                 ),
                 size: 140,
             }),
@@ -138,31 +138,31 @@ export default function SalesSummaryPage() {
                 <div className="grid md:grid-cols-5 gap-4">
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.grossRevenue}</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">
+                        <div className="text-2xl font-bold text-gray-900 mt-2">
                             {formatBDT(Number(summary?.totalRevenue ?? 0), { locale })}
                         </div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.returns}</div>
-                        <div className="text-2xl font-black text-rose-600 mt-2">
+                        <div className="text-2xl font-bold text-danger mt-2">
                             {formatBDT(Number(summary?.totalReturns ?? 0), { locale })}
                         </div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.netRevenue}</div>
-                        <div className="text-2xl font-black text-blue-700 mt-2">
+                        <div className="text-2xl font-bold text-blue-700 mt-2">
                             {formatBDT(Number(summary?.netRevenue ?? 0), { locale })}
                         </div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.transactions}</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">
+                        <div className="text-2xl font-bold text-gray-900 mt-2">
                             {summary?.transactionCount ?? 0}
                         </div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.avgOrderValue}</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">
+                        <div className="text-2xl font-bold text-gray-900 mt-2">
                             {formatBDT(Number(summary?.avgOrderValue ?? 0), { locale })}
                         </div>
                     </div>
@@ -173,7 +173,7 @@ export default function SalesSummaryPage() {
                     <div className="bg-purple-50 border border-purple-200 rounded-2xl p-5 flex gap-3">
                         <Sparkles className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
                         <div className="flex-1">
-                            <p className="text-xs font-black uppercase tracking-widest text-purple-400 mb-1">AI Insight</p>
+                            <p className="text-xs font-semibold text-purple-400 mb-1">AI Insight</p>
                             <p className="text-sm text-gray-800 leading-relaxed">{narration}</p>
                         </div>
                         <button onClick={() => setNarration(null)} className="text-purple-300 hover:text-purple-500 shrink-0">

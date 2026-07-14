@@ -111,7 +111,7 @@ export default function ReturnsPage() {
             columnHelper.accessor('return_number', {
                 header: t.returns.columns.returnNumber,
                 cell: (info) => (
-                    <span className="text-sm font-black text-gray-900">{info.getValue()}</span>
+                    <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>
                 ),
                 size: 140,
             }),
@@ -126,7 +126,7 @@ export default function ReturnsPage() {
             columnHelper.accessor('total_refund', {
                 header: t.returns.columns.refundAmount,
                 cell: (info) => (
-                    <span className="text-sm font-black text-rose-600">
+                    <span className="text-sm font-bold text-danger">
                         {formatBDT(parseFloat(info.getValue()), { locale })}
                     </span>
                 ),
@@ -165,7 +165,7 @@ export default function ReturnsPage() {
                     const status = info.getValue();
                     return (
                         <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${
                                 statusColors[status] ?? 'bg-gray-50 text-gray-700 border-gray-200'
                             }`}
                         >

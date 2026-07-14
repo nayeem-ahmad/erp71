@@ -161,19 +161,19 @@ export default function PurchasesByProductPage() {
                 <div className="grid md:grid-cols-3 gap-4">
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-xs font-medium text-gray-500">{t.purchaseReports.byProduct.totalSpend}</div>
-                        <div className="text-2xl font-black text-blue-700 mt-2">
+                        <div className="text-2xl font-bold text-blue-700 mt-2">
                             {formatBDT(Number(summary?.totalSpend ?? 0), { locale })}
                         </div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-xs font-medium text-gray-500">{t.purchaseReports.byProduct.totalUnits}</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">
+                        <div className="text-2xl font-bold text-gray-900 mt-2">
                             {summary?.totalUnits ?? 0}
                         </div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5">
                         <div className="text-xs font-medium text-gray-500">{t.purchaseReports.byProduct.products}</div>
-                        <div className="text-2xl font-black text-gray-900 mt-2">
+                        <div className="text-2xl font-bold text-gray-900 mt-2">
                             {summary?.productCount ?? 0}
                         </div>
                     </div>

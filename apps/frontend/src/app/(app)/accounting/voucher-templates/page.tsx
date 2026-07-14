@@ -139,9 +139,9 @@ export default function VoucherTemplatesPage() {
                     <table className="w-full text-sm border border-gray-100 rounded-xl overflow-hidden">
                         <thead>
                             <tr className="bg-gray-50">
-                                <th className="text-left px-3 py-2 text-xs font-black uppercase tracking-widest text-gray-400">Account</th>
-                                <th className="text-right px-3 py-2 text-xs font-black uppercase tracking-widest text-gray-400">Debit</th>
-                                <th className="text-right px-3 py-2 text-xs font-black uppercase tracking-widest text-gray-400">Credit</th>
+                                <th className="text-left px-3 py-2 text-xs font-semibold text-gray-400">Account</th>
+                                <th className="text-right px-3 py-2 text-xs font-semibold text-gray-400">Debit</th>
+                                <th className="text-right px-3 py-2 text-xs font-semibold text-gray-400">Credit</th>
                                 <th className="w-8" />
                             </tr>
                         </thead>
@@ -202,7 +202,7 @@ export default function VoucherTemplatesPage() {
                             <div className="flex items-start justify-between gap-4">
                                 <div>
                                     <div className="flex items-center gap-2">
-                                        <span className="font-black text-gray-900">{t.name}</span>
+                                        <span className="font-bold text-gray-900">{t.name}</span>
                                         <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5">{voucherTypeLabel(t.voucher_type)}</span>
                                     </div>
                                     {t.description && <div className="text-sm text-gray-500 mt-0.5">{t.description}</div>}
@@ -213,7 +213,7 @@ export default function VoucherTemplatesPage() {
                                         <FilePlus2 className="w-3 h-3" /> Use Template
                                     </Link>
                                     <button onClick={() => handleDelete(t.id)} aria-label="Delete template"
-                                        className="inline-flex items-center gap-2 rounded-xl bg-rose-50 border border-rose-100 px-2 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 transition">
+                                        className="inline-flex items-center gap-2 rounded-xl bg-danger-light border border-red-100 px-2 py-1.5 text-xs font-bold text-danger-text hover:bg-danger-light transition">
                                         <Trash2 className="w-3 h-3" />
                                     </button>
                                 </div>

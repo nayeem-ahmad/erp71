@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { FileText, ImageIcon, Loader2, Paperclip, Trash2, X } from 'lucide-react';
+import { FileText, ImageIcon, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import {
     formatFileSize,
@@ -10,6 +10,7 @@ import {
     VOUCHER_ATTACHMENT_MAX_BYTES,
     type VoucherAttachmentItem,
 } from '@/lib/file-preview';
+import ModalShell, { ModalHeader } from '@/components/ModalShell';
 
 type VoucherAttachmentsProps = {
     attachments: VoucherAttachmentItem[];
@@ -209,40 +210,22 @@ export function VoucherAttachments({
             )}
 
             {previewAttachment ? (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-                    onClick={() => setPreviewAttachment(null)}
-                >
-                    <div
-                        className="relative flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
-                        onClick={(event) => event.stopPropagation()}
-                    >
-                        <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
-                            <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold text-gray-900">{previewAttachment.fileName}</p>
-                                {formatFileSize(previewAttachment.fileSize) ? (
-                                    <p className="text-xs text-gray-500">{formatFileSize(previewAttachment.fileSize)}</p>
-                                ) : null}
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                                <a
-                                    href={previewAttachment.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="rounded border px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                                >
-                                    {openLabel}
-                                </a>
-                                <button
-                                    type="button"
-                                    onClick={() => setPreviewAttachment(null)}
-                                    className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                                    aria-label="Close preview"
-                                >
-                                    <X className="h-4 w-4" />
-                                </button>
-                            </div>
-                        </div>
+                <ModalShell size="xl" onBackdropClick={() => setPreviewAttachment(null)}>
+                    <div className="flex max-h-[90vh] w-full flex-col overflow-hidden">
+                        <ModalHeader
+                            title={previewAttachment.fileName}
+                            subtitle={formatFileSize(previewAttachment.fileSize) || undefined}
+                            onClose={() => setPreviewAttachment(null)}
+                        >
+                            <a
+                                href={previewAttachment.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="rounded border px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                            >
+                                {openLabel}
+                            </a>
+                        </ModalHeader>
 
                         <div className="flex-1 overflow-auto bg-gray-50 p-4">
                             {previewKind === 'image' ? (
@@ -286,7 +269,7 @@ export function VoucherAttachments({
                             ) : null}
                         </div>
                     </div>
-                </div>
+                </ModalShell>
             ) : null}
         </div>
     );

@@ -56,7 +56,7 @@ const SALES_HUB_SECTIONS: HubSectionConfig[] = [
             { href: routes.sales.reports.consolidated, key: 'consolidated', icon: BarChart3, accent: 'bg-violet-50 text-violet-700 border-violet-100', advancedOnly: true },
             { href: routes.sales.reports.branchReport, key: 'branchReport', icon: BarChart3, accent: 'bg-amber-50 text-amber-700 border-amber-100', advancedOnly: true },
             { href: routes.sales.customerLedger, key: 'customerLedger', icon: BookOpen, accent: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
-            { href: routes.sales.customerDueAging, key: 'dueAging', icon: Clock, accent: 'bg-rose-50 text-rose-700 border-rose-100' },
+            { href: routes.sales.customerDueAging, key: 'dueAging', icon: Clock, accent: 'bg-danger-light text-danger-text border-red-100' },
             { href: routes.sales.loyalty, key: 'loyalty', icon: Gift, accent: 'bg-pink-50 text-pink-700 border-pink-100' },
         ],
     },

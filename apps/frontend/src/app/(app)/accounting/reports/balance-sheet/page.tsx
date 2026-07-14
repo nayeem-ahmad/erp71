@@ -238,8 +238,8 @@ export default function BalanceSheetPage() {
 
                             <div className="space-y-3">
                                 <CompactSection className="space-y-3">
-                                    <BSSection groups={data.liabilities?.groups ?? []} label={t.accounting.reports.liabilities} colorClass="bg-rose-50 text-rose-700" />
-                                    <div className="flex justify-between items-center px-3 py-2 bg-rose-50 rounded-lg font-semibold text-sm text-rose-800 border border-rose-100">
+                                    <BSSection groups={data.liabilities?.groups ?? []} label={t.accounting.reports.liabilities} colorClass="bg-danger-light text-danger-text" />
+                                    <div className="flex justify-between items-center px-3 py-2 bg-danger-light rounded-lg font-semibold text-sm text-danger-text border border-red-100">
                                         <span>Total Liabilities</span>
                                         <span>{formatBDT(data.liabilities?.total ?? 0, { locale })}</span>
                                     </div>

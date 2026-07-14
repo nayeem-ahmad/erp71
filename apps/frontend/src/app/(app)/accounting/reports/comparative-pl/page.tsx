@@ -152,8 +152,8 @@ export default function ComparativePLPage() {
                                 <td className="px-3 py-2 text-right text-emerald-700">{formatBDT(data.revenue.total.year_ago, { locale })}</td>
                                 <td className="px-3 py-2 text-right">—</td>
                             </tr>
-                            <tr className="bg-rose-50">
-                                <td colSpan={5} className="px-3 py-1.5 text-xs font-medium text-rose-700">Expenses</td>
+                            <tr className="bg-danger-light">
+                                <td colSpan={5} className="px-3 py-1.5 text-xs font-medium text-danger-text">Expenses</td>
                             </tr>
                             {data.expenses.groups.map((g) => (
                                 <>
@@ -175,11 +175,11 @@ export default function ComparativePLPage() {
                                     ))}
                                 </>
                             ))}
-                            <tr className="bg-rose-50 font-semibold border-y border-rose-100">
+                            <tr className="bg-danger-light font-semibold border-y border-red-100">
                                 <td className="px-3 py-2 text-xs">Total Expenses</td>
-                                <td className="px-3 py-2 text-right text-rose-800">{formatBDT(data.expenses.total.current, { locale })}</td>
-                                <td className="px-3 py-2 text-right text-rose-700">{formatBDT(data.expenses.total.previous, { locale })}</td>
-                                <td className="px-3 py-2 text-right text-rose-700">{formatBDT(data.expenses.total.year_ago, { locale })}</td>
+                                <td className="px-3 py-2 text-right text-danger-text">{formatBDT(data.expenses.total.current, { locale })}</td>
+                                <td className="px-3 py-2 text-right text-danger-text">{formatBDT(data.expenses.total.previous, { locale })}</td>
+                                <td className="px-3 py-2 text-right text-danger-text">{formatBDT(data.expenses.total.year_ago, { locale })}</td>
                                 <td className="px-3 py-2 text-right">—</td>
                             </tr>
                             <tr className="bg-blue-50 font-semibold border-t-2 border-blue-200">

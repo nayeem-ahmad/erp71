@@ -113,9 +113,9 @@ export default function OpeningBalancesPage() {
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-gray-100">
-                                <th className="text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-gray-400 w-1/2">Account</th>
-                                <th className="text-right px-4 py-3 text-xs font-black uppercase tracking-widest text-gray-400">Debit</th>
-                                <th className="text-right px-4 py-3 text-xs font-black uppercase tracking-widest text-gray-400">Credit</th>
+                                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 w-1/2">Account</th>
+                                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400">Debit</th>
+                                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400">Credit</th>
                                 <th className="w-10" />
                             </tr>
                         </thead>
@@ -155,9 +155,9 @@ export default function OpeningBalancesPage() {
                         </tbody>
                         <tfoot>
                             <tr className="border-t border-gray-200 bg-gray-50">
-                                <td className="px-4 py-3 text-xs font-black uppercase tracking-widest text-gray-500">Totals</td>
-                                <td className="px-4 py-3 text-right font-black text-sm">{formatBDT(totalDebit, { locale })}</td>
-                                <td className="px-4 py-3 text-right font-black text-sm">{formatBDT(totalCredit, { locale })}</td>
+                                <td className="px-4 py-3 text-xs font-semibold text-gray-500">Totals</td>
+                                <td className="px-4 py-3 text-right font-bold text-sm">{formatBDT(totalDebit, { locale })}</td>
+                                <td className="px-4 py-3 text-right font-bold text-sm">{formatBDT(totalCredit, { locale })}</td>
                                 <td />
                             </tr>
                         </tfoot>
@@ -170,7 +170,7 @@ export default function OpeningBalancesPage() {
                 </button>
                 <div className="flex items-center gap-3">
                     {!isBalanced && (totalDebit > 0 || totalCredit > 0) && (
-                        <span className="text-xs font-semibold text-rose-600">
+                        <span className="text-xs font-semibold text-danger">
                             Difference: {formatBDT(Math.abs(totalDebit - totalCredit))}
                         </span>
                     )}
