@@ -112,7 +112,10 @@ export interface DataTableProps<T> {
     /** Opt-in server-side pagination + sorting. When set, the table drives page/size/sort
      *  through these callbacks and uses `total` for the footer count instead of the
      *  client row count. Pages using this must also set `showSearch={false}` and render
-     *  their own server-backed search. */
+     *  their own server-backed search.
+     *  IMPORTANT: `onPageSizeChange` consumers MUST also reset the current page to 1 when
+     *  the page size changes (see the leads page), or the new page size can be requested
+     *  against a stale page index and return an empty/mismatched result. */
     serverPagination?: {
         total: number;
         page: number;
@@ -125,6 +128,10 @@ export interface DataTableProps<T> {
 }
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 500];
+/** Mirrors the backend `PaginationDto` hard cap on `take` (e.g. crm-leads.service.ts). Server-mode
+ *  page-size options must not exceed this, or requesting a larger size silently gets clamped
+ *  server-side while the client still believes it fetched that many rows. */
+const SERVER_MAX_PAGE_SIZE = 100;
 
 /* --------------------------------------------------------------- */
 /*  Sortable Header Cell                                            */
@@ -312,6 +319,9 @@ export default function DataTable<T>({
         : [];
     const effectivePageSize = serverPagination ? serverPagination.pageSize : pageSize;
     const serverPageIndex = serverPagination ? serverPagination.page - 1 : 0;
+    const pageSizeOptions = isServer
+        ? PAGE_SIZE_OPTIONS.filter((s) => s <= SERVER_MAX_PAGE_SIZE)
+        : PAGE_SIZE_OPTIONS;
 
     // Table instance
     const table = useReactTable({
@@ -837,7 +847,7 @@ export default function DataTable<T>({
                                 onChange={(e) => handlePageSizeChange(Number(e.target.value))}
                                 className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300"
                             >
-                                {PAGE_SIZE_OPTIONS.map((size) => (
+                                {pageSizeOptions.map((size) => (
                                     <option key={size} value={size}>
                                         {size}
                                     </option>

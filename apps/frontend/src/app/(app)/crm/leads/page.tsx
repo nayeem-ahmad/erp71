@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { Plus, RefreshCw, Search, Eye, Trash2, ListChecks, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -99,6 +99,10 @@ export default function LeadsPage() {
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
     const [sort, setSort] = useState<{ id: string; desc: boolean } | null>(null);
+    // Guards against out-of-order responses: a filter/sort change while on page > 1 fires a
+    // stale-page fetch, then the reset-to-page-1 effect fires a second fetch. Only the latest
+    // in-flight request may commit its result.
+    const loadSeq = useRef(0);
 
     useEffect(() => {
         api.getCustomFields('LEAD').then((d: any[]) => setCustomFieldDefs(Array.isArray(d) ? d : [])).catch(() => setCustomFieldDefs([]));
@@ -112,6 +116,7 @@ export default function LeadsPage() {
     }, [search]);
 
     const loadLeads = useCallback(async () => {
+        const seq = ++loadSeq.current;
         setLoading(true);
         try {
             const data = await api.getLeads({
@@ -125,13 +130,15 @@ export default function LeadsPage() {
                 sortBy: sort?.id,
                 sortDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
             });
+            if (seq !== loadSeq.current) return;
             setLeads(data?.items ?? data ?? []);
             setTotal(data?.total ?? (Array.isArray(data) ? data.length : 0));
         } catch {
+            if (seq !== loadSeq.current) return;
             setLeads([]);
             setTotal(0);
         } finally {
-            setLoading(false);
+            if (seq === loadSeq.current) setLoading(false);
         }
     }, [debouncedSearch, statusFilter, categoryFilter, priorityFilter, myTodaysActions, page, pageSize, sort]);
 

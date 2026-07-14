@@ -472,6 +472,14 @@ describe('DataTable server pagination mode', () => {
         onSortChange: jest.fn(),
     };
 
+    it('does not offer a server page size above the backend cap of 100', () => {
+        const { container } = render(
+            <DataTable {...defaultProps} showSearch={false} serverPagination={{ ...serverBase }} />,
+        );
+        expect(container.querySelector('option[value="500"]')).toBeNull();
+        expect(container.querySelector('option[value="100"]')).not.toBeNull();
+    });
+
     it('shows the server total in the footer, not the row count', () => {
         render(
             <DataTable
