@@ -74,7 +74,7 @@ export default function FeedbackWidget() {
             </button>
 
             {open && (
-                <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden">
+                <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-100 z-50 overflow-hidden">
                     {status === 'success' ? (
                         <div className="flex flex-col items-center justify-center py-10 px-6 text-center gap-3">
                             <span className="text-3xl">🎉</span>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 
 /**
  * Closes a floating panel (dropdown, popover, sheet) when the user clicks
@@ -8,22 +8,26 @@ import { useEffect, type RefObject } from 'react';
  *
  * The outside-click listener is attached on the next tick (setTimeout 0) so
  * the same click/mousedown event that opened the panel doesn't immediately
- * close it again.
+ * close it again. `onClose` is held in a ref so callers may pass a fresh
+ * inline closure each render without tearing the listeners down.
  */
 export function useDismissable(
     ref: RefObject<HTMLElement | null>,
     onClose: () => void,
     enabled: boolean = true,
 ): void {
+    const onCloseRef = useRef(onClose);
+    onCloseRef.current = onClose;
+
     useEffect(() => {
         if (!enabled) return;
 
         const onKey = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') onClose();
+            if (event.key === 'Escape') onCloseRef.current();
         };
         const onPointer = (event: MouseEvent) => {
             if (ref.current && !ref.current.contains(event.target as Node)) {
-                onClose();
+                onCloseRef.current();
             }
         };
 
@@ -35,5 +39,5 @@ export function useDismissable(
             window.clearTimeout(id);
             document.removeEventListener('mousedown', onPointer);
         };
-    }, [enabled, ref, onClose]);
+    }, [enabled, ref]);
 }

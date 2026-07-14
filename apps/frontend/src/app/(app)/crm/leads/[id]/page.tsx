@@ -334,7 +334,7 @@ export default function LeadDetailPage() {
                                 <UserCheck className="w-4 h-4" /> {m.viewCustomer}
                             </Link>
                         ) : (
-                            <Button onClick={convertLead} loading={converting} icon={<UserCheck className="w-4 h-4" />} className="bg-emerald-600 hover:bg-emerald-700">
+                            <Button onClick={convertLead} loading={converting} icon={<UserCheck className="w-4 h-4" />}>
                                 {m.convert}
                             </Button>
                         )}
