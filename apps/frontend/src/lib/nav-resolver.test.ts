@@ -3,6 +3,14 @@ import { buildNavModulesFromLayout } from './nav-resolver';
 import { enMessages } from './localization/messages/en/index';
 
 describe('nav-resolver', () => {
+    it('does not include sales.new in the default sales children', () => {
+        const sales = buildNavModulesFromLayout(DEFAULT_TENANT_NAV_LAYOUT, enMessages as Record<string, unknown>)
+            .find((mod) => mod.key === 'sales');
+        const hrefs = (sales?.children ?? []).flatMap((child) =>
+            'type' in child && child.type === 'subgroup' ? child.children.map((link) => link.href) : [child.href]);
+        expect(hrefs).not.toContain('/sales/new');
+    });
+
     it('builds tenant sidebar modules from default layout', () => {
         const modules = buildNavModulesFromLayout(DEFAULT_TENANT_NAV_LAYOUT, enMessages as Record<string, unknown>);
 

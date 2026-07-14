@@ -243,7 +243,6 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('sales.order-flow.returns', 'sales', 2),
   layoutNode('sales.receivables.customer-payments', 'sales', 3),
   layoutNode('sales.pos', 'sales', 4),
-  layoutNode('sales.new', 'sales', 5),
   layoutNode('sales.order-flow', 'sales', 6),
   layoutNode('sales.order-flow.quotes', 'sales.order-flow', 0),
   layoutNode('sales.order-flow.orders', 'sales.order-flow', 1),
