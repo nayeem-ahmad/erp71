@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Sparkles, Loader2, CheckCircle, XCircle, Zap } from 'lucide-react';
+import { Loader2, Zap } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell, Button } from '@/components/ui';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { fetchWithAuth } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 
 type AiSettings = {
@@ -26,25 +28,6 @@ const MODEL_OPTIONS = [
     { value: 'openai/gpt-4o-mini', label: 'GPT-4o Mini — fast OpenAI model' },
 ];
 
-type Toast = { type: 'success' | 'error'; message: string } | null;
-
-function ToastBanner({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
-    useEffect(() => {
-        if (!toast) return;
-        const t = setTimeout(onDismiss, 4000);
-        return () => clearTimeout(t);
-    }, [toast, onDismiss]);
-
-    if (!toast) return null;
-    const isOk = toast.type === 'success';
-    return (
-        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl px-4 py-3 shadow-lg border text-sm font-semibold ${isOk ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
-            {isOk ? <CheckCircle className="w-4 h-4 text-green-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
-            {toast.message}
-        </div>
-    );
-}
-
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
     return (
         <div>
@@ -61,7 +44,6 @@ export default function PlatformAiSettingsPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [testing, setTesting] = useState(false);
-    const [toast, setToast] = useState<Toast>(null);
 
     const inputCls = 'w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition';
 
@@ -73,7 +55,7 @@ export default function PlatformAiSettingsPage() {
                     default_model: d.default_model ?? DEFAULTS.default_model,
                 });
             })
-            .catch(() => setToast({ type: 'error', message: 'Failed to load AI settings.' }))
+            .catch(() => toast.error('Failed to load AI settings.'))
             .finally(() => setLoading(false));
     }, []);
 
@@ -91,9 +73,9 @@ export default function PlatformAiSettingsPage() {
                 body: JSON.stringify({ settings: payload }),
             });
             setSettings((prev) => ({ ...prev, api_key: '' }));
-            setToast({ type: 'success', message: 'AI settings saved.' });
+            toast.success('AI settings saved.');
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message ?? 'Failed to save.' });
+            toast.error(e.message ?? 'Failed to save.');
         } finally {
             setSaving(false);
         }
@@ -104,21 +86,20 @@ export default function PlatformAiSettingsPage() {
         try {
             const result = await fetchWithAuth('/admin/platform-settings/ai/test', { method: 'POST' });
             if (result?.success) {
-                setToast({ type: 'success', message: `Connection OK — model: ${result.model}` });
+                toast.success(`Connection OK — model: ${result.model}`);
             } else {
-                setToast({ type: 'error', message: result?.message ?? 'Test failed.' });
+                toast.error(result?.message ?? 'Test failed.');
             }
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message ?? 'Test failed.' });
+            toast.error(e.message ?? 'Test failed.');
         } finally {
             setTesting(false);
         }
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="max-w-2xl mx-auto space-y-6">
-                <PageHeader
+        <PageShell maxWidth="narrow">
+            <PageHeader
                     title="AI Settings"
                     breadcrumbs={nestedPageBreadcrumbs(
                         t.dashboardHome.breadcrumbHome,
@@ -170,14 +151,9 @@ export default function PlatformAiSettingsPage() {
                         </Field>
 
                         <div className="pt-2">
-                            <button
-                                onClick={handleSave}
-                                disabled={saving}
-                                className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-purple-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
-                            >
-                                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                            <Button onClick={handleSave} loading={saving} size="md">
                                 {saving ? 'Saving…' : 'Save settings'}
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 )}
@@ -187,14 +163,9 @@ export default function PlatformAiSettingsPage() {
                     <p className="text-sm text-gray-500">
                         Sends a single short message through OpenRouter to verify the API key works. Uses ~10 tokens (negligible cost).
                     </p>
-                    <button
-                        onClick={handleTest}
-                        disabled={testing}
-                        className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-purple-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
-                    >
-                        {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                    <Button onClick={handleTest} loading={testing} icon={!testing ? <Zap className="w-4 h-4" /> : undefined} size="md">
                         {testing ? 'Testing…' : 'Test connection'}
-                    </button>
+                    </Button>
                 </div>
 
                 <div className="bg-white rounded-2xl border border-gray-200 p-6">
@@ -220,9 +191,6 @@ export default function PlatformAiSettingsPage() {
                     </table>
                     <p className="text-xs text-gray-400 mt-3">1 credit = 1,000 tokens. You charge tenants per credit; OpenRouter charges you per model usage.</p>
                 </div>
-            </div>
-
-            <ToastBanner toast={toast} onDismiss={() => setToast(null)} />
-        </div>
+        </PageShell>
     );
 }

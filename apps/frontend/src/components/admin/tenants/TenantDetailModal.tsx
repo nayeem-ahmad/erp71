@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Building2, Loader2, LogIn, RotateCcw, ShieldCheck, Trash2, UserX, Users, X } from 'lucide-react';
+import { Building2, Loader2, LogIn, RotateCcw, ShieldCheck, Trash2, UserX, Users } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import type { DiscountType, PlanCode, SecondaryLocale, TenantRecord } from './types';
+import ModalShell, { ModalHeader } from '@/components/ModalShell';
 
 type Props = {
     tenantId: string | null;
@@ -238,34 +239,12 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
     };
 
     return (
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-            onClick={onClose}
-        >
-            <div
-                className="w-full max-w-3xl rounded-3xl bg-white shadow-2xl flex flex-col max-h-[92vh]"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5 shrink-0">
-                    <div>
-                        <p className="text-xs font-medium text-gray-500">{m.selectedTenant}</p>
-                        <h2 className="mt-1 text-lg font-bold tracking-tight text-gray-950">
-                            {tenant?.name ?? '…'}
-                        </h2>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="rounded-xl p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                        aria-label="Close"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
+        <ModalShell size="lg" onBackdropClick={onClose}>
+            <ModalHeader title={tenant?.name ?? '…'} subtitle={m.selectedTenant} onClose={onClose} />
 
-                <div className="overflow-y-auto p-6 space-y-6">
+            <div className="overflow-y-auto p-6 space-y-6">
                     {error && (
-                        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
                             {error}
                         </div>
                     )}
@@ -501,8 +480,7 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                             </div>
                         </>
                     ) : null}
-                </div>
             </div>
-        </div>
+        </ModalShell>
     );
 }

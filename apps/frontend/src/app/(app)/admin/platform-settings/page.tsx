@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { MessageSquare, Mail, Landmark, Cog, ChevronRight, Sparkles, LayoutList, BadgePercent, MessageCircle, ToggleLeft, PackagePlus, Bot, Share2, Lightbulb, Rocket } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
@@ -151,7 +152,7 @@ export default function PlatformSettingsIndexPage() {
     ];
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-3xl mx-auto space-y-6">
                 <PageHeader
                     title={m.title}
@@ -192,6 +193,6 @@ export default function PlatformSettingsIndexPage() {
                     </div>
                 ))}
             </div>
-        </div>
+        </PageShell>
     );
 }

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { MessageSquare, Search, Send, CheckCircle, RotateCcw, Loader2 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { StatusBadge } from '@/components/ui';
 import { api } from '@/lib/api';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
@@ -166,13 +167,13 @@ export default function AdminSupportPage() {
                     />
 
                     {error && (
-                        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                        <div className="rounded-md border border-danger bg-danger-light px-3 py-2 text-xs font-semibold text-danger-text">
                             {error}
                         </div>
                     )}
 
                     <div className="flex flex-col gap-2">
-                        <label className="flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-3 py-2">
+                        <label className="flex items-center gap-2 rounded-md border border-gray-100 bg-white px-3 py-2">
                             <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                             <input
                                 value={search}
@@ -184,7 +185,7 @@ export default function AdminSupportPage() {
                         <select
                             value={statusFilter}
                             onChange={(e) => handleStatusFilter(e.target.value)}
-                            className="rounded-xl border border-gray-100 bg-white px-3 py-2 text-sm font-semibold text-gray-700 outline-none cursor-pointer"
+                            className="rounded-md border border-gray-100 bg-white px-3 py-2 text-sm font-semibold text-gray-700 outline-none cursor-pointer"
                         >
                             <option value="">{m.allStatuses}</option>
                             <option value="open">{m.statusOpen}</option>
@@ -192,7 +193,7 @@ export default function AdminSupportPage() {
                         </select>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto rounded-2xl border border-gray-100 bg-white divide-y divide-gray-100">
+                    <div className="flex-1 overflow-y-auto rounded-lg border border-gray-100 bg-white divide-y divide-gray-100">
                         {isLoading ? (
                             <div className="p-6 flex justify-center text-sm text-gray-400">
                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -205,13 +206,13 @@ export default function AdminSupportPage() {
                                     key={thread.id}
                                     type="button"
                                     onClick={() => selectThread(thread.id)}
-                                    className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${activeThreadId === thread.id ? 'bg-indigo-50 border-l-2 border-indigo-500' : ''}`}
+                                    className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${activeThreadId === thread.id ? 'bg-primary-light border-l-2 border-primary' : ''}`}
                                 >
                                     <div className="flex items-center justify-between gap-2 mb-0.5">
                                         <p className="text-sm font-bold text-gray-900 truncate">{thread.subject}</p>
-                                        <span className={`shrink-0 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full ${thread.status === 'resolved' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                        <StatusBadge tone={thread.status === 'resolved' ? 'success' : 'warning'} className="shrink-0 text-[9px]">
                                             {thread.status}
-                                        </span>
+                                        </StatusBadge>
                                     </div>
                                     <p className="text-xs text-gray-500 font-semibold truncate">{thread.tenant}</p>
                                     {thread.lastMessage && (
@@ -227,7 +228,7 @@ export default function AdminSupportPage() {
                 </div>
 
                 {/* Message area */}
-                <div className="flex-1 flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white min-w-0">
+                <div className="flex-1 flex flex-col overflow-hidden rounded-lg border border-gray-100 bg-white min-w-0">
                     {!activeThreadId ? (
                         <div className="flex-1 flex flex-col items-center justify-center gap-2 text-sm text-gray-400">
                             <MessageSquare className="w-8 h-8 text-gray-200" />
@@ -238,7 +239,7 @@ export default function AdminSupportPage() {
                             {/* Thread header */}
                             <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-4">
                                 <div className="min-w-0">
-                                    <p className="font-black text-sm text-gray-900 truncate">{threadInfo?.subject}</p>
+                                    <p className="font-bold text-sm text-gray-900 truncate">{threadInfo?.subject}</p>
                                     {threadInfo?.tenant && (
                                         <p className="text-xs text-gray-500 font-semibold">{threadInfo.tenant}</p>
                                     )}
@@ -276,7 +277,7 @@ export default function AdminSupportPage() {
                                         const isAdmin = msg.senderRole === 'admin';
                                         return (
                                             <div key={msg.id} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
-                                                <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${isAdmin ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
+                                                <div className={`max-w-[75%] rounded-lg px-4 py-2.5 ${isAdmin ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
                                                     <p className={`text-[10px] font-bold mb-1 ${isAdmin ? 'text-indigo-200' : 'text-gray-500'}`}>
                                                         {isAdmin ? m.you : m.owner}
                                                     </p>
@@ -306,13 +307,13 @@ export default function AdminSupportPage() {
                                         }}
                                         placeholder={m.replyPlaceholder}
                                         rows={2}
-                                        className="flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:bg-white"
+                                        className="flex-1 resize-none rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:bg-white"
                                     />
                                     <button
                                         type="button"
                                         onClick={sendReply}
                                         disabled={sending || !replyBody.trim()}
-                                        className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40"
+                                        className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40"
                                     >
                                         {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                                     </button>

@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import {
-    CheckCircle,
     KeyRound,
     Loader2,
     Mail,
@@ -12,6 +11,9 @@ import {
     Trash2,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell, Button } from '@/components/ui';
+import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
+import { toast } from '@/lib/toast';
 import { DataTable } from '@/components/data-table';
 import PlatformUserFormModal, { type PlatformAdminUser } from '@/components/admin/platform-users/PlatformUserFormModal';
 import { api } from '@/lib/api';
@@ -29,7 +31,6 @@ export default function AdminUsersPage() {
     const [search, setSearch] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
-    const [toast, setToast] = useState('');
     const [formOpen, setFormOpen] = useState(false);
     const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
     const [selectedUser, setSelectedUser] = useState<PlatformAdminUser | null>(null);
@@ -63,11 +64,6 @@ export default function AdminUsersPage() {
         void load();
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const showToast = (msg: string) => {
-        setToast(msg);
-        setTimeout(() => setToast(''), 3500);
-    };
-
     const openCreate = () => {
         setFormMode('create');
         setSelectedUser(null);
@@ -86,7 +82,7 @@ export default function AdminUsersPage() {
         setError('');
         try {
             await api.deletePlatformAdminUser(user.id);
-            showToast(formatMessage(m.deletedToast, { email: user.email }));
+            toast.success(formatMessage(m.deletedToast, { email: user.email }));
             await load();
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : m.deleteFailed);
@@ -100,7 +96,7 @@ export default function AdminUsersPage() {
         setError('');
         try {
             await api.sendPlatformAdminUserResetEmail(user.id);
-            showToast(formatMessage(m.resetEmailSent, { email: user.email }));
+            toast.success(formatMessage(m.resetEmailSent, { email: user.email }));
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : m.resetEmailFailed);
         } finally {
@@ -114,7 +110,7 @@ export default function AdminUsersPage() {
         setError('');
         try {
             await api.resetPlatformAdminUserPassword(resetUser.id, resetPassword);
-            showToast(formatMessage(m.resetPassword.success, { email: resetUser.email }));
+            toast.success(formatMessage(m.resetPassword.success, { email: resetUser.email }));
             setResetUser(null);
             setResetPassword('');
         } catch (err: unknown) {
@@ -196,8 +192,7 @@ export default function AdminUsersPage() {
     ], [actionUserId, m, selfId]);
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={m.title}
                     subtitle={formatMessage(m.subtitle, { total: users.length })}
@@ -208,24 +203,14 @@ export default function AdminUsersPage() {
                         'admin',
                     )}
                     actions={(
-                        <button
-                            type="button"
-                            onClick={openCreate}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors shrink-0"
-                        >
-                            <Plus className="w-4 h-4" /> {m.addUser}
-                        </button>
+                        <Button onClick={openCreate} icon={<Plus className="w-4 h-4" />} className="shrink-0">
+                            {m.addUser}
+                        </Button>
                     )}
                 />
 
-                {toast && (
-                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center gap-2 text-sm font-semibold text-emerald-700">
-                        <CheckCircle className="w-4 h-4" /> {toast}
-                    </div>
-                )}
-
                 {error && (
-                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div>
+                    <div className="rounded-md border border-danger bg-danger-light px-4 py-3 text-sm font-semibold text-danger-text">{error}</div>
                 )}
 
                 <input
@@ -235,11 +220,11 @@ export default function AdminUsersPage() {
                         void load(e.target.value);
                     }}
                     placeholder={m.searchPlaceholder}
-                    className="w-full max-w-md rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm outline-none"
+                    className="w-full max-w-md rounded-md border border-gray-100 bg-white px-4 py-3 text-sm outline-none"
                 />
 
                 {isLoading ? (
-                    <div className="flex items-center gap-2 rounded-3xl border border-gray-100 bg-white p-8 text-sm text-gray-500">
+                    <div className="flex items-center gap-2 rounded-lg border border-gray-100 bg-white p-8 text-sm text-gray-500">
                         <Loader2 className="w-4 h-4 animate-spin" /> {m.loading}
                     </div>
                 ) : (
@@ -251,7 +236,6 @@ export default function AdminUsersPage() {
                         emptyMessage={m.noUsers}
                     />
                 )}
-            </div>
 
             <PlatformUserFormModal
                 open={formOpen}
@@ -262,45 +246,37 @@ export default function AdminUsersPage() {
             />
 
             {resetUser && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setResetUser(null)}>
-                    <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                        <div className="border-b border-gray-100 px-6 py-5">
-                            <h2 className="text-lg font-black tracking-tight">{m.resetPassword.title}</h2>
-                            <p className="mt-1 text-sm text-gray-500">{resetUser.email}</p>
-                        </div>
-                        <div className="p-6 space-y-3">
-                            <label className="text-xs font-medium text-gray-500">{m.resetPassword.label}</label>
-                            <input
-                                type="password"
-                                value={resetPassword}
-                                onChange={(e) => setResetPassword(e.target.value)}
-                                minLength={8}
-                                placeholder={m.resetPassword.placeholder}
-                                className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none"
-                            />
-                        </div>
-                        <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
-                            <button
-                                type="button"
-                                onClick={() => setResetUser(null)}
-                                className="rounded-2xl bg-gray-100 px-5 py-2.5 text-sm font-black text-gray-700"
-                            >
-                                {m.resetPassword.cancel}
-                            </button>
-                            <button
-                                type="button"
-                                disabled={resetting || resetPassword.length < 8}
-                                onClick={() => void handleResetPassword()}
-                                className="inline-flex items-center gap-2 rounded-2xl bg-amber-600 px-5 py-2.5 text-sm font-black text-white disabled:opacity-60"
-                            >
-                                {resetting
-                                    ? <><Loader2 className="w-4 h-4 animate-spin" /> {m.resetPassword.confirming}</>
-                                    : m.resetPassword.confirm}
-                            </button>
-                        </div>
+                <ModalShell size="sm" onBackdropClick={() => setResetUser(null)}>
+                    <ModalHeader
+                        title={m.resetPassword.title}
+                        subtitle={resetUser.email}
+                        onClose={() => setResetUser(null)}
+                    />
+                    <div className="p-4 space-y-3 overflow-y-auto">
+                        <label className="text-xs font-medium text-gray-500">{m.resetPassword.label}</label>
+                        <input
+                            type="password"
+                            value={resetPassword}
+                            onChange={(e) => setResetPassword(e.target.value)}
+                            minLength={8}
+                            placeholder={m.resetPassword.placeholder}
+                            className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white"
+                        />
                     </div>
-                </div>
+                    <ModalFooter>
+                        <Button variant="secondary" onClick={() => setResetUser(null)}>
+                            {m.resetPassword.cancel}
+                        </Button>
+                        <Button
+                            disabled={resetting || resetPassword.length < 8}
+                            loading={resetting}
+                            onClick={() => void handleResetPassword()}
+                        >
+                            {resetting ? m.resetPassword.confirming : m.resetPassword.confirm}
+                        </Button>
+                    </ModalFooter>
+                </ModalShell>
             )}
-        </div>
+        </PageShell>
     );
 }

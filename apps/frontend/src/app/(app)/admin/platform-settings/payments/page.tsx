@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CreditCard, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell, Button } from '@/components/ui';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { fetchWithAuth } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 
 type SslSettings = { store_id: string; store_password: string; is_sandbox: string };
@@ -15,24 +17,6 @@ type NagadSettings = { merchant_id: string; merchant_private_key: string; mercha
 const SSL_DEFAULTS: SslSettings = { store_id: '', store_password: '', is_sandbox: 'true' };
 const BKASH_DEFAULTS: BkashSettings = { app_key: '', app_secret: '', username: '', password: '', is_sandbox: 'true' };
 const NAGAD_DEFAULTS: NagadSettings = { merchant_id: '', merchant_private_key: '', merchant_public_key: '', is_sandbox: 'true' };
-
-type Toast = { type: 'success' | 'error'; message: string } | null;
-
-function ToastBanner({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
-    useEffect(() => {
-        if (!toast) return;
-        const t = setTimeout(onDismiss, 4000);
-        return () => clearTimeout(t);
-    }, [toast, onDismiss]);
-    if (!toast) return null;
-    const isOk = toast.type === 'success';
-    return (
-        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl px-4 py-3 shadow-lg border text-sm font-semibold ${isOk ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
-            {isOk ? <CheckCircle className="w-4 h-4 text-green-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
-            {toast.message}
-        </div>
-    );
-}
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
     return (
@@ -95,14 +79,9 @@ function GatewayCard({
             <hr className="border-gray-100" />
             {children}
             <div className="pt-1">
-                <button
-                    onClick={onSave}
-                    disabled={saving}
-                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
-                >
-                    {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                <Button onClick={onSave} loading={saving} size="md">
                     {saving ? savingLabel : saveLabel}
-                </button>
+                </Button>
             </div>
         </div>
     );
@@ -121,7 +100,6 @@ export default function PlatformPaymentsSettingsPage() {
     const [savingSSL, setSavingSSL] = useState(false);
     const [savingBkash, setSavingBkash] = useState(false);
     const [savingNagad, setSavingNagad] = useState(false);
-    const [toast, setToast] = useState<Toast>(null);
 
     useEffect(() => {
         const load = async () => {
@@ -135,7 +113,7 @@ export default function PlatformPaymentsSettingsPage() {
             setNagad({ merchant_id: n.merchant_id ?? '', merchant_private_key: n.merchant_private_key === '••••••••' ? '' : (n.merchant_private_key ?? ''), merchant_public_key: n.merchant_public_key ?? '', is_sandbox: n.is_sandbox ?? 'true' });
         };
         load()
-            .catch(() => setToast({ type: 'error', message: m.loadFailed }))
+            .catch(() => toast.error(m.loadFailed))
             .finally(() => setLoading(false));
     }, []);
 
@@ -147,9 +125,9 @@ export default function PlatformPaymentsSettingsPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ settings: payload }),
             });
-            setToast({ type: 'success', message: c.saved });
+            toast.success(c.saved);
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message ?? c.saveFailed });
+            toast.error(e.message ?? c.saveFailed);
         } finally {
             setSaving(false);
         }
@@ -178,7 +156,7 @@ export default function PlatformPaymentsSettingsPage() {
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-2xl mx-auto space-y-6">
                 <PageHeader
                     title={m.title}
@@ -243,7 +221,6 @@ export default function PlatformPaymentsSettingsPage() {
                 )}
             </div>
 
-            <ToastBanner toast={toast} onDismiss={() => setToast(null)} />
-        </div>
+        </PageShell>
     );
 }

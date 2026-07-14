@@ -18,6 +18,18 @@ jest.mock('@/lib/api', () => ({
     fetchWithAuth: jest.fn(),
 }));
 
+jest.mock('@/lib/toast', () => ({
+    toast: {
+        success: jest.fn(),
+        error: jest.fn(),
+        info: jest.fn(),
+    },
+}));
+
+function getToast() {
+    return require('@/lib/toast').toast;
+}
+
 const mockSettings = {
     smtp_host: 'smtp.example.com',
     smtp_port: '587',
@@ -100,7 +112,9 @@ describe('AdminEmailSettingsPage', () => {
         await waitFor(() => screen.getByRole('button', { name: /save settings/i }));
         fireEvent.click(screen.getByRole('button', { name: /save settings/i }));
         await waitFor(() => {
-            expect(screen.getByText(/email settings saved/i)).toBeInTheDocument();
+            expect(getToast().success).toHaveBeenCalledWith(
+                expect.stringMatching(/email settings saved/i)
+            );
         });
     });
 
@@ -129,7 +143,9 @@ describe('AdminEmailSettingsPage', () => {
         await waitFor(() => screen.getByRole('button', { name: /save settings/i }));
         fireEvent.click(screen.getByRole('button', { name: /save settings/i }));
         await waitFor(() => {
-            expect(screen.getByText(/save failed/i)).toBeInTheDocument();
+            expect(getToast().error).toHaveBeenCalledWith(
+                expect.stringMatching(/save failed/i)
+            );
         });
     });
 });

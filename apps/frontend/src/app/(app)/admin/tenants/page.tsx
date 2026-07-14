@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { CheckCircle, Loader2, MessageSquare, Pencil, Plus, Sparkles } from 'lucide-react';
+import { Loader2, MessageSquare, Pencil, Plus, Sparkles } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell, Button } from '@/components/ui';
+import { toast } from '@/lib/toast';
 import { DataTable } from '@/components/data-table';
 import CreateTenantModal from '@/components/admin/tenants/CreateTenantModal';
 import TenantDetailModal from '@/components/admin/tenants/TenantDetailModal';
@@ -24,7 +26,6 @@ export default function AdminTenantsPage() {
     const [planCode, setPlanCode] = useState('');
     const [status, setStatus] = useState('');
     const [error, setError] = useState('');
-    const [toast, setToast] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [detailTenantId, setDetailTenantId] = useState<string | null>(null);
@@ -51,11 +52,6 @@ export default function AdminTenantsPage() {
     useEffect(() => {
         void loadTenants();
     }, [loadTenants]);
-
-    const showToast = (msg: string) => {
-        setToast(msg);
-        setTimeout(() => setToast(''), 3500);
-    };
 
     const columns: ColumnDef<TenantRecord, unknown>[] = useMemo(() => [
         columnHelper.accessor('name', {
@@ -151,8 +147,7 @@ export default function AdminTenantsPage() {
     ], [m]);
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={m.listTitle}
                     subtitle={m.listSubtitle}
@@ -164,24 +159,18 @@ export default function AdminTenantsPage() {
                         m.listTitle,
                     )}
                     actions={(
-                        <button
-                            type="button"
+                        <Button
                             onClick={() => setShowCreateModal(true)}
-                            className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-200 hover:bg-blue-700 shrink-0"
+                            icon={<Plus className="w-4 h-4" />}
+                            className="shrink-0"
                         >
-                            <Plus className="w-4 h-4" /> {m.createModal.trigger}
-                        </button>
+                            {m.createModal.trigger}
+                        </Button>
                     )}
                 />
 
-                {toast && (
-                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center gap-2 text-sm font-semibold text-emerald-700">
-                        <CheckCircle className="w-4 h-4 shrink-0" /> {toast}
-                    </div>
-                )}
-
                 {error && (
-                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                    <div className="rounded-md border border-danger bg-danger-light px-4 py-3 text-sm font-semibold text-danger-text">
                         {error}
                     </div>
                 )}
@@ -191,9 +180,9 @@ export default function AdminTenantsPage() {
                         value={search}
                         onChange={(event) => setSearch(event.target.value)}
                         placeholder={m.searchPlaceholder}
-                        className="rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm outline-none"
+                        className="rounded-md border border-gray-100 bg-white px-4 py-3 text-sm outline-none"
                     />
-                    <select value={planCode} onChange={(event) => setPlanCode(event.target.value)} className="rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm font-medium outline-none">
+                    <select value={planCode} onChange={(event) => setPlanCode(event.target.value)} className="rounded-md border border-gray-100 bg-white px-4 py-3 text-sm font-medium outline-none">
                         <option value="">{m.allPlans}</option>
                         <option value="FREE">{m.plans.free}</option>
                         <option value="BASIC">{m.plans.basic}</option>
@@ -201,7 +190,7 @@ export default function AdminTenantsPage() {
                         <option value="STANDARD">{m.plans.standard}</option>
                         <option value="PREMIUM">{m.plans.premium}</option>
                     </select>
-                    <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm font-medium outline-none">
+                    <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-md border border-gray-100 bg-white px-4 py-3 text-sm font-medium outline-none">
                         <option value="">{m.allStatuses}</option>
                         <option value="ACTIVE">{m.statuses.active}</option>
                         <option value="TRIALING">{m.statuses.trialing}</option>
@@ -211,7 +200,7 @@ export default function AdminTenantsPage() {
                 </div>
 
                 {isLoading ? (
-                    <div className="flex items-center gap-2 rounded-3xl border border-gray-100 bg-white p-8 text-sm text-gray-500">
+                    <div className="flex items-center gap-2 rounded-lg border border-gray-100 bg-white p-8 text-sm text-gray-500">
                         <Loader2 className="w-4 h-4 animate-spin" /> {m.loading}
                     </div>
                 ) : (
@@ -223,14 +212,13 @@ export default function AdminTenantsPage() {
                         emptyMessage={m.noResults}
                     />
                 )}
-            </div>
 
             <CreateTenantModal
                 open={showCreateModal}
                 onClose={() => setShowCreateModal(false)}
                 onCreated={(tenantId, tenantName) => {
                     setShowCreateModal(false);
-                    showToast(formatMessage(m.createModal.successToast, { name: tenantName }));
+                    toast.success(formatMessage(m.createModal.successToast, { name: tenantName }));
                     void loadTenants();
                     setDetailTenantId(tenantId);
                 }}
@@ -240,7 +228,7 @@ export default function AdminTenantsPage() {
                 tenantId={detailTenantId}
                 onClose={() => setDetailTenantId(null)}
                 onChanged={() => void loadTenants()}
-                onToast={showToast}
+                onToast={(msg) => toast.success(msg)}
             />
 
             <TenantSellCreditsModal
@@ -249,10 +237,10 @@ export default function AdminTenantsPage() {
                 tenant={sellCreditsTenant}
                 onClose={() => setSellCreditsTenant(null)}
                 onSuccess={(message) => {
-                    showToast(message);
+                    toast.success(message);
                     void loadTenants();
                 }}
             />
-        </div>
+        </PageShell>
     );
 }

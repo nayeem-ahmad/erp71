@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CheckCircle, Loader2, XCircle } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell, Button } from '@/components/ui';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { api } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { formatBDT } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import {
@@ -17,8 +19,6 @@ import {
     type PlanEntitlementDefinition,
     type PlanEntitlementGroup,
 } from '@erp71/shared-types';
-
-type Toast = { type: 'success' | 'error'; message: string } | null;
 
 type AdminPlan = {
     code: FixedSubscriptionPlanCode;
@@ -41,27 +41,6 @@ type PlanDraft = {
     features: Record<string, boolean | number>;
     marketing_features: string[];
 };
-
-function ToastBanner({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
-    useEffect(() => {
-        if (!toast) return;
-        const timer = setTimeout(onDismiss, 4000);
-        return () => clearTimeout(timer);
-    }, [toast, onDismiss]);
-
-    if (!toast) return null;
-
-    return (
-        <div className={`rounded-2xl border px-4 py-3 text-sm flex items-center gap-2 ${
-            toast.type === 'success'
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                : 'border-rose-200 bg-rose-50 text-rose-800'
-        }`}>
-            {toast.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-            <span>{toast.message}</span>
-        </div>
-    );
-}
 
 function planToDraft(plan: AdminPlan): PlanDraft {
     const features = normalizePlanFeatures(plan.features_json, plan.code);
@@ -135,7 +114,6 @@ export default function PlatformSubscriptionPlansPage() {
     const [draft, setDraft] = useState<PlanDraft | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [toast, setToast] = useState<Toast>(null);
 
     const selectedPlan = useMemo(
         () => plans.find((plan) => plan.code === selectedCode) ?? null,
@@ -155,7 +133,7 @@ export default function PlatformSubscriptionPlansPage() {
             const initial = nextPlans[0]?.code ?? 'FREE';
             setSelectedCode((current) => nextPlans.some((plan) => plan.code === current) ? current : initial);
         } catch {
-            setToast({ type: 'error', message: t.admin.platformSettings.common.loadFailed });
+            toast.error(t.admin.platformSettings.common.loadFailed);
         } finally {
             setLoading(false);
         }
@@ -221,9 +199,9 @@ export default function PlatformSubscriptionPlansPage() {
             setPlans((current) => current.map((plan) => (
                 plan.code === selectedCode ? { ...plan, ...updated } : plan
             )));
-            setToast({ type: 'success', message: t.admin.platformSettings.common.saved });
+            toast.success(t.admin.platformSettings.common.saved);
         } catch {
-            setToast({ type: 'error', message: t.admin.platformSettings.common.saveFailed });
+            toast.error(t.admin.platformSettings.common.saveFailed);
         } finally {
             setSaving(false);
         }
@@ -238,7 +216,7 @@ export default function PlatformSubscriptionPlansPage() {
     };
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-6xl mx-auto space-y-6">
                 <PageHeader
                     title={m.title}
@@ -252,7 +230,6 @@ export default function PlatformSubscriptionPlansPage() {
                     )}
                 />
 
-                <ToastBanner toast={toast} onDismiss={() => setToast(null)} />
 
                 <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
                     {m.notice}
@@ -303,15 +280,9 @@ export default function PlatformSubscriptionPlansPage() {
                                         <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{selectedCode}</p>
                                         <h2 className="mt-1 text-lg font-black tracking-tight text-gray-900">{m.editPlan}</h2>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={handleSave}
-                                        disabled={saving}
-                                        className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
-                                    >
-                                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                    <Button type="button" onClick={handleSave} loading={saving} size="md">
                                         {saving ? t.admin.platformSettings.common.saving : t.admin.platformSettings.common.saveSettings}
-                                    </button>
+                                    </Button>
                                 </div>
 
                                 <div className="grid gap-4 md:grid-cols-2">
@@ -448,6 +419,6 @@ export default function PlatformSubscriptionPlansPage() {
                     </div>
                 )}
             </div>
-        </div>
+        </PageShell>
     );
 }

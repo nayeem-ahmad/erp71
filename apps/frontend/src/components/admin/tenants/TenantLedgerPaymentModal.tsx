@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, Loader2, X } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Loader2 } from 'lucide-react';
 import type { TenantRecord } from './types';
 import { api } from '@/lib/api';
 import { formatMessage, useI18n } from '@/lib/i18n';
+import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 
 type PaymentDirection = 'payment' | 'refund';
 
@@ -73,115 +74,108 @@ export default function TenantLedgerPaymentModal({ open, tenants, defaultTenantI
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-lg rounded-3xl border border-gray-100 bg-white shadow-2xl">
-                <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-                    <h2 className="text-lg font-black text-gray-900">{lp.recordPaymentTitle}</h2>
-                    <button type="button" onClick={onClose} className="rounded-xl p-2 text-gray-500 hover:bg-gray-100" aria-label="Close">
-                        <X className="w-4 h-4" />
-                    </button>
-                </div>
+        <ModalShell size="sm" onBackdropClick={onClose}>
+            <ModalHeader title={lp.recordPaymentTitle} onClose={onClose} />
 
-                <div className="space-y-4 p-6">
-                    {error && (
-                        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-                            {error}
-                        </div>
-                    )}
-
-                    <div className="space-y-2">
-                        <label className="text-xs font-medium text-gray-500">{pm.tenantLabel}</label>
-                        <select
-                            value={tenantId || defaultTenantId}
-                            onChange={(e) => setTenantId(e.target.value)}
-                            className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm font-medium outline-none"
-                        >
-                            <option value="">{pm.tenantPlaceholder}</option>
-                            {tenants.map((tenant) => (
-                                <option key={tenant.id} value={tenant.id}>{tenant.name}</option>
-                            ))}
-                        </select>
+            <div className="space-y-4 p-6 overflow-y-auto">
+                {error && (
+                    <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                        {error}
                     </div>
+                )}
 
-                    <div className="space-y-2">
-                        <label className="text-xs font-medium text-gray-500">{pm.typeLabel}</label>
-                        <div className="flex rounded-2xl border border-gray-100 overflow-hidden">
-                            <button
-                                type="button"
-                                onClick={() => setDirection('payment')}
-                                className={`flex-1 inline-flex items-center justify-center gap-2 py-3 text-xs font-black uppercase tracking-widest transition ${direction === 'payment' ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
-                            >
-                                <ArrowDownLeft className="w-3.5 h-3.5" />
-                                {pm.receivePayment}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setDirection('refund')}
-                                className={`flex-1 inline-flex items-center justify-center gap-2 py-3 text-xs font-black uppercase tracking-widest transition ${direction === 'refund' ? 'bg-amber-600 text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
-                            >
-                                <ArrowUpRight className="w-3.5 h-3.5" />
-                                {pm.issueRefund}
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="text-xs font-medium text-gray-500">
-                            {direction === 'payment' ? ml.paymentModal.amountLabel : ml.refundModal.amountLabel}
-                        </label>
-                        <input
-                            type="number"
-                            min="0.01"
-                            step="0.01"
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            placeholder={direction === 'payment' ? ml.paymentModal.amountPlaceholder : ml.refundModal.amountPlaceholder}
-                            className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none"
-                        />
-                    </div>
-
-                    {direction === 'payment' && (
-                        <div className="space-y-2">
-                            <label className="text-xs font-medium text-gray-500">{ml.paymentModal.methodLabel}</label>
-                            <input
-                                value={method}
-                                onChange={(e) => setMethod(e.target.value)}
-                                placeholder={ml.paymentModal.methodPlaceholder}
-                                className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none"
-                            />
-                        </div>
-                    )}
-
-                    <div className="space-y-2">
-                        <label className="text-xs font-medium text-gray-500">
-                            {direction === 'payment' ? ml.paymentModal.notesLabel : ml.refundModal.notesLabel}
-                        </label>
-                        <textarea
-                            value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
-                            placeholder={direction === 'payment' ? ml.paymentModal.notesPlaceholder : ml.refundModal.notesPlaceholder}
-                            rows={3}
-                            className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none resize-none"
-                        />
-                    </div>
-                </div>
-
-                <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
-                    <button type="button" onClick={onClose} className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600">
-                        {ml.paymentModal.cancel}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => void handleSubmit()}
-                        disabled={submitting}
-                        className={`inline-flex items-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-black text-white disabled:opacity-60 ${direction === 'payment' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-600 hover:bg-amber-700'}`}
+                <div className="space-y-2">
+                    <label className="text-xs font-medium text-gray-500">{pm.tenantLabel}</label>
+                    <select
+                        value={tenantId || defaultTenantId}
+                        onChange={(e) => setTenantId(e.target.value)}
+                        className="w-full rounded-md border border-gray-100 bg-gray-50 px-4 py-3 text-sm font-medium outline-none"
                     >
-                        {submitting
-                            ? <><Loader2 className="w-4 h-4 animate-spin" /> {pm.submitting}</>
-                            : direction === 'payment' ? pm.submitPayment : pm.submitRefund}
-                    </button>
+                        <option value="">{pm.tenantPlaceholder}</option>
+                        {tenants.map((tenant) => (
+                            <option key={tenant.id} value={tenant.id}>{tenant.name}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div className="space-y-2">
+                    <label className="text-xs font-medium text-gray-500">{pm.typeLabel}</label>
+                    <div className="flex rounded-md border border-gray-100 overflow-hidden">
+                        <button
+                            type="button"
+                            onClick={() => setDirection('payment')}
+                            className={`flex-1 inline-flex items-center justify-center gap-2 py-3 text-xs font-semibold transition ${direction === 'payment' ? 'bg-success text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
+                        >
+                            <ArrowDownLeft className="w-3.5 h-3.5" />
+                            {pm.receivePayment}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setDirection('refund')}
+                            className={`flex-1 inline-flex items-center justify-center gap-2 py-3 text-xs font-semibold transition ${direction === 'refund' ? 'bg-warning text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
+                        >
+                            <ArrowUpRight className="w-3.5 h-3.5" />
+                            {pm.issueRefund}
+                        </button>
+                    </div>
+                </div>
+
+                <div className="space-y-2">
+                    <label className="text-xs font-medium text-gray-500">
+                        {direction === 'payment' ? ml.paymentModal.amountLabel : ml.refundModal.amountLabel}
+                    </label>
+                    <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder={direction === 'payment' ? ml.paymentModal.amountPlaceholder : ml.refundModal.amountPlaceholder}
+                        className="w-full rounded-md border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none"
+                    />
+                </div>
+
+                {direction === 'payment' && (
+                    <div className="space-y-2">
+                        <label className="text-xs font-medium text-gray-500">{ml.paymentModal.methodLabel}</label>
+                        <input
+                            value={method}
+                            onChange={(e) => setMethod(e.target.value)}
+                            placeholder={ml.paymentModal.methodPlaceholder}
+                            className="w-full rounded-md border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none"
+                        />
+                    </div>
+                )}
+
+                <div className="space-y-2">
+                    <label className="text-xs font-medium text-gray-500">
+                        {direction === 'payment' ? ml.paymentModal.notesLabel : ml.refundModal.notesLabel}
+                    </label>
+                    <textarea
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder={direction === 'payment' ? ml.paymentModal.notesPlaceholder : ml.refundModal.notesPlaceholder}
+                        rows={3}
+                        className="w-full rounded-md border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none resize-none"
+                    />
                 </div>
             </div>
-        </div>
+
+            <ModalFooter>
+                <button type="button" onClick={onClose} className="rounded-md border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600">
+                    {ml.paymentModal.cancel}
+                </button>
+                <button
+                    type="button"
+                    onClick={() => void handleSubmit()}
+                    disabled={submitting}
+                    className={`inline-flex items-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60 ${direction === 'payment' ? 'bg-success hover:bg-emerald-700' : 'bg-warning hover:bg-amber-700'}`}
+                >
+                    {submitting
+                        ? <><Loader2 className="w-4 h-4 animate-spin" /> {pm.submitting}</>
+                        : direction === 'payment' ? pm.submitPayment : pm.submitRefund}
+                </button>
+            </ModalFooter>
+        </ModalShell>
     );
 }

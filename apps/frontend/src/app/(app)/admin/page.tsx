@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Building2, Users, TrendingUp, ShieldCheck, ArrowRight, Loader2, Settings, Activity } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -35,8 +36,8 @@ export default function PlatformAdminPage() {
     }, [m.loadFailed]);
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-8">
+        <PageShell>
+            <div className="space-y-8">
                 <PageHeader
                     title={m.title}
                     subtitle={m.description}
@@ -83,7 +84,7 @@ export default function PlatformAdminPage() {
                     <QuickLink href="/status" icon={Activity} title={t.marketing.status.title} description={t.marketing.status.adminOnly} />
                 </div>
             </div>
-        </div>
+        </PageShell>
     );
 }
 

@@ -1,12 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CheckCircle, Loader2, Plus, XCircle } from 'lucide-react';
+import { Loader2, Plus } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell, Button } from '@/components/ui';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
+import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import {
     defaultPlanFeatures,
@@ -16,8 +18,6 @@ import {
     type PlanEntitlementDefinition,
     type PlanEntitlementGroup,
 } from '@erp71/shared-types';
-
-type Toast = { type: 'success' | 'error'; message: string } | null;
 
 type AdminAddon = {
     id: string;
@@ -46,27 +46,6 @@ type AddonDraft = {
 };
 
 const NEW_ADDON_ID = '__new__';
-
-function ToastBanner({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
-    useEffect(() => {
-        if (!toast) return;
-        const timer = setTimeout(onDismiss, 4000);
-        return () => clearTimeout(timer);
-    }, [toast, onDismiss]);
-
-    if (!toast) return null;
-
-    return (
-        <div className={`rounded-2xl border px-4 py-3 text-sm flex items-center gap-2 ${
-            toast.type === 'success'
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                : 'border-rose-200 bg-rose-50 text-rose-800'
-        }`}>
-            {toast.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-            <span>{toast.message}</span>
-        </div>
-    );
-}
 
 function emptyDraft(): AddonDraft {
     return {
@@ -155,7 +134,6 @@ export default function PlatformAddonModulesPage() {
     const [draft, setDraft] = useState<AddonDraft | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [toast, setToast] = useState<Toast>(null);
 
     const selectedAddon = useMemo(
         () => addons.find((addon) => addon.id === selectedId) ?? null,
@@ -174,7 +152,7 @@ export default function PlatformAddonModulesPage() {
             setAddons(nextAddons);
             setEntitlements(registryResponse?.entitlements ?? []);
         } catch {
-            setToast({ type: 'error', message: c.loadFailed });
+            toast.error(c.loadFailed);
         } finally {
             setLoading(false);
         }
@@ -217,7 +195,7 @@ export default function PlatformAddonModulesPage() {
         if (!draft) return;
 
         if (!draft.code.trim() || !draft.name.trim()) {
-            setToast({ type: 'error', message: 'Code and name are required.' });
+            toast.error('Code and name are required.');
             return;
         }
 
@@ -244,9 +222,9 @@ export default function PlatformAddonModulesPage() {
                     addon.id === selectedId ? { ...addon, ...updated } : addon
                 )));
             }
-            setToast({ type: 'success', message: c.saved });
+            toast.success(c.saved);
         } catch {
-            setToast({ type: 'error', message: c.saveFailed });
+            toast.error(c.saveFailed);
         } finally {
             setSaving(false);
         }
@@ -261,24 +239,21 @@ export default function PlatformAddonModulesPage() {
     };
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="max-w-6xl mx-auto space-y-6">
-                <PageHeader
-                    title="Add-on Modules"
-                    subtitle="Optional paid modules tenants can purchase on top of any subscription plan — priced and gated independently of the base plan."
-                    breadcrumbs={nestedPageBreadcrumbs(
-                        t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.admin,
-                        'admin',
-                        [{ label: t.admin.platformSettings.index.title, href: routes.admin.platformSettings.root }],
-                        'Add-on Modules',
-                    )}
-                />
+        <PageShell maxWidth="wide">
+            <PageHeader
+                title="Add-on Modules"
+                subtitle="Optional paid modules tenants can purchase on top of any subscription plan — priced and gated independently of the base plan."
+                breadcrumbs={nestedPageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.admin,
+                    'admin',
+                    [{ label: t.admin.platformSettings.index.title, href: routes.admin.platformSettings.root }],
+                    'Add-on Modules',
+                )}
+            />
 
-                <ToastBanner toast={toast} onDismiss={() => setToast(null)} />
-
-                <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-                    Price and entitlement changes apply to new purchases immediately. Existing tenant add-on
+            <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                Price and entitlement changes apply to new purchases immediately. Existing tenant add-on
                     subscriptions keep their current price and entitlements until they renew or repurchase.
                 </div>
 
@@ -340,15 +315,14 @@ export default function PlatformAddonModulesPage() {
                                             {isCreating ? 'Create add-on' : 'Edit add-on'}
                                         </h2>
                                     </div>
-                                    <button
+                                    <Button
                                         type="button"
                                         onClick={handleSave}
-                                        disabled={saving}
-                                        className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
+                                        loading={saving}
+                                        size="md"
                                     >
-                                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                                         {saving ? c.saving : c.saveSettings}
-                                    </button>
+                                    </Button>
                                 </div>
 
                                 <div className="grid gap-4 md:grid-cols-2">
@@ -466,7 +440,6 @@ export default function PlatformAddonModulesPage() {
                         ) : null}
                     </div>
                 )}
-            </div>
-        </div>
+        </PageShell>
     );
 }

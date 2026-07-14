@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, CheckCircle, XCircle, Bot } from 'lucide-react';
+import { Loader2, Bot } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell, Button } from '@/components/ui';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { fetchWithAuth } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 
 type Settings = {
@@ -47,25 +49,6 @@ const RECOMMENDED_MODELS: { slug: string; price: string; note: string }[] = [
 
 const MANUAL_MODEL = '__manual__';
 
-type Toast = { type: 'success' | 'error'; message: string } | null;
-
-function ToastBanner({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
-    useEffect(() => {
-        if (!toast) return;
-        const t = setTimeout(onDismiss, 4000);
-        return () => clearTimeout(t);
-    }, [toast, onDismiss]);
-
-    if (!toast) return null;
-    const isOk = toast.type === 'success';
-    return (
-        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl px-4 py-3 shadow-lg border text-sm font-semibold ${isOk ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
-            {isOk ? <CheckCircle className="w-4 h-4 text-green-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
-            {toast.message}
-        </div>
-    );
-}
-
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
     return (
         <div>
@@ -81,7 +64,6 @@ export default function FeedbackAutomationSettingsPage() {
     const [settings, setSettings] = useState<Settings>(DEFAULTS);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [toast, setToast] = useState<Toast>(null);
     // Show the free-text slug box when the user picks "manual" or the saved model isn't a preset.
     const [manualModel, setManualModel] = useState(false);
     const isPresetModel = RECOMMENDED_MODELS.some((m) => m.slug === settings.model);
@@ -105,7 +87,7 @@ export default function FeedbackAutomationSettingsPage() {
                     github_production_branch: d.github_production_branch ?? DEFAULTS.github_production_branch,
                 });
             })
-            .catch(() => setToast({ type: 'error', message: 'Failed to load feedback automation settings.' }))
+            .catch(() => toast.error('Failed to load feedback automation settings.'))
             .finally(() => setLoading(false));
     }, []);
 
@@ -129,16 +111,16 @@ export default function FeedbackAutomationSettingsPage() {
                 body: JSON.stringify({ settings: payload }),
             });
             setSettings((prev) => ({ ...prev, github_token: '' }));
-            setToast({ type: 'success', message: 'Feedback automation settings saved.' });
+            toast.success('Feedback automation settings saved.');
         } catch (e: any) {
-            setToast({ type: 'error', message: e.message ?? 'Failed to save.' });
+            toast.error(e.message ?? 'Failed to save.');
         } finally {
             setSaving(false);
         }
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-2xl mx-auto space-y-6">
                 <PageHeader
                     title="Feedback Automation"
@@ -278,20 +260,13 @@ export default function FeedbackAutomationSettingsPage() {
                         </Field>
 
                         <div className="pt-2">
-                            <button
-                                onClick={handleSave}
-                                disabled={saving}
-                                className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-purple-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
-                            >
-                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
+                            <Button onClick={handleSave} loading={saving} icon={!saving ? <Bot className="w-4 h-4" /> : undefined} size="md">
                                 {saving ? 'Saving…' : 'Save settings'}
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 )}
             </div>
-
-            <ToastBanner toast={toast} onDismiss={() => setToast(null)} />
-        </div>
+        </PageShell>
     );
 }
