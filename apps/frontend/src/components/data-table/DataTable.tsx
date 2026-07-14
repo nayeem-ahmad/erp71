@@ -478,8 +478,8 @@ export default function DataTable<T>({
                         </div>
                     )}
 
-                    {/* Toolbar buttons */}
-                    <div className="flex items-center gap-2 flex-wrap">
+                    {/* Toolbar buttons — always aligned to the right, even when the search box is hidden */}
+                    <div className="flex items-center gap-2 flex-wrap ml-auto">
                         {/* Advanced Filters */}
                         <button
                             onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
@@ -698,6 +698,23 @@ export default function DataTable<T>({
                                             {headerGroup.headers.map((header) => {
                                                 const canSort = header.column.getCanSort();
                                                 const sorted = header.column.getIsSorted();
+
+                                                // Selection checkbox column: render a plain, non-draggable
+                                                // header so the "select all" box lines up with the row
+                                                // checkboxes instead of being offset by the drag grip.
+                                                if (header.column.id === 'select') {
+                                                    return (
+                                                        <th
+                                                            key={header.id}
+                                                            style={{ width: header.getSize(), minWidth: header.getSize() }}
+                                                            className={d.headerCell}
+                                                        >
+                                                            {header.isPlaceholder
+                                                                ? null
+                                                                : flexRender(header.column.columnDef.header, header.getContext())}
+                                                        </th>
+                                                    );
+                                                }
 
                                                 return (
                                                     <SortableHeader key={header.id} header={header} headerClassName={d.headerCell}>

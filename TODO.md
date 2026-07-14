@@ -407,6 +407,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] DataTable: right-align toolbar buttons when search box is hidden (Leads list) and align the "select all" header checkbox with row checkboxes (render select column as a plain, non-draggable header) — done 2026-07-14
+
 ### UI polish follow-ups (non-blocking, from final migration review)
 - [ ] CRM lead form: live-clear inline field errors on keystroke (currently only re-validate on submit); remove now-dead `validateLeadForm` (superseded by `validateLeadFormErrors`)
 - [ ] Restore "Saving…" text label on modal submit buttons that now show spinner-only (e.g. CreatePurchaseModal)
