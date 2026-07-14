@@ -1,6 +1,16 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import ProfilePage from './page';
+import Toaster from '@/components/Toaster';
+
+function renderProfilePage() {
+    return render(
+        <>
+            <ProfilePage />
+            <Toaster />
+        </>,
+    );
+}
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -43,14 +53,14 @@ describe('ProfilePage', () => {
     });
 
     it('renders the profile heading', async () => {
-        render(<ProfilePage />);
+        renderProfilePage();
         await waitFor(() => {
             expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('My Profile');
         });
     });
 
     it('renders account tabs', async () => {
-        render(<ProfilePage />);
+        renderProfilePage();
         await waitFor(() => {
             expect(screen.getByRole('button', { name: 'Profile' })).toBeInTheDocument();
             expect(screen.getByRole('button', { name: 'Password' })).toBeInTheDocument();
@@ -60,7 +70,7 @@ describe('ProfilePage', () => {
     });
 
     it('shows profile tab by default after loading', async () => {
-        render(<ProfilePage />);
+        renderProfilePage();
         await waitFor(() => {
             expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
         });
@@ -70,12 +80,12 @@ describe('ProfilePage', () => {
     it('shows loading state while fetching user data', () => {
         const { api } = require('@/lib/api');
         api.getMe.mockReturnValue(new Promise(() => {})); // never resolves
-        render(<ProfilePage />);
+        renderProfilePage();
         expect(screen.getByText('Loading…')).toBeInTheDocument();
     });
 
     it('switches to password tab when clicked', async () => {
-        render(<ProfilePage />);
+        renderProfilePage();
         await waitFor(() => {
             expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
         });
@@ -87,7 +97,7 @@ describe('ProfilePage', () => {
     });
 
     it('switches to Two-Factor Auth tab when clicked', async () => {
-        render(<ProfilePage />);
+        renderProfilePage();
         await waitFor(() => {
             expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
         });
@@ -104,7 +114,7 @@ describe('ProfilePage', () => {
             two_factor_enabled: true,
         });
 
-        render(<ProfilePage />);
+        renderProfilePage();
         await waitFor(() => {
             expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
         });
@@ -119,7 +129,7 @@ describe('ProfilePage', () => {
         const { fetchWithAuth } = require('@/lib/api');
         fetchWithAuth.mockResolvedValue({});
 
-        render(<ProfilePage />);
+        renderProfilePage();
         await waitFor(() => {
             expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
         });
@@ -137,7 +147,7 @@ describe('ProfilePage', () => {
     });
 
     it('shows error toast when profile name is empty', async () => {
-        render(<ProfilePage />);
+        renderProfilePage();
         await waitFor(() => {
             expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
         });
@@ -152,7 +162,7 @@ describe('ProfilePage', () => {
     });
 
     it('shows error when current password is empty', async () => {
-        render(<ProfilePage />);
+        renderProfilePage();
         await waitFor(() => {
             expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
         });
@@ -174,7 +184,7 @@ describe('ProfilePage', () => {
     });
 
     it('shows error when new password is too short', async () => {
-        render(<ProfilePage />);
+        renderProfilePage();
         await waitFor(() => {
             expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
         });
@@ -203,7 +213,7 @@ describe('ProfilePage', () => {
     });
 
     it('shows password mismatch error when passwords do not match', async () => {
-        render(<ProfilePage />);
+        renderProfilePage();
         await waitFor(() => {
             expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
         });
@@ -232,7 +242,7 @@ describe('ProfilePage', () => {
     });
 
     it('shows error when new password same as current', async () => {
-        render(<ProfilePage />);
+        renderProfilePage();
         await waitFor(() => {
             expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
         });
@@ -270,7 +280,7 @@ describe('ProfilePage', () => {
             otpAuthUrl: 'otpauth://totp/test',
         });
 
-        render(<ProfilePage />);
+        renderProfilePage();
         await waitFor(() => {
             expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
         });
@@ -291,7 +301,7 @@ describe('ProfilePage', () => {
             two_factor_enabled: true,
         });
 
-        render(<ProfilePage />);
+        renderProfilePage();
         await waitFor(() => {
             expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
         });

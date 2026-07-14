@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
     Loader2, UserPlus, Mail, Trash2, ShieldCheck, Store as StoreIcon,
-    ChevronRight, CheckCircle, XCircle, X, Users, Plus, Pencil,
+    ChevronRight, Users, Plus, Pencil, X,
 } from 'lucide-react';
 import {
     STORE_PERMISSION_GROUPS,
@@ -15,6 +15,8 @@ import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell } from '@/components/ui';
+import { toast } from '@/lib/toast';
 
 /* ------------------------------- Types -------------------------------- */
 
@@ -65,22 +67,11 @@ type TeamTab = 'members' | 'roles';
 const OWNER_BADGE_STYLE = 'bg-purple-100 text-purple-700';
 const ROLE_BADGE_STYLE = 'bg-gray-100 text-gray-700';
 
-/* ------------------------------- Toast -------------------------------- */
-
-function Toast({ toast, onDismiss }: { toast: ToastState; onDismiss: () => void }) {
-    useEffect(() => {
-        if (!toast) return;
-        const t = setTimeout(onDismiss, 4000);
-        return () => clearTimeout(t);
-    }, [toast, onDismiss]);
-    if (!toast) return null;
-    const ok = toast.type === 'success';
-    return (
-        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl px-4 py-3 shadow-lg border text-sm font-semibold ${ok ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
-            {ok ? <CheckCircle className="w-4 h-4 text-green-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
-            {toast.message}
-        </div>
-    );
+/** Forwards local `{type, message}` toast payloads to the global toast store. */
+function showToast(state: ToastState) {
+    if (!state) return;
+    if (state.type === 'success') toast.success(state.message);
+    else toast.error(state.message);
 }
 
 /* --------------------------- Permission matrix ------------------------ */
@@ -658,7 +649,6 @@ export default function TeamPage() {
     const [invitations, setInvitations] = useState<Invitation[]>([]);
     const [loading, setLoading] = useState(true);
     const [selected, setSelected] = useState<string | null>(null);
-    const [toast, setToast] = useState<ToastState>(null);
 
     const [inviteEmail, setInviteEmail] = useState('');
     const [inviteTenantRoleId, setInviteTenantRoleId] = useState('');
@@ -693,7 +683,7 @@ export default function TeamPage() {
             setInvitations(inv ?? []);
             await loadRoles();
         } catch (err: any) {
-            setToast({ type: 'error', message: err?.message || tm.loadFailed });
+            showToast({ type: 'error', message: err?.message || tm.loadFailed });
         } finally {
             setLoading(false);
         }
@@ -706,11 +696,11 @@ export default function TeamPage() {
         setInviting(true);
         try {
             await api.sendTeamInvitation({ email: inviteEmail.trim(), tenantRoleId: inviteTenantRoleId });
-            setToast({ type: 'success', message: formatMessage(tm.inviteSent, { email: inviteEmail.trim() }) });
+            showToast({ type: 'success', message: formatMessage(tm.inviteSent, { email: inviteEmail.trim() }) });
             setInviteEmail('');
             await load();
         } catch (err: any) {
-            setToast({ type: 'error', message: err?.message || tm.inviteFailed });
+            showToast({ type: 'error', message: err?.message || tm.inviteFailed });
         } finally {
             setInviting(false);
         }
@@ -719,10 +709,10 @@ export default function TeamPage() {
     const revokeInvite = async (id: string, email: string) => {
         try {
             await api.revokeTeamInvitation(id);
-            setToast({ type: 'success', message: formatMessage(tm.inviteRevoked, { email }) });
+            showToast({ type: 'success', message: formatMessage(tm.inviteRevoked, { email }) });
             await load();
         } catch (err: any) {
-            setToast({ type: 'error', message: err?.message || tm.revokeFailed });
+            showToast({ type: 'error', message: err?.message || tm.revokeFailed });
         }
     };
 
@@ -734,8 +724,7 @@ export default function TeamPage() {
     }, [isOwner, activeTab]);
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={tm.title}
                     subtitle={tm.description}
@@ -773,7 +762,7 @@ export default function TeamPage() {
                 </div>
 
                 {activeTab === 'roles' ? (
-                    <RolesPanel onToast={setToast} />
+                    <RolesPanel onToast={showToast} />
                 ) : (
                     <>
                         <form onSubmit={sendInvite} className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
@@ -878,7 +867,7 @@ export default function TeamPage() {
                                     <MemberPanel
                                         userId={selected}
                                         tenantRoles={tenantRoles}
-                                        onToast={setToast}
+                                        onToast={showToast}
                                         onChanged={load}
                                         onClose={() => setSelected(null)}
                                     />
@@ -892,9 +881,6 @@ export default function TeamPage() {
                         </div>
                     </>
                 )}
-            </div>
-
-            <Toast toast={toast} onDismiss={() => setToast(null)} />
-        </div>
+        </PageShell>
     );
 }

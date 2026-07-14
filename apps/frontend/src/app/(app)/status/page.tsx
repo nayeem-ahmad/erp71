@@ -7,6 +7,7 @@ import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { routes } from '@/lib/routes';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell } from '@/components/ui';
 
 export default function StatusPage() {
     const { t } = useI18n();
@@ -14,7 +15,7 @@ export default function StatusPage() {
     const admin = t.admin.systemHealth;
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="w-full max-w-5xl mx-auto space-y-8">
                 <PageHeader
                     title={m.title}
@@ -43,6 +44,6 @@ export default function StatusPage() {
 
                 <SystemHealthPanel />
             </div>
-        </div>
+        </PageShell>
     );
 }

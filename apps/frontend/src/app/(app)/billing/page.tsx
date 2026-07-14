@@ -9,6 +9,7 @@ import { formatMessage, useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { redirectTo } from '@/lib/browser';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell } from '@/components/ui';
 
 type PlanCode = 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
 
@@ -247,7 +248,7 @@ function BillingPageContent() {
     };
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-6xl mx-auto space-y-6">
                 <PageHeader
                     title={copy.title}
@@ -550,7 +551,7 @@ function BillingPageContent() {
                     </div>
                 )}
             </div>
-        </div>
+        </PageShell>
     );
 }
 
@@ -559,13 +560,13 @@ function BillingPageFallback() {
     const copy = t.billing;
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-6xl mx-auto">
-                <div className="rounded-3xl border border-gray-100 bg-white p-8 flex items-center justify-center text-gray-500">
+                <div className="rounded-lg border border-gray-100 bg-white p-8 flex items-center justify-center text-gray-500">
                     <Loader2 className="w-5 h-5 animate-spin mr-2" /> {copy.loadingWorkspace}
                 </div>
             </div>
-        </div>
+        </PageShell>
     );
 }
 

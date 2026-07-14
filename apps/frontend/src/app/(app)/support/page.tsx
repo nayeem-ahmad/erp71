@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { MessageSquare, Plus, Send, CheckCircle, Loader2, X } from 'lucide-react';
+import { MessageSquare, Plus, Send, CheckCircle, Loader2 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { Button, Field, Input } from '@/components/ui';
+import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 
 type Thread = {
     id: string;
@@ -280,55 +282,40 @@ export default function SupportPage() {
 
             {/* New thread modal */}
             {showNewForm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-                    <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl p-6 space-y-4">
-                        <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-black text-gray-900">New Support Thread</h2>
-                            <button type="button" onClick={() => setShowNewForm(false)}>
-                                <X className="w-5 h-5 text-gray-400" />
-                            </button>
-                        </div>
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1">Subject</label>
-                                <input
-                                    value={newSubject}
-                                    onChange={(e) => setNewSubject(e.target.value)}
-                                    placeholder="Briefly describe your issue…"
-                                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:bg-white"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1">Message</label>
-                                <textarea
-                                    value={newBody}
-                                    onChange={(e) => setNewBody(e.target.value)}
-                                    placeholder="Describe in detail…"
-                                    rows={4}
-                                    className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:bg-white"
-                                />
-                            </div>
-                        </div>
-                        <div className="flex justify-end gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setShowNewForm(false)}
-                                className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={createThread}
-                                disabled={creating || !newSubject.trim() || !newBody.trim()}
-                                className="px-4 py-2 rounded-xl bg-indigo-600 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-40 inline-flex items-center gap-2"
-                            >
-                                {creating && <Loader2 className="w-3 h-3 animate-spin" />}
-                                {creating ? 'Creating…' : 'Create Thread'}
-                            </button>
-                        </div>
+                <ModalShell size="sm" onBackdropClick={() => setShowNewForm(false)}>
+                    <ModalHeader title="New Support Thread" onClose={() => setShowNewForm(false)} />
+                    <div className="p-4 space-y-3">
+                        <Field label="Subject">
+                            <Input
+                                value={newSubject}
+                                onChange={(e) => setNewSubject(e.target.value)}
+                                placeholder="Briefly describe your issue…"
+                            />
+                        </Field>
+                        <Field label="Message">
+                            <textarea
+                                value={newBody}
+                                onChange={(e) => setNewBody(e.target.value)}
+                                placeholder="Describe in detail…"
+                                rows={4}
+                                className="w-full resize-none rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white"
+                            />
+                        </Field>
                     </div>
-                </div>
+                    <ModalFooter>
+                        <Button variant="secondary" onClick={() => setShowNewForm(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="primary"
+                            onClick={createThread}
+                            loading={creating}
+                            disabled={!newSubject.trim() || !newBody.trim()}
+                        >
+                            {creating ? 'Creating…' : 'Create Thread'}
+                        </Button>
+                    </ModalFooter>
+                </ModalShell>
             )}
         </div>
     );

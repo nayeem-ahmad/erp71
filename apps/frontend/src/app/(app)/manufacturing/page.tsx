@@ -1,13 +1,15 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Factory, Plus, X, RefreshCw, Cog, Trash2, CheckCircle2, Package, Wallet, Calculator } from 'lucide-react';
+import { Factory, Plus, RefreshCw, Cog, Trash2, CheckCircle2, Package, Wallet, Calculator } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
 import { formatDate, formatBDT } from '@/lib/format';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { FinancialKpiTile } from '@/components/dashboard/KpiTile';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell, Button, Field, Input, Select, Alert } from '@/components/ui';
+import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 
 // ------------------------------------------------------------------ //
 //  Types                                                              //
@@ -232,7 +234,7 @@ export default function ManufacturingPage() {
     ];
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px] space-y-4">
+        <PageShell>
             <PageHeader
                 title={t.manufacturing.title}
                 subtitle={t.manufacturing.subtitle}
@@ -269,7 +271,7 @@ export default function ManufacturingPage() {
             ) : (
                 <ProductPLTab />
             )}
-        </div>
+        </PageShell>
     );
 }
 
@@ -416,13 +418,9 @@ function BomTab() {
                     >
                         <RefreshCw className="h-4 w-4" />
                     </button>
-                    <button
-                        onClick={openCreate}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
-                    >
-                        <Plus className="h-4 w-4" />
+                    <Button variant="primary" size="md" icon={<Plus className="h-4 w-4" />} onClick={openCreate}>
                         {t.manufacturing.newBom}
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -487,145 +485,115 @@ function BomTab() {
             )}
 
             {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-                        <div className="flex items-center justify-between p-6 border-b">
-                            <h2 className="text-lg font-semibold">
-                                {editingId ? t.manufacturing.editBomRecipe : t.manufacturing.newBomRecipe}
-                            </h2>
-                            <button
-                                onClick={() => setShowModal(false)}
-                                className="text-gray-400 hover:text-gray-600"
-                            >
-                                <X className="h-5 w-5" />
-                            </button>
-                        </div>
+                <ModalShell size="md" onBackdropClick={() => setShowModal(false)}>
+                    <ModalHeader
+                        title={editingId ? t.manufacturing.editBomRecipe : t.manufacturing.newBomRecipe}
+                        onClose={() => setShowModal(false)}
+                    />
 
-                        <div className="p-6 space-y-4">
-                            {saveError && (
-                                <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{saveError}</div>
-                            )}
+                    <div className="p-4 space-y-4 overflow-y-auto">
+                        {saveError && <Alert tone="danger">{saveError}</Alert>}
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    {t.manufacturing.outputProductId}
+                        <Field label={t.manufacturing.outputProductId}>
+                            <Input
+                                type="text"
+                                value={form.productId}
+                                onChange={(e) => setForm((f) => ({ ...f, productId: e.target.value }))}
+                                placeholder={t.manufacturing.placeholders.productId}
+                                disabled={!!editingId}
+                            />
+                        </Field>
+
+                        <Field label={t.manufacturing.outputQuantity} hint={t.manufacturing.outputQtyHint}>
+                            <Input
+                                type="number"
+                                min={1}
+                                value={form.outputQty}
+                                onChange={(e) =>
+                                    setForm((f) => ({ ...f, outputQty: Number.parseInt(e.target.value, 10) || 1 }))
+                                }
+                            />
+                        </Field>
+
+                        <Field label={t.manufacturing.columns.notes}>
+                            <textarea
+                                rows={2}
+                                value={form.notes}
+                                onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                                className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white"
+                            />
+                        </Field>
+
+                        <div>
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="block text-sm font-medium text-gray-700">
+                                    {t.manufacturing.componentsLabel}
                                 </label>
-                                <input
-                                    type="text"
-                                    value={form.productId}
-                                    onChange={(e) => setForm((f) => ({ ...f, productId: e.target.value }))}
-                                    placeholder={t.manufacturing.placeholders.productId}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                                    disabled={!!editingId}
-                                />
+                                <button
+                                    type="button"
+                                    onClick={addComponent}
+                                    className="text-xs text-primary hover:text-primary-hover font-medium flex items-center gap-1"
+                                >
+                                    <Plus className="h-3 w-3" />
+                                    {t.manufacturing.addComponent}
+                                </button>
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    {t.manufacturing.outputQuantity}
-                                </label>
-                                <input
-                                    type="number"
-                                    min={1}
-                                    value={form.outputQty}
-                                    onChange={(e) =>
-                                        setForm((f) => ({ ...f, outputQty: parseInt(e.target.value) || 1 }))
-                                    }
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                                />
-                                <p className="text-xs text-gray-500 mt-1">
-                                    {t.manufacturing.outputQtyHint}
+                            {form.components.length === 0 ? (
+                                <p className="text-xs text-gray-400 italic">
+                                    {t.manufacturing.noComponents}
                                 </p>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">{t.manufacturing.columns.notes}</label>
-                                <textarea
-                                    rows={2}
-                                    value={form.notes}
-                                    onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                                />
-                            </div>
-
-                            <div>
-                                <div className="flex items-center justify-between mb-2">
-                                    <label className="block text-sm font-medium text-gray-700">
-                                        {t.manufacturing.componentsLabel}
-                                    </label>
-                                    <button
-                                        type="button"
-                                        onClick={addComponent}
-                                        className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
-                                    >
-                                        <Plus className="h-3 w-3" />
-                                        {t.manufacturing.addComponent}
-                                    </button>
+                            ) : (
+                                <div className="space-y-2">
+                                    {form.components.map((comp, i) => (
+                                        <div key={i} className="flex gap-2 items-center">
+                                            <Input
+                                                type="text"
+                                                value={comp.productId}
+                                                onChange={(e) =>
+                                                    updateComponent(i, 'productId', e.target.value)
+                                                }
+                                                placeholder={t.manufacturing.placeholders.componentProductId}
+                                                className="flex-1"
+                                            />
+                                            <Input
+                                                type="number"
+                                                min={0.0001}
+                                                step={0.0001}
+                                                value={comp.quantity}
+                                                onChange={(e) =>
+                                                    updateComponent(
+                                                        i,
+                                                        'quantity',
+                                                        Number.parseFloat(e.target.value) || 1,
+                                                    )
+                                                }
+                                                placeholder={t.manufacturing.placeholders.qty}
+                                                className="w-24"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => removeComponent(i)}
+                                                className="text-danger hover:text-red-700"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    ))}
                                 </div>
-
-                                {form.components.length === 0 ? (
-                                    <p className="text-xs text-gray-400 italic">
-                                        {t.manufacturing.noComponents}
-                                    </p>
-                                ) : (
-                                    <div className="space-y-2">
-                                        {form.components.map((comp, i) => (
-                                            <div key={i} className="flex gap-2 items-center">
-                                                <input
-                                                    type="text"
-                                                    value={comp.productId}
-                                                    onChange={(e) =>
-                                                        updateComponent(i, 'productId', e.target.value)
-                                                    }
-                                                    placeholder={t.manufacturing.placeholders.componentProductId}
-                                                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                                                />
-                                                <input
-                                                    type="number"
-                                                    min={0.0001}
-                                                    step={0.0001}
-                                                    value={comp.quantity}
-                                                    onChange={(e) =>
-                                                        updateComponent(
-                                                            i,
-                                                            'quantity',
-                                                            parseFloat(e.target.value) || 1,
-                                                        )
-                                                    }
-                                                    placeholder={t.manufacturing.placeholders.qty}
-                                                    className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => removeComponent(i)}
-                                                    className="text-red-400 hover:text-red-600"
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end gap-3 p-6 border-t bg-gray-50 rounded-b-xl">
-                            <button
-                                onClick={() => setShowModal(false)}
-                                className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-100"
-                            >
-                                {t.common.cancel}
-                            </button>
-                            <button
-                                onClick={handleSave}
-                                disabled={saving}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-                            >
-                                {saving ? t.manufacturing.saving : editingId ? t.manufacturing.update : t.manufacturing.create}
-                            </button>
+                            )}
                         </div>
                     </div>
-                </div>
+
+                    <ModalFooter>
+                        <Button variant="secondary" onClick={() => setShowModal(false)}>
+                            {t.common.cancel}
+                        </Button>
+                        <Button variant="primary" onClick={handleSave} loading={saving}>
+                            {saving ? t.manufacturing.saving : editingId ? t.manufacturing.update : t.manufacturing.create}
+                        </Button>
+                    </ModalFooter>
+                </ModalShell>
             )}
         </>
     );
@@ -958,13 +926,9 @@ function JobsTab() {
                     >
                         <RefreshCw className="h-4 w-4" />
                     </button>
-                    <button
-                        onClick={openCreate}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
-                    >
-                        <Plus className="h-4 w-4" />
+                    <Button variant="primary" size="md" icon={<Plus className="h-4 w-4" />} onClick={openCreate}>
                         {t.manufacturing.newJob}
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -1315,205 +1279,156 @@ function JobsTab() {
             )}
 
             {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-                        <div className="flex items-center justify-between p-6 border-b">
-                            <h2 className="text-lg font-semibold">{t.manufacturing.newProductionJob}</h2>
-                            <button
-                                onClick={() => setShowModal(false)}
-                                className="text-gray-400 hover:text-gray-600"
+                <ModalShell size="md" onBackdropClick={() => setShowModal(false)}>
+                    <ModalHeader title={t.manufacturing.newProductionJob} onClose={() => setShowModal(false)} />
+
+                    <div className="p-4 space-y-4 overflow-y-auto">
+                        {saveError && <Alert tone="danger">{saveError}</Alert>}
+
+                        <Field
+                            label={t.manufacturing.bomRecipeId}
+                            htmlFor="job-recipe-select"
+                            hint={!bomsLoading && boms.length === 0 ? t.manufacturing.noBomsAvailable : undefined}
+                        >
+                            <Select
+                                id="job-recipe-select"
+                                value={form.recipeId}
+                                onChange={(e) => setForm((f) => ({ ...f, recipeId: e.target.value }))}
+                                disabled={bomsLoading}
                             >
-                                <X className="h-5 w-5" />
-                            </button>
-                        </div>
+                                <option value="">{t.manufacturing.selectRecipePlaceholder}</option>
+                                {boms.map((bom) => (
+                                    <option key={bom.id} value={bom.id}>
+                                        {bom.productName}{bom.productSku ? ` (${bom.productSku})` : ''}
+                                    </option>
+                                ))}
+                            </Select>
+                        </Field>
 
-                        <div className="p-6 space-y-4">
-                            {saveError && (
-                                <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{saveError}</div>
-                            )}
+                        <Field label={t.manufacturing.quantityLabel} hint={t.manufacturing.quantityHint}>
+                            <Input
+                                type="number"
+                                min={1}
+                                value={form.quantity}
+                                onChange={(e) =>
+                                    setForm((f) => ({ ...f, quantity: Number.parseInt(e.target.value, 10) || 1 }))
+                                }
+                            />
+                        </Field>
 
-                            <div>
-                                <label htmlFor="job-recipe-select" className="block text-sm font-medium text-gray-700 mb-1">
-                                    {t.manufacturing.bomRecipeId}
-                                </label>
-                                <select
-                                    id="job-recipe-select"
-                                    value={form.recipeId}
-                                    onChange={(e) => setForm((f) => ({ ...f, recipeId: e.target.value }))}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                                    disabled={bomsLoading}
-                                >
-                                    <option value="">{t.manufacturing.selectRecipePlaceholder}</option>
-                                    {boms.map((bom) => (
-                                        <option key={bom.id} value={bom.id}>
-                                            {bom.productName}{bom.productSku ? ` (${bom.productSku})` : ''}
-                                        </option>
-                                    ))}
-                                </select>
-                                {!bomsLoading && boms.length === 0 && (
-                                    <p className="text-xs text-amber-600 mt-1">{t.manufacturing.noBomsAvailable}</p>
-                                )}
-                            </div>
+                        <Field label={t.manufacturing.columns.notes}>
+                            <textarea
+                                rows={2}
+                                value={form.notes}
+                                onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                                className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white"
+                            />
+                        </Field>
 
+                        {form.recipeId && (
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    {t.manufacturing.quantityLabel}
+                                    {t.manufacturing.materialsRequired}
                                 </label>
-                                <input
-                                    type="number"
-                                    min={1}
-                                    value={form.quantity}
-                                    onChange={(e) =>
-                                        setForm((f) => ({ ...f, quantity: parseInt(e.target.value) || 1 }))
-                                    }
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                                />
-                                <p className="text-xs text-gray-500 mt-1">
-                                    {t.manufacturing.quantityHint}
-                                </p>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">{t.manufacturing.columns.notes}</label>
-                                <textarea
-                                    rows={2}
-                                    value={form.notes}
-                                    onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                                />
-                            </div>
-
-                            {form.recipeId && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        {t.manufacturing.materialsRequired}
-                                    </label>
-                                    {requirementsLoading ? (
-                                        <p className="text-xs text-gray-500">{t.manufacturing.loadingRequirements}</p>
-                                    ) : requirements ? (
-                                        <>
-                                            {!requirements.sufficient && (
-                                                <div className="bg-amber-50 text-amber-800 p-3 rounded-lg text-xs mb-2">
-                                                    {t.manufacturing.insufficientStockWarning}
-                                                </div>
-                                            )}
-                                            <div className="overflow-x-auto border border-gray-200 rounded-lg">
-                                                <table className="w-full text-xs">
-                                                    <thead className="bg-gray-50 text-gray-600 uppercase">
-                                                        <tr>
-                                                            <th className="px-3 py-2 text-left">{t.manufacturing.requirementsColumns.component}</th>
-                                                            <th className="px-3 py-2 text-right">{t.manufacturing.requirementsColumns.perUnit}</th>
-                                                            <th className="px-3 py-2 text-right">{t.manufacturing.requirementsColumns.required}</th>
-                                                            <th className="px-3 py-2 text-right">{t.manufacturing.requirementsColumns.available}</th>
+                                {requirementsLoading ? (
+                                    <p className="text-xs text-gray-500">{t.manufacturing.loadingRequirements}</p>
+                                ) : requirements ? (
+                                    <>
+                                        {!requirements.sufficient && (
+                                            <Alert tone="warning" className="mb-2">
+                                                {t.manufacturing.insufficientStockWarning}
+                                            </Alert>
+                                        )}
+                                        <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                                            <table className="w-full text-xs">
+                                                <thead className="bg-gray-50 text-gray-600 uppercase">
+                                                    <tr>
+                                                        <th className="px-3 py-2 text-left">{t.manufacturing.requirementsColumns.component}</th>
+                                                        <th className="px-3 py-2 text-right">{t.manufacturing.requirementsColumns.perUnit}</th>
+                                                        <th className="px-3 py-2 text-right">{t.manufacturing.requirementsColumns.required}</th>
+                                                        <th className="px-3 py-2 text-right">{t.manufacturing.requirementsColumns.available}</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {requirements.components.map((item) => (
+                                                        <tr key={item.productId} className={item.sufficient ? '' : 'bg-amber-50'}>
+                                                            <td className="px-3 py-2 text-gray-900">
+                                                                {item.productName}
+                                                                {item.productSku && (
+                                                                    <span className="text-gray-400"> ({item.productSku})</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-3 py-2 text-right text-gray-700">{item.perUnitQty}</td>
+                                                            <td className="px-3 py-2 text-right text-gray-700">{item.requiredQty}</td>
+                                                            <td className={`px-3 py-2 text-right ${item.sufficient ? 'text-gray-700' : 'text-amber-700 font-medium'}`}>
+                                                                {item.availableQty}
+                                                            </td>
                                                         </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-gray-100">
-                                                        {requirements.components.map((item) => (
-                                                            <tr key={item.productId} className={item.sufficient ? '' : 'bg-amber-50'}>
-                                                                <td className="px-3 py-2 text-gray-900">
-                                                                    {item.productName}
-                                                                    {item.productSku && (
-                                                                        <span className="text-gray-400"> ({item.productSku})</span>
-                                                                    )}
-                                                                </td>
-                                                                <td className="px-3 py-2 text-right text-gray-700">{item.perUnitQty}</td>
-                                                                <td className="px-3 py-2 text-right text-gray-700">{item.requiredQty}</td>
-                                                                <td className={`px-3 py-2 text-right ${item.sufficient ? 'text-gray-700' : 'text-amber-700 font-medium'}`}>
-                                                                    {item.availableQty}
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </>
-                                    ) : null}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="flex justify-end gap-3 p-6 border-t bg-gray-50 rounded-b-xl">
-                            <button
-                                onClick={() => setShowModal(false)}
-                                className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-100"
-                            >
-                                {t.common.cancel}
-                            </button>
-                            <button
-                                onClick={handleCreateJob}
-                                disabled={saving}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-                            >
-                                {saving ? t.manufacturing.creating : t.manufacturing.createJob}
-                            </button>
-                        </div>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </>
+                                ) : null}
+                            </div>
+                        )}
                     </div>
-                </div>
+
+                    <ModalFooter>
+                        <Button variant="secondary" onClick={() => setShowModal(false)}>
+                            {t.common.cancel}
+                        </Button>
+                        <Button variant="primary" onClick={handleCreateJob} loading={saving}>
+                            {saving ? t.manufacturing.creating : t.manufacturing.createJob}
+                        </Button>
+                    </ModalFooter>
+                </ModalShell>
             )}
 
             {completingJob && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-                        <div className="flex items-center justify-between p-6 border-b">
-                            <h2 className="text-lg font-semibold">{t.manufacturing.completeProductionJob}</h2>
-                            <button
-                                onClick={() => setCompletingJob(null)}
-                                className="text-gray-400 hover:text-gray-600"
-                            >
-                                <X className="h-5 w-5" />
-                            </button>
-                        </div>
+                <ModalShell size="sm" onBackdropClick={() => setCompletingJob(null)}>
+                    <ModalHeader title={t.manufacturing.completeProductionJob} onClose={() => setCompletingJob(null)} />
 
-                        <div className="p-6 space-y-4">
-                            {completeError && (
-                                <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{completeError}</div>
-                            )}
+                    <div className="p-4 space-y-4 overflow-y-auto">
+                        {completeError && <Alert tone="danger">{completeError}</Alert>}
 
-                            <p className="text-xs text-gray-500">{t.manufacturing.wastageHint}</p>
+                        <p className="text-xs text-gray-500">{t.manufacturing.wastageHint}</p>
 
-                            <div className="space-y-3">
-                                {completingJob.recipe.components.map((comp) => (
-                                    <div key={comp.productId} className="flex items-center gap-3">
-                                        <label htmlFor={`wastage-${comp.productId}`} className="flex-1 text-sm text-gray-700">
-                                            {comp.product.name}
-                                            {comp.product.sku && (
-                                                <span className="text-gray-400"> ({comp.product.sku})</span>
-                                            )}
-                                        </label>
-                                        <input
-                                            id={`wastage-${comp.productId}`}
-                                            type="number"
-                                            min={0}
-                                            step={0.0001}
-                                            placeholder="0"
-                                            value={wastageQty[comp.productId] ?? ''}
-                                            onChange={(e) =>
-                                                setWastageQty((w) => ({ ...w, [comp.productId]: e.target.value }))
-                                            }
-                                            className="w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end gap-3 p-6 border-t bg-gray-50 rounded-b-xl">
-                            <button
-                                onClick={() => setCompletingJob(null)}
-                                className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-100"
-                            >
-                                {t.common.cancel}
-                            </button>
-                            <button
-                                onClick={handleCompleteJob}
-                                disabled={completing}
-                                className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
-                            >
-                                {completing ? t.manufacturing.completingJob : t.manufacturing.jobActions.complete}
-                            </button>
+                        <div className="space-y-3">
+                            {completingJob.recipe.components.map((comp) => (
+                                <div key={comp.productId} className="flex items-center gap-3">
+                                    <label htmlFor={`wastage-${comp.productId}`} className="flex-1 text-sm text-gray-700">
+                                        {comp.product.name}
+                                        {comp.product.sku && (
+                                            <span className="text-gray-400"> ({comp.product.sku})</span>
+                                        )}
+                                    </label>
+                                    <Input
+                                        id={`wastage-${comp.productId}`}
+                                        type="number"
+                                        min={0}
+                                        step={0.0001}
+                                        placeholder="0"
+                                        value={wastageQty[comp.productId] ?? ''}
+                                        onChange={(e) =>
+                                            setWastageQty((w) => ({ ...w, [comp.productId]: e.target.value }))
+                                        }
+                                        className="w-28"
+                                    />
+                                </div>
+                            ))}
                         </div>
                     </div>
-                </div>
+
+                    <ModalFooter>
+                        <Button variant="secondary" onClick={() => setCompletingJob(null)}>
+                            {t.common.cancel}
+                        </Button>
+                        <Button variant="primary" onClick={handleCompleteJob} loading={completing}>
+                            {completing ? t.manufacturing.completingJob : t.manufacturing.jobActions.complete}
+                        </Button>
+                    </ModalFooter>
+                </ModalShell>
             )}
         </>
     );

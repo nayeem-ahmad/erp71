@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { NotificationIcon } from '@/components/NotificationIcon';
+import { PageShell, Button } from '@/components/ui';
 
 interface Notification {
     id: string;
@@ -100,20 +101,15 @@ export default function NotificationsPage() {
     };
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px] space-y-4">
+        <PageShell>
             <PageHeader
                 title={m.title}
                 subtitle={m.subtitle}
                 breadcrumbs={[{ label: m.title }]}
                 actions={unreadCount > 0 ? (
-                    <button
-                        type="button"
-                        onClick={() => void handleMarkAllRead()}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors"
-                    >
-                        <CheckCheck className="w-3.5 h-3.5" />
+                    <Button variant="secondary" icon={<CheckCheck className="w-3.5 h-3.5" />} onClick={() => void handleMarkAllRead()}>
                         {m.markAllRead}
-                    </button>
+                    </Button>
                 ) : undefined}
             />
 
@@ -195,6 +191,6 @@ export default function NotificationsPage() {
                     </div>
                 </div>
             )}
-        </div>
+        </PageShell>
     );
 }

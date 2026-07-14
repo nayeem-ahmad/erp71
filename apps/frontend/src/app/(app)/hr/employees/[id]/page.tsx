@@ -9,6 +9,7 @@ import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell, Button, StatusBadge, statusToneFor } from '@/components/ui';
 
 interface Department { id: string; name: string; }
 interface Designation { id: string; name: string; }
@@ -157,22 +158,22 @@ export default function EmployeeDetailPage() {
 
     if (loading) {
         return (
-            <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px] flex items-center justify-center">
-                <p className="text-gray-400 font-bold">{t.employees.detail.loading}</p>
-            </div>
+            <PageShell className="flex items-center justify-center">
+                <p className="text-gray-400 font-semibold">{t.employees.detail.loading}</p>
+            </PageShell>
         );
     }
 
     if (!employee) {
         return (
-            <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px] flex items-center justify-center">
-                <p className="text-red-500 font-bold">{t.employees.detail.notFound}</p>
-            </div>
+            <PageShell className="flex items-center justify-center">
+                <p className="text-danger font-semibold">{t.employees.detail.notFound}</p>
+            </PageShell>
         );
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-3xl mx-auto space-y-6">
                 <PageHeader
                     title={employee.name}
@@ -186,11 +187,9 @@ export default function EmployeeDetailPage() {
                     )}
                 />
 
-                <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+                <div className="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
                     <div className="flex justify-end">
-                        <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${employee.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                            {employee.status}
-                        </span>
+                        <StatusBadge tone={statusToneFor(employee.status)}>{employee.status}</StatusBadge>
                     </div>
                     <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         <div>
@@ -303,11 +302,9 @@ export default function EmployeeDetailPage() {
                     </div>
 
                     <div className="pt-2 flex justify-end">
-                        <button disabled={saving} type="submit"
-                            className="flex items-center gap-2 px-6 py-3 rounded-xl font-black text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 disabled:opacity-50">
-                            <Save className="w-4 h-4" />
+                        <Button type="submit" variant="primary" loading={saving} icon={<Save className="w-4 h-4" />}>
                             {saving ? t.employees.detail.saving : t.employees.detail.saveChanges}
-                        </button>
+                        </Button>
                     </div>
                 </form>
 
@@ -355,6 +352,6 @@ export default function EmployeeDetailPage() {
                     )}
                 </div>
             </div>
-        </div>
+        </PageShell>
     );
 }

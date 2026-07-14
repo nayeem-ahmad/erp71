@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, User, Phone, Mail, Calendar, Briefcase } from 'lucide-react';
-import ModalShell from '@/components/ModalShell';
+import { User, Phone, Mail, Calendar, Briefcase } from 'lucide-react';
+import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { Button, Field, Input, Select, FormGrid, Alert } from '@/components/ui';
 
 interface AddEmployeeModalProps {
     isOpen: boolean;
@@ -63,109 +64,87 @@ export default function AddEmployeeModal({ isOpen, onClose, onAdd }: AddEmployee
 
     return (
         <ModalShell size="sm" onBackdropClick={onClose}>
-                <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                    <div>
-                        <h2 className="text-xl font-black tracking-tight">{t.employees.modal.title}</h2>
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">{t.employees.modal.subtitle}</p>
-                    </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-50 rounded-xl text-gray-400 transition-all">
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
+                <ModalHeader title={t.employees.modal.title} subtitle={t.employees.modal.subtitle} onClose={onClose} />
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
-                    {error && <div className="p-3 bg-red-50 text-red-600 rounded-xl text-sm font-bold">{error}</div>}
+                <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto">
+                    {error && <Alert tone="danger">{error}</Alert>}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="col-span-2 space-y-2">
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.employees.modal.fullName}</label>
-                            <div className="relative">
-                                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input required type="text" value={formData.name} onChange={set('name')}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-black focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm"
-                                    placeholder={t.employees.modal.placeholders.name} />
-                            </div>
-                        </div>
+                    <FormGrid>
+                        <FormGrid.Full>
+                            <Field label={t.employees.modal.fullName} required>
+                                <div className="relative">
+                                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                    <Input required type="text" value={formData.name} onChange={set('name')}
+                                        className="pl-10"
+                                        placeholder={t.employees.modal.placeholders.name} />
+                                </div>
+                            </Field>
+                        </FormGrid.Full>
 
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.employees.modal.phone}</label>
+                        <Field label={t.employees.modal.phone} required>
                             <div className="relative">
                                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input required type="text" value={formData.phone} onChange={set('phone')}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-black focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm"
+                                <Input required type="text" value={formData.phone} onChange={set('phone')}
+                                    className="pl-10"
                                     placeholder={t.employees.modal.placeholders.phone} />
                             </div>
-                        </div>
+                        </Field>
 
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.employees.modal.email} <span className="text-gray-300">({t.common.optional})</span></label>
+                        <Field label={t.employees.modal.email} hint={`(${t.common.optional})`}>
                             <div className="relative">
                                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input type="email" value={formData.email} onChange={set('email')}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm"
+                                <Input type="email" value={formData.email} onChange={set('email')}
+                                    className="pl-10"
                                     placeholder={t.employees.modal.placeholders.email} />
                             </div>
-                        </div>
+                        </Field>
 
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.employees.modal.dateOfJoining} <span className="text-gray-300">({t.common.optional})</span></label>
+                        <Field label={t.employees.modal.dateOfJoining} hint={`(${t.common.optional})`}>
                             <div className="relative">
                                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input type="date" value={formData.date_of_joining} onChange={set('date_of_joining')}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" />
+                                <Input type="date" value={formData.date_of_joining} onChange={set('date_of_joining')} className="pl-10" />
                             </div>
-                        </div>
+                        </Field>
 
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.employees.modal.nationalId} <span className="text-gray-300">({t.common.optional})</span></label>
-                            <input type="text" value={formData.nid} onChange={set('nid')}
-                                className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm"
+                        <Field label={t.employees.modal.nationalId} hint={`(${t.common.optional})`}>
+                            <Input type="text" value={formData.nid} onChange={set('nid')}
                                 placeholder={t.employees.modal.placeholders.nationalId} />
-                        </div>
+                        </Field>
 
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.employees.modal.department} <span className="text-gray-300">({t.common.optional})</span></label>
+                        <Field label={t.employees.modal.department} hint={`(${t.common.optional})`}>
                             <div className="relative">
                                 <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <select value={formData.department_id} onChange={set('department_id')}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold text-gray-600 text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all appearance-none">
+                                <Select value={formData.department_id} onChange={set('department_id')} className="pl-10">
                                     <option value="">{t.common.none}</option>
                                     {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                                </select>
+                                </Select>
                             </div>
-                        </div>
+                        </Field>
 
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.employees.modal.designation} <span className="text-gray-300">({t.common.optional})</span></label>
-                            <select value={formData.designation_id} onChange={set('designation_id')}
-                                className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-bold text-gray-600 text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all">
+                        <Field label={t.employees.modal.designation} hint={`(${t.common.optional})`}>
+                            <Select value={formData.designation_id} onChange={set('designation_id')}>
                                 <option value="">{t.common.none}</option>
                                 {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                            </select>
-                        </div>
+                            </Select>
+                        </Field>
 
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.employees.modal.basicSalary} <span className="text-gray-300">({t.common.optional})</span></label>
-                            <input type="number" min="0" step="0.01" value={formData.basic_salary} onChange={set('basic_salary')}
-                                className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm"
+                        <Field label={t.employees.modal.basicSalary} hint={`(${t.common.optional})`}>
+                            <Input type="number" min="0" step="0.01" value={formData.basic_salary} onChange={set('basic_salary')}
                                 placeholder="0.00" />
-                        </div>
+                        </Field>
 
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.employees.modal.status}</label>
-                            <select value={formData.status} onChange={set('status')}
-                                className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-black text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all">
+                        <Field label={t.employees.modal.status}>
+                            <Select value={formData.status} onChange={set('status')}>
                                 <option value="ACTIVE">{t.employees.detail.active}</option>
                                 <option value="INACTIVE">{t.employees.detail.inactive}</option>
-                            </select>
-                        </div>
-                    </div>
+                            </Select>
+                        </Field>
+                    </FormGrid>
 
                     <div className="pt-2">
-                        <button disabled={loading} type="submit"
-                            className="w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center transition-all bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 hover:-translate-y-0.5 disabled:opacity-50">
+                        <Button disabled={loading} loading={loading} type="submit" variant="primary" className="w-full justify-center">
                             {loading ? t.employees.modal.adding : t.employees.modal.addEmployee}
-                        </button>
+                        </Button>
                     </div>
                 </form>
         </ModalShell>

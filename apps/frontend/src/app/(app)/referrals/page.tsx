@@ -10,6 +10,7 @@ import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { buildBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell } from '@/components/ui';
 
 const commissionHelper = createColumnHelper<ReferralCommission>();
 const paymentHelper = createColumnHelper<RefereePayment>();
@@ -119,8 +120,7 @@ export default function RefereePortalPage() {
     ] : [];
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={formatMessage(m.title, { name: ledger?.referee.name ?? '' })}
                     subtitle={m.subtitle}
@@ -223,7 +223,6 @@ export default function RefereePortalPage() {
                         </div>
                     </>
                 ) : null}
-            </div>
-        </div>
+        </PageShell>
     );
 }

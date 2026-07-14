@@ -7,6 +7,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { formatBDT, formatDate, formatNumber } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell } from '@/components/ui';
 
 type SmsPackage = {
     id: string;
@@ -91,7 +92,7 @@ export default function SmsCreditsPage() {
     }, [balance, summary?.low_balance]);
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-6xl mx-auto space-y-6">
                 <PageHeader
                     title="SMS Credits"
@@ -239,6 +240,6 @@ export default function SmsCreditsPage() {
                     </div>
                 )}
             </div>
-        </div>
+        </PageShell>
     );
 }
