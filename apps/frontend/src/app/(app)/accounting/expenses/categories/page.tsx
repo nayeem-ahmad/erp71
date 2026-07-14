@@ -154,7 +154,7 @@ export default function ExpenseCategoriesPage() {
                     t.accounting.links.expenseCategories.title,
                 )}
                 actions={(
-                    <button type="button" onClick={openCreate} className={`${compactDensity.btnPrimary} bg-danger text-white hover:bg-red-700`}>
+                    <button type="button" onClick={openCreate} className={`${compactDensity.btnPrimary}${compactDensity.btnPrimary} bg-primary text-white hover:bg-primary-hover`}>
                         <Plus className="w-3.5 h-3.5" />
                         {t.expenses.addCategory}
                     </button>
@@ -192,7 +192,7 @@ export default function ExpenseCategoriesPage() {
                         </div>
                         <ModalFooter>
                             <Button variant="secondary" type="button" onClick={() => setShowForm(false)}>{t.common.cancel}</Button>
-                            <Button variant="danger" type="submit" loading={saving}>
+                            <Button variant="primary" type="submit" loading={saving}>
                                 {t.common.save}
                             </Button>
                         </ModalFooter>

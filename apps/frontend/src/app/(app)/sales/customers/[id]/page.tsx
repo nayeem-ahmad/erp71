@@ -21,7 +21,7 @@ const TASK_TYPES = ['FOLLOW_UP', 'COLLECTION', 'BIRTHDAY', 'REORDER_REMINDER'] a
 
 const taskTypeColors: Record<string, string> = {
     FOLLOW_UP: 'bg-blue-50 text-blue-700', COLLECTION: 'bg-amber-50 text-amber-700',
-    BIRTHDAY: 'bg-danger-light text-danger-text', REORDER_REMINDER: 'bg-violet-50 text-violet-700',
+    BIRTHDAY: 'bg-primary-light text-blue-700', REORDER_REMINDER: 'bg-primary-light text-blue-700',
 };
 
 const TASK_TYPE_KEYS: Record<string, 'followUp' | 'collection' | 'birthday' | 'reorderReminder'> = {

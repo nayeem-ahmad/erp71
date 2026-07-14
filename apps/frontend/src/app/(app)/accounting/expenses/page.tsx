@@ -338,7 +338,7 @@ function ExpensesPageContent() {
                             <Button variant="secondary" type="button" onClick={() => setShowForm(false)}>
                                 {t.common.cancel}
                             </Button>
-                            <Button variant="danger" type="submit" loading={saving} disabled={categories.length === 0}>
+                            <Button variant="primary" type="submit" loading={saving} disabled={categories.length === 0}>
                                 {t.common.save}
                             </Button>
                         </ModalFooter>

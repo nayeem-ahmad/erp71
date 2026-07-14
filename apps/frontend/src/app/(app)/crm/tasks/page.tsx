@@ -40,7 +40,7 @@ const TASK_TYPE_KEYS: Record<string, 'followUp' | 'collection' | 'birthday' | 'r
 const taskTypeColors: Record<string, string> = {
     FOLLOW_UP: 'bg-blue-50 text-blue-700',
     COLLECTION: 'bg-amber-50 text-amber-700',
-    BIRTHDAY: 'bg-rose-50 text-rose-700',
+    BIRTHDAY: 'bg-primary-light text-blue-700',
     REORDER_REMINDER: 'bg-primary-light text-blue-700',
 };
 
