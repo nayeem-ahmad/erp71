@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
-import { Plus, RefreshCw, Search, Eye, Trash2, ListChecks, Upload, X } from 'lucide-react';
+import { Plus, RefreshCw, Search, Eye, Trash2, ListChecks, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import { DataTable, type BulkAction } from '@/components/data-table';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import { PageShell, PageHeader, Button } from '@/components/ui/compact';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -153,33 +153,6 @@ export default function LeadsPage() {
     const priorityLabel = (priority: string) => (m.priorities as Record<string, string>)[priority] ?? priority;
 
     const columns: ColumnDef<Lead, any>[] = useMemo(() => [
-        columnHelper.display({
-            id: 'select',
-            header: ({ table }) => (
-                <input
-                    type="checkbox"
-                    aria-label="Select all"
-                    className="h-4 w-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 cursor-pointer"
-                    checked={table.getIsAllPageRowsSelected()}
-                    ref={(el) => { if (el) el.indeterminate = table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected(); }}
-                    onChange={table.getToggleAllPageRowsSelectedHandler()}
-                />
-            ),
-            cell: ({ row }) => (
-                <input
-                    type="checkbox"
-                    aria-label="Select row"
-                    className="h-4 w-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 cursor-pointer"
-                    checked={row.getIsSelected()}
-                    onChange={row.getToggleSelectedHandler()}
-                    onClick={(e) => e.stopPropagation()}
-                />
-            ),
-            enableSorting: false,
-            enableColumnFilter: false,
-            enableResizing: false,
-            size: 40,
-        }),
         columnHelper.accessor('name', {
             header: m.columns.name,
             cell: (info) => (
@@ -279,6 +252,18 @@ export default function LeadsPage() {
         [customFieldDefs],
     );
 
+    const bulkActions: BulkAction<Lead>[] = useMemo(
+        () => [
+            {
+                label: c.delete,
+                tone: 'danger',
+                icon: <Trash2 className="w-4 h-4" />,
+                onClick: bulkDelete,
+            },
+        ],
+        [c.delete, bulkDelete],
+    );
+
     return (
         <PageShell>
             <PageHeader
@@ -342,59 +327,7 @@ export default function LeadsPage() {
                 </select>
             </div>
 
-            {selectedLeads.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
-                    <span className="text-sm font-semibold text-violet-800">
-                        {((m as any).selectedCount ?? '{count} selected').replace('{count}', String(selectedLeads.length))}
-                    </span>
-                    <div className="flex-1" />
-                    <select
-                        value=""
-                        disabled={bulkBusy}
-                        onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) void runBulkAction('status', v); }}
-                        className="border border-violet-200 bg-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
-                    >
-                        <option value="">{(m as any).bulkSetStatus ?? 'Set status…'}</option>
-                        {(['NEW', 'CONTACTED', 'QUALIFIED'] as const).map((s) => (
-                            <option key={s} value={s}>{statusLabel(s)}</option>
-                        ))}
-                    </select>
-                    <select
-                        value=""
-                        disabled={bulkBusy}
-                        onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) void runBulkAction('assign', v === '__unassign__' ? '' : v); }}
-                        className="border border-violet-200 bg-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
-                    >
-                        <option value="">{(m as any).bulkAssign ?? 'Assign to…'}</option>
-                        <option value="__unassign__">{(m as any).bulkUnassign ?? '— Unassigned —'}</option>
-                        {teamMembers.map((mem) => {
-                            const id = mem.userId ?? mem.user_id ?? mem.user?.id;
-                            const label = mem.name ?? mem.user?.name ?? mem.email ?? mem.user?.email ?? id;
-                            return id ? <option key={id} value={id}>{label}</option> : null;
-                        })}
-                    </select>
-                    <button
-                        type="button"
-                        onClick={bulkDelete}
-                        disabled={bulkBusy}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50"
-                    >
-                        <Trash2 className="w-4 h-4" /> {c.delete}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={clearSelection}
-                        disabled={bulkBusy}
-                        className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-sm text-gray-600 hover:bg-white disabled:opacity-50"
-                        title={(c as any).clear ?? 'Clear'}
-                    >
-                        <X className="w-4 h-4" />
-                    </button>
-                </div>
-            )}
-
             <DataTable<Lead>
-                key={selectionEpoch}
                 tableId="crm-leads"
                 title={m.title}
                 data={leads}
@@ -404,6 +337,38 @@ export default function LeadsPage() {
                 onRowSelectionChange={setSelectedLeads}
                 getRowId={(l) => l.id}
                 emptyMessage={myTodaysActions ? m.myTodaysActionsEmpty : m.emptyMessage}
+                clearSelectionSignal={selectionEpoch}
+                bulkActions={bulkActions}
+                bulkActionsDisabled={bulkBusy}
+                renderBulkExtra={() => (
+                    <>
+                        <select
+                            value=""
+                            disabled={bulkBusy}
+                            onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) void runBulkAction('status', v); }}
+                            className="border border-primary-border bg-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
+                        >
+                            <option value="">{(m as any).bulkSetStatus ?? 'Set status…'}</option>
+                            {(['NEW', 'CONTACTED', 'QUALIFIED'] as const).map((s) => (
+                                <option key={s} value={s}>{statusLabel(s)}</option>
+                            ))}
+                        </select>
+                        <select
+                            value=""
+                            disabled={bulkBusy}
+                            onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) void runBulkAction('assign', v === '__unassign__' ? '' : v); }}
+                            className="border border-primary-border bg-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
+                        >
+                            <option value="">{(m as any).bulkAssign ?? 'Assign to…'}</option>
+                            <option value="__unassign__">{(m as any).bulkUnassign ?? '— Unassigned —'}</option>
+                            {teamMembers.map((mem) => {
+                                const id = mem.userId ?? mem.user_id ?? mem.user?.id;
+                                const label = mem.name ?? mem.user?.name ?? mem.email ?? mem.user?.email ?? id;
+                                return id ? <option key={id} value={id}>{label}</option> : null;
+                            })}
+                        </select>
+                    </>
+                )}
             />
 
             <ImportDialog

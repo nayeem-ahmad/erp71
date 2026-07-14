@@ -331,6 +331,111 @@ describe('DataTable', () => {
         expect(screen.queryByText(/showing/i)).not.toBeInTheDocument();
     });
 
+    it('injects a checkbox column when enableRowSelection is true and no caller select column exists', () => {
+        render(<DataTable {...defaultProps} enableRowSelection />);
+        expect(screen.getByLabelText(/select all/i)).toBeInTheDocument();
+        expect(screen.getAllByLabelText(/select row/i)).toHaveLength(mockData.length);
+    });
+
+    it('does not double-inject a select column when caller already supplies one', () => {
+        const columnsWithSelect: ColumnDef<Row, any>[] = [
+            {
+                id: 'select',
+                header: () => <input type="checkbox" aria-label="Select all" />,
+                cell: () => <input type="checkbox" aria-label="Select row" />,
+            },
+            ...columns,
+        ];
+        render(<DataTable {...defaultProps} columns={columnsWithSelect} enableRowSelection />);
+        expect(screen.getAllByLabelText(/select all/i)).toHaveLength(1);
+        expect(screen.getAllByLabelText(/select row/i)).toHaveLength(mockData.length);
+    });
+
+    it('does not render a bulk action bar when nothing is selected', () => {
+        render(
+            <DataTable
+                {...defaultProps}
+                enableRowSelection
+                bulkActions={[{ label: 'Delete', onClick: jest.fn() }]}
+            />
+        );
+        expect(screen.queryByText(/selected/i)).not.toBeInTheDocument();
+    });
+
+    it('shows the bulk action bar with count once a row is selected and invokes the action with selected rows', () => {
+        const onClick = jest.fn();
+        render(
+            <DataTable
+                {...defaultProps}
+                enableRowSelection
+                getRowId={(row) => row.id}
+                bulkActions={[{ label: 'Delete', onClick, tone: 'danger' }]}
+            />
+        );
+        const rowCheckboxes = screen.getAllByLabelText(/select row/i);
+        fireEvent.click(rowCheckboxes[0]);
+
+        expect(screen.getByText(/1 selected/i)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+        expect(onClick).toHaveBeenCalledWith([mockData[0]]);
+    });
+
+    it('clears the selection when the clear button in the bulk bar is clicked', () => {
+        render(
+            <DataTable
+                {...defaultProps}
+                enableRowSelection
+                getRowId={(row) => row.id}
+                bulkActions={[{ label: 'Delete', onClick: jest.fn() }]}
+            />
+        );
+        fireEvent.click(screen.getAllByLabelText(/select row/i)[0]);
+        expect(screen.getByText(/1 selected/i)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /clear selection/i }));
+        expect(screen.queryByText(/selected/i)).not.toBeInTheDocument();
+    });
+
+    it('clears the selection when clearSelectionSignal changes', () => {
+        const onRowSelectionChange = jest.fn();
+        const { rerender } = render(
+            <DataTable
+                {...defaultProps}
+                enableRowSelection
+                getRowId={(row) => row.id}
+                onRowSelectionChange={onRowSelectionChange}
+                clearSelectionSignal={0}
+            />
+        );
+        fireEvent.click(screen.getAllByLabelText(/select row/i)[0]);
+        expect(onRowSelectionChange).toHaveBeenLastCalledWith([mockData[0]]);
+
+        rerender(
+            <DataTable
+                {...defaultProps}
+                enableRowSelection
+                getRowId={(row) => row.id}
+                onRowSelectionChange={onRowSelectionChange}
+                clearSelectionSignal={1}
+            />
+        );
+        expect(onRowSelectionChange).toHaveBeenLastCalledWith([]);
+    });
+
+    it('renders custom bulk extra content via renderBulkExtra', () => {
+        render(
+            <DataTable
+                {...defaultProps}
+                enableRowSelection
+                getRowId={(row) => row.id}
+                bulkActions={[]}
+                renderBulkExtra={(rows) => <span>Extra for {rows.length}</span>}
+            />
+        );
+        fireEvent.click(screen.getAllByLabelText(/select row/i)[0]);
+        expect(screen.getByText('Extra for 1')).toBeInTheDocument();
+    });
+
     it('renders multiple pages when data exceeds page size', () => {
         // Default page size from preferences mock returns undefined → falls back to 20
         // Create 25 rows to require multiple pages
