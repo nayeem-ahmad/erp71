@@ -158,4 +158,11 @@ describe('SalesListPage — Sales Transaction List', () => {
             expect(api.getSales).toHaveBeenCalledTimes(1);
         });
     });
+
+    it('shows a New Sales Entry action linking to /sales/new (not POS)', async () => {
+        render(<SalesListPage />);
+        const link = await screen.findByRole('link', { name: /new sales entry/i });
+        expect(link).toHaveAttribute('href', '/sales/new');
+        expect(screen.queryByRole('link', { name: /^POS$/i })).toBeNull();
+    });
 });

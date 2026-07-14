@@ -15,7 +15,6 @@ import {
     Package,
     Settings,
     ShieldCheck,
-    ShoppingCart,
     Tag,
     TrendingUp,
     Users,
@@ -26,7 +25,6 @@ import { api } from '@/lib/api';
 import { canAccessInventoryAdvancedReports } from '@/lib/plan-entitlements';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
-import { isPosEnabled } from '@/lib/sales-settings';
 
 const SALES_HUB_SECTIONS: HubSectionConfig[] = [
     {
@@ -36,7 +34,7 @@ const SALES_HUB_SECTIONS: HubSectionConfig[] = [
             { href: routes.sales.list, key: 'allSales', icon: TrendingUp, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
             { href: routes.sales.returns, key: 'returns', icon: ArrowLeftRight, accent: 'bg-orange-50 text-orange-700 border-orange-100' },
             { href: routes.sales.customerPayments, key: 'customerPayments', icon: Wallet, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
-            { href: routes.sales.pos, key: 'pos', icon: ShoppingCart, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
+            { href: routes.sales.new, key: 'newSale', icon: FileText, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
         ],
     },
     {
@@ -77,7 +75,6 @@ const SALES_HUB_SECTIONS: HubSectionConfig[] = [
 export default function SalesHubPage() {
     const { t } = useI18n();
     const [canAccessAdvancedReports, setCanAccessAdvancedReports] = useState(false);
-    const [posEnabled, setPosEnabled] = useState(true);
 
     useEffect(() => {
         api.getMe()
@@ -89,10 +86,6 @@ export default function SalesHubPage() {
                 setCanAccessAdvancedReports(canAccessInventoryAdvancedReports(planCode, features));
             })
             .catch(() => setCanAccessAdvancedReports(false));
-
-        api.getSalesSettings()
-            .then((settings) => setPosEnabled(isPosEnabled(settings)))
-            .catch(() => setPosEnabled(true));
     }, []);
 
     const hub = t.sales.hub;
@@ -108,24 +101,13 @@ export default function SalesHubPage() {
         overview: { title: t.sidebar.items.overview, description: hub.subtitle },
     }), [hub.links, hub.subtitle, t.sidebar.items.overview]);
 
-    const sections = useMemo(() => {
-        let next = SALES_HUB_SECTIONS;
-        if (!posEnabled) {
-            next = next.map((section) => ({
-                ...section,
-                links: section.links.filter((link) => link.key !== 'pos'),
-            }));
-        }
-        return next;
-    }, [posEnabled]);
-
     return (
         <ModuleHub
             module="sales"
             moduleLabel={hub.moduleLabel}
             title={hub.title}
             subtitle={hub.subtitle}
-            sections={sections}
+            sections={SALES_HUB_SECTIONS}
             sectionLabels={sectionLabels}
             linkCopy={linkCopy}
             openSectionLabel={t.accountingShared.openSection}
