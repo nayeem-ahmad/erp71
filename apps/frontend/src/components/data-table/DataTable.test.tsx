@@ -102,6 +102,16 @@ describe('DataTable', () => {
         expect(screen.getByPlaceholderText('Search products...')).toBeInTheDocument();
     });
 
+    it('hides the built-in search input when showSearch is false', () => {
+        render(<DataTable {...defaultProps} showSearch={false} />);
+        expect(screen.queryByPlaceholderText('Search...')).not.toBeInTheDocument();
+        // Rest of the toolbar (filters/columns/export/print) remains intact
+        expect(screen.getByRole('button', { name: /filters/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /columns/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /export/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /print/i })).toBeInTheDocument();
+    });
+
     it('shows loading state when isLoading is true', () => {
         render(<DataTable {...defaultProps} isLoading={true} />);
         expect(screen.getByText(/loading/i)).toBeInTheDocument();

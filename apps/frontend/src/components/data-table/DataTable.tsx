@@ -103,6 +103,8 @@ export interface DataTableProps<T> {
     toolbarActions?: React.ReactNode;
     /** Search placeholder text */
     searchPlaceholder?: string;
+    /** Show the built-in global search input in the toolbar (default: true). Set false when the caller renders its own (e.g. server-side) search box. */
+    showSearch?: boolean;
     /** Predefined filter presets */
     filterPresets?: { label: string; filters: ColumnFiltersState }[];
     /** Table density — defaults to CompactUiContext when inside accounting module */
@@ -186,6 +188,7 @@ export default function DataTable<T>({
     bulkActionsDisabled = false,
     toolbarActions,
     searchPlaceholder,
+    showSearch = true,
     filterPresets,
     density,
 }: DataTableProps<T>) {
@@ -454,24 +457,26 @@ export default function DataTable<T>({
             <div className={d.toolbar}>
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                     {/* Search */}
-                    <div className="relative flex-1 min-w-[200px] max-w-md">
-                        <Search className={`absolute top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 ${isCompact ? 'left-2.5' : 'left-3'}`} />
-                        <input
-                            type="text"
-                            placeholder={resolvedSearchPlaceholder}
-                            className={d.searchInput}
-                            value={globalFilter}
-                            onChange={(e) => setGlobalFilter(e.target.value)}
-                        />
-                        {globalFilter && (
-                            <button
-                                onClick={() => setGlobalFilter('')}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                            >
-                                <X className="w-3.5 h-3.5" />
-                            </button>
-                        )}
-                    </div>
+                    {showSearch && (
+                        <div className="relative flex-1 min-w-[200px] max-w-md">
+                            <Search className={`absolute top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 ${isCompact ? 'left-2.5' : 'left-3'}`} />
+                            <input
+                                type="text"
+                                placeholder={resolvedSearchPlaceholder}
+                                className={d.searchInput}
+                                value={globalFilter}
+                                onChange={(e) => setGlobalFilter(e.target.value)}
+                            />
+                            {globalFilter && (
+                                <button
+                                    onClick={() => setGlobalFilter('')}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                        </div>
+                    )}
 
                     {/* Toolbar buttons */}
                     <div className="flex items-center gap-2 flex-wrap">

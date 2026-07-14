@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
-import { Plus, RefreshCw, Eye, Trash2, ListChecks, Upload } from 'lucide-react';
+import { Plus, RefreshCw, Search, Eye, Trash2, ListChecks, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -10,7 +10,7 @@ import { routes } from '@/lib/routes';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable, type BulkAction } from '@/components/data-table';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
-import { PageShell, PageHeader, Button, Select, StatusBadge, type StatusBadgeTone } from '@/components/ui';
+import { PageShell, PageHeader, Button, Select, StatusBadge, Input, type StatusBadgeTone } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { compactDensity } from '@/lib/ui/compact-density';
 import {
@@ -83,6 +83,8 @@ export default function LeadsPage() {
 
     const [leads, setLeads] = useState<Lead[]>([]);
     const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('');
@@ -99,10 +101,17 @@ export default function LeadsPage() {
         api.getTeamMembers().then((d: any) => setTeamMembers(Array.isArray(d) ? d : [])).catch(() => setTeamMembers([]));
     }, []);
 
+    // Debounce free-text search before it triggers a server request
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(search), 300);
+        return () => clearTimeout(timer);
+    }, [search]);
+
     const loadLeads = useCallback(async () => {
         setLoading(true);
         try {
             const data = await api.getLeads({
+                search: debouncedSearch || undefined,
                 status: statusFilter || undefined,
                 category: categoryFilter || undefined,
                 priority: priorityFilter || undefined,
@@ -115,7 +124,7 @@ export default function LeadsPage() {
         } finally {
             setLoading(false);
         }
-    }, [statusFilter, categoryFilter, priorityFilter, myTodaysActions]);
+    }, [debouncedSearch, statusFilter, categoryFilter, priorityFilter, myTodaysActions]);
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
 
@@ -310,6 +319,15 @@ export default function LeadsPage() {
                     <ListChecks className="w-4 h-4" />
                     {m.myTodaysActions}
                 </button>
+                <div className="relative flex-1 min-w-[200px] max-w-sm">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Input
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder={m.searchPlaceholder}
+                        className="pl-9"
+                    />
+                </div>
                 <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allStatuses}</option>
                     {LEAD_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
@@ -330,6 +348,7 @@ export default function LeadsPage() {
                 data={leads}
                 columns={columns}
                 isLoading={loading}
+                showSearch={false}
                 enableRowSelection
                 onRowSelectionChange={setSelectedLeads}
                 getRowId={(l) => l.id}
