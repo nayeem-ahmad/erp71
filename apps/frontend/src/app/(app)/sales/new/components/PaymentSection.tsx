@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { ChevronDown } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Payment } from '@/lib/hooks/useNewSaleCart';
 import { canKeepDue, creditDueAmount, availableCustomerCredit } from '@/lib/customer-credit';
@@ -18,6 +17,7 @@ interface DefinedMethod {
     account_id?: string;
     is_active: boolean;
     sort_order?: number;
+    show_on_entry: boolean;
 }
 
 // Backend classifies a payment for accounting by substring-matching the method
@@ -81,7 +81,7 @@ function amountsToPayments(methods: PickMethod[], amounts: Record<string, number
 export default function PaymentSection({ payments, total, customer, onPaymentChange }: PaymentSectionProps) {
     const [definedMethods, setDefinedMethods] = useState<DefinedMethod[]>([]);
     const [amounts, setAmounts] = useState<Record<string, number>>({});
-    const [showOther, setShowOther] = useState(false);
+    const [added, setAdded] = useState<string[]>([]); // ids explicitly added via picker
 
     useEffect(() => {
         api.getPaymentMethods()
@@ -89,27 +89,34 @@ export default function PaymentSection({ payments, total, customer, onPaymentCha
             .catch((err) => console.error('Failed to load payment methods', err));
     }, []);
 
-    const activeMethods = useMemo(
-        () => definedMethods.filter((m) => m.is_active).map(toPick),
+    const activeSorted = useMemo(
+        () => definedMethods
+            .filter((m) => m.is_active)
+            .slice()
+            .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+            .map(toPick),
         [definedMethods],
     );
-    const inactiveMethods = useMemo(
-        () => definedMethods.filter((m) => !m.is_active).map(toPick),
+    const defaultVisible = useMemo(
+        () => definedMethods
+            .filter((m) => m.is_active && m.show_on_entry)
+            .slice()
+            .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+            .map(toPick),
         [definedMethods],
     );
-
-    const visibleMethods = useMemo(
-        () => (activeMethods.length > 0 ? activeMethods : genericPicks),
-        [activeMethods],
+    const hasDefined = definedMethods.length > 0;
+    const visibleMethods = useMemo(() => {
+        if (!hasDefined) return genericPicks; // fresh tenant fallback
+        const base = defaultVisible;
+        const extra = activeSorted.filter((m) => added.includes(m.key) && !base.some((b) => b.key === m.key));
+        return [...base, ...extra];
+    }, [hasDefined, defaultVisible, activeSorted, added]);
+    const addableMethods = useMemo(
+        () => activeSorted.filter((m) => !visibleMethods.some((v) => v.key === m.key)),
+        [activeSorted, visibleMethods],
     );
-    const otherMethods = useMemo(
-        () => (activeMethods.length > 0 ? [...inactiveMethods, ...genericPicks] : []),
-        [activeMethods, inactiveMethods],
-    );
-    const allMethods = useMemo(
-        () => [...visibleMethods, ...otherMethods],
-        [visibleMethods, otherMethods],
-    );
+    const allMethods = useMemo(() => (hasDefined ? activeSorted : genericPicks), [hasDefined, activeSorted]);
 
     const emitPayments = useCallback(
         (nextAmounts: Record<string, number>) => {
@@ -187,21 +194,19 @@ export default function PaymentSection({ payments, total, customer, onPaymentCha
                 {visibleMethods.map(renderMethodRow)}
             </div>
 
-            {otherMethods.length > 0 && (
+            {addableMethods.length > 0 && (
                 <div>
-                    <button
-                        type="button"
-                        onClick={() => setShowOther((v) => !v)}
-                        className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-blue-600 transition-colors"
+                    <select
+                        aria-label="Add payment method"
+                        value=""
+                        onChange={(e) => { if (e.target.value) setAdded((a) => [...a, e.target.value]); }}
+                        className="w-full px-2 py-1.5 border rounded text-sm text-gray-600"
                     >
-                        Other methods
-                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showOther ? 'rotate-180' : ''}`} />
-                    </button>
-                    {showOther && (
-                        <div className="mt-1.5 space-y-1.5 rounded border p-2">
-                            {otherMethods.map(renderMethodRow)}
-                        </div>
-                    )}
+                        <option value="">+ Add method…</option>
+                        {addableMethods.map((m) => (
+                            <option key={m.key} value={m.key}>{m.name}</option>
+                        ))}
+                    </select>
                 </div>
             )}
         </div>
