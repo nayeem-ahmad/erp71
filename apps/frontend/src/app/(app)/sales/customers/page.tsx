@@ -159,7 +159,7 @@ export default function CustomersPage() {
                     const type = info.getValue() || 'INDIVIDUAL';
                     const classes =
                         type === 'ORGANIZATION'
-                            ? 'bg-violet-50 text-violet-700 border-violet-200'
+                            ? 'bg-primary-light text-blue-700 border-primary-border'
                             : 'bg-gray-50 text-gray-700 border-gray-200';
 
                     return (

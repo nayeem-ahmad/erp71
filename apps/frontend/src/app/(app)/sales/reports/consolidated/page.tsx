@@ -381,7 +381,7 @@ export default function ConsolidatedReportPage() {
                                 icon={BarChart3}
                                 label={m.summary.avgOrderValue}
                                 value={formatBDT(report.overall.avg_order)}
-                                accent="bg-violet-500"
+                                accent="bg-primary"
                             />
                             <SummaryCard
                                 icon={Package}

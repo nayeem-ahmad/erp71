@@ -855,7 +855,7 @@ export default function POSPage() {
                                             <span className="w-8 text-center text-xs font-bold">{item.quantity}</span>
                                             <button onClick={() => updateQuantity(item.id, 1)} className="p-1 hover:text-blue-600 transition-colors"><Plus className="w-4 h-4" /></button>
                                         </div>
-                                        <button onClick={() => removeFromCart(item.id)} className="p-2 text-gray-300 hover:text-rose-500 transition-colors">
+                                        <button onClick={() => removeFromCart(item.id)} className="p-2 text-gray-300 hover:text-danger transition-colors">
                                             <Trash2 className="w-4 h-4" />
                                         </button>
                                     </div>
@@ -999,7 +999,7 @@ export default function POSPage() {
                                         </div>
                                     )}
                                     {loyaltyDiscount > 0 && (
-                                        <div className="text-xs text-violet-600 font-semibold mt-0.5">
+                                        <div className="text-xs text-primary font-semibold mt-0.5">
                                             -{formatBDT(loyaltyDiscount)} ({t.pos.payment.loyaltyPointsLabel})
                                         </div>
                                     )}
@@ -1016,7 +1016,7 @@ export default function POSPage() {
                                             <p className="text-sm font-bold text-gray-900">{selectedCustomer.name || selectedCustomer.phone}</p>
                                             <p className="text-xs text-gray-500">{selectedCustomer.phone}</p>
                                             {loyaltySettings?.loyalty_points_enabled && (
-                                                <p className="text-xs font-semibold text-violet-600 mt-1">
+                                                <p className="text-xs font-semibold text-primary mt-1">
                                                     <Gift className="inline w-3.5 h-3.5 mr-1" />
                                                     {interpolate(t.pos.payment.pointsAvailable, { count: selectedCustomer.loyalty_points ?? 0 })}
                                                 </p>
@@ -1059,8 +1059,8 @@ export default function POSPage() {
                                 )}
 
                                 {selectedCustomer && loyaltySettings?.loyalty_points_enabled && loyaltySettings?.loyalty_redeem_rate && (
-                                    <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-4 space-y-3">
-                                        <label className="flex items-center gap-2 text-sm font-semibold text-violet-800">
+                                    <div className="rounded-xl border border-primary-border bg-primary-light/50 p-4 space-y-3">
+                                        <label className="flex items-center gap-2 text-sm font-semibold text-blue-800">
                                             <input
                                                 type="checkbox"
                                                 checked={redeemPointsEnabled}
@@ -1073,7 +1073,7 @@ export default function POSPage() {
                                                         setPointsToRedeem(0);
                                                     }
                                                 }}
-                                                className="rounded border-violet-300"
+                                                className="rounded border-primary-border"
                                             />
                                             {t.pos.payment.redeemPoints}
                                         </label>
@@ -1085,9 +1085,9 @@ export default function POSPage() {
                                                     max={selectedCustomer.loyalty_points ?? 0}
                                                     value={pointsToRedeem || ''}
                                                     onChange={(e) => setPointsToRedeem(parseInt(e.target.value, 10) || 0)}
-                                                    className="w-32 rounded-lg border border-violet-200 px-3 py-2 text-sm"
+                                                    className="w-32 rounded-lg border border-primary-border px-3 py-2 text-sm"
                                                 />
-                                                <span className="text-xs text-violet-700">
+                                                <span className="text-xs text-primary">
                                                     {interpolate(t.pos.payment.redeemOff, { amount: formatBDT(loyaltyDiscount) })}
                                                     {loyaltySettings.loyalty_min_redeem
                                                         ? interpolate(t.pos.payment.redeemMin, { min: loyaltySettings.loyalty_min_redeem })

@@ -198,7 +198,7 @@ function CustomerLedgerContent() {
                 const row = info.row.original;
                 if (row.rowType === 'opening') {
                     return (
-                        <span className="text-[10px] font-semibold text-indigo-700">
+                        <span className="text-[10px] font-semibold text-primary">
                             {copy.openingBalance}
                         </span>
                     );
@@ -276,7 +276,7 @@ function CustomerLedgerContent() {
                 <PageHeader
                     title={
                         <span className="inline-flex items-center gap-2">
-                            <BookOpen className="w-7 h-7 text-indigo-600" />
+                            <BookOpen className="w-7 h-7 text-primary" />
                             {copy.title}
                         </span>
                     }

@@ -36,7 +36,7 @@ const statusStyles: Record<string, string> = {
     RECEIVED:  'bg-amber-100 text-amber-700',
     ACCEPTED:  'bg-emerald-100 text-emerald-700',
     REJECTED:  'bg-red-100 text-red-600',
-    CONVERTED: 'bg-violet-100 text-violet-700',
+    CONVERTED: 'bg-primary-light text-blue-700',
     CANCELLED: 'bg-gray-100 text-gray-500',
 };
 
@@ -250,7 +250,7 @@ export default function PurchaseQuotationDetailPage() {
                 )}
 
                 {rfq.status === 'CONVERTED' && (
-                    <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-sm text-violet-800">
+                    <div className="bg-primary-light border border-primary-border rounded-xl p-4 text-sm text-blue-800">
                         <span className="font-bold">{t.purchaseQuotations.detail.convertedBanner}</span> {t.purchaseQuotations.detail.convertedMessage}{' '}
                         <button onClick={() => router.push('/purchases/orders')} className="underline font-bold">
                             {t.purchaseQuotations.detail.viewPurchaseOrders}

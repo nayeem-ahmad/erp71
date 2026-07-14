@@ -244,7 +244,7 @@ export default function WarrantyClaimsPage() {
                     return (
                         <button
                             onClick={() => openStatusModal(claim)}
-                            className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                            className="text-xs text-primary hover:text-primary-hover font-medium"
                         >
                             {t.warrantyClaims.updateStatus}
                         </button>
@@ -261,7 +261,7 @@ export default function WarrantyClaimsPage() {
                 className="mb-4"
                 title={
                     <span className="inline-flex items-center gap-3">
-                        <ShieldCheck className="w-6 h-6 text-indigo-600" />
+                        <ShieldCheck className="w-6 h-6 text-primary" />
                         {t.warrantyClaims.title}
                     </span>
                 }
@@ -311,7 +311,7 @@ export default function WarrantyClaimsPage() {
                                         }}
                                         onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
                                         placeholder={t.warrantyClaims.enterSerial}
-                                        className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                                     />
                                     <button
                                         onClick={handleLookup}
@@ -383,7 +383,7 @@ export default function WarrantyClaimsPage() {
                                             value={reason}
                                             onChange={(e) => setReason(e.target.value)}
                                             placeholder={t.warrantyClaims.reasonPlaceholder}
-                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                                         />
                                     </div>
                                     <div>
@@ -395,7 +395,7 @@ export default function WarrantyClaimsPage() {
                                             onChange={(e) => setDescription(e.target.value)}
                                             rows={3}
                                             placeholder={t.warrantyClaims.additionalDetailsPlaceholder}
-                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
                                         />
                                     </div>
                                 </>
@@ -442,7 +442,7 @@ export default function WarrantyClaimsPage() {
                                 <select
                                     value={newStatus}
                                     onChange={(e) => setNewStatus(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                                 >
                                     {NEXT_STATUSES[statusModalClaim.status]?.map((s) => (
                                         <option key={s} value={s}>
@@ -461,7 +461,7 @@ export default function WarrantyClaimsPage() {
                                         value={replacementSerial}
                                         onChange={(e) => setReplacementSerial(e.target.value)}
                                         placeholder={t.warrantyClaims.replacementSerialPlaceholder}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                                     />
                                     <p className="text-xs text-gray-500 mt-1">
                                         {t.warrantyClaims.replacementHint}
@@ -477,7 +477,7 @@ export default function WarrantyClaimsPage() {
                                     onChange={(e) => setResolutionNotes(e.target.value)}
                                     rows={3}
                                     placeholder={t.warrantyClaims.resolutionPlaceholder}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
                                 />
                             </div>
                         </div>

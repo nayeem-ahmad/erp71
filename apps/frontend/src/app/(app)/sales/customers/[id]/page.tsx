@@ -654,7 +654,7 @@ export default function CustomerProfile() {
                         <div className="flex justify-end">
                             <button
                                 onClick={() => setShowTaskForm((v) => !v)}
-                                className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700"
+                                className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover"
                             >
                                 <Plus className="w-4 h-4" /> {t.customers.profile.addTask}
                             </button>
@@ -668,7 +668,7 @@ export default function CustomerProfile() {
                                             key={taskType}
                                             onClick={() => setNewTask((n) => ({ ...n, type: taskType }))}
                                             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                                                newTask.type === taskType ? 'bg-violet-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                                                newTask.type === taskType ? 'bg-primary text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
                                             }`}
                                         >
                                             {t.crmTasks.types[TASK_TYPE_KEYS[taskType]]}
@@ -701,7 +701,7 @@ export default function CustomerProfile() {
                                     <button
                                         onClick={saveTask}
                                         disabled={savingTask || !newTask.title.trim() || !newTask.due_at}
-                                        className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                                        className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium disabled:opacity-50"
                                     >
                                         <Send className="w-4 h-4" /> {t.customers.profile.saveTask}
                                     </button>

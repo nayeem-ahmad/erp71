@@ -30,7 +30,7 @@ const PURCHASE_HUB_SECTIONS: HubSectionConfig[] = [
         sectionKey: 'payables',
         links: [
             { href: routes.purchases.supplierPayments, key: 'supplierPayments', icon: Wallet, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
-            { href: routes.purchases.supplierLedger, key: 'supplierLedger', icon: BookOpen, accent: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+            { href: routes.purchases.supplierLedger, key: 'supplierLedger', icon: BookOpen, accent: 'bg-primary-light text-primary border-primary-border' },
         ],
     },
     {
@@ -47,7 +47,7 @@ const PURCHASE_HUB_SECTIONS: HubSectionConfig[] = [
         links: [
             { href: routes.purchases.reports.summary, key: 'purchaseSummary', icon: TrendingUp, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100', advancedOnly: true },
             { href: routes.purchases.reports.byProduct, key: 'purchasesByProduct', icon: Package, accent: 'bg-sky-50 text-sky-700 border-sky-100', advancedOnly: true },
-            { href: routes.purchases.reports.bySupplier, key: 'purchasesBySupplier', icon: Truck, accent: 'bg-violet-50 text-violet-700 border-violet-100', advancedOnly: true },
+            { href: routes.purchases.reports.bySupplier, key: 'purchasesBySupplier', icon: Truck, accent: 'bg-primary-light text-primary border-primary-border', advancedOnly: true },
         ],
     },
     {

@@ -265,7 +265,7 @@ export default function BranchReportPage() {
                                 icon={BarChart3}
                                 label={m.summary.avgOrder}
                                 value={formatBDT(r.summary.avg_order)}
-                                accent="bg-violet-500"
+                                accent="bg-primary"
                             />
                             <KpiCard
                                 icon={RotateCcw}
