@@ -493,5 +493,25 @@ describe('SalesService', () => {
 
       await expect(service.update('tenant-1', 'bad-id', { note: 'x' })).rejects.toThrow(NotFoundException);
     });
+
+    it('persists a provided saleDate into sale_date on update', async () => {
+      tx.sale.findFirst.mockResolvedValue({ id: 's1', items: [], payments: [], total_amount: 20, customer_id: null });
+      tx.sale.update.mockResolvedValue({ id: 's1' });
+
+      await service.update('tenant-1', 's1', { saleDate: '2026-01-15T10:00:00.000Z' });
+
+      const updateArg = tx.sale.update.mock.calls[0][0];
+      expect(updateArg.data.sale_date).toEqual(new Date('2026-01-15T10:00:00.000Z'));
+    });
+
+    it('does not set sale_date on update when saleDate is omitted', async () => {
+      tx.sale.findFirst.mockResolvedValue({ id: 's1', items: [], payments: [], total_amount: 20, customer_id: null });
+      tx.sale.update.mockResolvedValue({ id: 's1' });
+
+      await service.update('tenant-1', 's1', { note: 'no date' });
+
+      const updateArg = tx.sale.update.mock.calls[0][0];
+      expect(updateArg.data).not.toHaveProperty('sale_date');
+    });
   });
 });
