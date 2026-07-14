@@ -17,6 +17,8 @@ describe('CrmLeadsService', () => {
             lead: {
                 findUnique: jest.fn(),
                 findFirst: jest.fn(),
+                findMany: jest.fn(),
+                count: jest.fn(),
                 create: jest.fn(),
                 update: jest.fn(),
                 groupBy: jest.fn(),
@@ -447,6 +449,31 @@ describe('CrmLeadsService', () => {
                     data: expect.objectContaining({ custom_fields: { cf_1: 'Dhaka' } }),
                 }),
             );
+        });
+    });
+
+    describe('findAll sorting', () => {
+        beforeEach(() => {
+            db.lead.findMany.mockResolvedValue([]);
+            db.lead.count.mockResolvedValue(0);
+        });
+
+        it('passes an allowlisted sort to orderBy', async () => {
+            await service.findAll('tenant-1', { sortBy: 'name', sortDir: 'desc' });
+            const arg = (db.lead.findMany as jest.Mock).mock.calls[0][0];
+            expect(arg.orderBy).toEqual({ name: 'desc' });
+        });
+
+        it('falls back to default order for an unknown sort key', async () => {
+            await service.findAll('tenant-1', { sortBy: 'password', sortDir: 'asc' });
+            const arg = (db.lead.findMany as jest.Mock).mock.calls[0][0];
+            expect(arg.orderBy).toEqual([{ next_step_date: 'asc' }, { updated_at: 'desc' }]);
+        });
+
+        it('falls back to default order when no sort is given', async () => {
+            await service.findAll('tenant-1', {});
+            const arg = (db.lead.findMany as jest.Mock).mock.calls[0][0];
+            expect(arg.orderBy).toEqual([{ next_step_date: 'asc' }, { updated_at: 'desc' }]);
         });
     });
 });

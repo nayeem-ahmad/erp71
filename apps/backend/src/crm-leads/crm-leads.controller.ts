@@ -42,6 +42,8 @@ export class CrmLeadsController {
         @Query('search') search?: string,
         @Query('page') page?: string,
         @Query('limit') limit?: string,
+        @Query('sortBy') sortBy?: string,
+        @Query('sortDir') sortDir?: string,
     ) {
         return this.service.findAll(tenant.tenantId, {
             status,
@@ -54,6 +56,8 @@ export class CrmLeadsController {
             search,
             page: page ? parseInt(page, 10) : undefined,
             limit: limit ? parseInt(limit, 10) : undefined,
+            sortBy,
+            sortDir,
         });
     }
 
