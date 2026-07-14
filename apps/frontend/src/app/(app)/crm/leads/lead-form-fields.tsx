@@ -1,6 +1,7 @@
 'use client';
 
 import { useI18n } from '@/lib/i18n';
+import { Field, Input, Select, Textarea } from '@/components/ui';
 
 export const LEAD_STATUSES = ['NEW', 'CONTACTED', 'QUALIFIED', 'LOST', 'CONVERTED'] as const;
 export const LEAD_SOURCES = ['WALK_IN', 'PHONE', 'FACEBOOK', 'REFERRAL', 'WEBSITE', 'OTHER'] as const;
@@ -113,6 +114,26 @@ export function validateLeadForm(form: LeadFormState): string | null {
     return null;
 }
 
+/**
+ * Same validation rules as `validateLeadForm`, but returns a per-field error map
+ * (using the provided i18n messages) for inline `Field` errors instead of a single code.
+ */
+export function validateLeadFormErrors(
+    form: LeadFormState,
+    messages: { nameRequired?: string; invalidEmail?: string; lostReasonRequired?: string },
+): LeadFormErrors {
+    const errors: LeadFormErrors = {};
+    if (!form.name.trim()) errors.name = messages.nameRequired ?? 'Name is required.';
+    const email = form.email.trim();
+    if (email && !EMAIL_RE.test(email)) {
+        errors.email = messages.invalidEmail ?? 'Please enter a valid email address.';
+    }
+    if (form.status === 'LOST' && !form.lost_reason.trim()) {
+        errors.lost_reason = messages.lostReasonRequired ?? 'Please provide a reason for marking this lead as lost.';
+    }
+    return errors;
+}
+
 export function leadFormToPayload(form: LeadFormState) {
     const payload: Record<string, string> = {
         name: form.name.trim(),
@@ -153,8 +174,7 @@ export function leadFormToPayload(form: LeadFormState) {
     return payload;
 }
 
-const inputClass = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm';
-const labelClass = 'text-xs font-semibold text-gray-600';
+export type LeadFormErrors = Partial<Record<keyof LeadFormState, string>>;
 
 type TeamMember = {
     userId?: string;
@@ -178,9 +198,10 @@ type LeadFormFieldsProps = {
     teamMembers?: TeamMember[];
     showStatus?: boolean;
     customFieldDefs?: { key: string; label: string }[];
+    errors?: LeadFormErrors;
 };
 
-export function LeadFormFields({ form, onChange, teamMembers = [], showStatus = true, customFieldDefs = [] }: LeadFormFieldsProps) {
+export function LeadFormFields({ form, onChange, teamMembers = [], showStatus = true, customFieldDefs = [], errors = {} }: LeadFormFieldsProps) {
     const { t } = useI18n();
     const m = t.crm.leads;
     const set = (key: keyof LeadFormState, value: string) => onChange({ ...form, [key]: value });
@@ -192,91 +213,76 @@ export function LeadFormFields({ form, onChange, teamMembers = [], showStatus = 
 
     return (
         <div className="grid gap-3 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-                <label className={labelClass}>{m.columns.name}</label>
-                <input value={form.name} onChange={(e) => set('name', e.target.value)} className={inputClass} />
-            </div>
-            <div>
-                <label className={labelClass}>{m.fields.mobile}</label>
-                <input value={form.mobile} onChange={(e) => set('mobile', e.target.value)} className={inputClass} />
-            </div>
-            <div>
-                <label className={labelClass}>{m.fields.email}</label>
-                <input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} className={inputClass} />
-            </div>
-            <div>
-                <label className={labelClass}>{m.fields.category}</label>
-                <select value={form.category} onChange={(e) => set('category', e.target.value)} className={inputClass}>
+            <Field label={m.columns.name} required error={errors.name} className="sm:col-span-2">
+                <Input value={form.name} onChange={(e) => set('name', e.target.value)} error={Boolean(errors.name)} />
+            </Field>
+            <Field label={m.fields.mobile} error={errors.mobile}>
+                <Input value={form.mobile} onChange={(e) => set('mobile', e.target.value)} error={Boolean(errors.mobile)} />
+            </Field>
+            <Field label={m.fields.email} error={errors.email}>
+                <Input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} error={Boolean(errors.email)} />
+            </Field>
+            <Field label={m.fields.category}>
+                <Select value={form.category} onChange={(e) => set('category', e.target.value)}>
                     {LEAD_CATEGORIES.map((c) => <option key={c} value={c}>{categoryLabel(c)}</option>)}
-                </select>
-            </div>
-            <div>
-                <label className={labelClass}>{m.fields.priority}</label>
-                <select value={form.priority} onChange={(e) => set('priority', e.target.value)} className={inputClass}>
+                </Select>
+            </Field>
+            <Field label={m.fields.priority}>
+                <Select value={form.priority} onChange={(e) => set('priority', e.target.value)}>
                     {LEAD_PRIORITIES.map((p) => <option key={p} value={p}>{priorityLabel(p)}</option>)}
-                </select>
-            </div>
+                </Select>
+            </Field>
             {showStatus && (
-                <div>
-                    <label className={labelClass}>{m.columns.status}</label>
-                    <select value={form.status} onChange={(e) => set('status', e.target.value)} className={inputClass}>
+                <Field label={m.columns.status}>
+                    <Select value={form.status} onChange={(e) => set('status', e.target.value)}>
                         {LEAD_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
-                    </select>
-                </div>
+                    </Select>
+                </Field>
             )}
             {showStatus && form.status === 'LOST' && (
-                <div className="sm:col-span-2">
-                    <label className={labelClass}>{m.fields.lostReason}</label>
-                    <textarea
+                <Field label={m.fields.lostReason} error={errors.lost_reason} className="sm:col-span-2">
+                    <Textarea
                         value={form.lost_reason}
                         onChange={(e) => set('lost_reason', e.target.value)}
-                        className={inputClass}
                         rows={2}
                         placeholder={m.fields.lostReasonPlaceholder}
+                        error={Boolean(errors.lost_reason)}
                     />
-                </div>
+                </Field>
             )}
-            <div>
-                <label className={labelClass}>{m.columns.source}</label>
-                <select value={form.source} onChange={(e) => set('source', e.target.value)} className={inputClass}>
+            <Field label={m.columns.source}>
+                <Select value={form.source} onChange={(e) => set('source', e.target.value)}>
                     {LEAD_SOURCES.map((s) => <option key={s} value={s}>{sourceLabel(s)}</option>)}
-                </select>
-            </div>
-            <div className="sm:col-span-2">
-                <label className={labelClass}>{m.fields.remarks}</label>
-                <textarea value={form.remarks} onChange={(e) => set('remarks', e.target.value)} className={inputClass} rows={3} />
-            </div>
-            <div>
-                <label className={labelClass}>{m.fields.linkedinUrl}</label>
-                <input value={form.linkedin_url} onChange={(e) => set('linkedin_url', e.target.value)} className={inputClass} placeholder="https://linkedin.com/in/..." />
-            </div>
-            <div>
-                <label className={labelClass}>{m.fields.fbUrl}</label>
-                <input value={form.fb_url} onChange={(e) => set('fb_url', e.target.value)} className={inputClass} placeholder="https://facebook.com/..." />
-            </div>
-            <div>
-                <label className={labelClass}>{m.fields.xUrl}</label>
-                <input value={form.x_url} onChange={(e) => set('x_url', e.target.value)} className={inputClass} placeholder="https://x.com/..." />
-            </div>
-            <div>
-                <label className={labelClass}>{m.fields.websiteUrl}</label>
-                <input value={form.website_url} onChange={(e) => set('website_url', e.target.value)} className={inputClass} placeholder="https://..." />
-            </div>
+                </Select>
+            </Field>
+            <Field label={m.fields.remarks} className="sm:col-span-2">
+                <Textarea value={form.remarks} onChange={(e) => set('remarks', e.target.value)} rows={3} />
+            </Field>
+            <Field label={m.fields.linkedinUrl}>
+                <Input value={form.linkedin_url} onChange={(e) => set('linkedin_url', e.target.value)} placeholder="https://linkedin.com/in/..." />
+            </Field>
+            <Field label={m.fields.fbUrl}>
+                <Input value={form.fb_url} onChange={(e) => set('fb_url', e.target.value)} placeholder="https://facebook.com/..." />
+            </Field>
+            <Field label={m.fields.xUrl}>
+                <Input value={form.x_url} onChange={(e) => set('x_url', e.target.value)} placeholder="https://x.com/..." />
+            </Field>
+            <Field label={m.fields.websiteUrl}>
+                <Input value={form.website_url} onChange={(e) => set('website_url', e.target.value)} placeholder="https://..." />
+            </Field>
             <NextStepFields
                 state={{ next_step: form.next_step, next_step_date: form.next_step_date, next_step_assigned_to: form.next_step_assigned_to }}
                 onChange={(next) => onChange({ ...form, ...next })}
                 teamMembers={teamMembers}
             />
             {customFieldDefs.map((def) => (
-                <div key={def.key}>
-                    <label className={labelClass}>{def.label}</label>
-                    <input
+                <Field label={def.label} key={def.key}>
+                    <Input
                         value={form.custom_fields?.[def.key] ?? ''}
                         onChange={(e) => onChange({ ...form, custom_fields: { ...form.custom_fields, [def.key]: e.target.value } })}
-                        className={inputClass}
                         maxLength={500}
                     />
-                </div>
+                </Field>
             ))}
         </div>
     );
@@ -298,20 +304,17 @@ export function NextStepFields({ state, onChange, teamMembers = [], showSectionH
         <>
             {showSectionHeader && (
                 <div className="sm:col-span-2 border-t border-gray-100 pt-3 mt-1">
-                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">{m.fields.nextStepSection}</p>
+                    <p className="text-xs font-semibold uppercase text-gray-400 mb-2">{m.fields.nextStepSection}</p>
                 </div>
             )}
-            <div className="sm:col-span-2">
-                <label className={labelClass}>{m.fields.nextStep}</label>
-                <input value={state.next_step} onChange={(e) => set('next_step', e.target.value)} className={inputClass} />
-            </div>
-            <div>
-                <label className={labelClass}>{m.fields.nextStepDate}</label>
-                <input type="datetime-local" value={state.next_step_date} onChange={(e) => set('next_step_date', e.target.value)} className={inputClass} />
-            </div>
-            <div>
-                <label className={labelClass}>{m.fields.nextStepAssignedTo}</label>
-                <select value={state.next_step_assigned_to} onChange={(e) => set('next_step_assigned_to', e.target.value)} className={inputClass}>
+            <Field label={m.fields.nextStep} className="sm:col-span-2">
+                <Input value={state.next_step} onChange={(e) => set('next_step', e.target.value)} />
+            </Field>
+            <Field label={m.fields.nextStepDate}>
+                <Input type="datetime-local" value={state.next_step_date} onChange={(e) => set('next_step_date', e.target.value)} />
+            </Field>
+            <Field label={m.fields.nextStepAssignedTo}>
+                <Select value={state.next_step_assigned_to} onChange={(e) => set('next_step_assigned_to', e.target.value)}>
                     <option value="">{m.fields.unassigned}</option>
                     {teamMembers.map((member) => {
                         const id = teamMemberId(member);
@@ -322,8 +325,8 @@ export function NextStepFields({ state, onChange, teamMembers = [], showSectionH
                             </option>
                         );
                     })}
-                </select>
-            </div>
+                </Select>
+            </Field>
         </>
     );
 }

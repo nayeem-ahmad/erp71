@@ -9,7 +9,7 @@ import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { DataTable } from '@/components/data-table';
-import { PageShell, PageHeader, Button } from '@/components/ui/compact';
+import { PageShell, PageHeader, Button, Select, StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
 interface CrmTask {
@@ -44,10 +44,10 @@ const taskTypeColors: Record<string, string> = {
     REORDER_REMINDER: 'bg-violet-50 text-violet-700',
 };
 
-const statusColors: Record<string, string> = {
-    PENDING: 'bg-blue-50 text-blue-700',
-    DONE: 'bg-emerald-50 text-emerald-700',
-    SNOOZED: 'bg-gray-100 text-gray-600',
+const taskStatusTone: Record<string, StatusBadgeTone> = {
+    PENDING: 'warning',
+    DONE: 'success',
+    SNOOZED: 'neutral',
 };
 
 const columnHelper = createColumnHelper<CrmTask>();
@@ -127,7 +127,7 @@ export default function CrmTasksPage() {
             cell: (info) => {
                 const type = info.getValue();
                 return (
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${taskTypeColors[type] ?? 'bg-gray-100 text-gray-600'}`}>
+                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${taskTypeColors[type] ?? 'bg-gray-100 text-gray-600'}`}>
                         {m.types[TASK_TYPE_KEYS[type]] ?? type}
                     </span>
                 );
@@ -162,10 +162,9 @@ export default function CrmTasksPage() {
             header: m.columns.status,
             cell: (info) => {
                 const status = info.getValue();
+                const label = status === 'DONE' ? m.done : status === 'PENDING' ? m.pending : status;
                 return (
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${statusColors[status] ?? 'bg-gray-100 text-gray-600'}`}>
-                        {status === 'DONE' ? m.done : status === 'PENDING' ? m.pending : status}
-                    </span>
+                    <StatusBadge tone={taskStatusTone[status] ?? 'neutral'}>{label}</StatusBadge>
                 );
             },
         }),
@@ -229,24 +228,24 @@ export default function CrmTasksPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3 mb-4">
-                <select
+                <Select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
-                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none"
+                    className="w-auto max-w-[180px]"
                 >
                     <option value="">{m.all}</option>
                     <option value="PENDING">{m.pending}</option>
                     <option value="DONE">{m.done}</option>
-                </select>
-                <select
+                </Select>
+                <Select
                     value={targetFilter}
                     onChange={(e) => setTargetFilter(e.target.value as '' | 'customer' | 'lead')}
-                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none"
+                    className="w-auto max-w-[180px]"
                 >
                     <option value="">{m.targetFilter.all}</option>
                     <option value="customer">{m.targetFilter.customers}</option>
                     <option value="lead">{m.targetFilter.leads}</option>
-                </select>
+                </Select>
                 <label className="flex items-center gap-2 text-sm text-gray-600">
                     <input type="checkbox" checked={dueTodayOnly} onChange={(e) => setDueTodayOnly(e.target.checked)} className="h-4 w-4" />
                     {m.dueTodayOnly}
@@ -254,7 +253,7 @@ export default function CrmTasksPage() {
             </div>
 
             {error && (
-                <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+                <div className="mb-4 rounded-md border border-red-200 bg-danger-light px-4 py-3 text-sm font-semibold text-danger-text">
                     {error}
                 </div>
             )}
@@ -282,9 +281,9 @@ function StatCard({ label, value, tone }: { label: string; value: number; tone: 
         neutral: 'text-gray-900',
     };
     return (
-        <div className="rounded-2xl border border-gray-100 bg-white px-5 py-4 shadow-sm">
+        <div className="rounded-lg border border-gray-100 bg-white px-5 py-4 shadow-sm">
             <p className="text-xs font-medium text-gray-500">{label}</p>
-            <p className={`mt-1 text-2xl font-black ${toneClasses[tone]}`}>{value}</p>
+            <p className={`mt-1 text-2xl font-bold ${toneClasses[tone]}`}>{value}</p>
         </div>
     );
 }

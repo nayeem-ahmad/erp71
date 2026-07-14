@@ -8,13 +8,14 @@ import { FinancialKpiTile } from '@/components/dashboard/KpiTile';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { api } from '@/lib/api';
+import { StatusBadge, type StatusBadgeTone } from '@/components/ui';
 
-const statusColors: Record<string, string> = {
-    DRAFT: 'bg-gray-100 text-gray-600',
-    SCHEDULED: 'bg-blue-50 text-blue-700',
-    SENDING: 'bg-amber-50 text-amber-700',
-    COMPLETED: 'bg-emerald-50 text-emerald-700',
-    CANCELLED: 'bg-rose-50 text-rose-700',
+const campaignStatusTone: Record<string, StatusBadgeTone> = {
+    DRAFT: 'neutral',
+    SCHEDULED: 'info',
+    SENDING: 'warning',
+    COMPLETED: 'success',
+    CANCELLED: 'danger',
 };
 
 interface LeadsSummary {
@@ -166,9 +167,9 @@ export default function CrmHubPage() {
                                 {recentCampaigns.map((c) => (
                                     <div key={c.id} className="px-5 py-3 flex items-center justify-between gap-3">
                                         <div className="min-w-0 flex items-center gap-2">
-                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full shrink-0 ${statusColors[c.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                                            <StatusBadge tone={campaignStatusTone[c.status] ?? 'neutral'} className="shrink-0">
                                                 {c.status}
-                                            </span>
+                                            </StatusBadge>
                                             <span className="text-sm font-medium text-gray-800 truncate">{c.name}</span>
                                         </div>
                                         <div className="text-xs text-gray-500 shrink-0">

@@ -50,6 +50,7 @@ export const crmHrMessages = {
             cannotEditConverted: 'Prospek yang ditukar tidak boleh diedit.',
             deleteConfirm: 'Padam prospek ini?',
             validation: {
+                nameRequired: 'Nama diperlukan.',
                 invalidEmail: 'Sila masukkan alamat e-mel yang sah.',
                 lostReasonRequired: 'Sila nyatakan sebab prospek ini hilang.',
             },

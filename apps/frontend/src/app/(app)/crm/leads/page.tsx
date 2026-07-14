@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
-import { Plus, RefreshCw, Search, Eye, Trash2, ListChecks, Upload } from 'lucide-react';
+import { Plus, RefreshCw, Eye, Trash2, ListChecks, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -10,7 +10,7 @@ import { routes } from '@/lib/routes';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable, type BulkAction } from '@/components/data-table';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
-import { PageShell, PageHeader, Button } from '@/components/ui/compact';
+import { PageShell, PageHeader, Button, Select, StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { compactDensity } from '@/lib/ui/compact-density';
 import {
@@ -50,6 +50,14 @@ function scoreBadgeColor(score: number): string {
     return 'bg-gray-100 text-gray-600';
 }
 
+const leadStatusTone: Record<string, StatusBadgeTone> = {
+    NEW: 'info',
+    CONTACTED: 'neutral',
+    QUALIFIED: 'neutral',
+    LOST: 'danger',
+    CONVERTED: 'success',
+};
+
 const LEAD_IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
     { key: 'mobile', label: 'Mobile', required: false },
@@ -75,7 +83,6 @@ export default function LeadsPage() {
 
     const [leads, setLeads] = useState<Lead[]>([]);
     const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('');
@@ -96,7 +103,6 @@ export default function LeadsPage() {
         setLoading(true);
         try {
             const data = await api.getLeads({
-                search: search || undefined,
                 status: statusFilter || undefined,
                 category: categoryFilter || undefined,
                 priority: priorityFilter || undefined,
@@ -109,7 +115,7 @@ export default function LeadsPage() {
         } finally {
             setLoading(false);
         }
-    }, [search, statusFilter, categoryFilter, priorityFilter, myTodaysActions]);
+    }, [statusFilter, categoryFilter, priorityFilter, myTodaysActions]);
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
 
@@ -180,9 +186,9 @@ export default function LeadsPage() {
         columnHelper.accessor('status', {
             header: m.columns.status,
             cell: (info) => (
-                <span className="text-xs font-semibold px-2 py-1 rounded-full bg-violet-50 text-violet-700">
+                <StatusBadge tone={leadStatusTone[info.getValue()] ?? 'neutral'}>
                     {statusLabel(info.getValue())}
-                </span>
+                </StatusBadge>
             ),
         }),
         columnHelper.accessor('score', {
@@ -304,27 +310,18 @@ export default function LeadsPage() {
                     <ListChecks className="w-4 h-4" />
                     {m.myTodaysActions}
                 </button>
-                <div className="relative flex-1 min-w-[200px] max-w-sm">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder={m.searchPlaceholder}
-                        className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm"
-                    />
-                </div>
-                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allStatuses}</option>
                     {LEAD_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
-                </select>
-                <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                </Select>
+                <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allCategories}</option>
                     {LEAD_CATEGORIES.map((cat) => <option key={cat} value={cat}>{categoryLabel(cat)}</option>)}
-                </select>
-                <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                </Select>
+                <Select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allPriorities}</option>
                     {LEAD_PRIORITIES.map((p) => <option key={p} value={p}>{priorityLabel(p)}</option>)}
-                </select>
+                </Select>
             </div>
 
             <DataTable<Lead>

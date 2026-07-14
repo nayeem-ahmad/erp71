@@ -11,7 +11,7 @@ import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
-import PageHeader from '@/components/ui/compact/PageHeader';
+import { PageShell, PageHeader, Button, FormFooter, StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import {
     LeadFormFields,
@@ -22,10 +22,19 @@ import {
     leadToFormState,
     nextStepFromLead,
     nextStepToPayload,
-    validateLeadForm,
+    validateLeadFormErrors,
+    type LeadFormErrors,
     type LeadFormState,
     type NextStepState,
 } from '../lead-form-fields';
+
+const leadStatusTone: Record<string, StatusBadgeTone> = {
+    NEW: 'info',
+    CONTACTED: 'neutral',
+    QUALIFIED: 'neutral',
+    LOST: 'danger',
+    CONVERTED: 'success',
+};
 
 const typeIcons: Record<string, string> = {
     CALL: '📞', SMS: '💬', WHATSAPP: '🟢', EMAIL: '📧', VISIT: '🏪', ONLINE_MEETING: '💻', NOTE: '📝',
@@ -79,7 +88,9 @@ export default function LeadDetailPage() {
     const [draftPurpose, setDraftPurpose] = useState('follow_up');
     const [draftChannel, setDraftChannel] = useState('WHATSAPP');
     const [editForm, setEditForm] = useState<LeadFormState | null>(null);
+    const [editFormErrors, setEditFormErrors] = useState<LeadFormErrors>({});
     const [savingLead, setSavingLead] = useState(false);
+    const [saveLeadError, setSaveLeadError] = useState<string | null>(null);
     const [teamMembers, setTeamMembers] = useState<any[]>([]);
     const [customFieldDefs, setCustomFieldDefs] = useState<{ key: string; label: string }[]>([]);
 
@@ -193,21 +204,16 @@ export default function LeadDetailPage() {
 
     const startEditing = () => {
         setEditForm(leadToFormState(lead));
+        setEditFormErrors({});
         setShowEditForm(true);
     };
 
     const saveLead = async () => {
         if (!editForm) return;
-        const validationError = validateLeadForm(editForm);
-        if (validationError === 'INVALID_EMAIL') {
-            alert(m.validation?.invalidEmail ?? 'Please enter a valid email address.');
-            return;
-        }
-        if (validationError === 'LOST_REASON_REQUIRED') {
-            alert(m.validation?.lostReasonRequired ?? 'Please provide a reason for marking this lead as lost.');
-            return;
-        }
-        if (validationError) return;
+        const validationErrors = validateLeadFormErrors(editForm, m.validation ?? {});
+        setEditFormErrors(validationErrors);
+        if (Object.keys(validationErrors).length > 0) return;
+        setSaveLeadError(null);
         setSavingLead(true);
         try {
             const updated = await api.updateLead(leadId, leadFormToPayload(editForm));
@@ -215,7 +221,7 @@ export default function LeadDetailPage() {
             setShowEditForm(false);
             setEditForm(null);
         } catch (err: unknown) {
-            alert(err instanceof Error ? err.message : m.detail.saveFailed);
+            setSaveLeadError(err instanceof Error ? err.message : m.detail.saveFailed);
         } finally {
             setSavingLead(false);
         }
@@ -232,10 +238,10 @@ export default function LeadDetailPage() {
     };
 
     if (loading) {
-        return <div className="p-8 font-black uppercase tracking-widest text-gray-400">{m.workspace.loading}</div>;
+        return <div className="p-8 text-sm font-semibold uppercase text-gray-400">{m.workspace.loading}</div>;
     }
     if (!lead) {
-        return <div className="p-8 font-black text-rose-500 uppercase">{m.workspace.notFound}</div>;
+        return <div className="p-8 text-sm font-semibold uppercase text-danger">{m.workspace.notFound}</div>;
     }
 
     const isConverted = lead.status === 'CONVERTED';
@@ -252,7 +258,7 @@ export default function LeadDetailPage() {
     ].filter((l) => l.url);
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px] space-y-4">
+        <PageShell>
             <PageHeader
                 title={lead.name}
                 breadcrumbs={nestedPageBreadcrumbs(
@@ -271,7 +277,7 @@ export default function LeadDetailPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-50 text-violet-700">{statusLabel}</span>
+                            <StatusBadge tone={leadStatusTone[lead.status] ?? 'neutral'}>{statusLabel}</StatusBadge>
                             <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-700">{sourceLabel}</span>
                             {categoryLabel && (
                                 <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700">{categoryLabel}</span>
@@ -367,15 +373,16 @@ export default function LeadDetailPage() {
             {showEditForm && editForm && !isConverted && (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
                     <h2 className="text-lg font-bold text-gray-900">{m.fields.editLead}</h2>
-                    <LeadFormFields form={editForm} onChange={setEditForm} teamMembers={teamMembers} customFieldDefs={customFieldDefs} />
-                    <div className="flex gap-2 pt-2">
-                        <button onClick={saveLead} disabled={savingLead} className="px-4 py-2 bg-violet-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
-                            {savingLead ? <Loader2 className="w-4 h-4 animate-spin" /> : m.detail.saveLead}
-                        </button>
-                        <button onClick={() => { setShowEditForm(false); setEditForm(null); }} className="px-4 py-2 border text-sm rounded-lg">
+                    <LeadFormFields form={editForm} onChange={setEditForm} teamMembers={teamMembers} customFieldDefs={customFieldDefs} errors={editFormErrors} />
+                    {saveLeadError && <p role="alert" className="text-xs text-danger">{saveLeadError}</p>}
+                    <FormFooter className="border-t-0 pt-0">
+                        <Button variant="secondary" onClick={() => { setShowEditForm(false); setEditForm(null); }}>
                             {t.common.cancel}
-                        </button>
-                    </div>
+                        </Button>
+                        <Button onClick={saveLead} loading={savingLead}>
+                            {m.detail.saveLead}
+                        </Button>
+                    </FormFooter>
                 </div>
             )}
 
@@ -492,6 +499,6 @@ export default function LeadDetailPage() {
                     )}
                 </div>
             </div>
-        </div>
+        </PageShell>
     );
 }

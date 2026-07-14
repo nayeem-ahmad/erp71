@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Megaphone, Plus, Send, Eye, Trash2, RefreshCw, Users, CheckCircle2, XCircle, Clock, Search } from 'lucide-react';
+import { Megaphone, Plus, Send, Eye, Trash2, RefreshCw, Users, Search, Loader2 } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { DataTable } from '@/components/data-table';
-import { PageShell, PageHeader, Button } from '@/components/ui/compact';
+import { PageShell, PageHeader, Button, Input, Select, Textarea, Field, StatusBadge, type StatusBadgeTone } from '@/components/ui';
+import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import { toast } from '@/lib/toast';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
 interface Campaign {
@@ -36,30 +38,19 @@ const STATUSES = ['DRAFT', 'SCHEDULED', 'SENDING', 'COMPLETED', 'CANCELLED'];
 
 const columnHelper = createColumnHelper<Campaign>();
 
-const statusColors: Record<string, string> = {
-    DRAFT: 'bg-gray-100 text-gray-600',
-    SCHEDULED: 'bg-blue-50 text-blue-700',
-    SENDING: 'bg-amber-50 text-amber-700',
-    COMPLETED: 'bg-emerald-50 text-emerald-700',
-    CANCELLED: 'bg-rose-50 text-rose-700',
+const campaignStatusTone: Record<string, StatusBadgeTone> = {
+    DRAFT: 'neutral',
+    SCHEDULED: 'info',
+    SENDING: 'warning',
+    COMPLETED: 'success',
+    CANCELLED: 'danger',
 };
-
-function Toast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
-    useEffect(() => { const t = setTimeout(onClose, 4000); return () => clearTimeout(t); }, [onClose]);
-    return (
-        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-medium ${type === 'success' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>
-            {type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-            {message}
-        </div>
-    );
-}
 
 export default function CrmCampaignsPage() {
     const { t } = useI18n();
     const m = t.crmCampaigns;
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [loading, setLoading] = useState(true);
-    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [channelFilter, setChannelFilter] = useState('');
@@ -95,8 +86,6 @@ export default function CrmCampaignsPage() {
 
     useEffect(() => { void loadCampaigns(); }, [loadCampaigns]);
 
-    const showToast = (message: string, type: 'success' | 'error') => setToast({ message, type });
-
     const isEmail = form.channel === 'EMAIL';
     const canSubmit = form.name.trim() && form.message.trim() && (!isEmail || form.subject.trim());
 
@@ -110,12 +99,12 @@ export default function CrmCampaignsPage() {
                 scheduled_at: form.scheduled_at || undefined,
                 description: form.description || undefined,
             });
-            showToast(m.created, 'success');
+            toast.success(m.created);
             setShowCreate(false);
             setForm({ name: '', description: '', channel: 'SMS', subject: '', target_segment: 'ALL', message: '', scheduled_at: '' });
             await loadCampaigns();
         } catch (err: any) {
-            showToast(err?.message ?? m.createFailed, 'error');
+            toast.error(err?.message ?? m.createFailed);
         } finally {
             setCreating(false);
         }
@@ -142,11 +131,11 @@ export default function CrmCampaignsPage() {
         setSending(true);
         try {
             const result = await api.sendCrmCampaign(selected.id);
-            showToast(`Campaign queued for ${result.queued} recipients`, 'success');
+            toast.success(`Campaign queued for ${result.queued} recipients`);
             setSelected(null);
             await loadCampaigns();
         } catch (err: any) {
-            showToast(err?.message ?? m.sendFailed, 'error');
+            toast.error(err?.message ?? m.sendFailed);
         } finally {
             setSending(false);
         }
@@ -156,10 +145,10 @@ export default function CrmCampaignsPage() {
         if (!confirm(m.deleteConfirm)) return;
         try {
             await api.deleteCrmCampaign(id);
-            showToast(m.deleted, 'success');
+            toast.success(m.deleted);
             await loadCampaigns();
         } catch {
-            showToast(m.deleteFailed, 'error');
+            toast.error(m.deleteFailed);
         }
     };
 
@@ -230,9 +219,9 @@ export default function CrmCampaignsPage() {
             cell: (info) => {
                 const status = info.getValue();
                 return (
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${statusColors[status] ?? 'bg-gray-100 text-gray-600'}`}>
+                    <StatusBadge tone={campaignStatusTone[status] ?? 'neutral'}>
                         {status}
-                    </span>
+                    </StatusBadge>
                 );
             },
         }),
@@ -276,8 +265,6 @@ export default function CrmCampaignsPage() {
 
     return (
         <PageShell>
-            {toast && <Toast {...toast} onClose={() => setToast(null)} />}
-
             <PageHeader
                 title={m.title}
                 subtitle={m.subtitle}
@@ -301,21 +288,21 @@ export default function CrmCampaignsPage() {
             <div className="flex flex-wrap gap-3 items-center">
                 <div className="relative flex-1 min-w-[200px] max-w-sm">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
+                    <Input
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder={m.searchPlaceholder}
-                        className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm"
+                        className="pl-9"
                     />
                 </div>
-                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allStatuses}</option>
                     {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-                <select value={channelFilter} onChange={(e) => setChannelFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                </Select>
+                <Select value={channelFilter} onChange={(e) => setChannelFilter(e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allChannels}</option>
                     {CHANNELS.map((ch) => <option key={ch} value={ch}>{ch}</option>)}
-                </select>
+                </Select>
             </div>
 
             <DataTable<Campaign>
@@ -330,120 +317,99 @@ export default function CrmCampaignsPage() {
 
             {/* Create modal */}
             {showCreate && (
-                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4">
-                        <h2 className="text-lg font-bold text-gray-900">{m.newCampaign}</h2>
-
-                        <input
-                            type="text"
-                            placeholder={m.placeholders.name}
-                            value={form.name}
-                            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                        />
+                <ModalShell size="md" onBackdropClick={() => setShowCreate(false)}>
+                    <ModalHeader title={m.newCampaign} onClose={() => setShowCreate(false)} />
+                    <div className="p-4 overflow-y-auto flex-1 space-y-4">
+                        <Field label={m.columns.name}>
+                            <Input
+                                type="text"
+                                placeholder={m.placeholders.name}
+                                value={form.name}
+                                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                            />
+                        </Field>
 
                         <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="text-xs font-medium text-gray-500 mb-1 block">Channel</label>
-                                <select
+                            <Field label="Channel">
+                                <Select
                                     value={form.channel}
                                     onChange={(e) => setForm((f) => ({ ...f, channel: e.target.value }))}
-                                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
                                 >
                                     {CHANNELS.map((ch) => <option key={ch}>{ch}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-xs font-medium text-gray-500 mb-1 block">Target Segment</label>
-                                <select
+                                </Select>
+                            </Field>
+                            <Field label="Target Segment">
+                                <Select
                                     value={form.target_segment}
                                     onChange={(e) => setForm((f) => ({ ...f, target_segment: e.target.value }))}
-                                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
                                 >
                                     {SEGMENTS.map((s) => <option key={s}>{s}</option>)}
-                                </select>
-                            </div>
+                                </Select>
+                            </Field>
                         </div>
 
                         {isEmail && (
-                            <div>
-                                <label className="text-xs font-medium text-gray-500 mb-1 block">{m.subjectLabel}</label>
-                                <input
+                            <Field label={m.subjectLabel}>
+                                <Input
                                     type="text"
                                     placeholder={m.placeholders.subject}
                                     value={form.subject}
                                     onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
-                                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
                                 />
-                            </div>
+                            </Field>
                         )}
 
-                        <div>
-                            <label className="text-xs font-medium text-gray-500 mb-1 block">Message *</label>
-                            <textarea
+                        <Field
+                            label="Message"
+                            required
+                            hint={form.channel === 'SMS' ? `${charCount} chars · ${smsPages} SMS page${smsPages !== 1 ? 's' : ''}` : undefined}
+                        >
+                            <Textarea
                                 placeholder={m.placeholders.message}
                                 value={form.message}
                                 onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
-                                className="w-full border border-gray-200 rounded-lg p-3 text-sm resize-none"
                                 rows={4}
                             />
-                            {form.channel === 'SMS' && (
-                                <p className="text-xs text-gray-400 mt-1">
-                                    {charCount} chars · {smsPages} SMS page{smsPages !== 1 ? 's' : ''}
-                                </p>
-                            )}
-                        </div>
+                        </Field>
 
-                        <div>
-                            <label className="text-xs font-medium text-gray-500 mb-1 block">Schedule (optional)</label>
-                            <input
+                        <Field label="Schedule (optional)">
+                            <Input
                                 type="datetime-local"
                                 value={form.scheduled_at}
                                 onChange={(e) => setForm((f) => ({ ...f, scheduled_at: e.target.value }))}
-                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
                             />
-                        </div>
-
-                        <div className="flex gap-3 pt-1">
-                            <button
-                                onClick={handleCreate}
-                                disabled={creating || !canSubmit}
-                                className="flex-1 py-2.5 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50"
-                            >
-                                {creating ? m.creating : m.createCampaign}
-                            </button>
-                            <button
-                                onClick={() => setShowCreate(false)}
-                                className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
-                            >
-                                Cancel
-                            </button>
-                        </div>
+                        </Field>
                     </div>
-                </div>
+                    <ModalFooter>
+                        <Button variant="secondary" onClick={() => setShowCreate(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleCreate} disabled={!canSubmit} loading={creating}>
+                            {m.createCampaign}
+                        </Button>
+                    </ModalFooter>
+                </ModalShell>
             )}
 
             {/* Detail / Send modal */}
             {selected && (
-                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4">
-                        <div className="flex items-start justify-between">
-                            <div>
-                                <h2 className="text-lg font-bold text-gray-900">{selected.name}</h2>
-                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${statusColors[selected.status]}`}>
-                                    {selected.status}
-                                </span>
-                            </div>
-                            <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
-                        </div>
-
+                <ModalShell size="md" onBackdropClick={() => setSelected(null)}>
+                    <ModalHeader
+                        title={selected.name}
+                        onClose={() => setSelected(null)}
+                    >
+                        <StatusBadge tone={campaignStatusTone[selected.status] ?? 'neutral'}>
+                            {selected.status}
+                        </StatusBadge>
+                    </ModalHeader>
+                    <div className="p-4 overflow-y-auto flex-1 space-y-4">
                         {selected.channel === 'EMAIL' && selected.subject && (
                             <div className="text-sm">
                                 <span className="text-gray-400">{m.subjectLabel}</span> <span className="font-medium text-gray-900">{selected.subject}</span>
                             </div>
                         )}
 
-                        <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-700 whitespace-pre-wrap">
+                        <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-700 whitespace-pre-wrap">
                             {selected.message}
                         </div>
 
@@ -466,14 +432,14 @@ export default function CrmCampaignsPage() {
                         </div>
 
                         {selected.status === 'DRAFT' && (
-                            <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
+                            <div className="bg-violet-50 border border-violet-200 rounded-lg p-4">
                                 {previewLoading ? (
                                     <div className="flex items-center gap-2 text-violet-600 text-sm">
-                                        <Clock className="w-4 h-4 animate-spin" /> Loading recipients...
+                                        <Loader2 className="w-4 h-4 animate-spin" /> Loading recipients...
                                     </div>
                                 ) : preview ? (
                                     <div>
-                                        <p className="text-sm font-bold text-violet-700 mb-2">
+                                        <p className="text-sm font-semibold text-violet-700 mb-2">
                                             <Users className="w-4 h-4 inline mr-1" />{preview.count} recipient{preview.count !== 1 ? 's' : ''} will receive this message
                                         </p>
                                         {preview.sample.length > 0 && (
@@ -488,28 +454,18 @@ export default function CrmCampaignsPage() {
                                 ) : null}
                             </div>
                         )}
-
-                        {selected.status === 'DRAFT' && (
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={handleSend}
-                                    disabled={sending || (preview?.count === 0)}
-                                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50"
-                                >
-                                    <Send className="w-4 h-4" /> {sending ? m.sending : m.sendNow}
-                                </button>
-                                <button onClick={() => setSelected(null)} className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600">
-                                    Close
-                                </button>
-                            </div>
-                        )}
-                        {selected.status !== 'DRAFT' && (
-                            <button onClick={() => setSelected(null)} className="w-full py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600">
-                                Close
-                            </button>
-                        )}
                     </div>
-                </div>
+                    <ModalFooter>
+                        <Button variant="secondary" onClick={() => setSelected(null)}>
+                            Close
+                        </Button>
+                        {selected.status === 'DRAFT' && (
+                            <Button onClick={handleSend} disabled={preview?.count === 0} loading={sending} icon={<Send className="w-4 h-4" />}>
+                                {m.sendNow}
+                            </Button>
+                        )}
+                    </ModalFooter>
+                </ModalShell>
             )}
         </PageShell>
     );

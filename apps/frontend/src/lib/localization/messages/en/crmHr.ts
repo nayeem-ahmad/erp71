@@ -50,6 +50,7 @@ export const crmHrMessages = {
             cannotEditConverted: 'Converted leads cannot be edited.',
             deleteConfirm: 'Delete this lead?',
             validation: {
+                nameRequired: 'Name is required.',
                 invalidEmail: 'Please enter a valid email address.',
                 lostReasonRequired: 'Please provide a reason for marking this lead as lost.',
             },
