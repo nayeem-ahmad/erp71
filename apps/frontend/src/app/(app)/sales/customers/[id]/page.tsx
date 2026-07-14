@@ -13,6 +13,7 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
+import { PageShell } from '@/components/ui';
 
 type Tab = 'history' | 'interactions' | 'credit' | 'tasks';
 
@@ -232,7 +233,7 @@ export default function CustomerProfile() {
         'bg-gray-100 text-gray-600';
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px] space-y-4">
+        <PageShell>
             <PageHeader
                 title={customer.name}
                 breadcrumbs={nestedPageBreadcrumbs(
@@ -246,7 +247,7 @@ export default function CustomerProfile() {
 
             {/* Profile Header */}
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex items-start space-x-6">
-                <div className="w-20 h-20 bg-blue-600 rounded-2xl shadow-xl shadow-blue-500/20 flex items-center justify-center text-white font-black text-3xl uppercase overflow-hidden">
+                <div className="w-20 h-20 bg-blue-600 rounded-2xl shadow-sm flex items-center justify-center text-white font-black text-3xl uppercase overflow-hidden">
                     {customer.profile_pic_url
                         ? <img src={customer.profile_pic_url} alt={customer.name} className="w-full h-full object-cover" />
                         : customer.name.substring(0, 2)}
@@ -750,7 +751,7 @@ export default function CustomerProfile() {
                     </div>
                 )}
             </div>
-        </div>
+        </PageShell>
     );
 }
 

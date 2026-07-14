@@ -9,6 +9,7 @@ import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell } from '@/components/ui';
 
 interface SummaryRow {
     date: string;
@@ -122,8 +123,7 @@ export default function SalesSummaryPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.salesReports.summary.title}
                     subtitle={t.salesReports.summary.subtitle}
@@ -223,7 +223,7 @@ export default function SalesSummaryPage() {
                     emptyIcon={<TrendingUp className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.salesReports.summary.searchPlaceholder}
                 />
-            </div>
-        </div>
+            
+        </PageShell>
     );
 }

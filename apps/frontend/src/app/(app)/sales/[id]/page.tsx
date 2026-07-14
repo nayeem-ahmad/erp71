@@ -11,6 +11,7 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
+import { PageShell } from '@/components/ui';
 
 interface EditItem {
     productId: string;
@@ -262,7 +263,7 @@ function SaleDetailPageContent() {
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-4xl mx-auto space-y-6">
                 {/* Edit Mode Banner */}
                 {isEditMode && (
@@ -308,28 +309,28 @@ function SaleDetailPageContent() {
                             <>
                                 <button
                                     onClick={() => router.push(`/sales/${sale.id}?edit=true`)}
-                                    className="bg-white hover:bg-amber-50 text-gray-700 hover:text-amber-700 border border-gray-200 hover:border-amber-300 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-sm flex items-center space-x-2 transition-all hover:-translate-y-0.5"
+                                    className="bg-white hover:bg-amber-50 text-gray-700 hover:text-amber-700 border border-gray-200 hover:border-amber-300 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-sm flex items-center space-x-2 transition-all"
                                 >
                                     <Pencil className="w-4 h-4" />
                                     <span>{t.common.edit}</span>
                                 </button>
                                 <button
                                     onClick={handlePOSPrint}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-md flex items-center space-x-2 transition-all hover:-translate-y-0.5"
+                                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-md flex items-center space-x-2 transition-all"
                                 >
                                     <Printer className="w-4 h-4" />
                                     <span>{t.sales.detail.posReceipt}</span>
                                 </button>
                                 <button
                                     onClick={handlePrint}
-                                    className="bg-gray-900 hover:bg-gray-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-md flex items-center space-x-2 transition-all hover:-translate-y-0.5"
+                                    className="bg-gray-900 hover:bg-gray-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-md flex items-center space-x-2 transition-all"
                                 >
                                     <Printer className="w-4 h-4" />
                                     <span>{t.sales.detail.printPreview}</span>
                                 </button>
                                 <Link
                                     href={`/sales/${sale.id}/invoice`}
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-md flex items-center space-x-2 transition-all hover:-translate-y-0.5"
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-md flex items-center space-x-2 transition-all"
                                 >
                                     <Download className="w-4 h-4" />
                                     <span>{t.sales.detail.invoicePdf}</span>
@@ -733,7 +734,7 @@ function SaleDetailPageContent() {
                         <button
                             onClick={handleSave}
                             disabled={saving || editItems.length === 0}
-                            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-md flex items-center space-x-2 transition-all hover:-translate-y-0.5 disabled:opacity-50"
+                            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-md flex items-center space-x-2 transition-all disabled:opacity-50"
                         >
                             <Save className="w-4 h-4" />
                             <span>{saving ? t.sales.detail.saving : t.sales.detail.saveAllChanges}</span>
@@ -741,7 +742,7 @@ function SaleDetailPageContent() {
                     </div>
                 )}
             </div>
-        </div>
+        </PageShell>
     );
 }
 

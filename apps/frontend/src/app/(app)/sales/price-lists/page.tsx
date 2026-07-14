@@ -10,6 +10,7 @@ import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
+import { PageShell } from '@/components/ui';
 
 const IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
@@ -147,8 +148,7 @@ export default function PriceListsPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.priceLists.title}
                     subtitle={t.priceLists.subtitle}
@@ -201,8 +201,8 @@ export default function PriceListsPage() {
                     importFn={(rows, mode) => api.importPriceLists(rows, mode)}
                     onSuccess={() => void loadLists()}
                 />
-            </div>
-        </div>
+            
+        </PageShell>
     );
 }
 
@@ -274,7 +274,7 @@ function ListForm({ list, onSave, onCancel }: { list: PriceList | null; onSave: 
                     <input type="checkbox" checked={isDefault} onChange={e => setIsDefault(e.target.checked)} className="rounded" />
                     {t.priceLists.defaultBadge}
                 </label>
-                <button disabled={loading} type="submit" className="px-6 py-2.5 rounded-xl font-black text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200 transition-all disabled:opacity-50">
+                <button disabled={loading} type="submit" className="px-6 py-2.5 rounded-xl font-black text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all disabled:opacity-50">
                     {loading ? t.priceLists.saving : list ? t.common.update : t.common.create}
                 </button>
             </form>

@@ -9,6 +9,8 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
+import { PageShell, Button } from '@/components/ui';
+import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 
 interface EditItem {
     productId: string;
@@ -238,7 +240,7 @@ function OrderDetailsPageContent() {
     const canEdit = order.status === 'DRAFT' || order.status === 'CONFIRMED';
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-5xl mx-auto space-y-6">
                 {/* Edit Mode Banner */}
                 {isEditMode && (
@@ -292,7 +294,7 @@ function OrderDetailsPageContent() {
                                 {canEdit && (
                                     <button
                                         onClick={() => router.push(`/sales/orders/${id}?edit=true`)}
-                                        className="bg-white hover:bg-amber-50 text-gray-700 hover:text-amber-700 border border-gray-200 hover:border-amber-300 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-sm flex items-center space-x-2 transition-all hover:-translate-y-0.5"
+                                        className="bg-white hover:bg-amber-50 text-gray-700 hover:text-amber-700 border border-gray-200 hover:border-amber-300 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-sm flex items-center space-x-2 transition-all"
                                     >
                                         <Pencil className="w-4 h-4" />
                                         <span>{t.common.edit}</span>
@@ -300,7 +302,7 @@ function OrderDetailsPageContent() {
                                 )}
                                 <button
                                     onClick={handlePrint}
-                                    className="bg-gray-900 hover:bg-blue-600 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-md flex items-center space-x-2 transition-all hover:-translate-y-0.5"
+                                    className="bg-gray-900 hover:bg-blue-600 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-md flex items-center space-x-2 transition-all"
                                 >
                                     <Printer className="w-4 h-4" />
                                     <span>{t.common.print}</span>
@@ -662,7 +664,7 @@ function OrderDetailsPageContent() {
                         <button
                             onClick={handleSave}
                             disabled={saving || editItems.length === 0}
-                            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-md flex items-center space-x-2 transition-all hover:-translate-y-0.5 disabled:opacity-50"
+                            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-md flex items-center space-x-2 transition-all disabled:opacity-50"
                         >
                             <Save className="w-4 h-4" />
                             <span>{saving ? t.orders.detail.saving : t.orders.detail.saveChanges}</span>
@@ -673,30 +675,37 @@ function OrderDetailsPageContent() {
 
             {/* Deposit Modal */}
             {depositModalOpen && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white w-full max-w-sm rounded-3xl p-6 relative">
-                        <h3 className="font-black text-lg mb-1">{t.orders.detail.addDeposit}</h3>
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">{formatMessage(t.orders.detail.dueAmount, { amount: formatBDT(amountDue, { locale }) })}</p>
-                        <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-2">{t.orders.detail.amountToPay}</label>
-                        <div className="relative mb-6">
-                            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                            <input
-                                type="number"
-                                max={amountDue}
-                                value={depositAmount}
-                                onChange={(e) => setDepositAmount(e.target.value)}
-                                className="w-full bg-gray-50 border border-gray-200 rounded-xl py-4 pl-10 pr-4 font-black text-2xl focus:ring-2 focus:ring-emerald-500/20"
-                                placeholder={t.shared.form.amountPlaceholder}
-                            />
+                <ModalShell size="sm" onBackdropClick={() => setDepositModalOpen(false)}>
+                        <ModalHeader
+                            title={t.orders.detail.addDeposit}
+                            subtitle={formatMessage(t.orders.detail.dueAmount, { amount: formatBDT(amountDue, { locale }) })}
+                            onClose={() => setDepositModalOpen(false)}
+                        />
+                        <div className="p-6 overflow-y-auto">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-2">{t.orders.detail.amountToPay}</label>
+                            <div className="relative">
+                                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                <input
+                                    type="number"
+                                    max={amountDue}
+                                    value={depositAmount}
+                                    onChange={(e) => setDepositAmount(e.target.value)}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-4 pl-10 pr-4 font-black text-2xl focus:ring-2 focus:ring-emerald-500/20"
+                                    placeholder={t.shared.form.amountPlaceholder}
+                                />
+                            </div>
                         </div>
-                        <div className="flex space-x-3">
-                            <button onClick={() => setDepositModalOpen(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 font-bold text-gray-600 rounded-xl py-3 transition-colors">{t.common.cancel}</button>
-                            <button onClick={handleAddDeposit} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl py-3 shadow-lg shadow-emerald-200 transition-colors">{t.orders.detail.confirm}</button>
-                        </div>
-                    </div>
-                </div>
+                        <ModalFooter>
+                            <Button type="button" variant="secondary" size="md" className="flex-1 justify-center" onClick={() => setDepositModalOpen(false)}>
+                                {t.common.cancel}
+                            </Button>
+                            <Button type="button" variant="primary" size="md" className="flex-1 justify-center" onClick={handleAddDeposit}>
+                                {t.orders.detail.confirm}
+                            </Button>
+                        </ModalFooter>
+                </ModalShell>
             )}
-        </div>
+        </PageShell>
     );
 }
 

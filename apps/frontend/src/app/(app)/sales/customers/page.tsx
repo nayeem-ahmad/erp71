@@ -12,6 +12,7 @@ import { DataTable } from '@/components/data-table';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
+import { PageShell, Button } from '@/components/ui';
 
 const IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
@@ -270,8 +271,7 @@ export default function CustomersPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.customers.title}
                     subtitle={t.customers.subtitle}
@@ -299,13 +299,9 @@ export default function CustomersPage() {
                                 <Upload className="w-4 h-4 mr-1.5" />
                                 Import
                             </button>
-                            <button
-                                onClick={() => setIsModalOpen(true)}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                            >
-                                <Plus className="w-4 h-4 mr-2" />
+                            <Button type="button" variant="primary" size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setIsModalOpen(true)}>
                                 {t.customers.newCustomer}
-                            </button>
+                            </Button>
                         </>
                     }
                 />
@@ -361,9 +357,8 @@ export default function CustomersPage() {
                     emptyIcon={<Users className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.customers.searchPlaceholder}
                     filterPresets={filterPresets}
-                    enableRowSelection
                 />
-            </div>
-        </div>
+            
+        </PageShell>
     );
 }

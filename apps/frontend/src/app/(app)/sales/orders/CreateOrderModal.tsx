@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Search, Trash2 } from 'lucide-react';
+import { Search, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { isCompoundUnit, CompoundUnitType } from '@/lib/compound-units';
 import CompoundUnitInput from '@/components/CompoundUnitInput';
-import ModalShell from '@/components/ModalShell';
+import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import { Button } from '@/components/ui';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { useI18n } from '@/lib/i18n';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
@@ -138,15 +139,11 @@ export default function CreateOrderModal({ isOpen, onClose, onSuccess }: CreateO
 
     return (
         <ModalShell size="lg" onBackdropClick={onClose}>
-                <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                    <div>
-                        <h2 className="text-xl font-black tracking-tight">{t.orders.createModal.title}</h2>
-                        <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-0.5">{t.orders.createModal.subtitle}</p>
-                    </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-50 rounded-xl text-gray-400">
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
+                <ModalHeader
+                    title={t.orders.createModal.title}
+                    subtitle={t.orders.createModal.subtitle}
+                    onClose={onClose}
+                />
 
                 <div className="p-6 overflow-y-auto space-y-6">
                     {error && (
@@ -290,21 +287,21 @@ export default function CreateOrderModal({ isOpen, onClose, onSuccess }: CreateO
                     )}
                 </div>
 
-                <div className="p-6 border-t border-gray-100 flex justify-end space-x-3">
-                    <button
-                        onClick={onClose}
-                        className="px-6 py-3 bg-white border border-gray-200 text-gray-700 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gray-50 transition-all"
-                    >
+                <ModalFooter>
+                    <Button type="button" variant="secondary" size="md" onClick={onClose}>
                         Cancel
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="primary"
+                        size="md"
                         onClick={handleSubmit}
-                        disabled={loading || items.length === 0}
-                        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-md transition-all hover:-translate-y-0.5 disabled:opacity-50"
+                        disabled={items.length === 0}
+                        loading={loading}
                     >
                         {loading ? t.orders.createModal.creating : t.orders.createModal.createOrder}
-                    </button>
-                </div>
+                    </Button>
+                </ModalFooter>
         </ModalShell>
     );
 }

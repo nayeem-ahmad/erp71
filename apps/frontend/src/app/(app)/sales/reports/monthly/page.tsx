@@ -8,6 +8,7 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { resolveLocaleForFormatting } from '@/lib/format';
+import { PageShell } from '@/components/ui';
 
 interface MonthlyRow {
     customer: { id: string | null; name: string; phone: string | null };
@@ -67,7 +68,7 @@ export default function MonthlySalesPage() {
     };
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-[1600px] mx-auto space-y-6">
                 <PageHeader
                     title={t.salesReports.monthly.title}
@@ -176,6 +177,6 @@ export default function MonthlySalesPage() {
                     </div>
                 ) : null}
             </div>
-        </div>
+        </PageShell>
     );
 }

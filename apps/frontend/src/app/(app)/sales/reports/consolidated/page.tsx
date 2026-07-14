@@ -7,6 +7,7 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { TrendingUp, ShoppingCart, BarChart3, Package } from 'lucide-react';
+import { PageShell } from '@/components/ui';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -286,7 +287,7 @@ export default function ConsolidatedReportPage() {
     const hasData = report && report.by_store.length > 0;
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="w-full px-4 sm:px-6 py-8 space-y-6">
 
                 <PageHeader
@@ -403,6 +404,6 @@ export default function ConsolidatedReportPage() {
                     </>
                 )}
             </div>
-        </div>
+        </PageShell>
     );
 }

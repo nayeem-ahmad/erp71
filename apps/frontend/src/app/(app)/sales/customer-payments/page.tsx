@@ -12,6 +12,8 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import { formatBDT } from '@/lib/format';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell, Button } from '@/components/ui';
+import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 
 interface CustomerOption {
     id: string;
@@ -385,8 +387,7 @@ function CustomerPaymentsContent() {
     }, 0);
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={
                         <span className="inline-flex items-center gap-2">
@@ -463,15 +464,13 @@ function CustomerPaymentsContent() {
                         emptyMessage={copy.noPayments}
                     />
                 )}
-            </div>
+            
 
             {showForm && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <form onSubmit={handleCreate} className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
-                        <div className="p-6 border-b border-gray-100">
-                            <h2 className="text-xl font-black">{copy.newPayment}</h2>
-                        </div>
-                        <div className="p-6 space-y-4">
+                <ModalShell size="sm" onBackdropClick={() => setShowForm(false)}>
+                    <form onSubmit={handleCreate} className="flex flex-col overflow-hidden">
+                        <ModalHeader title={copy.newPayment} onClose={() => setShowForm(false)} />
+                        <div className="p-6 space-y-4 overflow-y-auto">
                             {customers.length === 0 ? (
                                 <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">
                                     {copy.noCustomers}
@@ -546,26 +545,28 @@ function CustomerPaymentsContent() {
                                 </>
                             )}
                         </div>
-                        <div className="p-6 border-t border-gray-100 flex gap-3">
-                            <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-3 rounded-2xl font-bold text-gray-500 hover:bg-gray-50">
+                        <ModalFooter>
+                            <Button type="button" variant="secondary" size="md" className="flex-1 justify-center" onClick={() => setShowForm(false)}>
                                 {t.common.cancel}
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                                 type="submit"
-                                disabled={saving || customers.length === 0}
-                                className="flex-1 py-3 rounded-2xl font-black bg-[#293F75] text-white hover:bg-[#1f3058] disabled:opacity-50"
+                                variant="primary"
+                                size="md"
+                                className="flex-1 justify-center"
+                                disabled={customers.length === 0}
+                                loading={saving}
                             >
                                 {saving ? copy.saving : (formDirection === 'pay' ? copy.confirmPayout : copy.confirmPayment)}
-                            </button>
-                        </div>
+                            </Button>
+                        </ModalFooter>
                     </form>
-                </div>
+                </ModalShell>
             )}
 
             {viewPayment && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
-                        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                <ModalShell size="sm" onBackdropClick={() => setViewPayment(null)}>
+                    <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                             <h2 className="text-xl font-black">{copy.viewPayment}</h2>
                             <span className="text-xs font-mono font-bold text-gray-500">{viewPayment.payment_number}</span>
                         </div>
@@ -636,18 +637,18 @@ function CustomerPaymentsContent() {
                                 {t.common.close}
                             </button>
                         </div>
-                    </div>
-                </div>
+                </ModalShell>
             )}
 
             {editPayment && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <form onSubmit={handleUpdate} className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
-                        <div className="p-6 border-b border-gray-100">
-                            <h2 className="text-xl font-black">{copy.editPayment}</h2>
-                            <p className="text-xs text-gray-400 mt-1 font-mono">{editPayment.payment_number}</p>
-                        </div>
-                        <div className="p-6 space-y-4">
+                <ModalShell size="sm" onBackdropClick={() => setEditPayment(null)}>
+                    <form onSubmit={handleUpdate} className="flex flex-col overflow-hidden">
+                        <ModalHeader
+                            title={copy.editPayment}
+                            subtitle={editPayment.payment_number}
+                            onClose={() => setEditPayment(null)}
+                        />
+                        <div className="p-6 space-y-4 overflow-y-auto">
                             <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 text-sm">
                                 <span className="text-gray-500">{copy.columns.customer}: </span>
                                 <span className="font-bold">{editPayment.customer?.name}</span>
@@ -686,22 +687,18 @@ function CustomerPaymentsContent() {
                                 />
                             </label>
                         </div>
-                        <div className="p-6 border-t border-gray-100 flex gap-3">
-                            <button type="button" onClick={() => setEditPayment(null)} className="flex-1 py-3 rounded-2xl font-bold text-gray-500 hover:bg-gray-50">
+                        <ModalFooter>
+                            <Button type="button" variant="secondary" size="md" className="flex-1 justify-center" onClick={() => setEditPayment(null)}>
                                 {t.common.cancel}
-                            </button>
-                            <button
-                                type="submit"
-                                disabled={saving}
-                                className="flex-1 py-3 rounded-2xl font-black bg-[#293F75] text-white hover:bg-[#1f3058] disabled:opacity-50"
-                            >
+                            </Button>
+                            <Button type="submit" variant="primary" size="md" className="flex-1 justify-center" loading={saving}>
                                 {saving ? copy.saving : t.common.saveChanges}
-                            </button>
-                        </div>
+                            </Button>
+                        </ModalFooter>
                     </form>
-                </div>
+                </ModalShell>
             )}
-        </div>
+        </PageShell>
     );
 }
 

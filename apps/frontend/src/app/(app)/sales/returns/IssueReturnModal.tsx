@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { X, Search, AlertCircle } from 'lucide-react';
+import { Search, AlertCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
-import ModalShell from '@/components/ModalShell';
+import ModalShell, { ModalHeader } from '@/components/ModalShell';
+import { Button } from '@/components/ui';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { applyVoiceEntryReturnQuantities, buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 
@@ -141,12 +142,7 @@ export default function IssueReturnModal({ isOpen, onClose, onSuccess }: IssueRe
 
     return (
         <ModalShell size="md" onBackdropClick={onClose}>
-                <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                    <h2 className="text-xl font-black tracking-tight">{t.returns.issueModal.title}</h2>
-                    <button onClick={handleClose} className="p-2 hover:bg-gray-50 rounded-xl text-gray-400">
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
+                <ModalHeader title={t.returns.issueModal.title} onClose={handleClose} />
 
                 <div className="p-6 overflow-y-auto w-full max-h-[80vh]">
                     {error && (
@@ -172,13 +168,16 @@ export default function IssueReturnModal({ isOpen, onClose, onSuccess }: IssueRe
                                         placeholder={t.shared.form.receiptSerialPlaceholder}
                                     />
                                 </div>
-                                <button
+                                <Button
+                                    type="button"
+                                    variant="primary"
+                                    size="md"
                                     onClick={searchReceipt}
-                                    disabled={loading || !serialNumber.trim()}
-                                    className="bg-gray-900 text-white px-6 rounded-xl font-bold uppercase text-xs tracking-widest shadow-xl disabled:opacity-50"
+                                    disabled={!serialNumber.trim()}
+                                    loading={loading}
                                 >
                                     {loading ? t.returns.issueModal.searching : t.common.search}
-                                </button>
+                                </Button>
                             </div>
                         </div>
                     ) : (
@@ -254,20 +253,26 @@ export default function IssueReturnModal({ isOpen, onClose, onSuccess }: IssueRe
                                 />
                             </div>
 
-                            <button
+                            <Button
+                                type="button"
+                                variant="danger"
+                                size="md"
                                 onClick={submitReturn}
-                                disabled={loading}
-                                className="w-full bg-rose-600 text-white rounded-xl py-4 font-black uppercase tracking-widest shadow-xl shadow-rose-500/20 disabled:opacity-50 hover:bg-rose-700 hover:-translate-y-0.5 transition-all"
+                                loading={loading}
+                                className="w-full justify-center"
                             >
                                 {loading ? t.returns.issueModal.processing : t.returns.issueModal.confirmReturn}
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
                                 onClick={() => setSale(null)}
                                 disabled={loading}
-                                className="w-full bg-white text-gray-400 uppercase tracking-widest text-xs font-bold py-2 mt-2 hover:text-gray-600 transition-colors"
+                                className="w-full justify-center mt-2"
                             >
                                 {t.returns.issueModal.cancelTryAnother}
-                            </button>
+                            </Button>
                         </div>
                     )}
                 </div>

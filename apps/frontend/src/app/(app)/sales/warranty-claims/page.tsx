@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { ShieldCheck, Plus, X, Search, CheckCircle, XCircle, Clock, Wrench, RefreshCw } from 'lucide-react';
+import { ShieldCheck, Plus, Search, CheckCircle, XCircle, Clock, Wrench, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { createColumnHelper } from '@tanstack/react-table';
@@ -10,6 +10,8 @@ import type { WarrantyClaim } from '@erp71/shared-types';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell, Button } from '@/components/ui';
+import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 
 const STATUS_STYLES: Record<string, string> = {
     SUBMITTED: 'bg-blue-50 text-blue-700 border-blue-200',
@@ -254,7 +256,7 @@ export default function WarrantyClaimsPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <PageHeader
                 className="mb-4"
                 title={
@@ -289,16 +291,10 @@ export default function WarrantyClaimsPage() {
 
             {/* {t.warrantyClaims.newClaim} Modal */}
             {isModalOpen && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
-                        <div className="flex items-center justify-between p-5 border-b">
-                            <h2 className="text-lg font-semibold text-gray-900">{t.warrantyClaims.submitTitle}</h2>
-                            <button onClick={closeModal} className="text-gray-400 hover:text-gray-600">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
+                <ModalShell size="md" onBackdropClick={closeModal}>
+                        <ModalHeader title={t.warrantyClaims.submitTitle} onClose={closeModal} />
 
-                        <div className="p-5 space-y-4">
+                        <div className="p-5 space-y-4 overflow-y-auto">
                             {/* Serial number lookup */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -406,41 +402,34 @@ export default function WarrantyClaimsPage() {
                             )}
                         </div>
 
-                        <div className="flex justify-end gap-3 p-5 border-t">
-                            <button
-                                onClick={closeModal}
-                                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
-                            >
+                        <ModalFooter>
+                            <Button type="button" variant="secondary" size="md" onClick={closeModal}>
                                 {t.common.cancel}
-                            </button>
+                            </Button>
                             {lookupResult?.isClaimable && (
-                                <button
+                                <Button
+                                    type="button"
+                                    variant="primary"
+                                    size="md"
                                     onClick={handleSubmitClaim}
-                                    disabled={submitting || !reason.trim()}
-                                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                                    disabled={!reason.trim()}
+                                    loading={submitting}
                                 >
                                     {submitting ? t.warrantyClaims.submitting : t.warrantyClaims.submitClaim}
-                                </button>
+                                </Button>
                             )}
-                        </div>
-                    </div>
-                </div>
+                        </ModalFooter>
+                </ModalShell>
             )}
 
             {/* Status Update Modal */}
             {statusModalClaim && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-                        <div className="flex items-center justify-between p-5 border-b">
-                            <h2 className="text-lg font-semibold text-gray-900">{t.warrantyClaims.updateClaimStatus}</h2>
-                            <button
-                                onClick={() => setStatusModalClaim(null)}
-                                className="text-gray-400 hover:text-gray-600"
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="p-5 space-y-4">
+                <ModalShell size="sm" onBackdropClick={() => setStatusModalClaim(null)}>
+                        <ModalHeader
+                            title={t.warrantyClaims.updateClaimStatus}
+                            onClose={() => setStatusModalClaim(null)}
+                        />
+                        <div className="p-5 space-y-4 overflow-y-auto">
                             <p className="text-sm text-gray-600">
                                 Claim <span className="font-mono font-medium">{statusModalClaim.claim_number}</span>
                                 &nbsp;·&nbsp;Serial{' '}
@@ -492,28 +481,26 @@ export default function WarrantyClaimsPage() {
                                 />
                             </div>
                         </div>
-                        <div className="flex justify-end gap-3 p-5 border-t">
-                            <button
-                                onClick={() => setStatusModalClaim(null)}
-                                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
-                            >
+                        <ModalFooter>
+                            <Button type="button" variant="secondary" size="md" onClick={() => setStatusModalClaim(null)}>
                                 Cancel
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="primary"
+                                size="md"
                                 onClick={handleStatusUpdate}
                                 disabled={
-                                    statusUpdating ||
                                     !newStatus ||
                                     (newStatus === 'REPLACED' && !replacementSerial.trim())
                                 }
-                                className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                                loading={statusUpdating}
                             >
                                 {statusUpdating ? t.warrantyClaims.saving : t.common.save}
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                            </Button>
+                        </ModalFooter>
+                </ModalShell>
             )}
-        </div>
+        </PageShell>
     );
 }

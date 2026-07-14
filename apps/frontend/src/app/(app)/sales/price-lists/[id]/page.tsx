@@ -11,6 +11,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { formatBDT } from '@/lib/format';
+import { PageShell } from '@/components/ui';
 
 interface PriceListItem {
     id: string;
@@ -212,8 +213,7 @@ export default function PriceListDetailPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={listName || t.priceLists.detailTitle}
                     subtitle={t.priceLists.subtitle}
@@ -241,7 +241,7 @@ export default function PriceListDetailPage() {
                     emptyMessage={t.priceLists.emptyMessage}
                     searchPlaceholder={t.priceLists.searchPlaceholder}
                 />
-            </div>
-        </div>
+            
+        </PageShell>
     );
 }

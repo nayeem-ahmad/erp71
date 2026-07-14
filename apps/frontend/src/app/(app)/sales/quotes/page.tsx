@@ -11,6 +11,7 @@ import CreateQuotationModal from './CreateQuotationModal';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell, Button } from '@/components/ui';
 
 interface Quotation {
     id: string;
@@ -249,8 +250,7 @@ export default function QuotesPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.quotes.title}
                     subtitle={t.quotes.subtitle}
@@ -261,13 +261,9 @@ export default function QuotesPage() {
                         'sales',
                     )}
                     actions={
-                        <button
-                            onClick={() => setIsModalOpen(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                        >
-                            <Plus className="w-4 h-4 mr-2" />
+                        <Button type="button" variant="primary" size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setIsModalOpen(true)}>
                             {t.quotes.newQuotation}
-                        </button>
+                        </Button>
                     }
                 />
 
@@ -283,9 +279,8 @@ export default function QuotesPage() {
                     emptyIcon={<FileText className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.quotes.dataTable.searchPlaceholder}
                     filterPresets={filterPresets}
-                    enableRowSelection
                 />
-            </div>
-        </div>
+            
+        </PageShell>
     );
 }

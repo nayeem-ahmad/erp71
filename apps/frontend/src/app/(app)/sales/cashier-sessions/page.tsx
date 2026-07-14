@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Clock, DollarSign, ArrowDownCircle, ArrowUpCircle, X, CheckCircle, AlertCircle, Monitor } from 'lucide-react';
+import { Clock, DollarSign, ArrowDownCircle, ArrowUpCircle, CheckCircle, AlertCircle, Monitor } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell, Button } from '@/components/ui';
+import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 
 export default function CashierSessionsPage() {
     const { t, locale } = useI18n();
@@ -123,8 +125,7 @@ export default function CashierSessionsPage() {
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.cashierSessions.title}
                     subtitle={t.cashierSessions.subtitle}
@@ -138,7 +139,7 @@ export default function CashierSessionsPage() {
                         !session ? (
                             <button
                                 onClick={() => setShowOpenModal(true)}
-                                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg flex items-center space-x-2 transition-all hover:-translate-y-0.5"
+                                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg flex items-center space-x-2 transition-all"
                             >
                                 <Clock className="w-5 h-5" />
                                 <span>{t.cashierSessions.openShift}</span>
@@ -146,7 +147,7 @@ export default function CashierSessionsPage() {
                         ) : (
                             <button
                                 onClick={() => setShowCloseModal(true)}
-                                className="bg-rose-600 hover:bg-rose-700 text-white px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg flex items-center space-x-2 transition-all hover:-translate-y-0.5"
+                                className="bg-rose-600 hover:bg-rose-700 text-white px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg flex items-center space-x-2 transition-all"
                             >
                                 <Clock className="w-5 h-5" />
                                 <span>{t.cashierSessions.closeShift}</span>
@@ -256,19 +257,13 @@ export default function CashierSessionsPage() {
                         <p className="text-xs font-bold text-gray-300 uppercase tracking-widest mt-1">{t.cashierSessions.noActiveSessionHint}</p>
                     </div>
                 )}
-            </div>
+            
 
             {/* Open Session Modal */}
             {showOpenModal && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-                    <div className="bg-white w-[420px] rounded-3xl shadow-2xl overflow-hidden">
-                        <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-                            <h2 className="text-xl font-black tracking-tight">{t.cashierSessions.openShiftTitle}</h2>
-                            <button onClick={() => setShowOpenModal(false)} className="p-2 hover:bg-white rounded-xl text-gray-400 hover:text-gray-900 transition-all">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-4">
+                <ModalShell size="sm" onBackdropClick={() => setShowOpenModal(false)}>
+                        <ModalHeader title={t.cashierSessions.openShiftTitle} onClose={() => setShowOpenModal(false)} />
+                        <div className="p-6 space-y-4 overflow-y-auto">
                             {counters.length > 0 && (
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.cashierSessions.counter}</label>
@@ -296,29 +291,19 @@ export default function CashierSessionsPage() {
                                 />
                             </div>
                         </div>
-                        <div className="p-6 bg-gray-50 border-t border-gray-100">
-                            <button
-                                onClick={handleOpenSession}
-                                className="w-full py-3 rounded-2xl font-black text-sm uppercase tracking-widest bg-green-600 hover:bg-green-700 text-white shadow-lg transition-all"
-                            >
+                        <ModalFooter>
+                            <Button type="button" variant="primary" size="md" className="w-full justify-center" onClick={handleOpenSession}>
                                 Open Shift
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                            </Button>
+                        </ModalFooter>
+                </ModalShell>
             )}
 
             {/* Close Session Modal */}
             {showCloseModal && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-                    <div className="bg-white w-[420px] rounded-3xl shadow-2xl overflow-hidden">
-                        <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-                            <h2 className="text-xl font-black tracking-tight">{t.cashierSessions.closeShiftTitle}</h2>
-                            <button onClick={() => setShowCloseModal(false)} className="p-2 hover:bg-white rounded-xl text-gray-400 hover:text-gray-900 transition-all">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-4">
+                <ModalShell size="sm" onBackdropClick={() => setShowCloseModal(false)}>
+                        <ModalHeader title={t.cashierSessions.closeShiftTitle} onClose={() => setShowCloseModal(false)} />
+                        <div className="p-6 space-y-4 overflow-y-auto">
                             <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
                                 <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 block mb-1">{t.cashierSessions.expectedCash}</span>
                                 <span className="text-2xl font-black text-blue-600">
@@ -345,29 +330,19 @@ export default function CashierSessionsPage() {
                                 </div>
                             )}
                         </div>
-                        <div className="p-6 bg-gray-50 border-t border-gray-100">
-                            <button
-                                onClick={handleCloseSession}
-                                className="w-full py-3 rounded-2xl font-black text-sm uppercase tracking-widest bg-rose-600 hover:bg-rose-700 text-white shadow-lg transition-all"
-                            >
+                        <ModalFooter>
+                            <Button type="button" variant="danger" size="md" className="w-full justify-center" onClick={handleCloseSession}>
                                 Close Shift
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                            </Button>
+                        </ModalFooter>
+                </ModalShell>
             )}
 
             {/* Cash Transaction Modal */}
             {showTxModal && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-                    <div className="bg-white w-[420px] rounded-3xl shadow-2xl overflow-hidden">
-                        <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-                            <h2 className="text-xl font-black tracking-tight">{t.cashierSessions.cashInOutTitle}</h2>
-                            <button onClick={() => setShowTxModal(false)} className="p-2 hover:bg-white rounded-xl text-gray-400 hover:text-gray-900 transition-all">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-4">
+                <ModalShell size="sm" onBackdropClick={() => setShowTxModal(false)}>
+                        <ModalHeader title={t.cashierSessions.cashInOutTitle} onClose={() => setShowTxModal(false)} />
+                        <div className="p-6 space-y-4 overflow-y-auto">
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.cashierSessions.type}</label>
                                 <select
@@ -402,18 +377,20 @@ export default function CashierSessionsPage() {
                                 />
                             </div>
                         </div>
-                        <div className="p-6 bg-gray-50 border-t border-gray-100">
-                            <button
+                        <ModalFooter>
+                            <Button
+                                type="button"
+                                variant="primary"
+                                size="md"
+                                className="w-full justify-center"
                                 onClick={handleAddTransaction}
                                 disabled={txAmount === 0}
-                                className="w-full py-3 rounded-2xl font-black text-sm uppercase tracking-widest bg-blue-600 hover:bg-blue-700 text-white shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Record Transaction
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                            </Button>
+                        </ModalFooter>
+                </ModalShell>
             )}
-        </div>
+        </PageShell>
     );
 }

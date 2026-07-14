@@ -9,6 +9,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { PageShell } from '@/components/ui';
 
 interface EditQuoteItem {
     productId: string;
@@ -204,7 +205,7 @@ function QuoteDetailsPageContent() {
     const totalAmount = Number(quote.total_amount);
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             {isEditMode && (
                 <div className="px-8 pt-6">
                     <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-center justify-between">
@@ -314,7 +315,7 @@ function QuoteDetailsPageContent() {
                                     </button>
                                 )}
                                 {quote.status !== 'REVISED' && quote.status !== 'CONVERTED' && (
-                                    <button onClick={handleConvertToOrder} disabled={actionLoading} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm flex items-center hover:bg-blue-700 shadow-xl shadow-blue-500/20 transition-all">
+                                    <button onClick={handleConvertToOrder} disabled={actionLoading} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm flex items-center hover:bg-blue-700 shadow-sm transition-all">
                                         <ClipboardList className="w-4 h-4 mr-2" />
                                         {t.quotes.detail.convertToOrder}
                                     </button>
@@ -511,7 +512,7 @@ function QuoteDetailsPageContent() {
                     </div>
                 </div>
             </div>
-        </div>
+        </PageShell>
     );
 }
 

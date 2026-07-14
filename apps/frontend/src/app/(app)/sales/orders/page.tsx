@@ -14,6 +14,7 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
+import { PageShell } from '@/components/ui';
 
 type OrdersTab = 'sales' | 'online';
 
@@ -262,8 +263,7 @@ export default function OrdersPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.orders.title}
                     subtitle={t.orders.subtitle}
@@ -326,10 +326,9 @@ export default function OrdersPage() {
                     emptyIcon={<ClipboardList className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.orders.dataTable.searchPlaceholder}
                     filterPresets={filterPresets}
-                    enableRowSelection
                 />
                 )}
-            </div>
-        </div>
+            
+        </PageShell>
     );
 }

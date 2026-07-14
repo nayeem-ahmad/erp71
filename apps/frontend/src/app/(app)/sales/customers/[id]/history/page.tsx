@@ -11,6 +11,7 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
+import { PageShell } from '@/components/ui';
 
 interface MonthlyTotal {
     month: string;
@@ -97,7 +98,7 @@ export default function PurchaseHistoryPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px] space-y-4">
+        <PageShell>
             <PageHeader
                 title={customer.name}
                 subtitle={t.customers.history.title}
@@ -272,7 +273,7 @@ export default function PurchaseHistoryPage() {
                     )}
                 </div>
             </div>
-        </div>
+        </PageShell>
     );
 }
 

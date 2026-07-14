@@ -7,6 +7,7 @@ import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell } from '@/components/ui';
 
 function defaultFrom() {
     const d = new Date();
@@ -148,7 +149,7 @@ export default function BranchReportPage() {
     const r = report;
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="w-full px-4 sm:px-6 py-8 space-y-6">
 
                 <PageHeader
@@ -389,6 +390,6 @@ export default function BranchReportPage() {
                     </div>
                 )}
             </div>
-        </div>
+        </PageShell>
     );
 }

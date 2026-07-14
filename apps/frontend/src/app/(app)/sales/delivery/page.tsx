@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Truck, Plus, X, RefreshCw } from 'lucide-react';
+import { Truck, Plus, RefreshCw } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell, Button } from '@/components/ui';
+import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 
 interface DeliveryOrder {
     id: string;
@@ -158,7 +160,7 @@ export default function DeliveryPage() {
     ];
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px] space-y-4">
+        <PageShell>
             <PageHeader
                 title={
                     <span className="inline-flex items-center gap-2">
@@ -313,17 +315,12 @@ export default function DeliveryPage() {
 
             {/* Create/Edit Modal */}
             {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-                        <div className="flex items-center justify-between p-6 border-b">
-                            <h2 className="text-lg font-semibold">
-                                {editingId ? 'Edit Delivery' : 'New Delivery Order'}
-                            </h2>
-                            <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
-                                <X className="h-5 w-5" />
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-4">
+                <ModalShell size="md" onBackdropClick={() => setShowModal(false)}>
+                        <ModalHeader
+                            title={editingId ? 'Edit Delivery' : 'New Delivery Order'}
+                            onClose={() => setShowModal(false)}
+                        />
+                        <div className="p-6 space-y-4 overflow-y-auto">
                             {saveError && (
                                 <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{saveError}</div>
                             )}
@@ -428,34 +425,29 @@ export default function DeliveryPage() {
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-between p-6 border-t bg-gray-50 rounded-b-xl gap-3">
-                            {editingId && (
-                                <button
+                        <ModalFooter className="justify-between">
+                            {editingId ? (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-danger hover:bg-red-50"
                                     onClick={() => { setShowModal(false); handleCancel(editingId); }}
-                                    className="text-red-600 hover:text-red-800 text-sm font-medium"
                                 >
                                     Cancel Delivery
-                                </button>
-                            )}
-                            <div className="flex gap-3 ml-auto">
-                                <button
-                                    onClick={() => setShowModal(false)}
-                                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-100"
-                                >
+                                </Button>
+                            ) : <span />}
+                            <div className="flex gap-3">
+                                <Button type="button" variant="secondary" size="md" onClick={() => setShowModal(false)}>
                                     Close
-                                </button>
-                                <button
-                                    onClick={handleSave}
-                                    disabled={saving}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-                                >
+                                </Button>
+                                <Button type="button" variant="primary" size="md" onClick={handleSave} loading={saving}>
                                     {saving ? 'Saving…' : editingId ? 'Update' : 'Create'}
-                                </button>
+                                </Button>
                             </div>
-                        </div>
-                    </div>
-                </div>
+                        </ModalFooter>
+                </ModalShell>
             )}
-        </div>
+        </PageShell>
     );
 }

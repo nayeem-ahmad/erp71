@@ -9,6 +9,7 @@ import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
+import { PageShell } from '@/components/ui';
 
 const IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
@@ -163,8 +164,7 @@ export default function CustomerGroupsPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.customerGroups.title}
                     subtitle={t.customerGroups.subtitle}
@@ -183,7 +183,7 @@ export default function CustomerGroupsPage() {
                                 <Upload className="w-4 h-4 mr-1.5" />
                                 Import
                             </button>
-                            <button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0">
+                            <button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-sm transition-all">
                                 <Plus className="w-4 h-4 mr-2" /> {t.customerGroups.newGroup}
                             </button>
                         </>
@@ -208,7 +208,7 @@ export default function CustomerGroupsPage() {
                     emptyIcon={<FolderTree className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.customerGroups.searchPlaceholder}
                 />
-            </div>
+            
 
             <ImportDialog
                 open={importOpen}
@@ -218,7 +218,7 @@ export default function CustomerGroupsPage() {
                 importFn={(rows, mode) => api.importCustomerGroups(rows, mode)}
                 onSuccess={() => void loadGroups()}
             />
-        </div>
+        </PageShell>
     );
 }
 
@@ -282,7 +282,7 @@ function GroupForm({ group, onSave, onCancel }: { group: any; onSave: (d: any) =
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">{t.customerGroups.discountPct}</label>
                     <input type="number" min="0" max="100" step="0.01" value={discount} onChange={e => setDiscount(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-2.5 px-4 font-bold text-gray-600 text-sm focus:ring-2 focus:ring-blue-500/20" placeholder="0" />
                 </div>
-                <button disabled={loading} type="submit" className="px-6 py-2.5 rounded-xl font-black text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200 transition-all disabled:opacity-50">
+                <button disabled={loading} type="submit" className="px-6 py-2.5 rounded-xl font-black text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all disabled:opacity-50">
                     {loading ? t.customerGroups.saving : group ? t.common.update : t.common.create}
                 </button>
             </form>

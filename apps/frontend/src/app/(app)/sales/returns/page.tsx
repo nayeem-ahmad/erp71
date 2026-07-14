@@ -12,6 +12,7 @@ import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { PageShell, Button } from '@/components/ui';
 
 interface SalesReturn {
     id: string;
@@ -241,8 +242,7 @@ export default function ReturnsPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.returns.title}
                     subtitle={t.returns.subtitle}
@@ -253,13 +253,9 @@ export default function ReturnsPage() {
                         'sales',
                     )}
                     actions={
-                        <button
-                            onClick={() => setIsModalOpen(true)}
-                            className="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-rose-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                        >
-                            <Plus className="w-4 h-4 mr-2" />
+                        <Button type="button" variant="danger" size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setIsModalOpen(true)}>
                             {t.returns.processReturn}
-                        </button>
+                        </Button>
                     }
                 />
 
@@ -275,9 +271,8 @@ export default function ReturnsPage() {
                     emptyIcon={<RotateCcw className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.returns.dataTable.searchPlaceholder}
                     filterPresets={filterPresets}
-                    enableRowSelection
                 />
-            </div>
-        </div>
+            
+        </PageShell>
     );
 }

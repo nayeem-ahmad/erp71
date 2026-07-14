@@ -13,6 +13,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { isPosEnabled } from '@/lib/sales-settings';
 import { routes } from '@/lib/routes';
+import { PageShell } from '@/components/ui';
 
 interface Sale {
     id: string;
@@ -216,8 +217,7 @@ export default function SalesPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.sales.list.title}
                     subtitle={t.sales.list.subtitle}
@@ -232,7 +232,7 @@ export default function SalesPage() {
                             {posEnabled ? (
                                 <Link
                                     href={routes.sales.pos}
-                                    className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:-translate-y-0.5 active:translate-y-0"
+                                    className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-colors"
                                 >
                                     <ShoppingCart className="w-4 h-4 mr-2" />
                                     {t.sidebar.items.pos}
@@ -252,9 +252,8 @@ export default function SalesPage() {
                     emptyIcon={<Receipt className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.sales.dataTable.searchPlaceholder}
                     filterPresets={filterPresets}
-                    enableRowSelection
                 />
-            </div>
-        </div>
+            
+        </PageShell>
     );
 }
