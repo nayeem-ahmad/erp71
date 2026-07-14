@@ -342,7 +342,7 @@ function SupplierLedgerContent() {
                     actions={supplierId ? (
                         <Link
                             href={`/purchases/supplier-payments?supplierId=${supplierId}&new=1`}
-                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#293F75] text-white text-sm font-bold hover:bg-[#1f3058]"
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-hover"
                         >
                             {copy.recordPayment}
                         </Link>
