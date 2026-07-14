@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Search, Trash2, X } from 'lucide-react';
+import { Search, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
-import ModalShell from '@/components/ModalShell';
+import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import { Button } from '@/components/ui';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
@@ -151,17 +152,11 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
 
     return (
         <ModalShell size="xl" onBackdropClick={onClose}>
-                <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                    <div>
-                        <h2 className="text-xl font-black tracking-tight">{t.purchaseOrders.modal.title}</h2>
-                        <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-0.5">
-                            {t.purchaseOrders.modal.subtitle}
-                        </p>
-                    </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-50 rounded-xl text-gray-400">
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
+                <ModalHeader
+                    title={t.purchaseOrders.modal.title}
+                    subtitle={t.purchaseOrders.modal.subtitle}
+                    onClose={onClose}
+                />
 
                 <div className="p-6 overflow-y-auto space-y-6">
                     {error && <div className="p-3 bg-red-50 text-red-600 rounded-xl text-sm font-bold">{error}</div>}
@@ -301,16 +296,14 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                     </div>
                 </div>
 
-                <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
-                    <button onClick={onClose}
-                        className="px-6 py-3 bg-white border border-gray-200 text-gray-700 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gray-50">
+                <ModalFooter>
+                    <Button variant="secondary" onClick={onClose}>
                         Cancel
-                    </button>
-                    <button onClick={handleSubmit} disabled={loading || items.length === 0}
-                        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-md disabled:opacity-50">
-                        {loading ? t.purchaseOrders.modal.creating : t.purchaseOrders.modal.createPo}
-                    </button>
-                </div>
+                    </Button>
+                    <Button onClick={handleSubmit} disabled={loading || items.length === 0} loading={loading}>
+                        {t.purchaseOrders.modal.createPo}
+                    </Button>
+                </ModalFooter>
         </ModalShell>
     );
 }

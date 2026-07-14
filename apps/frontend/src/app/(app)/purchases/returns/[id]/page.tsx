@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Pencil, Printer, Receipt, Save, Trash2, Undo2, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
+import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
@@ -266,7 +267,7 @@ function PurchaseReturnDetailPageContent() {
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-4xl mx-auto space-y-6">
                 {isEditMode && (
                     <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-center justify-between">
@@ -385,7 +386,7 @@ function PurchaseReturnDetailPageContent() {
                     </div>
                 )}
 
-                <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+                <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                     <div className="p-6 border-b border-gray-100 flex items-center space-x-3">
                         <div className="p-2 bg-emerald-50 rounded-xl text-emerald-600">
                             <Undo2 className="w-5 h-5" />
@@ -480,7 +481,7 @@ function PurchaseReturnDetailPageContent() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white p-5 rounded-3xl shadow-sm">
+                    <div className="bg-white p-5 rounded-lg shadow-sm">
                         <div className="flex items-center space-x-2 mb-3">
                             <Receipt className="w-4 h-4 text-gray-400" />
                             <h3 className="text-sm font-black tracking-tight">{t.purchaseReturns.detail.reference}</h3>
@@ -497,7 +498,7 @@ function PurchaseReturnDetailPageContent() {
                             <p className="text-sm font-bold text-gray-700">{purchaseReturn.reference_number || 'No reference number provided'}</p>
                         )}
                     </div>
-                    <div className="bg-white p-5 rounded-3xl shadow-sm">
+                    <div className="bg-white p-5 rounded-lg shadow-sm">
                         <div className="flex items-center space-x-2 mb-3">
                             <Receipt className="w-4 h-4 text-gray-400" />
                             <h3 className="text-sm font-black tracking-tight">{t.common.notes}</h3>
@@ -516,7 +517,7 @@ function PurchaseReturnDetailPageContent() {
                     </div>
                 </div>
             </div>
-        </div>
+        </PageShell>
     );
 }
 

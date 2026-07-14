@@ -6,6 +6,7 @@ import { Package } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
+import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
@@ -145,8 +146,7 @@ export default function PurchasesByProductPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.purchaseReports.byProduct.title}
                     subtitle={t.purchaseReports.byProduct.subtitle}
@@ -230,7 +230,6 @@ export default function PurchasesByProductPage() {
                     emptyIcon={<Package className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.purchaseReports.byProduct.searchPlaceholder}
                 />
-            </div>
-        </div>
+    </PageShell>
     );
 }

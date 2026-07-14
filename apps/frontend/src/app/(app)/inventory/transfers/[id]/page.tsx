@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { ArrowRightLeft, CheckCircle2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
@@ -76,7 +77,7 @@ export default function InventoryTransferDetailPage() {
     ].filter(Boolean) as Array<{ label: string; at: string; tone: string }>;
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-[1100px] mx-auto space-y-6">
                 <PageHeader
                     title={formatMessage(t.inventoryTransferDetail.transferTitle, { number: transfer.transfer_number })}
@@ -173,6 +174,6 @@ export default function InventoryTransferDetailPage() {
                     </div>
                 </div>
             </div>
-        </div>
+    </PageShell>
     );
 }

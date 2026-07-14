@@ -6,6 +6,7 @@ import { AlertTriangle, Plus } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { PostingBadge } from '@/components/PostingBadge';
+import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
@@ -113,8 +114,7 @@ export default function InventoryShrinkagePage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.inventoryShrinkage.title}
                     subtitle={t.inventoryShrinkage.subtitle}
@@ -173,7 +173,6 @@ export default function InventoryShrinkagePage() {
                     emptyIcon={<AlertTriangle className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.inventoryShrinkage.searchPlaceholder}
                 />
-            </div>
-        </div>
+    </PageShell>
     );
 }

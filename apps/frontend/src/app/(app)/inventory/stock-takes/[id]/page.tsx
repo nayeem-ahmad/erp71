@@ -8,6 +8,7 @@ import { HelpTooltip } from '@/components/HelpTooltip';
 import { STOCK_TAKES_FIELD_HELP, STOCK_TAKE_DETAIL_HELP } from '@/lib/help/contextual-help';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
+import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
@@ -111,7 +112,7 @@ export default function StockTakeDetailPage() {
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-[1300px] mx-auto space-y-6">
                 <PageHeader
                     title={(
@@ -216,6 +217,6 @@ export default function StockTakeDetailPage() {
                     })}
                 </div>
             </div>
-        </div>
+    </PageShell>
     );
 }

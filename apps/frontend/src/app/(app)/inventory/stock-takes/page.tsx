@@ -9,6 +9,7 @@ import { HelpTooltip } from '@/components/HelpTooltip';
 import { DataTable } from '@/components/data-table';
 import { STOCK_TAKES_FIELD_HELP, STOCK_TAKES_HELP } from '@/lib/help/contextual-help';
 import { api } from '@/lib/api';
+import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
@@ -92,8 +93,7 @@ export default function StockTakesPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={(
                         <span className="inline-flex items-center gap-2">
@@ -153,7 +153,6 @@ export default function StockTakesPage() {
                     emptyIcon={<ClipboardCheck className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.inventoryStockTakes.searchPlaceholder}
                 />
-            </div>
-        </div>
+    </PageShell>
     );
 }

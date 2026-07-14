@@ -11,7 +11,9 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
 import CreatePurchaseModal from '../../purchases/CreatePurchaseModal';
 import ProductImage from '@/components/ProductImage';
+import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { Button } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
 interface Product {
@@ -364,8 +366,7 @@ export default function InventoryPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <input
                     ref={csvInputRef}
                     type="file"
@@ -386,38 +387,29 @@ export default function InventoryPage() {
                     actions={(
                         <>
                     <div className="flex items-center gap-2 md:hidden">
-                        <button
-                            onClick={() => setIsModalOpen(true)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                        >
-                            <Plus className="w-4 h-4" />
+                        <Button onClick={() => setIsModalOpen(true)} icon={<Plus className="w-4 h-4" />}>
                             {t.inventory.addProduct}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                            variant="secondary"
                             onClick={() => csvInputRef.current?.click()}
                             disabled={isImporting}
-                            className="bg-white border border-gray-200 text-gray-700 px-3 py-2.5 rounded-xl font-bold text-sm flex items-center transition-all hover:border-emerald-300 hover:text-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                        >
-                            <Upload className="w-4 h-4" />
-                        </button>
+                            icon={<Upload className="w-4 h-4" />}
+                        />
                     </div>
 
                     <div className="hidden md:flex flex-wrap items-center justify-end gap-3">
-                        <button
+                        <Button
+                            variant="secondary"
                             onClick={() => csvInputRef.current?.click()}
                             disabled={isImporting}
-                            className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-emerald-300 hover:text-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                            icon={<Upload className="w-4 h-4" />}
                         >
-                            <Upload className="w-4 h-4 mr-2" />
                             {isImporting ? t.inventory.importing : t.inventory.importCsv}
-                        </button>
-                        <button
-                            onClick={() => setIsModalOpen(true)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                        >
-                            <Plus className="w-4 h-4" />
+                        </Button>
+                        <Button onClick={() => setIsModalOpen(true)} icon={<Plus className="w-4 h-4" />}>
                             {t.inventory.addProduct}
-                        </button>
+                        </Button>
                     </div>
                         </>
                     )}
@@ -442,7 +434,7 @@ export default function InventoryPage() {
                     </div>
                 )}
 
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap gap-3 items-end">
+                <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
                     <div className="min-w-[220px] flex-1">
                         <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.inventory.filters.groupFilter}</label>
                         <select
@@ -544,9 +536,7 @@ export default function InventoryPage() {
                     emptyIcon={<Package className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.inventory.dataTable.searchPlaceholder}
                     filterPresets={filterPresets}
-                    enableRowSelection
                 />
-            </div>
-        </div>
+    </PageShell>
     );
 }

@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { X, Camera, Bold, Italic, List, ListOrdered, Trash2 } from 'lucide-react';
-import ModalShell from '@/components/ModalShell';
+import { Camera, Bold, Italic, List, ListOrdered, Trash2 } from 'lucide-react';
+import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
 import { COMPOUND_UNIT_DEFS, CompoundUnitType } from '@/lib/compound-units';
 import { useI18n } from '@/lib/i18n';
@@ -191,12 +192,10 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
 
     return (
         <ModalShell size="xl" onBackdropClick={onClose}>
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-                <h2 className="text-xl font-bold tracking-tight text-gray-900">{mode === 'edit' ? t.addProductModal.editTitle : t.addProductModal.addTitle}</h2>
-                <button onClick={onClose} type="button" className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-white transition-all">
-                    <X className="w-5 h-5" />
-                </button>
-            </div>
+            <ModalHeader
+                title={mode === 'edit' ? t.addProductModal.editTitle : t.addProductModal.addTitle}
+                onClose={onClose}
+            />
 
             <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
                 {/* Tab switcher */}
@@ -573,22 +572,18 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                     )}
                 </div>
 
-                <div className="border-t border-gray-100 px-6 py-4 flex space-x-3 bg-white flex-shrink-0">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="flex-1 bg-white border border-gray-100 text-gray-400 hover:text-gray-600 hover:bg-gray-50 py-2.5 rounded-xl font-bold text-sm transition-all"
-                    >
+                <ModalFooter className="flex-shrink-0">
+                    <Button type="button" variant="secondary" onClick={onClose}>
                         Cancel
-                    </button>
-                    <button
-                        disabled={loading || uploading || uploadingGallery}
+                    </Button>
+                    <Button
                         type="submit"
-                        className="flex-[2] bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:translate-y-0"
+                        disabled={loading || uploading || uploadingGallery}
+                        loading={loading}
                     >
-                        {loading ? (mode === 'edit' ? t.addProductModal.savingChanges : t.addProductModal.creatingProduct) : (mode === 'edit' ? t.common.saveChanges : t.addProductModal.confirmAdd)}
-                    </button>
-                </div>
+                        {mode === 'edit' ? t.common.saveChanges : t.addProductModal.confirmAdd}
+                    </Button>
+                </ModalFooter>
             </form>
         </ModalShell>
     );

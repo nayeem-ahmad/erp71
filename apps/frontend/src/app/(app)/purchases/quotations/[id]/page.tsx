@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ShoppingCart } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
+import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
@@ -121,7 +122,7 @@ export default function PurchaseQuotationDetailPage() {
     const actions = nextActions[rfq.status] ?? [];
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-[1000px] mx-auto space-y-6">
                 <PageHeader
                     title={rfq.rfq_number}
@@ -257,6 +258,6 @@ export default function PurchaseQuotationDetailPage() {
                     </div>
                 )}
             </div>
-        </div>
+    </PageShell>
     );
 }

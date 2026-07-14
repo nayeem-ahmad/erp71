@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import CreatePurchaseReturnModal from './CreatePurchaseReturnModal';
 import { PostingBadge } from '@/components/PostingBadge';
 import { formatBDT, formatDate } from '@/lib/format';
+import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n, formatMessage } from '@/lib/i18n';
@@ -197,8 +198,7 @@ export default function PurchaseReturnsPage() {
     );
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
+        <PageShell>
                 <PageHeader
                     title={t.purchaseReturns.title}
                     subtitle={t.purchaseReturns.subtitle}
@@ -235,9 +235,7 @@ export default function PurchaseReturnsPage() {
                     emptyMessage={t.purchaseReturns.emptyMessage}
                     emptyIcon={<RotateCcw className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.purchaseReturns.searchPlaceholder}
-                    enableRowSelection
                 />
-            </div>
-        </div>
+    </PageShell>
     );
 }

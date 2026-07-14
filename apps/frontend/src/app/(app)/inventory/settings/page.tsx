@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, Save, Settings2, Warehouse, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
+import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
@@ -153,7 +154,7 @@ export default function InventorySettingsPage() {
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
+        <PageShell>
             <div className="max-w-[1100px] mx-auto space-y-6">
                 <PageHeader
                     title={t.inventorySettings.title}
@@ -281,6 +282,6 @@ export default function InventorySettingsPage() {
                     </div>
                 </section>
             </div>
-        </div>
+    </PageShell>
     );
 }
