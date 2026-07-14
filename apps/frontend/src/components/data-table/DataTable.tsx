@@ -109,6 +109,19 @@ export interface DataTableProps<T> {
     filterPresets?: { label: string; filters: ColumnFiltersState }[];
     /** Table density — defaults to CompactUiContext when inside accounting module */
     density?: UiDensity;
+    /** Opt-in server-side pagination + sorting. When set, the table drives page/size/sort
+     *  through these callbacks and uses `total` for the footer count instead of the
+     *  client row count. Pages using this must also set `showSearch={false}` and render
+     *  their own server-backed search. */
+    serverPagination?: {
+        total: number;
+        page: number;
+        pageSize: number;
+        onPageChange: (page: number) => void;
+        onPageSizeChange: (size: number) => void;
+        sort: { id: string; desc: boolean } | null;
+        onSortChange: (sort: { id: string; desc: boolean } | null) => void;
+    };
 }
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 500];
@@ -191,6 +204,7 @@ export default function DataTable<T>({
     showSearch = true,
     filterPresets,
     density,
+    serverPagination,
 }: DataTableProps<T>) {
     const { t } = useI18n();
     const compactUi = useCompactUi();
@@ -292,27 +306,54 @@ export default function DataTable<T>({
         return { ...columnVisibility, ...mobileOverrides };
     }, [columnVisibility, effectiveColumns, isMdUp]);
 
+    const isServer = !!serverPagination;
+    const serverSorting: SortingState = serverPagination?.sort
+        ? [{ id: serverPagination.sort.id, desc: serverPagination.sort.desc }]
+        : [];
+    const effectivePageSize = serverPagination ? serverPagination.pageSize : pageSize;
+    const serverPageIndex = serverPagination ? serverPagination.page - 1 : 0;
+
     // Table instance
     const table = useReactTable({
         data,
         columns: effectiveColumns,
         state: {
-            sorting,
+            sorting: isServer ? serverSorting : sorting,
             columnFilters,
             globalFilter,
             columnVisibility: effectiveColumnVisibility,
             columnOrder,
             columnSizing,
             rowSelection,
-            pagination: { pageIndex: 0, pageSize },
+            pagination: { pageIndex: serverPageIndex, pageSize: effectivePageSize },
         },
-        onSortingChange: setSorting,
+        onSortingChange: isServer
+            ? (updater) => {
+                  const next =
+                      typeof updater === 'function' ? updater(serverSorting) : updater;
+                  const first = next[0] ?? null;
+                  serverPagination!.onSortChange(
+                      first ? { id: first.id, desc: first.desc } : null,
+                  );
+              }
+            : setSorting,
         onColumnFiltersChange: setColumnFilters,
         onGlobalFilterChange: setGlobalFilter,
         onColumnVisibilityChange: setColumnVisibility,
         onColumnOrderChange: setColumnOrder,
         onColumnSizingChange: setColumnSizing,
         onRowSelectionChange: setRowSelection,
+        onPaginationChange: isServer
+            ? (updater) => {
+                  const prev = { pageIndex: serverPageIndex, pageSize: effectivePageSize };
+                  const next = typeof updater === 'function' ? updater(prev) : updater;
+                  if (next.pageSize !== prev.pageSize) {
+                      serverPagination!.onPageSizeChange(next.pageSize);
+                  } else if (next.pageIndex !== prev.pageIndex) {
+                      serverPagination!.onPageChange(next.pageIndex + 1);
+                  }
+              }
+            : undefined,
         getRowId,
         getCoreRowModel: getCoreRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
@@ -320,6 +361,11 @@ export default function DataTable<T>({
         getPaginationRowModel: getPaginationRowModel(),
         enableRowSelection,
         columnResizeMode: 'onChange',
+        manualPagination: isServer,
+        manualSorting: isServer,
+        pageCount: isServer
+            ? Math.max(1, Math.ceil(serverPagination!.total / serverPagination!.pageSize))
+            : undefined,
     });
 
     // Persist preferences
@@ -431,11 +477,13 @@ export default function DataTable<T>({
         (c) => c.id !== 'actions' && c.id !== 'select' && c.getCanFilter(),
     );
 
-    const totalRows = table.getFilteredRowModel().rows.length;
+    const totalRows = isServer
+        ? serverPagination!.total
+        : table.getFilteredRowModel().rows.length;
     const currentPage = table.getState().pagination.pageIndex;
     const totalPages = table.getPageCount();
-    const startRow = currentPage * pageSize + 1;
-    const endRow = Math.min((currentPage + 1) * pageSize, totalRows);
+    const startRow = currentPage * effectivePageSize + 1;
+    const endRow = Math.min((currentPage + 1) * effectivePageSize, totalRows);
 
     const columnIds = useMemo(
         () => table.getVisibleLeafColumns().map((c) => c.id),
@@ -785,7 +833,7 @@ export default function DataTable<T>({
                         <div className="flex items-center gap-1.5">
                             <span className={d.filterLabel}>{t.common.dataTable.rows}</span>
                             <select
-                                value={pageSize}
+                                value={effectivePageSize}
                                 onChange={(e) => handlePageSizeChange(Number(e.target.value))}
                                 className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300"
                             >
