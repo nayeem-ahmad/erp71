@@ -106,7 +106,7 @@ export default function DesignationsPage() {
             columnHelper.accessor('name', {
                 header: t.designations.columns.name,
                 cell: (info) => (
-                    <span className="text-sm font-black text-gray-900">{info.getValue()}</span>
+                    <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>
                 ),
                 size: 300,
             }),

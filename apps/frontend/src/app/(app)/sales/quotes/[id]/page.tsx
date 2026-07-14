@@ -208,7 +208,7 @@ function QuoteDetailsPageContent() {
         <PageShell>
             {isEditMode && (
                 <div className="px-8 pt-6">
-                    <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-center justify-between">
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-3 flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                             <Pencil className="w-4 h-4 text-amber-600" />
                             <span className="text-sm font-bold text-amber-800">
@@ -329,7 +329,7 @@ function QuoteDetailsPageContent() {
             <div className="p-8 max-w-5xl mx-auto space-y-8 print:p-0 print:block">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 print:block print:w-full">
                     <div className="lg:col-span-2 space-y-8">
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden print:shadow-none print:border-none">
+                        <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden print:shadow-none print:border-none">
                             <div className="p-6 border-b border-gray-100 print:px-0">
                                 <h2 className="font-bold tracking-tight">{t.quotes.detail.proposedItems}</h2>
                             </div>
@@ -444,7 +444,7 @@ function QuoteDetailsPageContent() {
                             )}
                         </div>
 
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 print:shadow-none print:border-none print:px-0">
+                        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 print:shadow-none print:border-none print:px-0">
                             <h2 className="font-bold tracking-tight mb-4">{t.quotes.detail.targetAccount}</h2>
                             {isEditMode ? (
                                 <div className="space-y-4 print:hidden">
@@ -491,14 +491,14 @@ function QuoteDetailsPageContent() {
                         </div>
                         
                         {!isEditMode && quote.notes && (
-                            <div className="bg-yellow-50 text-yellow-800 p-6 rounded-2xl text-sm font-medium italic">
+                            <div className="bg-yellow-50 text-yellow-800 p-6 rounded-lg text-sm font-medium italic">
                                 &quot;{quote.notes}&quot;
                             </div>
                         )}
                     </div>
 
                     <div className="space-y-8">
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden print:shadow-none print:border border-gray-400 print:mt-12">
+                        <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden print:shadow-none print:border border-gray-400 print:mt-12">
                             <div className="p-6 border-b border-gray-100 bg-gray-900 text-white print:bg-white print:text-black print:border-b-2">
                                 <h2 className="font-bold tracking-tight uppercase tracking-widest text-sm">{t.quotes.detail.quoteNetWrapUp}</h2>
                             </div>

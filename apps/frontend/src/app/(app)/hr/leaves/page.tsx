@@ -194,7 +194,7 @@ export default function LeavesPage() {
                     const req = info.row.original;
                     return (
                         <div>
-                            <span className="block text-sm font-black text-gray-900">{req.employee?.name ?? '—'}</span>
+                            <span className="block text-sm font-bold text-gray-900">{req.employee?.name ?? '—'}</span>
                             <span className="block text-xs text-gray-400 font-mono">{req.employee?.employee_code ?? ''}</span>
                         </div>
                     );

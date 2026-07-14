@@ -139,7 +139,7 @@ export default function CashierSessionsPage() {
                         !session ? (
                             <button
                                 onClick={() => setShowOpenModal(true)}
-                                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-2xl text-sm font-semibold shadow-lg flex items-center space-x-2 transition-all"
+                                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg text-sm font-semibold shadow-lg flex items-center space-x-2 transition-all"
                             >
                                 <Clock className="w-5 h-5" />
                                 <span>{t.cashierSessions.openShift}</span>
@@ -147,7 +147,7 @@ export default function CashierSessionsPage() {
                         ) : (
                             <button
                                 onClick={() => setShowCloseModal(true)}
-                                className="bg-danger hover:bg-red-700 text-white px-6 py-3 rounded-2xl text-sm font-semibold shadow-lg flex items-center space-x-2 transition-all"
+                                className="bg-danger hover:bg-red-700 text-white px-6 py-3 rounded-lg text-sm font-semibold shadow-lg flex items-center space-x-2 transition-all"
                             >
                                 <Clock className="w-5 h-5" />
                                 <span>{t.cashierSessions.closeShift}</span>
@@ -159,7 +159,7 @@ export default function CashierSessionsPage() {
                 {/* Session Status */}
                 {session ? (
                     <>
-                        <div className="bg-white rounded-3xl shadow-sm p-6 border border-green-100">
+                        <div className="bg-white rounded-lg shadow-sm p-6 border border-green-100">
                             <div className="flex items-center justify-between mb-4">
                                 <div className="flex items-center space-x-3">
                                     <div className="p-2 bg-green-50 rounded-xl text-green-600">
@@ -183,15 +183,15 @@ export default function CashierSessionsPage() {
                                 )}
                             </div>
                             <div className="grid grid-cols-3 gap-4">
-                                <div className="bg-gray-50 p-4 rounded-2xl">
+                                <div className="bg-gray-50 p-4 rounded-lg">
                                     <span className="text-xs font-medium text-gray-500 block mb-1">{t.cashierSessions.openingCash}</span>
                                     <span className="text-xl font-bold text-gray-900">{formatBDT(parseFloat(session.opening_cash), { locale })}</span>
                                 </div>
-                                <div className="bg-green-50 p-4 rounded-2xl">
+                                <div className="bg-green-50 p-4 rounded-lg">
                                     <span className="text-[10px] font-semibold text-green-500 block mb-1">{t.cashierSessions.cashIn}</span>
                                     <span className="text-xl font-bold text-green-600">{formatBDT(totalCashIn, { locale })}</span>
                                 </div>
-                                <div className="bg-danger-light p-4 rounded-2xl">
+                                <div className="bg-danger-light p-4 rounded-lg">
                                     <span className="text-[10px] font-semibold text-red-400 block mb-1">{t.cashierSessions.cashOut}</span>
                                     <span className="text-xl font-bold text-danger">{formatBDT(totalCashOut, { locale })}</span>
                                 </div>
@@ -210,7 +210,7 @@ export default function CashierSessionsPage() {
                         </div>
 
                         {/* Transactions List */}
-                        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+                        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                             <div className="p-6 border-b border-gray-100">
                                 <h3 className="text-lg font-bold tracking-tight">{t.cashierSessions.cashTransactions}</h3>
                             </div>
@@ -251,7 +251,7 @@ export default function CashierSessionsPage() {
                         </div>
                     </>
                 ) : (
-                    <div className="bg-white rounded-3xl shadow-sm p-12 text-center">
+                    <div className="bg-white rounded-lg shadow-sm p-12 text-center">
                         <AlertCircle className="w-16 h-16 mx-auto text-gray-200 mb-4" />
                         <h2 className="text-lg font-bold tracking-tight text-gray-400">{t.cashierSessions.noActiveSession}</h2>
                         <p className="text-xs font-bold text-gray-300 uppercase tracking-widest mt-1">{t.cashierSessions.noActiveSessionHint}</p>
@@ -304,7 +304,7 @@ export default function CashierSessionsPage() {
                 <ModalShell size="sm" onBackdropClick={() => setShowCloseModal(false)}>
                         <ModalHeader title={t.cashierSessions.closeShiftTitle} onClose={() => setShowCloseModal(false)} />
                         <div className="p-6 space-y-4 overflow-y-auto">
-                            <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
                                 <span className="text-[10px] font-semibold text-blue-400 block mb-1">{t.cashierSessions.expectedCash}</span>
                                 <span className="text-2xl font-bold text-blue-600">
                                     {formatBDT(parseFloat(session?.opening_cash || 0) + totalCashIn - totalCashOut)}
@@ -322,7 +322,7 @@ export default function CashierSessionsPage() {
                                 />
                             </div>
                             {closingCash > 0 && (
-                                <div className={`p-3 rounded-2xl ${Math.abs(closingCash - (parseFloat(session?.opening_cash || 0) + totalCashIn - totalCashOut)) < 0.01 ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'}`}>
+                                <div className={`p-3 rounded-lg ${Math.abs(closingCash - (parseFloat(session?.opening_cash || 0) + totalCashIn - totalCashOut)) < 0.01 ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'}`}>
                                     <span className="text-[10px] font-semibold block mb-1">{t.cashierSessions.difference}</span>
                                     <span className="text-lg font-bold">
                                         {formatBDT(closingCash - (parseFloat(session?.opening_cash || 0) + totalCashIn - totalCashOut))}

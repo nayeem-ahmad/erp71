@@ -229,7 +229,7 @@ export default function CreatePurchaseQuotationModal({ isOpen, onClose, onSucces
 
                         {/* Right: supplier + validity */}
                         <div className="space-y-5">
-                            <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 space-y-3">
+                            <div className="rounded-lg border border-gray-100 bg-gray-50/70 p-4 space-y-3">
                                 <h3 className="text-sm font-bold tracking-tight">{t.common.supplier}</h3>
                                 <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}
                                     className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20">
@@ -250,7 +250,7 @@ export default function CreatePurchaseQuotationModal({ isOpen, onClose, onSucces
                                 </div>
                             </div>
 
-                            <div className="rounded-2xl bg-blue-950 text-white p-5">
+                            <div className="rounded-lg bg-blue-950 text-white p-5">
                                 <div className="flex justify-between items-center">
                                     <span className="text-xs font-semibold text-blue-200">RFQ Total</span>
                                     <span className="text-2xl font-bold">{formatBDT(total, { locale })}</span>

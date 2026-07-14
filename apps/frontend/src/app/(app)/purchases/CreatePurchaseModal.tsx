@@ -395,7 +395,7 @@ export default function CreatePurchaseModal({
                         </div>
 
                         <div className="space-y-5">
-                            <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 space-y-4">
+                            <div className="rounded-lg border border-gray-100 bg-gray-50/70 p-4 space-y-4">
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <h3 className="text-sm font-bold tracking-tight">{t.common.supplier}</h3>
@@ -467,7 +467,7 @@ export default function CreatePurchaseModal({
                                 )}
                             </div>
 
-                            <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 space-y-3">
+                            <div className="rounded-lg border border-gray-100 bg-gray-50/70 p-4 space-y-3">
                                 <h3 className="text-sm font-bold tracking-tight">{t.purchaseShared.costAdjustments}</h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     <div>
@@ -519,7 +519,7 @@ export default function CreatePurchaseModal({
                                 />
                             </div>
 
-                            <div className="rounded-2xl bg-emerald-950 text-white p-5 space-y-3">
+                            <div className="rounded-lg bg-emerald-950 text-white p-5 space-y-3">
                                 <div className="flex items-center justify-between text-sm font-bold text-emerald-100">
                                     <span>{t.common.subtotal}</span>
                                     <span>{formatBDT(subtotal, { locale })}</span>

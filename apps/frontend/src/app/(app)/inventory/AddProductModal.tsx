@@ -388,7 +388,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                             ) : (
                                                 <div className="text-center p-1">
                                                     <Camera className="w-5 h-5 text-gray-400 mx-auto mb-0.5" />
-                                                    <span className="text-[7px] font-black uppercase tracking-widest text-gray-400 block">{t.addProductModal.upload}</span>
+                                                    <span className="text-[7px] font-bold uppercase tracking-widest text-gray-400 block">{t.addProductModal.upload}</span>
                                                 </div>
                                             )}
                                         </div>
@@ -423,7 +423,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                     )}
                                 </div>
 
-                                <div className="bg-gray-50 rounded-2xl p-4 space-y-3 border border-gray-100">
+                                <div className="bg-gray-50 rounded-lg p-4 space-y-3 border border-gray-100">
                                     <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer select-none">
                                         <input
                                             type="checkbox"
@@ -448,7 +448,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                 </div>
 
                                 {formData.type !== 'SERVICE' && (
-                                <div className="bg-gray-50/50 rounded-2xl p-4 border border-gray-100/50 space-y-3">
+                                <div className="bg-gray-50/50 rounded-lg p-4 border border-gray-100/50 space-y-3">
                                     <span className="block text-xs font-bold text-gray-700 ml-1">Inventory Alert & Lead Times</span>
                                     <div className="grid grid-cols-3 gap-2">
                                         <div>
@@ -498,9 +498,9 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                     ) : (
                         <div className="space-y-6">
                             {/* Featured toggle card */}
-                            <div className="bg-blue-50/30 rounded-2xl p-5 border border-blue-100 flex items-center justify-between">
+                            <div className="bg-blue-50/30 rounded-lg p-5 border border-blue-100 flex items-center justify-between">
                                 <div>
-                                    <h4 className="text-sm font-black text-blue-900 mb-1">{t.addProductModal.featuredLabel || "Featured Product"}</h4>
+                                    <h4 className="text-sm font-bold text-blue-900 mb-1">{t.addProductModal.featuredLabel || "Featured Product"}</h4>
                                     <p className="text-xs text-blue-700/60">Highlight this product in trending items on the web storefront.</p>
                                 </div>
                                 <label className="relative inline-flex items-center cursor-pointer select-none">
@@ -533,7 +533,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                 </label>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-4">
                                     {formData.images_gallery.map((url, index) => (
-                                        <div key={url + index} className="relative group aspect-square rounded-2xl border border-gray-150 overflow-hidden bg-gray-50 shadow-sm transition-all hover:shadow-md">
+                                        <div key={url + index} className="relative group aspect-square rounded-lg border border-gray-150 overflow-hidden bg-gray-50 shadow-sm transition-all hover:shadow-md">
                                             <img src={url} alt={`Gallery image ${index + 1}`} className="w-full h-full object-cover" />
                                             <button
                                                 type="button"
@@ -541,7 +541,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                                     const newGallery = formData.images_gallery.filter((_, i) => i !== index);
                                                     setFormData((prev) => ({ ...prev, images_gallery: newGallery }));
                                                 }}
-                                                className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all text-white rounded-2xl"
+                                                className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all text-white rounded-lg"
                                             >
                                                 <Trash2 className="w-5 h-5 hover:scale-110 transition-all text-rose-400" />
                                             </button>
@@ -549,7 +549,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                     ))}
 
                                     {/* Uploader Card */}
-                                    <div className="relative aspect-square bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center transition-all hover:border-blue-400 group cursor-pointer">
+                                    <div className="relative aspect-square bg-gray-50 rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center transition-all hover:border-blue-400 group cursor-pointer">
                                         <Camera className="w-6 h-6 text-gray-400 mb-1 group-hover:text-blue-500 group-hover:scale-105 transition-all" />
                                         <span className="text-[10px] font-bold text-gray-400 group-hover:text-blue-500">Add Image</span>
                                         <input
@@ -561,7 +561,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                             disabled={uploadingGallery}
                                         />
                                         {uploadingGallery && (
-                                            <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center rounded-2xl">
+                                            <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center rounded-lg">
                                                 <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                                             </div>
                                         )}
@@ -614,7 +614,7 @@ function RichTextEditor({ value, onChange, placeholder }: { value: string; onCha
     };
 
     return (
-        <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm focus-within:ring-2 focus-within:ring-blue-500/10 transition-all">
+        <div className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm focus-within:ring-2 focus-within:ring-blue-500/10 transition-all">
             <div className="flex items-center gap-1 bg-gray-50 border-b border-gray-100 p-2">
                 <button
                     type="button"

@@ -136,31 +136,31 @@ export default function SalesSummaryPage() {
                 />
 
                 <div className="grid md:grid-cols-5 gap-4">
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.grossRevenue}</div>
                         <div className="text-2xl font-bold text-gray-900 mt-2">
                             {formatBDT(Number(summary?.totalRevenue ?? 0), { locale })}
                         </div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.returns}</div>
                         <div className="text-2xl font-bold text-danger mt-2">
                             {formatBDT(Number(summary?.totalReturns ?? 0), { locale })}
                         </div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.netRevenue}</div>
                         <div className="text-2xl font-bold text-blue-700 mt-2">
                             {formatBDT(Number(summary?.netRevenue ?? 0), { locale })}
                         </div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.transactions}</div>
                         <div className="text-2xl font-bold text-gray-900 mt-2">
                             {summary?.transactionCount ?? 0}
                         </div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.avgOrderValue}</div>
                         <div className="text-2xl font-bold text-gray-900 mt-2">
                             {formatBDT(Number(summary?.avgOrderValue ?? 0), { locale })}
@@ -170,7 +170,7 @@ export default function SalesSummaryPage() {
 
                 {/* AI Narration */}
                 {narration && (
-                    <div className="bg-purple-50 border border-purple-200 rounded-2xl p-5 flex gap-3">
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-5 flex gap-3">
                         <Sparkles className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
                         <div className="flex-1">
                             <p className="text-xs font-semibold text-purple-400 mb-1">AI Insight</p>
@@ -182,7 +182,7 @@ export default function SalesSummaryPage() {
                     </div>
                 )}
 
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap gap-3 items-end justify-between">
+                <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end justify-between">
                     <div className="flex flex-wrap gap-3 items-end">
                         <div className="flex flex-col gap-1">
                             <span className="text-xs font-medium text-gray-500">{t.salesReports.common.from}</span>

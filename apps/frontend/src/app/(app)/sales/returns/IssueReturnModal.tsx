@@ -182,7 +182,7 @@ export default function IssueReturnModal({ isOpen, onClose, onSuccess }: IssueRe
                         </div>
                     ) : (
                         <div className="space-y-6">
-                            <div className="bg-gray-50 p-4 rounded-2xl">
+                            <div className="bg-gray-50 p-4 rounded-lg">
                                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">{t.shared.form.receiptFound}</p>
                                 <p className="font-bold text-lg">{sale.serial_number}</p>
                                 <p className="text-sm font-bold text-blue-600 mt-1">

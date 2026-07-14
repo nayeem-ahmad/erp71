@@ -175,7 +175,7 @@ function ReturnDetailPageContent() {
             <div className="max-w-4xl mx-auto space-y-6">
                 {/* Edit Mode Banner */}
                 {isEditMode && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-center justify-between">
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-3 flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                             <Pencil className="w-4 h-4 text-amber-600" />
                             <span className="text-sm font-bold text-amber-800">
@@ -237,11 +237,11 @@ function ReturnDetailPageContent() {
                 {/* Summary cards */}
                 {isEditMode ? (
                     <div className="grid grid-cols-3 gap-4">
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">{t.returns.columns.originalReceipt}</span>
                             <span className="text-sm font-bold text-gray-900">{ret.sale?.serial_number || '-'}</span>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">{t.returns.detail.newTotalRefund}</span>
                             <span className="text-xl font-bold text-danger">{formatBDT(editTotal, { locale })}</span>
                             {editTotal !== parseFloat(ret.total_refund) && (
@@ -250,26 +250,26 @@ function ReturnDetailPageContent() {
                                 </span>
                             )}
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">{t.returns.columns.items}</span>
                             <span className="text-xl font-bold text-gray-900">{editItems.filter((i) => i.quantity > 0).length}</span>
                         </div>
                     </div>
                 ) : (
                     <div className="grid grid-cols-4 gap-4">
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">{t.returns.columns.originalReceipt}</span>
                             <span className="text-sm font-bold text-gray-900">{ret.sale?.serial_number || '-'}</span>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">{t.returns.detail.totalRefund}</span>
                             <span className="text-xl font-bold text-danger">{formatBDT(parseFloat(ret.total_refund), { locale })}</span>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">{t.returns.detail.itemsReturned}</span>
                             <span className="text-xl font-bold text-gray-900">{ret.items?.length || 0}</span>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">{t.common.status}</span>
                             <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200">
                                 {t.shared.statuses.return[(ret.status || 'COMPLETED') as keyof typeof t.shared.statuses.return] ?? ret.status}
@@ -312,7 +312,7 @@ function ReturnDetailPageContent() {
                 </div>
 
                 {/* {t.returns.detail.returnedItems} Section */}
-                <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+                <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                     <div className="p-6 border-b border-gray-100 flex items-center space-x-3">
                         <div className="p-2 bg-danger-light rounded-xl text-danger">
                             <Package className="w-5 h-5" />
@@ -421,7 +421,7 @@ function ReturnDetailPageContent() {
                 </div>
 
                 {/* Reason Section */}
-                <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+                <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                     <div className="p-6 border-b border-gray-100 flex items-center space-x-3">
                         <div className="p-2 bg-amber-50 rounded-xl text-amber-600">
                             <FileText className="w-5 h-5" />

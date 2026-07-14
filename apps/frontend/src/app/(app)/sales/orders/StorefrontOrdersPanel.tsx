@@ -79,7 +79,7 @@ export default function StorefrontOrdersPanel() {
 
     return (
         <div className="space-y-4">
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
                 {loading ? (
                     <div className="flex items-center justify-center py-16">
                         <div className="animate-spin w-7 h-7 border-4 border-blue-600 border-t-transparent rounded-full" />

@@ -126,7 +126,7 @@ export default function PurchaseOrderDetailPage() {
                 {error && <div className="p-3 bg-red-50 text-red-600 rounded-xl text-sm font-bold">{error}</div>}
 
                 {/* PO summary card */}
-                <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-4">
+                <div className="bg-white rounded-lg border border-gray-100 p-6 space-y-4">
                     <div className="flex items-start justify-between">
                         <div>
                             <h2 className="text-lg font-bold tracking-tight text-gray-950">{po.po_number}</h2>
@@ -160,7 +160,7 @@ export default function PurchaseOrderDetailPage() {
                 </div>
 
                 {/* Line items */}
-                <div className="bg-white rounded-2xl border border-gray-100 p-6">
+                <div className="bg-white rounded-lg border border-gray-100 p-6">
                     <h2 className="text-xs font-semibold text-gray-400 mb-4">{t.purchaseOrders.detail.items}</h2>
                     <table className="w-full text-sm">
                         <thead>
@@ -207,7 +207,7 @@ export default function PurchaseOrderDetailPage() {
 
                 {/* Status actions */}
                 {actions.length > 0 && (
-                    <div className="bg-white rounded-2xl border border-gray-100 p-6">
+                    <div className="bg-white rounded-lg border border-gray-100 p-6">
                         <h2 className="text-xs font-semibold text-gray-400 mb-4">{t.purchaseQuotations.detail.actions}</h2>
                         <div className="flex gap-3">
                             {actions.map((action) => (

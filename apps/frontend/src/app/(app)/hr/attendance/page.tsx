@@ -153,7 +153,7 @@ export default function AttendancePage() {
                     const rec = info.row.original;
                     return (
                         <div>
-                            <span className="block text-sm font-black text-gray-900">{rec.employee?.name ?? '—'}</span>
+                            <span className="block text-sm font-bold text-gray-900">{rec.employee?.name ?? '—'}</span>
                             <span className="block text-xs text-gray-400 font-mono">{rec.employee?.employee_code ?? ''}</span>
                         </div>
                     );
@@ -235,7 +235,7 @@ export default function AttendancePage() {
                 />
 
                 {/* Filters */}
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-4">
                     <div className="flex flex-wrap gap-3 items-end">
                         <div className="space-y-1">
                             <label className="text-xs font-medium text-gray-500 block">{t.attendance.filters.from}</label>

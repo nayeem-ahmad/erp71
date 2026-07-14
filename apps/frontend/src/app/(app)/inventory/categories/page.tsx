@@ -47,10 +47,10 @@ const subgroupColumnHelper = createColumnHelper<ProductSubgroup>();
 function GroupNameCell({ group, noDescription, featured }: { readonly group: ProductGroup; readonly noDescription: string; readonly featured: string }) {
     return (
         <div>
-            <span className="block text-sm font-black text-gray-900">{group.name}</span>
+            <span className="block text-sm font-bold text-gray-900">{group.name}</span>
             <span className="block text-xs text-gray-400">{group.description || noDescription}</span>
             {group.is_featured && (
-                <span className="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                <span className="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-700">
                     {featured}
                 </span>
             )}
@@ -61,7 +61,7 @@ function GroupNameCell({ group, noDescription, featured }: { readonly group: Pro
 function SubgroupNameCell({ subgroup, noDescription }: { readonly subgroup: ProductSubgroup; readonly noDescription: string }) {
     return (
         <div>
-            <span className="block text-sm font-black text-gray-900">{subgroup.name}</span>
+            <span className="block text-sm font-bold text-gray-900">{subgroup.name}</span>
             <span className="block text-xs text-gray-400">{subgroup.description || noDescription}</span>
         </div>
     );
@@ -420,9 +420,9 @@ function ProductGroupForm({
     }
 
     return (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
             <div className="flex items-center justify-between mb-4">
-                <h3 className="font-black text-sm">{group ? t.inventoryCategories.editProductGroup : t.inventoryCategories.newProductGroup}</h3>
+                <h3 className="font-bold text-sm">{group ? t.inventoryCategories.editProductGroup : t.inventoryCategories.newProductGroup}</h3>
                 <button type="button" onClick={onCancel} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400">
                     <X className="w-4 h-4" />
                 </button>
@@ -450,7 +450,7 @@ function ProductGroupForm({
                     />
                     <span>{t.inventoryCategories.featured}</span>
                 </label>
-                <button disabled={loading} type="submit" className="px-6 py-2.5 rounded-xl font-black text-sm bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50">
+                <button disabled={loading} type="submit" className="px-6 py-2.5 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50">
                     {submitLabel}
                 </button>
             </form>
@@ -506,9 +506,9 @@ function ProductSubgroupForm({
     }
 
     return (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
             <div className="flex items-center justify-between mb-4">
-                <h3 className="font-black text-sm">{subgroup ? t.inventoryCategories.editProductSubgroup : t.inventoryCategories.newProductSubgroup}</h3>
+                <h3 className="font-bold text-sm">{subgroup ? t.inventoryCategories.editProductSubgroup : t.inventoryCategories.newProductSubgroup}</h3>
                 <button type="button" onClick={onCancel} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400">
                     <X className="w-4 h-4" />
                 </button>
@@ -533,7 +533,7 @@ function ProductSubgroupForm({
                     <label htmlFor="subgroup-description" className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">{t.common.description}</label>
                     <input id="subgroup-description" value={description} onChange={(event) => setDescription(event.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-2.5 px-4 text-sm" />
                 </div>
-                <button disabled={loading} type="submit" className="px-6 py-2.5 rounded-xl font-black text-sm bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50">
+                <button disabled={loading} type="submit" className="px-6 py-2.5 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50">
                     {submitLabel}
                 </button>
             </form>

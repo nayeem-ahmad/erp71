@@ -607,9 +607,9 @@ export default function POSPage() {
                                     <div
                                         key={product.id}
                                         onClick={() => addToCart(product)}
-                                        className="bg-white p-4 rounded-xl shadow-sm border border-transparent hover:border-blue-500/20 hover:shadow-xl hover:shadow-blue-500/5 cursor-pointer transition-all group flex flex-col items-center text-center space-y-3"
+                                        className="bg-white p-4 rounded-xl shadow-sm border border-transparent hover:border-blue-500/20 hover:shadow-xl hover:shadow-sm/5 cursor-pointer transition-all group flex flex-col items-center text-center space-y-3"
                                     >
-                                        <div className="w-full aspect-square bg-gray-50 rounded-2xl flex items-center justify-center overflow-hidden">
+                                        <div className="w-full aspect-square bg-gray-50 rounded-lg flex items-center justify-center overflow-hidden">
                                             {product.image_url ? (
                                                 <img src={product.image_url} alt={product.name} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
                                             ) : (
@@ -635,7 +635,7 @@ export default function POSPage() {
                                     <div
                                         key={product.id}
                                         onClick={() => addToCart(product)}
-                                        className="bg-white rounded-2xl border border-transparent hover:border-blue-500/20 hover:shadow-md hover:shadow-blue-500/5 cursor-pointer transition-all group flex items-center gap-3 px-3 py-2.5"
+                                        className="bg-white rounded-lg border border-transparent hover:border-blue-500/20 hover:shadow-md hover:shadow-sm/5 cursor-pointer transition-all group flex items-center gap-3 px-3 py-2.5"
                                     >
                                         <div className="w-10 h-10 flex-shrink-0 bg-gray-50 rounded-xl flex items-center justify-center overflow-hidden">
                                             {product.image_url ? (
@@ -796,7 +796,7 @@ export default function POSPage() {
                                     <Link
                                         key={sale.id}
                                         href={`/sales/${sale.id}`}
-                                        className="block bg-gray-50/80 hover:bg-white border border-transparent hover:border-blue-500/10 rounded-2xl p-3 transition-all hover:shadow-md hover:shadow-blue-500/5"
+                                        className="block bg-gray-50/80 hover:bg-white border border-transparent hover:border-blue-500/10 rounded-lg p-3 transition-all hover:shadow-md hover:shadow-sm/5"
                                     >
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="min-w-0">
@@ -834,7 +834,7 @@ export default function POSPage() {
                             </div>
                         ) : (
                             cart.map((item) => (
-                                <div key={item.id} className="bg-gray-50/50 p-4 rounded-2xl group border border-transparent hover:border-blue-500/10 hover:bg-white hover:shadow-lg hover:shadow-blue-500/5 transition-all space-y-3">
+                                <div key={item.id} className="bg-gray-50/50 p-4 rounded-lg group border border-transparent hover:border-blue-500/10 hover:bg-white hover:shadow-lg hover:shadow-sm/5 transition-all space-y-3">
                                     <div className="flex items-center space-x-4">
                                         <div className="w-12 h-12 bg-white rounded-xl flex-shrink-0 flex items-center justify-center overflow-hidden border border-gray-100">
                                             {item.image_url ? (
@@ -898,7 +898,7 @@ export default function POSPage() {
 
                         {/* Pending sync badge */}
                         {pendingCount > 0 && (
-                            <div className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-2xl px-4 py-2">
+                            <div className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2">
                                 <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0" />
                                 <span className="text-xs font-bold text-yellow-800">
                                     {interpolate(
@@ -928,7 +928,7 @@ export default function POSPage() {
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-modal flex items-center justify-center p-4">
                     <div className="bg-white w-full max-w-[420px] rounded-xl shadow-2xl overflow-hidden">
                         <div className="p-6 border-b border-gray-100 bg-green-50/50 flex items-center space-x-4">
-                            <div className="p-3 bg-green-100 rounded-2xl text-green-600">
+                            <div className="p-3 bg-green-100 rounded-lg text-green-600">
                                 <CheckCircle className="w-7 h-7" />
                             </div>
                             <div>
@@ -937,7 +937,7 @@ export default function POSPage() {
                             </div>
                         </div>
                         <div className="p-6 space-y-4">
-                            <div className="bg-gray-50 rounded-2xl p-4 space-y-2">
+                            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
                                 <div className="flex justify-between text-xs font-bold text-gray-500 uppercase tracking-widest">
                                     <span>{t.pos.saleComplete.total}</span>
                                     <span className="text-gray-900">{formatBDT(lastSale.total)}</span>
@@ -953,7 +953,7 @@ export default function POSPage() {
                             </div>
                             <button
                                 onClick={() => handlePrintReceipt(lastSale)}
-                                className="w-full bg-gray-900 hover:bg-blue-600 text-white py-4 rounded-2xl font-semibold text-sm shadow-lg flex items-center justify-center space-x-3 transition-all hover:-translate-y-0.5"
+                                className="w-full bg-gray-900 hover:bg-blue-600 text-white py-4 rounded-lg font-semibold text-sm shadow-lg flex items-center justify-center space-x-3 transition-all hover:-translate-y-0.5"
                             >
                                 <Printer className="w-5 h-5" />
                                 <span>{t.pos.saleComplete.printReceipt}</span>
@@ -962,7 +962,7 @@ export default function POSPage() {
                         <div className="px-6 pb-6">
                             <button
                                 onClick={() => setLastSale(null)}
-                                className="w-full py-3 rounded-2xl font-semibold text-xs text-gray-400 hover:text-gray-900 hover:bg-gray-50 transition-all"
+                                className="w-full py-3 rounded-lg font-semibold text-xs text-gray-400 hover:text-gray-900 hover:bg-gray-50 transition-all"
                             >
                                 {t.pos.saleComplete.skipContinue}
                             </button>
@@ -990,7 +990,7 @@ export default function POSPage() {
                             </button>
                         </div>
                         <div className="p-6 space-y-6 overflow-y-auto flex-1">
-                            <div className="bg-blue-50 p-4 rounded-2xl flex items-center justify-between border border-blue-100">
+                            <div className="bg-blue-50 p-4 rounded-lg flex items-center justify-between border border-blue-100">
                                 <div>
                                     <span className="font-semibold text-blue-900 text-xs">{t.pos.payment.totalDue}</span>
                                     {appliedDiscount && (
@@ -1152,11 +1152,11 @@ export default function POSPage() {
                             </div>
 
                             <div className="grid grid-cols-2 gap-4 pt-4 border-t border-dashed border-gray-200">
-                                <div className="bg-gray-50 p-3 rounded-2xl flex flex-col justify-center">
+                                <div className="bg-gray-50 p-3 rounded-lg flex flex-col justify-center">
                                     <span className="text-xs font-semibold text-gray-400 mb-1">{t.pos.payment.totalPaid}</span>
                                     <span className="text-lg font-bold text-gray-900">{formatBDT(totalPaid)}</span>
                                 </div>
-                                <div className={`p-3 rounded-2xl flex flex-col justify-center ${
+                                <div className={`p-3 rounded-lg flex flex-col justify-center ${
                                     creditDue > 0.01
                                         ? keepDueCheck.allowed
                                             ? 'bg-amber-50 text-amber-700'
@@ -1184,7 +1184,7 @@ export default function POSPage() {
                             <button
                                 onClick={handleConfirmCheckout}
                                 disabled={totalPaid < total}
-                                className="w-full py-4 rounded-2xl font-semibold text-sm shadow-xl flex items-center justify-center transition-all disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 hover:-translate-y-0.5"
+                                className="w-full py-4 rounded-lg font-semibold text-sm shadow-xl flex items-center justify-center transition-all disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed bg-blue-600 hover:bg-blue-700 text-white shadow-sm/20 hover:-translate-y-0.5"
                             >
                                 {isOnline ? t.pos.payment.confirmTransaction : t.pos.payment.saveOfflineSale}
                             </button>

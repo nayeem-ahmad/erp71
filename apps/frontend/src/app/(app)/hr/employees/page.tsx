@@ -78,7 +78,7 @@ export default function EmployeesPage() {
                     const emp = info.row.original;
                     return (
                         <div>
-                            <span className="block text-sm font-black text-gray-900">{emp.name}</span>
+                            <span className="block text-sm font-bold text-gray-900">{emp.name}</span>
                             <span className="block text-xs text-gray-400">{emp.phone}</span>
                         </div>
                     );

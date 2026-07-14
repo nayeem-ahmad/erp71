@@ -246,8 +246,8 @@ export default function CustomerProfile() {
             />
 
             {/* Profile Header */}
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex items-start space-x-6">
-                <div className="w-20 h-20 bg-blue-600 rounded-2xl shadow-sm flex items-center justify-center text-white font-bold text-3xl uppercase overflow-hidden">
+            <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 flex items-start space-x-6">
+                <div className="w-20 h-20 bg-blue-600 rounded-lg shadow-sm flex items-center justify-center text-white font-bold text-3xl uppercase overflow-hidden">
                     {customer.profile_pic_url
                         ? <img src={customer.profile_pic_url} alt={customer.name} className="w-full h-full object-cover" />
                         : customer.name.substring(0, 2)}
@@ -297,7 +297,7 @@ export default function CustomerProfile() {
             </div>
 
             {/* Tabs */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
                 <div className="border-b border-gray-100 flex">
                     {([
                         { key: 'history', label: t.customers.profile.tabs.history, icon: <ShoppingBag className="w-4 h-4" /> },
@@ -757,7 +757,7 @@ export default function CustomerProfile() {
 
 function InfoCard({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
     return (
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center space-x-4">
+        <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-100 flex items-center space-x-4">
             <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center">{icon}</div>
             <div>
                 <p className="text-gray-500 font-bold text-[10px] uppercase tracking-widest">{label}</p>

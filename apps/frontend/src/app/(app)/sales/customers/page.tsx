@@ -308,14 +308,14 @@ export default function CustomersPage() {
 
                 {segmentStats && segmentStats.total > 0 && (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+                        <div className="bg-white border border-gray-100 rounded-lg p-5 shadow-sm">
                             <p className="text-xs font-medium text-gray-500 mb-1">{t.customers.totalCustomers}</p>
                             <p className="text-3xl font-bold text-gray-900">{segmentStats.total}</p>
                         </div>
                         {segmentStats.breakdown.map((seg) => {
                             const style = segmentCardStyle[seg.segment] ?? segmentCardStyle['Regular'];
                             return (
-                                <div key={seg.segment} className={`border rounded-2xl p-5 shadow-sm ${style.bg}`}>
+                                <div key={seg.segment} className={`border rounded-lg p-5 shadow-sm ${style.bg}`}>
                                     <div className="flex items-center justify-between mb-2">
                                         <p className={`text-[10px] font-semibold ${style.text}`}>{seg.segment}</p>
                                         {style.icon}

@@ -261,7 +261,7 @@ export default function CreatePurchaseReturnModal({
                                 </div>
                             </div>
 
-                            <div className="border border-gray-100 rounded-2xl overflow-hidden bg-gray-50/60 min-h-[300px]">
+                            <div className="border border-gray-100 rounded-lg overflow-hidden bg-gray-50/60 min-h-[300px]">
                                 {loading ? (
                                     <div className="p-6 text-center text-xs font-bold uppercase tracking-widest text-gray-400">
                                         Loading purchases...
@@ -315,7 +315,7 @@ export default function CreatePurchaseReturnModal({
                                 </div>
                             ) : (
                                 <>
-                                    <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="rounded-lg border border-gray-100 bg-gray-50/70 p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div>
                                             <span className="text-xs font-medium text-gray-500 block mb-1">Purchase #</span>
                                             <span className="text-sm font-bold text-gray-900">{selectedPurchase.purchase_number}</span>
@@ -423,7 +423,7 @@ export default function CreatePurchaseReturnModal({
                                         </div>
                                     </div>
 
-                                    <div className="rounded-2xl bg-emerald-950 text-white p-5 flex items-center justify-between">
+                                    <div className="rounded-lg bg-emerald-950 text-white p-5 flex items-center justify-between">
                                         <div>
                                             <p className="text-xs font-semibold text-emerald-200">Return Total</p>
                                             <p className="text-sm text-emerald-100 mt-1">{t.purchaseReturns.modal.returnTotalHint}</p>

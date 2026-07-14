@@ -81,7 +81,7 @@ export default function MonthlySalesPage() {
                     )}
                 />
 
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap gap-3 items-end">
+                <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
                     <div className="flex flex-col gap-1">
                         <span className="text-xs font-medium text-gray-500">{t.salesReports.common.from}</span>
                         <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
@@ -94,17 +94,17 @@ export default function MonthlySalesPage() {
                     </div>
                 </div>
 
-                {error && <div className="rounded-2xl bg-red-50 border border-red-100 p-4 text-sm text-red-700">{error}</div>}
+                {error && <div className="rounded-lg bg-red-50 border border-red-100 p-4 text-sm text-red-700">{error}</div>}
 
                 {loading ? (
-                    <div className="bg-white border border-gray-100 rounded-2xl p-12 text-center text-gray-400 text-sm font-medium">{t.shared.loading.generic}</div>
+                    <div className="bg-white border border-gray-100 rounded-lg p-12 text-center text-gray-400 text-sm font-medium">{t.shared.loading.generic}</div>
                 ) : data && data.rows.length === 0 ? (
-                    <div className="bg-white border border-gray-100 rounded-2xl p-12 flex flex-col items-center gap-3 text-gray-400">
+                    <div className="bg-white border border-gray-100 rounded-lg p-12 flex flex-col items-center gap-3 text-gray-400">
                         <BarChart3 className="w-16 h-16 text-gray-200" />
                         <p className="text-sm font-medium">{t.salesReports.common.noSalesInPeriod}</p>
                     </div>
                 ) : data ? (
-                    <div className="bg-white border border-gray-100 rounded-2xl overflow-x-auto">
+                    <div className="bg-white border border-gray-100 rounded-lg overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-gray-100">

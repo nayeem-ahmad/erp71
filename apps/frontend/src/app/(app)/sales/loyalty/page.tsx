@@ -277,7 +277,7 @@ export default function LoyaltyPage() {
                 </div>
 
                 {/* Table */}
-                <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
                     {/* Table header */}
                     <div className="grid grid-cols-[1fr_140px_120px_140px_120px] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-100">
                         <span className="text-xs font-bold uppercase tracking-wider text-gray-400">{t.shared.columns.customer}</span>

@@ -447,7 +447,7 @@ export default function LoansPage() {
                             <Button variant="secondary" type="button" onClick={() => setShowForm(false)}>
                                 {t.common.cancel}
                             </Button>
-                            <Button variant="primary" type="submit" loading={saving} className="bg-indigo-600 hover:bg-indigo-700">
+                            <Button variant="primary" type="submit" loading={saving}>
                                 {t.common.save}
                             </Button>
                         </ModalFooter>

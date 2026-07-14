@@ -85,7 +85,7 @@ export default function StockTakesPage() {
             columnHelper.display({
                 id: 'actions',
                 header: t.inventoryStockTakes.columns.actions,
-                cell: (info) => <Link href={`/inventory/stock-takes/${info.row.original.id}`} className="text-sm font-black text-blue-700 hover:text-blue-900">{t.inventoryStockTakes.columns.open}</Link>,
+                cell: (info) => <Link href={`/inventory/stock-takes/${info.row.original.id}`} className="text-sm font-bold text-blue-700 hover:text-blue-900">{t.inventoryStockTakes.columns.open}</Link>,
                 size: 100,
             }),
         ],
@@ -112,10 +112,10 @@ export default function StockTakesPage() {
 
                 <ContextualHelpPanel {...STOCK_TAKES_HELP} />
 
-                <form onSubmit={handleCreate} className="bg-white border border-gray-100 rounded-2xl p-6 space-y-4">
+                <form onSubmit={handleCreate} className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
                     <div className="flex items-center gap-2">
                         <ClipboardCheck className="w-5 h-5 text-blue-600" />
-                        <h2 className="font-black text-lg">{t.inventoryStockTakes.newSession}</h2>
+                        <h2 className="font-bold text-lg">{t.inventoryStockTakes.newSession}</h2>
                     </div>
                     {message ? <div className="text-sm font-bold text-gray-700 bg-gray-50 rounded-xl px-4 py-3">{message}</div> : null}
                     <div className="grid md:grid-cols-3 gap-4">
@@ -138,7 +138,7 @@ export default function StockTakesPage() {
                             </span>
                         </label>
                     </div>
-                    <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200">
+                    <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-sm">
                         <Plus className="w-4 h-4 mr-2" /> {t.inventoryStockTakes.createSession}
                     </button>
                 </form>

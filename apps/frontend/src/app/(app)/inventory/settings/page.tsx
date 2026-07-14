@@ -166,7 +166,7 @@ export default function InventorySettingsPage() {
                         'inventory',
                     )}
                     actions={(
-                        <button onClick={() => void handleSave()} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200">
+                        <button onClick={() => void handleSave()} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-sm">
                             <Save className="w-4 h-4 mr-2" /> {t.common.saveChanges}
                         </button>
                     )}
@@ -174,10 +174,10 @@ export default function InventorySettingsPage() {
 
                 {message ? <div className="bg-white border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-700">{message}</div> : null}
 
-                <section className="bg-white border border-gray-100 rounded-2xl p-6 space-y-4">
+                <section className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
                     <div className="flex items-center gap-2">
                         <Settings2 className="w-5 h-5 text-blue-600" />
-                        <h2 className="font-black text-lg">{t.inventorySettings.warehouseDefaults}</h2>
+                        <h2 className="font-bold text-lg">{t.inventorySettings.warehouseDefaults}</h2>
                     </div>
                     <div className="grid md:grid-cols-2 gap-4">
                         {Object.entries(warehouseDefaultLabels).map(([key, label]) => (
@@ -194,11 +194,11 @@ export default function InventorySettingsPage() {
                     </div>
                 </section>
 
-                <section className="bg-white border border-gray-100 rounded-2xl p-6 space-y-4">
+                <section className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
                     <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                             <Warehouse className="w-5 h-5 text-blue-600" />
-                            <h2 className="font-black text-lg">{t.inventorySettings.warehouses}</h2>
+                            <h2 className="font-bold text-lg">{t.inventorySettings.warehouses}</h2>
                         </div>
                         <button
                             onClick={() => setImportWarehouseOpen(true)}
@@ -212,7 +212,7 @@ export default function InventorySettingsPage() {
                         <input value={warehouseForm.storeId} onChange={(e) => setWarehouseForm((current: any) => ({ ...current, storeId: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" placeholder={t.inventorySettings.storeId} />
                         <input value={warehouseForm.name} onChange={(e) => setWarehouseForm((current: any) => ({ ...current, name: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" placeholder={t.inventorySettings.warehouseName} />
                         <input value={warehouseForm.code} onChange={(e) => setWarehouseForm((current: any) => ({ ...current, code: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" placeholder={t.inventorySettings.optionalCode} />
-                        <button onClick={() => void handleCreateWarehouse()} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center shadow-lg shadow-blue-200">
+                        <button onClick={() => void handleCreateWarehouse()} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center shadow-lg shadow-sm">
                             <Plus className="w-4 h-4 mr-2" /> {t.inventorySettings.addWarehouse}
                         </button>
                     </div>
@@ -220,7 +220,7 @@ export default function InventorySettingsPage() {
                         {warehouses.map((warehouse) => (
                             <div key={warehouse.id} className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3 gap-4">
                                 <div>
-                                    <div className="text-sm font-black text-gray-900">{warehouse.name}</div>
+                                    <div className="text-sm font-bold text-gray-900">{warehouse.name}</div>
                                     <div className="text-xs text-gray-500 font-bold uppercase tracking-widest">{warehouse.code} • {warehouse.is_default ? t.inventorySettings.default : t.inventorySettings.secondary} • {warehouse.is_active ? t.inventorySettings.active : t.inventorySettings.inactive}</div>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -241,8 +241,8 @@ export default function InventorySettingsPage() {
                 onSuccess={() => void loadAll()}
             />
 
-                <section className="bg-white border border-gray-100 rounded-2xl p-6 space-y-4">
-                    <h2 className="font-black text-lg">{t.inventorySettings.alertRules}</h2>
+                <section className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
+                    <h2 className="font-bold text-lg">{t.inventorySettings.alertRules}</h2>
                     <div className="grid md:grid-cols-4 gap-4">
                         {Object.entries(alertRuleLabels).map(([key, label]) => (
                             <div key={key}>
@@ -253,8 +253,8 @@ export default function InventorySettingsPage() {
                     </div>
                 </section>
 
-                <section className="bg-white border border-gray-100 rounded-2xl p-6 space-y-4">
-                    <h2 className="font-black text-lg">{t.inventorySettings.reasonCatalog}</h2>
+                <section className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
+                    <h2 className="font-bold text-lg">{t.inventorySettings.reasonCatalog}</h2>
                     <div className="grid md:grid-cols-4 gap-4">
                         <select value={reasonForm.type} onChange={(e) => setReasonForm((current: any) => ({ ...current, type: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                             <option value="SHRINKAGE">{t.inventorySettings.shrinkage}</option>
@@ -262,7 +262,7 @@ export default function InventorySettingsPage() {
                         </select>
                         <input value={reasonForm.code} onChange={(e) => setReasonForm((current: any) => ({ ...current, code: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" placeholder={t.inventorySettings.reasonCode} />
                         <input value={reasonForm.label} onChange={(e) => setReasonForm((current: any) => ({ ...current, label: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" placeholder={t.inventorySettings.reasonLabel} />
-                        <button onClick={() => void handleCreateReason()} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center shadow-lg shadow-blue-200">
+                        <button onClick={() => void handleCreateReason()} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center shadow-lg shadow-sm">
                             <Plus className="w-4 h-4 mr-2" /> {t.inventorySettings.addReason}
                         </button>
                     </div>
@@ -270,7 +270,7 @@ export default function InventorySettingsPage() {
                         {reasons.map((reason) => (
                             <div key={reason.id} className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
                                 <div>
-                                    <div className="text-sm font-black text-gray-900">{reason.label}</div>
+                                    <div className="text-sm font-bold text-gray-900">{reason.label}</div>
                                     <div className="text-xs text-gray-500 font-bold uppercase tracking-widest">{reason.type} • {reason.code}</div>
                                 </div>
                                 <div className="flex items-center gap-2">

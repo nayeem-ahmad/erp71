@@ -106,7 +106,7 @@ export default function DepartmentsPage() {
             columnHelper.accessor('name', {
                 header: t.departments.columns.name,
                 cell: (info) => (
-                    <span className="text-sm font-black text-gray-900">{info.getValue()}</span>
+                    <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>
                 ),
                 size: 300,
             }),

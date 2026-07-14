@@ -288,7 +288,7 @@ function TerritoryForm({ territory, territories, onSave, onCancel }: {
     };
 
     return (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 mb-8">
             <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-sm">{territory ? t.territories.editTerritory : t.territories.newTerritory}</h3>
                 <button onClick={onCancel} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400"><X className="w-4 h-4" /></button>

@@ -242,7 +242,7 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
 
                         {/* Right: supplier + adjustments */}
                         <div className="space-y-5">
-                            <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 space-y-3">
+                            <div className="rounded-lg border border-gray-100 bg-gray-50/70 p-4 space-y-3">
                                 <h3 className="text-sm font-bold tracking-tight">{t.common.supplier}</h3>
                                 <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}
                                     className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20">
@@ -258,7 +258,7 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                                 </div>
                             </div>
 
-                            <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 space-y-3">
+                            <div className="rounded-lg border border-gray-100 bg-gray-50/70 p-4 space-y-3">
                                 <h3 className="text-sm font-bold tracking-tight">{t.purchaseShared.costAdjustments}</h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     {[ [t.common.tax, taxAmount, setTaxAmount], [t.common.discount, discountAmount, setDiscountAmount], [t.purchaseShared.freight, freightAmount, setFreightAmount] ].map(([label, val, setter]) => (
@@ -274,7 +274,7 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                                     rows={2} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500/20" />
                             </div>
 
-                            <div className="rounded-2xl bg-blue-950 text-white p-5 space-y-2">
+                            <div className="rounded-lg bg-blue-950 text-white p-5 space-y-2">
                                 <div className="flex justify-between text-sm font-bold text-blue-100">
                                     <span>{t.common.subtotal}</span><span>{formatBDT(subtotal, { locale })}</span>
                                 </div>

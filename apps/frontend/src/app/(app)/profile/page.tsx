@@ -76,7 +76,7 @@ function PrivacyTab({ onToast }: { onToast: (t: ToastState) => void }) {
                     type="button"
                     onClick={handleExport}
                     disabled={exporting}
-                    className="rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 text-left hover:border-blue-300 transition-colors disabled:opacity-60"
+                    className="rounded-lg border border-gray-200 bg-gray-50 px-5 py-4 text-left hover:border-blue-300 transition-colors disabled:opacity-60"
                 >
                     <p className="text-sm font-bold text-gray-900">{t.settings.privacy.downloadData}</p>
                     <p className="mt-1 text-xs text-gray-500">{t.settings.privacy.downloadDesc}</p>
@@ -85,7 +85,7 @@ function PrivacyTab({ onToast }: { onToast: (t: ToastState) => void }) {
                     type="button"
                     onClick={handleDeletionRequest}
                     disabled={requestingDeletion}
-                    className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-left hover:border-rose-300 transition-colors disabled:opacity-60"
+                    className="rounded-lg border border-rose-200 bg-rose-50 px-5 py-4 text-left hover:border-rose-300 transition-colors disabled:opacity-60"
                 >
                     <p className="text-sm font-bold text-rose-800">{t.settings.privacy.requestDeletion}</p>
                     <p className="mt-1 text-xs text-rose-700">{t.settings.privacy.deletionDesc}</p>
@@ -406,7 +406,7 @@ function TwoFATab({
             {/* Step 1 */}
             <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-black flex items-center justify-center flex-shrink-0">
+                    <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
                         1
                     </span>
                     <span className="text-sm font-semibold text-gray-700">{t.settings.twoFactor.step1}</span>
@@ -459,7 +459,7 @@ function TwoFATab({
             {setup && (
                 <div className="space-y-3">
                     <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-black flex items-center justify-center flex-shrink-0">
+                        <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
                             2
                         </span>
                         <span className="text-sm font-semibold text-gray-700">{t.settings.twoFactor.step2}</span>
@@ -631,7 +631,7 @@ export default function ProfilePage() {
                                     className="w-24 h-24 rounded-full object-cover ring-4 ring-white shadow-md"
                                 />
                             ) : (
-                                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-black ring-4 ring-white shadow-md">
+                                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold ring-4 ring-white shadow-md">
                                     {initials}
                                 </div>
                             )}
@@ -665,7 +665,7 @@ export default function ProfilePage() {
                 </div>
 
                 {/* Tabbed account controls card */}
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
                     {/* Tab bar */}
                     <div className="flex items-center border-b border-gray-100 px-6 gap-1">
                         {tabs.map(({ key, label }) => (

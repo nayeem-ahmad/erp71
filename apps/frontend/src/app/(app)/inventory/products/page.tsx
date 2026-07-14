@@ -192,14 +192,14 @@ export default function InventoryPage() {
                     const product = info.row.original;
                     return (
                         <div className="flex items-center space-x-3">
-                            <div className="w-9 h-9 rounded-xl bg-gray-100 relative overflow-hidden flex items-center justify-center text-[10px] font-black text-gray-500 uppercase">
+                            <div className="w-9 h-9 rounded-xl bg-gray-100 relative overflow-hidden flex items-center justify-center text-[10px] font-bold text-gray-500 uppercase">
                                 {product.image_url ? (
                                     <ProductImage src={product.image_url} alt={product.name} fallbackClassName="w-full h-full flex items-center justify-center" />
                                 ) : (
                                     product.name.slice(0, 2)
                                 )}
                             </div>
-                            <span className="text-sm font-black text-gray-900">{product.name}</span>
+                            <span className="text-sm font-bold text-gray-900">{product.name}</span>
                         </div>
                     );
                 },
@@ -216,7 +216,7 @@ export default function InventoryPage() {
             columnHelper.accessor('price', {
                 header: t.inventory.columns.price,
                 cell: (info) => (
-                    <span className="text-sm font-black text-blue-600">
+                    <span className="text-sm font-bold text-blue-600">
                         {formatBDT(Number(info.getValue() || 0))}
                     </span>
                 ),
@@ -285,7 +285,7 @@ export default function InventoryPage() {
                                   : t.inventory.status.inStock;
 
                         return (
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${classes}`}>
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border ${classes}`}>
                                 {label}
                             </span>
                         );
@@ -426,7 +426,7 @@ export default function InventoryPage() {
                         <span>{importStatus}</span>
                         <button
                             onClick={() => setImportStatus(null)}
-                            className="ml-4 text-current opacity-60 hover:opacity-100 font-black text-base leading-none"
+                            className="ml-4 text-current opacity-60 hover:opacity-100 font-bold text-base leading-none"
                             aria-label={t.common.dismiss}
                         >
                             ×

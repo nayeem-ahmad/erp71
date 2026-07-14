@@ -109,25 +109,25 @@ export default function SalesByCustomerPage() {
                 />
 
                 <div className="grid md:grid-cols-4 gap-4">
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.totalRevenue}</div>
                         <div className="text-2xl font-bold text-blue-700 mt-2">{formatBDT(Number(summary?.totalRevenue ?? 0), { locale })}</div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.totalOrders}</div>
                         <div className="text-2xl font-bold text-gray-900 mt-2">{summary?.totalOrders ?? 0}</div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.customers}</div>
                         <div className="text-2xl font-bold text-gray-900 mt-2">{summary?.customerCount ?? 0}</div>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5">
                         <div className="text-xs font-medium text-gray-500">{t.salesReports.common.avgOrderValue}</div>
                         <div className="text-2xl font-bold text-gray-900 mt-2">{formatBDT(Number(summary?.avgOrderValue ?? 0), { locale })}</div>
                     </div>
                 </div>
 
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap gap-3 items-end">
+                <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
                     <div className="flex flex-col gap-1">
                         <span className="text-xs font-medium text-gray-500">{t.salesReports.common.from}</span>
                         <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}

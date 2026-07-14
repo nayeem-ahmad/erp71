@@ -270,7 +270,7 @@ function PurchaseReturnDetailPageContent() {
         <PageShell>
             <div className="max-w-4xl mx-auto space-y-6">
                 {isEditMode && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-center justify-between">
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-3 flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                             <Pencil className="w-4 h-4 text-amber-600" />
                             <span className="text-sm font-bold text-amber-800">
@@ -337,19 +337,19 @@ function PurchaseReturnDetailPageContent() {
 
                 {isEditMode ? (
                     <div className="grid grid-cols-4 gap-4">
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">Source Purchase</span>
                             <span className="text-sm font-bold text-gray-900">{purchaseReturn.purchase?.purchase_number || '-'}</span>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">Supplier</span>
                             <span className="text-sm font-bold text-gray-700">{purchaseReturn.supplier?.name || 'Unlinked supplier'}</span>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">Editable Items</span>
                             <span className="text-xl font-bold text-gray-900">{editItems.filter((item) => item.quantity > 0).length}</span>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">New Total</span>
                             <span className="text-xl font-bold text-emerald-600">{formatBDT(editTotal, { locale })}</span>
                             {editTotal !== Number(purchaseReturn.total_amount || 0) && (
@@ -361,25 +361,25 @@ function PurchaseReturnDetailPageContent() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-5 gap-4">
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">Source Purchase</span>
                             <span className="text-sm font-bold text-gray-900">{purchaseReturn.purchase?.purchase_number || '-'}</span>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">Supplier</span>
                             <span className="text-sm font-bold text-gray-700">{purchaseReturn.supplier?.name || 'Unlinked supplier'}</span>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">Status</span>
                             <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200">
                                 {purchaseReturn.status || 'RECORDED'}
                             </span>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">Items</span>
                             <span className="text-xl font-bold text-gray-900">{purchaseReturn.items?.length || 0}</span>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">{t.purchases.invoice.total}</span>
                             <span className="text-xl font-bold text-emerald-600">{formatBDT(Number(purchaseReturn.total_amount || 0), { locale })}</span>
                         </div>

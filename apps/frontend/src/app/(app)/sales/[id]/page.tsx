@@ -267,7 +267,7 @@ function SaleDetailPageContent() {
             <div className="max-w-4xl mx-auto space-y-6">
                 {/* Edit Mode Banner */}
                 {isEditMode && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-center justify-between">
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-3 flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                             <Pencil className="w-4 h-4 text-amber-600" />
                             <span className="text-sm font-bold text-amber-800">
@@ -343,7 +343,7 @@ function SaleDetailPageContent() {
                 {/* Status & Summary (edit or view) */}
                 {isEditMode ? (
                     <div className="grid grid-cols-3 gap-4">
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <label className="text-xs font-medium text-gray-500 block mb-2">{t.common.status}</label>
                             <select
                                 value={editStatus}
@@ -357,7 +357,7 @@ function SaleDetailPageContent() {
                                 ))}
                             </select>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <label className="text-xs font-medium text-gray-500 block mb-2">{t.common.customer}</label>
                             <select
                                 value={editCustomerId || ''}
@@ -370,7 +370,7 @@ function SaleDetailPageContent() {
                                 ))}
                             </select>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">{t.sales.detail.newTotal}</span>
                             <span className="text-xl font-bold text-blue-600">{formatBDT(editTotal, { locale })}</span>
                             {Math.abs(editPaid - editTotal) > 0.01 && (
@@ -382,7 +382,7 @@ function SaleDetailPageContent() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-4 gap-4">
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">{t.common.status}</span>
                             <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${
                                 sale.status === 'COMPLETED' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-700 border-gray-200'
@@ -390,15 +390,15 @@ function SaleDetailPageContent() {
                                 {t.shared.statuses.sale[sale.status as keyof typeof t.shared.statuses.sale] ?? sale.status}
                             </span>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">{t.common.total}</span>
                             <span className="text-xl font-bold text-blue-600">{formatBDT(parseFloat(sale.total_amount), { locale })}</span>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">{t.sales.columns.paid}</span>
                             <span className="text-xl font-bold text-gray-900">{formatBDT(parseFloat(sale.amount_paid), { locale })}</span>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                        <div className="bg-white p-4 rounded-lg shadow-sm">
                             <span className="text-xs font-medium text-gray-500 block mb-1">{t.sales.columns.items}</span>
                             <span className="text-xl font-bold text-gray-900">{sale.items?.length || 0}</span>
                         </div>
@@ -454,7 +454,7 @@ function SaleDetailPageContent() {
                 </div>
 
                 {/* Items Section */}
-                <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+                <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                     <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                             <div className="p-2 bg-blue-50 rounded-xl text-blue-600">
@@ -611,7 +611,7 @@ function SaleDetailPageContent() {
                 </div>
 
                 {/* Payments Section */}
-                <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+                <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                     <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                             <div className="p-2 bg-green-50 rounded-xl text-green-600">
@@ -698,7 +698,7 @@ function SaleDetailPageContent() {
                 </div>
 
                 {/* Note Section */}
-                <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+                <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                     <div className="p-6 border-b border-gray-100 flex items-center space-x-3">
                         <div className="p-2 bg-amber-50 rounded-xl text-amber-600">
                             <FileText className="w-5 h-5" />

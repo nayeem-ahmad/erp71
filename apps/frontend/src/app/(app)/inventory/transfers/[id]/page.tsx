@@ -96,12 +96,12 @@ export default function InventoryTransferDetailPage() {
                     actions={(
                         <>
                             {transfer.status === 'DRAFT' ? (
-                                <button onClick={() => void handleSend()} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-blue-200">
+                                <button onClick={() => void handleSend()} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-sm">
                                     <ArrowRightLeft className="w-4 h-4 mr-2" /> {t.inventoryTransferDetail.sendTransfer}
                                 </button>
                             ) : null}
                             {canReceive ? (
-                                <button onClick={() => void handleReceive()} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-emerald-200">
+                                <button onClick={() => void handleReceive()} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-sm">
                                     <CheckCircle2 className="w-4 h-4 mr-2" /> {t.inventoryTransferDetail.receiveStock}
                                 </button>
                             ) : null}
@@ -112,15 +112,15 @@ export default function InventoryTransferDetailPage() {
                 {message ? <div className="bg-white border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-700">{message}</div> : null}
 
                 <div className="grid lg:grid-cols-[1.4fr_0.8fr] gap-6">
-                    <div className="bg-white border border-gray-100 rounded-2xl p-6 space-y-4">
-                        <h2 className="font-black text-lg">{t.inventoryTransferDetail.transferLines}</h2>
+                    <div className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
+                        <h2 className="font-bold text-lg">{t.inventoryTransferDetail.transferLines}</h2>
                         <div className="space-y-3">
                             {transfer.items.map((item: any) => {
                                 const outstanding = item.quantity_sent - item.quantity_received;
                                 return (
                                     <div key={item.id} className="grid md:grid-cols-[1fr_120px_120px_160px] gap-4 items-center rounded-xl bg-gray-50 px-4 py-3">
                                         <div>
-                                            <div className="text-sm font-black text-gray-900">{item.product?.name}</div>
+                                            <div className="text-sm font-bold text-gray-900">{item.product?.name}</div>
                                             <div className="text-xs text-gray-500">
                                                 {formatMessage(t.inventoryTransferDetail.sentReceived, {
                                                     sent: item.quantity_sent,
@@ -152,14 +152,14 @@ export default function InventoryTransferDetailPage() {
                         </div>
                     </div>
 
-                    <div className="bg-white border border-gray-100 rounded-2xl p-6 space-y-4">
-                        <h2 className="font-black text-lg">{t.inventoryTransferDetail.transferTimeline}</h2>
+                    <div className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
+                        <h2 className="font-bold text-lg">{t.inventoryTransferDetail.transferTimeline}</h2>
                         <div className="space-y-4">
                             {timeline.map((event, index) => (
                                 <div key={`${event.label}-${index}`} className="flex gap-3">
                                     <div className="mt-1 h-2.5 w-2.5 rounded-full bg-blue-600" />
                                     <div>
-                                        <div className={`text-sm font-black ${event.tone}`}>{event.label}</div>
+                                        <div className={`text-sm font-bold ${event.tone}`}>{event.label}</div>
                                         <div className="text-xs text-gray-500">{new Date(event.at).toLocaleString()}</div>
                                     </div>
                                 </div>

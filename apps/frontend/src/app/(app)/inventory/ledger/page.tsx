@@ -86,7 +86,7 @@ export default function InventoryLedgerPage() {
                 header: t.inventoryLedger.columns.delta,
                 cell: (info) => {
                     const value = Number(info.getValue() || 0);
-                    return <span className={value >= 0 ? 'text-emerald-600 font-black' : 'text-rose-600 font-black'}>{value}</span>;
+                    return <span className={value >= 0 ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>{value}</span>;
                 },
                 size: 80,
             }),
@@ -122,7 +122,7 @@ export default function InventoryLedgerPage() {
                     )}
                 />
 
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap gap-3 items-end">
+                <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
                     <div className="min-w-[220px]">
                         <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.inventoryLedger.warehouseLabel}</label>
                         <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">

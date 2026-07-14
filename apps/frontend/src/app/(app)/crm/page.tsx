@@ -153,7 +153,7 @@ export default function CrmHubPage() {
                         )}
                     </div>
 
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
                         <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
                             <h2 className="text-sm font-bold text-gray-800">{hub.dashboard.recentCampaigns}</h2>
                             <Link href={routes.crm.campaigns} className="text-xs font-semibold text-primary hover:underline">

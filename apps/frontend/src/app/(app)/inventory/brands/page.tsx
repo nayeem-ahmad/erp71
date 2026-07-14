@@ -129,7 +129,7 @@ export default function BrandsPage() {
             columnHelper.accessor('name', {
                 header: t.brands.columns.brand,
                 cell: (info) => (
-                    <span className="text-sm font-black text-gray-900">{info.getValue()}</span>
+                    <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>
                 ),
                 size: 200,
             }),

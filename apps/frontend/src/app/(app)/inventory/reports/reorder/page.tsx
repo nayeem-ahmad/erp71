@@ -87,7 +87,7 @@ export default function ReorderSuggestionsPage() {
             columnHelper.accessor((row) => row.targetStock ?? '-', { id: 'targetStock', header: t.inventoryReports.reorder.columns.target, size: 90 }),
             columnHelper.accessor('suggestedQuantity', {
                 header: t.inventoryReports.reorder.columns.suggestedQty,
-                cell: (info) => <span className="text-sm font-black text-rose-600">{info.getValue()}</span>,
+                cell: (info) => <span className="text-sm font-bold text-rose-600">{info.getValue()}</span>,
                 size: 120,
             }),
             columnHelper.accessor('shortageReason', { header: t.inventoryReports.reorder.columns.explanation, size: 320 }),
@@ -109,7 +109,7 @@ export default function ReorderSuggestionsPage() {
                     )}
                 />
 
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap gap-3 items-end">
+                <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
                     <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[220px]">
                         <option value="">{t.inventoryReports.reorder.allWarehouses}</option>
                         {warehouses.map((warehouse: any) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}

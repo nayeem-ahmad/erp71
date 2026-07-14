@@ -119,7 +119,7 @@ export default function NotificationsPage() {
                 </p>
             )}
 
-            <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+            <div className="rounded-lg border border-gray-100 bg-white shadow-sm overflow-hidden">
                 {loading ? (
                     <div className="py-16 flex flex-col items-center justify-center text-sm text-gray-400 gap-2">
                         <Loader2 className="w-5 h-5 animate-spin" />

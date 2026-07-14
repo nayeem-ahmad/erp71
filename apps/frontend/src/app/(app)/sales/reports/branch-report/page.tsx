@@ -75,7 +75,7 @@ function KpiCard({
     sub?: string;
 }) {
     return (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-start gap-4">
+        <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-5 flex items-start gap-4">
             <div className={`rounded-xl p-2.5 ${accent}`}>
                 <Icon className="w-5 h-5 text-white" />
             </div>
@@ -222,7 +222,7 @@ export default function BranchReportPage() {
                     <div className="space-y-4">
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                             {[...Array(4)].map((_, i) => (
-                                <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-3">
+                                <div key={i} className="bg-white rounded-lg border border-gray-100 shadow-sm p-5 space-y-3">
                                     <Skeleton className="h-4 w-28" />
                                     <Skeleton className="h-7 w-36" />
                                 </div>
@@ -277,7 +277,7 @@ export default function BranchReportPage() {
                         </div>
 
                         {/* Company comparison bar */}
-                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                        <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-6">
                             <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400 mb-4">
                                 {m.companyComparison.title}
                             </h3>
@@ -308,7 +308,7 @@ export default function BranchReportPage() {
 
                         <div className="grid md:grid-cols-2 gap-6">
                             {/* Top Products */}
-                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                            <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
                                 <div className="px-6 py-4 border-b border-gray-100">
                                     <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400">
                                         {m.topProducts.title}
@@ -342,7 +342,7 @@ export default function BranchReportPage() {
                             </div>
 
                             {/* Daily Breakdown */}
-                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                            <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
                                 <div className="px-6 py-4 border-b border-gray-100">
                                     <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400">
                                         {m.dailyBreakdown.title}
@@ -382,7 +382,7 @@ export default function BranchReportPage() {
 
                 {!loading && !r && !error && selectedStore && (
                     <div className="flex flex-col items-center justify-center py-20 text-center">
-                        <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mb-4">
+                        <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center mb-4">
                             <BarChart3 className="w-8 h-8 text-gray-300" />
                         </div>
                         <p className="text-base font-semibold text-gray-500">{m.empty.title}</p>

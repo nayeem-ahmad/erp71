@@ -179,7 +179,7 @@ export default function SalaryPaymentsPage() {
             columnHelper.accessor('payment_method', {
                 header: 'Method',
                 cell: (info) => (
-                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">{info.getValue()}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{info.getValue()}</span>
                 ),
                 size: 100,
             }),
@@ -191,7 +191,7 @@ export default function SalaryPaymentsPage() {
             columnHelper.accessor('amount', {
                 header: t.common.amount,
                 cell: (info) => (
-                    <span className="text-sm font-black text-emerald-600">{formatBDT(Number(info.getValue()))}</span>
+                    <span className="text-sm font-bold text-emerald-600">{formatBDT(Number(info.getValue()))}</span>
                 ),
                 sortingFn: (a, b) => Number(a.getValue('amount')) - Number(b.getValue('amount')),
                 size: 120,
@@ -244,7 +244,7 @@ export default function SalaryPaymentsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
                         <p className="text-xs font-medium text-gray-500">Period Total</p>
-                        <p className="text-2xl font-black text-emerald-600 mt-1">{formatBDT(totalAmount)}</p>
+                        <p className="text-2xl font-bold text-emerald-600 mt-1">{formatBDT(totalAmount)}</p>
                         <p className="text-xs text-gray-400 mt-1">{payments.length} payment(s)</p>
                     </div>
                     <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4 sm:col-span-2">

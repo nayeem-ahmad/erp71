@@ -153,7 +153,7 @@ export default function PurchaseHistoryPage() {
             </div>
 
             {summary.firstPurchase && summary.lastPurchase && (
-                <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm flex items-center space-x-6">
+                <div className="bg-white border border-gray-100 rounded-lg p-5 shadow-sm flex items-center space-x-6">
                     <Calendar className="w-5 h-5 text-gray-400 flex-shrink-0" />
                     <div>
                         <p className="text-xs font-medium text-gray-500">{t.customers.history.purchaseTimeline}</p>
@@ -166,7 +166,7 @@ export default function PurchaseHistoryPage() {
 
             {/* {t.customers.history.monthlySpending} Chart */}
             {monthlyTotals.length > 0 && (
-                <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+                <div className="bg-white border border-gray-100 rounded-lg p-6 shadow-sm">
                     <p className="text-xs font-semibold text-gray-400 mb-5">{t.customers.history.monthlySpending}</p>
                     <div className="space-y-3">
                         {monthlyTotals.slice(-12).map(month => (
@@ -190,7 +190,7 @@ export default function PurchaseHistoryPage() {
 
             {/* Top Products */}
             {topProducts.length > 0 && (
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
                     <p className="text-xs font-semibold text-gray-400 mb-4 flex items-center">
                         <Package className="w-4 h-4 mr-2" /> {t.customers.history.topProducts}
                     </p>
@@ -214,7 +214,7 @@ export default function PurchaseHistoryPage() {
             )}
 
             {/* Transaction List */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100">
                 <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                     <h2 className="text-lg font-bold flex items-center">
                         <ShoppingBag className="w-5 h-5 mr-2 text-blue-600" /> {t.customers.history.allTransactions}
@@ -290,7 +290,7 @@ function SummaryCard({ label, value, icon, accent }: {
         purple: 'bg-purple-50',
     };
     return (
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+        <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-100">
             <div className={`w-10 h-10 ${bg[accent]} rounded-xl flex items-center justify-center mb-3`}>
                 {icon}
             </div>

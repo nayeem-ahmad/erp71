@@ -108,7 +108,7 @@ export default function StorefrontSettingsPage() {
                         <div className="animate-spin w-7 h-7 border-4 border-blue-600 border-t-transparent rounded-full" />
                     </div>
                 ) : (
-                    <form onSubmit={handleSave} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
+                    <form onSubmit={handleSave} className="bg-white rounded-lg border border-gray-100 shadow-sm p-6 space-y-6">
                         {/* Enable / Disable toggle */}
                         <div className="flex items-center justify-between">
                             <div>

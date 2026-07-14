@@ -244,7 +244,7 @@ function OrderDetailsPageContent() {
             <div className="max-w-5xl mx-auto space-y-6">
                 {/* Edit Mode Banner */}
                 {isEditMode && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-center justify-between">
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-3 flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                             <Pencil className="w-4 h-4 text-amber-600" />
                             <span className="text-sm font-bold text-amber-800">{t.shared.editMode.order}</span>
@@ -330,23 +330,23 @@ function OrderDetailsPageContent() {
 
                 {/* Summary cards */}
                 <div className="grid grid-cols-4 gap-4">
-                    <div className="bg-white p-4 rounded-2xl shadow-sm">
+                    <div className="bg-white p-4 rounded-lg shadow-sm">
                         <span className="text-xs font-medium text-gray-500 block mb-1">{t.common.status}</span>
                         <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-800">
                             {t.shared.statuses.order[order.status as keyof typeof t.shared.statuses.order] ?? order.status}
                         </span>
                     </div>
-                    <div className="bg-white p-4 rounded-2xl shadow-sm">
+                    <div className="bg-white p-4 rounded-lg shadow-sm">
                         <span className="text-xs font-medium text-gray-500 block mb-1">{t.orders.detail.totalAmount}</span>
                         <span className="text-xl font-bold text-blue-600">{formatBDT(totalAmount, { locale })}</span>
                     </div>
-                    <div className="bg-white p-4 rounded-2xl shadow-sm">
+                    <div className="bg-white p-4 rounded-lg shadow-sm">
                         <span className="text-xs font-medium text-gray-500 block mb-1">{t.shared.columns.payment}</span>
                         <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-800">
                             {t.shared.statuses.payment[order.payment_status as keyof typeof t.shared.statuses.payment] ?? order.payment_status}
                         </span>
                     </div>
-                    <div className="bg-white p-4 rounded-2xl shadow-sm">
+                    <div className="bg-white p-4 rounded-lg shadow-sm">
                         <span className="text-xs font-medium text-gray-500 block mb-1">{t.orders.detail.amountDue}</span>
                         <span className={`text-xl font-bold ${amountDue > 0 ? 'text-danger' : 'text-emerald-600'}`}>
                             {amountDue > 0 ? formatBDT(amountDue, { locale }) : formatBDT(0, { locale })}
@@ -403,7 +403,7 @@ function OrderDetailsPageContent() {
 
                 {/* Edit mode: Customer & Delivery Date */}
                 {isEditMode && (
-                    <div className="bg-white rounded-3xl shadow-sm p-6">
+                    <div className="bg-white rounded-lg shadow-sm p-6">
                         <h2 className="text-lg font-bold tracking-tight mb-4">{t.orders.detail.orderDetails}</h2>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
@@ -433,7 +433,7 @@ function OrderDetailsPageContent() {
                 )}
 
                 {/* {t.orders.detail.orderItems} Section */}
-                <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+                <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                     <div className="p-6 border-b border-gray-100 flex items-center space-x-3">
                         <div className="p-2 bg-blue-50 rounded-xl text-blue-600">
                             <Package className="w-5 h-5" />
@@ -580,7 +580,7 @@ function OrderDetailsPageContent() {
 
                 {/* Customer (view mode) */}
                 {!isEditMode && (
-                    <div className="bg-white rounded-3xl shadow-sm p-6">
+                    <div className="bg-white rounded-lg shadow-sm p-6">
                         <h2 className="font-bold tracking-tight mb-4">{t.orders.detail.customerDetails}</h2>
                         {order.customer ? (
                             <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
@@ -604,8 +604,8 @@ function OrderDetailsPageContent() {
                 {/* Payment Tracker (view mode) */}
                 {!isEditMode && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
-                            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-900 text-white rounded-t-3xl">
+                        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+                            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-900 text-white rounded-t-xl">
                                 <h2 className="font-bold tracking-tight">{t.orders.detail.paymentTracker}</h2>
                                 <span className="bg-white/20 px-2 py-0.5 rounded text-[10px] font-semibold">
                                     {t.shared.statuses.payment[order.payment_status as keyof typeof t.shared.statuses.payment] ?? order.payment_status}
@@ -634,7 +634,7 @@ function OrderDetailsPageContent() {
 
                         {/* {t.orders.detail.depositHistory} */}
                         {order.deposits?.length > 0 && (
-                            <div className="bg-white rounded-3xl shadow-sm p-6">
+                            <div className="bg-white rounded-lg shadow-sm p-6">
                                 <h2 className="font-bold tracking-tight mb-4 text-sm uppercase tracking-widest text-gray-400">{t.orders.detail.depositHistory}</h2>
                                 <div className="space-y-3">
                                     {order.deposits.map((dep: any) => (
