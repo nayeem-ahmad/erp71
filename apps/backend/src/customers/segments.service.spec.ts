@@ -115,7 +115,7 @@ describe('SegmentsService', () => {
                 { id: 'c1', tenant_id: 't1', total_spent: 60000, segment_category: 'Regular', created_at: new Date('2025-01-01') },
             ]);
             db.sale.groupBy.mockResolvedValue([
-                { customer_id: 'c1', _max: { created_at: new Date('2026-04-25') } },
+                { customer_id: 'c1', _max: { sale_date: new Date('2026-04-25') } },
             ]);
             db.customer.update.mockResolvedValue({});
 
@@ -133,7 +133,7 @@ describe('SegmentsService', () => {
                 { id: 'c2', tenant_id: 't1', total_spent: 500, segment_category: 'Regular', created_at: new Date('2025-01-01') },
             ]);
             db.sale.groupBy.mockResolvedValue([
-                { customer_id: 'c2', _max: { created_at: new Date('2026-04-25') } },
+                { customer_id: 'c2', _max: { sale_date: new Date('2026-04-25') } },
             ]);
 
             const result = await service.runForTenant('t1', NOW);
@@ -165,6 +165,14 @@ describe('SegmentsService', () => {
                     where: expect.objectContaining({ tenant_id: 'tenant-abc' }),
                 }),
             );
+        });
+
+        it('aggregates last purchase from sale_date, not created_at', async () => {
+            db.customer.findMany.mockResolvedValue([]);
+            db.sale.groupBy.mockResolvedValue([]);
+            await service.runForTenant('tenant-abc', NOW);
+            const call = db.sale.groupBy.mock.calls[0][0];
+            expect(call._max).toEqual({ sale_date: true });
         });
     });
 });

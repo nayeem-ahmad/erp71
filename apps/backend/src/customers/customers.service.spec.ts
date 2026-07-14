@@ -55,6 +55,7 @@ describe('CustomersService', () => {
       sale: {
         count: jest.fn(),
         findMany: jest.fn(),
+        findFirst: jest.fn(),
       },
       $transaction: jest.fn(),
     };
@@ -114,14 +115,14 @@ describe('CustomersService', () => {
       db.sale.count.mockResolvedValue(2);
       db.sale.findMany.mockResolvedValue([
         {
-          id: 's1', total_amount: 1000, created_at: new Date('2026-04-01'),
+          id: 's1', total_amount: 1000, sale_date: new Date('2026-04-01'),
           items: [
             { id: 'i1', product_id: 'p1', quantity: 2, price_at_sale: 300, product: { name: 'Widget' } },
             { id: 'i2', product_id: 'p2', quantity: 1, price_at_sale: 400, product: { name: 'Gadget' } },
           ],
         },
         {
-          id: 's2', total_amount: 500, created_at: new Date('2026-03-01'),
+          id: 's2', total_amount: 500, sale_date: new Date('2026-03-01'),
           items: [
             { id: 'i3', product_id: 'p1', quantity: 3, price_at_sale: 100, product: { name: 'Widget' } },
           ],
@@ -131,12 +132,31 @@ describe('CustomersService', () => {
       const result = await service.getPurchaseHistory('t1', 'c1');
 
       expect(db.sale.count).toHaveBeenCalledWith({ where: { customer_id: 'c1' } });
+      expect(db.sale.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { sale_date: 'desc' } }),
+      );
       expect(result.total).toBe(2);
       expect(result.page).toBe(1);
       expect(result.limit).toBe(20);
       expect(result.totalPages).toBe(1);
       expect(result.data).toHaveLength(2);
       expect(result.data[0].items[0].product.name).toBe('Widget');
+    });
+
+    it('filters by sale_date (not created_at) when a date range is given', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'c1' });
+      db.sale.count.mockResolvedValue(0);
+      db.sale.findMany.mockResolvedValue([]);
+
+      await service.getPurchaseHistory('t1', 'c1', { from: '2026-06-01', to: '2026-06-30' });
+
+      const countArgs = db.sale.count.mock.calls[0][0];
+      expect(countArgs.where.sale_date.gte).toEqual(new Date('2026-06-01'));
+      expect(countArgs.where.sale_date.lte).toEqual(new Date('2026-06-30'));
+      expect(countArgs.where.created_at).toBeUndefined();
+
+      const findArgs = db.sale.findMany.mock.calls[0][0];
+      expect(findArgs.orderBy).toEqual({ sale_date: 'desc' });
     });
 
     it('returns an empty page when customer has no sales', async () => {
@@ -158,6 +178,43 @@ describe('CustomersService', () => {
     it('throws NotFoundException when customer does not exist', async () => {
       db.customer.findFirst.mockResolvedValue(null);
       await expect(service.getPurchaseHistory('t1', 'nonexistent')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('getAnalytics()', () => {
+    it('computes last purchase date and days-since from sale_date, not created_at', async () => {
+      db.customer.findFirst.mockResolvedValue({
+        id: 'c1', name: 'Alice', total_spent: 5000, created_at: new Date('2025-01-01'),
+        segment_category: 'Regular', loyalty_points: 10, due_balance: 0,
+      });
+      db.sale.count.mockResolvedValue(3);
+      const saleDate = new Date(Date.now() - 5 * 86_400_000);
+      db.sale.findFirst.mockResolvedValue({ sale_date: saleDate, total_amount: 1000 });
+
+      const result = await service.getAnalytics('t1', 'c1');
+
+      expect(db.sale.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: { sale_date: 'desc' },
+          select: { sale_date: true, total_amount: true },
+        }),
+      );
+      expect(result.last_purchase_date).toEqual(saleDate);
+      expect(result.days_since_last_purchase).toBe(5);
+    });
+
+    it('returns null last_purchase_date when customer has no sales', async () => {
+      db.customer.findFirst.mockResolvedValue({
+        id: 'c2', name: 'Bob', total_spent: 0, created_at: new Date('2025-01-01'),
+        segment_category: 'New', loyalty_points: 0, due_balance: 0,
+      });
+      db.sale.count.mockResolvedValue(0);
+      db.sale.findFirst.mockResolvedValue(null);
+
+      const result = await service.getAnalytics('t1', 'c2');
+
+      expect(result.last_purchase_date).toBeNull();
+      expect(result.days_since_last_purchase).toBeNull();
     });
   });
 

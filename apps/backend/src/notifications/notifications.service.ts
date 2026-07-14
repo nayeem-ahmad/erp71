@@ -387,12 +387,12 @@ export class NotificationsService {
         const sales = await this.db.sale.findMany({
             where: {
                 tenant_id: tenantId,
-                created_at: { gte: from, lte: to },
+                sale_date: { gte: from, lte: to },
                 status: 'COMPLETED',
             },
             select: {
                 total_amount: true,
-                created_at: true,
+                sale_date: true,
                 customer_id: true,
                 items: {
                     select: {
@@ -444,7 +444,7 @@ export class NotificationsService {
                 buckets.set(key, 0);
             }
             for (const sale of sales) {
-                const key = sale.created_at.toISOString().slice(0, 10);
+                const key = sale.sale_date.toISOString().slice(0, 10);
                 if (buckets.has(key)) buckets.set(key, (buckets.get(key)! + sale.total_amount.toNumber()));
             }
             for (const [key, amount] of buckets) {
@@ -455,7 +455,7 @@ export class NotificationsService {
             const weekBuckets = new Map<string, number>();
             const weekLabels = new Map<string, string>();
             for (const sale of sales) {
-                const d = sale.created_at;
+                const d = sale.sale_date;
                 const weekStart = new Date(d);
                 weekStart.setDate(d.getDate() - d.getDay());
                 const key = weekStart.toISOString().slice(0, 10);
