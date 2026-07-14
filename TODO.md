@@ -134,7 +134,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [ ] Phase 4 — Color normalization: retire per-module accents (CRM violet, dashboard/admin indigo, purchases emerald, expenses rose) → semantic tokens
 - [ ] Phase 5 — Surface polish: compact detail-page headers + tabs; move FeedbackWidget from floating dock into header/sidebar; POS mobile cart FAB → bottom summary bar; admin restyle to compact system
 - [ ] Phase 6 — Supersede stale `docs/front-end-spec.md` (green/Roboto spec matches nothing built) with ratified guidelines
-- [ ] Quick wins (independent): POS `$` literal on product cards → `formatBDT` (`sales/pos/page.tsx:629,846`); CRM leads duplicate search box; remove dead `--color-primary` branding var (or wire it up); remove unused `KpiTile.tsx`; shared `useDismissable` hook for duplicated outside-click/Escape logic
+- [ ] Quick wins (independent): CRM leads duplicate search box; remove dead `--color-primary` branding var (or wire it up); remove unused `KpiTile.tsx`; shared `useDismissable` hook for duplicated outside-click/Escape logic
 
 ### Mobile Responsiveness
 - [x] Add viewport meta tag to root layout (`apps/frontend/src/app/layout.tsx`) — added `export const viewport: Viewport` with `width: 'device-width', initialScale: 1, maximumScale: 5` — done 2026-06-13
@@ -416,6 +416,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] UI migration Task 20 (Phase 5 — POS fixes): `${product.price}`/`${item.price}` literals → `formatBDT`; mobile cart FAB → persistent `fixed bottom-0 inset-x-0 md:hidden` bottom summary bar (item count + total + tap-to-open cart), scroll container given matching bottom padding; POS-local toast stack removed in favor of the global `@/lib/toast` store + `<Toaster/>`; customer-dropdown `z-10` → `z-50`, Print Receipt/Checkout modals `z-50` → `z-modal`; `rounded-3xl`→`rounded-xl`, all `font-black uppercase tracking-widest` micro-labels → `text-xs font-semibold` normal case, bare `font-black` → `font-bold` — done 2026-07-14
 - [x] Added "UI Rules (frontend)" section to CLAUDE.md — 12 non-negotiables distilled from `docs/ui-design-guidelines.md` so every Claude Code session enforces them; other enforcement (theme restriction, ESLint rules, CI ratchet) deferred — done 2026-07-14
 - [x] Full UI review across all surfaces (shell, lists, forms/modals, dashboard, POS, storefront, auth, settings, admin) + proposed design guidelines written to `docs/ui-design-guidelines.md` (PROPOSED — no UI changed; migration phases added under IMPORTANT → UI Design System) — done 2026-07-14
 - [x] CRM Leads list: multi-row checkbox selection + bulk actions (delete with confirmation, set status to NEW/CONTACTED/QUALIFIED, assign/unassign to team member). New `POST /crm/leads/bulk-actions` (`BulkLeadActionDto`, tenant-scoped deleteMany/updateMany; rejects bulk LOST/CONVERTED); `api.bulkLeadAction`; `DataTable` gained a `getRowId` prop (selection stable across reloads); leads page got a `select` checkbox column + bulk action bar. Bulk labels use English fallbacks via `(m as any)` — i18n keys are a follow-up. Note: bulk status uses `updateMany` and does not recompute the advisory `score`. — done 2026-07-12
