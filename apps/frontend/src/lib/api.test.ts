@@ -63,7 +63,7 @@ function errorJson(status: number, statusText: string, body?: unknown) {
 }
 
 /** The API module under test (imported after mocks are wired). */
-import { fetchWithAuth, fetchBlobWithAuth, api } from './api';
+import { fetchWithAuth, fetchBlobWithAuth, fetchPaginated, api } from './api';
 
 // ---------------------------------------------------------------------------
 // Shared beforeEach
@@ -117,6 +117,58 @@ describe('fetchWithAuth', () => {
         mockFetch.mockReturnValue(errorJson(404, 'Not Found', null));
 
         await expect(fetchWithAuth('/missing')).rejects.toThrow('API error: Not Found');
+    });
+});
+
+// ===========================================================================
+// fetchPaginated
+// ===========================================================================
+
+describe('fetchPaginated', () => {
+    it('reads the server total from the { data, meta } envelope', async () => {
+        // Shape produced by the backend TransformInterceptor for paginated results.
+        mockFetch.mockReturnValue(okJson({
+            data: [{ id: 'a' }, { id: 'b' }],
+            meta: { total: 146, page: 1, limit: 20, pages: 8 },
+        }));
+
+        const result = await fetchPaginated('/crm/leads?page=1&limit=20');
+
+        expect(result.items).toEqual([{ id: 'a' }, { id: 'b' }]);
+        expect(result.total).toBe(146);   // real DB total, NOT the 2 rows on this page
+        expect(result.page).toBe(1);
+        expect(result.limit).toBe(20);
+        expect(result.pages).toBe(8);
+    });
+
+    it('api.getLeads surfaces the server total (regression: total must not collapse to page size)', async () => {
+        mockFetch.mockReturnValue(okJson({
+            data: new Array(20).fill(0).map((_, i) => ({ id: String(i) })),
+            meta: { total: 146, page: 1, limit: 20, pages: 8 },
+        }));
+
+        const result: any = await api.getLeads({ page: 1, limit: 20 });
+
+        expect(result.items).toHaveLength(20);
+        expect(result.total).toBe(146);
+    });
+
+    it('falls back to items length when no meta/total is present', async () => {
+        mockFetch.mockReturnValue(okJson({ data: [{ id: 'x' }, { id: 'y' }, { id: 'z' }] }));
+
+        const result = await fetchPaginated('/some-list');
+
+        expect(result.items).toHaveLength(3);
+        expect(result.total).toBe(3);
+    });
+
+    it('handles a bare array response', async () => {
+        mockFetch.mockReturnValue(okJson([{ id: 1 }, { id: 2 }]));
+
+        const result = await fetchPaginated('/bare-list');
+
+        expect(result.items).toEqual([{ id: 1 }, { id: 2 }]);
+        expect(result.total).toBe(2);
     });
 
     it('throws with message from JSON error body (string)', async () => {

@@ -131,8 +131,8 @@ export default function LeadsPage() {
                 sortDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
             });
             if (seq !== loadSeq.current) return;
-            setLeads(data?.items ?? data ?? []);
-            setTotal(data?.total ?? (Array.isArray(data) ? data.length : 0));
+            setLeads(data?.items ?? []);
+            setTotal(data?.total ?? 0);
         } catch {
             if (seq !== loadSeq.current) return;
             setLeads([]);

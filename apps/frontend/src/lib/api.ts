@@ -66,7 +66,13 @@ export async function fetchBlobWithAuth(endpoint: string, options: RequestInit =
     return { blob, filename };
 }
 
-export async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
+/**
+ * Core authenticated request. Returns the FULL parsed response body, including
+ * the `{ data, meta }` envelope the backend's TransformInterceptor produces for
+ * paginated endpoints. Most callers should use `fetchWithAuth` (which unwraps
+ * `.data`); paginated callers use `fetchPaginated` (which also reads `meta`).
+ */
+async function requestWithAuth(endpoint: string, options: RequestInit = {}): Promise<any> {
     const token = getAccessToken();
     const tenantId = typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null;
     const storeId = typeof window !== 'undefined' ? localStorage.getItem('store_id') : null;
@@ -116,9 +122,55 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit = {})
         throw new Error(message);
     }
 
-    const json = await response.json();
+    return response.json();
+}
+
+export async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
+    const json = await requestWithAuth(endpoint, options);
     // Backend wraps all responses in { data: T } — unwrap transparently
-    return 'data' in json ? json.data : json;
+    return json && typeof json === 'object' && 'data' in json ? json.data : json;
+}
+
+export interface Paginated<T = any> {
+    items: T[];
+    total: number;
+    page: number;
+    limit: number;
+    pages: number;
+}
+
+/**
+ * Fetch a paginated list endpoint, preserving the server total.
+ *
+ * The backend's TransformInterceptor reshapes a `{ items, total, page, limit, pages }`
+ * result into `{ data: items, meta: { total, page, limit, pages } }`. Plain
+ * `fetchWithAuth` unwraps `.data` and DROPS `meta`, so the caller loses the real
+ * total (and can only ever see one page's worth of rows). This helper reads
+ * `meta` back into a normal `{ items, total, page, limit, pages }` envelope for
+ * server-side pagination. Falls back gracefully for endpoints that return a bare
+ * array or an un-wrapped paginated object.
+ */
+export async function fetchPaginated<T = any>(endpoint: string, options: RequestInit = {}): Promise<Paginated<T>> {
+    const json = await requestWithAuth(endpoint, options);
+
+    const items: T[] = Array.isArray(json?.data)
+        ? json.data
+        : Array.isArray(json?.items)
+            ? json.items
+            : Array.isArray(json)
+                ? json
+                : [];
+    const meta = (json && typeof json === 'object' && json.meta) ? json.meta : {};
+    const total = typeof meta.total === 'number'
+        ? meta.total
+        : typeof json?.total === 'number'
+            ? json.total
+            : items.length;
+    const page = meta.page ?? json?.page ?? 1;
+    const limit = meta.limit ?? json?.limit ?? items.length;
+    const pages = meta.pages ?? json?.pages ?? 1;
+
+    return { items, total, page, limit, pages };
 }
 
 export type ReportScope = 'branch' | 'company' | 'compare';
@@ -499,7 +551,7 @@ export const api = {
         if (params?.limit) query.set('limit', String(params.limit));
         if (params?.sortBy) query.set('sortBy', params.sortBy);
         if (params?.sortDir) query.set('sortDir', params.sortDir);
-        return fetchWithAuth(`/crm/leads${query.toString() ? `?${query.toString()}` : ''}`);
+        return fetchPaginated(`/crm/leads${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getLead: (id: string) => fetchWithAuth(`/crm/leads/${id}`),
     getLeadsSummary: () => fetchWithAuth('/crm/leads/summary'),
