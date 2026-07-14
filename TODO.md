@@ -407,6 +407,7 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Server-pagination final-review fixes: `DataTable` server mode now excludes the 500 page-size option (backend hard-caps `take` at 100 via `PaginationDto`) via new `SERVER_MAX_PAGE_SIZE`/`pageSizeOptions`, client mode unchanged; added a `loadSeq` request-sequence guard in `crm/leads/page.tsx`'s `loadLeads` so an out-of-order response can no longer overwrite fresher data when a filter/sort change fires while off page 1; documented the `onPageSizeChange`-must-reset-page-1 contract in `serverPagination` JSDoc — done 2026-07-14
 - [x] DataTable: right-align toolbar buttons when search box is hidden (Leads list) and align the "select all" header checkbox with row checkboxes (render select column as a plain, non-draggable header) — done 2026-07-14
 
 ### UI polish follow-ups (non-blocking, from final migration review)
