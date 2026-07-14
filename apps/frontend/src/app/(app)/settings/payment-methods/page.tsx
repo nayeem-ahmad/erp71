@@ -1,20 +1,20 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { CreditCard, Loader2, Plus, Edit2, Trash2, CheckCircle, XCircle, X, Upload } from 'lucide-react';
+import { CreditCard, Loader2, Plus, Edit2, Trash2, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
+import { toast } from '@/lib/toast';
+import { Button, Field, Input, PageShell, Select } from '@/components/ui';
 
 const IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
     { key: 'description', label: 'Description', required: false },
     { key: 'is_active', label: 'Is Active', required: false },
 ];
-
-type ToastState = { type: 'success' | 'error'; message: string } | null;
 
 interface Account {
     id: string;
@@ -37,33 +37,6 @@ const PAYMENT_TYPES = [
     { value: 'CARD', label: 'Card' },
     { value: 'BANK', label: 'Bank Transfer' },
 ];
-
-function Toast({ toast, onDismiss }: { toast: ToastState; onDismiss: () => void }) {
-    useEffect(() => {
-        if (!toast) return;
-        const t = setTimeout(onDismiss, 4000);
-        return () => clearTimeout(t);
-    }, [toast, onDismiss]);
-
-    if (!toast) return null;
-    const isSuccess = toast.type === 'success';
-    return (
-        <div
-            className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl px-4 py-3 shadow-lg border text-sm font-semibold ${
-                isSuccess
-                    ? 'bg-green-50 border-green-200 text-green-800'
-                    : 'bg-red-50 border-red-200 text-red-800'
-            }`}
-        >
-            {isSuccess ? (
-                <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-            ) : (
-                <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-            )}
-            {toast.message}
-        </div>
-    );
-}
 
 interface MethodFormProps {
     initial?: Partial<PaymentMethod>;
@@ -96,41 +69,39 @@ function MethodForm({ initial, accounts, onSave, onCancel }: MethodFormProps) {
     };
 
     return (
-        <form onSubmit={handleSubmit} className="bg-blue-50 border border-blue-200 rounded-2xl p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="bg-blue-50 border border-blue-200 rounded-lg p-5 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Name</label>
-                    <input
+                <Field label="Name">
+                    <Input
                         type="text"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder="e.g. bKash, Main Cash"
                         required
-                        className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                     />
-                </div>
+                </Field>
 
-                <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Type</label>
-                    <select
+                <Field label="Type">
+                    <Select
                         value={type}
                         onChange={(e) => setType(e.target.value)}
-                        className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                     >
                         {PAYMENT_TYPES.map((pt) => (
                             <option key={pt.value} value={pt.value}>{pt.label}</option>
                         ))}
-                    </select>
-                </div>
+                    </Select>
+                </Field>
 
-                <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                        Account <span className="font-normal text-gray-400">(optional)</span>
-                    </label>
-                    <select
+                <Field
+                    label={(
+                        <>
+                            Account <span className="font-normal text-gray-400">(optional)</span>
+                        </>
+                    ) as unknown as string}
+                >
+                    <Select
                         value={accountId}
                         onChange={(e) => setAccountId(e.target.value)}
-                        className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                     >
                         <option value="">— No account linked —</option>
                         {accounts.map((acc) => (
@@ -138,8 +109,8 @@ function MethodForm({ initial, accounts, onSave, onCancel }: MethodFormProps) {
                                 {acc.code ? `[${acc.code}] ` : ''}{acc.name}
                             </option>
                         ))}
-                    </select>
-                </div>
+                    </Select>
+                </Field>
 
                 <div className="flex items-center gap-3 pt-6">
                     <button
@@ -160,21 +131,12 @@ function MethodForm({ initial, accounts, onSave, onCancel }: MethodFormProps) {
             </div>
 
             <div className="flex gap-3">
-                <button
-                    type="submit"
-                    disabled={saving || !name.trim()}
-                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
-                >
-                    {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                <Button type="submit" disabled={saving || !name.trim()} loading={saving}>
                     {saving ? 'Saving...' : initial?.id ? 'Update' : 'Create'}
-                </button>
-                <button
-                    type="button"
-                    onClick={onCancel}
-                    className="rounded-xl border border-gray-200 px-5 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
-                >
+                </Button>
+                <Button type="button" variant="secondary" onClick={onCancel}>
                     Cancel
-                </button>
+                </Button>
             </div>
         </form>
     );
@@ -186,7 +148,6 @@ export default function PaymentMethodsSettingsPage() {
     const [methods, setMethods] = useState<PaymentMethod[]>([]);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [loading, setLoading] = useState(true);
-    const [toast, setToast] = useState<ToastState>(null);
     const [showCreate, setShowCreate] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -201,7 +162,7 @@ export default function PaymentMethodsSettingsPage() {
             setMethods(methodsData ?? []);
             setAccounts(accountsData?.data ?? accountsData ?? []);
         } catch (err: any) {
-            setToast({ type: 'error', message: err?.message || 'Failed to load data' });
+            toast.error(err?.message || 'Failed to load data');
         } finally {
             setLoading(false);
         }
@@ -214,22 +175,22 @@ export default function PaymentMethodsSettingsPage() {
     const handleCreate = async (data: any) => {
         try {
             await api.createPaymentMethod(data);
-            setToast({ type: 'success', message: 'Payment method created' });
+            toast.success('Payment method created');
             setShowCreate(false);
             loadData();
         } catch (err: any) {
-            setToast({ type: 'error', message: err?.message || 'Failed to create' });
+            toast.error(err?.message || 'Failed to create');
         }
     };
 
     const handleUpdate = async (id: string, data: any) => {
         try {
             await api.updatePaymentMethod(id, data);
-            setToast({ type: 'success', message: 'Payment method updated' });
+            toast.success('Payment method updated');
             setEditingId(null);
             loadData();
         } catch (err: any) {
-            setToast({ type: 'error', message: err?.message || 'Failed to update' });
+            toast.error(err?.message || 'Failed to update');
         }
     };
 
@@ -238,10 +199,10 @@ export default function PaymentMethodsSettingsPage() {
         setDeletingId(id);
         try {
             await api.deletePaymentMethod(id);
-            setToast({ type: 'success', message: 'Payment method deleted' });
+            toast.success('Payment method deleted');
             loadData();
         } catch (err: any) {
-            setToast({ type: 'error', message: err?.message || 'Failed to delete' });
+            toast.error(err?.message || 'Failed to delete');
         } finally {
             setDeletingId(null);
         }
@@ -251,44 +212,36 @@ export default function PaymentMethodsSettingsPage() {
         PAYMENT_TYPES.find((pt) => pt.value === type)?.label ?? type;
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
-                <PageHeader
-                    title={(
-                        <span className="inline-flex items-center gap-3">
-                            <span className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
-                                <CreditCard className="w-5 h-5 text-indigo-600" />
-                            </span>
-                            {pageTitle}
+        <PageShell maxWidth="full">
+            <PageHeader
+                title={(
+                    <span className="inline-flex items-center gap-3">
+                        <span className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
+                            <CreditCard className="w-5 h-5 text-indigo-600" />
                         </span>
-                    )}
-                    subtitle="Manage accepted payment methods for sales"
-                    breadcrumbs={modulePageBreadcrumbs(
-                        t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.accountSettings,
-                        pageTitle,
-                        'settings',
-                    )}
-                    actions={(
-                        <>
-                            <button
-                                onClick={() => setImportOpen(true)}
-                                className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
-                            >
-                                <Upload className="w-4 h-4 mr-1.5" />
-                                Import
-                            </button>
-                            <button
-                                onClick={() => { setShowCreate(true); setEditingId(null); }}
-                                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 transition-colors shadow-sm"
-                            >
-                                <Plus className="w-4 h-4" />
-                                Add Method
-                            </button>
-                        </>
-                    )}
-                />
+                        {pageTitle}
+                    </span>
+                )}
+                subtitle="Manage accepted payment methods for sales"
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.accountSettings,
+                    pageTitle,
+                    'settings',
+                )}
+                actions={(
+                    <>
+                        <Button variant="secondary" icon={<Upload className="w-4 h-4" />} onClick={() => setImportOpen(true)}>
+                            Import
+                        </Button>
+                        <Button icon={<Plus className="w-4 h-4" />} onClick={() => { setShowCreate(true); setEditingId(null); }}>
+                            Add Method
+                        </Button>
+                    </>
+                )}
+            />
 
+            <div className="space-y-4 mt-4">
                 {/* Create form */}
                 {showCreate && (
                     <MethodForm
@@ -322,16 +275,16 @@ export default function PaymentMethodsSettingsPage() {
                                         onCancel={() => setEditingId(null)}
                                     />
                                 ) : (
-                                    <div className="bg-white rounded-2xl border border-gray-200 px-5 py-4 flex items-center justify-between">
+                                    <div className="bg-white rounded-lg border border-gray-200 px-5 py-4 flex items-center justify-between">
                                         <div className="flex items-center gap-4">
-                                            <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                                            <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0">
                                                 <CreditCard className="w-4 h-4 text-indigo-600" />
                                             </div>
                                             <div>
                                                 <div className="flex items-center gap-2">
                                                     <p className="text-sm font-bold text-gray-900">{method.name}</p>
                                                     {!method.is_active && (
-                                                        <span className="text-[10px] font-black uppercase tracking-wider bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-md">
+                                                        <span className="text-[10px] font-semibold uppercase tracking-wide bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-md">
                                                             Inactive
                                                         </span>
                                                     )}
@@ -370,8 +323,6 @@ export default function PaymentMethodsSettingsPage() {
                 )}
             </div>
 
-            <Toast toast={toast} onDismiss={() => setToast(null)} />
-
             <ImportDialog
                 open={importOpen}
                 onClose={() => setImportOpen(false)}
@@ -380,6 +331,6 @@ export default function PaymentMethodsSettingsPage() {
                 importFn={(rows, mode) => api.importPaymentMethods(rows, mode)}
                 onSuccess={() => void loadData()}
             />
-        </div>
+        </PageShell>
     );
 }

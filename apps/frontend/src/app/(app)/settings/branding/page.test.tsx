@@ -1,6 +1,17 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import BrandingSettingsPage from './page';
+import Toaster from '@/components/Toaster';
+import { useToastStore } from '@/lib/toast';
+
+function renderPage() {
+    return render(
+        <>
+            <BrandingSettingsPage />
+            <Toaster />
+        </>,
+    );
+}
 
 jest.mock('next/navigation', () => ({
     useRouter: () => ({ push: jest.fn() }),
@@ -25,6 +36,7 @@ const brandingData = {
 
 beforeEach(() => {
     jest.clearAllMocks();
+    useToastStore.setState({ toasts: [] });
     // Default: GET returns branding data, PATCH resolves
     mockFetchWithAuth.mockImplementation((url: string, options?: any) => {
         if (!options || options.method !== 'PATCH') {
@@ -37,26 +49,26 @@ beforeEach(() => {
 describe('BrandingSettingsPage', () => {
     it('shows loading spinner initially', () => {
         mockFetchWithAuth.mockReturnValue(new Promise(() => {}));
-        render(<BrandingSettingsPage />);
+        renderPage();
         expect(screen.getByText('Loading branding settings…')).toBeInTheDocument();
     });
 
     it('renders the Branding heading after load', async () => {
-        render(<BrandingSettingsPage />);
+        renderPage();
         await waitFor(() => {
             expect(screen.getByRole('heading', { name: 'Branding' })).toBeInTheDocument();
         });
     });
 
     it('renders page description', async () => {
-        render(<BrandingSettingsPage />);
+        renderPage();
         await waitFor(() => {
             expect(screen.getByText(/Customize your dashboard with your logo/)).toBeInTheDocument();
         });
     });
 
     it('populates form fields with fetched branding data', async () => {
-        render(<BrandingSettingsPage />);
+        renderPage();
         await waitFor(() => {
             expect((screen.getByPlaceholderText('Your Business Name') as HTMLInputElement).value).toBe('My Shop');
         });
@@ -65,7 +77,7 @@ describe('BrandingSettingsPage', () => {
     });
 
     it('renders Save Branding button', async () => {
-        render(<BrandingSettingsPage />);
+        renderPage();
         await waitFor(() => {
             expect(screen.getByRole('button', { name: 'Save Branding' })).toBeInTheDocument();
         });
@@ -73,7 +85,7 @@ describe('BrandingSettingsPage', () => {
 
     it('uses defaults when API returns nothing', async () => {
         mockFetchWithAuth.mockResolvedValue(null);
-        render(<BrandingSettingsPage />);
+        renderPage();
         await waitFor(() => {
             const businessNameInput = screen.getByPlaceholderText('Your Business Name') as HTMLInputElement;
             expect(businessNameInput.value).toBe('');
@@ -82,14 +94,14 @@ describe('BrandingSettingsPage', () => {
 
     it('uses defaults when API rejects', async () => {
         mockFetchWithAuth.mockRejectedValue(new Error('fetch failed'));
-        render(<BrandingSettingsPage />);
+        renderPage();
         await waitFor(() => {
             expect(screen.getByPlaceholderText('Your Business Name')).toBeInTheDocument();
         });
     });
 
     it('updates business name input', async () => {
-        render(<BrandingSettingsPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByPlaceholderText('Your Business Name')).toBeInTheDocument());
         const input = screen.getByPlaceholderText('Your Business Name') as HTMLInputElement;
         fireEvent.change(input, { target: { value: 'New Name' } });
@@ -97,7 +109,7 @@ describe('BrandingSettingsPage', () => {
     });
 
     it('updates hex color input', async () => {
-        render(<BrandingSettingsPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByPlaceholderText('#2563eb')).toBeInTheDocument());
         const hexInput = screen.getByPlaceholderText('#2563eb') as HTMLInputElement;
         fireEvent.change(hexInput, { target: { value: '#abc123' } });
@@ -105,7 +117,7 @@ describe('BrandingSettingsPage', () => {
     });
 
     it('prepends # when typing hex without it', async () => {
-        render(<BrandingSettingsPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByPlaceholderText('#2563eb')).toBeInTheDocument());
         const hexInput = screen.getByPlaceholderText('#2563eb') as HTMLInputElement;
         fireEvent.change(hexInput, { target: { value: 'abc123' } });
@@ -113,7 +125,7 @@ describe('BrandingSettingsPage', () => {
     });
 
     it('updates color via color picker input', async () => {
-        render(<BrandingSettingsPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByTitle('Pick a color')).toBeInTheDocument());
         const colorPicker = screen.getByTitle('Pick a color') as HTMLInputElement;
         fireEvent.change(colorPicker, { target: { value: '#123456' } });
@@ -121,7 +133,7 @@ describe('BrandingSettingsPage', () => {
     });
 
     it('updates logo URL input', async () => {
-        render(<BrandingSettingsPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByPlaceholderText('https://example.com/logo.png')).toBeInTheDocument());
         const logoInput = screen.getByPlaceholderText('https://example.com/logo.png') as HTMLInputElement;
         fireEvent.change(logoInput, { target: { value: 'https://cdn.example.com/new-logo.png' } });
@@ -129,14 +141,14 @@ describe('BrandingSettingsPage', () => {
     });
 
     it('shows logo preview when logo URL is set', async () => {
-        render(<BrandingSettingsPage />);
+        renderPage();
         await waitFor(() => {
             expect(screen.getByAltText('Logo preview')).toBeInTheDocument();
         });
     });
 
     it('shows favicon preview when favicon URL is set', async () => {
-        render(<BrandingSettingsPage />);
+        renderPage();
         await waitFor(() => {
             expect(screen.getByAltText('Favicon preview')).toBeInTheDocument();
             expect(screen.getByText('Favicon preview')).toBeInTheDocument();
@@ -148,7 +160,7 @@ describe('BrandingSettingsPage', () => {
             if (!options || options.method !== 'PATCH') return Promise.resolve(brandingData);
             return Promise.resolve({});
         });
-        render(<BrandingSettingsPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByRole('button', { name: 'Save Branding' })).toBeInTheDocument());
         await act(async () => {
             fireEvent.submit(screen.getByRole('button', { name: 'Save Branding' }).closest('form')!);
@@ -159,7 +171,7 @@ describe('BrandingSettingsPage', () => {
     });
 
     it('calls PATCH /tenants/branding on submit', async () => {
-        render(<BrandingSettingsPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByRole('button', { name: 'Save Branding' })).toBeInTheDocument());
         await act(async () => {
             fireEvent.submit(screen.getByRole('button', { name: 'Save Branding' }).closest('form')!);
@@ -177,7 +189,7 @@ describe('BrandingSettingsPage', () => {
             if (!options || options.method !== 'PATCH') return Promise.resolve(brandingData);
             return Promise.reject(new Error('Server error'));
         });
-        render(<BrandingSettingsPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByRole('button', { name: 'Save Branding' })).toBeInTheDocument());
         await act(async () => {
             fireEvent.submit(screen.getByRole('button', { name: 'Save Branding' }).closest('form')!);
@@ -194,7 +206,7 @@ describe('BrandingSettingsPage', () => {
             if (!options || options.method !== 'PATCH') return Promise.resolve(brandingData);
             return pending;
         });
-        render(<BrandingSettingsPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByRole('button', { name: 'Save Branding' })).toBeInTheDocument());
         fireEvent.submit(screen.getByRole('button', { name: 'Save Branding' }).closest('form')!);
         await waitFor(() => {
@@ -208,7 +220,7 @@ describe('BrandingSettingsPage', () => {
             if (!options || options.method !== 'PATCH') return Promise.resolve(brandingData);
             return new Promise(() => {});
         });
-        render(<BrandingSettingsPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByRole('button', { name: 'Save Branding' })).toBeInTheDocument());
         fireEvent.submit(screen.getByRole('button', { name: 'Save Branding' }).closest('form')!);
         await waitFor(() => {
@@ -223,7 +235,7 @@ describe('BrandingSettingsPage', () => {
             if (!options || options.method !== 'PATCH') return Promise.resolve({ ...brandingData, brand_primary_color: '#abcdef' });
             return Promise.resolve({});
         });
-        render(<BrandingSettingsPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByRole('button', { name: 'Save Branding' })).toBeInTheDocument());
         // Set a valid hex color
         const hexInput = screen.getByPlaceholderText('#2563eb');

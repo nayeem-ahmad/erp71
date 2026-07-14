@@ -11,6 +11,7 @@ import { formatDate } from '@/lib/format';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
+import { Button, Input, PageShell } from '@/components/ui';
 
 interface AuditUser {
     id: string;
@@ -103,7 +104,7 @@ export default function AuditLogsPage() {
             columnHelper.accessor('action', {
                 header: t.settings.audit.columns.action,
                 cell: (info) => (
-                    <span className="px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-700 border border-slate-200">
+                    <span className="px-2 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-slate-100 text-slate-700 border border-slate-200">
                         {info.getValue()}
                     </span>
                 ),
@@ -156,118 +157,110 @@ export default function AuditLogsPage() {
 
     if (forbidden) {
         return (
-            <div className="h-full overflow-y-auto p-6">
-                <div className="max-w-2xl mx-auto rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center space-y-3">
+            <PageShell maxWidth="narrow">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-8 text-center space-y-3">
                     <ScrollText className="w-10 h-10 text-amber-600 mx-auto" />
-                    <h1 className="text-xl font-black text-amber-900">{t.settings.audit.forbiddenTitle}</h1>
+                    <h1 className="text-xl font-bold text-amber-900">{t.settings.audit.forbiddenTitle}</h1>
                     <p className="text-sm text-amber-800">{t.settings.audit.forbiddenDescription}</p>
-                    <Link href={routes.settings.root} className="inline-flex items-center gap-2 text-sm font-bold text-amber-900 hover:underline">
+                    <Link href={routes.settings.root} className="inline-flex items-center gap-2 text-sm font-semibold text-amber-900 hover:underline">
                         {t.common.back}
                     </Link>
                 </div>
-            </div>
+            </PageShell>
         );
     }
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
-                <PageHeader
-                    title={t.settings.audit.title}
-                    subtitle={t.settings.audit.description}
-                    breadcrumbs={modulePageBreadcrumbs(
-                        t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.accountSettings,
-                        t.settings.audit.title,
-                        'settings',
-                    )}
-                />
-
-                <div className="rounded-2xl border border-gray-200 bg-white p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <label className="space-y-1">
-                        <span className="text-xs font-medium text-gray-500">{t.settings.audit.filters.entity}</span>
-                        <input
-                            type="text"
-                            value={entity}
-                            onChange={(e) => { setEntity(e.target.value); setOffset(0); }}
-                            placeholder="sale, customer…"
-                            className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm"
-                        />
-                    </label>
-                    <label className="space-y-1">
-                        <span className="text-xs font-medium text-gray-500">{t.settings.audit.filters.action}</span>
-                        <input
-                            type="text"
-                            value={action}
-                            onChange={(e) => { setAction(e.target.value); setOffset(0); }}
-                            placeholder="CREATE, UPDATE…"
-                            className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm"
-                        />
-                    </label>
-                    <label className="space-y-1">
-                        <span className="text-xs font-medium text-gray-500">{t.common.date} (from)</span>
-                        <input
-                            type="date"
-                            value={fromDate}
-                            onChange={(e) => { setFromDate(e.target.value); setOffset(0); }}
-                            className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm"
-                        />
-                    </label>
-                    <label className="space-y-1">
-                        <span className="text-xs font-medium text-gray-500">{t.common.date} (to)</span>
-                        <input
-                            type="date"
-                            value={toDate}
-                            onChange={(e) => { setToDate(e.target.value); setOffset(0); }}
-                            className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm"
-                        />
-                    </label>
-                </div>
-
-                {loading ? (
-                    <div className="flex items-center justify-center py-20 text-gray-400">
-                        <Loader2 className="w-6 h-6 animate-spin mr-2" />
-                        {t.common.loading}
-                    </div>
-                ) : (
-                    <>
-                        <DataTable
-                            tableId="audit-logs"
-                            title="Audit Logs"
-                            data={rows}
-                            columns={columns}
-                            searchPlaceholder={t.settings.audit.searchPlaceholder}
-                            emptyMessage={t.settings.audit.noLogs}
-                        />
-                        <div className="flex items-center justify-between text-sm text-gray-500">
-                            <span>
-                                {t.settings.audit.showing} {rows.length} / {total}
-                            </span>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    disabled={offset === 0}
-                                    onClick={() => setOffset(Math.max(0, offset - limit))}
-                                    className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white disabled:opacity-40 font-bold text-xs"
-                                >
-                                    {t.settings.audit.prevPage}
-                                </button>
-                                <span className="text-xs font-bold">
-                                    {page} / {totalPages}
-                                </span>
-                                <button
-                                    type="button"
-                                    disabled={offset + limit >= total}
-                                    onClick={() => setOffset(offset + limit)}
-                                    className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white disabled:opacity-40 font-bold text-xs"
-                                >
-                                    {t.settings.audit.nextPage}
-                                </button>
-                            </div>
-                        </div>
-                    </>
+        <PageShell maxWidth="full">
+            <PageHeader
+                title={t.settings.audit.title}
+                subtitle={t.settings.audit.description}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.accountSettings,
+                    t.settings.audit.title,
+                    'settings',
                 )}
+            />
+
+            <div className="rounded-lg border border-gray-200 bg-white p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+                <label className="space-y-1">
+                    <span className="text-xs font-medium text-gray-500">{t.settings.audit.filters.entity}</span>
+                    <Input
+                        type="text"
+                        value={entity}
+                        onChange={(e) => { setEntity(e.target.value); setOffset(0); }}
+                        placeholder="sale, customer…"
+                    />
+                </label>
+                <label className="space-y-1">
+                    <span className="text-xs font-medium text-gray-500">{t.settings.audit.filters.action}</span>
+                    <Input
+                        type="text"
+                        value={action}
+                        onChange={(e) => { setAction(e.target.value); setOffset(0); }}
+                        placeholder="CREATE, UPDATE…"
+                    />
+                </label>
+                <label className="space-y-1">
+                    <span className="text-xs font-medium text-gray-500">{t.common.date} (from)</span>
+                    <Input
+                        type="date"
+                        value={fromDate}
+                        onChange={(e) => { setFromDate(e.target.value); setOffset(0); }}
+                    />
+                </label>
+                <label className="space-y-1">
+                    <span className="text-xs font-medium text-gray-500">{t.common.date} (to)</span>
+                    <Input
+                        type="date"
+                        value={toDate}
+                        onChange={(e) => { setToDate(e.target.value); setOffset(0); }}
+                    />
+                </label>
             </div>
-        </div>
+
+            {loading ? (
+                <div className="flex items-center justify-center py-20 text-gray-400">
+                    <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                    {t.common.loading}
+                </div>
+            ) : (
+                <>
+                    <DataTable
+                        tableId="audit-logs"
+                        title="Audit Logs"
+                        data={rows}
+                        columns={columns}
+                        searchPlaceholder={t.settings.audit.searchPlaceholder}
+                        emptyMessage={t.settings.audit.noLogs}
+                    />
+                    <div className="flex items-center justify-between text-sm text-gray-500 mt-4">
+                        <span>
+                            {t.settings.audit.showing} {rows.length} / {total}
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="secondary"
+                                disabled={offset === 0}
+                                onClick={() => setOffset(Math.max(0, offset - limit))}
+                            >
+                                {t.settings.audit.prevPage}
+                            </Button>
+                            <span className="text-xs font-semibold">
+                                {page} / {totalPages}
+                            </span>
+                            <Button
+                                variant="secondary"
+                                disabled={offset + limit >= total}
+                                onClick={() => setOffset(offset + limit)}
+                            >
+                                {t.settings.audit.nextPage}
+                            </Button>
+                        </div>
+                    </div>
+                </>
+            )}
+        </PageShell>
     );
 }

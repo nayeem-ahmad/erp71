@@ -2,12 +2,12 @@
 import { useI18n, formatMessage } from '@/lib/i18n';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Gift, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { Gift, Loader2 } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-
-type ToastState = { type: 'success' | 'error'; message: string } | null;
+import { toast } from '@/lib/toast';
+import { Button, Input, PageShell } from '@/components/ui';
 
 interface LoyaltySettings {
     loyalty_points_enabled: boolean;
@@ -16,39 +16,11 @@ interface LoyaltySettings {
     loyalty_min_redeem: number | null;
 }
 
-function Toast({ toast, onDismiss }: { toast: ToastState; onDismiss: () => void }) {
-    useEffect(() => {
-        if (!toast) return;
-        const t = setTimeout(onDismiss, 4000);
-        return () => clearTimeout(t);
-    }, [toast, onDismiss]);
-
-    if (!toast) return null;
-    const isSuccess = toast.type === 'success';
-    return (
-        <div
-            className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl px-4 py-3 shadow-lg border text-sm font-semibold ${
-                isSuccess
-                    ? 'bg-green-50 border-green-200 text-green-800'
-                    : 'bg-red-50 border-red-200 text-red-800'
-            }`}
-        >
-            {isSuccess ? (
-                <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-            ) : (
-                <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-            )}
-            {toast.message}
-        </div>
-    );
-}
-
 export default function LoyaltySettingsPage() {
     const { t } = useI18n();
     const m = t.settingsExtras.loyalty;
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [toast, setToast] = useState<ToastState>(null);
 
     const [enabled, setEnabled] = useState(false);
     const [earnRate, setEarnRate] = useState('');
@@ -63,7 +35,7 @@ export default function LoyaltySettingsPage() {
             setRedeemRate(data.loyalty_redeem_rate != null ? String(data.loyalty_redeem_rate) : '');
             setMinRedeem(data.loyalty_min_redeem != null ? String(data.loyalty_min_redeem) : '');
         } catch (err: any) {
-            setToast({ type: 'error', message: err?.message || m.loadFailed });
+            toast.error(err?.message || m.loadFailed);
         } finally {
             setLoading(false);
         }
@@ -87,9 +59,9 @@ export default function LoyaltySettingsPage() {
                     ...(minRedeem !== '' ? { loyalty_min_redeem: parseInt(minRedeem, 10) } : {}),
                 }),
             });
-            setToast({ type: 'success', message: m.saved });
+            toast.success(m.saved);
         } catch (err: any) {
-            setToast({ type: 'error', message: err?.message || m.saveFailed });
+            toast.error(err?.message || m.saveFailed);
         } finally {
             setSaving(false);
         }
@@ -103,35 +75,34 @@ export default function LoyaltySettingsPage() {
     const exampleDiscount = examplePointsEarned * redeemRateNum;
 
     return (
-        <div className="overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]">
-            <div className="w-full space-y-4">
-                <PageHeader
-                    title={(
-                        <span className="inline-flex items-center gap-3">
-                            <span className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center">
-                                <Gift className="w-5 h-5 text-purple-600" />
-                            </span>
-                            {m.title}
+        <PageShell maxWidth="full">
+            <PageHeader
+                title={(
+                    <span className="inline-flex items-center gap-3">
+                        <span className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center">
+                            <Gift className="w-5 h-5 text-purple-600" />
                         </span>
-                    )}
-                    subtitle={m.description}
-                    breadcrumbs={modulePageBreadcrumbs(
-                        t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.accountSettings,
-                        m.title,
-                        'settings',
-                    )}
-                />
+                        {m.title}
+                    </span>
+                )}
+                subtitle={m.description}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.accountSettings,
+                    m.title,
+                    'settings',
+                )}
+            />
 
-                {loading ? (
-                    <div className="flex items-center gap-2 text-gray-400 text-sm">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        {m.loading}
-                    </div>
-                ) : (
-                    <form onSubmit={handleSave} className="space-y-6">
+            {loading ? (
+                <div className="flex items-center gap-2 text-gray-400 text-sm">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {m.loading}
+                </div>
+            ) : (
+                <form onSubmit={handleSave} className="space-y-6 mt-4">
                         {/* Enable toggle */}
-                        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
+                        <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-4">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-bold text-gray-800">{m.enableLabel}</p>
@@ -154,7 +125,7 @@ export default function LoyaltySettingsPage() {
                         </div>
 
                         {/* Rate configuration */}
-                        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-5">
+                        <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-5">
                             <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">{m.rateConfigTitle}</h2>
 
                             <div className="space-y-4">
@@ -163,14 +134,14 @@ export default function LoyaltySettingsPage() {
                                         Earn Rate
                                     </label>
                                     <div className="flex items-center gap-2">
-                                        <input
+                                        <Input
                                             type="number"
                                             step="0.0001"
                                             min="0"
                                             value={earnRate}
                                             onChange={(e) => setEarnRate(e.target.value)}
                                             placeholder={m.earnRate.placeholder}
-                                            className="w-32 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
+                                            className="w-32"
                                         />
                                         <span className="text-sm text-gray-500">{m.earnRate.suffix}</span>
                                     </div>
@@ -186,14 +157,14 @@ export default function LoyaltySettingsPage() {
                                     <div className="flex items-center gap-2">
                                         <span className="text-sm text-gray-500">{m.redeemRate.prefix}</span>
                                         <span className="text-sm text-gray-500">৳</span>
-                                        <input
+                                        <Input
                                             type="number"
                                             step="0.0001"
                                             min="0"
                                             value={redeemRate}
                                             onChange={(e) => setRedeemRate(e.target.value)}
                                             placeholder={m.redeemRate.placeholder}
-                                            className="w-32 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
+                                            className="w-32"
                                         />
                                     </div>
                                     <p className="mt-1 text-xs text-gray-400">
@@ -206,14 +177,14 @@ export default function LoyaltySettingsPage() {
                                         Minimum Points to Redeem
                                     </label>
                                     <div className="flex items-center gap-2">
-                                        <input
+                                        <Input
                                             type="number"
                                             step="1"
                                             min="0"
                                             value={minRedeem}
                                             onChange={(e) => setMinRedeem(e.target.value)}
                                             placeholder={m.minRedeem.placeholder}
-                                            className="w-32 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
+                                            className="w-32"
                                         />
                                         <span className="text-sm text-gray-500">{m.minRedeem.suffix}</span>
                                     </div>
@@ -226,7 +197,7 @@ export default function LoyaltySettingsPage() {
 
                         {/* Example calculation */}
                         {earnRateNum > 0 && (
-                            <div className="bg-purple-50 rounded-2xl border border-purple-100 p-5">
+                            <div className="bg-purple-50 rounded-lg border border-purple-100 p-5">
                                 <h3 className="text-sm font-bold text-purple-800 mb-2">{m.example.title}</h3>
                                 <p className="text-sm text-purple-700">
                                     {formatMessage(m.example.saleEarned, { amount: exampleSaleAmount, points: examplePointsEarned })}
@@ -240,20 +211,17 @@ export default function LoyaltySettingsPage() {
                         )}
 
                         <div className="flex justify-end">
-                            <button
+                            <Button
                                 type="submit"
                                 disabled={saving}
-                                className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-purple-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
+                                loading={saving}
+                                className="!bg-purple-600 hover:!bg-purple-700"
                             >
-                                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                                 {saving ? m.saving : m.saveButton}
-                            </button>
+                            </Button>
                         </div>
                     </form>
                 )}
-            </div>
-
-            <Toast toast={toast} onDismiss={() => setToast(null)} />
-        </div>
+        </PageShell>
     );
 }
