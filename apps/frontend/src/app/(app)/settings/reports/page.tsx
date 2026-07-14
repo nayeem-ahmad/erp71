@@ -179,7 +179,7 @@ export default function ReportSettingsPage() {
                                 Report Email Address
                                 <span className="ml-1.5 text-xs font-normal text-gray-400">{m.email.optional}</span>
                             </>
-                        ) as unknown as string}
+                        )}
                         htmlFor="report_email"
                         hint={m.email.hint}
                     >

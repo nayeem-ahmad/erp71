@@ -97,7 +97,7 @@ function MethodForm({ initial, accounts, onSave, onCancel }: MethodFormProps) {
                         <>
                             Account <span className="font-normal text-gray-400">(optional)</span>
                         </>
-                    ) as unknown as string}
+                    )}
                 >
                     <Select
                         value={accountId}

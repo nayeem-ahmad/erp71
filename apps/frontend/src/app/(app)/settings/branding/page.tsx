@@ -138,7 +138,7 @@ export default function BrandingSettingsPage() {
                                     <Building2 className="w-4 h-4 text-gray-400" />
                                     {m.businessName.label}
                                 </span>
-                            ) as unknown as string}
+                            )}
                             hint={m.businessName.hint}
                         >
                             <Input
@@ -157,7 +157,7 @@ export default function BrandingSettingsPage() {
                                     <Palette className="w-4 h-4 text-gray-400" />
                                     {m.primaryColor.label}
                                 </span>
-                            ) as unknown as string}
+                            )}
                             hint={m.primaryColor.hint}
                         >
                             <div className="flex items-center gap-3">
@@ -195,7 +195,7 @@ export default function BrandingSettingsPage() {
                                     <Image className="w-4 h-4 text-gray-400" />
                                     {m.logo.label}
                                 </span>
-                            ) as unknown as string}
+                            )}
                             hint={m.logo.hint}
                         >
                             <Input
@@ -227,7 +227,7 @@ export default function BrandingSettingsPage() {
                                     <Globe className="w-4 h-4 text-gray-400" />
                                     {m.favicon.label}
                                 </span>
-                            ) as unknown as string}
+                            )}
                             hint={m.favicon.hint}
                         >
                             <Input

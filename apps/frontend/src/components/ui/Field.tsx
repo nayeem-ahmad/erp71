@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 
 export type FieldProps = {
-    label: string;
+    label: ReactNode;
     required?: boolean;
     error?: string;
     hint?: string;
