@@ -66,6 +66,10 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## HIGH PRIORITY — Ship within first 2 weeks of launch
 
+### Server-side pagination rollout (foundation shipped for Leads 2026-07-14)
+- [ ] Migrate the remaining ~16 pages that hand a server-capped slice to `DataTable` onto server pagination + sorting (same pattern as Leads: per-endpoint `SORTABLE` allowlist + `sortBy`/`sortDir`, page/pageSize/sort state, `serverPagination` prop). Step 3 (100-limit): crm/customers, crm/tasks, accounting/expenses, accounting/loans, admin/users, hr/leaves, hr/salary-payments, purchases/supplier-payments, sales/customer-payments. Step 4 (20/50/200/500-limit): accounting/reconciliation, accounting/vouchers, crm/campaigns, hr/attendance, sales/customer-ledger, purchases/supplier-ledger, sales/price-lists/[id]. `DataTable`/`resolveOrderBy` need no further changes. Documented limitation: server-mode export/print covers the current page only.
+- [ ] `DataTable` client-mode pagination is structurally non-functional (pre-existing, surfaced during the server-pagination review): `state.pagination.pageIndex` is hardcoded to `0` with no `onPaginationChange`, so Next/Prev/page-number buttons never change the visible slice for any table NOT using `serverPagination`. Either fix client mode (back `pageIndex` with state) or migrate all such tables to server mode. Verify which currently-client tables actually let users reach page 2.
+
 ### Auth & Account Management
 - [x] Password reset flow (email-based expiring token) — done 2026-05-15
 - [x] Email verification on signup — verification email on signup, `/verify-email` pending flow, dashboard banner + resend, optional `REQUIRE_EMAIL_VERIFICATION` login gate — done 2026-06-12
@@ -407,6 +411,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## COMPLETED
 
+- [x] Server-side pagination + sorting foundation + CRM Leads slice — root-caused the "Showing 1–10 of 100" (real total 146) bug: `DataTable` paginated purely client-side over a server-capped 100-row slice, so the count was wrong AND leads 101–146 were unreachable. Added opt-in `serverPagination` prop to `DataTable` (TanStack `manualPagination`/`manualSorting`, footer count from server `total`, page/size/sort routed through callbacks; client mode 100% unchanged), a reusable injection-safe `resolveOrderBy` allowlist helper (`apps/backend/src/common/sort.util.ts`), `sortBy`/`sortDir` on the leads list endpoint (allowlist: name/category/priority/status/score/next_step_date/created_at; unknown→existing default order), and wired the Leads page (page/pageSize/sort state, reads full `{items,total}` envelope, resets to page 1 on filter/sort change). TDD throughout (be 34/34, fe 44/44); per-task + whole-branch subagent reviews. Spec: `docs/superpowers/specs/2026-07-14-server-pagination-design.md`; plan: `docs/superpowers/plans/2026-07-14-server-pagination-foundation-leads.md` — done 2026-07-14
+- [x] Server-pagination final-review fixes: `DataTable` server mode now excludes the 500 page-size option (backend hard-caps `take` at 100 via `PaginationDto`) via new `SERVER_MAX_PAGE_SIZE`/`pageSizeOptions`, client mode unchanged; added a `loadSeq` request-sequence guard in `crm/leads/page.tsx`'s `loadLeads` so an out-of-order response can no longer overwrite fresher data when a filter/sort change fires while off page 1; documented the `onPageSizeChange`-must-reset-page-1 contract in `serverPagination` JSDoc — done 2026-07-14
 - [x] DataTable: right-align toolbar buttons when search box is hidden (Leads list) and align the "select all" header checkbox with row checkboxes (render select column as a plain, non-draggable header) — done 2026-07-14
 
 ### UI polish follow-ups (non-blocking, from final migration review)

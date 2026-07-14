@@ -460,3 +460,61 @@ describe('DataTable', () => {
         expect(screen.getByText('25', { exact: false })).toBeInTheDocument();
     });
 });
+
+describe('DataTable server pagination mode', () => {
+    const serverBase = {
+        total: 146,
+        page: 1,
+        pageSize: 10,
+        onPageChange: jest.fn(),
+        onPageSizeChange: jest.fn(),
+        sort: null as { id: string; desc: boolean } | null,
+        onSortChange: jest.fn(),
+    };
+
+    it('does not offer a server page size above the backend cap of 100', () => {
+        const { container } = render(
+            <DataTable {...defaultProps} showSearch={false} serverPagination={{ ...serverBase }} />,
+        );
+        expect(container.querySelector('option[value="500"]')).toBeNull();
+        expect(container.querySelector('option[value="100"]')).not.toBeNull();
+    });
+
+    it('shows the server total in the footer, not the row count', () => {
+        render(
+            <DataTable
+                {...defaultProps}
+                showSearch={false}
+                serverPagination={{ ...serverBase }}
+            />,
+        );
+        // 3 rows are rendered but the footer reflects the server total of 146
+        expect(screen.getByText(/of 146/i)).toBeInTheDocument();
+    });
+
+    it('calls onPageChange with the next 1-based page', () => {
+        const onPageChange = jest.fn();
+        render(
+            <DataTable
+                {...defaultProps}
+                showSearch={false}
+                serverPagination={{ ...serverBase, onPageChange }}
+            />,
+        );
+        fireEvent.click(screen.getByRole('button', { name: '2' }));
+        expect(onPageChange).toHaveBeenCalledWith(2);
+    });
+
+    it('emits onSortChange when a sortable header is clicked', () => {
+        const onSortChange = jest.fn();
+        render(
+            <DataTable
+                {...defaultProps}
+                showSearch={false}
+                serverPagination={{ ...serverBase, onSortChange }}
+            />,
+        );
+        fireEvent.click(screen.getByText('Name'));
+        expect(onSortChange).toHaveBeenCalledWith({ id: 'name', desc: false });
+    });
+});

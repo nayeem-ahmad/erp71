@@ -12,6 +12,7 @@ import { BulkLeadActionDto, CreateLeadDto, LeadBulkAction, LeadCategory, LeadPri
 import { paginate } from '../common/pagination.dto';
 import { computeLeadScore } from './lead-scoring.util';
 import { runImport, ImportResult } from '../common/import.util';
+import { resolveOrderBy, SortableMap } from '../common/sort.util';
 
 const leadIncludes = {
     assignee: { select: { id: true, name: true, email: true } },
@@ -19,6 +20,17 @@ const leadIncludes = {
     creator: { select: { id: true, name: true, email: true } },
     convertedCustomer: { select: { id: true, name: true, phone: true } },
 } as const;
+
+const LEAD_SORTABLE: SortableMap = {
+    name: (dir) => ({ name: dir }),
+    category: (dir) => ({ category: dir }),
+    priority: (dir) => ({ priority: dir }),
+    status: (dir) => ({ status: dir }),
+    score: (dir) => ({ score: dir }),
+    next_step_date: (dir) => ({ next_step_date: dir }),
+    created_at: (dir) => ({ created_at: dir }),
+};
+const LEAD_DEFAULT_ORDER = [{ next_step_date: 'asc' as const }, { updated_at: 'desc' as const }];
 
 @Injectable()
 export class CrmLeadsService {
@@ -113,6 +125,8 @@ export class CrmLeadsService {
             search?: string;
             page?: number;
             limit?: number;
+            sortBy?: string;
+            sortDir?: string;
         },
     ) {
         const page = opts.page ?? 1;
@@ -146,7 +160,7 @@ export class CrmLeadsService {
             this.db.lead.findMany({
                 where,
                 include: leadIncludes,
-                orderBy: [{ next_step_date: 'asc' }, { updated_at: 'desc' }],
+                orderBy: resolveOrderBy(opts.sortBy, opts.sortDir, LEAD_SORTABLE, LEAD_DEFAULT_ORDER),
                 skip,
                 take: limit,
             }),

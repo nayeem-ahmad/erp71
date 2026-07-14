@@ -486,7 +486,7 @@ export const api = {
     }),
     deleteCrmInteraction: (id: string) => fetchWithAuth(`/crm/interactions/${id}`, { method: 'DELETE' }),
     // CRM Leads
-    getLeads: (params?: { status?: string; source?: string; category?: string; priority?: string; assignedTo?: string; myActionsToday?: boolean; search?: string; page?: number; limit?: number }) => {
+    getLeads: (params?: { status?: string; source?: string; category?: string; priority?: string; assignedTo?: string; myActionsToday?: boolean; search?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string }) => {
         const query = new URLSearchParams();
         if (params?.status) query.set('status', params.status);
         if (params?.source) query.set('source', params.source);
@@ -497,6 +497,8 @@ export const api = {
         if (params?.search) query.set('search', params.search);
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
+        if (params?.sortBy) query.set('sortBy', params.sortBy);
+        if (params?.sortDir) query.set('sortDir', params.sortDir);
         return fetchWithAuth(`/crm/leads${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getLead: (id: string) => fetchWithAuth(`/crm/leads/${id}`),
