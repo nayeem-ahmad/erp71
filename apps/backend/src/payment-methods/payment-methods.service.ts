@@ -47,6 +47,7 @@ export class PaymentMethodsService {
         account_id: dto.account_id || null,
         is_active: dto.is_active ?? true,
         sort_order: dto.sort_order ?? 0,
+        show_on_entry: dto.show_on_entry ?? true,
       },
     });
 
@@ -129,6 +130,7 @@ export class PaymentMethodsService {
         account_id: dto.account_id ?? paymentMethod.account_id,
         is_active: dto.is_active ?? paymentMethod.is_active,
         sort_order: dto.sort_order ?? paymentMethod.sort_order,
+        show_on_entry: dto.show_on_entry ?? paymentMethod.show_on_entry,
       },
     });
 
@@ -209,6 +211,7 @@ export class PaymentMethodsService {
       account_id: pm.account_id,
       is_active: pm.is_active,
       sort_order: pm.sort_order,
+      show_on_entry: pm.show_on_entry,
       created_at: pm.created_at,
       updated_at: pm.updated_at,
     };
