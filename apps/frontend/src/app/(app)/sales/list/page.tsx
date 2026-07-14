@@ -18,6 +18,7 @@ interface Sale {
     id: string;
     serial_number: string;
     created_at: string;
+    sale_date?: string | null;
     items: any[];
     total_amount: string;
     amount_paid: string;
@@ -69,10 +70,13 @@ export default function SalesPage() {
             columnHelper.accessor('created_at', {
                 header: t.sales.columns.date,
                 cell: (info) => {
-                    const d = new Date(info.getValue());
+                    // Display the (possibly back-dated) sale_date to agree with reports;
+                    // ordering stays on created_at for cursor-pagination stability.
+                    const displayDate = info.row.original.sale_date ?? info.getValue();
+                    const d = new Date(displayDate);
                     return (
                         <div>
-                            <span className="text-sm text-gray-600">{formatDate(info.getValue(), locale)}</span>
+                            <span className="text-sm text-gray-600">{formatDate(displayDate, locale)}</span>
                             <span className="text-xs text-gray-400 block">{d.toLocaleTimeString()}</span>
                         </div>
                     );

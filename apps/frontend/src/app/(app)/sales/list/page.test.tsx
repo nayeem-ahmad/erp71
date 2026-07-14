@@ -36,6 +36,7 @@ const mockSales = [
         id: 'sale-1',
         serial_number: 'SL-00001',
         created_at: '2026-03-20T10:00:00.000Z',
+        sale_date: '2026-01-05T12:00:00.000Z',
         items: [{ id: 'item-1' }, { id: 'item-2' }],
         total_amount: '55.00',
         amount_paid: '55.00',
@@ -156,6 +157,15 @@ describe('SalesListPage — Sales Transaction List', () => {
         render(<SalesListPage />);
         await waitFor(() => {
             expect(api.getSales).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    it('displays the sale_date (not created_at) in the Date column', async () => {
+        render(<SalesListPage />);
+        await waitFor(() => {
+            // sale_date is 2026-01-05; created_at is 2026-03-20 — the list must show the sale_date.
+            expect(screen.getByText('05/01/2026')).toBeInTheDocument();
+            expect(screen.queryByText('20/03/2026')).not.toBeInTheDocument();
         });
     });
 
