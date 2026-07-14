@@ -209,7 +209,7 @@ export class CustomersService {
                 territory: true,
                 sales: {
                     include: { items: { include: { product: true } } },
-                    orderBy: { created_at: 'desc' }
+                    orderBy: { sale_date: 'desc' }
                 }
             }
         });
