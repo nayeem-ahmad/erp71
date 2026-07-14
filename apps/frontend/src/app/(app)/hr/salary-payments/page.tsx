@@ -203,7 +203,7 @@ export default function SalaryPaymentsPage() {
                     <button
                         type="button"
                         onClick={() => handleDelete(row.original)}
-                        className="p-2 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50"
+                        className="p-2 rounded-lg text-gray-400 hover:text-danger hover:bg-red-50"
                         title={t.common.delete}
                     >
                         <Trash2 className="w-4 h-4" />

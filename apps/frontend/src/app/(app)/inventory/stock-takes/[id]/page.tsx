@@ -172,11 +172,11 @@ export default function StockTakeDetailPage() {
                     </div>
                     <div className="bg-white border border-gray-100 rounded-lg p-4">
                         <div className="text-xs font-medium text-gray-500">{t.inventoryStockTakeDetail.netQuantityImpact}</div>
-                        <div className={`mt-2 text-2xl font-bold ${(session.summary?.netQuantityImpact ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{session.summary?.netQuantityImpact ?? 0}</div>
+                        <div className={`mt-2 text-2xl font-bold ${(session.summary?.netQuantityImpact ?? 0) >= 0 ? 'text-emerald-600' : 'text-danger'}`}>{session.summary?.netQuantityImpact ?? 0}</div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-lg p-4">
                         <div className="text-xs font-medium text-gray-500">{t.inventoryStockTakeDetail.estimatedValueImpact}</div>
-                        <div className={`mt-2 text-2xl font-bold ${(session.summary?.netValueImpact ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatBDT(Number(session.summary?.netValueImpact ?? 0))}</div>
+                        <div className={`mt-2 text-2xl font-bold ${(session.summary?.netValueImpact ?? 0) >= 0 ? 'text-emerald-600' : 'text-danger'}`}>{formatBDT(Number(session.summary?.netValueImpact ?? 0))}</div>
                     </div>
                 </div>
 
@@ -207,7 +207,7 @@ export default function StockTakeDetailPage() {
                                     {reasons.map((reason) => <option key={reason.id} value={reason.id}>{reason.label}</option>)}
                                 </select>
                                 <div className="space-y-2">
-                                    <div className={`text-sm font-bold ${variance === 0 ? 'text-gray-500' : variance > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                    <div className={`text-sm font-bold ${variance === 0 ? 'text-gray-500' : variance > 0 ? 'text-emerald-600' : 'text-danger'}`}>
                                         {formatMessage(t.inventoryStockTakeDetail.variance, { value: Number.isFinite(variance) ? variance : '-' })}
                                     </div>
                                     <input value={values.note} onChange={(event) => setDraftCounts((current) => ({ ...current, [line.product_id]: { ...values, note: event.target.value } }))} className="w-full bg-white border border-gray-200 rounded-xl py-2.5 px-4 text-sm font-medium" placeholder={t.inventoryStockTakeDetail.note} />

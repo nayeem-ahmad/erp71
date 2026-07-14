@@ -91,7 +91,7 @@ export default function ShrinkageReportPage() {
             columnHelper.accessor('quantity', { header: t.inventoryReports.shrinkage.columns.quantityLost, size: 120 }),
             columnHelper.accessor('value', {
                 header: t.inventoryReports.shrinkage.columns.estimatedValue,
-                cell: (info) => <span className="text-sm font-bold text-rose-600">{formatBDT(Number(info.getValue()))}</span>,
+                cell: (info) => <span className="text-sm font-bold text-danger">{formatBDT(Number(info.getValue()))}</span>,
                 size: 150,
             }),
         ],
@@ -118,7 +118,7 @@ export default function ShrinkageReportPage() {
                     </div>
                     <div className="bg-white border border-gray-100 rounded-lg p-4">
                         <div className="text-xs font-medium text-gray-500">{t.inventoryReports.shrinkage.estimatedValueLost}</div>
-                        <div className="mt-2 text-2xl font-bold text-rose-600">{formatBDT(Number(report.summary?.totalValue ?? 0))}</div>
+                        <div className="mt-2 text-2xl font-bold text-danger">{formatBDT(Number(report.summary?.totalValue ?? 0))}</div>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-lg p-4">
                         <div className="text-xs font-medium text-gray-500">{t.inventoryReports.shrinkage.topDriver}</div>

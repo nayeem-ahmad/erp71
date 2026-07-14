@@ -543,7 +543,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                                 }}
                                                 className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all text-white rounded-lg"
                                             >
-                                                <Trash2 className="w-5 h-5 hover:scale-110 transition-all text-rose-400" />
+                                                <Trash2 className="w-5 h-5 hover:scale-110 transition-all text-danger" />
                                             </button>
                                         </div>
                                     ))}

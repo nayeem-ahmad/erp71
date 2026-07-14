@@ -86,7 +86,7 @@ export default function InventoryLedgerPage() {
                 header: t.inventoryLedger.columns.delta,
                 cell: (info) => {
                     const value = Number(info.getValue() || 0);
-                    return <span className={value >= 0 ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>{value}</span>;
+                    return <span className={value >= 0 ? 'text-emerald-600 font-bold' : 'text-danger font-bold'}>{value}</span>;
                 },
                 size: 80,
             }),

@@ -23,8 +23,8 @@ const HR_HUB_SECTIONS: HubSectionConfig[] = [
     {
         sectionKey: 'organization',
         links: [
-            { href: routes.hr.departments, key: 'departments', icon: Layers, accent: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
-            { href: routes.hr.designations, key: 'designations', icon: BadgeCheck, accent: 'bg-violet-50 text-violet-700 border-violet-100' },
+            { href: routes.hr.departments, key: 'departments', icon: Layers, accent: 'bg-primary-light text-blue-700 border-primary-border' },
+            { href: routes.hr.designations, key: 'designations', icon: BadgeCheck, accent: 'bg-primary-light text-blue-700 border-primary-border' },
         ],
     },
     {

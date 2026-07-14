@@ -87,7 +87,7 @@ export default function ReorderSuggestionsPage() {
             columnHelper.accessor((row) => row.targetStock ?? '-', { id: 'targetStock', header: t.inventoryReports.reorder.columns.target, size: 90 }),
             columnHelper.accessor('suggestedQuantity', {
                 header: t.inventoryReports.reorder.columns.suggestedQty,
-                cell: (info) => <span className="text-sm font-bold text-rose-600">{info.getValue()}</span>,
+                cell: (info) => <span className="text-sm font-bold text-danger">{info.getValue()}</span>,
                 size: 120,
             }),
             columnHelper.accessor('shortageReason', { header: t.inventoryReports.reorder.columns.explanation, size: 320 }),

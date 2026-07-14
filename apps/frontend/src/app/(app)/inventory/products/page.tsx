@@ -273,7 +273,7 @@ export default function InventoryPage() {
                         const status = info.getValue();
                         const classes =
                             status === 'OUT'
-                                ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                ? 'bg-danger-light text-danger-text border-red-200'
                                 : status === 'LOW'
                                   ? 'bg-amber-50 text-amber-700 border-amber-200'
                                   : 'bg-emerald-50 text-emerald-700 border-emerald-200';
@@ -314,7 +314,7 @@ export default function InventoryPage() {
                     <div className="flex items-center justify-end space-x-1">
                         <button
                             onClick={() => openEditProduct(info.row.original)}
-                            className="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 transition-colors"
+                            className="p-1.5 rounded-lg text-primary hover:bg-primary-light transition-colors"
                             title={t.inventory.actions.editProduct}
                         >
                             <Pencil className="w-4 h-4" />
