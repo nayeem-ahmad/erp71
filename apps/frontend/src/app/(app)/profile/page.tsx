@@ -85,10 +85,10 @@ function PrivacyTab({ onToast }: { onToast: (t: ToastState) => void }) {
                     type="button"
                     onClick={handleDeletionRequest}
                     disabled={requestingDeletion}
-                    className="rounded-lg border border-rose-200 bg-rose-50 px-5 py-4 text-left hover:border-rose-300 transition-colors disabled:opacity-60"
+                    className="rounded-lg border border-red-200 bg-danger-light px-5 py-4 text-left hover:border-red-300 transition-colors disabled:opacity-60"
                 >
-                    <p className="text-sm font-bold text-rose-800">{t.settings.privacy.requestDeletion}</p>
-                    <p className="mt-1 text-xs text-rose-700">{t.settings.privacy.deletionDesc}</p>
+                    <p className="text-sm font-bold text-danger-text">{t.settings.privacy.requestDeletion}</p>
+                    <p className="mt-1 text-xs text-danger-text">{t.settings.privacy.deletionDesc}</p>
                 </button>
             </div>
         </div>
@@ -631,7 +631,7 @@ export default function ProfilePage() {
                                     className="w-24 h-24 rounded-full object-cover ring-4 ring-white shadow-md"
                                 />
                             ) : (
-                                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold ring-4 ring-white shadow-md">
+                                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white text-2xl font-bold ring-4 ring-white shadow-md">
                                     {initials}
                                 </div>
                             )}

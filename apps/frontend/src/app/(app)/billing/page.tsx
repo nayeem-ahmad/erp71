@@ -286,7 +286,7 @@ function BillingPageContent() {
                                     <div className="mt-2 flex items-center gap-3">
                                         <h2 className="text-lg font-bold tracking-tight text-gray-950">{summary.subscription?.plan?.name || copy.noActivePlan}</h2>
                                         {summary.subscription?.plan?.code && (
-                                            <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-widest ${summary.subscription.plan.code === 'PREMIUM' ? 'bg-amber-100 text-amber-700' : summary.subscription.plan.code === 'STANDARD' ? 'bg-indigo-100 text-indigo-700' : summary.subscription.plan.code === 'BASIC' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                                            <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-widest ${summary.subscription.plan.code === 'PREMIUM' ? 'bg-amber-100 text-amber-700' : summary.subscription.plan.code === 'STANDARD' ? 'bg-primary-light text-blue-700' : summary.subscription.plan.code === 'BASIC' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
                                                 {summary.subscription.plan.code}
                                             </span>
                                         )}
@@ -343,7 +343,7 @@ function BillingPageContent() {
                                                         type="button"
                                                         onClick={() => cancelAddon(row.addon.code)}
                                                         disabled={isSubmitting}
-                                                        className="mt-3 inline-flex items-center rounded-xl bg-white px-3 py-2 text-xs font-bold text-rose-700 border border-rose-200 transition hover:bg-rose-50 disabled:opacity-60"
+                                                        className="mt-3 inline-flex items-center rounded-xl bg-white px-3 py-2 text-xs font-bold text-danger-text border border-red-200 transition hover:bg-danger-light disabled:opacity-60"
                                                     >
                                                         <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
                                                         {copy.cancelAtPeriodEnd}
@@ -482,7 +482,7 @@ function BillingPageContent() {
                                                 type="button"
                                                 onClick={cancelAtPeriodEnd}
                                                 disabled={isSubmitting}
-                                                className="inline-flex items-center rounded-lg bg-white px-5 py-3 text-sm font-bold text-rose-700 border border-rose-200 transition hover:bg-rose-50 disabled:opacity-60"
+                                                className="inline-flex items-center rounded-lg bg-white px-5 py-3 text-sm font-bold text-danger-text border border-red-200 transition hover:bg-danger-light disabled:opacity-60"
                                             >
                                                 <RotateCcw className="w-4 h-4 mr-2" />
                                                 {copy.cancelAtPeriodEnd}

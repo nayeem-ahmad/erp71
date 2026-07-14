@@ -22,7 +22,7 @@ export default function StatusPage() {
                     subtitle={(
                         <>
                             <span>{m.description}</span>
-                            <span className="block mt-2 text-xs font-semibold text-indigo-600">{m.adminOnly}</span>
+                            <span className="block mt-2 text-xs font-semibold text-primary">{m.adminOnly}</span>
                         </>
                     )}
                     breadcrumbs={modulePageBreadcrumbs(
@@ -34,7 +34,7 @@ export default function StatusPage() {
                     actions={(
                         <Link
                             href={routes.admin.systemHealth}
-                            className="inline-flex items-center gap-2 self-start rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-50"
+                            className="inline-flex items-center gap-2 self-start rounded-xl border border-primary-border bg-white px-4 py-2 text-sm font-bold text-primary hover:bg-primary-light"
                         >
                             <Activity className="w-4 h-4" />
                             {m.openFullDashboard}

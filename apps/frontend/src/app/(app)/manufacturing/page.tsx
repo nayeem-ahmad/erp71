@@ -1674,10 +1674,10 @@ function ProductPLTab() {
                                 <td className="px-4 py-3 text-right text-gray-700">{formatBDT(row.avgCostPerUnit)}</td>
                                 <td className="px-4 py-3 text-right text-gray-700">{formatBDT(row.totalProductionCost)}</td>
                                 <td className="px-4 py-3 text-right text-gray-700">{formatBDT(row.revenue)}</td>
-                                <td className={`px-4 py-3 text-right font-medium ${row.grossProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                                <td className={`px-4 py-3 text-right font-medium ${row.grossProfit >= 0 ? 'text-emerald-700' : 'text-danger'}`}>
                                     {formatBDT(row.grossProfit)}
                                 </td>
-                                <td className={`px-4 py-3 text-right font-medium ${row.grossMarginPct >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                                <td className={`px-4 py-3 text-right font-medium ${row.grossMarginPct >= 0 ? 'text-emerald-700' : 'text-danger'}`}>
                                     {row.grossMarginPct.toFixed(1)}%
                                 </td>
                             </tr>
