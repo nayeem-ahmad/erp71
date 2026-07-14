@@ -1,5 +1,7 @@
 # Grocery SaaS UI/UX Specification
 
+> **⚠️ PARTIALLY SUPERSEDED (2026-07-14):** The visual design sections of this document (Branding & Style Guide — color palette, typography, buttons) no longer reflect the implemented product and are superseded by **`docs/ui-design-guidelines.md`**, the ratified design system (blue-600 primary, semantic success/warning/danger tokens, Inter + Noto Sans Bengali, compact density). The UX goals, personas, IA, and user-flow sections below remain valid.
+
 This document defines the user experience goals, information architecture, user flows, and visual design specifications for Grocery SaaS's user interface. It serves as the foundation for visual design and frontend development, ensuring a cohesive and user-centered experience.
 
 ## Overall UX Goals & Principles
@@ -231,34 +233,7 @@ graph TD
 
 ## Branding & Style Guide
 
-### Visual Identity
-**Brand Guidelines:** Clean, modern, trustworthy.
-
-### Color Palette
-
-| Color Type | Hex Code | Usage |
-|---|---|---|
-| Primary | #4CAF50 | Main interactive elements, primary calls to action |
-| Secondary | #FFC107 | Accent elements, secondary actions |
-| Accent | #2196F3 | Highlighting, notifications |
-| Success | #4CAF50 | Positive feedback, confirmations |
-| Warning | #FF9800 | Cautions, important notices |
-| Error | #F44336 | Errors, destructive actions |
-| Neutral | #212121, #757575, #BDBDBD, #EEEEEE, #FAFAFA | Text, borders, backgrounds |
-
-### Typography
-- **Primary:** Roboto (Headings)
-- **Secondary:** Open Sans (Body)
-- **Monospace:** Fira Code (Data/Code)
-
-**Type Scale:**
-- H1: 36px / Bold
-- H2: 28px / Semi-Bold
-- Body: 16px / Regular
-
-### Iconography
-**Icon Library:** Lucide React (clean, consistent SVG icons).
-**Usage Guidelines:** Use outlined icons for general UI, filled icons for active states.
+> **Superseded.** The palette (green #4CAF50 primary, Roboto/Open Sans, 16px body) specified in earlier revisions of this section was never implemented. The authoritative style guide is **`docs/ui-design-guidelines.md`** (§2.2 color system, §2.3 typography, §2.4 shape/elevation/spacing, §2.7 components). Iconography remains Lucide React, as originally specified.
 
 ## Accessibility Requirements
 

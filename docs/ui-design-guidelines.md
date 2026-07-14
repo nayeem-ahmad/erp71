@@ -1,12 +1,16 @@
-# ERP71 UI Design Guidelines (PROPOSED)
+# ERP71 UI Design Guidelines
 
-**Status: PROPOSAL — no UI changes have been made.** This document is the output of a full UI review (2026-07-14) covering the app shell, list/table pages, forms/modals/detail pages, dashboard, POS, storefront, auth/marketing, settings, and admin surfaces. Part 1 records what exists today; Part 2 proposes the guidelines; Part 3 proposes a migration order.
+**Status: ADOPTED (2026-07-14).** The 6-phase migration in Part 3 has been executed on `dev`; Part 2 is now the binding style guide for all frontend work (summarized in CLAUDE.md's "UI Rules (frontend)" section). Part 1 documents the **pre-migration** state (2026-07-14 audit) and is retained as historical context — the inconsistencies it describes have been resolved except where noted.
+
+This document originated as the output of a full UI review (2026-07-14) covering the app shell, list/table pages, forms/modals/detail pages, dashboard, POS, storefront, auth/marketing, settings, and admin surfaces.
 
 Goals: **beautiful, compact, consistent, mobile-responsive, minimal scrolling, nothing hidden behind floating buttons.**
 
 ---
 
-## Part 1 — Current state (audit summary)
+## Part 1 — Pre-migration state (2026-07-14 audit, historical)
+
+> Everything below describes the codebase **before** the migration. Known intentional leftovers after the migration: storefront/marketing/auth pages keep their softer consumer look (out of scope by design); print/export HTML templates untouched; `settings/branding` page still has one dead `--color-primary` DOM write (the picker itself is live — `brand_primary_color` is consumed as a JS value by Sidebar and invoices); TenantDetailModal keeps blue/violet/slate section color-coding; "Close Shift" in cashier sessions is deliberately red.
 
 ### What's already good (keep and build on)
 
