@@ -108,7 +108,7 @@ export default function ProductionDeployPage() {
                     )}
                 />
 
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                     <strong>Ships to real users.</strong> This rebuilds and restarts the production stack on the VPS from the
                     latest <code>{status?.productionBranch ?? 'main'}</code>. Feedback Automation auto-promotes green work to{' '}
                     <code>{status?.productionBranch ?? 'main'}</code>, but it never deploys — that is this button.
@@ -119,7 +119,7 @@ export default function ProductionDeployPage() {
                         <Loader2 className="w-4 h-4 animate-spin" /> Loading…
                     </div>
                 ) : (
-                    <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
+                    <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-5">
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Live in production</p>

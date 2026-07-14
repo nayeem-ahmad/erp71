@@ -142,11 +142,11 @@ export default function PlatformNavigationSettingsPage() {
                 />
 
 
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                     {m.notice}
                 </div>
 
-                <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-4">
+                <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
                     <div className="flex flex-wrap items-center gap-2">
                         {([
                             { id: 'tenant' as NavScope, label: m.scopes.tenant },
@@ -207,7 +207,7 @@ export default function PlatformNavigationSettingsPage() {
                     </div>
                 </div>
 
-                <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-4">
+                <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                             <h2 className="text-base font-bold text-gray-900">{tenantOverrideCopy.title}</h2>

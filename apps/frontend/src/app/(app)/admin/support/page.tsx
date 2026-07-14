@@ -277,12 +277,12 @@ export default function AdminSupportPage() {
                                         const isAdmin = msg.senderRole === 'admin';
                                         return (
                                             <div key={msg.id} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
-                                                <div className={`max-w-[75%] rounded-lg px-4 py-2.5 ${isAdmin ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
-                                                    <p className={`text-[10px] font-bold mb-1 ${isAdmin ? 'text-indigo-200' : 'text-gray-500'}`}>
+                                                <div className={`max-w-[75%] rounded-lg px-4 py-2.5 ${isAdmin ? 'bg-primary text-white' : 'bg-gray-100 text-gray-900'}`}>
+                                                    <p className={`text-[10px] font-bold mb-1 ${isAdmin ? 'text-blue-100' : 'text-gray-500'}`}>
                                                         {isAdmin ? m.you : m.owner}
                                                     </p>
                                                     <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
-                                                    <p className={`text-[10px] mt-1 ${isAdmin ? 'text-indigo-300' : 'text-gray-400'}`}>
+                                                    <p className={`text-[10px] mt-1 ${isAdmin ? 'text-blue-200' : 'text-gray-400'}`}>
                                                         {new Date(msg.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                                                     </p>
                                                 </div>
@@ -307,13 +307,13 @@ export default function AdminSupportPage() {
                                         }}
                                         placeholder={m.replyPlaceholder}
                                         rows={2}
-                                        className="flex-1 resize-none rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:bg-white"
+                                        className="flex-1 resize-none rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-primary/40 focus:bg-white"
                                     />
                                     <button
                                         type="button"
                                         onClick={sendReply}
                                         disabled={sending || !replyBody.trim()}
-                                        className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40"
+                                        className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-md bg-primary text-white hover:bg-primary-hover disabled:opacity-40"
                                     >
                                         {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                                     </button>

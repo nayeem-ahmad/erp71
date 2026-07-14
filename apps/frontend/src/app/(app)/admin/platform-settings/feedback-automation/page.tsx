@@ -133,7 +133,7 @@ export default function FeedbackAutomationSettingsPage() {
                     )}
                 />
 
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                     <strong>Experimental.</strong> Lets an agent propose an implementation plan for approved tenant feedback,
                     and — once you approve the plan — implement it and open a pull request. It never merges anything itself;
                     every PR still needs human review. Reuses the OpenRouter key configured on the AI settings page.
@@ -144,7 +144,7 @@ export default function FeedbackAutomationSettingsPage() {
                         <Loader2 className="w-4 h-4 animate-spin" /> Loading…
                     </div>
                 ) : (
-                    <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
+                    <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-5">
                         <Field label="Enabled">
                             <select
                                 value={settings.enabled}

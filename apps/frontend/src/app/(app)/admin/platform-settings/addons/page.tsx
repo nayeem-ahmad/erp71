@@ -252,7 +252,7 @@ export default function PlatformAddonModulesPage() {
                 )}
             />
 
-            <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+            <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
                 Price and entitlement changes apply to new purchases immediately. Existing tenant add-on
                     subscriptions keep their current price and entitlements until they renew or repurchase.
                 </div>
@@ -264,7 +264,7 @@ export default function PlatformAddonModulesPage() {
                     </div>
                 ) : (
                     <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
-                        <div className="rounded-2xl border border-gray-200 bg-white p-2 space-y-1 h-fit">
+                        <div className="rounded-lg border border-gray-200 bg-white p-2 space-y-1 h-fit">
                             <button
                                 type="button"
                                 onClick={() => setSelectedId(NEW_ADDON_ID)}
@@ -288,7 +288,7 @@ export default function PlatformAddonModulesPage() {
                                         <div className="flex items-center justify-between gap-2">
                                             <span className="font-bold tracking-tight">{addon.name}</span>
                                             {!addon.is_active ? (
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                                <span className="text-[10px] font-medium text-gray-500">
                                                     Hidden
                                                 </span>
                                             ) : null}
@@ -296,7 +296,7 @@ export default function PlatformAddonModulesPage() {
                                         <p className="mt-1 text-[11px] font-medium text-gray-500">
                                             {formatBDT(addon.monthly_price)}/mo
                                         </p>
-                                        <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                                        <p className="mt-1 text-[10px] font-medium text-gray-500">
                                             {addon.subscriber_count} subscribers
                                         </p>
                                     </button>
@@ -305,13 +305,13 @@ export default function PlatformAddonModulesPage() {
                         </div>
 
                         {draft ? (
-                            <div className="rounded-2xl border border-gray-200 bg-white p-4 md:p-6 space-y-6">
+                            <div className="rounded-lg border border-gray-200 bg-white p-4 md:p-6 space-y-6">
                                 <div className="flex flex-wrap items-start justify-between gap-3">
                                     <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                        <p className="text-[10px] font-medium text-gray-500">
                                             {isCreating ? 'New' : draft.code}
                                         </p>
-                                        <h2 className="mt-1 text-lg font-black tracking-tight text-gray-900">
+                                        <h2 className="mt-1 text-lg font-bold tracking-tight text-gray-900">
                                             {isCreating ? 'Create add-on' : 'Edit add-on'}
                                         </h2>
                                     </div>
@@ -327,7 +327,7 @@ export default function PlatformAddonModulesPage() {
 
                                 <div className="grid gap-4 md:grid-cols-2">
                                     <label className="block">
-                                        <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Code</span>
+                                        <span className="text-xs font-medium text-gray-500">Code</span>
                                         <input
                                             value={draft.code}
                                             disabled={!isCreating}
@@ -338,7 +338,7 @@ export default function PlatformAddonModulesPage() {
                                     </label>
 
                                     <label className="block">
-                                        <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Name</span>
+                                        <span className="text-xs font-medium text-gray-500">Name</span>
                                         <input
                                             value={draft.name}
                                             onChange={(event) => setDraft((current) => current ? { ...current, name: event.target.value } : current)}
@@ -360,7 +360,7 @@ export default function PlatformAddonModulesPage() {
                                     </label>
 
                                     <label className="block md:col-span-2">
-                                        <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Description</span>
+                                        <span className="text-xs font-medium text-gray-500">Description</span>
                                         <textarea
                                             value={draft.description}
                                             onChange={(event) => setDraft((current) => current ? { ...current, description: event.target.value } : current)}
@@ -370,7 +370,7 @@ export default function PlatformAddonModulesPage() {
                                     </label>
 
                                     <label className="block">
-                                        <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Category</span>
+                                        <span className="text-xs font-medium text-gray-500">Category</span>
                                         <input
                                             value={draft.category}
                                             placeholder="e.g. operations"
@@ -380,7 +380,7 @@ export default function PlatformAddonModulesPage() {
                                     </label>
 
                                     <label className="block">
-                                        <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Sort order</span>
+                                        <span className="text-xs font-medium text-gray-500">Sort order</span>
                                         <input
                                             type="number"
                                             value={draft.sort_order}
@@ -390,7 +390,7 @@ export default function PlatformAddonModulesPage() {
                                     </label>
 
                                     <label className="block">
-                                        <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Monthly price (৳)</span>
+                                        <span className="text-xs font-medium text-gray-500">Monthly price (৳)</span>
                                         <input
                                             type="number"
                                             min={0}
@@ -401,7 +401,7 @@ export default function PlatformAddonModulesPage() {
                                     </label>
 
                                     <label className="block">
-                                        <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Yearly price (৳, optional)</span>
+                                        <span className="text-xs font-medium text-gray-500">Yearly price (৳, optional)</span>
                                         <input
                                             type="number"
                                             min={0}
@@ -413,14 +413,14 @@ export default function PlatformAddonModulesPage() {
                                 </div>
 
                                 <div className="space-y-5">
-                                    <h3 className="text-sm font-black uppercase tracking-widest text-gray-500">Entitlements granted</h3>
+                                    <h3 className="text-sm font-medium text-gray-500">Entitlements granted</h3>
                                     <p className="text-xs text-gray-500">
                                         Toggle exactly the entitlements this add-on should grant — a tenant on any plan who
                                         purchases it gets these on top of their plan&apos;s own entitlements.
                                     </p>
                                     {groupedEntitlements.map((group) => (
                                         <div key={group.key} className="space-y-3">
-                                            <h4 className="text-xs font-bold uppercase tracking-widest text-gray-400">
+                                            <h4 className="text-xs font-medium text-gray-500">
                                                 {group.key}
                                             </h4>
                                             <div className="grid gap-3 md:grid-cols-2">

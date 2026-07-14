@@ -85,7 +85,7 @@ export default function PlatformGeneralSettingsPage() {
                         <Loader2 className="w-4 h-4 animate-spin" /> {c.loading}
                     </div>
                 ) : (
-                    <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
+                    <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-5">
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-1">{m.platformName.label}</label>
                             <input

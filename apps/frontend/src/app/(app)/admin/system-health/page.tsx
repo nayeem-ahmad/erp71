@@ -12,7 +12,7 @@ export default function SystemHealthPage() {
 
     return (
         <PageShell>
-            <div className="space-y-8">
+            <div className="space-y-4">
                 <PageHeader
                     title={m.title}
                     subtitle={m.description}

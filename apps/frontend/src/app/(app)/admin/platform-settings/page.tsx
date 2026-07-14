@@ -165,7 +165,7 @@ export default function PlatformSettingsIndexPage() {
                     )}
                 />
 
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                     <strong>{m.securityNotice}</strong> {m.securityBody}
                 </div>
 
@@ -177,7 +177,7 @@ export default function PlatformSettingsIndexPage() {
                                 <Link
                                     key={href}
                                     href={href}
-                                    className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white px-5 py-4 hover:border-blue-300 hover:shadow-sm transition-all group"
+                                    className="flex items-center gap-4 rounded-lg border border-gray-200 bg-white px-5 py-4 hover:border-blue-300 hover:shadow-sm transition-all group"
                                 >
                                     <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center flex-shrink-0`}>
                                         <Icon className={`w-5 h-5 ${color}`} />

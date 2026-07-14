@@ -171,7 +171,7 @@ export default function AdminUsersPage() {
                             aria-label={m.actions.sendResetEmail}
                             disabled={busy}
                             onClick={() => void handleSendResetEmail(user)}
-                            className="rounded-xl border border-gray-200 bg-white p-2 text-gray-600 hover:border-indigo-300 hover:text-indigo-600 disabled:opacity-50"
+                            className="rounded-xl border border-gray-200 bg-white p-2 text-gray-600 hover:border-primary-border hover:text-blue-700 disabled:opacity-50"
                         >
                             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
                         </button>

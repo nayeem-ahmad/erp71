@@ -121,7 +121,7 @@ export default function PlatformWhatsAppSettingsPage() {
                         <Loader2 className="w-4 h-4 animate-spin" /> {c.loading}
                     </div>
                 ) : (
-                    <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
+                    <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-5">
                         <p className="text-sm text-gray-500 leading-relaxed">{m.description}</p>
 
                         <Field label={m.accessToken.label} hint={c.apiKeyHint}>
@@ -163,8 +163,8 @@ export default function PlatformWhatsAppSettingsPage() {
                     </div>
                 )}
 
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
-                    <h2 className="text-sm font-black uppercase tracking-widest text-gray-400">{m.test.title}</h2>
+                <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
+                    <h2 className="text-sm font-medium text-gray-500">{m.test.title}</h2>
                     <div className="flex gap-3">
                         <input
                             type="tel"

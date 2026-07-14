@@ -37,7 +37,7 @@ export default function PlatformAdminPage() {
 
     return (
         <PageShell>
-            <div className="space-y-8">
+            <div className="space-y-4">
                 <PageHeader
                     title={m.title}
                     subtitle={m.description}
@@ -50,7 +50,7 @@ export default function PlatformAdminPage() {
                 />
 
                 {error && (
-                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div>
+                    <div className="rounded-lg border border-red-200 bg-danger-light px-4 py-3 text-sm font-semibold text-danger-text">{error}</div>
                 )}
 
                 {isLoading ? (
@@ -64,8 +64,8 @@ export default function PlatformAdminPage() {
                             <StatCard icon={ShieldCheck} label={m.stats.activeSubscriptions} value={metrics.subscriptions.active} color="amber" />
                         </div>
 
-                        <div className="rounded-3xl border border-gray-100 bg-white p-6 space-y-4">
-                            <h2 className="text-sm font-black uppercase tracking-widest text-gray-400">{m.subscriptionBreakdown}</h2>
+                        <div className="rounded-lg border border-gray-100 bg-white p-4 shadow-sm space-y-4">
+                            <h2 className="text-xs font-medium text-gray-500">{m.subscriptionBreakdown}</h2>
                             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                                 <SubBadge label={m.subscriptionStatus.active} value={metrics.subscriptions.active} color="bg-emerald-100 text-emerald-700" />
                                 <SubBadge label={m.subscriptionStatus.trialing} value={metrics.subscriptions.trialing} color="bg-blue-100 text-blue-700" />
@@ -90,43 +90,43 @@ export default function PlatformAdminPage() {
 
 function StatCard({ icon: Icon, label, value, color }: { icon: any; label: string; value: number; color: string }) {
     const colors: Record<string, string> = {
-        blue: 'bg-blue-50 text-blue-600',
-        violet: 'bg-violet-50 text-violet-600',
-        emerald: 'bg-emerald-50 text-emerald-600',
-        amber: 'bg-amber-50 text-amber-600',
+        blue: 'bg-primary-light text-blue-700',
+        violet: 'bg-primary-light text-blue-700',
+        emerald: 'bg-success-light text-success-text',
+        amber: 'bg-warning-light text-warning-text',
     };
     return (
-        <div className="rounded-3xl border border-gray-100 bg-white p-5">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${colors[color]}`}>
+        <div className="rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center mb-3 ${colors[color]}`}>
                 <Icon className="w-4 h-4" />
             </div>
-            <p className="text-lg font-bold tracking-tight text-gray-950">{value.toLocaleString()}</p>
-            <p className="mt-1 text-xs font-bold uppercase tracking-widest text-gray-400">{label}</p>
+            <p className="text-xl font-bold text-gray-900">{value.toLocaleString()}</p>
+            <p className="mt-1 text-xs font-medium text-gray-500">{label}</p>
         </div>
     );
 }
 
 function SubBadge({ label, value, color }: { label: string; value: number; color: string }) {
     return (
-        <div className={`rounded-2xl px-4 py-3 flex items-center justify-between ${color}`}>
-            <span className="text-xs font-black uppercase tracking-widest">{label}</span>
-            <span className="text-xl font-black">{value}</span>
+        <div className={`rounded-lg px-4 py-3 flex items-center justify-between ${color}`}>
+            <span className="text-xs font-semibold">{label}</span>
+            <span className="text-xl font-bold">{value}</span>
         </div>
     );
 }
 
 function QuickLink({ href, icon: Icon, title, description }: { href: string; icon: any; title: string; description: string }) {
     return (
-        <Link href={href} className="group rounded-3xl border border-gray-100 bg-white p-6 hover:border-indigo-200 hover:bg-indigo-50/30 transition block">
+        <Link href={href} className="group rounded-lg border border-gray-100 bg-white p-4 shadow-sm hover:border-primary-border hover:bg-primary-light/30 transition block">
             <div className="flex items-start justify-between gap-4">
                 <div>
-                    <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3">
+                    <div className="w-9 h-9 rounded-lg bg-primary-light text-blue-700 flex items-center justify-center mb-3">
                         <Icon className="w-4 h-4" />
                     </div>
-                    <h3 className="text-sm font-black text-gray-900">{title}</h3>
+                    <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
                     <p className="mt-1 text-xs text-gray-500 leading-relaxed">{description}</p>
                 </div>
-                <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-indigo-400 mt-1 shrink-0 transition" />
+                <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-primary mt-1 shrink-0 transition" />
             </div>
         </Link>
     );

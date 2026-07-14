@@ -110,7 +110,7 @@ export default function PlatformAiSettingsPage() {
                     )}
                 />
 
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                     <strong>Platform-wide secret.</strong> This OpenRouter API key is used by all tenants for AI features. Keep it confidential. Get your key from{' '}
                     <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="underline">openrouter.ai/keys</a>.
                 </div>
@@ -120,7 +120,7 @@ export default function PlatformAiSettingsPage() {
                         <Loader2 className="w-4 h-4 animate-spin" /> Loading…
                     </div>
                 ) : (
-                    <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
+                    <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-5">
                         <Field
                             label="OpenRouter API Key"
                             hint="Leave blank to keep existing value. Stored encrypted. Falls back to OPENROUTER_API_KEY env var if unset."
@@ -158,8 +158,8 @@ export default function PlatformAiSettingsPage() {
                     </div>
                 )}
 
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
-                    <h2 className="text-sm font-black uppercase tracking-widest text-gray-400">Connection test</h2>
+                <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
+                    <h2 className="text-sm font-medium text-gray-500">Connection test</h2>
                     <p className="text-sm text-gray-500">
                         Sends a single short message through OpenRouter to verify the API key works. Uses ~10 tokens (negligible cost).
                     </p>
@@ -168,8 +168,8 @@ export default function PlatformAiSettingsPage() {
                     </Button>
                 </div>
 
-                <div className="bg-white rounded-2xl border border-gray-200 p-6">
-                    <h2 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-3">Pricing reference</h2>
+                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                    <h2 className="text-sm font-medium text-gray-500 mb-3">Pricing reference</h2>
                     <p className="text-sm text-gray-500 mb-3">
                         OpenRouter bills per model. Actual cost is recorded from each API response. See{' '}
                         <a href="https://openrouter.ai/models" target="_blank" rel="noopener noreferrer" className="text-purple-600 underline">openrouter.ai/models</a>{' '}

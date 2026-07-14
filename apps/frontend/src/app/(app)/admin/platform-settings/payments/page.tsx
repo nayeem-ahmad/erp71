@@ -71,9 +71,9 @@ function GatewayCard({
     children: React.ReactNode;
 }) {
     return (
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
+        <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-5">
             <div>
-                <h2 className="text-base font-black text-gray-800">{title}</h2>
+                <h2 className="text-base font-bold text-gray-800">{title}</h2>
                 <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>
             </div>
             <hr className="border-gray-100" />

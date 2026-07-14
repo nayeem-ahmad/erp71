@@ -132,7 +132,7 @@ export default function PlatformTenantFeaturesPage() {
                         <Loader2 className="w-4 h-4 animate-spin" /> {c.loading}
                     </div>
                 ) : (
-                    <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
+                    <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-5">
                         <p className="text-xs text-gray-500">{m.hint}</p>
                         {FEATURE_TOGGLES.map(({ key, labelKey }) => {
                             const feature = m[labelKey];

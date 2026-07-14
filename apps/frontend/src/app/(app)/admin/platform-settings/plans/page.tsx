@@ -231,7 +231,7 @@ export default function PlatformSubscriptionPlansPage() {
                 />
 
 
-                <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
                     {m.notice}
                 </div>
 
@@ -242,7 +242,7 @@ export default function PlatformSubscriptionPlansPage() {
                     </div>
                 ) : (
                     <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
-                        <div className="rounded-2xl border border-gray-200 bg-white p-2 space-y-1 h-fit">
+                        <div className="rounded-lg border border-gray-200 bg-white p-2 space-y-1 h-fit">
                             {plans.map((plan) => {
                                 const active = plan.code === selectedCode;
                                 return (
@@ -257,7 +257,7 @@ export default function PlatformSubscriptionPlansPage() {
                                         <div className="flex items-center justify-between gap-2">
                                             <span className="font-bold tracking-tight">{plan.name}</span>
                                             {!plan.is_active ? (
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                                <span className="text-[10px] font-medium text-gray-500">
                                                     {m.inactiveBadge}
                                                 </span>
                                             ) : null}
@@ -265,7 +265,7 @@ export default function PlatformSubscriptionPlansPage() {
                                         <p className="mt-1 text-[11px] font-medium text-gray-500">
                                             {formatBDT(plan.monthly_price)}{m.perMonth}
                                         </p>
-                                        <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                                        <p className="mt-1 text-[10px] font-medium text-gray-500">
                                             {formatMessage(m.subscribersLabel, { count: plan.subscriber_count })}
                                         </p>
                                     </button>
@@ -274,11 +274,11 @@ export default function PlatformSubscriptionPlansPage() {
                         </div>
 
                         {draft ? (
-                            <div className="rounded-2xl border border-gray-200 bg-white p-4 md:p-6 space-y-6">
+                            <div className="rounded-lg border border-gray-200 bg-white p-4 md:p-6 space-y-6">
                                 <div className="flex flex-wrap items-start justify-between gap-3">
                                     <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{selectedCode}</p>
-                                        <h2 className="mt-1 text-lg font-black tracking-tight text-gray-900">{m.editPlan}</h2>
+                                        <p className="text-[10px] font-medium text-gray-500">{selectedCode}</p>
+                                        <h2 className="mt-1 text-lg font-bold tracking-tight text-gray-900">{m.editPlan}</h2>
                                     </div>
                                     <Button type="button" onClick={handleSave} loading={saving} size="md">
                                         {saving ? t.admin.platformSettings.common.saving : t.admin.platformSettings.common.saveSettings}
@@ -287,7 +287,7 @@ export default function PlatformSubscriptionPlansPage() {
 
                                 <div className="grid gap-4 md:grid-cols-2">
                                     <label className="block">
-                                        <span className="text-xs font-bold uppercase tracking-widest text-gray-500">{m.fields.name}</span>
+                                        <span className="text-xs font-medium text-gray-500">{m.fields.name}</span>
                                         <input
                                             value={draft.name}
                                             onChange={(event) => setDraft((current) => current ? { ...current, name: event.target.value } : current)}
@@ -310,7 +310,7 @@ export default function PlatformSubscriptionPlansPage() {
                                     </label>
 
                                     <label className="block md:col-span-2">
-                                        <span className="text-xs font-bold uppercase tracking-widest text-gray-500">{m.fields.description}</span>
+                                        <span className="text-xs font-medium text-gray-500">{m.fields.description}</span>
                                         <textarea
                                             value={draft.description}
                                             onChange={(event) => setDraft((current) => current ? { ...current, description: event.target.value } : current)}
@@ -320,7 +320,7 @@ export default function PlatformSubscriptionPlansPage() {
                                     </label>
 
                                     <label className="block">
-                                        <span className="text-xs font-bold uppercase tracking-widest text-gray-500">{m.fields.monthlyPrice}</span>
+                                        <span className="text-xs font-medium text-gray-500">{m.fields.monthlyPrice}</span>
                                         <input
                                             type="number"
                                             min={0}
@@ -332,7 +332,7 @@ export default function PlatformSubscriptionPlansPage() {
                                     </label>
 
                                     <label className="block">
-                                        <span className="text-xs font-bold uppercase tracking-widest text-gray-500">{m.fields.yearlyPrice}</span>
+                                        <span className="text-xs font-medium text-gray-500">{m.fields.yearlyPrice}</span>
                                         <input
                                             type="number"
                                             min={0}
@@ -351,7 +351,7 @@ export default function PlatformSubscriptionPlansPage() {
                                 ) : null}
 
                                 <div className="space-y-3">
-                                    <h3 className="text-sm font-black uppercase tracking-widest text-gray-500">{m.marketingFeaturesTitle}</h3>
+                                    <h3 className="text-sm font-medium text-gray-500">{m.marketingFeaturesTitle}</h3>
                                     <p className="text-xs text-gray-500">{m.marketingFeaturesHint}</p>
                                     <div className="space-y-2">
                                         {draft.marketing_features.map((line, index) => (
@@ -395,10 +395,10 @@ export default function PlatformSubscriptionPlansPage() {
                                 </div>
 
                                 <div className="space-y-5">
-                                    <h3 className="text-sm font-black uppercase tracking-widest text-gray-500">{m.entitlementsTitle}</h3>
+                                    <h3 className="text-sm font-medium text-gray-500">{m.entitlementsTitle}</h3>
                                     {groupedEntitlements.map((group) => (
                                         <div key={group.key} className="space-y-3">
-                                            <h4 className="text-xs font-bold uppercase tracking-widest text-gray-400">
+                                            <h4 className="text-xs font-medium text-gray-500">
                                                 {m.entitlementGroups[group.key]}
                                             </h4>
                                             <div className="grid gap-3 md:grid-cols-2">

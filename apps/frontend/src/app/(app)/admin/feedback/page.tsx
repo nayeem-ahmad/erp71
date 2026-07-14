@@ -189,7 +189,7 @@ export default function AdminFeedbackPage() {
                                                     <button
                                                         type="button"
                                                         onClick={() => toggleExpand(item.id)}
-                                                        className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+                                                        className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-primary-hover"
                                                     >
                                                         {isExpanded ? (
                                                             <><ChevronUp className="w-3 h-3" /> Show less</>

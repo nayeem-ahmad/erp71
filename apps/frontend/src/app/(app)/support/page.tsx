@@ -151,7 +151,7 @@ export default function SupportPage() {
                             <button
                                 type="button"
                                 onClick={() => setShowNewForm(true)}
-                                className="inline-flex items-center gap-1 rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700"
+                                className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-hover"
                             >
                                 <Plus className="w-3 h-3" /> New
                             </button>
@@ -164,7 +164,7 @@ export default function SupportPage() {
                         </div>
                     )}
 
-                    <div className="flex-1 overflow-y-auto rounded-2xl border border-gray-100 bg-white divide-y divide-gray-100">
+                    <div className="flex-1 overflow-y-auto rounded-lg border border-gray-100 bg-white divide-y divide-gray-100">
                         {loadingThreads ? (
                             <div className="p-6 flex justify-center text-sm text-gray-400">
                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -177,11 +177,11 @@ export default function SupportPage() {
                                     key={thread.id}
                                     type="button"
                                     onClick={() => selectThread(thread.id)}
-                                    className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${activeThreadId === thread.id ? 'bg-indigo-50 border-l-2 border-indigo-500' : ''}`}
+                                    className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${activeThreadId === thread.id ? 'bg-primary-light border-l-2 border-primary' : ''}`}
                                 >
                                     <div className="flex items-center justify-between gap-2 mb-0.5">
                                         <p className="text-sm font-bold text-gray-900 truncate">{thread.subject}</p>
-                                        <span className={`shrink-0 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full ${thread.status === 'resolved' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                        <span className={`shrink-0 text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${thread.status === 'resolved' ? 'bg-success-light text-success-text' : 'bg-warning-light text-warning-text'}`}>
                                             {thread.status}
                                         </span>
                                     </div>
@@ -198,7 +198,7 @@ export default function SupportPage() {
                 </div>
 
                 {/* Message area */}
-                <div className="flex-1 flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white min-w-0">
+                <div className="flex-1 flex flex-col overflow-hidden rounded-lg border border-gray-100 bg-white min-w-0">
                     {!activeThreadId ? (
                         <div className="flex-1 flex flex-col items-center justify-center text-sm text-gray-400 gap-2">
                             <MessageSquare className="w-8 h-8 text-gray-200" />
@@ -209,7 +209,7 @@ export default function SupportPage() {
                             {/* Thread header */}
                             <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-4">
                                 <div className="min-w-0">
-                                    <p className="font-black text-sm text-gray-900 truncate">{threadInfo?.subject}</p>
+                                    <p className="font-semibold text-sm text-gray-900 truncate">{threadInfo?.subject}</p>
                                 </div>
                                 {threadInfo?.status === 'resolved' && (
                                     <span className="inline-flex items-center gap-1 text-xs font-bold text-green-700 bg-green-50 px-2 py-1 rounded-full">
@@ -231,12 +231,12 @@ export default function SupportPage() {
                                         const isOwner = msg.senderRole === 'owner';
                                         return (
                                             <div key={msg.id} className={`flex ${isOwner ? 'justify-end' : 'justify-start'}`}>
-                                                <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${isOwner ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
-                                                    <p className={`text-[10px] font-bold mb-1 ${isOwner ? 'text-indigo-200' : 'text-gray-500'}`}>
+                                                <div className={`max-w-[75%] rounded-lg px-4 py-2.5 ${isOwner ? 'bg-primary text-white' : 'bg-gray-100 text-gray-900'}`}>
+                                                    <p className={`text-[10px] font-bold mb-1 ${isOwner ? 'text-blue-100' : 'text-gray-500'}`}>
                                                         {isOwner ? 'You' : 'Platform Admin'}
                                                     </p>
                                                     <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
-                                                    <p className={`text-[10px] mt-1 ${isOwner ? 'text-indigo-300' : 'text-gray-400'}`}>
+                                                    <p className={`text-[10px] mt-1 ${isOwner ? 'text-blue-200' : 'text-gray-400'}`}>
                                                         {new Date(msg.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                                                     </p>
                                                 </div>
@@ -262,13 +262,13 @@ export default function SupportPage() {
                                             }}
                                             placeholder="Type a message… (Enter to send)"
                                             rows={2}
-                                            className="flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:bg-white"
+                                            className="flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-primary/40 focus:bg-white"
                                         />
                                         <button
                                             type="button"
                                             onClick={sendReply}
                                             disabled={sending || !replyBody.trim()}
-                                            className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40"
+                                            className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-xl bg-primary text-white hover:bg-primary-hover disabled:opacity-40"
                                         >
                                             {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                                         </button>
