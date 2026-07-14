@@ -1,6 +1,6 @@
 'use client';
 
-import { useI18n, formatMessage } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import { useEffect, useRef, useState } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
@@ -22,7 +22,7 @@ export default function FeedbackWidget() {
     const [message, setMessage] = useState('');
     const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
     const [errorMsg, setErrorMsg] = useState('');
-    const cardRef = useRef<HTMLDivElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
 
     // Close on Escape
     useEffect(() => {
@@ -38,11 +38,11 @@ export default function FeedbackWidget() {
     useEffect(() => {
         if (!open) return;
         const onPointer = (e: MouseEvent) => {
-            if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
+            if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
                 closeWidget();
             }
         };
-        // Use setTimeout to avoid immediately closing when the button click opens the card
+        // Use setTimeout to avoid immediately closing when the button click opens the panel
         const id = setTimeout(() => document.addEventListener('mousedown', onPointer), 0);
         return () => {
             clearTimeout(id);
@@ -85,21 +85,18 @@ export default function FeedbackWidget() {
     }
 
     return (
-        <div className="flex flex-col items-end gap-2">
-            {/* Slide-up card */}
-            {open && (
-                <div
-                    ref={cardRef}
-                    className="w-[calc(100vw-2.5rem)] max-w-80 rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden animate-slide-up"
-                    style={{ animation: 'slideUp 0.18s ease-out' }}
-                >
-                    <style>{`
-                        @keyframes slideUp {
-                            from { opacity: 0; transform: translateY(12px); }
-                            to   { opacity: 1; transform: translateY(0); }
-                        }
-                    `}</style>
+        <div className="relative" ref={panelRef}>
+            <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                className="relative p-2 text-gray-400 hover:text-gray-600 cursor-pointer transition-colors rounded-lg hover:bg-gray-100"
+                aria-label={m.openAria}
+            >
+                <MessageSquare className="w-5 h-5" />
+            </button>
 
+            {open && (
+                <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden">
                     {status === 'success' ? (
                         <div className="flex flex-col items-center justify-center py-10 px-6 text-center gap-3">
                             <span className="text-3xl">🎉</span>
@@ -178,16 +175,6 @@ export default function FeedbackWidget() {
                     )}
                 </div>
             )}
-
-            {/* Floating pill button */}
-            <button
-                onClick={() => setOpen((v) => !v)}
-                className="flex items-center gap-1.5 bg-white text-gray-700 border border-gray-200 shadow-md hover:shadow-lg hover:border-gray-300 px-3.5 py-2 rounded-full text-xs font-semibold transition-all hover:scale-105 active:scale-95"
-                aria-label={m.openAria}
-            >
-                <MessageSquare className="w-3.5 h-3.5 text-blue-500" />
-                {m.button}
-            </button>
         </div>
     );
 }
