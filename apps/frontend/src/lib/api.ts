@@ -1279,6 +1279,21 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    setAdminTenantBusinessType: (tenantId: string, businessType: string) => fetchWithAuth(`/admin/tenants/${tenantId}/business-type`, {
+        method: 'PATCH',
+        body: JSON.stringify({ businessType }),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    importAdminTenantCatalog: (tenantId: string): Promise<{
+        business_type: string;
+        created: number;
+        skipped: number;
+        groups: number;
+        subgroups: number;
+        brands: number;
+    }> => fetchWithAuth(`/admin/tenants/${tenantId}/catalog-import`, {
+        method: 'POST',
+    }),
     suspendTenant: (tenantId: string, reason?: string) => fetchWithAuth(`/admin/tenants/${tenantId}/suspend`, {
         method: 'PATCH',
         body: JSON.stringify({ reason }),

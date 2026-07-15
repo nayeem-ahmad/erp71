@@ -10,6 +10,7 @@ export type TenantRecord = {
     created_at: string;
     localization_enabled?: boolean;
     secondary_locale?: SecondaryLocale | null;
+    business_type?: string | null;
     owner: { id: string; email: string; name?: string | null } | null;
     stores: Array<{ id: string; name: string; address?: string | null; created_at?: string }>;
     users: Array<{ id: string; email: string; name?: string | null; role: string; joined_at?: string }>;
