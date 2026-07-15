@@ -693,9 +693,14 @@ export class AdminTenantsService {
         sendPasswordResetAfterTx?.();
 
         if (dto.businessType) {
-            seedBusinessTypeTemplate(this.db, tenant.id, dto.businessType).catch((err: any) =>
-                console.error(`[AdminTenantsService] Failed to seed business type template:`, err),
-            );
+            // Deliberately not awaited; see the note in AuthService.setupTenant.
+            try {
+                void seedBusinessTypeTemplate(this.db, tenant.id, dto.businessType).catch((err: any) =>
+                    console.error(`[AdminTenantsService] Failed to seed business type template:`, err),
+                );
+            } catch (err) {
+                console.error(`[AdminTenantsService] Failed to start business type template seed:`, err);
+            }
         }
 
         await this.auditService.log('tenant.admin_create', 'Tenant', { userId: adminUserId }, tenant.id, {

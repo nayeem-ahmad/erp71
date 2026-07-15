@@ -1,5 +1,6 @@
 import { IsBoolean, IsEmail, IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, Max, Min, MinLength, ValidateIf } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
+import { BUSINESS_TYPE_VALUES } from '@erp71/shared-types';
 
 export class ListAdminTenantsQueryDto {
     @IsOptional() @IsString() search?: string;
@@ -95,7 +96,7 @@ export class CreateAdminTenantDto {
     address?: string;
 
     @IsOptional()
-    @IsString()
+    @IsIn(BUSINESS_TYPE_VALUES)
     businessType?: string;
 
     @IsIn(['FREE', 'BASIC', 'ACCOUNTING', 'STANDARD', 'PREMIUM'])
