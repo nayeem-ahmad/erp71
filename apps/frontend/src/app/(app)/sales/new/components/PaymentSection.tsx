@@ -24,7 +24,15 @@ interface DefinedMethod {
 // string (bank/card/wallet/credit → "bank", else "cash"). Keep the submitted
 // `method` canonical so accounting posting stays correct regardless of the
 // friendly name the tenant gave a defined method.
+// Keyed by the `type` values actually stored on PaymentMethod, which are the
+// backend PaymentMethodType enum values ('Cash' | 'Mobile Wallet' | 'Card' |
+// 'Bank'). Legacy uppercase keys are kept so rows written before the settings
+// form was aligned to the enum still classify correctly.
 const TYPE_TO_CANONICAL: Record<string, string> = {
+    'Cash': 'Cash',
+    'Mobile Wallet': 'Mobile Wallet',
+    'Card': 'Card',
+    'Bank': 'Bank',
     CASH: 'Cash',
     MOBILE_WALLET: 'Mobile Wallet',
     CARD: 'Card',
@@ -32,10 +40,10 @@ const TYPE_TO_CANONICAL: Record<string, string> = {
 };
 
 const GENERIC_METHODS = [
-    { name: 'Cash', type: 'CASH' },
-    { name: 'Mobile Wallet', type: 'MOBILE_WALLET' },
-    { name: 'Card', type: 'CARD' },
-    { name: 'Bank', type: 'BANK' },
+    { name: 'Cash', type: 'Cash' },
+    { name: 'Mobile Wallet', type: 'Mobile Wallet' },
+    { name: 'Card', type: 'Card' },
+    { name: 'Bank', type: 'Bank' },
 ];
 
 const canonicalFor = (type: string) => TYPE_TO_CANONICAL[type] ?? 'Cash';

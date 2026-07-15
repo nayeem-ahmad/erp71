@@ -33,6 +33,7 @@ export default function FrequentQuickLinks({ accountingOnlyMode = false }: Frequ
     const accountingCopy = t.accounting.links;
 
     const retailLinks: QuickLink[] = [
+        { key: 'sales-entry', href: routes.sales.new, label: copy.quickLinks.salesEntry, icon: FileText, accent: 'bg-sky-50 text-sky-700 border-sky-100' },
         { key: 'sales', href: '/sales', label: copy.quickLinks.sales, icon: TrendingUp, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
         { key: 'customer-payment', href: '/sales/customer-payments', label: copy.quickLinks.customerPayment, icon: Wallet, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
         { key: 'supplier-payment', href: '/purchases/supplier-payments', label: copy.quickLinks.supplierPayment, icon: Wallet, accent: 'bg-violet-50 text-violet-700 border-violet-100' },

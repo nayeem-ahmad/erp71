@@ -22,12 +22,13 @@ jest.mock('@/lib/api', () => ({
 }));
 
 import { api } from '@/lib/api';
+import { PAYMENT_METHOD_TYPE_VALUES } from '@erp71/shared-types';
 
 const mockApi = api as jest.Mocked<typeof api>;
 
 const sampleMethods = [
-    { id: 'm1', name: 'bKash', type: 'MOBILE_WALLET', is_active: true, show_on_entry: true, sort_order: 2 },
-    { id: 'm2', name: 'Cash', type: 'CASH', is_active: true, show_on_entry: true, sort_order: 1 },
+    { id: 'm1', name: 'bKash', type: 'Mobile Wallet', is_active: true, show_on_entry: true, sort_order: 2 },
+    { id: 'm2', name: 'Cash', type: 'Cash', is_active: true, show_on_entry: true, sort_order: 1 },
 ];
 
 beforeEach(() => {
@@ -87,5 +88,40 @@ describe('PaymentMethodsSettingsPage', () => {
                 expect.objectContaining({ show_on_entry: false, sort_order: 3 }),
             );
         });
+    });
+
+    // Regression: the form used to send 'CASH'/'MOBILE_WALLET' while the backend
+    // DTO validates against the PaymentMethodType *values* ('Cash', 'Mobile
+    // Wallet', ...). Every create 400'd, so no tenant ever had payment methods.
+    it('submits a type the backend PaymentMethodType contract accepts', async () => {
+        mockApi.getPaymentMethods.mockResolvedValue([]);
+        mockApi.createPaymentMethod.mockResolvedValue({} as never);
+        render(<PaymentMethodsSettingsPage />);
+
+        fireEvent.click(await screen.findByRole('button', { name: /add method/i }));
+        fireEvent.change(screen.getByPlaceholderText('e.g. bKash, Main Cash'), {
+            target: { value: 'Main Till' },
+        });
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+        });
+
+        await waitFor(() => expect(mockApi.createPaymentMethod).toHaveBeenCalled());
+        const payload = mockApi.createPaymentMethod.mock.calls[0][0] as { type: string };
+        expect(PAYMENT_METHOD_TYPE_VALUES).toContain(payload.type);
+    });
+
+    it('offers every shared PaymentMethodType value as a selectable option', async () => {
+        mockApi.getPaymentMethods.mockResolvedValue([]);
+        render(<PaymentMethodsSettingsPage />);
+
+        fireEvent.click(await screen.findByRole('button', { name: /add method/i }));
+        const options = screen
+            .getAllByRole('option')
+            .map((o) => (o as HTMLOptionElement).value);
+
+        for (const value of PAYMENT_METHOD_TYPE_VALUES) {
+            expect(options).toContain(value);
+        }
     });
 });

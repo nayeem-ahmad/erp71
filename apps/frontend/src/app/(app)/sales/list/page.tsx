@@ -229,7 +229,7 @@ export default function SalesPage() {
                     actions={
                         <Link
                             href={routes.sales.new}
-                            className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-colors"
+                            className="bg-primary hover:bg-primary-hover text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-colors"
                         >
                             <FileText className="w-4 h-4 mr-2" />
                             {t.sidebar.items.newSalesEntry}

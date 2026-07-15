@@ -1,11 +1,10 @@
 import { IsString, IsOptional, IsBoolean, IsInt, IsEnum } from 'class-validator';
+import { PaymentMethodType } from '@erp71/shared-types';
 
-export enum PaymentMethodType {
-  CASH = 'Cash',
-  MOBILE_WALLET = 'Mobile Wallet',
-  CARD = 'Card',
-  BANK = 'Bank',
-}
+// Re-exported so existing importers (controller, specs) keep working. The
+// values live in @erp71/shared-types so the settings form validates against
+// exactly what this DTO accepts — they must never drift apart.
+export { PaymentMethodType };
 
 export class CreatePaymentMethodDto {
   @IsEnum(PaymentMethodType)

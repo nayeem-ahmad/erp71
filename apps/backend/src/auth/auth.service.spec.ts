@@ -54,6 +54,7 @@ describe('AuthService', () => {
         tenantUser: { create: jest.fn() },
         tenantRole: { create: jest.fn() },
         tenantRolePermission: { createMany: jest.fn() },
+        paymentMethod: { createMany: jest.fn() },
         store: { create: jest.fn() },
         tenantSubscription: { create: jest.fn(), findUnique: jest.fn().mockResolvedValue(null) },
         userStoreAccess: { create: jest.fn() },
@@ -197,6 +198,22 @@ describe('AuthService', () => {
 
         expect(result.access_token).toBe('jwt-token');
         expect(db.tenantSubscription.create).toHaveBeenCalled();
+
+        // A tenant with no payment methods falls back to generic options on the
+        // sales-entry UI, leaving Show-on-Entry/Serial inert — so signup must
+        // provision the defaults.
+        expect(db.paymentMethod.createMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                skipDuplicates: true,
+                data: expect.arrayContaining([
+                    expect.objectContaining({ tenant_id: 'tenant-1', name: 'Cash', type: 'Cash', sort_order: 1, show_on_entry: true }),
+                    expect.objectContaining({ tenant_id: 'tenant-1', name: 'bKash', type: 'Mobile Wallet', sort_order: 2 }),
+                    expect.objectContaining({ tenant_id: 'tenant-1', name: 'Nagad', type: 'Mobile Wallet', sort_order: 3 }),
+                    expect.objectContaining({ tenant_id: 'tenant-1', name: 'Card', type: 'Card', sort_order: 4 }),
+                    expect.objectContaining({ tenant_id: 'tenant-1', name: 'Bank', type: 'Bank', sort_order: 5 }),
+                ]),
+            }),
+        );
     });
 
     it('provisionTenant creates UserStoreAccess and UserStorePermission for OWNER', async () => {
