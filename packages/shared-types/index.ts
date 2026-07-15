@@ -8,6 +8,24 @@ export const UserRole = {
 } as const;
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
+/**
+ * Payment method types — the single source of truth for both the backend DTO
+ * validator and the settings form. These exact strings are what get stored in
+ * `PaymentMethod.type` and mapped to a canonical accounting string on the
+ * sales-entry UI, so the API and the form must never drift apart.
+ */
+export const PaymentMethodType = {
+  CASH: "Cash",
+  MOBILE_WALLET: "Mobile Wallet",
+  CARD: "Card",
+  BANK: "Bank",
+} as const;
+export type PaymentMethodType =
+  (typeof PaymentMethodType)[keyof typeof PaymentMethodType];
+export const PAYMENT_METHOD_TYPE_VALUES = Object.values(
+  PaymentMethodType,
+) as PaymentMethodType[];
+
 export const StorePermission = {
   // Product & Catalog
   VIEW_PRODUCT_CATALOG: "VIEW_PRODUCT_CATALOG",

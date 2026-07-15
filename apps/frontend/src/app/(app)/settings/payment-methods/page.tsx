@@ -9,6 +9,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import { toast } from '@/lib/toast';
 import { Button, Field, Input, PageShell, Select } from '@/components/ui';
+import { PAYMENT_METHOD_TYPE_VALUES, PaymentMethodType } from '@erp71/shared-types';
 
 const IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
@@ -33,12 +34,19 @@ interface PaymentMethod {
     sort_order: number;
 }
 
-const PAYMENT_TYPES = [
-    { value: 'CASH', label: 'Cash' },
-    { value: 'MOBILE_WALLET', label: 'Mobile Wallet (bKash / Nagad)' },
-    { value: 'CARD', label: 'Card' },
-    { value: 'BANK', label: 'Bank Transfer' },
-];
+// Values come from the shared PaymentMethodType contract so they always match
+// what the backend DTO validates — a mismatch here 400s every create.
+const PAYMENT_TYPE_LABELS: Record<PaymentMethodType, string> = {
+    [PaymentMethodType.CASH]: 'Cash',
+    [PaymentMethodType.MOBILE_WALLET]: 'Mobile Wallet (bKash / Nagad)',
+    [PaymentMethodType.CARD]: 'Card',
+    [PaymentMethodType.BANK]: 'Bank Transfer',
+};
+
+const PAYMENT_TYPES = PAYMENT_METHOD_TYPE_VALUES.map((value) => ({
+    value,
+    label: PAYMENT_TYPE_LABELS[value],
+}));
 
 interface MethodFormProps {
     initial?: Partial<PaymentMethod>;
@@ -49,7 +57,7 @@ interface MethodFormProps {
 
 function MethodForm({ initial, accounts, onSave, onCancel }: MethodFormProps) {
     const [name, setName] = useState(initial?.name ?? '');
-    const [type, setType] = useState(initial?.type ?? 'CASH');
+    const [type, setType] = useState<string>(initial?.type ?? PaymentMethodType.CASH);
     const [accountId, setAccountId] = useState(initial?.account_id ?? '');
     const [isActive, setIsActive] = useState(initial?.is_active ?? true);
     const [showOnEntry, setShowOnEntry] = useState(initial?.show_on_entry ?? true);

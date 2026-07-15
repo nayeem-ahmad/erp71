@@ -2,6 +2,7 @@ jest.mock('@erp71/database', () => ({
     bootstrapDefaultAccountingForTenant: jest.fn().mockResolvedValue(undefined),
     seedBusinessTypeTemplate: jest.fn().mockResolvedValue(undefined),
     seedDefaultTenantRoles: jest.fn().mockResolvedValue(undefined),
+    seedDefaultPaymentMethods: jest.fn().mockResolvedValue(undefined),
     PrismaClient: class MockPrismaClient {},
 }));
 
@@ -77,6 +78,7 @@ describe('AdminTenantsService', () => {
         update: jest.fn(),
       },
       tenantUser: { create: jest.fn() },
+      paymentMethod: { createMany: jest.fn() },
       store: { create: jest.fn() },
       subscriptionPlan: { findUnique: jest.fn() },
       tenantSubscription: {

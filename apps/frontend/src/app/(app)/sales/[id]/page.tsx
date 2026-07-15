@@ -34,7 +34,14 @@ const SALE_STATUSES = ['COMPLETED', 'REFUNDED', 'PARTIAL_REFUND'];
 // path. Keep the submitted value canonical per payment-method `type` so
 // accounting classification stays correct if/when the update path adopts the
 // same posting logic (mirrors sales/new/components/PaymentSection.tsx).
+// Keyed by the `type` values stored on PaymentMethod (the backend
+// PaymentMethodType enum values); legacy uppercase keys retained for rows
+// written before the settings form was aligned to the enum.
 const TYPE_TO_CANONICAL: Record<string, string> = {
+    'Cash': 'Cash',
+    'Mobile Wallet': 'Mobile Wallet',
+    'Card': 'Card',
+    'Bank': 'Bank',
     CASH: 'Cash',
     MOBILE_WALLET: 'Mobile Wallet',
     CARD: 'Card',

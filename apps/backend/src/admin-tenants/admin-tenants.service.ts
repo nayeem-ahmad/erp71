@@ -6,7 +6,7 @@ import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
-import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate } from '@erp71/database';
+import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate, seedDefaultPaymentMethods, seedDefaultTenantRoles } from '@erp71/database';
 import {
     DEFAULT_MOBILE_COUNTRY_CODE,
     ROLE_DEFAULT_PERMISSIONS,
@@ -23,7 +23,6 @@ import { SmsCreditService } from '../sms/sms-credit.service';
 import { ledgerEventDelta } from './ledger-balance.util';
 import { REMINDER_EVENT_TYPES } from './reminder-event-types';
 import { applySubscriptionDiscount } from '../billing/discount.util';
-import { seedDefaultTenantRoles } from '@erp71/database';
 import {
     ListAdminTenantsQueryDto,
     ListAdminUsersQueryDto,
@@ -611,6 +610,7 @@ export class AdminTenantsService {
             });
 
             await seedDefaultTenantRoles(tx, tenant.id);
+            await seedDefaultPaymentMethods(tx, tenant.id);
 
             await tx.tenantUser.create({
                 data: { tenant_id: tenant.id, user_id: ownerId, role: 'OWNER' },
