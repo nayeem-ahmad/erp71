@@ -23,11 +23,19 @@ interface TemplateData {
   groups: GroupEntry[];
 }
 
+export interface CatalogImportSummary {
+  created: number;
+  skipped: number;
+  groups: number;
+  subgroups: number;
+  brands: number;
+}
+
 export async function seedBusinessTypeTemplate(
   prisma: any,
   tenantId: string,
   businessType: string,
-): Promise<void> {
+): Promise<CatalogImportSummary> {
   const templatePath = path.join(
     __dirname,
     `${businessType.toLowerCase().replace(/_/g, '-')}.json`,
@@ -35,7 +43,7 @@ export async function seedBusinessTypeTemplate(
 
   if (!fs.existsSync(templatePath)) {
     console.log(`No product template found for business type: ${businessType}`);
-    return;
+    return { created: 0, skipped: 0, groups: 0, subgroups: 0, brands: 0 };
   }
 
   const template: TemplateData = JSON.parse(fs.readFileSync(templatePath, 'utf-8'));
@@ -62,6 +70,10 @@ export async function seedBusinessTypeTemplate(
   }
 
   // Create groups → subgroups → products
+  let created = 0;
+  let skipped = 0;
+  let subgroupCount = 0;
+
   for (const groupData of template.groups) {
     const group = await prisma.productGroup.upsert({
       where: { tenant_id_name: { tenant_id: tenantId, name: groupData.name } },
@@ -70,6 +82,7 @@ export async function seedBusinessTypeTemplate(
     });
 
     for (const subgroupData of groupData.subgroups) {
+      subgroupCount += 1;
       const subgroup = await prisma.productSubgroup.upsert({
         where: { group_id_name: { group_id: group.id, name: subgroupData.name } },
         create: { tenant_id: tenantId, group_id: group.id, name: subgroupData.name },
@@ -96,17 +109,24 @@ export async function seedBusinessTypeTemplate(
           brand_id: p.brand ? (brandMap.get(p.brand) ?? null) : null,
         }));
 
+      created += toCreate.length;
+      skipped += subgroupData.products.length - toCreate.length;
+
       if (toCreate.length > 0) {
         await prisma.product.createMany({ data: toCreate, skipDuplicates: true });
       }
     }
   }
 
-  const total = template.groups.reduce(
-    (acc, g) => acc + g.subgroups.reduce((a, sg) => a + sg.products.length, 0),
-    0,
-  );
   console.log(
-    `Seeded ${businessType} template for tenant ${tenantId}: ${total} products across ${template.groups.length} groups`,
+    `Seeded ${businessType} template for tenant ${tenantId}: ${created} products created, ${skipped} skipped, across ${template.groups.length} groups`,
   );
+
+  return {
+    created,
+    skipped,
+    groups: template.groups.length,
+    subgroups: subgroupCount,
+    brands: brandNames.size,
+  };
 }
