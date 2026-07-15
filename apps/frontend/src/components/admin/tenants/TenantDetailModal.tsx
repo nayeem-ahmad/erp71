@@ -204,10 +204,12 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
         setError('');
         try {
             const summary = await api.importAdminTenantCatalog(tenant.id);
+            await loadTenant(tenant.id);
             onToast(formatMessage(bt.imported, {
                 created: String(summary.created),
                 skipped: String(summary.skipped),
             }));
+            onChanged();
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : bt.importFailed);
         } finally {

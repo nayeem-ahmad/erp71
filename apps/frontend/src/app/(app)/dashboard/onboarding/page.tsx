@@ -6,6 +6,7 @@ import {
     Package, ShoppingCart, CheckCircle2, ArrowRight, Plus, Zap, Store, Loader2,
     Stethoscope, ShoppingBag, Computer, Pill,
 } from 'lucide-react';
+import { BUSINESS_TYPE_LABELS, BUSINESS_TYPE_VALUES, BUSINESS_TYPES_WITH_TEMPLATE, type BusinessType } from '@erp71/shared-types';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 
@@ -52,12 +53,20 @@ function StepIndicator({ current, labels }: { current: Step; labels: Record<Step
     );
 }
 
-const BUSINESS_TYPES = [
-    { value: 'SURGICAL_MEDICAL', label: 'Surgical / Medical', icon: Stethoscope, description: '1,173 products pre-loaded' },
-    { value: 'PHARMACY', label: 'Pharmacy', icon: Pill, description: 'Coming soon' },
-    { value: 'GROCERY', label: 'Grocery', icon: ShoppingBag, description: 'Coming soon' },
-    { value: 'COMPUTER_HARDWARE', label: 'Computer Hardware', icon: Computer, description: 'Coming soon' },
-] as const;
+/** Icon + description per business type — not part of the shared value/label source of truth since icons are React components. */
+const BUSINESS_TYPE_DISPLAY: Record<BusinessType, { icon: typeof Stethoscope; description: string }> = {
+    SURGICAL_MEDICAL: { icon: Stethoscope, description: '1,173 products pre-loaded' },
+    PHARMACY: { icon: Pill, description: 'Coming soon' },
+    GROCERY: { icon: ShoppingBag, description: 'Coming soon' },
+    COMPUTER_HARDWARE: { icon: Computer, description: 'Coming soon' },
+};
+
+const BUSINESS_TYPES = BUSINESS_TYPE_VALUES.map((value) => ({
+    value,
+    label: BUSINESS_TYPE_LABELS[value],
+    icon: BUSINESS_TYPE_DISPLAY[value].icon,
+    description: BUSINESS_TYPE_DISPLAY[value].description,
+}));
 
 function StoreStep({
     existingStore,
@@ -170,7 +179,7 @@ function StoreStep({
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Business Type <span className="text-gray-400 font-normal">(optional — pre-loads products)</span></label>
                 <div className="grid grid-cols-2 gap-2">
                     {BUSINESS_TYPES.map(({ value, label, icon: Icon, description }) => {
-                        const isAvailable = value === 'SURGICAL_MEDICAL';
+                        const isAvailable = BUSINESS_TYPES_WITH_TEMPLATE.includes(value);
                         const isSelected = businessType === value;
                         return (
                             <button

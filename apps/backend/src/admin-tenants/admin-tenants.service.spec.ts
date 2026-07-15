@@ -1079,7 +1079,7 @@ describe('AdminTenantsService', () => {
           );
       });
 
-      it('is re-runnable and reports skipped SKUs on a second run', async () => {
+      it('passes the seeder\'s skipped counts through to the response', async () => {
           db.tenant.findFirst.mockResolvedValue(makeTenant({ id: 't1', business_type: 'SURGICAL_MEDICAL' }));
           (seedBusinessTypeTemplate as jest.Mock).mockResolvedValue({
               created: 0, skipped: 1173, groups: 24, subgroups: 103, brands: 42,

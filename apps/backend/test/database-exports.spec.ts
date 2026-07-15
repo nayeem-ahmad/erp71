@@ -22,4 +22,11 @@ describe('@erp71/database runtime exports', () => {
     ])('exports %s as a function from index.js', (name) => {
         expect(typeof database[name]).toBe('function');
     });
+
+    it.each([
+        'DEMO_ACCOUNT_EMAIL',
+        'DEMO_ACCOUNT_PASSWORD',
+    ])('exports %s as a defined (non-function) value from index.js', (name) => {
+        expect(database[name]).not.toBeUndefined();
+    });
 });
