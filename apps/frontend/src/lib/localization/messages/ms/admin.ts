@@ -202,7 +202,7 @@ export const adminMessages = {
                 importConfirm: 'Import katalog permulaan untuk {name}? Ini mungkin mengambil masa beberapa saat.',
                 imported: '{created} produk telah diimport ({skipped} sudah wujud).',
                 importFailed: 'Gagal mengimport katalog.',
-                noTemplate: 'Tiada katalog permulaan tersedia untuk jenis perniagaan ini lagi.',
+                noTemplate: 'Katalog permulaan belum tersedia untuk jenis perniagaan ini.',
                 noTypeSet: 'Tetapkan jenis perniagaan sebelum mengimport katalog.',
             },
             navLayoutControls: {

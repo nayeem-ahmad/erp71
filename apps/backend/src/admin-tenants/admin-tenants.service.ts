@@ -1344,6 +1344,7 @@ export class AdminTenantsService {
             default_locale: tenant.default_locale,
             localization_enabled: tenant.localization_enabled,
             secondary_locale: tenant.secondary_locale,
+            business_type: tenant.business_type ?? null,
             owner: tenant.owner
                 ? {
                       id: tenant.owner.id,

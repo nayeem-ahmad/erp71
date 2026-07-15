@@ -317,6 +317,14 @@ describe('AdminTenantsService', () => {
 
       expect(result.stores[0].address).toBe('123 Dhaka');
     });
+
+    it('includes business_type in the response', async () => {
+      db.tenant.findFirst.mockResolvedValue(makeTenant({ business_type: 'SURGICAL_MEDICAL' }));
+
+      const result = await service.getTenant('t-1');
+
+      expect(result.business_type).toBe('SURGICAL_MEDICAL');
+    });
   });
 
   /* ------------------------------------------------------------------ */
