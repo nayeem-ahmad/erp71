@@ -1028,6 +1028,9 @@ describe('AdminTenantsService', () => {
           await expect(
               service.setBusinessType('nope', { businessType: 'SURGICAL_MEDICAL' }, 'admin1'),
           ).rejects.toBeInstanceOf(NotFoundException);
+          expect(db.tenant.findFirst).toHaveBeenCalledWith(
+              expect.objectContaining({ where: { id: 'nope', deleted_at: null } }),
+          );
           expect(db.tenant.update).not.toHaveBeenCalled();
       });
 
@@ -1084,6 +1087,9 @@ describe('AdminTenantsService', () => {
           db.tenant.findFirst.mockResolvedValue(null);
 
           await expect(service.importCatalog('nope', 'admin1')).rejects.toBeInstanceOf(NotFoundException);
+          expect(db.tenant.findFirst).toHaveBeenCalledWith(
+              expect.objectContaining({ where: { id: 'nope', deleted_at: null } }),
+          );
           expect(seedBusinessTypeTemplate).not.toHaveBeenCalled();
       });
 
