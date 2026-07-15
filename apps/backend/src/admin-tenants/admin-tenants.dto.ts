@@ -180,3 +180,8 @@ export class AdminResetPlatformUserPasswordDto {
     @MinLength(8)
     newPassword: string;
 }
+
+export class SetAdminTenantBusinessTypeDto {
+    @IsIn(BUSINESS_TYPE_VALUES)
+    businessType: string;
+}
