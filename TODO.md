@@ -180,6 +180,22 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [ ] Backend has no e2e specs at all (`find apps/backend -name "*.e2e-spec.ts"` is empty) despite `supertest` being a devDependency, so guard wiring on admin routes is covered by no test — the new `business-type` / `catalog-import` routes' `PlatformAdminGuard` was verified only by a one-off manual 401 check
 - [ ] Local dev environment drift: root `.env` `DATABASE_URL` points at `localhost:5432`, but the `erp71-db-1` container publishes **5434** (host 5432 is a different, migrated-but-empty Postgres; `kraftize-postgres` holds 5433). Separately, `erp71-db-1`'s `erp71` database is behind `schema.prisma` (missing `Product.type`, `TenantSubscription.discount_type`) and has no `_prisma_migrations` table, so `GET /admin/tenants/:id` 500s against it
 
+### Six-month demo data generation (2026-07-16)
+
+Spec: `docs/superpowers/specs/2026-07-16-six-month-demo-data-design.md` (approach B — primitive-level generator in the backend)
+
+- [ ] New `apps/backend/src/demo-data/` module: chronological, stock-aware 6-month simulator (~2,700 sales) driving the real `applyInventoryMovement` + `autoPostFromRules` with explicit dates. Move `seedTenantDemoData` out of `packages/database` (barrel **and** `index.js` in lockstep — see the `.js` duplicate item above); `seedDemoAccount` stays as scaffolding
+- [ ] Add optional `occurredAt?: Date` to `applyInventoryMovement` (`apps/backend/src/database/inventory.utils.ts:121`) so `InventoryMovement.created_at` can be backdated — additive, no existing caller passes it
+- [ ] Demo catalogs for all 4 business types (`GROCERY`, `PHARMACY`, `SURGICAL_MEDICAL`, `COMPUTER_HARDWARE`) with sell price, reorder level, popularity weight, real `unit_type`; `SURGICAL_MEDICAL` sourced from the existing `templates/surgical-medical.json`. Demo data currently ignores `business_type` entirely — a surgical tenant gets rice and soap
+- [ ] Seed `ProductPrice` rows — `sales.service.ts` snapshots `unit_cost_at_sale` from them, so today's demo sales all record zero cost and the P&L shows 100% margin
+- [ ] `DemoDataBatch` model + in-process background execution with DB-backed progress (no queue infra exists; `JobRun` is cron-only, no Redis). `POST /tenants/demo-data` → 202 + poll `GET /tenants/demo-data/status`; 409 while RUNNING; mark orphaned RUNNING batches FAILED on module init
+- [ ] Settings → Data UI: confirm alert before appending a second demo batch (today the button has **no** confirmation at all), plus phase label + progress bar while polling; i18n en/bn/ms
+- [ ] Extract `ConfirmDialog` out of `settings/data/page.tsx:19-89` into `@/components/ui`, make `expected` optional (plain confirm vs type-to-confirm), and fix its hardcoded English `"Confirm"`/`"Cancel"`/`Type "..."` strings
+- [ ] **Bug** — `sales-returns.service.ts` decrements `total_spent` (`:80`) but never writes a `CustomerCreditTransaction` or adjusts `Customer.due_balance`: returning a credit sale leaves the customer still owing for returned goods
+- [ ] **Bug** — `purchase-returns.service.ts` never touches `SupplierCreditTransaction` / `supplier.due_balance` at all
+- [ ] **Bug** — both return services pass `referenceId: returnNumber` (a string like `RET-...`) to `applyInventoryMovement` where every other caller passes the row id, breaking movement→source traceability
+- [ ] Integration test asserting the dataset's invariants: debits == credits; `ProductStock` == sum of `InventoryMovement`; `due_balance` == sum of credit transactions; all dates within `[start, end]`; and no voucher/movement/payment stamped *today* for a backdated sale
+
 ### Subscription Plans (platform admin)
 - [x] Phase 2 — Entitlement registry drives guards: `planRank` + `aiCreditsMonthly` in DB `features_json`; `SubscriptionAccessGuard` + `AiService` read from entitlements; layout sidebar uses `normalizePlanFeatures` not hardcoded plan codes — done 2026-07-02
 - [x] Phase 3 — `accountingOnly` entitlement hides retail modules in sidebar + route guards — done 2026-07-02
