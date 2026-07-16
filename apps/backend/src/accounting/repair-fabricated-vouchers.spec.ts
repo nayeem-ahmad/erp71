@@ -64,4 +64,27 @@ describe('isFabricatedVoucher', () => {
         };
         expect(isFabricatedVoucher(threeLines, accountNameById)).toBe(false);
     });
+
+    it('preserves a voucher whose source_type collides with an inherited Object.prototype member', () => {
+        // FABRICATED_SOURCE_TYPES is a plain object: `'constructor'` (or '__proto__',
+        // 'toString', etc.) resolves to an inherited, truthy prototype member via
+        // plain bracket lookup, which would pass the `if (!eventType)` guard and
+        // then throw when FALLBACK_FINGERPRINTS[fn] is looked up. Must be rejected
+        // instead of crashing.
+        expect(isFabricatedVoucher(voucher('constructor', 'acc-bank', 'acc-cash'), accountNameById)).toBe(false);
+    });
+
+    it('flags a fabricated voucher when amounts are Decimal-style strings, as production actually passes them', () => {
+        // The spec above uses plain numbers, but production passes Prisma Decimal
+        // objects and decimal strings for debit_amount/credit_amount. Both coerce
+        // via Number(...) today; this locks that in with string amounts.
+        const decimalStrings: FabricationCandidate = {
+            source_type: 'transfer',
+            details: [
+                { account_id: 'acc-bank', debit_amount: '500.00', credit_amount: '0' },
+                { account_id: 'acc-cash', debit_amount: '0', credit_amount: '500.00' },
+            ],
+        };
+        expect(isFabricatedVoucher(decimalStrings, accountNameById)).toBe(true);
+    });
 });

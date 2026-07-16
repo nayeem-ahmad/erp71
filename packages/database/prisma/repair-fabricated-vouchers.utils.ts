@@ -43,6 +43,14 @@ export function isFabricatedVoucher(
         return false;
     }
 
+    // hasOwnProperty guard: a plain-object lookup for e.g. source_type: 'constructor'
+    // or '__proto__' would resolve to an inherited Object.prototype member (truthy),
+    // pass the `if (!eventType)` check below, and then blow up on the
+    // FALLBACK_FINGERPRINTS lookup with an unrelated TypeError.
+    if (!Object.prototype.hasOwnProperty.call(FABRICATED_SOURCE_TYPES, voucher.source_type)) {
+        return false;
+    }
+
     const eventType = FABRICATED_SOURCE_TYPES[voucher.source_type];
     if (!eventType) {
         return false;

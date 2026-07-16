@@ -75,7 +75,28 @@ async function repairTenant(tenantId: string, dryRun: boolean): Promise<RepairSt
     });
 
     for (const voucher of candidates) {
-        if (!isFabricatedVoucher(voucher, nameById)) {
+        const fabricated = isFabricatedVoucher(voucher, nameById);
+
+        // The dry run is the human review gate before an irreversible delete, and
+        // counts alone cannot be reviewed. The fingerprint matches accounts by NAME,
+        // so a tenant who renamed e.g. "Cash in Hand" would have their fabricated
+        // vouchers silently counted as "preserved" with no signal at all. Printing
+        // the actual account names for every candidate — deleted AND preserved —
+        // lets an operator spot that a rename defeated the fingerprint.
+        if (dryRun) {
+            const debitLine = voucher.details.find((d) => Number(d.debit_amount) > 0);
+            const creditLine = voucher.details.find((d) => Number(d.credit_amount) > 0);
+            const debitName = debitLine ? nameById.get(debitLine.account_id) ?? '(unknown account)' : '(no debit line)';
+            const creditName = creditLine ? nameById.get(creditLine.account_id) ?? '(unknown account)' : '(no credit line)';
+            const amount = debitLine ? String(debitLine.debit_amount) : '?';
+            const date = voucher.date.toISOString().slice(0, 10);
+            console.log(
+                `    ${fabricated ? 'DELETED  ' : 'PRESERVED'}  ${voucher.voucher_number}  ${date}  ${amount}  ` +
+                `Dr ${debitName} / Cr ${creditName}`,
+            );
+        }
+
+        if (!fabricated) {
             stats.vouchersPreserved++;
             continue;
         }
@@ -108,9 +129,12 @@ async function repairTenant(tenantId: string, dryRun: boolean): Promise<RepairSt
                 },
             });
 
-            await tx.postingEvent.deleteMany({
-                where: { tenant_id: tenantId, event_type: eventType, source_id: voucher.source_id ?? undefined },
-            });
+            // Scoped by voucher_id, not { tenant_id, event_type, source_id }: Prisma
+            // strips `undefined` keys from a where-clause, so if source_id were ever
+            // null the old clause collapsed to { tenant_id, event_type } and deleted
+            // every PostingEvent of that event type in the tenant. voucher_id is set
+            // on every posted event (see posting.utils.ts) and is strictly tighter.
+            await tx.postingEvent.deleteMany({ where: { voucher_id: voucher.id } });
             await tx.voucherDetail.deleteMany({ where: { voucher_id: voucher.id } });
             await tx.voucher.delete({ where: { id: voucher.id } });
         });
