@@ -39,7 +39,11 @@ describe('SalesReturnsService', () => {
           findFirst: jest.fn(),
         },
       customer: {
-          update: jest.fn()
+          update: jest.fn(),
+          findUnique: jest.fn()
+      },
+      customerCreditTransaction: {
+          create: jest.fn()
       }
     };
 
@@ -90,11 +94,56 @@ describe('SalesReturnsService', () => {
           warehouseId: 'wh-1',
           quantityDelta: 2,
           movementType: 'SALES_RETURN',
+          // Regression: referenceId must be the row id, not the RET- string,
+          // so movements trace back to the return like every other caller.
+          referenceId: 'return-99',
         }),
       );
       expect(db.customer.update).toHaveBeenCalledWith({
           where: { id: 'cust-1' },
           data: { total_spent: { decrement: 20 } } // 2 * 10
+      });
+  });
+
+  it('create() reduces customer due and writes a credit ledger entry when returning a credit sale', async () => {
+      // Regression: returning a credit sale used to leave the customer still
+      // owing for the goods they gave back — total_spent moved but due_balance
+      // and the credit ledger did not.
+      const mockSale = {
+          id: 'sale-1',
+          customer_id: 'cust-1',
+          total_amount: 100,
+          amount_paid: 0, // fully on credit
+          payments: [],
+          items: [
+              { id: 'item-1', product_id: 'p-1', quantity: 5, price_at_sale: 10, returns: [] }
+          ]
+      };
+      db.sale.findUnique.mockResolvedValue(mockSale);
+      db.salesReturn.create.mockResolvedValue({ id: 'return-99' });
+      db.customer.findUnique.mockResolvedValue({ due_balance: 100 });
+
+      await service.create('tenant-1', 'user-1', {
+          storeId: 'store-1',
+          saleId: 'sale-1',
+          items: [{ saleItemId: 'item-1', quantity: 3 }], // refund 30
+      });
+
+      expect(db.customerCreditTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            customer_id: 'cust-1',
+            type: 'ADJUSTMENT',
+            amount: -30,
+            balance_after: 70,
+            reference_type: 'SALES_RETURN',
+            reference_id: 'return-99',
+          }),
+        }),
+      );
+      expect(db.customer.update).toHaveBeenCalledWith({
+          where: { id: 'cust-1' },
+          data: { due_balance: 70 },
       });
   });
 
@@ -156,7 +205,11 @@ describe('SalesReturnsService — posting condition value', () => {
                     total_refund: 250,
                 }),
             },
-            customer: { update: jest.fn().mockResolvedValue({}) },
+            customer: {
+                update: jest.fn().mockResolvedValue({}),
+                findUnique: jest.fn().mockResolvedValue({ due_balance: 500 }),
+            },
+            customerCreditTransaction: { create: jest.fn().mockResolvedValue({}) },
         };
         const db = { $transaction: jest.fn().mockImplementation(async (fn: any) => fn(tx)) };
         const module: TestingModule = await Test.createTestingModule({

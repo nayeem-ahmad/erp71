@@ -86,6 +86,7 @@ import { SalaryPaymentsModule } from './salary-payments/salary-payments.module';
 import { AiModule } from './ai/ai.module';
 import { SupportModule } from './support/support.module';
 import { ReferralsModule } from './referrals/referrals.module';
+import { DemoDataModule } from './demo-data/demo-data.module';
 
 @Module({
     imports: [
@@ -176,6 +177,7 @@ import { ReferralsModule } from './referrals/referrals.module';
         AiModule,
         SupportModule,
         ReferralsModule,
+        DemoDataModule,
     ],
     controllers: [],
     providers: [

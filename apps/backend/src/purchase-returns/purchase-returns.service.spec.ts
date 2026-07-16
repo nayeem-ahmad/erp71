@@ -42,6 +42,12 @@ describe('PurchaseReturnsService', () => {
                 findFirst: jest.fn(),
                 delete: jest.fn(),
             },
+            supplierCreditTransaction: {
+                create: jest.fn(),
+            },
+            supplier: {
+                update: jest.fn(),
+            },
         };
 
         db = {
@@ -90,6 +96,7 @@ describe('PurchaseReturnsService', () => {
             tenant_id: 'tenant-1',
             store_id: 'store-1',
             supplier_id: 'sup-1',
+            supplier: { id: 'sup-1', due_balance: 100 },
             items: [
                 { id: 'item-1', product_id: 'prod-1', unit_cost: 12.5, quantity: 4, returnItems: [] },
             ],
@@ -114,8 +121,27 @@ describe('PurchaseReturnsService', () => {
                 warehouseId: 'wh-1',
                 quantityDelta: -2,
                 movementType: 'PURCHASE_RETURN',
+                // Regression: referenceId must be the row id, not the PRET- string.
+                referenceId: 'pret-1',
             }),
         );
+        // Regression: returning payable goods must reduce what we owe the supplier.
+        expect(tx.supplierCreditTransaction.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: expect.objectContaining({
+                    supplier_id: 'sup-1',
+                    type: 'ADJUSTMENT',
+                    amount: -25,
+                    balance_after: 75,
+                    reference_type: 'PURCHASE_RETURN',
+                    reference_id: 'pret-1',
+                }),
+            }),
+        );
+        expect(tx.supplier.update).toHaveBeenCalledWith({
+            where: { id: 'sup-1' },
+            data: { due_balance: 75 },
+        });
         expect(tx.purchaseReturnItem.createMany).toHaveBeenCalledWith({
             data: [
                 expect.objectContaining({ return_id: 'pret-1', purchase_item_id: 'item-1', quantity: 2 }),
@@ -190,6 +216,7 @@ describe('PurchaseReturnsService', () => {
             ],
         });
         tx.purchaseReturn.count.mockResolvedValue(0);
+        tx.purchaseReturn.create.mockResolvedValue({ id: 'pret-1', return_number: 'PRET-00001' });
         (applyInventoryMovement as jest.Mock).mockRejectedValueOnce(new BadRequestException('Insufficient stock'));
 
         await expect(

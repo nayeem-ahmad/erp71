@@ -9,3 +9,5 @@ export { FormFooter } from './FormFooter';
 export { StatusBadge, statusToneFor } from './StatusBadge';
 export type { StatusBadgeTone } from './StatusBadge';
 export { Alert } from './Alert';
+export { ConfirmDialog } from './ConfirmDialog';
+export type { ConfirmDialogProps } from './ConfirmDialog';

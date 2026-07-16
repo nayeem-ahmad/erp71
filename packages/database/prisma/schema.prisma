@@ -318,6 +318,27 @@ model JobRun {
   @@index([job_name, status, finished_at])
 }
 
+/// Progress tracker + append-detection marker for a six-month demo-data load.
+/// Tenant-scoped. One row per "Load Demo Data" invocation; batch_number lets a
+/// tenant append multiple loads. Drives the in-process background generator and
+/// the Settings → Data progress UI (polled via GET /tenants/demo-data/status).
+model DemoDataBatch {
+  id           String    @id @default(uuid())
+  tenant_id    String
+  batch_number Int
+  status       String    @default("PENDING") // PENDING | RUNNING | COMPLETED | FAILED
+  phase        String?
+  processed    Int       @default(0)
+  total        Int       @default(0)
+  counts       Json?
+  started_at   DateTime  @default(now())
+  finished_at  DateTime?
+  error        String?
+
+  @@index([tenant_id])
+  @@map("demo_data_batches")
+}
+
 model Tenant {
   id                   String   @id @default(uuid())
   name                 String

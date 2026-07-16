@@ -1,108 +1,68 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Database, Trash2, PackageOpen, AlertTriangle } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Database, Trash2, PackageOpen } from 'lucide-react';
 import { api, fetchWithAuth } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { isOwner } from '@/lib/permissions';
 import { toast } from '@/lib/toast';
-import { Alert, Button, Input, PageShell } from '@/components/ui';
-import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
+import { Alert, Button, ConfirmDialog, PageShell } from '@/components/ui';
 
-/* ------------------------------------------------------------------ */
-/*  Confirmation dialog                                                */
-/* ------------------------------------------------------------------ */
-
-function ConfirmDialog({
-    open,
-    prompt,
-    expected,
-    loading,
-    onConfirm,
-    onCancel,
-    danger,
-}: {
-    open: boolean;
-    prompt: string;
-    expected: string;
-    loading: boolean;
-    onConfirm: () => void;
-    onCancel: () => void;
-    danger?: boolean;
-}) {
-    const [value, setValue] = useState('');
-
-    useEffect(() => {
-        if (open) setValue('');
-    }, [open]);
-
-    if (!open) return null;
-
-    const lines = prompt.split('\n\n');
-    const bodyLines = lines.slice(0, -1).join('\n\n');
-    const inputLabel = lines[lines.length - 1];
-
-    return (
-        <ModalShell size="sm" onBackdropClick={() => { setValue(''); onCancel(); }}>
-            <ModalHeader
-                title="Confirm"
-                onClose={() => { setValue(''); onCancel(); }}
-            />
-            <div className="p-6 space-y-4">
-                <div className="flex items-start gap-3">
-                    <div className={`mt-0.5 p-2 rounded-md ${danger ? 'bg-red-100' : 'bg-amber-100'}`}>
-                        <AlertTriangle className={`w-5 h-5 ${danger ? 'text-red-600' : 'text-amber-600'}`} />
-                    </div>
-                    <div className="space-y-2 flex-1">
-                        <p className="text-sm text-gray-700 whitespace-pre-line">{bodyLines}</p>
-                        <p className="text-sm font-semibold text-gray-800">{inputLabel}</p>
-                        <Input
-                            type="text"
-                            value={value}
-                            onChange={(e) => setValue(e.target.value)}
-                            placeholder={`Type "${expected}"`}
-                            className="font-mono"
-                            autoFocus
-                        />
-                    </div>
-                </div>
-            </div>
-            <ModalFooter>
-                <Button
-                    variant="ghost"
-                    onClick={() => { setValue(''); onCancel(); }}
-                    disabled={loading}
-                >
-                    Cancel
-                </Button>
-                <Button
-                    variant={danger ? 'danger' : 'primary'}
-                    onClick={onConfirm}
-                    disabled={value.trim().toLowerCase() !== expected || loading}
-                    loading={loading}
-                    className={!danger ? '!bg-amber-600 hover:!bg-amber-700' : undefined}
-                >
-                    {loading ? 'Clearing…' : 'Confirm'}
-                </Button>
-            </ModalFooter>
-        </ModalShell>
-    );
+interface DemoBatch {
+    status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+    phase?: string | null;
+    processed: number;
+    total: number;
+    batch_number: number;
+    error?: string | null;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Page                                                               */
-/* ------------------------------------------------------------------ */
+/** Number of completed demo-data loads, given the tenant's latest batch. */
+function getCompletedLoads(batch: DemoBatch | null): number {
+    if (!batch) return 0;
+    return batch.status === 'COMPLETED' ? batch.batch_number : batch.batch_number - 1;
+}
 
 export default function DataManagementPage() {
     const { t } = useI18n();
     const dm = t.settingsExtras.dataManagement;
 
     const [role, setRole] = useState<string | null>(null);
-    const [loadingDemo, setLoadingDemo] = useState(false);
     const [clearingMode, setClearingMode] = useState<'transactions' | 'all' | null>(null);
-    const [dialog, setDialog] = useState<{ mode: 'transactions' | 'all' } | null>(null);
+    const [clearDialog, setClearDialog] = useState<{ mode: 'transactions' | 'all' } | null>(null);
+
+    const [demoBatch, setDemoBatch] = useState<DemoBatch | null>(null);
+    const [demoConfirm, setDemoConfirm] = useState(false);
+    const [demoStarting, setDemoStarting] = useState(false);
+    const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const owner = isOwner(role);
+    const running = demoBatch?.status === 'RUNNING' || demoBatch?.status === 'PENDING' || demoStarting;
+    // "N previous loads": the latest completed batch number, or one less if a
+    // load is currently in flight.
+    const completedLoads = getCompletedLoads(demoBatch);
+
+    const fetchStatus = useCallback(async (): Promise<DemoBatch | null> => {
+        try {
+            return (await fetchWithAuth('/tenants/demo-data/status')) as DemoBatch | null;
+        } catch {
+            return null;
+        }
+    }, []);
+
+    const poll = useCallback(async () => {
+        const batch = await fetchStatus();
+        setDemoBatch(batch);
+        if (batch && (batch.status === 'RUNNING' || batch.status === 'PENDING')) {
+            pollTimer.current = setTimeout(poll, 2000);
+        } else if (batch?.status === 'COMPLETED') {
+            toast.success(dm.demoData.completed);
+        } else if (batch?.status === 'FAILED') {
+            toast.error(batch.error || dm.demoData.failed);
+        }
+    }, [fetchStatus, dm.demoData.completed, dm.demoData.failed]);
 
     useEffect(() => {
         api.getMe().then((me: any) => {
@@ -110,40 +70,60 @@ export default function DataManagementPage() {
             const tenant = me?.tenants?.find((entry: any) => entry.id === tenantId) ?? me?.tenants?.[0];
             setRole(tenant?.role ?? null);
         }).catch(() => null);
-    }, []);
 
-    const owner = isOwner(role);
+        // Resume polling if a load is already in flight (e.g. after a refresh).
+        fetchStatus().then((batch) => {
+            setDemoBatch(batch);
+            if (batch && (batch.status === 'RUNNING' || batch.status === 'PENDING')) {
+                pollTimer.current = setTimeout(poll, 2000);
+            }
+        });
 
-    const handleLoadDemo = async () => {
-        setLoadingDemo(true);
+        return () => { if (pollTimer.current) clearTimeout(pollTimer.current); };
+    }, [fetchStatus, poll]);
+
+    const startDemo = async () => {
+        setDemoConfirm(false);
+        setDemoStarting(true);
         try {
-            const res = await fetchWithAuth('/tenants/demo-data', { method: 'POST' });
-            toast.success(
-                dm.demoData.success
-                    .replace('{products}', String(res.productsUpserted))
-                    .replace('{customers}', String(res.customersUpserted))
-                    .replace('{sales}', String(res.salesCreated)),
-            );
+            await fetchWithAuth('/tenants/demo-data', { method: 'POST' });
+            const batch = await fetchStatus();
+            setDemoBatch(batch);
+            pollTimer.current = setTimeout(poll, 2000);
         } catch (err: any) {
-            toast.error(err?.message || dm.demoData.failed);
+            // A 409 means a load is already running — recover by resuming polling
+            // rather than surfacing a hard error.
+            const batch = await fetchStatus();
+            if (batch && (batch.status === 'RUNNING' || batch.status === 'PENDING')) {
+                setDemoBatch(batch);
+                toast.error(dm.demoData.alreadyRunning);
+                pollTimer.current = setTimeout(poll, 2000);
+            } else {
+                toast.error(err?.message || dm.demoData.failed);
+            }
         } finally {
-            setLoadingDemo(false);
+            setDemoStarting(false);
         }
     };
 
     const handleClear = async () => {
-        if (!dialog) return;
-        setClearingMode(dialog.mode);
+        if (!clearDialog) return;
+        setClearingMode(clearDialog.mode);
         try {
-            await fetchWithAuth(`/tenants/data?mode=${dialog.mode}`, { method: 'DELETE' });
-            toast.success(dialog.mode === 'all' ? dm.clearData.clearedAll : dm.clearData.clearedTransactions);
-            setDialog(null);
+            await fetchWithAuth(`/tenants/data?mode=${clearDialog.mode}`, { method: 'DELETE' });
+            toast.success(clearDialog.mode === 'all' ? dm.clearData.clearedAll : dm.clearData.clearedTransactions);
+            setClearDialog(null);
+            setDemoBatch(null); // Clear Data also resets the demo-batch history.
         } catch (err: any) {
             toast.error(err?.message || dm.clearData.failed);
         } finally {
             setClearingMode(null);
         }
     };
+
+    const progressPct = demoBatch && demoBatch.total > 0
+        ? Math.min(100, Math.round((demoBatch.processed / demoBatch.total) * 100))
+        : 0;
 
     return (
         <PageShell maxWidth="full">
@@ -174,14 +154,36 @@ export default function DataManagementPage() {
                                     <p className="text-sm text-gray-500">{dm.demoData.description}</p>
                                 </div>
                             </div>
-                            <Button
-                                onClick={handleLoadDemo}
-                                disabled={loadingDemo}
-                                loading={loadingDemo}
-                                icon={!loadingDemo ? <Database className="w-4 h-4" /> : undefined}
-                            >
-                                {loadingDemo ? dm.demoData.loading : dm.demoData.button}
-                            </Button>
+
+                            {running ? (
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="font-medium text-gray-700">
+                                            {demoBatch?.phase || dm.demoData.generating}
+                                        </span>
+                                        {demoBatch && demoBatch.total > 0 && (
+                                            <span className="text-gray-500">
+                                                {dm.demoData.progress
+                                                    .replace('{processed}', String(demoBatch.processed))
+                                                    .replace('{total}', String(demoBatch.total))}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+                                        <div
+                                            className="h-full bg-blue-600 transition-all duration-500"
+                                            style={{ width: `${progressPct}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            ) : (
+                                <Button
+                                    onClick={() => setDemoConfirm(true)}
+                                    icon={<Database className="w-4 h-4" />}
+                                >
+                                    {dm.demoData.button}
+                                </Button>
+                            )}
                         </div>
 
                         {/* Clear Data */}
@@ -205,7 +207,7 @@ export default function DataManagementPage() {
                                     </div>
                                     <Button
                                         variant="secondary"
-                                        onClick={() => setDialog({ mode: 'transactions' })}
+                                        onClick={() => setClearDialog({ mode: 'transactions' })}
                                         disabled={!!clearingMode}
                                         loading={clearingMode === 'transactions'}
                                         icon={clearingMode !== 'transactions' ? <Trash2 className="w-3.5 h-3.5" /> : undefined}
@@ -223,7 +225,7 @@ export default function DataManagementPage() {
                                     </div>
                                     <Button
                                         variant="secondary"
-                                        onClick={() => setDialog({ mode: 'all' })}
+                                        onClick={() => setClearDialog({ mode: 'all' })}
                                         disabled={!!clearingMode}
                                         loading={clearingMode === 'all'}
                                         icon={clearingMode !== 'all' ? <Trash2 className="w-3.5 h-3.5" /> : undefined}
@@ -238,14 +240,34 @@ export default function DataManagementPage() {
                 )}
             </div>
 
+            {/* Load Demo Data confirmation (plain confirm — no type-to-confirm) */}
             <ConfirmDialog
-                open={!!dialog}
-                prompt={dialog?.mode === 'all' ? dm.clearData.allConfirm : dm.clearData.transactionsConfirm}
-                expected={dialog?.mode === 'all' ? dm.clearData.confirmAll : dm.clearData.confirmTransactions}
+                open={demoConfirm}
+                title={dm.demoData.confirmTitle}
+                prompt={completedLoads > 0
+                    ? dm.demoData.confirmAppend.replace('{count}', String(completedLoads))
+                    : dm.demoData.confirmFirst}
+                confirmLabel={dm.demoData.confirmButton}
+                cancelLabel={dm.dialog.cancel}
+                loading={demoStarting}
+                onConfirm={startDemo}
+                onCancel={() => setDemoConfirm(false)}
+            />
+
+            {/* Clear Data confirmation (type-to-confirm) */}
+            <ConfirmDialog
+                open={!!clearDialog}
+                title={dm.dialog.title}
+                prompt={clearDialog?.mode === 'all' ? dm.clearData.allConfirm : dm.clearData.transactionsConfirm}
+                expected={clearDialog?.mode === 'all' ? dm.clearData.confirmAll : dm.clearData.confirmTransactions}
+                typePromptTemplate={dm.dialog.typePrompt}
+                confirmLabel={dm.dialog.confirm}
+                cancelLabel={dm.dialog.cancel}
+                workingLabel={dm.clearData.clearing}
                 loading={!!clearingMode}
+                danger={clearDialog?.mode === 'all'}
                 onConfirm={handleClear}
-                onCancel={() => setDialog(null)}
-                danger={dialog?.mode === 'all'}
+                onCancel={() => setClearDialog(null)}
             />
         </PageShell>
     );

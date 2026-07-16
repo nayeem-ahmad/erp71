@@ -51,19 +51,10 @@ export class SalesReturnsService {
                     quantity: returnItem.quantity,
                     refund_amount: refundAmount,
                 });
-
-                await applyInventoryMovement(tx, {
-                    tenantId,
-                    productId: originalItem.product_id,
-                    warehouseId,
-                    quantityDelta: returnItem.quantity,
-                    movementType: 'SALES_RETURN',
-                    referenceType: 'SALES_RETURN',
-                    referenceId: returnNumber,
-                });
             }
 
-            // 3. Create the return record
+            // 3. Create the return record first, so movements can reference its
+            //    row id (every other caller passes the id, not the RET- string).
             const salesReturn = await tx.salesReturn.create({
                 data: {
                     tenant_id: tenantId,
@@ -80,12 +71,17 @@ export class SalesReturnsService {
                 include: { items: true }
             });
 
-            // 4. Optionally: If the sale had a customer, decrease their total spent
-            if (sale.customer_id) {
-                 await tx.customer.update({
-                      where: { id: sale.customer_id },
-                      data: { total_spent: { decrement: totalRefund } }
-                 });
+            // 4. Restock the returned goods, keyed to the return row.
+            for (const item of returnItemData) {
+                await applyInventoryMovement(tx, {
+                    tenantId,
+                    productId: item.product_id,
+                    warehouseId,
+                    quantityDelta: item.quantity,
+                    movementType: 'SALES_RETURN',
+                    referenceType: 'SALES_RETURN',
+                    referenceId: salesReturn.id,
+                });
             }
 
             // Refund the way the customer paid. An unpaid balance was a receivable,
@@ -94,6 +90,46 @@ export class SalesReturnsService {
             const returnPaymentMode = balanceDue > 0.005
                 ? 'credit'
                 : classifyPaymentMode(sale.payments?.[0]?.payment_method ?? 'cash');
+
+            // 5. If the sale had a customer, keep their balances consistent:
+            //    reduce total_spent, and — for a credit sale — reduce what they
+            //    still owe and record a matching credit-ledger entry, so a
+            //    returned credit sale no longer leaves them owing for the goods.
+            if (sale.customer_id) {
+                await tx.customer.update({
+                    where: { id: sale.customer_id },
+                    data: { total_spent: { decrement: totalRefund } },
+                });
+
+                if (returnPaymentMode === 'credit') {
+                    const customer = await tx.customer.findUnique({
+                        where: { id: sale.customer_id },
+                        select: { due_balance: true },
+                    });
+                    const currentDue = Number(customer?.due_balance ?? 0);
+                    const creditReduction = Math.min(totalRefund, currentDue);
+                    if (creditReduction > 0.005) {
+                        const balanceAfter = currentDue - creditReduction;
+                        await tx.customerCreditTransaction.create({
+                            data: {
+                                tenant_id: tenantId,
+                                customer_id: sale.customer_id,
+                                type: 'ADJUSTMENT',
+                                amount: -creditReduction,
+                                balance_after: balanceAfter,
+                                reference_type: 'SALES_RETURN',
+                                reference_id: salesReturn.id,
+                                notes: `Credit sale return ${returnNumber}`,
+                                created_by: userId,
+                            },
+                        });
+                        await tx.customer.update({
+                            where: { id: sale.customer_id },
+                            data: { due_balance: balanceAfter },
+                        });
+                    }
+                }
+            }
 
             const posting = await autoPostFromRules({
                 tx,

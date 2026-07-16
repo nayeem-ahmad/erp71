@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Post, Delete, Body, Query, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Patch, Delete, Body, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
 import { StorefrontSettingsDto } from '../storefront/storefront.dto';
 import { UpdateBrandingDto } from './update-branding.dto';
@@ -89,11 +89,6 @@ export class TenantsController {
         @Body() dto: UpdateLocalizationSettingsDto,
     ) {
         return this.tenantsService.updateLocalizationSettings(tenant.tenantId, dto);
-    }
-
-    @Post('demo-data')
-    async loadDemoData(@Tenant() tenant: TenantContext) {
-        return this.tenantsService.loadDemoData(tenant.tenantId, tenant.userRole);
     }
 
     @Delete('data')

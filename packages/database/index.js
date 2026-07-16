@@ -18,6 +18,5 @@ module.exports = {
     DEMO_ACCOUNT_EMAIL: seedDemo.DEMO_ACCOUNT_EMAIL,
     DEMO_ACCOUNT_PASSWORD: seedDemo.DEMO_ACCOUNT_PASSWORD,
     seedDemoAccount: seedDemo.seedDemoAccount,
-    seedTenantDemoData: seedDemo.seedTenantDemoData,
     seedBusinessTypeTemplate: seedTemplate.seedBusinessTypeTemplate,
 };
