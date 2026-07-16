@@ -3,6 +3,7 @@ import { DatabaseService } from '../database/database.service';
 import { CreateSaleDto, UpdateSaleDto } from './sale.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
 import { autoPostFromRules, type AutoPostResult } from '../accounting/posting.utils';
+import { classifyPaymentMode } from './classify-payment-mode';
 import { previewSaleLoyaltyRedemption, recordSaleLoyalty } from '../loyalty/loyalty-sale.utils';
 import { cursorPaginate, CursorPaginatedResult } from '../common/pagination.dto';
 import { EmailService } from '../email/email.service';
@@ -264,24 +265,6 @@ export class SalesService {
                     data: { due_balance: balanceAfter },
                 });
             }
-
-            const classifyPaymentMode = (method: string) => {
-                const normalized = method.toLowerCase();
-                if (
-                    normalized.includes('bank')
-                    || normalized.includes('card')
-                    || normalized.includes('wallet')
-                    || normalized.includes('bkash')
-                    || normalized.includes('nagad')
-                    || normalized.includes('rocket')
-                ) {
-                    return 'bank';
-                }
-                if (normalized.includes('credit')) {
-                    return 'credit';
-                }
-                return 'cash';
-            };
 
             let posting: AutoPostResult = { postingStatus: 'skipped' };
 
