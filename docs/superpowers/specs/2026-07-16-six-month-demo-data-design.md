@@ -1,7 +1,38 @@
 # Six-Month Demo Data Generation — Design
 
 **Date:** 2026-07-16
-**Status:** Approved, ready for implementation planning
+**Status:** Approved, but **BLOCKED** — see "Blocker: accounting bootstrap" below. Implementation
+planning is deferred until the accounting-bootstrap alignment project lands.
+
+## Blocker: accounting bootstrap (discovered 2026-07-16, during planning)
+
+Planning-time verification found that `bootstrapDefaultAccountingForTenant`
+(`packages/database/prisma/bootstrap-accounting.ts`) — used by both `seedDemoAccount` and every real
+tenant — is a strict subset of the rule set in `packages/database/prisma/seed.ts`. It is missing four
+accounts (Accounts Receivable, Stock on Hand, Goods in Transit, COGS) and roughly eight posting rules.
+
+Three of the gaps produce **actively wrong** accounting rather than nothing, because
+`autoPostFromRules` falls back to a `condition_key: 'none'` rule:
+
+| Caller | Passes | Bootstrap outcome |
+|---|---|---|
+| `warehouse-transfers.service.ts:131` | `fund_movement` / `transfer_scope` | Falls back → **Dr Main Bank, Cr Cash in Hand** for a pure stock movement — fabricates money that never moved |
+| `stock-takes.service.ts:190` | `inventory_adjustment` / `reason_type` | Falls back → **Cr Cash in Hand** for a physical count variance |
+| `inventory-shrinkage.service.ts:69` | `inventory_adjustment` / `reason_type` | Falls back → **Cr Cash in Hand** for written-off stock |
+| `customers.service.ts:566,669` | `customer_payment` / `payment_direction` | Silently skipped — `ensureCustomerPaymentPostingSetup` returns early because no account named `Accounts Receivable` exists |
+| `sales.service.ts:289` | `sale` / `credit` | Silently skipped — no `sale`/`credit` rule |
+
+This is a live production bug affecting real tenants, independent of demo data. There is also a code
+collision: `seed.ts` assigns `1030` to Accounts Receivable, `bootstrap-accounting.ts` assigns `1030`
+to Loans Receivable.
+
+Demo data cannot deliver a derived, trustworthy trial balance on this foundation — credit sales and
+customer payments would post nothing, and transfers/shrinkage/stock-takes would post fiction. Note
+that the "debits equal credits" invariant test below would still **pass** in that state, because
+nothing was posted at all.
+
+**Decision:** the bootstrap alignment plus a corrective data repair for already-posted fabricated
+vouchers is being specced and planned as its own project. This spec resumes once that lands.
 
 ## Problem
 
@@ -126,13 +157,41 @@ falls below a product's reorder level, so replenishment cadence emerges rather t
 | Credit | ~15% of sales on credit, settled 0–45 days later, producing real aging buckets |
 | Purchases | Reorder-triggered from ~12 suppliers, part cash / part credit, with supplier payments over time |
 | Returns | ~2% of sales, ~3% of purchases, within days of the original |
-| Expenses | Monthly rent/utilities/salaries, weekly transport |
+| Expenses | Monthly rent/utilities/salaries, weekly transport. Categories must pre-exist (`assertCategoryExists` throws) |
 | Inventory ops | Main↔Banani transfers, occasional shrinkage with reason codes, quarterly stock takes |
-| Cashier sessions | Per store per trading day, floats reconciling to cash sales |
+| Cashier sessions | Per store per trading day, with opening/closing floats |
 | Accounting | Every domain above posts through `autoPostFromRules` with an explicit `date` |
 
 The last row is the payoff: vouchers come from the tenant's own configured `PostingRule`s, so the
-trial balance balances because it was derived, not asserted.
+trial balance balances because it was derived, not asserted — **conditional on the bootstrap blocker
+above being fixed first.**
+
+### Corrections found during planning verification
+
+These contradict earlier drafts of this spec and constrain the generator:
+
+- **Cashier sessions cannot reconcile to sales.** There is no foreign key from `Sale` to
+  `CashierSession` — sessions are standalone with only `cashTransactions` as a child relation. The
+  generator can create sessions with plausible floats, but nothing ties them to the sales they would
+  reconcile. An earlier draft of this spec claimed "floats reconciling to cash sales"; that is not
+  achievable without a schema change, which is out of scope.
+- **Supplier payments do not auto-post to accounting.** Unlike `customers.service.recordCreditPayment`,
+  `suppliers.service.recordCreditPayment` (`:611`) never calls `autoPostFromRules`. Supplier payment
+  vouchers will not exist. Flagged as a separate gap, not fixed here.
+- **Demo tenants have no `SHRINKAGE` inventory reasons.** `seed-demo.ts:292` seeds only the two
+  `DISCREPANCY` reasons; the four `SHRINKAGE` reasons (`THEFT`, `DAMAGE`, `EXPIRATION`, `UNKNOWN`)
+  exist only in `seed.ts:532`. Shrinkage generation throws until these are seeded for the tenant.
+  Shrinkage is also looked up **by reason id, not code**, so the generator must map code→id first.
+- **Supplier and customer payment directions are inverted.** For customers, `direction: 'receive'` →
+  `PAYMENT`, due decreases. For suppliers, `direction: 'pay'` → `PAYMENT`, due decreases. Easy to
+  get backwards.
+- **Warehouse transfers default to `status: 'SENT'` on create, and create-with-SENT does not post.**
+  Only `send()` posts. To exercise the real flow the generator must create with `status: 'DRAFT'`,
+  then call `send()`, then `receive()`.
+- **Stock takes gate posting on variance.** `post()` throws when max variance exceeds
+  `InventorySettings.discrepancy_approval_threshold` (default 25) unless status is `REVIEW` first.
+- **Reference-number generators are `count() + 1` based** (`TRF-`, `SHR-`, `STK-`, `PRET-`) and are
+  not concurrency-safe. Fine for a sequential generator; do not parallelize across them.
 
 ## Catalogs
 
@@ -159,9 +218,20 @@ back to `GROCERY` when null.
 purchases. Today's demo products have stock but no group/brand; catalog imports have group/brand but
 no stock.
 
-**`ProductPrice` rows are required.** `sales.service.ts` snapshots `unit_cost_at_sale` from
-`ProductPrice`. Today's seeder omits these entirely, so every demo sale records zero cost and the P&L
-shows 100% margin — likely the cause of current wrong demo margins.
+**`ProductPrice` rows are required, with a non-null `cost`, effective before the earliest sale.**
+`sales.service.ts:159` resolves `unit_cost_at_sale` **only** from `ProductPrice` rows with
+`cost: { not: null }` (store-specific overriding global, newest `effective_from` first). There is no
+fallback to `Product.price` and no purchase-cost lookup — if no row matches, `unit_cost_at_sale` is
+silently `null`.
+
+Every consumer in `sales-reports.service.ts` (`getSalesSummary`, `getSalesByProduct`,
+`getBranchReport`) coalesces null to **0**, so a null cost is counted as zero COGS rather than
+excluded — yielding `grossProfit === netRevenue` and `grossMarginPct === 100`. Today's seeder omits
+`ProductPrice` entirely, which is why demo margins read 100%.
+
+Because the value is snapshotted at sale-creation time, **backfilling prices afterwards fixes
+nothing.** The generator must write `ProductPrice` rows with `effective_from` at or before the
+earliest generated sale, before generating any sales.
 
 ## Job execution, API, and the append alert
 

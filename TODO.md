@@ -180,10 +180,29 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [ ] Backend has no e2e specs at all (`find apps/backend -name "*.e2e-spec.ts"` is empty) despite `supertest` being a devDependency, so guard wiring on admin routes is covered by no test — the new `business-type` / `catalog-import` routes' `PlatformAdminGuard` was verified only by a one-off manual 401 check
 - [ ] Local dev environment drift: root `.env` `DATABASE_URL` points at `localhost:5432`, but the `erp71-db-1` container publishes **5434** (host 5432 is a different, migrated-but-empty Postgres; `kraftize-postgres` holds 5433). Separately, `erp71-db-1`'s `erp71` database is behind `schema.prisma` (missing `Product.type`, `TenantSubscription.discount_type`) and has no `_prisma_migrations` table, so `GET /admin/tenants/:id` 500s against it
 
-### Six-month demo data generation (2026-07-16)
+### Accounting bootstrap is missing accounts + rules — posts fabricated vouchers (2026-07-16) — CRITICAL
 
-Spec: `docs/superpowers/specs/2026-07-16-six-month-demo-data-design.md` (approach B — primitive-level generator in the backend)
+Found while planning the demo-data work. `bootstrapDefaultAccountingForTenant` (`packages/database/prisma/bootstrap-accounting.ts`) — used by **every real tenant** and by `seedDemoAccount` — is a strict subset of the rule set in `seed.ts`: missing ~4 accounts (Accounts Receivable, Stock on Hand, Goods in Transit, COGS) and ~8 posting rules. `autoPostFromRules` falls back to `condition_key: 'none'`, so three of the gaps post **wrong** entries rather than skipping. Spec/plan being written as its own project; blocks the demo-data work below.
 
+- [ ] **Bug** — every warehouse transfer posts **Dr Main Bank / Cr Cash in Hand** for a pure stock movement (`warehouse-transfers.service.ts:131` passes `fund_movement`/`transfer_scope`; no such rule → falls back to `fund_movement`/`none`). Fabricates money that never moved. `seed.ts:1073` has the correct Dr Goods in Transit / Cr Stock on Hand rule
+- [ ] **Bug** — stock-take variances post **Cr Cash in Hand** (`stock-takes.service.ts:190`, `reason_type`/`DISCREPANCY` → falls back to `inventory_adjustment`/`none`)
+- [ ] **Bug** — inventory shrinkage posts **Cr Cash in Hand** for written-off stock (`inventory-shrinkage.service.ts:69`, any reason code falls back the same way)
+- [ ] **Bug** — all customer payments/payouts silently unposted: `ensureCustomerPaymentPostingSetup` returns early because `DEFAULT_ACCOUNTING_TEMPLATE` never creates an account named `Accounts Receivable`. `customers.service.spec.ts:17` mocks `autoPostFromRules` to always return `posted`, so tests can't catch it
+- [ ] **Bug** — credit sales silently unposted: `sales.service.ts:289` passes `sale`/`credit`, bootstrap has no such rule (only cash/bank)
+- [ ] Account code collision: `seed.ts` assigns `1030` to Accounts Receivable, `bootstrap-accounting.ts` assigns `1030` to Loans Receivable
+- [ ] Consider removing the `inventory_adjustment`/`none` and `fund_movement`/`none` fallback rules — a skip is safer than a wrong posting; the `none` fallbacks all credit Cash in Hand, which only makes sense for `expense`
+- [ ] Corrective data repair for fabricated vouchers already posted to real tenants (decided in scope; needs accounting judgement + careful review of live financial records)
+- [ ] Two divergent bootstraps (`seed.ts` vs `bootstrap-accounting.ts`) are the root cause — decide on a single source of truth
+
+### Six-month demo data generation (2026-07-16) — BLOCKED on the accounting bootstrap fix above
+
+Spec: `docs/superpowers/specs/2026-07-16-six-month-demo-data-design.md` (approach B — primitive-level generator in the backend). Blocked: on the current bootstrap, demo credit sales and customer payments would post nothing while transfers/shrinkage/stock-takes post fiction — and the "debits == credits" test would still pass, because nothing posted.
+
+- [ ] Cannot deliver a derived trial balance until the bootstrap project lands — do not start the generator first
+- [ ] Spec correction: cashier sessions **cannot** reconcile to sales — there is no FK from `Sale` to `CashierSession`
+- [ ] Gap — supplier payments never call `autoPostFromRules` (`suppliers.service.ts:611`), unlike customer payments, so no supplier-payment vouchers exist
+- [ ] Demo tenants lack the four `SHRINKAGE` inventory reasons (`THEFT`/`DAMAGE`/`EXPIRATION`/`UNKNOWN`, only in `seed.ts:532`) — shrinkage generation throws until seeded; lookup is by reason **id**, not code
+- [ ] `inventory-shrinkage.service.ts` uses `product.price` (selling price) as `unitCost` on the movement — a real modelling flaw
 - [ ] New `apps/backend/src/demo-data/` module: chronological, stock-aware 6-month simulator (~2,700 sales) driving the real `applyInventoryMovement` + `autoPostFromRules` with explicit dates. Move `seedTenantDemoData` out of `packages/database` (barrel **and** `index.js` in lockstep — see the `.js` duplicate item above); `seedDemoAccount` stays as scaffolding
 - [ ] Add optional `occurredAt?: Date` to `applyInventoryMovement` (`apps/backend/src/database/inventory.utils.ts:121`) so `InventoryMovement.created_at` can be backdated — additive, no existing caller passes it
 - [ ] Demo catalogs for all 4 business types (`GROCERY`, `PHARMACY`, `SURGICAL_MEDICAL`, `COMPUTER_HARDWARE`) with sell price, reorder level, popularity weight, real `unit_type`; `SURGICAL_MEDICAL` sourced from the existing `templates/surgical-medical.json`. Demo data currently ignores `business_type` entirely — a surgical tenant gets rice and soap
