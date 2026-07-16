@@ -218,19 +218,35 @@ export interface DefaultPostingRuleDefinition {
  * vouchers this work removes.
  */
 export const DEFAULT_POSTING_RULES: DefaultPostingRuleDefinition[] = [
+    // ── Sales ────────────────────────────────────────────────────────────────
     { event_type: 'sale', condition_key: 'payment_mode', condition_value: 'cash', debit_account: 'Cash in Hand', credit_account: 'Sales Revenue', priority: 10 },
     { event_type: 'sale', condition_key: 'payment_mode', condition_value: 'bank', debit_account: 'Main Bank Account', credit_account: 'Sales Revenue', priority: 20 },
+    { event_type: 'sale', condition_key: 'payment_mode', condition_value: 'bkash', debit_account: 'bKash Account', credit_account: 'Sales Revenue', priority: 30 },
+    { event_type: 'sale', condition_key: 'payment_mode', condition_value: 'nagad', debit_account: 'Nagad Account', credit_account: 'Sales Revenue', priority: 40 },
+    { event_type: 'sale', condition_key: 'payment_mode', condition_value: 'credit', debit_account: 'Accounts Receivable', credit_account: 'Sales Revenue', priority: 50 },
+
+    // ── Sales returns (mirror of sales) ──────────────────────────────────────
     { event_type: 'sale_return', condition_key: 'payment_mode', condition_value: 'cash', debit_account: 'Sales Revenue', credit_account: 'Cash in Hand', priority: 10 },
     { event_type: 'sale_return', condition_key: 'payment_mode', condition_value: 'bank', debit_account: 'Sales Revenue', credit_account: 'Main Bank Account', priority: 20 },
-    { event_type: 'purchase', condition_key: 'payment_mode', condition_value: 'cash', debit_account: 'General Operating Expense', credit_account: 'Cash in Hand', priority: 10 },
-    { event_type: 'purchase', condition_key: 'payment_mode', condition_value: 'bank', debit_account: 'General Operating Expense', credit_account: 'Main Bank Account', priority: 20 },
-    { event_type: 'purchase', condition_key: 'payment_mode', condition_value: 'credit', debit_account: 'General Operating Expense', credit_account: 'Purchase Payable', priority: 30 },
-    { event_type: 'purchase_return', condition_key: 'none', condition_value: null, debit_account: 'Purchase Payable', credit_account: 'General Operating Expense', priority: 100 },
-    { event_type: 'inventory_adjustment', condition_key: 'none', condition_value: null, debit_account: 'General Operating Expense', credit_account: 'Cash in Hand', priority: 100 },
-    { event_type: 'fund_movement', condition_key: 'none', condition_value: null, debit_account: 'Main Bank Account', credit_account: 'Cash in Hand', priority: 100 },
+    { event_type: 'sale_return', condition_key: 'payment_mode', condition_value: 'bkash', debit_account: 'Sales Revenue', credit_account: 'bKash Account', priority: 30 },
+    { event_type: 'sale_return', condition_key: 'payment_mode', condition_value: 'nagad', debit_account: 'Sales Revenue', credit_account: 'Nagad Account', priority: 40 },
+    { event_type: 'sale_return', condition_key: 'payment_mode', condition_value: 'credit', debit_account: 'Sales Revenue', credit_account: 'Accounts Receivable', priority: 50 },
+
+    // ── Purchases (periodic: stock is expensed on receipt) ───────────────────
+    // Only 'credit': a purchase is always a payable in this data model. See the
+    // purchases note in posting-contract.ts. cash/bank rules would be unreachable.
+    { event_type: 'purchase', condition_key: 'payment_mode', condition_value: 'credit', debit_account: 'Purchases', credit_account: 'Purchase Payable', priority: 30 },
+    { event_type: 'purchase_return', condition_key: 'none', condition_value: null, debit_account: 'Purchase Payable', credit_account: 'Purchases', priority: 100 },
+
+    // ── Expenses ─────────────────────────────────────────────────────────────
     { event_type: 'expense', condition_key: 'payment_mode', condition_value: 'cash', debit_account: 'General Operating Expense', credit_account: 'Cash in Hand', priority: 10 },
     { event_type: 'expense', condition_key: 'payment_mode', condition_value: 'bank', debit_account: 'General Operating Expense', credit_account: 'Main Bank Account', priority: 20 },
-    { event_type: 'expense', condition_key: 'none', condition_value: null, debit_account: 'General Operating Expense', credit_account: 'Cash in Hand', priority: 100 },
+
+    // ── DELIBERATELY ABSENT: fund_movement, inventory_adjustment ─────────────
+    // Under periodic inventory these events have no journal entry. Adding a
+    // condition_key:'none' rule here is worse than adding nothing, because
+    // autoPostFromRules FALLS BACK to it - which is what posted Dr Main Bank /
+    // Cr Cash in Hand for every warehouse transfer. See posting-contract.spec.ts.
 ];
 
 export async function bootstrapDefaultAccountingForTenant(
