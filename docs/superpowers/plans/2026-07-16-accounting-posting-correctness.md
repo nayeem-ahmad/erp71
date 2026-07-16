@@ -15,6 +15,11 @@ Spec: `docs/superpowers/specs/2026-07-16-accounting-posting-correctness-design.m
 - **Branch: `dev`.** `.githooks/` blocks commits on `main`. Never commit to `main`.
 - **`packages/database` has NO build step.** `bootstrap-accounting.js` is a hand-maintained mirror of `bootstrap-accounting.ts`. TypeScript resolves imports against `index.ts`, Node against `index.js`. **Every change to a `.ts` file in `packages/database` MUST be mirrored into its `.js` twin in the same commit.** This has shipped broken three times (`9374ffc`, `6372327`, `seedBusinessTypeTemplate`). Files with `.js` mirrors: `accounting.constants`, `bootstrap-accounting`, `payment-method.seed`, `seed-demo`, `tenant-role.seed`. Standalone scripts (e.g. `backfill-voucher-store-id.ts`) have no mirror and need none.
 - **Run backend tests from `apps/backend`:** `npx jest <path>`.
+- **Baseline facts — measured on `dev` before this branch. Do not mistake these for regressions you caused:**
+  - **CI only runs specs under `src/`** (`--testPathPatterns="src/"` → 93 suites). Nothing in `apps/backend/test/` runs in CI today. **All new tests in this plan go under `src/`** so they actually execute. Task 12 points CI at `test/` as well.
+  - **Three suites under `apps/backend/test/` fail on baseline**: `integration.spec.ts`, `inventory-operations.spec.ts`, `sales-returns-orders.spec.ts` — 60 failed / 1198 passed / 97 suites. They hit a **real database** and fail locally because the root `.env` `DATABASE_URL` points at `localhost:5432`, an empty database (134 tables, 0 tenants), while the real dev DB container `erp71-db-1` publishes **5434**. Failures are hook/connection timeouts, not assertions. Whether they pass in CI (which runs `prisma db push` onto a clean DB) is **unknown** — CI has never run them.
+  - **Three pre-existing `tsc` errors** in `accounting.service.spec.ts` and `billing-scheduler.service.spec.ts`. Typecheck expectation is **no NEW errors**, never "exits 0".
+- **Never expect "the full suite passes."** The correct bar is **no new failures versus baseline**.
 - **Inventory model is periodic.** Warehouse transfers, shrinkage and stock takes post **nothing**. This is intentional — do not "fix" it by adding rules.
 - **Money is `Decimal(12,2)`.** Never use floats for amounts.
 - **`autoPostFromRules` writes exactly two `VoucherDetail` rows.** It cannot express a multi-leg entry. Do not attempt COGS legs.
@@ -39,7 +44,7 @@ Spec: `docs/superpowers/specs/2026-07-16-accounting-posting-correctness-design.m
 | `apps/backend/src/purchases/purchases.service.ts` | Stops hardcoding `'credit'`. |
 | `packages/database/prisma/repair-fabricated-vouchers.utils.ts` | **New.** Pure fingerprint logic — decides what is safe to delete. No Prisma, no side effects, unit-tested. |
 | `packages/database/prisma/repair-fabricated-vouchers.ts` | **New.** The script: migrates existing tenants; deletes fabricated vouchers + harmful rules. |
-| `apps/backend/test/repair-fabricated-vouchers.spec.ts` | **New.** Tests the fingerprint logic. |
+| `apps/backend/src/accounting/repair-fabricated-vouchers.spec.ts` | **New.** Tests the fingerprint logic. Under `src/` because CI does not run `apps/backend/test/`. |
 | `.github/workflows/deploy.yaml` | Re-enables the three skipped spec suites. |
 
 **Task order matters.** Task 1 writes a test that FAILS and stays failing until Task 3. That is intentional — the contract test *is* the specification.
@@ -819,73 +824,99 @@ sales-returns."
 
 **Files:**
 - Modify: `apps/backend/src/sales-returns/sales-returns.service.ts:16-19, 89-102`
-- Test: `apps/backend/test/sales-returns-orders.spec.ts` (existing)
+- Create: `apps/backend/src/sales-returns/sales-returns.service.spec.ts`
 
 **Interfaces:**
 - Consumes: `classifyPaymentMode` (Task 5).
 
+> **Do NOT put these tests in `apps/backend/test/sales-returns-orders.spec.ts`.** That directory is not run by CI (`--testPathPatterns="src/"`), and that suite is one of the three that fail on baseline because it needs a real database. A self-contained mocked unit spec under `src/` runs in CI and needs no database.
+
 - [ ] **Step 1: Write the failing test**
 
-Append to `apps/backend/test/sales-returns-orders.spec.ts`. Read the file first and follow its existing mocking style; this describe block assumes the `autoPostFromRules` mock pattern used elsewhere in the suite:
+Create `apps/backend/src/sales-returns/sales-returns.service.spec.ts`:
 
 ```ts
+import { Test, TestingModule } from '@nestjs/testing';
+import { SalesReturnsService } from './sales-returns.service';
+import { DatabaseService } from '../database/database.service';
+import { autoPostFromRules } from '../accounting/posting.utils';
+
+jest.mock('../accounting/posting.utils', () => ({
+    autoPostFromRules: jest.fn().mockResolvedValue({ postingStatus: 'posted', voucherId: 'v1', voucherNumber: 'CP-00001' }),
+}));
+
+jest.mock('../database/inventory.utils', () => ({
+    applyInventoryMovement: jest.fn().mockResolvedValue(5),
+    resolveWarehouseId: jest.fn().mockResolvedValue('wh-1'),
+}));
+
 describe('SalesReturnsService — posting condition value', () => {
-    it('classifies a credit sale return as credit, not cash', async () => {
-        // Regression: the service hardcoded conditionValue 'cash', so returning a
-        // credit sale posted Dr Sales Revenue / Cr Cash in Hand - refunding cash the
-        // shop never received, and leaving the receivable untouched.
-        const sale = {
-            id: 'sale-1',
-            store_id: 'store-1',
-            customer_id: 'cust-1',
-            total_amount: 500,
-            amount_paid: 0,
-            payments: [],
-            items: [
-                { id: 'si-1', product_id: 'p-1', quantity: 2, price_at_sale: 250, returns: [] },
-            ],
+    let service: SalesReturnsService;
+
+    /** @param sale the row tx.sale.findUnique should return */
+    const buildModule = async (sale: unknown) => {
+        const tx = {
+            sale: { findUnique: jest.fn().mockResolvedValue(sale) },
+            salesReturn: {
+                create: jest.fn().mockResolvedValue({
+                    id: 'ret-1',
+                    return_number: 'RET-1',
+                    total_refund: 250,
+                }),
+            },
+            customer: { update: jest.fn().mockResolvedValue({}) },
         };
+        const db = { $transaction: jest.fn().mockImplementation(async (fn: any) => fn(tx)) };
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [SalesReturnsService, { provide: DatabaseService, useValue: db }],
+        }).compile();
+        return module.get<SalesReturnsService>(SalesReturnsService);
+    };
 
-        const posting = await captureAutoPostFromRules(() =>
-            service.create('tenant-1', 'user-1', {
-                saleId: 'sale-1',
-                storeId: 'store-1',
-                items: [{ saleItemId: 'si-1', quantity: 1 }],
-            } as any),
-        );
+    const saleRow = (overrides: Record<string, unknown>) => ({
+        id: 'sale-1',
+        store_id: 'store-1',
+        customer_id: 'cust-1',
+        total_amount: 500,
+        amount_paid: 500,
+        payments: [{ payment_method: 'Cash', amount: 500 }],
+        items: [{ id: 'si-1', product_id: 'p-1', quantity: 2, price_at_sale: 250, returns: [] }],
+        ...overrides,
+    });
 
-        expect(posting.conditionValue).toBe('credit');
+    const dto = { saleId: 'sale-1', storeId: 'store-1', items: [{ saleItemId: 'si-1', quantity: 1 }] };
+
+    const lastPosting = () => jest.mocked(autoPostFromRules).mock.calls.at(-1)![0];
+
+    beforeEach(() => jest.mocked(autoPostFromRules).mockClear());
+
+    it('classifies a credit sale return as credit, not cash', async () => {
+        // Regression: conditionValue was hardcoded 'cash', so returning a credit sale
+        // posted Dr Sales Revenue / Cr Cash in Hand - refunding cash the shop never
+        // received, and leaving the receivable untouched.
+        service = await buildModule(saleRow({ amount_paid: 0, payments: [] }));
+        await service.create('tenant-1', 'user-1', dto as any);
+        expect(lastPosting().conditionValue).toBe('credit');
     });
 
     it('classifies a bKash sale return as bkash', async () => {
-        const posting = await captureAutoPostFromRules(() =>
-            service.create('tenant-1', 'user-1', {
-                saleId: 'sale-bkash',
-                storeId: 'store-1',
-                items: [{ saleItemId: 'si-2', quantity: 1 }],
-            } as any),
-        );
+        service = await buildModule(saleRow({ payments: [{ payment_method: 'bKash', amount: 500 }] }));
+        await service.create('tenant-1', 'user-1', dto as any);
+        expect(lastPosting().conditionValue).toBe('bkash');
+    });
 
-        expect(posting.conditionValue).toBe('bkash');
+    it('classifies a fully paid cash sale return as cash', async () => {
+        service = await buildModule(saleRow({}));
+        await service.create('tenant-1', 'user-1', dto as any);
+        expect(lastPosting().conditionValue).toBe('cash');
     });
 });
 ```
 
-If the existing suite has no `captureAutoPostFromRules` helper, add one that reads the mocked `autoPostFromRules`'s last call argument:
-
-```ts
-const captureAutoPostFromRules = async (run: () => Promise<unknown>) => {
-    const mocked = jest.mocked(autoPostFromRules);
-    mocked.mockClear();
-    await run();
-    return mocked.mock.calls.at(-1)![0];
-};
-```
-
 - [ ] **Step 2: Run it and watch it fail**
 
-Run: `cd apps/backend && npx jest test/sales-returns-orders.spec.ts`
-Expected: FAIL — received `'cash'`, expected `'credit'`.
+Run: `cd apps/backend && npx jest src/sales-returns/`
+Expected: FAIL — the credit and bKash cases receive `'cash'`.
 
 - [ ] **Step 3: Classify from the original sale**
 
@@ -923,13 +954,13 @@ And change the `autoPostFromRules` call's `conditionValue` (line 94) from `'cash
 
 - [ ] **Step 4: Run the tests**
 
-Run: `cd apps/backend && npx jest test/sales-returns-orders.spec.ts`
+Run: `cd apps/backend && npx jest src/sales-returns/`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/backend/src/sales-returns/sales-returns.service.ts apps/backend/test/sales-returns-orders.spec.ts
+git add apps/backend/src/sales-returns/sales-returns.service.ts apps/backend/src/sales-returns/sales-returns.service.spec.ts
 git commit -m "fix(sales-returns): post refunds against the original payment method
 
 The service hardcoded conditionValue 'cash'. Returning a credit sale
@@ -1121,7 +1152,7 @@ Migrates existing tenants and removes the fabricated vouchers. This is the only 
 **Files:**
 - Create: `packages/database/prisma/repair-fabricated-vouchers.utils.ts` (pure, testable)
 - Create: `packages/database/prisma/repair-fabricated-vouchers.ts` (the script)
-- Create: `apps/backend/test/repair-fabricated-vouchers.spec.ts`
+- Create: `apps/backend/src/accounting/repair-fabricated-vouchers.spec.ts`
 - Modify: `packages/database/package.json` (add script)
 
 **Interfaces:**
@@ -1210,13 +1241,13 @@ export function isFabricatedVoucher(
 
 - [ ] **Step 2: Write the fingerprint tests**
 
-Create `apps/backend/test/repair-fabricated-vouchers.spec.ts`:
+Create `apps/backend/src/accounting/repair-fabricated-vouchers.spec.ts` (under `src/` so CI runs it):
 
 ```ts
 import {
     isFabricatedVoucher,
     FabricationCandidate,
-} from '../../../packages/database/prisma/repair-fabricated-vouchers.utils';
+} from '@erp71/database/prisma/repair-fabricated-vouchers.utils';
 
 const accountNameById = new Map<string, string>([
     ['acc-bank', 'Main Bank Account'],
@@ -1284,8 +1315,10 @@ describe('isFabricatedVoucher', () => {
 
 - [ ] **Step 3: Run the tests**
 
-Run: `cd apps/backend && npx jest test/repair-fabricated-vouchers.spec.ts`
+Run: `cd apps/backend && npx jest src/accounting/repair-fabricated-vouchers.spec.ts`
 Expected: PASS.
+
+The `@erp71/database/...` import resolves via `moduleNameMapper` in `apps/backend/jest.config.js`. If it does not resolve, fall back to the relative path `../../../../packages/database/prisma/repair-fabricated-vouchers.utils`.
 
 - [ ] **Step 4: Write the script**
 
@@ -1479,7 +1512,7 @@ If the local database is unusable (per project notes it is schema-drifted and on
 - [ ] **Step 8: Commit**
 
 ```bash
-git add packages/database/prisma/repair-fabricated-vouchers.ts packages/database/prisma/repair-fabricated-vouchers.utils.ts apps/backend/test/repair-fabricated-vouchers.spec.ts packages/database/package.json
+git add packages/database/prisma/repair-fabricated-vouchers.ts packages/database/prisma/repair-fabricated-vouchers.utils.ts apps/backend/src/accounting/repair-fabricated-vouchers.spec.ts packages/database/package.json
 git commit -m "feat(db): add repair script for fabricated vouchers
 
 Existing tenants cannot be fixed by the bootstrap change alone -
@@ -1587,9 +1620,9 @@ In `apps/backend/jest.config.js`, delete these three lines and the comment above
 - [ ] **Step 6: Run the full backend suite exactly as CI will**
 
 Run: `cd apps/backend && npx jest --testPathPatterns="src/" --passWithNoTests --forceExit`
-Expected: PASS.
+Expected: **no NEW failures versus baseline.** Do not expect a clean run — see Global Constraints. The three failing suites live under `apps/backend/test/` and are not matched by `src/`, so this command should be green; if anything under `src/` fails, it is yours and must be fixed.
 
-If `accounting.controller.spec.ts` fails, fix it. It was disabled rather than repaired; if the failure is a genuine product bug, stop and report rather than deleting the assertion.
+If `accounting.controller.spec.ts` or `bootstrap-accounting.spec.ts` fails once re-enabled, fix it. They were disabled rather than repaired; if a failure is a genuine product bug, stop and report rather than deleting the assertion.
 
 - [ ] **Step 7: Commit**
 
@@ -1638,6 +1671,80 @@ Add under the same section:
 ```bash
 git add TODO.md
 git commit -m "docs: log accounting posting correctness completion + follow-ups"
+```
+
+---
+
+### Task 12: Make CI run `apps/backend/test/`
+
+**Deliberately last.** Its outcome depends on infrastructure nobody has ever observed, so it must not block the correctness work in Tasks 1-11.
+
+CI runs `--testPathPatterns="src/"` — 93 suites, none from `apps/backend/test/`. So `database-exports.spec.ts`, the guard written specifically to stop the `.js`-drift bug that has shipped **three times**, does not actually run in CI. Neither do the integration suites.
+
+**The unknown:** three suites there (`integration.spec.ts`, `inventory-operations.spec.ts`, `sales-returns-orders.spec.ts`) fail locally — hook/connection timeouts against a real database, because the root `.env` points at `localhost:5432`, an empty database, while the dev container publishes 5434. **CI runs `prisma db push` onto a clean database first, so they may well pass there.** CI is the only oracle; do not guess.
+
+**Files:**
+- Modify: `.github/workflows/deploy.yaml`
+
+- [ ] **Step 1: Point CI at both directories**
+
+In `.github/workflows/deploy.yaml`, change the backend test step's pattern from `"src/"` to cover both:
+
+```yaml
+      - name: Run backend unit + integration tests with coverage
+        run: |
+          npx jest --testPathPatterns="(src|test)/" --passWithNoTests --coverage --forceExit
+        working-directory: apps/backend
+```
+
+- [ ] **Step 2: Confirm the pattern picks up the extra suites**
+
+Run: `cd apps/backend && npx jest --testPathPatterns="(src|test)/" --listTests | wc -l`
+Expected: 98 — the 93 from `src/` plus the 5 under `test/`.
+
+- [ ] **Step 3: Commit and push, then read CI**
+
+```bash
+git add .github/workflows/deploy.yaml
+git commit -m "ci: run apps/backend/test/ suites as well
+
+CI matched only src/, so nothing under apps/backend/test/ ever ran -
+including database-exports.spec.ts, the guard added specifically to stop
+the packages/database .ts/.js drift bug that has shipped three times. It
+was protecting nothing."
+git push origin dev
+```
+
+Then watch the run: `gh run watch` (or `gh run list --branch dev --limit 1`).
+
+- [ ] **Step 4: Judge the result — do NOT fix 60 tests in this project**
+
+If CI is **green**: done. The suites only ever failed locally, on a misconfigured `DATABASE_URL`. Say so in the report.
+
+If CI is **red**, read the failures and split them:
+
+- **Failures this branch caused** — fix them. This is the whole point of enabling the suites.
+- **Pre-existing failures** — do **not** fix them here. That is a separate project. Quarantine each failing suite individually, with a comment naming it and why, so the rest of `test/` still runs:
+
+```yaml
+          npx jest --testPathPatterns="(src|test)/" --passWithNoTests --coverage --forceExit \
+            --testPathIgnorePatterns="test/integration.spec.ts"
+```
+
+Add one `--testPathIgnorePatterns` per genuinely pre-existing broken suite — **never** a blanket `test/` exclusion, which would undo this task. `database-exports.spec.ts` must run.
+
+Then log each quarantined suite in `TODO.md` with its actual failure mode, and report to the controller which suites you quarantined and why.
+
+- [ ] **Step 5: Commit any quarantine**
+
+```bash
+git add .github/workflows/deploy.yaml TODO.md
+git commit -m "ci: quarantine pre-existing broken integration suites
+
+Enabling apps/backend/test/ surfaced suites that were already failing
+before this branch. Quarantined individually rather than by excluding
+the directory, so database-exports.spec.ts and the rest still run.
+Each is logged in TODO.md with its failure mode."
 ```
 
 ---
