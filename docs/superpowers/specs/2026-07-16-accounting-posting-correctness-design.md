@@ -106,7 +106,7 @@ Failing to do that is what produced the dead rules.
 | | | `nagad` *(new)* | Dr Nagad Account, Cr Sales Revenue |
 | | | `credit` *(new)* | Dr Accounts Receivable, Cr Sales Revenue |
 | `sale_return` | `payment_mode` | same set (after caller fix) | mirror of `sale` |
-| `purchase` | `payment_mode` | `cash` / `bank` / `credit` (after caller fix) | Dr Purchases, Cr Cash / Bank / Purchase Payable |
+| `purchase` | `payment_mode` | `credit` only — see note below | Dr Purchases, Cr Purchase Payable |
 | `purchase_return` | `none` | `null` | Dr Purchase Payable, Cr Purchases |
 | `expense` | `payment_mode` | `cash` / `bank` | unchanged |
 | `customer_payment` | `payment_direction` | `receive` / `pay` | Dr Cash, Cr Accounts Receivable (and reverse) |
@@ -149,8 +149,17 @@ keeping moved into `DEFAULT_ACCOUNTING_TEMPLATE`.
   a credit sale's return credits Accounts Receivable. Today it posts *Dr Sales Revenue, Cr Cash*,
   refunding cash that was never received. This overlaps the returns fixes already logged in the
   demo-data spec; they land together.
-- **`purchases.service.ts:140`** stops hardcoding `'credit'` and classifies from `paid_amount` vs
-  `total_amount`.
+- **`purchases.service.ts:140`** keeps `'credit'` — corrected during planning. An earlier draft of this
+  spec called for classifying from `paid_amount` vs `total_amount`; that is impossible.
+  `CreatePurchaseDto` has no `paidAmount` field, `tx.purchase.create` (`:75`) never writes
+  `paid_amount` (schema default `0`), and the service always books the full total as
+  `CREDIT_PURCHASE`. A purchase is *always* a payable in this data model, so classifying would return
+  `'credit'` every time — identical to the hardcode, with more code.
+
+  So `purchase`/`cash` and `purchase`/`bank` are unreachable **by construction**, not merely by the
+  hardcode, and the target rule set above deliberately omits them. Recording a cash purchase is a
+  two-step flow (purchase, then supplier payment), which is coherent double-entry and out of scope.
+  The work only adds a comment explaining this, so the next reader doesn't "fix" it.
 
 ### Out of scope: `PaymentMethod.account_id`
 
@@ -227,4 +236,8 @@ return `posted`. That mock is precisely why nobody noticed customer payments nev
 - Perpetual inventory accounting (needs multi-leg vouchers or a second COGS event per sale).
 - `inventory-shrinkage.service.ts` uses `product.price` (selling price) as `unitCost` on the movement.
 - `suppliers.service.recordCreditPayment` (`:611`) never posts to accounting, unlike the customer
-  equivalent.
+  equivalent. **Consequence: Purchase Payable never clears in the ledger.** Purchases post
+  Dr Purchases / Cr Purchase Payable, but paying the supplier moves `due_balance` without a voucher,
+  so the payable grows forever.
+- Purchases cannot record a payment at all (`CreatePurchaseDto` has no `paidAmount`). Adding it needs
+  the supplier credit transaction to book only the unpaid remainder.
