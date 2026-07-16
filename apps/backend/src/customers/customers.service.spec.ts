@@ -13,9 +13,12 @@ jest.mock('@erp71/database', () => {
   };
 });
 
+// Default to 'skipped', not 'posted'. A mock that always reports success is why
+// nobody noticed customer payments posted nothing for want of an AR account.
 jest.mock('../accounting/posting.utils', () => ({
-  autoPostFromRules: jest.fn().mockResolvedValue({ postingStatus: 'posted', voucherId: 'v1', voucherNumber: 'CR-00001' }),
+  autoPostFromRules: jest.fn().mockResolvedValue({ postingStatus: 'skipped' }),
   voidAutoPostedVoucher: jest.fn().mockResolvedValue(undefined),
+  assertFiscalPeriodOpen: jest.fn().mockResolvedValue(undefined),
 }));
 
 describe('CustomersService', () => {
@@ -606,5 +609,18 @@ describe('CustomersService', () => {
         }),
       );
     });
+  });
+
+  describe('ensureCustomerPaymentPostingSetup — Accounts Receivable dependency', () => {
+      it('is provisioned by the default template', async () => {
+          // Regression: the template had no 'Accounts Receivable' account, so
+          // ensureCustomerPaymentPostingSetup returned early, no customer_payment
+          // rules were ever created, and every payment silently posted nothing.
+          const { DEFAULT_ACCOUNTING_TEMPLATE } = jest.requireActual('@erp71/database');
+          const names = DEFAULT_ACCOUNTING_TEMPLATE.flatMap((g: any) =>
+              g.subgroups.flatMap((s: any) => s.accounts.map((a: any) => a.name)),
+          );
+          expect(names).toContain('Accounts Receivable');
+      });
   });
 });

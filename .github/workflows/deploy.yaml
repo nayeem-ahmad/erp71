@@ -68,10 +68,7 @@ jobs:
       - run: npx prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate
       - name: Run backend unit + integration tests with coverage
         run: |
-          npx jest --testPathPatterns="src/" --passWithNoTests --coverage --forceExit \
-            --testPathIgnorePatterns="src/accounting/bootstrap-accounting.spec.ts" \
-            --testPathIgnorePatterns="src/accounting/accounting.controller.spec.ts" \
-            --testPathIgnorePatterns="src/customers/customers.service.spec.ts"
+          npx jest --testPathPatterns="src/" --passWithNoTests --coverage --forceExit
         working-directory: apps/backend
       - name: Upload backend coverage report
         uses: actions/upload-artifact@v4
