@@ -56,6 +56,17 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 					},
 				],
 			},
+			{
+				name: 'Inter-Branch Clearing',
+				accounts: [
+					{
+						name: 'Due from Branches',
+						code: '1040',
+						type: AccountType.ASSET,
+						category: AccountCategory.GENERAL,
+					},
+				],
+			},
 		],
 	},
 	{
@@ -79,6 +90,17 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 					{
 						name: 'Loans Payable',
 						code: '2020',
+						type: AccountType.LIABILITY,
+						category: AccountCategory.GENERAL,
+					},
+				],
+			},
+			{
+				name: 'Inter-Branch Clearing',
+				accounts: [
+					{
+						name: 'Due to Branches',
+						code: '2040',
 						type: AccountType.LIABILITY,
 						category: AccountCategory.GENERAL,
 					},
