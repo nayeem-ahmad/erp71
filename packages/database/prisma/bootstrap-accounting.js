@@ -20,6 +20,29 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 						type: AccountType.ASSET,
 						category: AccountCategory.BANK,
 					},
+					{
+						name: 'bKash Account',
+						code: '1015',
+						type: AccountType.ASSET,
+						category: AccountCategory.CASH,
+					},
+					{
+						name: 'Nagad Account',
+						code: '1016',
+						type: AccountType.ASSET,
+						category: AccountCategory.CASH,
+					},
+				],
+			},
+			{
+				name: 'Receivables',
+				accounts: [
+					{
+						name: 'Accounts Receivable',
+						code: '1030',
+						type: AccountType.ASSET,
+						category: AccountCategory.GENERAL,
+					},
 				],
 			},
 			{
@@ -27,7 +50,7 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 				accounts: [
 					{
 						name: 'Loans Receivable',
-						code: '1030',
+						code: '1035',
 						type: AccountType.ASSET,
 						category: AccountCategory.GENERAL,
 					},
@@ -101,6 +124,17 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 		name: 'Operating Expenses',
 		type: AccountType.EXPENSE,
 		subgroups: [
+			{
+				name: 'Cost of Sales',
+				accounts: [
+					{
+						name: 'Purchases',
+						code: '5015',
+						type: AccountType.EXPENSE,
+						category: AccountCategory.GENERAL,
+					},
+				],
+			},
 			{
 				name: 'General Expenses',
 				accounts: [
@@ -308,7 +342,7 @@ async function ensureLoanPostingSetup(db, tenantId) {
 			group_id: assetGroup.id,
 			subgroup_id: receivableSubgroup.id,
 			name: 'Loans Receivable',
-			code: '1030',
+			code: '1035',
 			type: AccountType.ASSET,
 			category: AccountCategory.GENERAL,
 		},
