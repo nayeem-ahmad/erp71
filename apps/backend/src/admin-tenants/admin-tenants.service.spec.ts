@@ -1,6 +1,8 @@
 jest.mock('@erp71/database', () => ({
     bootstrapDefaultAccountingForTenant: jest.fn().mockResolvedValue(undefined),
-    seedBusinessTypeTemplate: jest.fn().mockResolvedValue(undefined),
+    seedBusinessTypeTemplate: jest.fn().mockResolvedValue({
+        created: 0, skipped: 0, groups: 0, subgroups: 0, brands: 0,
+    }),
     seedDefaultTenantRoles: jest.fn().mockResolvedValue(undefined),
     seedDefaultPaymentMethods: jest.fn().mockResolvedValue(undefined),
     PrismaClient: class MockPrismaClient {},
@@ -11,8 +13,9 @@ jest.mock('bcrypt', () => ({
 }));
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { seedBusinessTypeTemplate } from '@erp71/database';
 import { AdminTenantsService } from './admin-tenants.service';
 import { DatabaseService } from '../database/database.service';
 import { BillingService } from '../billing/billing.service';
@@ -313,6 +316,14 @@ describe('AdminTenantsService', () => {
       const result = await service.getTenant('t-1');
 
       expect(result.stores[0].address).toBe('123 Dhaka');
+    });
+
+    it('includes business_type in the response', async () => {
+      db.tenant.findFirst.mockResolvedValue(makeTenant({ business_type: 'SURGICAL_MEDICAL' }));
+
+      const result = await service.getTenant('t-1');
+
+      expect(result.business_type).toBe('SURGICAL_MEDICAL');
     });
   });
 
@@ -991,5 +1002,117 @@ describe('AdminTenantsService', () => {
         ).rejects.toThrow(NotFoundException);
       });
     });
+  });
+
+  /* ------------------------------------------------------------------ */
+  /*  setBusinessType                                                     */
+  /* ------------------------------------------------------------------ */
+
+  describe('setBusinessType', () => {
+      it('updates business_type and writes an audit row', async () => {
+          db.tenant.findFirst.mockResolvedValue(makeTenant({ id: 't1', business_type: null }));
+          db.tenant.update.mockResolvedValue({ id: 't1', business_type: 'SURGICAL_MEDICAL' });
+
+          const result = await service.setBusinessType('t1', { businessType: 'SURGICAL_MEDICAL' }, 'admin1');
+
+          expect(db.tenant.update).toHaveBeenCalledWith({
+              where: { id: 't1' },
+              data: { business_type: 'SURGICAL_MEDICAL' },
+              select: { id: true, business_type: true },
+          });
+          expect(auditService.log).toHaveBeenCalledWith(
+              'tenant.business_type.set',
+              'Tenant',
+              { userId: 'admin1' },
+              't1',
+              { business_type: 'SURGICAL_MEDICAL', previous_business_type: null },
+          );
+          expect(result).toEqual({ id: 't1', business_type: 'SURGICAL_MEDICAL' });
+      });
+
+      it('throws NotFoundException for an unknown or deleted tenant', async () => {
+          db.tenant.findFirst.mockResolvedValue(null);
+
+          await expect(
+              service.setBusinessType('nope', { businessType: 'SURGICAL_MEDICAL' }, 'admin1'),
+          ).rejects.toBeInstanceOf(NotFoundException);
+          expect(db.tenant.findFirst).toHaveBeenCalledWith(
+              expect.objectContaining({ where: { id: 'nope', deleted_at: null } }),
+          );
+          expect(db.tenant.update).not.toHaveBeenCalled();
+      });
+
+      it('does not run the catalog import', async () => {
+          db.tenant.findFirst.mockResolvedValue(makeTenant({ id: 't1', business_type: null }));
+          db.tenant.update.mockResolvedValue({ id: 't1', business_type: 'SURGICAL_MEDICAL' });
+
+          await service.setBusinessType('t1', { businessType: 'SURGICAL_MEDICAL' }, 'admin1');
+
+          expect(seedBusinessTypeTemplate).not.toHaveBeenCalled();
+      });
+  });
+
+  /* ------------------------------------------------------------------ */
+  /*  importCatalog                                                       */
+  /* ------------------------------------------------------------------ */
+
+  describe('importCatalog', () => {
+      it('runs the seeder and returns the summary', async () => {
+          db.tenant.findFirst.mockResolvedValue(makeTenant({ id: 't1', business_type: 'SURGICAL_MEDICAL' }));
+          (seedBusinessTypeTemplate as jest.Mock).mockResolvedValue({
+              created: 1173, skipped: 0, groups: 24, subgroups: 103, brands: 42,
+          });
+
+          const result = await service.importCatalog('t1', 'admin1');
+
+          expect(seedBusinessTypeTemplate).toHaveBeenCalledWith(db, 't1', 'SURGICAL_MEDICAL');
+          expect(result).toEqual({
+              business_type: 'SURGICAL_MEDICAL',
+              created: 1173, skipped: 0, groups: 24, subgroups: 103, brands: 42,
+          });
+          expect(auditService.log).toHaveBeenCalledWith(
+              'tenant.catalog.import',
+              'Tenant',
+              { userId: 'admin1' },
+              't1',
+              { business_type: 'SURGICAL_MEDICAL', created: 1173, skipped: 0, groups: 24, subgroups: 103, brands: 42 },
+          );
+      });
+
+      it('passes the seeder\'s skipped counts through to the response', async () => {
+          db.tenant.findFirst.mockResolvedValue(makeTenant({ id: 't1', business_type: 'SURGICAL_MEDICAL' }));
+          (seedBusinessTypeTemplate as jest.Mock).mockResolvedValue({
+              created: 0, skipped: 1173, groups: 24, subgroups: 103, brands: 42,
+          });
+
+          const result = await service.importCatalog('t1', 'admin1');
+
+          expect(result.created).toBe(0);
+          expect(result.skipped).toBe(1173);
+      });
+
+      it('throws NotFoundException for an unknown or deleted tenant', async () => {
+          db.tenant.findFirst.mockResolvedValue(null);
+
+          await expect(service.importCatalog('nope', 'admin1')).rejects.toBeInstanceOf(NotFoundException);
+          expect(db.tenant.findFirst).toHaveBeenCalledWith(
+              expect.objectContaining({ where: { id: 'nope', deleted_at: null } }),
+          );
+          expect(seedBusinessTypeTemplate).not.toHaveBeenCalled();
+      });
+
+      it('throws BadRequestException when the tenant has no business type', async () => {
+          db.tenant.findFirst.mockResolvedValue(makeTenant({ id: 't1', business_type: null }));
+
+          await expect(service.importCatalog('t1', 'admin1')).rejects.toBeInstanceOf(BadRequestException);
+          expect(seedBusinessTypeTemplate).not.toHaveBeenCalled();
+      });
+
+      it('throws BadRequestException when the business type has no template', async () => {
+          db.tenant.findFirst.mockResolvedValue(makeTenant({ id: 't1', business_type: 'PHARMACY' }));
+
+          await expect(service.importCatalog('t1', 'admin1')).rejects.toBeInstanceOf(BadRequestException);
+          expect(seedBusinessTypeTemplate).not.toHaveBeenCalled();
+      });
   });
 });

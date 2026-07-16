@@ -14,6 +14,7 @@ import {
     RecordTenantRefundDto,
     AdminSellSmsCreditsDto,
     AdminSellAiCreditsDto,
+    SetAdminTenantBusinessTypeDto,
 } from './admin-tenants.dto';
 
 @Controller('admin/tenants')
@@ -64,6 +65,23 @@ export class AdminTenantsController {
         @Request() req: any,
     ) {
         return this.adminTenantsService.updateLocalization(tenantId, dto, req.user.userId);
+    }
+
+    @Patch(':tenantId/business-type')
+    setBusinessType(
+        @Param('tenantId') tenantId: string,
+        @Body() dto: SetAdminTenantBusinessTypeDto,
+        @Request() req: any,
+    ) {
+        return this.adminTenantsService.setBusinessType(tenantId, dto, req.user.userId);
+    }
+
+    @Post(':tenantId/catalog-import')
+    importCatalog(
+        @Param('tenantId') tenantId: string,
+        @Request() req: any,
+    ) {
+        return this.adminTenantsService.importCatalog(tenantId, req.user.userId);
     }
 
     @Patch(':tenantId/suspend')

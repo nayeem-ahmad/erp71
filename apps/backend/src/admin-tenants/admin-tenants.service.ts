@@ -8,6 +8,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
 import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate, seedDefaultPaymentMethods, seedDefaultTenantRoles } from '@erp71/database';
 import {
+    BUSINESS_TYPES_WITH_TEMPLATE,
     DEFAULT_MOBILE_COUNTRY_CODE,
     ROLE_DEFAULT_PERMISSIONS,
     UserRole,
@@ -38,6 +39,7 @@ import {
     AdminResetPlatformUserPasswordDto,
     AdminSellSmsCreditsDto,
     AdminSellAiCreditsDto,
+    SetAdminTenantBusinessTypeDto,
 } from './admin-tenants.dto';
 
 const ACTIVE_TENANT_FILTER = { deleted_at: null } as const;
@@ -421,6 +423,78 @@ export class AdminTenantsService {
         return updated;
     }
 
+    async setBusinessType(
+        tenantId: string,
+        dto: SetAdminTenantBusinessTypeDto,
+        adminUserId: string,
+    ) {
+        const tenant = await this.db.tenant.findFirst({
+            where: { id: tenantId, ...ACTIVE_TENANT_FILTER },
+            select: { id: true, business_type: true },
+        });
+        if (!tenant) {
+            throw new NotFoundException('Tenant not found');
+        }
+
+        const updated = await this.db.tenant.update({
+            where: { id: tenantId },
+            data: { business_type: dto.businessType },
+            select: { id: true, business_type: true },
+        });
+
+        await this.auditService.log(
+            'tenant.business_type.set',
+            'Tenant',
+            { userId: adminUserId },
+            tenantId,
+            {
+                business_type: updated.business_type,
+                previous_business_type: tenant.business_type,
+            },
+        );
+
+        return updated;
+    }
+
+    /**
+     * Loads the starter product catalog for the tenant's business type.
+     * Runs synchronously — the seeder is re-runnable (it upserts groups/brands and
+     * skips SKUs the tenant already has), so a repeat call is a safe no-op.
+     */
+    async importCatalog(tenantId: string, adminUserId: string) {
+        const tenant = await this.db.tenant.findFirst({
+            where: { id: tenantId, ...ACTIVE_TENANT_FILTER },
+            select: { id: true, business_type: true },
+        });
+        if (!tenant) {
+            throw new NotFoundException('Tenant not found');
+        }
+
+        if (!tenant.business_type) {
+            throw new BadRequestException(
+                'This tenant has no business type. Set a business type before importing a catalog.',
+            );
+        }
+
+        if (!BUSINESS_TYPES_WITH_TEMPLATE.includes(tenant.business_type as any)) {
+            throw new BadRequestException(
+                `No starter catalog is available for business type ${tenant.business_type}.`,
+            );
+        }
+
+        const summary = await seedBusinessTypeTemplate(this.db, tenantId, tenant.business_type);
+
+        await this.auditService.log(
+            'tenant.catalog.import',
+            'Tenant',
+            { userId: adminUserId },
+            tenantId,
+            { business_type: tenant.business_type, ...summary },
+        );
+
+        return { business_type: tenant.business_type, ...summary };
+    }
+
     async suspendTenant(tenantId: string, dto: SuspendTenantDto, adminUserId: string) {
         const tenant = await this.db.tenant.findFirst({
             where: { id: tenantId, ...ACTIVE_TENANT_FILTER },
@@ -693,9 +767,14 @@ export class AdminTenantsService {
         sendPasswordResetAfterTx?.();
 
         if (dto.businessType) {
-            seedBusinessTypeTemplate(this.db, tenant.id, dto.businessType).catch((err: any) =>
-                console.error(`[AdminTenantsService] Failed to seed business type template:`, err),
-            );
+            // Deliberately not awaited; see the note in AuthService.setupTenant.
+            try {
+                void seedBusinessTypeTemplate(this.db, tenant.id, dto.businessType).catch((err: any) =>
+                    console.error(`[AdminTenantsService] Failed to seed business type template:`, err),
+                );
+            } catch (err) {
+                console.error(`[AdminTenantsService] Failed to start business type template seed:`, err);
+            }
         }
 
         await this.auditService.log('tenant.admin_create', 'Tenant', { userId: adminUserId }, tenant.id, {
@@ -1265,6 +1344,7 @@ export class AdminTenantsService {
             default_locale: tenant.default_locale,
             localization_enabled: tenant.localization_enabled,
             secondary_locale: tenant.secondary_locale,
+            business_type: tenant.business_type ?? null,
             owner: tenant.owner
                 ? {
                       id: tenant.owner.id,

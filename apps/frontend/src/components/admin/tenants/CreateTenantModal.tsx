@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Loader2, Search } from 'lucide-react';
+import { BUSINESS_TYPE_LABELS, BUSINESS_TYPE_VALUES } from '@erp71/shared-types';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { emptyCreateDraft, type CreateDraft, type PlanCode } from './types';
@@ -191,10 +192,9 @@ export default function CreateTenantModal({ open, onClose, onCreated }: Props) {
                         className="w-full rounded-md border border-gray-100 bg-gray-50 px-4 py-3 text-sm font-medium outline-none"
                     >
                         <option value="">{mc.businessType}</option>
-                        <option value="GROCERY">Grocery</option>
-                        <option value="PHARMACY">Pharmacy</option>
-                        <option value="SURGICAL_MEDICAL">Surgical / Medical</option>
-                        <option value="COMPUTER_HARDWARE">Computer Hardware</option>
+                        {BUSINESS_TYPE_VALUES.map((value) => (
+                            <option key={value} value={value}>{BUSINESS_TYPE_LABELS[value]}</option>
+                        ))}
                     </select>
                 </div>
 

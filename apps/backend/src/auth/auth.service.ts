@@ -488,9 +488,16 @@ export class AuthService {
         );
 
         if (dto.businessType) {
-            seedBusinessTypeTemplate(this.db, result.tenant.id, dto.businessType).catch((err) =>
-                console.error(`Failed to seed product template for ${dto.businessType}:`, err),
-            );
+            // Deliberately not awaited: signup should not block on a bulk import.
+            // Must be try/catch, not .catch() — a synchronous throw never reaches
+            // a promise handler, which 500'd signup after the tenant had committed.
+            try {
+                void seedBusinessTypeTemplate(this.db, result.tenant.id, dto.businessType).catch((err) =>
+                    console.error(`Failed to seed product template for ${dto.businessType}:`, err),
+                );
+            } catch (err) {
+                console.error(`Failed to start product template seed for ${dto.businessType}:`, err);
+            }
         }
 
         return result;

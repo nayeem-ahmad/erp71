@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Building2, Loader2, LogIn, RotateCcw, ShieldCheck, Trash2, UserX, Users } from 'lucide-react';
+import { Building2, Download, Loader2, LogIn, RotateCcw, ShieldCheck, Trash2, UserX, Users } from 'lucide-react';
+import { BUSINESS_TYPE_LABELS, BUSINESS_TYPE_VALUES, BUSINESS_TYPES_WITH_TEMPLATE } from '@erp71/shared-types';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
@@ -35,6 +36,7 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
     const sc = m.subscriptionControls;
     const lc = m.localizationControls;
     const nc = m.navLayoutControls;
+    const bt = m.businessTypeControls;
 
     const [tenant, setTenant] = useState<TenantRecord | null>(null);
     const [loading, setLoading] = useState(false);
@@ -46,6 +48,9 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
     const [isImpersonating, setIsImpersonating] = useState(false);
     const [tenantNavKind, setTenantNavKind] = useState<'none' | 'custom' | 'pinned_default'>('none');
     const [isResettingTenantNav, setIsResettingTenantNav] = useState(false);
+    const [businessTypeDraft, setBusinessTypeDraft] = useState('');
+    const [isSavingBusinessType, setIsSavingBusinessType] = useState(false);
+    const [isImportingCatalog, setIsImportingCatalog] = useState(false);
 
     const subscriptionForm = useMemo(() => {
         if (!tenant?.subscription) {
@@ -82,6 +87,10 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
     useEffect(() => {
         setLocalizationDraft(localizationForm);
     }, [localizationForm]);
+
+    useEffect(() => {
+        setBusinessTypeDraft(tenant?.business_type ?? '');
+    }, [tenant?.business_type]);
 
     const loadTenant = async (id: string) => {
         setLoading(true);
@@ -169,6 +178,42 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
             setError(err instanceof Error ? err.message : lc.saveFailed);
         } finally {
             setIsSavingLocalization(false);
+        }
+    };
+
+    const saveBusinessType = async () => {
+        if (!tenant || !businessTypeDraft) return;
+        setIsSavingBusinessType(true);
+        setError('');
+        try {
+            await api.setAdminTenantBusinessType(tenant.id, businessTypeDraft);
+            await loadTenant(tenant.id);
+            onToast(bt.saved);
+            onChanged();
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : bt.saveFailed);
+        } finally {
+            setIsSavingBusinessType(false);
+        }
+    };
+
+    const importCatalog = async () => {
+        if (!tenant) return;
+        if (!window.confirm(formatMessage(bt.importConfirm, { name: tenant.name }))) return;
+        setIsImportingCatalog(true);
+        setError('');
+        try {
+            const summary = await api.importAdminTenantCatalog(tenant.id);
+            await loadTenant(tenant.id);
+            onToast(formatMessage(bt.imported, {
+                created: String(summary.created),
+                skipped: String(summary.skipped),
+            }));
+            onChanged();
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : bt.importFailed);
+        } finally {
+            setIsImportingCatalog(false);
         }
     };
 
@@ -434,6 +479,50 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                     {isResettingTenantNav ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
                                     {nc.reset}
                                 </button>
+                            </div>
+
+                            <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-5 space-y-4">
+                                <div>
+                                    <p className="text-[10px] font-medium text-blue-400">{bt.badge}</p>
+                                    <h3 className="mt-2 text-lg font-bold tracking-tight text-blue-900">{bt.title}</h3>
+                                    <p className="mt-1 text-xs text-blue-700/80">{bt.description}</p>
+                                </div>
+                                <select
+                                    value={businessTypeDraft}
+                                    onChange={(event) => setBusinessTypeDraft(event.target.value)}
+                                    aria-label={bt.typeLabel}
+                                    className="w-full rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm font-medium outline-none"
+                                >
+                                    <option value="">{bt.typePlaceholder}</option>
+                                    {BUSINESS_TYPE_VALUES.map((value) => (
+                                        <option key={value} value={value}>{BUSINESS_TYPE_LABELS[value]}</option>
+                                    ))}
+                                </select>
+                                <div className="flex flex-wrap gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => void saveBusinessType()}
+                                        disabled={isSavingBusinessType || !businessTypeDraft || businessTypeDraft === (tenant.business_type ?? '')}
+                                        className="inline-flex min-h-touch items-center rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
+                                    >
+                                        {isSavingBusinessType ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                                        {bt.save}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => void importCatalog()}
+                                        disabled={isImportingCatalog || !tenant.business_type || !BUSINESS_TYPES_WITH_TEMPLATE.includes(tenant.business_type as never)}
+                                        className="inline-flex min-h-touch items-center gap-2 rounded-lg border border-blue-200 bg-white px-5 py-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-60"
+                                    >
+                                        {isImportingCatalog ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                                        {bt.import}
+                                    </button>
+                                </div>
+                                {!tenant.business_type ? (
+                                    <p className="text-xs font-medium text-blue-700">{bt.noTypeSet}</p>
+                                ) : !BUSINESS_TYPES_WITH_TEMPLATE.includes(tenant.business_type as never) ? (
+                                    <p className="text-xs font-medium text-blue-700">{bt.noTemplate}</p>
+                                ) : null}
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

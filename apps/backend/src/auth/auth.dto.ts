@@ -1,4 +1,5 @@
 import { IsEmail, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import { BUSINESS_TYPE_VALUES } from '@erp71/shared-types';
 
 const SUPPORTED_LOCALES = ['en', 'bn', 'ms'] as const;
 
@@ -67,7 +68,7 @@ export class CreateStoreDto {
     planCode?: 'BASIC' | 'ACCOUNTING' | 'STANDARD';
 
     @IsOptional()
-    @IsString()
+    @IsIn(BUSINESS_TYPE_VALUES)
     businessType?: string;
 }
 

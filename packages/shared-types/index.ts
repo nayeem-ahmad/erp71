@@ -317,6 +317,26 @@ export const SubscriptionPlanCode = {
 } as const;
 export type SubscriptionPlanCode = (typeof SubscriptionPlanCode)[keyof typeof SubscriptionPlanCode];
 
+export const BusinessType = {
+  SURGICAL_MEDICAL: 'SURGICAL_MEDICAL',
+  PHARMACY: 'PHARMACY',
+  GROCERY: 'GROCERY',
+  COMPUTER_HARDWARE: 'COMPUTER_HARDWARE',
+} as const;
+export type BusinessType = (typeof BusinessType)[keyof typeof BusinessType];
+
+export const BUSINESS_TYPE_VALUES = Object.values(BusinessType) as BusinessType[];
+
+/** Business types that have a starter product catalog under packages/database/prisma/templates/. */
+export const BUSINESS_TYPES_WITH_TEMPLATE: BusinessType[] = [BusinessType.SURGICAL_MEDICAL];
+
+export const BUSINESS_TYPE_LABELS: Record<BusinessType, string> = {
+  SURGICAL_MEDICAL: 'Surgical / Medical',
+  PHARMACY: 'Pharmacy',
+  GROCERY: 'Grocery',
+  COMPUTER_HARDWARE: 'Computer Hardware',
+};
+
 export interface SubscriptionPlanSummary {
   code: SubscriptionPlanCode;
   name: string;
