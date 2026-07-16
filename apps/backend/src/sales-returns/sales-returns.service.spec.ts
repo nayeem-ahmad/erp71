@@ -141,3 +141,65 @@ describe('SalesReturnsService', () => {
     expect(res.id).toEqual('ret-1');
   });
 });
+
+describe('SalesReturnsService — posting condition value', () => {
+    let service: SalesReturnsService;
+
+    /** @param sale the row tx.sale.findUnique should return */
+    const buildModule = async (sale: unknown) => {
+        const tx = {
+            sale: { findUnique: jest.fn().mockResolvedValue(sale) },
+            salesReturn: {
+                create: jest.fn().mockResolvedValue({
+                    id: 'ret-1',
+                    return_number: 'RET-1',
+                    total_refund: 250,
+                }),
+            },
+            customer: { update: jest.fn().mockResolvedValue({}) },
+        };
+        const db = { $transaction: jest.fn().mockImplementation(async (fn: any) => fn(tx)) };
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [SalesReturnsService, { provide: DatabaseService, useValue: db }],
+        }).compile();
+        return module.get<SalesReturnsService>(SalesReturnsService);
+    };
+
+    const saleRow = (overrides: Record<string, unknown>) => ({
+        id: 'sale-1',
+        store_id: 'store-1',
+        customer_id: 'cust-1',
+        total_amount: 500,
+        amount_paid: 500,
+        payments: [{ payment_method: 'Cash', amount: 500 }],
+        items: [{ id: 'si-1', product_id: 'p-1', quantity: 2, price_at_sale: 250, returns: [] }],
+        ...overrides,
+    });
+
+    const dto = { saleId: 'sale-1', storeId: 'store-1', items: [{ saleItemId: 'si-1', quantity: 1 }] };
+
+    const lastPosting = () => jest.mocked(autoPostFromRules).mock.calls.at(-1)![0];
+
+    beforeEach(() => jest.mocked(autoPostFromRules).mockClear());
+
+    it('classifies a credit sale return as credit, not cash', async () => {
+        // Regression: conditionValue was hardcoded 'cash', so returning a credit sale
+        // posted Dr Sales Revenue / Cr Cash in Hand - refunding cash the shop never
+        // received, and leaving the receivable untouched.
+        service = await buildModule(saleRow({ amount_paid: 0, payments: [] }));
+        await service.create('tenant-1', 'user-1', dto as any);
+        expect(lastPosting().conditionValue).toBe('credit');
+    });
+
+    it('classifies a bKash sale return as bkash', async () => {
+        service = await buildModule(saleRow({ payments: [{ payment_method: 'bKash', amount: 500 }] }));
+        await service.create('tenant-1', 'user-1', dto as any);
+        expect(lastPosting().conditionValue).toBe('bkash');
+    });
+
+    it('classifies a fully paid cash sale return as cash', async () => {
+        service = await buildModule(saleRow({}));
+        await service.create('tenant-1', 'user-1', dto as any);
+        expect(lastPosting().conditionValue).toBe('cash');
+    });
+});

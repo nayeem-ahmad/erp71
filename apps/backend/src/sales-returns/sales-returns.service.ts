@@ -5,6 +5,7 @@ import { DatabaseService } from '../database/database.service';
 import { CreateSalesReturnDto, UpdateSalesReturnDto } from './sales-returns.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
+import { classifyPaymentMode } from '../sales/classify-payment-mode';
 
 @Injectable()
 export class SalesReturnsService {
@@ -15,7 +16,7 @@ export class SalesReturnsService {
             // 1. Fetch original sale and its items
             const sale = await tx.sale.findUnique({
                 where: { id: dto.saleId, tenant_id: tenantId },
-                include: { items: { include: { returns: true } } }
+                include: { items: { include: { returns: true } }, payments: true }
             });
 
             if (!sale) throw new BadRequestException('Sale not found');
@@ -86,12 +87,19 @@ export class SalesReturnsService {
                  });
             }
 
+            // Refund the way the customer paid. An unpaid balance was a receivable,
+            // so its return credits AR rather than handing back cash.
+            const balanceDue = Number(sale.total_amount) - Number(sale.amount_paid);
+            const returnPaymentMode = balanceDue > 0.005
+                ? 'credit'
+                : classifyPaymentMode(sale.payments?.[0]?.payment_method ?? 'cash');
+
             const posting = await autoPostFromRules({
                 tx,
                 tenantId,
                 eventType: 'sale_return',
                 conditionKey: 'payment_mode',
-                conditionValue: 'cash',
+                conditionValue: returnPaymentMode,
                 sourceModule: 'sales',
                 sourceType: 'sale_return',
                 sourceId: salesReturn.id,
