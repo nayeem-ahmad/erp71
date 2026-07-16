@@ -158,8 +158,9 @@ export async function autoPostFromRules(input: AutoPostInput): Promise<AutoPostR
     const conditionValue = input.conditionValue ?? null;
     const idempotencyKey = `${input.tenantId}:${input.eventType}:${input.sourceId}`;
 
-    await assertFiscalPeriodOpen(input.tx, input.tenantId, input.date ?? new Date());
-
+    // Read-only lookup runs before the fiscal-period guard: an already-posted
+    // event must short-circuit as a no-op even if its period has since been
+    // locked. Retrying a no-op read path must never be blocked by a write guard.
     const existingEvent = await input.tx.postingEvent.findUnique({
         where: {
             tenant_id_idempotency_key: {
@@ -180,6 +181,10 @@ export async function autoPostFromRules(input: AutoPostInput): Promise<AutoPostR
             voucherType: existingEvent.voucher.voucher_type,
         };
     }
+
+    // Guard runs after the no-op short-circuit above, but before any
+    // PostingEvent row is created or mutated below.
+    await assertFiscalPeriodOpen(input.tx, input.tenantId, input.date ?? new Date());
 
     const postingEvent = existingEvent
         ? await input.tx.postingEvent.update({

@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { ensureInterBranchAccounts } from '@erp71/database';
 import { DatabaseService } from '../database/database.service';
 import { AccountCategory, VoucherAttribution, VoucherType } from '../accounting/accounting.constants';
+import { assertFiscalPeriodOpen } from '../accounting/posting.utils';
 import { InitiateFundTransferDto, ListFundTransfersQueryDto } from './fund-transfers.dto';
 
 const VOUCHER_PREFIX = 'FT';
@@ -38,6 +39,10 @@ export class FundTransfersService {
             });
 
             const voucherNumber = await this.generateVoucherNumber(tx, tenantId, VoucherType.FUND_TRANSFER);
+            // No explicit `date` is passed below, so the voucher is dated with the
+            // schema's `@default(now())` - guard the same date so locking a period
+            // actually stops this write.
+            await assertFiscalPeriodOpen(tx, tenantId, new Date());
             const sourceVoucher = await tx.voucher.create({
                 data: {
                     tenant_id: tenantId,
@@ -105,6 +110,10 @@ export class FundTransfersService {
             const { cashAccountId, dueToAccountId } = await this.resolveInterBranchAccounts(tx, tenantId);
 
             const voucherNumber = await this.generateVoucherNumber(tx, tenantId, VoucherType.FUND_TRANSFER);
+            // No explicit `date` is passed below, so the voucher is dated with the
+            // schema's `@default(now())` - guard the same date so locking a period
+            // actually stops this write.
+            await assertFiscalPeriodOpen(tx, tenantId, new Date());
             const destinationVoucher = await tx.voucher.create({
                 data: {
                     tenant_id: tenantId,

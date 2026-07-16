@@ -2009,6 +2009,9 @@ export class AccountingService {
 
         return this.db.$transaction(async (tx) => {
             const generatedNumber = await this.generateNextVoucherNumberWithClient(tx, tenantId, VoucherType.JOURNAL);
+            // The voucher is explicitly dated with `dto.asOfDate` below - guard
+            // that same date so locking the covering period actually blocks this.
+            await assertFiscalPeriodOpen(tx, tenantId, new Date(dto.asOfDate));
             return tx.voucher.create({
                 data: {
                     tenant_id: tenantId,
