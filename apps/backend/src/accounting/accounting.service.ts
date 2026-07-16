@@ -17,6 +17,7 @@ import {
     parseStoreIdsParam,
     plBalanceForType,
 } from './report-scope.utils';
+import { assertFiscalPeriodOpen } from './posting.utils';
 import { AuditService } from '../audit/audit.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 import { JOB_NAMES } from '../system-health/jobs/job-names';
@@ -711,6 +712,8 @@ export class AccountingService {
                 const parsedDate = dto.date ? new Date(dto.date) : undefined;
 
                 const attachmentRows = this.buildVoucherAttachmentRows(tenantId, dto.attachments);
+
+                await assertFiscalPeriodOpen(tx, tenantId, dto.date ? new Date(dto.date) : new Date());
 
                 return tx.voucher.create({
                     data: {

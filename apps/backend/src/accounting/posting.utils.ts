@@ -123,10 +123,42 @@ function resolveVoucherAttribution(input: AutoPostInput): string {
     return input.storeId ? VoucherAttribution.BRANCH : VoucherAttribution.COMPANY;
 }
 
+/**
+ * Rejects a posting dated into a locked fiscal period.
+ *
+ * `is_locked` was previously written by the lock/unlock endpoints and read by
+ * nothing, so locking a period did nothing at all.
+ *
+ * A date with no covering FiscalPeriod row is allowed - most tenants never create
+ * periods, and absence must not block posting.
+ */
+export async function assertFiscalPeriodOpen(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    date: Date,
+): Promise<void> {
+    const period = await tx.fiscalPeriod.findFirst({
+        where: {
+            tenant_id: tenantId,
+            start_date: { lte: date },
+            end_date: { gte: date },
+        },
+        select: { is_locked: true, period_label: true },
+    });
+
+    if (period?.is_locked) {
+        throw new BadRequestException(
+            `FISCAL_PERIOD_LOCKED: ${period.period_label} is locked and cannot accept new postings.`,
+        );
+    }
+}
+
 export async function autoPostFromRules(input: AutoPostInput): Promise<AutoPostResult> {
     const conditionKey = input.conditionKey ?? 'none';
     const conditionValue = input.conditionValue ?? null;
     const idempotencyKey = `${input.tenantId}:${input.eventType}:${input.sourceId}`;
+
+    await assertFiscalPeriodOpen(input.tx, input.tenantId, input.date ?? new Date());
 
     const existingEvent = await input.tx.postingEvent.findUnique({
         where: {
