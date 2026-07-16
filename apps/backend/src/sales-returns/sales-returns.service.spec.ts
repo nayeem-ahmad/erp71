@@ -202,4 +202,36 @@ describe('SalesReturnsService — posting condition value', () => {
         await service.create('tenant-1', 'user-1', dto as any);
         expect(lastPosting().conditionValue).toBe('cash');
     });
+
+    it('requests payments ordered by created_at so the refund account is deterministic', async () => {
+        // Postgres does not guarantee row order without an ORDER BY, and
+        // sales.service.ts rebuilds payment rows via delete-and-recreate on
+        // update, which scrambles physical row order. Without an explicit
+        // orderBy here, sale.payments?.[0] used to pick refunds could return a
+        // different payment method than the one the original sale posted
+        // against, so a split-tender, fully-paid sale could credit a
+        // different account on return than it debited on sale — silently and
+        // nondeterministically.
+        const tx = {
+            sale: { findUnique: jest.fn().mockResolvedValue(saleRow({})) },
+            salesReturn: {
+                create: jest.fn().mockResolvedValue({
+                    id: 'ret-1',
+                    return_number: 'RET-1',
+                    total_refund: 250,
+                }),
+            },
+            customer: { update: jest.fn().mockResolvedValue({}) },
+        };
+        const db = { $transaction: jest.fn().mockImplementation(async (fn: any) => fn(tx)) };
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [SalesReturnsService, { provide: DatabaseService, useValue: db }],
+        }).compile();
+        service = module.get<SalesReturnsService>(SalesReturnsService);
+
+        await service.create('tenant-1', 'user-1', dto as any);
+
+        const findUniqueArgs = tx.sale.findUnique.mock.calls.at(-1)![0];
+        expect(findUniqueArgs.include.payments).toEqual({ orderBy: { created_at: 'asc' } });
+    });
 });
