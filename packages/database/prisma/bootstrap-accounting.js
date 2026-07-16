@@ -116,6 +116,36 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 	},
 ];
 
+/**
+ * The default posting rules provisioned for every tenant.
+ *
+ * These are derived from the (eventType, conditionKey, conditionValue) tuples the
+ * services actually emit — see apps/backend/src/accounting/posting-contract.ts and
+ * its spec, which fail if this list and the callers drift apart.
+ *
+ * Deliberately absent: fund_movement and inventory_adjustment. Under the periodic
+ * inventory model this system uses, warehouse transfers and stock write-offs are not
+ * economic events (stock is expensed at purchase), so they must post NOTHING. A
+ * condition_key:'none' rule here would be WORSE than no rule, because
+ * autoPostFromRules falls back to it — that is what fabricated the Dr Bank / Cr Cash
+ * vouchers this work removes.
+ */
+const DEFAULT_POSTING_RULES = [
+	{ event_type: 'sale', condition_key: 'payment_mode', condition_value: 'cash', debit_account: 'Cash in Hand', credit_account: 'Sales Revenue', priority: 10 },
+	{ event_type: 'sale', condition_key: 'payment_mode', condition_value: 'bank', debit_account: 'Main Bank Account', credit_account: 'Sales Revenue', priority: 20 },
+	{ event_type: 'sale_return', condition_key: 'payment_mode', condition_value: 'cash', debit_account: 'Sales Revenue', credit_account: 'Cash in Hand', priority: 10 },
+	{ event_type: 'sale_return', condition_key: 'payment_mode', condition_value: 'bank', debit_account: 'Sales Revenue', credit_account: 'Main Bank Account', priority: 20 },
+	{ event_type: 'purchase', condition_key: 'payment_mode', condition_value: 'cash', debit_account: 'General Operating Expense', credit_account: 'Cash in Hand', priority: 10 },
+	{ event_type: 'purchase', condition_key: 'payment_mode', condition_value: 'bank', debit_account: 'General Operating Expense', credit_account: 'Main Bank Account', priority: 20 },
+	{ event_type: 'purchase', condition_key: 'payment_mode', condition_value: 'credit', debit_account: 'General Operating Expense', credit_account: 'Purchase Payable', priority: 30 },
+	{ event_type: 'purchase_return', condition_key: 'none', condition_value: null, debit_account: 'Purchase Payable', credit_account: 'General Operating Expense', priority: 100 },
+	{ event_type: 'inventory_adjustment', condition_key: 'none', condition_value: null, debit_account: 'General Operating Expense', credit_account: 'Cash in Hand', priority: 100 },
+	{ event_type: 'fund_movement', condition_key: 'none', condition_value: null, debit_account: 'Main Bank Account', credit_account: 'Cash in Hand', priority: 100 },
+	{ event_type: 'expense', condition_key: 'payment_mode', condition_value: 'cash', debit_account: 'General Operating Expense', credit_account: 'Cash in Hand', priority: 10 },
+	{ event_type: 'expense', condition_key: 'payment_mode', condition_value: 'bank', debit_account: 'General Operating Expense', credit_account: 'Main Bank Account', priority: 20 },
+	{ event_type: 'expense', condition_key: 'none', condition_value: null, debit_account: 'General Operating Expense', credit_account: 'Cash in Hand', priority: 100 },
+];
+
 async function bootstrapDefaultAccountingForTenant(db, tenantId) {
 	for (const groupDefinition of DEFAULT_ACCOUNTING_TEMPLATE) {
 		const group = await db.accountGroup.upsert({
@@ -186,121 +216,12 @@ async function bootstrapDefaultAccountingForTenant(db, tenantId) {
 	});
 
 	const accountByName = new Map(accounts.map((account) => [account.name, account.id]));
-	const cashId = accountByName.get('Cash in Hand');
-	const bankId = accountByName.get('Main Bank Account');
-	const salesRevenueId = accountByName.get('Sales Revenue');
-	const purchasePayableId = accountByName.get('Purchase Payable');
-	const expenseId = accountByName.get('General Operating Expense');
 
-	const defaultRules = [
-		{
-			event_type: 'sale',
-			condition_key: 'payment_mode',
-			condition_value: 'cash',
-			debit_account_id: cashId,
-			credit_account_id: salesRevenueId,
-			priority: 10,
-		},
-		{
-			event_type: 'sale',
-			condition_key: 'payment_mode',
-			condition_value: 'bank',
-			debit_account_id: bankId,
-			credit_account_id: salesRevenueId,
-			priority: 20,
-		},
-		{
-			event_type: 'sale_return',
-			condition_key: 'payment_mode',
-			condition_value: 'cash',
-			debit_account_id: salesRevenueId,
-			credit_account_id: cashId,
-			priority: 10,
-		},
-		{
-			event_type: 'sale_return',
-			condition_key: 'payment_mode',
-			condition_value: 'bank',
-			debit_account_id: salesRevenueId,
-			credit_account_id: bankId,
-			priority: 20,
-		},
-		{
-			event_type: 'purchase',
-			condition_key: 'payment_mode',
-			condition_value: 'cash',
-			debit_account_id: expenseId,
-			credit_account_id: cashId,
-			priority: 10,
-		},
-		{
-			event_type: 'purchase',
-			condition_key: 'payment_mode',
-			condition_value: 'bank',
-			debit_account_id: expenseId,
-			credit_account_id: bankId,
-			priority: 20,
-		},
-		{
-			event_type: 'purchase',
-			condition_key: 'payment_mode',
-			condition_value: 'credit',
-			debit_account_id: expenseId,
-			credit_account_id: purchasePayableId,
-			priority: 30,
-		},
-		{
-			event_type: 'purchase_return',
-			condition_key: 'none',
-			condition_value: null,
-			debit_account_id: purchasePayableId,
-			credit_account_id: expenseId,
-			priority: 100,
-		},
-		{
-			event_type: 'inventory_adjustment',
-			condition_key: 'none',
-			condition_value: null,
-			debit_account_id: expenseId,
-			credit_account_id: cashId,
-			priority: 100,
-		},
-		{
-			event_type: 'fund_movement',
-			condition_key: 'none',
-			condition_value: null,
-			debit_account_id: bankId,
-			credit_account_id: cashId,
-			priority: 100,
-		},
-		{
-			event_type: 'expense',
-			condition_key: 'payment_mode',
-			condition_value: 'cash',
-			debit_account_id: expenseId,
-			credit_account_id: cashId,
-			priority: 10,
-		},
-		{
-			event_type: 'expense',
-			condition_key: 'payment_mode',
-			condition_value: 'bank',
-			debit_account_id: expenseId,
-			credit_account_id: bankId,
-			priority: 20,
-		},
-		{
-			event_type: 'expense',
-			condition_key: 'none',
-			condition_value: null,
-			debit_account_id: expenseId,
-			credit_account_id: cashId,
-			priority: 100,
-		},
-	];
+	for (const rule of DEFAULT_POSTING_RULES) {
+		const debitAccountId = accountByName.get(rule.debit_account);
+		const creditAccountId = accountByName.get(rule.credit_account);
 
-	for (const rule of defaultRules) {
-		if (!rule.debit_account_id || !rule.credit_account_id) {
+		if (!debitAccountId || !creditAccountId) {
 			continue;
 		}
 
@@ -318,8 +239,8 @@ async function bootstrapDefaultAccountingForTenant(db, tenantId) {
 			await db.postingRule.update({
 				where: { id: existingRule.id },
 				data: {
-					debit_account_id: rule.debit_account_id,
-					credit_account_id: rule.credit_account_id,
+					debit_account_id: debitAccountId,
+					credit_account_id: creditAccountId,
 					priority: rule.priority,
 					is_active: true,
 				},
@@ -333,8 +254,8 @@ async function bootstrapDefaultAccountingForTenant(db, tenantId) {
 				event_type: rule.event_type,
 				condition_key: rule.condition_key,
 				condition_value: rule.condition_value,
-				debit_account_id: rule.debit_account_id,
-				credit_account_id: rule.credit_account_id,
+				debit_account_id: debitAccountId,
+				credit_account_id: creditAccountId,
 				priority: rule.priority,
 				is_active: true,
 			},
@@ -558,6 +479,7 @@ async function ensureCustomerPaymentPostingSetup(db, tenantId) {
 
 module.exports = {
 	DEFAULT_ACCOUNTING_TEMPLATE,
+	DEFAULT_POSTING_RULES,
 	bootstrapDefaultAccountingForTenant,
 	ensureLoanPostingSetup,
 	ensureCustomerPaymentPostingSetup,
