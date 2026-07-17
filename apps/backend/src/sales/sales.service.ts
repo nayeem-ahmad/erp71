@@ -4,6 +4,7 @@ import { CreateSaleDto, UpdateSaleDto } from './sale.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
 import { autoPostFromRules, type AutoPostResult } from '../accounting/posting.utils';
 import { classifyPaymentMode } from './classify-payment-mode';
+import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
 import { previewSaleLoyaltyRedemption, recordSaleLoyalty } from '../loyalty/loyalty-sale.utils';
 import { cursorPaginate, CursorPaginatedResult } from '../common/pagination.dto';
 import { EmailService } from '../email/email.service';
@@ -406,36 +407,18 @@ export class SalesService {
             ...(opts?.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
         });
 
-        const saleIds = sales.map((sale) => sale.id);
-        const vouchers = saleIds.length > 0
-            ? await this.db.voucher.findMany({
-                where: {
-                    tenant_id: tenantId,
-                    source_module: 'sales',
-                    source_type: 'sale',
-                    source_id: { in: saleIds },
-                },
-                select: {
-                    source_id: true,
-                    id: true,
-                    voucher_number: true,
-                    voucher_type: true,
-                },
-            })
-            : [];
+        const summaries = await loadPostingSummaries(
+            this.db,
+            tenantId,
+            'sales',
+            'sale',
+            sales.map((sale) => sale.id),
+        );
 
-        const voucherBySaleId = new Map(vouchers.map((voucher) => [voucher.source_id, voucher]));
-
-        const enriched = sales.map((sale) => {
-            const voucher = voucherBySaleId.get(sale.id);
-            return {
-                ...sale,
-                posting_status: voucher ? 'posted' : 'skipped',
-                voucher_id: voucher?.id ?? null,
-                voucher_number: voucher?.voucher_number ?? null,
-                voucher_type: voucher?.voucher_type ?? null,
-            };
-        });
+        const enriched = sales.map((sale) => ({
+            ...sale,
+            ...(summaries.get(sale.id) ?? NO_POSTING_EVENT),
+        }));
 
         return cursorPaginate(enriched, limit);
     }
@@ -454,26 +437,9 @@ export class SalesService {
             throw new NotFoundException('Sale not found');
         }
 
-        const voucher = await this.db.voucher.findFirst({
-            where: {
-                tenant_id: tenantId,
-                source_module: 'sales',
-                source_type: 'sale',
-                source_id: sale.id,
-            },
-            select: {
-                id: true,
-                voucher_number: true,
-                voucher_type: true,
-            },
-        });
-
         return {
             ...sale,
-            posting_status: voucher ? 'posted' : 'skipped',
-            voucher_id: voucher?.id ?? null,
-            voucher_number: voucher?.voucher_number ?? null,
-            voucher_type: voucher?.voucher_type ?? null,
+            ...(await loadPostingSummary(this.db, tenantId, 'sales', 'sale', sale.id)),
         };
     }
 

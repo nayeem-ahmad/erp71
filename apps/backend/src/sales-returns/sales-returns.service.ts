@@ -5,6 +5,7 @@ import { DatabaseService } from '../database/database.service';
 import { CreateSalesReturnDto, UpdateSalesReturnDto } from './sales-returns.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
+import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
 import { classifyPaymentMode } from '../sales/classify-payment-mode';
 import { creditDueAmount } from '../customers/customer-credit.utils';
 
@@ -170,38 +171,20 @@ export class SalesReturnsService {
             limit,
         });
 
-        const returnIds = result.items.map((item: { id: string }) => item.id);
-        const vouchers = returnIds.length > 0
-            ? await this.db.voucher.findMany({
-                where: {
-                    tenant_id: tenantId,
-                    source_module: 'sales',
-                    source_type: 'sale_return',
-                    source_id: { in: returnIds },
-                },
-                select: {
-                    source_id: true,
-                    id: true,
-                    voucher_number: true,
-                    voucher_type: true,
-                },
-            })
-            : [];
-
-        const voucherByReturnId = new Map(vouchers.map((voucher) => [voucher.source_id, voucher]));
+        const summaries = await loadPostingSummaries(
+            this.db,
+            tenantId,
+            'sales',
+            'sale_return',
+            result.items.map((item: { id: string }) => item.id),
+        );
 
         return {
             ...result,
-            items: result.items.map((item: Record<string, unknown> & { id: string }) => {
-                const voucher = voucherByReturnId.get(item.id);
-                return {
-                    ...item,
-                    posting_status: voucher ? 'posted' : 'skipped',
-                    voucher_id: voucher?.id ?? null,
-                    voucher_number: voucher?.voucher_number ?? null,
-                    voucher_type: voucher?.voucher_type ?? null,
-                };
-            }),
+            items: result.items.map((item: Record<string, unknown> & { id: string }) => ({
+                ...item,
+                ...(summaries.get(item.id) ?? NO_POSTING_EVENT),
+            })),
         };
     }
 
@@ -218,26 +201,9 @@ export class SalesReturnsService {
             return null;
         }
 
-        const voucher = await this.db.voucher.findFirst({
-            where: {
-                tenant_id: tenantId,
-                source_module: 'sales',
-                source_type: 'sale_return',
-                source_id: salesReturn.id,
-            },
-            select: {
-                id: true,
-                voucher_number: true,
-                voucher_type: true,
-            },
-        });
-
         return {
             ...salesReturn,
-            posting_status: voucher ? 'posted' : 'skipped',
-            voucher_id: voucher?.id ?? null,
-            voucher_number: voucher?.voucher_number ?? null,
-            voucher_type: voucher?.voucher_type ?? null,
+            ...(await loadPostingSummary(this.db, tenantId, 'sales', 'sale_return', salesReturn.id)),
         };
     }
 
