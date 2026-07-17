@@ -354,11 +354,16 @@ Supporting invariants:
 - Extend `test/demo-data.integration.spec.ts` (already asserts 7 similar invariants) with: every
   money-bearing source row has a voucher.
 
-**Fix the read paths.** `posting_status: voucher ? 'posted' : 'skipped'` (`sales.service.ts:433`,
-`:473`, and the sibling services `sales-returns:199,237`, `purchases:226,294`,
-`purchase-returns:183,218`) infers status from voucher existence and never reads
-`PostingEvent.status`. A `pending` or `failed` event renders as **"Skipped"** — real failures are
-invisible in the UI. Read the real status.
+**Fix the read paths — LANDED 2026-07-17.** All 8 sites now read `PostingEvent` via the shared
+`accounting/posting-status.util.ts`, and additionally surface `posting_error` so "why was this
+skipped" is answerable rather than a mystery. `PostingBadge` already mapped all four statuses and was
+simply never sent them, so no frontend change was needed.
+
+One deliberate limit: a source with **no** `PostingEvent` row still reports `skipped`. That covers
+pre-auto-posting rows and rows whose event `voidAutoPostedVoucher` deleted. It is not strictly true,
+but it is indistinguishable after the fact and is what those rows have always reported — fixing the
+failed-as-skipped lie should not silently reclassify history. Phase 8's backfill is what resolves
+them properly.
 
 ## Phase 8 — Backfill history
 
