@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Building2, Download, Loader2, LogIn, RotateCcw, ShieldCheck, Trash2, UserX, Users } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Building2, Database, Download, Loader2, LogIn, RotateCcw, ShieldCheck, Trash2, UserX, Users } from 'lucide-react';
 import { BUSINESS_TYPE_LABELS, BUSINESS_TYPE_VALUES, BUSINESS_TYPES_WITH_TEMPLATE } from '@erp71/shared-types';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
@@ -14,6 +14,15 @@ type Props = {
     onClose: () => void;
     onChanged: () => void;
     onToast: (message: string) => void;
+};
+
+type DemoBatch = {
+    status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+    phase?: string | null;
+    processed: number;
+    total: number;
+    batch_number: number;
+    error?: string | null;
 };
 
 function InfoCard({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
@@ -37,6 +46,7 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
     const lc = m.localizationControls;
     const nc = m.navLayoutControls;
     const bt = m.businessTypeControls;
+    const dd = m.demoData;
 
     const [tenant, setTenant] = useState<TenantRecord | null>(null);
     const [loading, setLoading] = useState(false);
@@ -51,6 +61,9 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
     const [businessTypeDraft, setBusinessTypeDraft] = useState('');
     const [isSavingBusinessType, setIsSavingBusinessType] = useState(false);
     const [isImportingCatalog, setIsImportingCatalog] = useState(false);
+    const [demoBatch, setDemoBatch] = useState<DemoBatch | null>(null);
+    const [isStartingDemo, setIsStartingDemo] = useState(false);
+    const demoPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const subscriptionForm = useMemo(() => {
         if (!tenant?.subscription) {
@@ -110,6 +123,24 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
         }
     };
 
+    const pollDemoStatus = useCallback(async (id: string) => {
+        let batch: DemoBatch | null = null;
+        try {
+            batch = await api.getAdminTenantDemoDataStatus(id);
+        } catch {
+            batch = null;
+        }
+        setDemoBatch(batch);
+        if (batch && (batch.status === 'RUNNING' || batch.status === 'PENDING')) {
+            demoPollTimer.current = setTimeout(() => void pollDemoStatus(id), 2000);
+        } else if (batch?.status === 'COMPLETED') {
+            onToast(formatMessage(dd.completed, { name: tenant?.name ?? '' }));
+            onChanged();
+        } else if (batch?.status === 'FAILED') {
+            setError(batch.error || dd.failed);
+        }
+    }, [dd.completed, dd.failed, onChanged, onToast, tenant?.name]);
+
     useEffect(() => {
         if (!tenantId) {
             setTenant(null);
@@ -117,6 +148,17 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
         }
         void loadTenant(tenantId);
     }, [tenantId]);
+
+    // Resume demo-data progress polling when the modal opens (e.g. a load kicked
+    // off earlier is still running); always clear the timer on close/unmount.
+    useEffect(() => {
+        setDemoBatch(null);
+        if (tenantId) void pollDemoStatus(tenantId);
+        return () => {
+            if (demoPollTimer.current) clearTimeout(demoPollTimer.current);
+            demoPollTimer.current = null;
+        };
+    }, [tenantId, pollDemoStatus]);
 
     if (!tenantId) return null;
 
@@ -214,6 +256,35 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
             setError(err instanceof Error ? err.message : bt.importFailed);
         } finally {
             setIsImportingCatalog(false);
+        }
+    };
+
+    const startDemoData = async () => {
+        if (!tenant) return;
+        const completedLoads = demoBatch
+            ? (demoBatch.status === 'COMPLETED' ? demoBatch.batch_number : demoBatch.batch_number - 1)
+            : 0;
+        const prompt = completedLoads > 0
+            ? formatMessage(dd.confirmAppend, { name: tenant.name, count: String(completedLoads) })
+            : formatMessage(dd.confirmFirst, { name: tenant.name });
+        if (!window.confirm(prompt)) return;
+
+        setIsStartingDemo(true);
+        setError('');
+        try {
+            await api.loadAdminTenantDemoData(tenant.id);
+            await pollDemoStatus(tenant.id);
+        } catch (err: unknown) {
+            // A 409 means a load is already running — recover by resuming polling.
+            const running = await api.getAdminTenantDemoDataStatus(tenant.id).catch(() => null);
+            if (running && (running.status === 'RUNNING' || running.status === 'PENDING')) {
+                setDemoBatch(running);
+                demoPollTimer.current = setTimeout(() => void pollDemoStatus(tenant.id), 2000);
+            } else {
+                setError(err instanceof Error ? err.message : dd.failed);
+            }
+        } finally {
+            setIsStartingDemo(false);
         }
     };
 
@@ -523,6 +594,45 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                 ) : !BUSINESS_TYPES_WITH_TEMPLATE.includes(tenant.business_type as never) ? (
                                     <p className="text-xs font-medium text-blue-700">{bt.noTemplate}</p>
                                 ) : null}
+                            </div>
+
+                            {/* Demo data */}
+                            <div className="rounded-lg border border-gray-100 bg-gray-50/70 p-5 space-y-4">
+                                <div>
+                                    <p className="text-[10px] font-medium text-gray-400">{dd.badge}</p>
+                                    <h3 className="mt-2 text-lg font-bold tracking-tight text-gray-900">{dd.title}</h3>
+                                    <p className="mt-1 text-xs text-gray-500">{dd.description}</p>
+                                </div>
+                                {demoBatch && (demoBatch.status === 'RUNNING' || demoBatch.status === 'PENDING') || isStartingDemo ? (
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="font-medium text-gray-700">{demoBatch?.phase || dd.generating}</span>
+                                            {demoBatch && demoBatch.total > 0 ? (
+                                                <span className="text-gray-500">
+                                                    {formatMessage(dd.progress, {
+                                                        processed: String(demoBatch.processed),
+                                                        total: String(demoBatch.total),
+                                                    })}
+                                                </span>
+                                            ) : null}
+                                        </div>
+                                        <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                                            <div
+                                                className="h-full bg-blue-600 transition-all duration-500"
+                                                style={{ width: `${demoBatch && demoBatch.total > 0 ? Math.min(100, Math.round((demoBatch.processed / demoBatch.total) * 100)) : 0}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => void startDemoData()}
+                                        className="inline-flex min-h-touch items-center gap-2 rounded-lg border border-blue-200 bg-white px-5 py-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-60"
+                                    >
+                                        <Database className="w-4 h-4" />
+                                        {dd.button}
+                                    </button>
+                                )}
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

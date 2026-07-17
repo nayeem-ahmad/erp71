@@ -21,6 +21,7 @@ import { PasswordResetService } from '../password-reset/password-reset.service';
 import { getPlatformAdminEmails, isPlatformAdminEmail } from '../auth/platform-admin.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SmsCreditService } from '../sms/sms-credit.service';
+import { DemoDataService } from '../demo-data/demo-data.service';
 import { ledgerEventDelta } from './ledger-balance.util';
 import { REMINDER_EVENT_TYPES } from './reminder-event-types';
 import { applySubscriptionDiscount } from '../billing/discount.util';
@@ -55,6 +56,7 @@ export class AdminTenantsService {
         private readonly passwordResetService: PasswordResetService,
         private readonly notificationsService: NotificationsService,
         private readonly smsCreditService: SmsCreditService,
+        private readonly demoDataService: DemoDataService,
     ) {}
 
     private resolveMobileFields(
@@ -493,6 +495,24 @@ export class AdminTenantsService {
         );
 
         return { business_type: tenant.business_type, ...summary };
+    }
+
+    /** Kick off a six-month demo-data load for an arbitrary tenant (admin). */
+    async loadDemoData(tenantId: string, adminUserId: string) {
+        const result = await this.demoDataService.startBatchForTenant(tenantId);
+        await this.auditService.log(
+            'tenant.demo_data.load',
+            'Tenant',
+            { userId: adminUserId },
+            tenantId,
+            { batchId: result.batchId, batchNumber: result.batchNumber },
+        );
+        return result;
+    }
+
+    /** Latest demo-data batch for a tenant, for admin progress polling. */
+    getDemoDataStatus(tenantId: string) {
+        return this.demoDataService.getStatus(tenantId);
     }
 
     async suspendTenant(tenantId: string, dto: SuspendTenantDto, adminUserId: string) {

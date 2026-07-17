@@ -205,6 +205,18 @@ export const adminMessages = {
                 noTemplate: 'Katalog permulaan belum tersedia untuk jenis perniagaan ini.',
                 noTypeSet: 'Tetapkan jenis perniagaan sebelum mengimport katalog.',
             },
+            demoData: {
+                badge: 'Data demo',
+                title: 'Muat data demo',
+                description: 'Isikan tenant ini dengan kira-kira enam bulan sejarah dagangan yang realistik — produk, pelanggan, pembekal, pembelian, jualan, perbelanjaan, dan catatan perakaunan yang sepadan.',
+                button: 'Muat data demo',
+                confirmFirst: 'Muat kira-kira enam bulan sejarah demo (~2,700 jualan) ke dalam {name}? Data sedia ada tidak akan dipadamkan.',
+                confirmAppend: '{name} sudah mempunyai data demo daripada {count} muatan sebelumnya. Memuat semula menambah enam bulan lagi (~2,700 jualan). Data sedia ada tidak akan dipadamkan.',
+                generating: 'Menjana data demo',
+                progress: '{processed} daripada {total} hari',
+                completed: 'Data demo dimuatkan untuk {name}.',
+                failed: 'Gagal memuatkan data demo.',
+            },
             navLayoutControls: {
                 badge: 'Navigasi',
                 title: 'Susun atur bar sisi',

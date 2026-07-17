@@ -205,6 +205,18 @@ export const adminMessages = {
             noTemplate: 'No starter catalog is available for this business type yet.',
             noTypeSet: 'Set a business type before importing a catalog.',
         },
+        demoData: {
+            badge: 'Demo data',
+            title: 'Load demo data',
+            description: 'Populate this tenant with about six months of realistic trading history — products, customers, suppliers, purchases, sales, expenses, and matching accounting entries.',
+            button: 'Load demo data',
+            confirmFirst: 'Load about six months of demo history (~2,700 sales) into {name}? Existing data will not be removed.',
+            confirmAppend: '{name} already has demo data from {count} previous load(s). Loading again adds another six months (~2,700 sales). Existing data will not be removed.',
+            generating: 'Generating demo data',
+            progress: '{processed} of {total} days',
+            completed: 'Demo data loaded for {name}.',
+            failed: 'Failed to load demo data.',
+        },
         navLayoutControls: {
             badge: 'Navigation',
             title: 'Sidebar layout',

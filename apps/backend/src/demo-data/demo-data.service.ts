@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { runSimulation, type SimulationProgress } from './generator/simulate';
 
@@ -33,11 +33,32 @@ export class DemoDataService implements OnModuleInit {
      * Create a batch and kick off generation in the background (in-process,
      * DB-backed progress). Returns immediately with the batch id/number.
      */
+    /** Tenant-owner path: the shop owner loads demo data for their own store. */
     async startBatch(tenantId: string, userId: string, userRole: string | undefined) {
         if (userRole !== 'OWNER') {
             throw new ForbiddenException('Only the shop owner can load demo data');
         }
+        return this.beginBatch(tenantId, userId);
+    }
 
+    /**
+     * Platform-admin path: load demo data into an arbitrary tenant. Access is
+     * gated by the admin guard on the route, not the OWNER role check; rows are
+     * attributed to the target tenant's own owner rather than the admin.
+     */
+    async startBatchForTenant(tenantId: string) {
+        const tenant = await this.db.tenant.findFirst({
+            where: { id: tenantId, deleted_at: null },
+            select: { owner_id: true },
+        });
+        if (!tenant) {
+            throw new NotFoundException('Tenant not found');
+        }
+        return this.beginBatch(tenantId, tenant.owner_id);
+    }
+
+    /** Create the batch row and kick off generation in the background. */
+    private async beginBatch(tenantId: string, userId: string) {
         const running = await this.db.demoDataBatch.findFirst({
             where: { tenant_id: tenantId, status: 'RUNNING' },
         });

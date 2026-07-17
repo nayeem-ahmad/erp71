@@ -7,5 +7,6 @@ import { DemoDataService } from './demo-data.service';
     imports: [DatabaseModule],
     controllers: [DemoDataController],
     providers: [DemoDataService],
+    exports: [DemoDataService],
 })
 export class DemoDataModule {}
