@@ -578,6 +578,8 @@ export class CustomersService {
                     : `Customer payment — ${customer.name}`,
                 referenceNumber: payment.payment_number ?? paymentId,
                 storeId,
+                partyType: 'CUSTOMER',
+                partyId: customerId,
             });
 
             return {
@@ -681,6 +683,8 @@ export class CustomersService {
                     : `Customer payment — ${customer.name}`,
                 referenceNumber: payment_number,
                 storeId,
+                partyType: 'CUSTOMER',
+                partyId: id,
             });
 
             return {

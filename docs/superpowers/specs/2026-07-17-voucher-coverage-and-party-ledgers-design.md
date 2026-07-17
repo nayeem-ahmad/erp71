@@ -249,20 +249,50 @@ are a second, parallel mechanism for creating rules — the reason those tuples 
 default-provisioned and tenant-overridable, which means one mechanism. Once Phase 0 makes bootstrap
 re-runnable, these move into `DEFAULT_POSTING_RULES` and the lazy path is deleted.
 
-## Phase 3 — Party dimension (prerequisite for Phase 4)
+## Phase 3 — Party dimension (prerequisite for Phase 4) — **LANDED 2026-07-17**
 
-- Migration: `VoucherDetail.party_type` + `party_id`, indexed, mirroring `cost_center_id`.
-- `autoPostFromRules` gains optional `partyType` / `partyId`, stamped on whichever of its two legs
-  hits an account whose `Account.party_type` matches. Callers pass the party they already hold.
-- Backfill `party_id` onto existing AR/AP voucher lines from `Voucher.source_id`.
+Delivered:
 
-Party ledger becomes `voucher_details WHERE party_id = X`. The control account balance then equals
-the sum of its sub-ledgers **by construction** rather than by hope, and `due_balance` demotes to a
-rebuildable cache.
+- New `PartyType` enum (`CUSTOMER | SUPPLIER | EMPLOYEE`); `Account.party_type` marks a control
+  account; `VoucherDetail.party_type` + `party_id` (indexed) mirror the `cost_center_id` dimension.
+  `party_id` is polymorphic — deliberately **not** an FK, since it points at three tables. Migration
+  `20260717170000_add_party_dimension`.
+- The bootstrap marks Accounts Receivable `CUSTOMER` and Purchase Payable `SUPPLIER`, threaded through
+  the account upsert's **update** clause — so `sync:accounting` sets `party_type` on existing tenants
+  on the next deploy (verified: stripped it to NULL, sync restored it). In **both** `.ts` and `.js`.
+- `autoPostFromRules` gains optional `partyType` / `partyId`, stamped **only** on the leg whose
+  account's `party_type` matches — never the cash/revenue side, and a no-op if neither leg matches or
+  the types differ. Wired into every caller that holds a party: sales (credit), customer payments,
+  purchases, purchase orders, sales/purchase returns, supplier payments, and the demo generator.
+- **Retires the suppliers debt from the earlier commit** — `recordCreditPayment` now passes
+  `partyType: 'SUPPLIER'`.
+
+Party ledger is now `voucher_details WHERE party_id = X`. Repointing the UI at it and rebuilding
+`due_balance` from it is Phase 8; the backfill of `party_id` onto *historical* AR/AP lines is also
+Phase 8 (this phase tags new postings only).
+
+**Employees** carry `party_type` support in the schema but no rule/account yet — that arrives with
+Phase 5b (Salary Payable 2050).
+
+**Two corrections / discoveries while building:**
+
+1. A tautology trap in the first invariant I wrote (sum of per-party balances == control balance is
+   just re-summing the same lines). The sound integration invariants that shipped: *every
+   control-account line carries a `party_id`* (completeness), and *every `party_id` resolves to a real
+   party of the matching type* (correct attribution — the cross-contamination failure the unit tests
+   can't see across modules). A GL-vs-`due_balance` amount check is **unsound** and was dropped: GL
+   posts the full return while the credit tracker floors at zero, so they legitimately diverge on an
+   over-return.
+2. A **pre-existing** generator bug surfaced by those invariants: `maybePurchaseReturn` recorded the
+   full `-lineTotal` in the credit ledger while flooring `due_balance` at 0, so an over-return left
+   the two out of sync (intermittent reconciliation failure, ~1 run in 3). Fixed to clamp both to
+   `min(lineTotal, due)`, matching `purchase-returns.service`. Also fixed a pre-existing
+   time-of-day flake: `simulate.ts` stamped today's sales at a random 10–20h, which could land in the
+   future; now clamped to `now`.
 
 **`SalesOrder.customer_id` is nullable** (`String?`). A walk-in deposit would produce an AR/advance
-line attributable to nobody, violating the Phase 7 invariant. Taking a deposit must require a
-customer — a validation change, enforced by the invariant rather than by convention.
+line attributable to nobody, violating the completeness invariant. Taking a deposit must require a
+customer — enforced in Phase 4 (deposits) / by the invariant, not by convention.
 
 ## Phase 4 — Wire the calls
 

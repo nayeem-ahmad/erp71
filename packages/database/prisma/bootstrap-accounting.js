@@ -42,6 +42,7 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 						code: '1030',
 						type: AccountType.ASSET,
 						category: AccountCategory.GENERAL,
+						party_type: 'CUSTOMER',
 					},
 				],
 			},
@@ -81,6 +82,7 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 						code: '2010',
 						type: AccountType.LIABILITY,
 						category: AccountCategory.GENERAL,
+						party_type: 'SUPPLIER',
 					},
 				],
 			},
@@ -279,6 +281,7 @@ async function bootstrapDefaultAccountingForTenant(db, tenantId) {
 						code: accountDefinition.code,
 						type: accountDefinition.type,
 						category: accountDefinition.category,
+						party_type: accountDefinition.party_type ?? null,
 					},
 					create: {
 						tenant_id: tenantId,
@@ -288,6 +291,7 @@ async function bootstrapDefaultAccountingForTenant(db, tenantId) {
 						code: accountDefinition.code,
 						type: accountDefinition.type,
 						category: accountDefinition.category,
+						party_type: accountDefinition.party_type ?? null,
 					},
 				});
 			}

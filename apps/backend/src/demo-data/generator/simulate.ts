@@ -124,7 +124,10 @@ export async function runSimulation(deps: SimulationDeps): Promise<DemoCounts> {
             for (let s = 0; s < dailySales; s++) {
                 const store = rng.chance(0.7) ? stores[0] : (stores[1] ?? stores[0]);
                 const hour = rng.int(10, 20);
-                const saleTime = new Date(dayStart.getTime() + hour * 3_600_000);
+                // Clamp to `end` so a sale on the current day is never stamped past
+                // `now` (the 10–20h spread would otherwise put today's late sales in
+                // the future when the run happens before 20:00 UTC).
+                const saleTime = new Date(Math.min(dayStart.getTime() + hour * 3_600_000, end.getTime()));
                 await writer.writeSale(tx, saleTime, store, growth);
             }
 

@@ -102,6 +102,62 @@ describe('Demo-data generator (integration)', () => {
         expect(Math.abs(debits - credits)).toBeLessThan(0.01);
     });
 
+    it('every voucher line on a party-control account carries a party_id', async () => {
+        // The party dimension is only meaningful if it is never missing: an
+        // untagged line on Accounts Receivable / Purchase Payable is a receivable
+        // or payable belonging to nobody, invisible in every subsidiary ledger.
+        const controlAccounts = await db.account.findMany({
+            where: { tenant_id: tenantId, party_type: { not: null } },
+            select: { id: true },
+        });
+        expect(controlAccounts.length).toBeGreaterThan(0);
+
+        const untagged = await db.voucherDetail.count({
+            where: {
+                voucher: { tenant_id: tenantId },
+                account_id: { in: controlAccounts.map((a) => a.id) },
+                party_id: null,
+            },
+        });
+        expect(untagged).toBe(0);
+    });
+
+    it('every party_id on a control account resolves to a real party of the right type', async () => {
+        // party_id is polymorphic and NOT a foreign key, so nothing at the DB level
+        // stops a customer id landing on Purchase Payable. This is the check that a
+        // caller passed the RIGHT party: the receivable carries only real customer
+        // ids, the payable only real supplier ids. Cross-contamination — the one
+        // failure mode the unit tests cannot see across module boundaries — fails
+        // here. (Deliberately not an amount check: GL legitimately diverges from the
+        // clamped due_balance/credit tracker when a return exceeds what is owed.)
+        const [ar, payable] = await Promise.all([
+            db.account.findFirst({ where: { tenant_id: tenantId, name: 'Accounts Receivable' }, select: { id: true } }),
+            db.account.findFirst({ where: { tenant_id: tenantId, name: 'Purchase Payable' }, select: { id: true } }),
+        ]);
+
+        const partyIdsOn = async (accountId: string) => {
+            const rows = await db.voucherDetail.findMany({
+                where: { voucher: { tenant_id: tenantId }, account_id: accountId },
+                select: { party_id: true },
+                distinct: ['party_id'],
+            });
+            return rows.map((r) => r.party_id!).filter(Boolean);
+        };
+
+        const customerIds = await partyIdsOn(ar!.id);
+        const supplierIds = await partyIdsOn(payable!.id);
+        expect(customerIds.length).toBeGreaterThan(0);
+        expect(supplierIds.length).toBeGreaterThan(0);
+
+        const [realCustomers, realSuppliers] = await Promise.all([
+            db.customer.count({ where: { tenant_id: tenantId, id: { in: customerIds } } }),
+            db.supplier.count({ where: { tenant_id: tenantId, id: { in: supplierIds } } }),
+        ]);
+        // Every id present must resolve — no supplier id on AR, no customer id on AP.
+        expect(realCustomers).toBe(customerIds.length);
+        expect(realSuppliers).toBe(supplierIds.length);
+    });
+
     it('every ProductStock quantity equals the sum of its inventory movements', async () => {
         const stocks = await db.productStock.findMany({ where: { tenant_id: tenantId } });
         expect(stocks.length).toBeGreaterThan(0);

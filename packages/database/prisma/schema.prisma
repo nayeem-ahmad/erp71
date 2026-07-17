@@ -172,6 +172,16 @@ enum PostingRuleEventType {
   supplier_payment
 }
 
+/// A subsidiary-ledger party. Marks a control account (Accounts Receivable,
+/// Purchase Payable, Salary Payable) as one whose balance is the sum of
+/// per-party balances, and tags each voucher line on such an account with the
+/// party it belongs to. See Account.party_type and VoucherDetail.party_id.
+enum PartyType {
+  CUSTOMER
+  SUPPLIER
+  EMPLOYEE
+}
+
 enum PostingRuleConditionKey {
   payment_mode
   reason_type
@@ -1627,6 +1637,10 @@ model Account {
   code        String?
   type        String
   category    String   @default("general")
+  /// Non-null on a control account (AR / Purchase Payable / Salary Payable):
+  /// its balance is maintained as a subsidiary ledger, one balance per party.
+  /// autoPostFromRules tags the voucher line hitting this account with party_id.
+  party_type  PartyType?
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
 
@@ -1767,10 +1781,18 @@ model VoucherDetail {
   account       Account  @relation(fields: [account_id], references: [id])
   cost_center_id String?
   costCenter     CostCenter? @relation("VoucherDetailCostCenter", fields: [cost_center_id], references: [id])
+  /// Set when this line hits a control account, tying it to one customer,
+  /// supplier or employee. party_id is a polymorphic reference resolved by
+  /// party_type (Customer/Supplier/Employee id) — deliberately NOT a foreign key,
+  /// since it points at three different tables. The subsidiary ledger for a party
+  /// is `voucher_details WHERE party_id = X`.
+  party_type    PartyType?
+  party_id      String?
 
   @@index([voucher_id])
   @@index([account_id])
   @@index([cost_center_id])
+  @@index([party_id])
   @@map("voucher_details")
 }
 

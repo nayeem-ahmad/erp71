@@ -157,6 +157,8 @@ export class PurchasesService {
                 description: `Auto-posted purchase ${purchase.purchase_number}`,
                 referenceNumber: purchase.purchase_number,
                 storeId: dto.storeId,
+                partyType: 'SUPPLIER',
+                partyId: supplierId,
             });
 
             const purchaseWithItems = await tx.purchase.findFirst({

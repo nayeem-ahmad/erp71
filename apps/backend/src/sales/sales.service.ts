@@ -283,6 +283,8 @@ export class SalesService {
                     description: `Auto-posted credit portion — sale ${sale.serial_number}`,
                     referenceNumber: sale.serial_number,
                     storeId: dto.storeId,
+                    partyType: 'CUSTOMER',
+                    partyId: dto.customerId,
                 });
 
                 if (dto.amountPaid > 0.005) {

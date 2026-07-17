@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, PartyType } from '@prisma/client';
 import { VoucherAttribution, VoucherType } from './accounting.constants';
 
 export type PostingEventType =
@@ -31,6 +31,15 @@ export interface AutoPostInput {
     storeId?: string;
     attribution?: string;
     counterpartyStoreId?: string;
+    /**
+     * The party this posting concerns. When set, the voucher leg whose account is
+     * a control account of this type (Account.party_type === partyType) is tagged
+     * with partyId, so the account's balance becomes a per-party subsidiary
+     * ledger. Ignored on the leg that is not a matching control account (e.g. the
+     * cash or revenue side). No-op if neither leg matches.
+     */
+    partyType?: PartyType;
+    partyId?: string;
 }
 
 export interface AutoPostResult {
@@ -265,7 +274,7 @@ export async function autoPostFromRules(input: AutoPostInput): Promise<AutoPostR
             tenant_id: input.tenantId,
             id: { in: [postingRule.debit_account_id, postingRule.credit_account_id] },
         },
-        select: { id: true },
+        select: { id: true, party_type: true },
     });
 
     if (accounts.length !== 2 || postingRule.debit_account_id === postingRule.credit_account_id) {
@@ -281,6 +290,17 @@ export async function autoPostFromRules(input: AutoPostInput): Promise<AutoPostR
 
     const voucherType = resolveVoucherType(input.eventType, conditionKey, conditionValue);
     const voucherNumber = await generateVoucherNumber(input.tx, input.tenantId, voucherType);
+
+    // Tag whichever leg hits the control account of the passed party type. Only
+    // that leg — the cash/revenue side must stay party-less so it does not pollute
+    // an unrelated account's subsidiary ledger. If neither account matches (no
+    // party passed, or the rule points at a non-control account), both legs are
+    // untagged and the posting behaves exactly as before.
+    const partyTypeByAccount = new Map(accounts.map((account) => [account.id, account.party_type]));
+    const partyFieldsFor = (accountId: string) =>
+        input.partyId && input.partyType && partyTypeByAccount.get(accountId) === input.partyType
+            ? { party_type: input.partyType, party_id: input.partyId }
+            : {};
 
     const voucher = await input.tx.voucher.create({
         data: {
@@ -303,11 +323,13 @@ export async function autoPostFromRules(input: AutoPostInput): Promise<AutoPostR
                         account_id: postingRule.debit_account_id,
                         debit_amount: new Prisma.Decimal(input.amount),
                         credit_amount: new Prisma.Decimal(0),
+                        ...partyFieldsFor(postingRule.debit_account_id),
                     },
                     {
                         account_id: postingRule.credit_account_id,
                         debit_amount: new Prisma.Decimal(0),
                         credit_amount: new Prisma.Decimal(input.amount),
+                        ...partyFieldsFor(postingRule.credit_account_id),
                     },
                 ],
             },

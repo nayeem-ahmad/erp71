@@ -124,6 +124,8 @@ export class PurchaseReturnsService {
                 description: `Auto-posted purchase return ${purchaseReturn.return_number}`,
                 referenceNumber: purchaseReturn.return_number,
                 storeId: purchase.store_id,
+                partyType: 'SUPPLIER',
+                partyId: purchase.supplier_id ?? undefined,
             });
 
             const purchaseReturnWithDetails = await tx.purchaseReturn.findFirst({

@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient, PostingRuleConditionKey, PostingRuleEventType } from '@prisma/client';
+import { Prisma, PrismaClient, PostingRuleConditionKey, PostingRuleEventType, PartyType } from '@prisma/client';
 import { AccountCategory, AccountType } from './accounting.constants.js';
 
 export interface DefaultAccountingAccountDefinition {
@@ -6,6 +6,8 @@ export interface DefaultAccountingAccountDefinition {
     code?: string;
     type: AccountType;
     category: AccountCategory;
+    /** Set on a control account so autoPostFromRules tags its lines with a party. */
+    party_type?: PartyType;
 }
 
 export interface DefaultAccountingSubgroupDefinition {
@@ -61,6 +63,7 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                         code: '1030',
                         type: AccountType.ASSET,
                         category: AccountCategory.GENERAL,
+                        party_type: PartyType.CUSTOMER,
                     },
                 ],
             },
@@ -100,6 +103,7 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                         code: '2010',
                         type: AccountType.LIABILITY,
                         category: AccountCategory.GENERAL,
+                        party_type: PartyType.SUPPLIER,
                     },
                 ],
             },
@@ -313,6 +317,7 @@ export async function bootstrapDefaultAccountingForTenant(
                         code: accountDefinition.code,
                         type: accountDefinition.type,
                         category: accountDefinition.category,
+                        party_type: accountDefinition.party_type ?? null,
                     },
                     create: {
                         tenant_id: tenantId,
@@ -322,6 +327,7 @@ export async function bootstrapDefaultAccountingForTenant(
                         code: accountDefinition.code,
                         type: accountDefinition.type,
                         category: accountDefinition.category,
+                        party_type: accountDefinition.party_type ?? null,
                     },
                 });
             }

@@ -680,6 +680,8 @@ export class SuppliersService {
                 description: `Auto-posted supplier ${txType === 'PAYMENT' ? 'payment' : 'receipt'} — ${supplier.name}`,
                 referenceNumber: payment_number,
                 date: payment.created_at,
+                partyType: 'SUPPLIER',
+                partyId: id,
             });
 
             return {

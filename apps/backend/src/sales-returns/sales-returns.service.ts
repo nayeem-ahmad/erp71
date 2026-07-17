@@ -145,6 +145,10 @@ export class SalesReturnsService {
                 description: `Auto-posted sales return ${salesReturn.return_number}`,
                 referenceNumber: salesReturn.return_number,
                 storeId: sale.store_id,
+                // Only the credit return touches AR; a cash return's legs are not
+                // control accounts, so this tags nothing and is a safe no-op there.
+                partyType: 'CUSTOMER',
+                partyId: sale.customer_id ?? undefined,
             });
 
             return {
