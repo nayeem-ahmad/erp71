@@ -24,6 +24,7 @@ import { EmailService } from '../email/email.service';
 import { PasswordResetService } from '../password-reset/password-reset.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SmsCreditService } from '../sms/sms-credit.service';
+import { DemoDataService } from '../demo-data/demo-data.service';
 
 describe('AdminTenantsService', () => {
   let service: AdminTenantsService;
@@ -35,6 +36,7 @@ describe('AdminTenantsService', () => {
   let passwordResetService: any;
   let notificationsService: any;
   let smsCreditService: any;
+  let demoDataService: any;
 
   const makeTenant = (overrides: any = {}) => ({
     id: 't-1',
@@ -135,6 +137,10 @@ describe('AdminTenantsService', () => {
     smsCreditService = {
       adminGrantCredits: jest.fn().mockResolvedValue({ balance: 600, transactionId: 'tx-1' }),
     };
+    demoDataService = {
+      startBatchForTenant: jest.fn().mockResolvedValue({ batchId: 'batch-1', batchNumber: 1 }),
+      getStatus: jest.fn().mockResolvedValue(null),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -147,6 +153,7 @@ describe('AdminTenantsService', () => {
         { provide: PasswordResetService, useValue: passwordResetService },
         { provide: NotificationsService, useValue: notificationsService },
         { provide: SmsCreditService, useValue: smsCreditService },
+        { provide: DemoDataService, useValue: demoDataService },
       ],
     }).compile();
 
@@ -535,6 +542,33 @@ describe('AdminTenantsService', () => {
       const result = service.impersonateTenant('nonexistent', 'admin-1');
       await expect(result).rejects.toThrow(NotFoundException);
       await expect(result).rejects.toThrow('Tenant not found');
+    });
+  });
+
+  /* ------------------------------------------------------------------ */
+  /*  loadDemoData                                                        */
+  /* ------------------------------------------------------------------ */
+
+  describe('loadDemoData', () => {
+    it('delegates to DemoDataService and audits the load', async () => {
+      const result = await service.loadDemoData('t-1', 'admin-1');
+
+      expect(demoDataService.startBatchForTenant).toHaveBeenCalledWith('t-1');
+      expect(result).toEqual({ batchId: 'batch-1', batchNumber: 1 });
+      expect(auditService.log).toHaveBeenCalledWith(
+        'tenant.demo_data.load',
+        'Tenant',
+        { userId: 'admin-1' },
+        't-1',
+        expect.objectContaining({ batchId: 'batch-1', batchNumber: 1 }),
+      );
+    });
+
+    it('returns the latest batch for status polling', async () => {
+      demoDataService.getStatus.mockResolvedValue({ status: 'RUNNING', processed: 10, total: 182 });
+      const status = await service.getDemoDataStatus('t-1');
+      expect(demoDataService.getStatus).toHaveBeenCalledWith('t-1');
+      expect(status).toEqual({ status: 'RUNNING', processed: 10, total: 182 });
     });
   });
 

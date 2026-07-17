@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Request, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../auth/platform-admin.guard';
 import { AdminTenantsService } from './admin-tenants.service';
@@ -82,6 +82,20 @@ export class AdminTenantsController {
         @Request() req: any,
     ) {
         return this.adminTenantsService.importCatalog(tenantId, req.user.userId);
+    }
+
+    @Post(':tenantId/demo-data')
+    @HttpCode(202)
+    loadDemoData(
+        @Param('tenantId') tenantId: string,
+        @Request() req: any,
+    ) {
+        return this.adminTenantsService.loadDemoData(tenantId, req.user.userId);
+    }
+
+    @Get(':tenantId/demo-data/status')
+    demoDataStatus(@Param('tenantId') tenantId: string) {
+        return this.adminTenantsService.getDemoDataStatus(tenantId);
     }
 
     @Patch(':tenantId/suspend')

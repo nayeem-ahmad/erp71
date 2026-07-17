@@ -1294,6 +1294,16 @@ export const api = {
     }> => fetchWithAuth(`/admin/tenants/${tenantId}/catalog-import`, {
         method: 'POST',
     }),
+    loadAdminTenantDemoData: (tenantId: string): Promise<{ batchId: string; batchNumber: number }> =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/demo-data`, { method: 'POST' }),
+    getAdminTenantDemoDataStatus: (tenantId: string): Promise<{
+        status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+        phase?: string | null;
+        processed: number;
+        total: number;
+        batch_number: number;
+        error?: string | null;
+    } | null> => fetchWithAuth(`/admin/tenants/${tenantId}/demo-data/status`),
     suspendTenant: (tenantId: string, reason?: string) => fetchWithAuth(`/admin/tenants/${tenantId}/suspend`, {
         method: 'PATCH',
         body: JSON.stringify({ reason }),
