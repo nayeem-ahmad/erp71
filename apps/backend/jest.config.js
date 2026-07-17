@@ -11,10 +11,6 @@ module.exports = {
         '!src/**/*.module.ts',
         '!src/main.ts',
         '!src/instrument.ts',
-        // Source files whose spec suites are excluded from the CI run
-        '!src/accounting/accounting.controller.ts',
-        '!src/accounting/bootstrap-accounting.service.ts',
-        '!src/customers/customers.service.ts',
     ],
     coverageDirectory: './coverage',
     // Reports: text-summary printed to console; lcov + html uploaded as CI artifacts

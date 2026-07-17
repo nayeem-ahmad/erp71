@@ -46,19 +46,8 @@ export class PurchaseReturnsService {
             const returnNumber = `PRET-${String(count + 1).padStart(5, '0')}`;
             const warehouseId = await resolveWarehouseId(tx, tenantId, purchase.store_id);
 
-            for (const item of returnItemData) {
-                await applyInventoryMovement(tx, {
-                    tenantId,
-                    productId: item.product_id,
-                    warehouseId,
-                    quantityDelta: -item.quantity,
-                    movementType: 'PURCHASE_RETURN',
-                    referenceType: 'PURCHASE_RETURN',
-                    referenceId: returnNumber,
-                    unitCost: item.unit_cost,
-                });
-            }
-
+            // Create the return row first, so movements can reference its id
+            // (every other caller passes the id, not the PRET- string).
             const purchaseReturn = await tx.purchaseReturn.create({
                 data: {
                     tenant_id: tenantId,
@@ -79,6 +68,47 @@ export class PurchaseReturnsService {
                     ...item,
                 })),
             });
+
+            for (const item of returnItemData) {
+                await applyInventoryMovement(tx, {
+                    tenantId,
+                    productId: item.product_id,
+                    warehouseId,
+                    quantityDelta: -item.quantity,
+                    movementType: 'PURCHASE_RETURN',
+                    referenceType: 'PURCHASE_RETURN',
+                    referenceId: purchaseReturn.id,
+                    unitCost: item.unit_cost,
+                });
+            }
+
+            // Returning purchased goods reduces what we owe the supplier. Record
+            // the credit-ledger entry and adjust the running balance to match, so
+            // a purchase return no longer leaves the payable overstated.
+            if (purchase.supplier_id) {
+                const currentDue = Number(purchase.supplier?.due_balance ?? 0);
+                const creditReduction = Math.min(totalAmount, currentDue);
+                if (creditReduction > 0.005) {
+                    const balanceAfter = currentDue - creditReduction;
+                    await tx.supplierCreditTransaction.create({
+                        data: {
+                            tenant_id: tenantId,
+                            supplier_id: purchase.supplier_id,
+                            type: 'ADJUSTMENT',
+                            amount: -creditReduction,
+                            balance_after: balanceAfter,
+                            reference_type: 'PURCHASE_RETURN',
+                            reference_id: purchaseReturn.id,
+                            notes: `Purchase return ${returnNumber}`,
+                            created_by: userId,
+                        },
+                    });
+                    await tx.supplier.update({
+                        where: { id: purchase.supplier_id },
+                        data: { due_balance: balanceAfter },
+                    });
+                }
+            }
 
             const posting = await autoPostFromRules({
                 tx,

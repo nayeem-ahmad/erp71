@@ -1,4 +1,4 @@
-import { bootstrapDefaultAccountingForTenant } from '@erp71/database';
+import { bootstrapDefaultAccountingForTenant, DEFAULT_ACCOUNTING_TEMPLATE } from '@erp71/database';
 
 describe('bootstrapDefaultAccountingForTenant — Story 30.2', () => {
     it('upserts the default account skeleton without failing on rerun', async () => {
@@ -91,5 +91,37 @@ describe('bootstrapDefaultAccountingForTenant — Story 30.2', () => {
 
         expect(postingRule.update).toHaveBeenCalled();
         expect(postingRule.create).not.toHaveBeenCalled();
+    });
+});
+
+describe('DEFAULT_ACCOUNTING_TEMPLATE — chart of accounts', () => {
+    const allAccounts = DEFAULT_ACCOUNTING_TEMPLATE.flatMap((group) =>
+        group.subgroups.flatMap((subgroup) => subgroup.accounts),
+    );
+
+    it.each([
+        ['Accounts Receivable', '1030'],
+        ['bKash Account', '1015'],
+        ['Nagad Account', '1016'],
+        ['Purchases', '5015'],
+        ['Loans Receivable', '1035'],
+    ])('provisions %s at code %s', (name, code) => {
+        const account = allAccounts.find((a) => a.name === name);
+        expect(account).toBeDefined();
+        expect(account?.code).toBe(code);
+    });
+
+    it('assigns every account code exactly once', () => {
+        const codes = allAccounts.map((a) => a.code).filter(Boolean);
+        expect(codes).toHaveLength(new Set(codes).size);
+    });
+
+    it.each([
+        'Stock on Hand',
+        'Goods in Transit',
+        'Cost of Goods Sold',
+        'Rocket Account',
+    ])('does not provision %s (unused under periodic inventory)', (name) => {
+        expect(allAccounts.find((a) => a.name === name)).toBeUndefined();
     });
 });

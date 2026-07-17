@@ -3,8 +3,6 @@ import { DatabaseService } from '../database/database.service';
 import { StorefrontSettingsDto } from '../storefront/storefront.dto';
 import { UpdateBrandingDto } from './update-branding.dto';
 import { UpdateLocalizationSettingsDto } from './localization-settings.dto';
-import { seedTenantDemoData } from '@erp71/database';
-import { ensureDefaultWarehouse } from '../database/inventory.utils';
 
 @Injectable()
 export class TenantsService {
@@ -190,20 +188,6 @@ export class TenantsService {
         });
     }
 
-    async loadDemoData(tenantId: string, userRole: string | undefined) {
-        if (userRole !== 'OWNER') throw new ForbiddenException('Only the shop owner can load demo data');
-
-        const store = await this.db.store.findFirst({
-            where: { tenant_id: tenantId },
-            orderBy: { created_at: 'asc' },
-        });
-        if (!store) throw new NotFoundException('No store found for this tenant');
-
-        const warehouse = await ensureDefaultWarehouse(this.db, tenantId, store.id);
-
-        return seedTenantDemoData(this.db, tenantId, store.id, warehouse.id);
-    }
-
     async clearData(tenantId: string, mode: 'transactions' | 'all', userRole: string | undefined) {
         if (userRole !== 'OWNER') throw new ForbiddenException('Only the shop owner can clear data');
         if (mode !== 'transactions' && mode !== 'all') {
@@ -212,6 +196,9 @@ export class TenantsService {
 
         await this.db.$transaction(async (tx) => {
             // --- Transactional / operational records ---
+
+            // Demo-data batch history (metadata; both modes reset the append counter)
+            await tx.demoDataBatch.deleteMany({ where: { tenant_id: tenantId } });
 
             // CRM operational (before Customer)
             await tx.lead.deleteMany({ where: { tenant_id: tenantId } }); // cascades LeadConversation

@@ -50,6 +50,9 @@ describe('AccountingService — Story 30.2', () => {
         store: {
             findMany: jest.fn(),
         },
+        fiscalPeriod: {
+            findFirst: jest.fn().mockResolvedValue(null),
+        },
         postingRule: {
             findMany: jest.fn(),
             findFirst: jest.fn(),

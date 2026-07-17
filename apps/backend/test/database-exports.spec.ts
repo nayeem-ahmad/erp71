@@ -18,7 +18,7 @@ describe('@erp71/database runtime exports', () => {
         'seedDefaultPaymentMethods',
         'bootstrapDefaultAccountingForTenant',
         'seedDemoAccount',
-        'seedTenantDemoData',
+        'ensureInterBranchAccounts',
     ])('exports %s as a function from index.js', (name) => {
         expect(typeof database[name]).toBe('function');
     });

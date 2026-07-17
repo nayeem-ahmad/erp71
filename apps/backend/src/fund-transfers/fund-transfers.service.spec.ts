@@ -42,6 +42,8 @@ describe('FundTransfersService', () => {
                 upsert: jest.fn().mockResolvedValue({ next_number: 1, prefix: 'FT' }),
                 update: jest.fn().mockResolvedValue({}),
             },
+            // null = no covering fiscal period, which correctly allows posting.
+            fiscalPeriod: { findFirst: jest.fn().mockResolvedValue(null) },
         };
 
         db.$transaction.mockImplementation(async (callback: (client: typeof tx) => unknown) => callback(tx));

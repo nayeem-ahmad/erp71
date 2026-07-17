@@ -130,9 +130,15 @@ export async function applyInventoryMovement(
         referenceId?: string;
         unitCost?: number;
         note?: string;
+        /**
+         * Backdates InventoryMovement.created_at. Omitted by every real caller
+         * (movements stamp now); used by the demo-data generator to backfill a
+         * six-month history so the stock ledger agrees with backdated sales.
+         */
+        occurredAt?: Date;
     },
 ) {
-    const { tenantId, productId, warehouseId, quantityDelta, movementType, referenceType, referenceId, unitCost, note } = params;
+    const { tenantId, productId, warehouseId, quantityDelta, movementType, referenceType, referenceId, unitCost, note, occurredAt } = params;
 
     if (quantityDelta === 0) {
         throw new BadRequestException('Inventory movement delta cannot be zero.');
@@ -214,6 +220,7 @@ export async function applyInventoryMovement(
             balance_after: balanceAfter,
             unit_cost: unitCost,
             note,
+            ...(occurredAt ? { created_at: occurredAt } : {}),
         },
     });
 

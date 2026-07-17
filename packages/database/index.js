@@ -7,12 +7,16 @@ const seedTemplate = require('./prisma/templates/seed-template.js');
 
 module.exports = {
     ...prisma,
-    ...accounting,
+    bootstrapDefaultAccountingForTenant: accounting.bootstrapDefaultAccountingForTenant,
+    ensureLoanPostingSetup: accounting.ensureLoanPostingSetup,
+    ensureCustomerPaymentPostingSetup: accounting.ensureCustomerPaymentPostingSetup,
+    ensureInterBranchAccounts: accounting.ensureInterBranchAccounts,
+    DEFAULT_ACCOUNTING_TEMPLATE: accounting.DEFAULT_ACCOUNTING_TEMPLATE,
+    DEFAULT_POSTING_RULES: accounting.DEFAULT_POSTING_RULES,
     ...tenantRoles,
     ...paymentMethods,
     DEMO_ACCOUNT_EMAIL: seedDemo.DEMO_ACCOUNT_EMAIL,
     DEMO_ACCOUNT_PASSWORD: seedDemo.DEMO_ACCOUNT_PASSWORD,
     seedDemoAccount: seedDemo.seedDemoAccount,
-    seedTenantDemoData: seedDemo.seedTenantDemoData,
     seedBusinessTypeTemplate: seedTemplate.seedBusinessTypeTemplate,
 };

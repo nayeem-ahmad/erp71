@@ -137,6 +137,12 @@ export class PurchasesService {
                 });
             }
 
+            // Always 'credit', and that is correct rather than a shortcut: this
+            // service never writes Purchase.paid_amount (CreatePurchaseDto has no
+            // paidAmount field) and books the full total as supplier credit, so a
+            // purchase is always a payable. Recording a cash buy is a two-step flow:
+            // purchase, then supplier payment. There are deliberately no
+            // purchase/cash or purchase/bank rules — they would be unreachable.
             const posting = await autoPostFromRules({
                 tx,
                 tenantId,
