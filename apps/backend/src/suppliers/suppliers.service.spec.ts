@@ -1,6 +1,12 @@
+jest.mock('../accounting/posting.utils', () => ({
+    autoPostFromRules: jest.fn().mockResolvedValue({ postingStatus: 'skipped' }),
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { autoPostFromRules } from '../accounting/posting.utils';
 import { DatabaseService } from '../database/database.service';
+import { SupplierPaymentDirectionDto } from './supplier.dto';
 import { SuppliersService } from './suppliers.service';
 
 describe('SuppliersService', () => {
@@ -113,6 +119,91 @@ describe('SuppliersService', () => {
         const result = await service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 150 });
 
         expect(result.type).toBe('PAYMENT');
+    });
+
+    describe('supplier payment posting', () => {
+        // Regression cover for "Purchase Payable never clears": purchases credit the
+        // payable on every tenant, but recordCreditPayment never posted, so nothing
+        // ever debited it and the liability grew forever.
+        const mockTx = (type: 'PAYMENT' | 'PAYOUT') => {
+            db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', due_balance: 500, name: 'ACME' });
+            db.$transaction.mockImplementation(async (fn: (tx: any) => Promise<unknown>) => fn({
+                supplierCreditTransaction: {
+                    findFirst: jest.fn().mockResolvedValue(null),
+                    create: jest.fn().mockResolvedValue({
+                        id: 'tx-1',
+                        type,
+                        payment_number: 'SPY-00001',
+                        created_at: new Date('2026-07-17T00:00:00Z'),
+                    }),
+                },
+                supplier: { update: jest.fn().mockResolvedValue({ id: 'sup-1' }) },
+            }));
+        };
+
+        beforeEach(() => {
+            (autoPostFromRules as jest.Mock).mockClear();
+            (autoPostFromRules as jest.Mock).mockResolvedValue({ postingStatus: 'skipped' });
+        });
+
+        it('posts direction "pay" when paying the supplier, so Purchase Payable is debited', async () => {
+            mockTx('PAYMENT');
+
+            await service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 200 });
+
+            expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+                eventType: 'supplier_payment',
+                conditionKey: 'payment_direction',
+                conditionValue: 'pay',
+                sourceId: 'tx-1',
+                amount: 200,
+            }));
+        });
+
+        it('posts direction "receive" for a payout, mirroring dueDelta', async () => {
+            // dueDelta: PAYMENT reduces due, PAYOUT increases it. The voucher must
+            // move in the same direction or the ledger and due_balance diverge.
+            mockTx('PAYOUT');
+
+            await service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', {
+                amount: 200,
+                direction: SupplierPaymentDirectionDto.RECEIVE,
+            });
+
+            expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+                conditionValue: 'receive',
+            }));
+        });
+
+        it('surfaces the voucher on the returned payment', async () => {
+            // Asserting the RESULT, not just that the call happened — a posting that
+            // returns 'skipped' is invisible unless the caller reports it.
+            mockTx('PAYMENT');
+            (autoPostFromRules as jest.Mock).mockResolvedValue({
+                postingStatus: 'posted',
+                voucherId: 'v-1',
+                voucherNumber: 'CP-00001',
+            });
+
+            const result: any = await service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 200 });
+
+            expect(result.posting_status).toBe('posted');
+            expect(result.voucher_id).toBe('v-1');
+            expect(result.voucher_number).toBe('CP-00001');
+        });
+
+        it('scopes the posting to the tenant and the payment row', async () => {
+            mockTx('PAYMENT');
+
+            await service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 200 });
+
+            expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+                tenantId: 'tenant-1',
+                sourceModule: 'suppliers',
+                sourceType: 'supplier_payment',
+                sourceId: 'tx-1',
+            }));
+        });
     });
 
     describe('bill allocations', () => {

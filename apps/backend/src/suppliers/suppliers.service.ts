@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { autoPostFromRules } from '../accounting/posting.utils';
 import { DatabaseService } from '../database/database.service';
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
@@ -661,7 +662,32 @@ export class SuppliersService {
                 await this.applyAllocations(tx, tenantId, id, payment.id, dto.allocations, dto.amount);
             }
 
-            return payment;
+            // Purchases credit Purchase Payable; without this nothing ever debits
+            // it, so the payable grows forever and the balance sheet overstates
+            // liabilities. PAYMENT (we pay the supplier) reduces the payable;
+            // PAYOUT (we receive from the supplier) increases it — mirroring
+            // dueDelta above, so the voucher and due_balance cannot disagree.
+            const posting = await autoPostFromRules({
+                tx,
+                tenantId,
+                eventType: 'supplier_payment',
+                conditionKey: 'payment_direction',
+                conditionValue: txType === 'PAYMENT' ? 'pay' : 'receive',
+                sourceModule: 'suppliers',
+                sourceType: 'supplier_payment',
+                sourceId: payment.id,
+                amount: dto.amount,
+                description: `Auto-posted supplier ${txType === 'PAYMENT' ? 'payment' : 'receipt'} — ${supplier.name}`,
+                referenceNumber: payment_number,
+                date: payment.created_at,
+            });
+
+            return {
+                ...payment,
+                posting_status: posting.postingStatus,
+                voucher_id: posting.voucherId ?? null,
+                voucher_number: posting.voucherNumber ?? null,
+            };
         });
     }
 

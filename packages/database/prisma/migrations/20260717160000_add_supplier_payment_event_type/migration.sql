@@ -1,0 +1,11 @@
+-- Add the supplier_payment event type to the posting-rules engine so paying a
+-- supplier posts a voucher.
+--
+-- Until now purchases posted Dr Purchases / Cr Purchase Payable, but
+-- suppliers.service.recordCreditPayment never called autoPostFromRules — it moved
+-- due_balance without a voucher, so nothing ever debited Purchase Payable and the
+-- liability grew forever on every tenant.
+--
+-- Reuses the existing payment_direction condition key (added by
+-- 20260616000000_add_loan_posting), mirroring customer_payment.
+ALTER TYPE "PostingRuleEventType" ADD VALUE IF NOT EXISTS 'supplier_payment';

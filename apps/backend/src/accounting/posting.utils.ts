@@ -12,7 +12,8 @@ export type PostingEventType =
     | 'expense'
     | 'loan_disbursement'
     | 'loan_repayment'
-    | 'customer_payment';
+    | 'customer_payment'
+    | 'supplier_payment';
 
 export interface AutoPostInput {
     tx: Prisma.TransactionClient;
@@ -61,6 +62,10 @@ const VOUCHER_TYPE_BY_EVENT: Record<PostingEventType, string> = {
     loan_disbursement: VoucherType.JOURNAL,
     loan_repayment: VoucherType.JOURNAL,
     customer_payment: VoucherType.CASH_RECEIVE,
+    // Paying a supplier is the common case, so cash OUT is the default here and
+    // the 'receive' direction is the exception below — the mirror of
+    // customer_payment, where money normally comes IN.
+    supplier_payment: VoucherType.CASH_PAYMENT,
 };
 
 function resolveVoucherType(
@@ -70,6 +75,9 @@ function resolveVoucherType(
 ): string {
     if (eventType === 'customer_payment' && conditionKey === 'payment_direction' && conditionValue === 'pay') {
         return VoucherType.CASH_PAYMENT;
+    }
+    if (eventType === 'supplier_payment' && conditionKey === 'payment_direction' && conditionValue === 'receive') {
+        return VoucherType.CASH_RECEIVE;
     }
     return VOUCHER_TYPE_BY_EVENT[eventType];
 }

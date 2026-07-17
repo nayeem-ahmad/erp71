@@ -169,6 +169,7 @@ enum PostingRuleEventType {
   loan_disbursement
   loan_repayment
   customer_payment
+  supplier_payment
 }
 
 enum PostingRuleConditionKey {

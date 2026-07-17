@@ -205,9 +205,27 @@ Also: add `Account.party_type` (`CUSTOMER | SUPPLIER | EMPLOYEE | null`) and mar
 Extend `PostingEventType` (`posting.utils.ts:5`), add matching `VOUCHER_TYPE_BY_EVENT` entries, and
 add to `DEFAULT_POSTING_RULES`:
 
+**`supplier_payment` LANDED 2026-07-17** — but keyed on `payment_direction`, not `payment_mode`.
+A third correction to this plan: `SupplierCreditTransaction` has **no `payment_method` column**, so
+there is no mode to read and `payment_mode × cash/bank/bkash/nagad` is not implementable. It mirrors
+`customer_payment` instead, which already hardcodes Cash in Hand for the same reason:
+
 | Event | Condition | Dr / Cr |
 |---|---|---|
-| `supplier_payment` | `payment_mode` × cash/bank/bkash/nagad | Purchase Payable / \<mode\> |
+| `supplier_payment` | `payment_direction` × pay | Purchase Payable / Cash in Hand |
+| `supplier_payment` | `payment_direction` × receive | Cash in Hand / Purchase Payable |
+
+`pay` / `receive` mirror `dueDelta` in `suppliers.service.ts` (PAYMENT reduces the payable, PAYOUT
+increases it), so the voucher and `due_balance` cannot move in opposite directions. Unlike
+`customer_payment` these live in `DEFAULT_POSTING_RULES` rather than a lazy `ensure*` helper — the
+bootstrap creates Purchase Payable and Cash in Hand unconditionally, so there is nothing to provision
+lazily around. Resolving the counter-account from the payment method is the existing
+`PaymentMethod.account_id` follow-up in TODO.md.
+
+Remaining, not yet built:
+
+| Event | Condition | Dr / Cr |
+|---|---|---|
 | `supplier_advance` | `payment_mode` × cash/bank/bkash/nagad | Advances to Suppliers / \<mode\> |
 | `order_deposit` | `payment_mode` × cash/bank/bkash/nagad | \<mode\> / Customer Advances |
 | `advance_settlement` | `party_type` × customer | Customer Advances / Accounts Receivable |

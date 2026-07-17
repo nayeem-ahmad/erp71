@@ -242,6 +242,18 @@ export const DEFAULT_POSTING_RULES: DefaultPostingRuleDefinition[] = [
     { event_type: 'expense', condition_key: 'payment_mode', condition_value: 'cash', debit_account: 'General Operating Expense', credit_account: 'Cash in Hand', priority: 10 },
     { event_type: 'expense', condition_key: 'payment_mode', condition_value: 'bank', debit_account: 'General Operating Expense', credit_account: 'Main Bank Account', priority: 20 },
 
+    // ── Supplier payments ────────────────────────────────────────────────────
+    // What finally DEBITS Purchase Payable. Purchases credit it on every tenant,
+    // but nothing ever debited it, so the liability grew forever.
+    //
+    // Keyed on payment_direction, not payment_mode, because
+    // SupplierCreditTransaction has no payment_method column — there is no mode to
+    // read. Cash in Hand is therefore the default counter-account, exactly as
+    // customer_payment already assumes. Tenants can repoint the rule; resolving the
+    // account from the payment method is tracked in TODO.md.
+    { event_type: 'supplier_payment', condition_key: 'payment_direction', condition_value: 'pay', debit_account: 'Purchase Payable', credit_account: 'Cash in Hand', priority: 10 },
+    { event_type: 'supplier_payment', condition_key: 'payment_direction', condition_value: 'receive', debit_account: 'Cash in Hand', credit_account: 'Purchase Payable', priority: 20 },
+
     // ── DELIBERATELY ABSENT: fund_movement, inventory_adjustment ─────────────
     // Under periodic inventory these events have no journal entry. Adding a
     // condition_key:'none' rule here is worse than adding nothing, because
