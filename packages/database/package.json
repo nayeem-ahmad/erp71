@@ -11,7 +11,8 @@
         "db:studio": "prisma studio",
         "repair:vouchers": "tsx prisma/repair-fabricated-vouchers.ts",
         "sync:accounting": "tsx prisma/sync-accounting.ts",
-        "reconcile:balances": "tsx prisma/reconcile-party-balances.ts"
+        "reconcile:balances": "tsx prisma/reconcile-party-balances.ts",
+        "retag:parties": "tsx prisma/retag-party-ledger.ts"
     },
     "dependencies": {
         "@erp71/shared-types": "*",
