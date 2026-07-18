@@ -333,6 +333,14 @@ export const DEFAULT_POSTING_RULES: DefaultPostingRuleDefinition[] = [
     { event_type: 'asset_acquisition', condition_key: 'payment_mode', condition_value: 'bkash', debit_account: 'Fixed Assets', credit_account: 'bKash Account', priority: 30 },
     { event_type: 'asset_acquisition', condition_key: 'payment_mode', condition_value: 'nagad', debit_account: 'Fixed Assets', credit_account: 'Nagad Account', priority: 40 },
 
+    // ── Inter-branch fund transfer (cash between branches) ───────────────────
+    // Two legs of one transfer: the source loses cash and gains a receivable from
+    // the branch; the destination gains cash and owes the branch. transfer_scope
+    // carries the phase here (distinct from warehouse-transfer's inter/intra_store
+    // because the event_type differs).
+    { event_type: 'fund_transfer', condition_key: 'transfer_scope', condition_value: 'initiate', debit_account: 'Due from Branches', credit_account: 'Cash in Hand', priority: 10 },
+    { event_type: 'fund_transfer', condition_key: 'transfer_scope', condition_value: 'receive', debit_account: 'Cash in Hand', credit_account: 'Due to Branches', priority: 20 },
+
     // ── Cashier cash-out ─────────────────────────────────────────────────────
     // A till PAYOUT is a petty expense; a LOAN is cash advanced to staff. Keyed
     // on the CashTransaction.type via reason_type. DROP (drawer→safe) and OTHER

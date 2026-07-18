@@ -282,6 +282,8 @@ const DEFAULT_POSTING_RULES = [
 	{ event_type: 'asset_acquisition', condition_key: 'payment_mode', condition_value: 'bank', debit_account: 'Fixed Assets', credit_account: 'Main Bank Account', priority: 20 },
 	{ event_type: 'asset_acquisition', condition_key: 'payment_mode', condition_value: 'bkash', debit_account: 'Fixed Assets', credit_account: 'bKash Account', priority: 30 },
 	{ event_type: 'asset_acquisition', condition_key: 'payment_mode', condition_value: 'nagad', debit_account: 'Fixed Assets', credit_account: 'Nagad Account', priority: 40 },
+	{ event_type: 'fund_transfer', condition_key: 'transfer_scope', condition_value: 'initiate', debit_account: 'Due from Branches', credit_account: 'Cash in Hand', priority: 10 },
+	{ event_type: 'fund_transfer', condition_key: 'transfer_scope', condition_value: 'receive', debit_account: 'Cash in Hand', credit_account: 'Due to Branches', priority: 20 },
 	{ event_type: 'cash_transaction', condition_key: 'reason_type', condition_value: 'PAYOUT', debit_account: 'General Operating Expense', credit_account: 'Cash in Hand', priority: 10 },
 	{ event_type: 'cash_transaction', condition_key: 'reason_type', condition_value: 'LOAN', debit_account: 'Staff Advances', credit_account: 'Cash in Hand', priority: 20 },
 	{ event_type: 'salary_accrual', condition_key: 'none', condition_value: null, debit_account: 'Salary & Wages', credit_account: 'Salary Payable', priority: 10 },

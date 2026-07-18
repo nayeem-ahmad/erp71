@@ -18,7 +18,8 @@ export type PostingEventType =
     | 'cash_transaction'
     | 'salary_accrual'
     | 'salary_payment'
-    | 'asset_acquisition';
+    | 'asset_acquisition'
+    | 'fund_transfer';
 
 export interface AutoPostInput {
     tx: Prisma.TransactionClient;
@@ -106,6 +107,8 @@ const VOUCHER_TYPE_BY_EVENT: Record<PostingEventType, string> = {
     salary_payment: VoucherType.CASH_PAYMENT,
     // Cash out to buy an asset (Dr Fixed Assets / Cr <mode>) — a cash payment.
     asset_acquisition: VoucherType.CASH_PAYMENT,
+    // Inter-branch cash movement (Due from/to Branches vs Cash) — a fund transfer.
+    fund_transfer: VoucherType.FUND_TRANSFER,
 };
 
 function resolveVoucherType(

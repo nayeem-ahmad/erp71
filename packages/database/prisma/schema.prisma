@@ -175,6 +175,7 @@ enum PostingRuleEventType {
   salary_accrual
   salary_payment
   asset_acquisition
+  fund_transfer
 }
 
 /// A subsidiary-ledger party. Marks a control account (Accounts Receivable,

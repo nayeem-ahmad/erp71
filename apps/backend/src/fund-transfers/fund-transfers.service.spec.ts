@@ -2,11 +2,16 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ensureInterBranchAccounts } from '@erp71/database';
 import { DatabaseService } from '../database/database.service';
+import { autoPostFromRules } from '../accounting/posting.utils';
 import { FundTransfersService } from './fund-transfers.service';
 
 jest.mock('@erp71/database', () => ({
     ...jest.requireActual('@erp71/database'),
     ensureInterBranchAccounts: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('../accounting/posting.utils', () => ({
+    autoPostFromRules: jest.fn().mockResolvedValue({ postingStatus: 'posted', voucherId: 'v-1' }),
 }));
 
 describe('FundTransfersService', () => {
@@ -63,9 +68,10 @@ describe('FundTransfersService', () => {
         service = module.get(FundTransfersService);
     });
 
-    it('initiate creates transfer and source voucher', async () => {
+    it('initiate posts the source leg through the rules engine and marks in-transit', async () => {
+        (autoPostFromRules as jest.Mock).mockClear();
+        (autoPostFromRules as jest.Mock).mockResolvedValue({ postingStatus: 'posted', voucherId: 'v-source-1' });
         tx.fundTransfer.create.mockResolvedValue({ id: 'ft-1' });
-        tx.voucher.create.mockResolvedValue({ id: 'v-source-1' });
         tx.fundTransfer.update.mockResolvedValue({
             id: 'ft-1',
             status: 'IN_TRANSIT',
@@ -79,15 +85,16 @@ describe('FundTransfersService', () => {
         });
 
         expect(ensureInterBranchAccounts).toHaveBeenCalledWith(tx, 'tenant-1');
-        expect(tx.voucher.create).toHaveBeenCalledWith(
-            expect.objectContaining({
-                data: expect.objectContaining({
-                    store_id: 'store-a',
-                    attribution: 'INTER_BRANCH',
-                    counterparty_store_id: 'store-b',
-                }),
-            }),
-        );
+        expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+            eventType: 'fund_transfer',
+            conditionKey: 'transfer_scope',
+            conditionValue: 'initiate',
+            legKey: 'initiate',
+            sourceId: 'ft-1',
+            amount: 500,
+            storeId: 'store-a',
+            counterpartyStoreId: 'store-b',
+        }));
         expect(result.status).toBe('IN_TRANSIT');
     });
 
@@ -101,7 +108,9 @@ describe('FundTransfersService', () => {
         ).rejects.toThrow(BadRequestException);
     });
 
-    it('receive creates destination voucher and marks transfer received', async () => {
+    it('receive posts the destination leg through the rules engine and marks received', async () => {
+        (autoPostFromRules as jest.Mock).mockClear();
+        (autoPostFromRules as jest.Mock).mockResolvedValue({ postingStatus: 'posted', voucherId: 'v-dest-1' });
         tx.fundTransfer.findFirst.mockResolvedValue({
             id: 'ft-1',
             status: 'IN_TRANSIT',
@@ -111,12 +120,6 @@ describe('FundTransfersService', () => {
             amount: 500,
             description: null,
         });
-        tx.account.findFirst
-            .mockReset()
-            .mockResolvedValueOnce({ id: 'cash-1' })
-            .mockResolvedValueOnce({ id: 'due-from-1' })
-            .mockResolvedValueOnce({ id: 'due-to-1' });
-        tx.voucher.create.mockResolvedValue({ id: 'v-dest-1' });
         tx.fundTransfer.update.mockResolvedValue({
             id: 'ft-1',
             status: 'RECEIVED',
@@ -125,15 +128,15 @@ describe('FundTransfersService', () => {
 
         const result = await service.receive('tenant-1', 'user-2', 'ft-1');
 
-        expect(tx.voucher.create).toHaveBeenCalledWith(
-            expect.objectContaining({
-                data: expect.objectContaining({
-                    store_id: 'store-b',
-                    attribution: 'INTER_BRANCH',
-                    counterparty_store_id: 'store-a',
-                }),
-            }),
-        );
+        expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+            eventType: 'fund_transfer',
+            conditionValue: 'receive',
+            legKey: 'receive',
+            sourceId: 'ft-1',
+            amount: 500,
+            storeId: 'store-b',
+            counterpartyStoreId: 'store-a',
+        }));
         expect(result.status).toBe('RECEIVED');
     });
 

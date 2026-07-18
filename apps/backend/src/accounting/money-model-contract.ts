@@ -37,7 +37,7 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     { model: 'ExpenseEntry', postsVia: 'expense' },
     { model: 'Loan', postsVia: 'loan_disbursement' },
     { model: 'LoanPayment', postsVia: 'loan_repayment' },
-    { model: 'FundTransfer', postsVia: 'fund_movement', note: 'hand-rolled voucher (tx.voucher.create), not autoPostFromRules — see TODO' },
+    { model: 'FundTransfer', postsVia: 'fund_transfer', note: 'inter-branch cash: initiate + receive legs, both through autoPostFromRules' },
     { model: 'AssetDepreciationEntry', postsVia: 'depreciation' },
     { model: 'CashTransaction', postsVia: 'cash_transaction', note: 'PAYOUT/LOAN post; DROP/OTHER post nothing by design' },
     { model: 'SalaryAccrual', postsVia: 'salary_accrual' },

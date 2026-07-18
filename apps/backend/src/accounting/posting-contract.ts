@@ -88,6 +88,10 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     { eventType: 'cash_transaction', conditionKey: 'reason_type', conditionValue: 'PAYOUT', emittedBy: 'cashier-sessions.service.ts:addCashTransaction', expectation: 'rule' },
     { eventType: 'cash_transaction', conditionKey: 'reason_type', conditionValue: 'LOAN', emittedBy: 'cashier-sessions.service.ts:addCashTransaction', expectation: 'rule' },
 
+    // ── inter-branch fund transfer ───────────────────────────────────────────
+    { eventType: 'fund_transfer', conditionKey: 'transfer_scope', conditionValue: 'initiate', emittedBy: 'fund-transfers.service.ts:initiate', expectation: 'rule' },
+    { eventType: 'fund_transfer', conditionKey: 'transfer_scope', conditionValue: 'receive', emittedBy: 'fund-transfers.service.ts:receive', expectation: 'rule' },
+
     // ── fixed-asset acquisition ──────────────────────────────────────────────
     { eventType: 'asset_acquisition', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'accounting.service.ts:createFixedAsset', expectation: 'rule' },
     { eventType: 'asset_acquisition', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'accounting.service.ts:createFixedAsset', expectation: 'rule' },
