@@ -71,6 +71,29 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 		],
 	},
 	{
+		name: 'Non-Current Assets',
+		type: AccountType.ASSET,
+		subgroups: [
+			{
+				name: 'Fixed Assets',
+				accounts: [
+					{
+						name: 'Fixed Assets',
+						code: '1050',
+						type: AccountType.ASSET,
+						category: AccountCategory.GENERAL,
+					},
+					{
+						name: 'Accumulated Depreciation',
+						code: '1055',
+						type: AccountType.ASSET,
+						category: AccountCategory.GENERAL,
+					},
+				],
+			},
+		],
+	},
+	{
 		name: 'Current Liabilities',
 		type: AccountType.LIABILITY,
 		subgroups: [
@@ -168,6 +191,12 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 						type: AccountType.EXPENSE,
 						category: AccountCategory.GENERAL,
 					},
+					{
+						name: 'Depreciation Expense',
+						code: '5030',
+						type: AccountType.EXPENSE,
+						category: AccountCategory.GENERAL,
+					},
 				],
 			},
 		],
@@ -224,6 +253,7 @@ const DEFAULT_POSTING_RULES = [
 	// account from the payment method is tracked in TODO.md.
 	{ event_type: 'supplier_payment', condition_key: 'payment_direction', condition_value: 'pay', debit_account: 'Purchase Payable', credit_account: 'Cash in Hand', priority: 10 },
 	{ event_type: 'supplier_payment', condition_key: 'payment_direction', condition_value: 'receive', debit_account: 'Cash in Hand', credit_account: 'Purchase Payable', priority: 20 },
+	{ event_type: 'depreciation', condition_key: 'none', condition_value: null, debit_account: 'Depreciation Expense', credit_account: 'Accumulated Depreciation', priority: 10 },
 
 	// ── DELIBERATELY ABSENT: fund_movement, inventory_adjustment ─────────────
 	// Under periodic inventory these events have no journal entry. Adding a

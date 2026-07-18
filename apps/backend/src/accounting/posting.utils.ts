@@ -13,7 +13,8 @@ export type PostingEventType =
     | 'loan_disbursement'
     | 'loan_repayment'
     | 'customer_payment'
-    | 'supplier_payment';
+    | 'supplier_payment'
+    | 'depreciation';
 
 export interface AutoPostInput {
     tx: Prisma.TransactionClient;
@@ -75,6 +76,9 @@ const VOUCHER_TYPE_BY_EVENT: Record<PostingEventType, string> = {
     // the 'receive' direction is the exception below — the mirror of
     // customer_payment, where money normally comes IN.
     supplier_payment: VoucherType.CASH_PAYMENT,
+    // A non-cash internal adjustment (Dr Depreciation Expense / Cr Accumulated
+    // Depreciation) — a journal voucher, not a cash movement.
+    depreciation: VoucherType.JOURNAL,
 };
 
 function resolveVoucherType(

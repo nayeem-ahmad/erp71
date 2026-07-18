@@ -186,19 +186,19 @@ bKash/Nagad bug persists on prod.
 
 New group **Non-Current Assets** (none exists today):
 
-| Code | Account | Type | Needed by |
-|---|---|---|---|
-| 1045 | Advances to Suppliers | ASSET | supplier advances (D2) |
-| 1050 | Fixed Assets | ASSET | depreciation |
-| 1055 | Accumulated Depreciation | ASSET (contra) | depreciation |
-| 1060 | Staff Advances | ASSET | cashier `LOAN` + employee salary advances (D4) |
-| 2030 | Customer Advances | LIABILITY | order deposits (D2) |
-| 2050 | Salary Payable | LIABILITY | employee payables (D4) |
-| 5020 | Salary & Wages | EXPENSE | salary payments |
-| 5030 | Depreciation Expense | EXPENSE | depreciation |
-| 5040 | Cash Shortage / Overage | EXPENSE | till reconciliation |
+| Code | Account | Type | Needed by | Status |
+|---|---|---|---|---|
+| 1045 | Advances to Suppliers | ASSET | supplier advances (D2) | pending |
+| 1050 | Fixed Assets | ASSET | depreciation | **LANDED 2026-07-18** |
+| 1055 | Accumulated Depreciation | ASSET (contra) | depreciation | **LANDED 2026-07-18** |
+| 1060 | Staff Advances | ASSET | cashier `LOAN` + employee salary advances (D4) | pending |
+| 2030 | Customer Advances | LIABILITY | order deposits (D2) | pending |
+| 2050 | Salary Payable | LIABILITY | employee payables (D4) | pending |
+| 5020 | Salary & Wages | EXPENSE | salary payments | pending |
+| 5030 | Depreciation Expense | EXPENSE | depreciation | **LANDED 2026-07-18** |
+| 5040 | Cash Shortage / Overage | EXPENSE | till reconciliation | pending |
 
-Also: add `Account.party_type` (`CUSTOMER | SUPPLIER | EMPLOYEE | null`) and mark 1030 / 2010 / 2050.
+`Account.party_type` and the 1030/2010 marks landed with Phase 3.
 
 ## Phase 2 — Event types and default rules
 
@@ -230,7 +230,7 @@ Remaining, not yet built:
 | `order_deposit` | `payment_mode` × cash/bank/bkash/nagad | \<mode\> / Customer Advances |
 | `advance_settlement` | `party_type` × customer | Customer Advances / Accounts Receivable |
 | `advance_settlement` | `party_type` × supplier | Purchase Payable / Advances to Suppliers |
-| `depreciation` | `none` | Depreciation Expense / Accumulated Depreciation |
+| `depreciation` | `none` | Depreciation Expense / Accumulated Depreciation — **LANDED 2026-07-18** |
 | `cash_transaction` | `reason_type` × PAYOUT | General Operating Expense / Cash in Hand |
 | `cash_transaction` | `reason_type` × LOAN | Staff Advances / Cash in Hand |
 | `salary_accrual` | `none` | Salary & Wages / Salary Payable |

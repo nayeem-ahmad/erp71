@@ -79,6 +79,9 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     { eventType: 'supplier_payment', conditionKey: 'payment_direction', conditionValue: 'pay', emittedBy: 'suppliers.service.ts:670', expectation: 'rule' },
     { eventType: 'supplier_payment', conditionKey: 'payment_direction', conditionValue: 'receive', emittedBy: 'suppliers.service.ts:670', expectation: 'rule' },
 
+    // ── depreciation ─────────────────────────────────────────────────────────
+    { eventType: 'depreciation', conditionKey: 'none', conditionValue: null, emittedBy: 'accounting.service.ts:runDepreciation', expectation: 'rule' },
+
     // ── loans ────────────────────────────────────────────────────────────────
     { eventType: 'loan_disbursement', conditionKey: 'loan_direction', conditionValue: 'PAYABLE', emittedBy: 'loans.service.ts:83', expectation: 'skip', skipReason: 'Provisioned lazily by ensureLoanPostingSetup, not by DEFAULT_POSTING_RULES.' },
     { eventType: 'loan_disbursement', conditionKey: 'loan_direction', conditionValue: 'RECEIVABLE', emittedBy: 'loans.service.ts:83', expectation: 'skip', skipReason: 'Provisioned lazily by ensureLoanPostingSetup, not by DEFAULT_POSTING_RULES.' },

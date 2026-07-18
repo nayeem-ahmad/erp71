@@ -17,7 +17,7 @@ import {
     parseStoreIdsParam,
     plBalanceForType,
 } from './report-scope.utils';
-import { assertFiscalPeriodOpen } from './posting.utils';
+import { assertFiscalPeriodOpen, autoPostFromRules } from './posting.utils';
 import { AuditService } from '../audit/audit.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 import { JOB_NAMES } from '../system-health/jobs/job-names';
@@ -2271,54 +2271,91 @@ export class AccountingService {
             where: { tenant_id: tenantId, is_active: true },
         });
 
-        const results = [];
-        for (const asset of assets) {
-            // Check if already run for this period
-            const existing = await this.db.assetDepreciationEntry.findUnique({
-                where: { asset_id_period_year_period_month: { asset_id: asset.id, period_year: dto.year, period_month: dto.month } },
-            });
-            if (existing) continue;
+        // Dated to the last day of the depreciation month, so the charge lands in
+        // the period it belongs to (and autoPostFromRules' fiscal-period guard
+        // blocks running it into a locked month).
+        const periodDate = new Date(Date.UTC(dto.year, dto.month, 0));
 
-            const cost = Number(asset.cost);
-            const residual = Number(asset.residual_value);
-            const accum = Number(asset.accumulated_depreciation);
-            let depreciation = 0;
+        // One transaction for the whole run: each asset creates a depreciation
+        // entry, increments accumulated depreciation, AND posts a balanced voucher.
+        // Wrapping them together means a posting failure (e.g. a locked period)
+        // rolls the entry and the increment back too, instead of leaving the ledger
+        // and the asset out of sync — the bug the old non-transactional version had.
+        return this.db.$transaction(async (tx) => {
+            const results = [];
+            for (const asset of assets) {
+                const existing = await tx.assetDepreciationEntry.findUnique({
+                    where: { asset_id_period_year_period_month: { asset_id: asset.id, period_year: dto.year, period_month: dto.month } },
+                });
+                if (existing) continue;
 
-            if (asset.depreciation_method === 'STRAIGHT_LINE') {
-                depreciation = this.roundAmount((cost - residual) / asset.useful_life_months);
-            } else {
-                // Declining balance: 2 / useful_life_months applied to book value
-                const bookValue = cost - accum;
-                const rate = 2 / asset.useful_life_months;
-                depreciation = this.roundAmount(bookValue * rate);
+                const cost = Number(asset.cost);
+                const residual = Number(asset.residual_value);
+                const accum = Number(asset.accumulated_depreciation);
+                let depreciation = 0;
+
+                if (asset.depreciation_method === 'STRAIGHT_LINE') {
+                    depreciation = this.roundAmount((cost - residual) / asset.useful_life_months);
+                } else {
+                    // Declining balance: 2 / useful_life_months applied to book value
+                    const bookValue = cost - accum;
+                    const rate = 2 / asset.useful_life_months;
+                    depreciation = this.roundAmount(bookValue * rate);
+                }
+
+                // Don't depreciate below residual value
+                const maxDepreciation = this.roundAmount(cost - residual - accum);
+                if (maxDepreciation <= 0) continue;
+                depreciation = Math.min(depreciation, maxDepreciation);
+                if (depreciation <= 0) continue;
+
+                const entry = await tx.assetDepreciationEntry.create({
+                    data: {
+                        asset_id: asset.id,
+                        period_year: dto.year,
+                        period_month: dto.month,
+                        depreciation_amount: depreciation,
+                    },
+                });
+
+                await tx.fixedAsset.update({
+                    where: { id: asset.id },
+                    data: { accumulated_depreciation: { increment: depreciation } },
+                });
+
+                const posting = await autoPostFromRules({
+                    tx,
+                    tenantId,
+                    eventType: 'depreciation',
+                    conditionKey: 'none',
+                    conditionValue: null,
+                    sourceModule: 'accounting',
+                    sourceType: 'depreciation',
+                    sourceId: entry.id,
+                    amount: depreciation,
+                    description: `Depreciation ${dto.year}-${String(dto.month).padStart(2, '0')} — ${asset.name}`,
+                    referenceNumber: asset.asset_code,
+                    date: periodDate,
+                });
+
+                if (posting.voucherId) {
+                    await tx.assetDepreciationEntry.update({
+                        where: { id: entry.id },
+                        data: { voucher_id: posting.voucherId },
+                    });
+                }
+
+                results.push({
+                    asset: { id: asset.id, name: asset.name, asset_code: asset.asset_code },
+                    depreciation_amount: depreciation,
+                    entry_id: entry.id,
+                    posting_status: posting.postingStatus,
+                    voucher_id: posting.voucherId ?? null,
+                });
             }
 
-            // Don't depreciate below residual value
-            const maxDepreciation = this.roundAmount(cost - residual - accum);
-            if (maxDepreciation <= 0) continue;
-            depreciation = Math.min(depreciation, maxDepreciation);
-            if (depreciation <= 0) continue;
-
-            // Record entry
-            const entry = await this.db.assetDepreciationEntry.create({
-                data: {
-                    asset_id: asset.id,
-                    period_year: dto.year,
-                    period_month: dto.month,
-                    depreciation_amount: depreciation,
-                },
-            });
-
-            // Update accumulated depreciation
-            await this.db.fixedAsset.update({
-                where: { id: asset.id },
-                data: { accumulated_depreciation: { increment: depreciation } },
-            });
-
-            results.push({ asset: { id: asset.id, name: asset.name, asset_code: asset.asset_code }, depreciation_amount: depreciation, entry_id: entry.id });
-        }
-
-        return { period: `${dto.year}-${String(dto.month).padStart(2, '0')}`, processed: results.length, results };
+            return { period: `${dto.year}-${String(dto.month).padStart(2, '0')}`, processed: results.length, results };
+        });
     }
 
     async getDepreciationSchedule(tenantId: string, assetId: string) {

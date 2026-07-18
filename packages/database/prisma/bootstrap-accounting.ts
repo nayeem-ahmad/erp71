@@ -92,6 +92,31 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
         ],
     },
     {
+        name: 'Non-Current Assets',
+        type: AccountType.ASSET,
+        subgroups: [
+            {
+                name: 'Fixed Assets',
+                accounts: [
+                    {
+                        name: 'Fixed Assets',
+                        code: '1050',
+                        type: AccountType.ASSET,
+                        category: AccountCategory.GENERAL,
+                    },
+                    // Contra-asset (credit balance): accumulated depreciation nets
+                    // against Fixed Assets to give net book value on the balance sheet.
+                    {
+                        name: 'Accumulated Depreciation',
+                        code: '1055',
+                        type: AccountType.ASSET,
+                        category: AccountCategory.GENERAL,
+                    },
+                ],
+            },
+        ],
+    },
+    {
         name: 'Current Liabilities',
         type: AccountType.LIABILITY,
         subgroups: [
@@ -189,6 +214,12 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                         type: AccountType.EXPENSE,
                         category: AccountCategory.GENERAL,
                     },
+                    {
+                        name: 'Depreciation Expense',
+                        code: '5030',
+                        type: AccountType.EXPENSE,
+                        category: AccountCategory.GENERAL,
+                    },
                 ],
             },
         ],
@@ -257,6 +288,11 @@ export const DEFAULT_POSTING_RULES: DefaultPostingRuleDefinition[] = [
     // account from the payment method is tracked in TODO.md.
     { event_type: 'supplier_payment', condition_key: 'payment_direction', condition_value: 'pay', debit_account: 'Purchase Payable', credit_account: 'Cash in Hand', priority: 10 },
     { event_type: 'supplier_payment', condition_key: 'payment_direction', condition_value: 'receive', debit_account: 'Cash in Hand', credit_account: 'Purchase Payable', priority: 20 },
+
+    // ── Depreciation ─────────────────────────────────────────────────────────
+    // Monthly non-cash charge: Dr Depreciation Expense / Cr Accumulated
+    // Depreciation. No party, no payment mode, so condition_key 'none'.
+    { event_type: 'depreciation', condition_key: 'none', condition_value: null, debit_account: 'Depreciation Expense', credit_account: 'Accumulated Depreciation', priority: 10 },
 
     // ── DELIBERATELY ABSENT: fund_movement, inventory_adjustment ─────────────
     // Under periodic inventory these events have no journal entry. Adding a
