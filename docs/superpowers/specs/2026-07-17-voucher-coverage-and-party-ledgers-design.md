@@ -383,16 +383,24 @@ Fix: add optional `legKey?: string` to `AutoPostInput`; the key becomes
 the paid-portion call and stop discarding its result. Leaving the credit leg keyless is deliberate:
 it preserves every existing voucher's key, so nothing re-posts.
 
-## Phase 7 — The guard that prevents recurrence
+## Phase 7 — The guard that prevents recurrence — **LANDED 2026-07-18**
 
 `POSTING_CONTRACT` starts from call sites, which can hide. The guard must start from the **data
 model, which cannot**.
 
-**`money-model-contract.spec.ts`** — parse `schema.prisma`, enumerate every model with a
-`Decimal @db.Decimal` field, and require each to appear in a registry as either
-`postsVia: <eventType>` or `exempt: '<reason>'`. Anything unclassified fails the build. A new model
-with a money column fails CI until its author classifies it. This matches an idiom already in the
-repo: `database-exports.spec.ts` uses the same drift-guard shape.
+**`money-model-contract.ts` + `money-model-contract.spec.ts`** — the spec parses `schema.prisma`,
+finds every model with a `@db.Decimal` field (65 today), and requires each to appear in the registry
+as `postsVia: <eventType>`, `exempt: '<reason>'`, or `gap: '<reason>'`. Anything unclassified fails
+the build. **Mutation-verified both ways:** dropping a classification fails, and appending a new
+`@db.Decimal` model to the schema fails until it is classified — the exact recurrence property. The
+spec also checks every `postsVia` names an event type `POSTING_CONTRACT` knows, every reason is
+non-empty, and pins the current gap set so wiring one forces a conscious update. Same drift-guard
+idiom as `database-exports.spec.ts`.
+
+A third state, `gap`, was added beyond the spec's original two: a money model that *should* post but
+is not wired yet, tracked rather than hidden as `exempt`. The census surfaced two — `OrderDeposit`
+(Phase 4/5 deposits) and **`FixedAsset`** (asset **acquisition** is not posted; `createFixedAsset`
+only registers the row — a newly-found gap, now a TODO follow-up).
 
 Supporting invariants:
 
