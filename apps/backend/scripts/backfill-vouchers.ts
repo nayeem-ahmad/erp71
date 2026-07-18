@@ -41,7 +41,14 @@ import { creditDueAmount } from '../src/customers/customer-credit.utils';
 const prisma = new PrismaClient();
 
 type PostInput = Omit<AutoPostInput, 'tx'>;
-type Candidate = { sourceId: string; label: string; input: PostInput };
+type Candidate = {
+    sourceId: string;
+    label: string;
+    input: PostInput;
+    // Writes the new voucher id back to the source row (as the live caller does),
+    // in the same transaction as the post. Depreciation links its entry this way.
+    linkVoucher?: (tx: Prisma.TransactionClient, voucherId: string) => Promise<void>;
+};
 type Stats = { posted: number; alreadyPosted: number; lockedSkipped: number; failed: number };
 
 const isLocked = (error: unknown) =>
@@ -135,7 +142,141 @@ const supplierPaymentReposter: Reposter = {
     },
 };
 
-const REPOSTERS: Reposter[] = [salesReposter, supplierPaymentReposter];
+const customerPaymentReposter: Reposter = {
+    name: 'customer-payments',
+    async findCandidates(tenantId) {
+        const posted = await postedSourceIds(tenantId, 'customers', 'customer_payment');
+        const posted2 = await postedSourceIds(tenantId, 'customers', 'customer_payout');
+        // PAYMENT/PAYOUT settle AR; CREDIT_SALE mirrors the Sale (which posts) and
+        // ADJUSTMENT mirrors a sale return.
+        const txns = await prisma.customerCreditTransaction.findMany({
+            where: { tenant_id: tenantId, type: { in: ['PAYMENT', 'PAYOUT'] } },
+            include: { customer: { select: { name: true } } },
+        });
+
+        return txns.filter((t) => !posted.has(t.id) && !posted2.has(t.id)).map((t) => {
+            const isPayout = t.type === 'PAYOUT';
+            return {
+                sourceId: t.id,
+                label: `${t.payment_number ?? t.id} (${t.type})`,
+                input: {
+                    tenantId,
+                    eventType: 'customer_payment',
+                    conditionKey: 'payment_direction',
+                    conditionValue: isPayout ? 'pay' : 'receive',
+                    sourceModule: 'customers',
+                    sourceType: isPayout ? 'customer_payout' : 'customer_payment',
+                    sourceId: t.id,
+                    amount: Number(t.amount),
+                    description: `Backfill customer ${isPayout ? 'payout' : 'payment'} — ${t.customer.name}`,
+                    referenceNumber: t.payment_number ?? undefined,
+                    date: t.created_at,
+                    partyType: 'CUSTOMER',
+                    partyId: t.customer_id,
+                },
+            };
+        });
+    },
+};
+
+const salaryPaymentReposter: Reposter = {
+    name: 'salary-payments',
+    async findCandidates(tenantId) {
+        const posted = await postedSourceIds(tenantId, 'salary-payments', 'salary_payment');
+        const payments = await prisma.salaryPayment.findMany({
+            where: { tenant_id: tenantId },
+            include: { employee: { select: { name: true } } },
+        });
+
+        return payments.filter((p) => !posted.has(p.id)).map((p) => ({
+            sourceId: p.id,
+            label: `${p.pay_period} — ${p.employee.name}`,
+            input: {
+                tenantId,
+                eventType: 'salary_payment',
+                conditionKey: 'payment_mode',
+                conditionValue: classifyPaymentMode(p.payment_method),
+                sourceModule: 'salary-payments',
+                sourceType: 'salary_payment',
+                sourceId: p.id,
+                amount: Number(p.amount),
+                description: `Backfill salary payment ${p.pay_period}`,
+                date: p.payment_date,
+                partyType: 'EMPLOYEE',
+                partyId: p.employee_id,
+            },
+        }));
+    },
+};
+
+const cashTransactionReposter: Reposter = {
+    name: 'cashier-cashouts',
+    async findCandidates(tenantId) {
+        const posted = await postedSourceIds(tenantId, 'cashier-sessions', 'cash_transaction');
+        // Only PAYOUT/LOAN post; DROP/OTHER are Cash in Hand on both sides.
+        const txns = await prisma.cashTransaction.findMany({
+            where: { tenant_id: tenantId, type: { in: ['PAYOUT', 'LOAN'] } },
+            include: { session: { select: { store_id: true } } },
+        });
+
+        return txns.filter((t) => !posted.has(t.id)).map((t) => ({
+            sourceId: t.id,
+            label: `${t.type} ${Math.abs(Number(t.amount))}`,
+            input: {
+                tenantId,
+                eventType: 'cash_transaction',
+                conditionKey: 'reason_type',
+                conditionValue: t.type,
+                sourceModule: 'cashier-sessions',
+                sourceType: 'cash_transaction',
+                sourceId: t.id,
+                amount: Math.abs(Number(t.amount)),
+                description: t.description ?? `Backfill cashier ${t.type.toLowerCase()}`,
+                date: t.created_at,
+                storeId: t.session.store_id,
+            },
+        }));
+    },
+};
+
+const depreciationReposter: Reposter = {
+    name: 'depreciation',
+    async findCandidates(tenantId) {
+        const posted = await postedSourceIds(tenantId, 'accounting', 'depreciation');
+        const entries = await prisma.assetDepreciationEntry.findMany({
+            where: { asset: { tenant_id: tenantId } },
+            include: { asset: { select: { name: true, asset_code: true } } },
+        });
+
+        return entries.filter((e) => !posted.has(e.id)).map((e) => ({
+            sourceId: e.id,
+            label: `${e.period_year}-${String(e.period_month).padStart(2, '0')} — ${e.asset.name}`,
+            input: {
+                tenantId,
+                eventType: 'depreciation',
+                conditionKey: 'none',
+                conditionValue: null,
+                sourceModule: 'accounting',
+                sourceType: 'depreciation',
+                sourceId: e.id,
+                amount: Number(e.depreciation_amount),
+                description: `Backfill depreciation ${e.period_year}-${String(e.period_month).padStart(2, '0')} — ${e.asset.name}`,
+                referenceNumber: e.asset.asset_code,
+                date: new Date(Date.UTC(e.period_year, e.period_month, 0)),
+            },
+            linkVoucher: (tx, voucherId) => tx.assetDepreciationEntry.update({ where: { id: e.id }, data: { voucher_id: voucherId } }).then(() => undefined),
+        }));
+    },
+};
+
+const REPOSTERS: Reposter[] = [
+    salesReposter,
+    supplierPaymentReposter,
+    customerPaymentReposter,
+    salaryPaymentReposter,
+    cashTransactionReposter,
+    depreciationReposter,
+];
 
 function reportDryRun(name: string, candidates: Candidate[]): void {
     console.log(`    ${name}: ${candidates.length} row(s) would post`);
@@ -147,7 +288,12 @@ async function repostAll(name: string, candidates: Candidate[]): Promise<Stats> 
     const s: Stats = { posted: 0, alreadyPosted: 0, lockedSkipped: 0, failed: 0 };
     for (const c of candidates) {
         try {
-            const result = await prisma.$transaction(async (tx) => autoPostFromRules({ ...c.input, tx: tx as Prisma.TransactionClient }));
+            const result = await prisma.$transaction(async (txRaw) => {
+                const tx = txRaw as Prisma.TransactionClient;
+                const r = await autoPostFromRules({ ...c.input, tx });
+                if (r.postingStatus === 'posted' && r.voucherId && c.linkVoucher) await c.linkVoucher(tx, r.voucherId);
+                return r;
+            });
             if (result.postingStatus === 'posted') s.posted++; else s.alreadyPosted++;
         } catch (error) {
             if (isLocked(error)) { s.lockedSkipped++; continue; }
