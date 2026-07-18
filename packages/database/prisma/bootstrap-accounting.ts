@@ -155,6 +155,20 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                 ],
             },
             {
+                name: 'Payroll',
+                accounts: [
+                    // Control account: salary accrued but not yet paid, one balance
+                    // per employee via the party dimension.
+                    {
+                        name: 'Salary Payable',
+                        code: '2050',
+                        type: AccountType.LIABILITY,
+                        category: AccountCategory.GENERAL,
+                        party_type: PartyType.EMPLOYEE,
+                    },
+                ],
+            },
+            {
                 name: 'Inter-Branch Clearing',
                 accounts: [
                     {
@@ -228,6 +242,12 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                     {
                         name: 'Depreciation Expense',
                         code: '5030',
+                        type: AccountType.EXPENSE,
+                        category: AccountCategory.GENERAL,
+                    },
+                    {
+                        name: 'Salary & Wages',
+                        code: '5020',
                         type: AccountType.EXPENSE,
                         category: AccountCategory.GENERAL,
                     },
@@ -311,6 +331,11 @@ export const DEFAULT_POSTING_RULES: DefaultPostingRuleDefinition[] = [
     // deliberately have no rule — both sides are Cash in Hand, so nothing posts.
     { event_type: 'cash_transaction', condition_key: 'reason_type', condition_value: 'PAYOUT', debit_account: 'General Operating Expense', credit_account: 'Cash in Hand', priority: 10 },
     { event_type: 'cash_transaction', condition_key: 'reason_type', condition_value: 'LOAN', debit_account: 'Staff Advances', credit_account: 'Cash in Hand', priority: 20 },
+
+    // ── Payroll accrual ──────────────────────────────────────────────────────
+    // Monthly accrual of the expense against the payable: Dr Salary & Wages / Cr
+    // Salary Payable, tagged per employee. Payment (salary_payment) settles it.
+    { event_type: 'salary_accrual', condition_key: 'none', condition_value: null, debit_account: 'Salary & Wages', credit_account: 'Salary Payable', priority: 10 },
 
     // ── DELIBERATELY ABSENT: fund_movement, inventory_adjustment ─────────────
     // Under periodic inventory these events have no journal entry. Adding a

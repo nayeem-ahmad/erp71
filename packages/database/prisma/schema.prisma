@@ -172,6 +172,7 @@ enum PostingRuleEventType {
   supplier_payment
   depreciation
   cash_transaction
+  salary_accrual
 }
 
 /// A subsidiary-ledger party. Marks a control account (Accounts Receivable,
@@ -484,6 +485,7 @@ model Tenant {
   loans             Loan[]
   loanPayments      LoanPayment[]
   salaryPayments    SalaryPayment[]
+  salaryAccruals    SalaryAccrual[]
   smsTransactions   SmsTransaction[]
   aiUsageLogs       AiUsageLog[]
   paymentMethods    PaymentMethod[]
@@ -2598,6 +2600,7 @@ model Employee {
   leaveBalances     LeaveBalance[]
   leaveRequests     LeaveRequest[]
   salaryPayments    SalaryPayment[]
+  salaryAccruals    SalaryAccrual[]
 
   @@unique([tenant_id, employee_code])
   @@unique([tenant_id, phone])
@@ -3031,6 +3034,28 @@ model SalaryPayment {
 
   @@unique([tenant_id, employee_id, pay_period])
   @@index([tenant_id, payment_date])
+  @@index([tenant_id, employee_id])
+}
+
+// The monthly accrual of an employee's salary as an expense + payable, distinct
+// from SalaryPayment (the cash settlement). Mirrors AssetDepreciationEntry:
+// one row per employee per period, carrying the voucher it posted. voucher_id
+// gives autoPostFromRules a real source row to key idempotency on.
+model SalaryAccrual {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  employee_id String
+  pay_period  String   // 'YYYY-MM' — the month this salary is for
+  amount      Decimal  @db.Decimal(12, 2)
+  voucher_id  String?
+  created_by  String?
+  created_at  DateTime @default(now())
+
+  tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, employee_id, pay_period])
+  @@index([tenant_id, pay_period])
   @@index([tenant_id, employee_id])
 }
 

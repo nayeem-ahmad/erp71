@@ -1,6 +1,11 @@
+jest.mock('../accounting/posting.utils', () => ({
+    autoPostFromRules: jest.fn().mockResolvedValue({ postingStatus: 'posted', voucherId: 'v-1' }),
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { SalaryPaymentsService } from './salary-payments.service';
+import { autoPostFromRules } from '../accounting/posting.utils';
 import { DatabaseService } from '../database/database.service';
 
 describe('SalaryPaymentsService', () => {
@@ -18,9 +23,16 @@ describe('SalaryPaymentsService', () => {
                 delete: jest.fn(),
                 count: jest.fn(),
             },
+            salaryAccrual: {
+                findUnique: jest.fn(),
+                create: jest.fn(),
+                update: jest.fn().mockResolvedValue({}),
+            },
             employee: {
                 findFirst: jest.fn(),
+                findMany: jest.fn(),
             },
+            $transaction: jest.fn().mockImplementation(async (cb: any) => cb(db)),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -198,6 +210,84 @@ describe('SalaryPaymentsService', () => {
                 amount: 10500,
                 count: 2,
             });
+        });
+    });
+
+    describe('runMonthlyAccrual', () => {
+        const alice = { id: 'e1', name: 'Alice', employee_code: 'EMP-00001', basic_salary: 30000, status: 'ACTIVE' };
+
+        beforeEach(() => {
+            (autoPostFromRules as jest.Mock).mockClear();
+            (autoPostFromRules as jest.Mock).mockResolvedValue({ postingStatus: 'posted', voucherId: 'v-1' });
+        });
+
+        it('accrues each active employee: Dr Salary & Wages / Cr Salary Payable, tagged to the employee', async () => {
+            db.employee.findMany.mockResolvedValue([alice]);
+            db.salaryAccrual.findUnique.mockResolvedValue(null);
+            db.salaryAccrual.create.mockResolvedValue({ id: 'acc-1' });
+
+            const result = await service.runMonthlyAccrual('t1', 'u1', { year: 2026, month: 6 });
+
+            expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+                eventType: 'salary_accrual',
+                conditionKey: 'none',
+                sourceModule: 'salary-payments',
+                sourceId: 'acc-1',
+                amount: 30000,
+                partyType: 'EMPLOYEE',
+                partyId: 'e1',
+            }));
+            // Dated to the last day of the pay period (Jun 2026 → Jun 30).
+            const call = (autoPostFromRules as jest.Mock).mock.calls[0][0];
+            expect((call.date as Date).toISOString().slice(0, 10)).toBe('2026-06-30');
+            expect(db.salaryAccrual.update).toHaveBeenCalledWith({ where: { id: 'acc-1' }, data: { voucher_id: 'v-1' } });
+            expect(result.processed).toBe(1);
+        });
+
+        it('runs the whole period in one transaction and only for ACTIVE, non-deleted employees', async () => {
+            db.employee.findMany.mockResolvedValue([alice]);
+            db.salaryAccrual.findUnique.mockResolvedValue(null);
+            db.salaryAccrual.create.mockResolvedValue({ id: 'acc-1' });
+
+            await service.runMonthlyAccrual('t1', 'u1', { year: 2026, month: 6 });
+
+            expect(db.$transaction).toHaveBeenCalledTimes(1);
+            expect(db.employee.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { tenant_id: 't1', status: 'ACTIVE', deleted_at: null } }),
+            );
+        });
+
+        it('skips and reports an employee with no basic_salary — never posts a zero accrual', async () => {
+            db.employee.findMany.mockResolvedValue([{ ...alice, basic_salary: null }]);
+            db.salaryAccrual.findUnique.mockResolvedValue(null);
+
+            const result = await service.runMonthlyAccrual('t1', 'u1', { year: 2026, month: 6 });
+
+            expect(autoPostFromRules).not.toHaveBeenCalled();
+            expect(db.salaryAccrual.create).not.toHaveBeenCalled();
+            expect(result.processed).toBe(0);
+            expect(result.skipped).toEqual([{ id: 'e1', name: 'Alice', reason: 'NO_BASIC_SALARY' }]);
+        });
+
+        it('is idempotent: skips an employee already accrued for the period', async () => {
+            db.employee.findMany.mockResolvedValue([alice]);
+            db.salaryAccrual.findUnique.mockResolvedValue({ id: 'existing' });
+
+            const result = await service.runMonthlyAccrual('t1', 'u1', { year: 2026, month: 6 });
+
+            expect(db.salaryAccrual.create).not.toHaveBeenCalled();
+            expect(autoPostFromRules).not.toHaveBeenCalled();
+            expect(result.processed).toBe(0);
+        });
+
+        it('propagates a posting failure so the transaction rolls back', async () => {
+            db.employee.findMany.mockResolvedValue([alice]);
+            db.salaryAccrual.findUnique.mockResolvedValue(null);
+            db.salaryAccrual.create.mockResolvedValue({ id: 'acc-1' });
+            (autoPostFromRules as jest.Mock).mockRejectedValue(new Error('FISCAL_PERIOD_LOCKED'));
+
+            await expect(service.runMonthlyAccrual('t1', 'u1', { year: 2026, month: 6 }))
+                .rejects.toThrow('FISCAL_PERIOD_LOCKED');
         });
     });
 });

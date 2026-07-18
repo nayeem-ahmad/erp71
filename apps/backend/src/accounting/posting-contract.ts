@@ -88,6 +88,9 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     { eventType: 'cash_transaction', conditionKey: 'reason_type', conditionValue: 'PAYOUT', emittedBy: 'cashier-sessions.service.ts:addCashTransaction', expectation: 'rule' },
     { eventType: 'cash_transaction', conditionKey: 'reason_type', conditionValue: 'LOAN', emittedBy: 'cashier-sessions.service.ts:addCashTransaction', expectation: 'rule' },
 
+    // ── payroll accrual ──────────────────────────────────────────────────────
+    { eventType: 'salary_accrual', conditionKey: 'none', conditionValue: null, emittedBy: 'salary-payments.service.ts:runMonthlyAccrual', expectation: 'rule' },
+
     // ── loans ────────────────────────────────────────────────────────────────
     { eventType: 'loan_disbursement', conditionKey: 'loan_direction', conditionValue: 'PAYABLE', emittedBy: 'loans.service.ts:83', expectation: 'skip', skipReason: 'Provisioned lazily by ensureLoanPostingSetup, not by DEFAULT_POSTING_RULES.' },
     { eventType: 'loan_disbursement', conditionKey: 'loan_direction', conditionValue: 'RECEIVABLE', emittedBy: 'loans.service.ts:83', expectation: 'skip', skipReason: 'Provisioned lazily by ensureLoanPostingSetup, not by DEFAULT_POSTING_RULES.' },

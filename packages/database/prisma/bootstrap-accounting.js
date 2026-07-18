@@ -127,6 +127,18 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 				],
 			},
 			{
+				name: 'Payroll',
+				accounts: [
+					{
+						name: 'Salary Payable',
+						code: '2050',
+						type: AccountType.LIABILITY,
+						category: AccountCategory.GENERAL,
+						party_type: 'EMPLOYEE',
+					},
+				],
+			},
+			{
 				name: 'Inter-Branch Clearing',
 				accounts: [
 					{
@@ -203,6 +215,12 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 						type: AccountType.EXPENSE,
 						category: AccountCategory.GENERAL,
 					},
+					{
+						name: 'Salary & Wages',
+						code: '5020',
+						type: AccountType.EXPENSE,
+						category: AccountCategory.GENERAL,
+					},
 				],
 			},
 		],
@@ -262,6 +280,7 @@ const DEFAULT_POSTING_RULES = [
 	{ event_type: 'depreciation', condition_key: 'none', condition_value: null, debit_account: 'Depreciation Expense', credit_account: 'Accumulated Depreciation', priority: 10 },
 	{ event_type: 'cash_transaction', condition_key: 'reason_type', condition_value: 'PAYOUT', debit_account: 'General Operating Expense', credit_account: 'Cash in Hand', priority: 10 },
 	{ event_type: 'cash_transaction', condition_key: 'reason_type', condition_value: 'LOAN', debit_account: 'Staff Advances', credit_account: 'Cash in Hand', priority: 20 },
+	{ event_type: 'salary_accrual', condition_key: 'none', condition_value: null, debit_account: 'Salary & Wages', credit_account: 'Salary Payable', priority: 10 },
 
 	// ── DELIBERATELY ABSENT: fund_movement, inventory_adjustment ─────────────
 	// Under periodic inventory these events have no journal entry. Adding a

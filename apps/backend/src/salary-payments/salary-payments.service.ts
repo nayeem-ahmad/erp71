@@ -6,9 +6,11 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
+import { autoPostFromRules } from '../accounting/posting.utils';
 import {
     CreateSalaryPaymentDto,
     ListSalaryPaymentsQueryDto,
+    RunSalaryAccrualDto,
     SalaryPaymentSummaryQueryDto,
     UpdateSalaryPaymentDto,
 } from './salary-payments.dto';
@@ -81,6 +83,78 @@ export class SalaryPaymentsService {
                 created_by: userId,
             },
             include: this.paymentInclude(),
+        });
+    }
+
+    /**
+     * Accrues one month's salary for every active employee: posts
+     * Dr Salary & Wages / Cr Salary Payable per employee, tagged with the
+     * employee party so Salary Payable becomes a per-employee ledger. The cash
+     * payment (create, below) settles that payable later.
+     *
+     * Mirrors runDepreciation: one transaction for the whole run, idempotent per
+     * (employee, period) via SalaryAccrual's unique key, dated to the period end
+     * so autoPostFromRules' fiscal-period guard blocks accruing into a locked
+     * month. Employees without a basic_salary are skipped and reported.
+     */
+    async runMonthlyAccrual(tenantId: string, userId: string, dto: RunSalaryAccrualDto) {
+        const payPeriod = `${dto.year}-${String(dto.month).padStart(2, '0')}`;
+        const periodDate = new Date(Date.UTC(dto.year, dto.month, 0));
+
+        const employees = await this.db.employee.findMany({
+            where: { tenant_id: tenantId, status: 'ACTIVE', deleted_at: null },
+        });
+
+        return this.db.$transaction(async (tx) => {
+            const results = [];
+            const skipped = [];
+            for (const employee of employees) {
+                const amount = Number(employee.basic_salary ?? 0);
+                if (amount <= 0) {
+                    skipped.push({ id: employee.id, name: employee.name, reason: 'NO_BASIC_SALARY' });
+                    continue;
+                }
+
+                const existing = await tx.salaryAccrual.findUnique({
+                    where: { tenant_id_employee_id_pay_period: { tenant_id: tenantId, employee_id: employee.id, pay_period: payPeriod } },
+                });
+                if (existing) continue;
+
+                const accrual = await tx.salaryAccrual.create({
+                    data: { tenant_id: tenantId, employee_id: employee.id, pay_period: payPeriod, amount, created_by: userId },
+                });
+
+                const posting = await autoPostFromRules({
+                    tx,
+                    tenantId,
+                    eventType: 'salary_accrual',
+                    conditionKey: 'none',
+                    conditionValue: null,
+                    sourceModule: 'salary-payments',
+                    sourceType: 'salary_accrual',
+                    sourceId: accrual.id,
+                    amount,
+                    description: `Salary accrual ${payPeriod} — ${employee.name}`,
+                    referenceNumber: employee.employee_code,
+                    date: periodDate,
+                    partyType: 'EMPLOYEE',
+                    partyId: employee.id,
+                });
+
+                if (posting.voucherId) {
+                    await tx.salaryAccrual.update({ where: { id: accrual.id }, data: { voucher_id: posting.voucherId } });
+                }
+
+                results.push({
+                    employee: { id: employee.id, name: employee.name, employee_code: employee.employee_code },
+                    amount,
+                    accrual_id: accrual.id,
+                    posting_status: posting.postingStatus,
+                    voucher_id: posting.voucherId ?? null,
+                });
+            }
+
+            return { period: payPeriod, processed: results.length, skipped, results };
         });
     }
 

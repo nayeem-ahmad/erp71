@@ -13,9 +13,11 @@ import {
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { TenantRoles } from '../auth/tenant-roles.decorator';
 import {
     CreateSalaryPaymentDto,
     ListSalaryPaymentsQueryDto,
+    RunSalaryAccrualDto,
     SalaryPaymentSummaryQueryDto,
     UpdateSalaryPaymentDto,
 } from './salary-payments.dto';
@@ -45,6 +47,12 @@ export class SalaryPaymentsController {
     @Post()
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateSalaryPaymentDto) {
         return this.service.create(tenant.tenantId, tenant.userId, dto);
+    }
+
+    @Post('run-accrual')
+    @TenantRoles('OWNER', 'ACCOUNTANT')
+    runAccrual(@Tenant() tenant: TenantContext, @Body() dto: RunSalaryAccrualDto) {
+        return this.service.runMonthlyAccrual(tenant.tenantId, tenant.userId, dto);
     }
 
     @Patch(':id')
