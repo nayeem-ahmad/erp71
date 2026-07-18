@@ -378,6 +378,8 @@ export class DemoWriter {
             referenceNumber: purchaseNumber,
             date,
             storeId: store.storeId,
+            partyType: 'SUPPLIER',
+            partyId: supplier.id,
         });
         this.counts.purchases++;
 
@@ -430,9 +432,9 @@ export class DemoWriter {
         const total = money(lines.reduce((s, l) => s + l.price * l.quantity, 0));
 
         // ~40% named customers; of those ~15% buy on full credit (settled later).
-        // Full credit (not partial) keeps posting to a single balanced voucher,
-        // matching sales.service (which reuses one sourceId for both portions and
-        // so drops the paid portion as a duplicate).
+        // The generator uses full credit (not partial) for simplicity — one
+        // balanced voucher. (sales.service now handles a partial down-payment
+        // correctly via legKey, so this is a generator choice, not a workaround.)
         const named = rng.chance(0.4);
         const customerIndex = named ? rng.int(0, this.customers.length - 1) : -1;
         const onCredit = named && rng.chance(0.15);
@@ -490,8 +492,8 @@ export class DemoWriter {
 
         // Posting: a single balanced voucher (credit → Dr AR / Cr Sales, else → Dr <mode> / Cr Sales).
         if (balanceDue > 0.005) {
-            await this.postSale(tx, date, sale.id, serial, 'credit', balanceDue, store.storeId);
             const customer = this.customers[customerIndex];
+            await this.postSale(tx, date, sale.id, serial, 'credit', balanceDue, store.storeId, customer.id);
             const balanceAfter = money(customer.due + balanceDue);
             await tx.customerCreditTransaction.create({
                 data: {
@@ -524,7 +526,10 @@ export class DemoWriter {
         this.counts.sales++;
     }
 
-    private async postSale(tx: Tx, date: Date, saleId: string, serial: string, mode: string, amount: number, storeId: string): Promise<void> {
+    private async postSale(
+        tx: Tx, date: Date, saleId: string, serial: string, mode: string, amount: number, storeId: string,
+        customerId?: string,
+    ): Promise<void> {
         await autoPostFromRules({
             tx,
             tenantId: this.deps.tenantId,
@@ -539,6 +544,10 @@ export class DemoWriter {
             referenceNumber: serial,
             date,
             storeId,
+            // Only the credit sale's AR leg is a control account; tags nothing on
+            // a cash sale, so the undefined default is fine there.
+            partyType: 'CUSTOMER',
+            partyId: customerId,
         });
     }
 
@@ -578,12 +587,14 @@ export class DemoWriter {
                 referenceNumber: paymentNumber,
                 date,
                 storeId: this.deps.stores[0].storeId,
+                partyType: 'CUSTOMER',
+                partyId: customer.id,
             });
             this.counts.customerPayments++;
         }
     }
 
-    /** Pay down a supplier's balance. Supplier payments deliberately do not post. */
+    /** Pay down a supplier's balance, posting Dr Purchase Payable / Cr Cash. */
     async paySuppliers(tx: Tx, date: Date): Promise<void> {
         const rng = this.deps.rng;
         if (!rng.chance(0.3)) return;
@@ -593,7 +604,7 @@ export class DemoWriter {
         const amount = money(supplier.due * rng.range(0.4, 1));
         const balanceAfter = money(supplier.due - amount);
         const paymentNumber = this.ref('SPY', ++this.seq.supPay);
-        await tx.supplierCreditTransaction.create({
+        const payment = await tx.supplierCreditTransaction.create({
             data: {
                 tenant_id: this.deps.tenantId, supplier_id: supplier.id, type: 'PAYMENT',
                 amount, balance_after: balanceAfter, payment_number: paymentNumber,
@@ -602,6 +613,23 @@ export class DemoWriter {
         });
         supplier.due = balanceAfter;
         await tx.supplier.update({ where: { id: supplier.id }, data: { due_balance: balanceAfter } });
+        await autoPostFromRules({
+            tx,
+            tenantId: this.deps.tenantId,
+            eventType: 'supplier_payment',
+            conditionKey: 'payment_direction',
+            conditionValue: 'pay',
+            sourceModule: 'suppliers',
+            sourceType: 'supplier_payment',
+            sourceId: payment.id,
+            amount,
+            description: `Supplier payment — ${supplier.name}`,
+            referenceNumber: paymentNumber,
+            date,
+            storeId: this.deps.stores[0].storeId,
+            partyType: 'SUPPLIER',
+            partyId: supplier.id,
+        });
         this.counts.supplierPayments++;
     }
 
@@ -716,24 +744,33 @@ export class DemoWriter {
         });
         if (product) product.stock.set(candidate.warehouseId, onHand - qty);
 
-        // Returning payable goods reduces what we owe the supplier.
+        // Returning payable goods reduces what we owe the supplier. Clamp the
+        // credit-ledger reduction to what is actually owed — matching
+        // purchase-returns.service (creditReduction = min(total, due)). The earlier
+        // form recorded the full -lineTotal in the ledger while flooring due_balance
+        // at 0, so an over-return left the two out of sync (an intermittent
+        // reconciliation failure whenever a return exceeded a supplier's balance).
         const supplier = this.suppliers[candidate.supplierIndex % this.suppliers.length];
-        const balanceAfter = money(Math.max(0, supplier.due - lineTotal));
-        await tx.supplierCreditTransaction.create({
-            data: {
-                tenant_id: this.deps.tenantId, supplier_id: supplier.id, type: 'ADJUSTMENT',
-                amount: -lineTotal, balance_after: balanceAfter, reference_type: 'PURCHASE_RETURN',
-                reference_id: purchaseReturn.id, notes: 'Demo purchase return', created_by: this.deps.userId, created_at: date,
-            },
-        });
-        supplier.due = balanceAfter;
-        await tx.supplier.update({ where: { id: supplier.id }, data: { due_balance: balanceAfter } });
+        const creditReduction = money(Math.min(lineTotal, supplier.due));
+        if (creditReduction > 0.005) {
+            const balanceAfter = money(supplier.due - creditReduction);
+            await tx.supplierCreditTransaction.create({
+                data: {
+                    tenant_id: this.deps.tenantId, supplier_id: supplier.id, type: 'ADJUSTMENT',
+                    amount: -creditReduction, balance_after: balanceAfter, reference_type: 'PURCHASE_RETURN',
+                    reference_id: purchaseReturn.id, notes: 'Demo purchase return', created_by: this.deps.userId, created_at: date,
+                },
+            });
+            supplier.due = balanceAfter;
+            await tx.supplier.update({ where: { id: supplier.id }, data: { due_balance: balanceAfter } });
+        }
 
         await autoPostFromRules({
             tx, tenantId: this.deps.tenantId, eventType: 'purchase_return', conditionKey: 'none',
             conditionValue: null, sourceModule: 'purchases', sourceType: 'purchase_return',
             sourceId: purchaseReturn.id, amount: lineTotal, description: `Auto-posted purchase return ${returnNumber}`,
             referenceNumber: returnNumber, date, storeId: this.deps.stores[0].storeId,
+            partyType: 'SUPPLIER', partyId: supplier.id,
         });
         this.counts.purchaseReturns++;
     }

@@ -169,6 +169,23 @@ enum PostingRuleEventType {
   loan_disbursement
   loan_repayment
   customer_payment
+  supplier_payment
+  depreciation
+  cash_transaction
+  salary_accrual
+  salary_payment
+  asset_acquisition
+  fund_transfer
+}
+
+/// A subsidiary-ledger party. Marks a control account (Accounts Receivable,
+/// Purchase Payable, Salary Payable) as one whose balance is the sum of
+/// per-party balances, and tags each voucher line on such an account with the
+/// party it belongs to. See Account.party_type and VoucherDetail.party_id.
+enum PartyType {
+  CUSTOMER
+  SUPPLIER
+  EMPLOYEE
 }
 
 enum PostingRuleConditionKey {
@@ -471,6 +488,7 @@ model Tenant {
   loans             Loan[]
   loanPayments      LoanPayment[]
   salaryPayments    SalaryPayment[]
+  salaryAccruals    SalaryAccrual[]
   smsTransactions   SmsTransaction[]
   aiUsageLogs       AiUsageLog[]
   paymentMethods    PaymentMethod[]
@@ -1626,6 +1644,10 @@ model Account {
   code        String?
   type        String
   category    String   @default("general")
+  /// Non-null on a control account (AR / Purchase Payable / Salary Payable):
+  /// its balance is maintained as a subsidiary ledger, one balance per party.
+  /// autoPostFromRules tags the voucher line hitting this account with party_id.
+  party_type  PartyType?
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
 
@@ -1766,10 +1788,18 @@ model VoucherDetail {
   account       Account  @relation(fields: [account_id], references: [id])
   cost_center_id String?
   costCenter     CostCenter? @relation("VoucherDetailCostCenter", fields: [cost_center_id], references: [id])
+  /// Set when this line hits a control account, tying it to one customer,
+  /// supplier or employee. party_id is a polymorphic reference resolved by
+  /// party_type (Customer/Supplier/Employee id) — deliberately NOT a foreign key,
+  /// since it points at three different tables. The subsidiary ledger for a party
+  /// is `voucher_details WHERE party_id = X`.
+  party_type    PartyType?
+  party_id      String?
 
   @@index([voucher_id])
   @@index([account_id])
   @@index([cost_center_id])
+  @@index([party_id])
   @@map("voucher_details")
 }
 
@@ -2573,6 +2603,7 @@ model Employee {
   leaveBalances     LeaveBalance[]
   leaveRequests     LeaveRequest[]
   salaryPayments    SalaryPayment[]
+  salaryAccruals    SalaryAccrual[]
 
   @@unique([tenant_id, employee_code])
   @@unique([tenant_id, phone])
@@ -3004,8 +3035,33 @@ model SalaryPayment {
   tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   employee Employee @relation(fields: [employee_id], references: [id])
 
-  @@unique([tenant_id, employee_id, pay_period])
+  // No unique on (employee, period): a period can be settled in several
+  // instalments (and advances), each a row that settles the accrued payable.
+  // The payable balance, not a row count, is the source of truth now.
+  @@index([tenant_id, employee_id, pay_period])
   @@index([tenant_id, payment_date])
+  @@index([tenant_id, employee_id])
+}
+
+// The monthly accrual of an employee's salary as an expense + payable, distinct
+// from SalaryPayment (the cash settlement). Mirrors AssetDepreciationEntry:
+// one row per employee per period, carrying the voucher it posted. voucher_id
+// gives autoPostFromRules a real source row to key idempotency on.
+model SalaryAccrual {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  employee_id String
+  pay_period  String   // 'YYYY-MM' — the month this salary is for
+  amount      Decimal  @db.Decimal(12, 2)
+  voucher_id  String?
+  created_by  String?
+  created_at  DateTime @default(now())
+
+  tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, employee_id, pay_period])
+  @@index([tenant_id, pay_period])
   @@index([tenant_id, employee_id])
 }
 

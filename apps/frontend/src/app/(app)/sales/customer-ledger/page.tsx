@@ -127,10 +127,11 @@ function CustomerLedgerContent() {
         const loadLedger = async () => {
             setLedgerLoading(true);
             try {
-                const data = await api.getCustomerCreditLedger(customerId, {
+                // GL-derived ledger: the AR voucher lines tagged to this customer,
+                // so the ledger reflects what was actually posted to the accounts.
+                const data = await api.getCustomerGlLedger(customerId, {
                     from: fromDate || undefined,
                     to: toDate || undefined,
-                    limit: 500,
                 });
                 setDueBalance(Number(data.due_balance ?? 0));
                 setOpeningBalance(Number(data.opening_balance ?? 0));

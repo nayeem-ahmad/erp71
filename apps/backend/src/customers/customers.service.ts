@@ -1,8 +1,8 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
-import { ensureCustomerPaymentPostingSetup } from '@erp71/database';
 import { DatabaseService } from '../database/database.service';
 import { EncryptionService } from '../common/encryption.service';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
+import { buildPartyLedger } from '../accounting/party-ledger.util';
 import {
     CreateCustomerDto,
     UpdateCustomerDto,
@@ -362,6 +362,43 @@ export class CustomersService {
         };
     }
 
+    /**
+     * The customer ledger derived from the GENERAL LEDGER — the AR voucher lines
+     * tagged to this customer — rather than from CustomerCreditTransaction. Same
+     * shape as getCreditLedger so the UI can swap to it; the two are kept side by
+     * side so they can be diffed before the parallel table is retired.
+     */
+    async getGlLedger(
+        tenantId: string,
+        id: string,
+        params?: { from?: string; to?: string },
+    ) {
+        const customer = await this.db.customer.findFirst({
+            where: { id, tenant_id: tenantId, deleted_at: null },
+            select: { id: true, name: true, phone: true, due_balance: true, credit_limit: true, credit_enabled: true },
+        });
+        if (!customer) throw new NotFoundException('Customer not found');
+
+        const ledger = await buildPartyLedger(this.db, tenantId, 'CUSTOMER', id, {
+            from: params?.from,
+            to: params?.to,
+            increaseLabel: 'CREDIT_SALE',
+            decreaseLabel: 'PAYMENT',
+        });
+
+        return {
+            customer: { id: customer.id, name: customer.name, phone: customer.phone },
+            due_balance: Number(customer.due_balance),
+            opening_balance: ledger.opening_balance,
+            closing_balance: ledger.closing_balance,
+            credit_limit: customer.credit_limit ? Number(customer.credit_limit) : null,
+            credit_enabled: customer.credit_enabled,
+            transactions: ledger.transactions,
+            total: ledger.total,
+            source: 'general_ledger' as const,
+        };
+    }
+
     async getCreditLedger(
         tenantId: string,
         id: string,
@@ -561,8 +598,6 @@ export class CustomersService {
                 data: { due_balance: balanceAfter },
             });
 
-            await ensureCustomerPaymentPostingSetup(tx, tenantId);
-
             const posting = await autoPostFromRules({
                 tx,
                 tenantId,
@@ -578,6 +613,8 @@ export class CustomersService {
                     : `Customer payment — ${customer.name}`,
                 referenceNumber: payment.payment_number ?? paymentId,
                 storeId,
+                partyType: 'CUSTOMER',
+                partyId: customerId,
             });
 
             return {
@@ -640,8 +677,6 @@ export class CustomersService {
         const balanceAfter = isPayout ? currentDue + dto.amount : currentDue - dto.amount;
 
         return this.db.$transaction(async (tx) => {
-            await ensureCustomerPaymentPostingSetup(tx, tenantId);
-
             const payment_number = await this.generatePaymentNumber(tenantId, tx, txType);
 
             const payment = await tx.customerCreditTransaction.create({
@@ -681,6 +716,8 @@ export class CustomersService {
                     : `Customer payment — ${customer.name}`,
                 referenceNumber: payment_number,
                 storeId,
+                partyType: 'CUSTOMER',
+                partyId: id,
             });
 
             return {

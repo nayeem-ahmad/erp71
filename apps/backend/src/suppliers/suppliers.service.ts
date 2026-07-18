@@ -1,4 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { autoPostFromRules } from '../accounting/posting.utils';
+import { buildPartyLedger } from '../accounting/party-ledger.util';
 import { DatabaseService } from '../database/database.service';
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
@@ -420,6 +422,38 @@ export class SuppliersService {
         };
     }
 
+    /**
+     * The supplier ledger derived from the GENERAL LEDGER — the Purchase Payable
+     * voucher lines tagged to this supplier — rather than from
+     * SupplierCreditTransaction. Same shape as getCreditLedger so the UI can swap
+     * to it; kept alongside so the two can be diffed before the parallel table is
+     * retired.
+     */
+    async getGlLedger(tenantId: string, id: string, params?: { from?: string; to?: string }) {
+        const supplier = await this.db.supplier.findFirst({
+            where: { id, tenant_id: tenantId, deleted_at: null },
+            select: { id: true, name: true, phone: true, due_balance: true },
+        });
+        if (!supplier) throw new NotFoundException('Supplier not found');
+
+        const ledger = await buildPartyLedger(this.db, tenantId, 'SUPPLIER', id, {
+            from: params?.from,
+            to: params?.to,
+            increaseLabel: 'CREDIT_PURCHASE',
+            decreaseLabel: 'PAYMENT',
+        });
+
+        return {
+            supplier: { id: supplier.id, name: supplier.name, phone: supplier.phone },
+            due_balance: Number(supplier.due_balance),
+            opening_balance: ledger.opening_balance,
+            closing_balance: ledger.closing_balance,
+            transactions: ledger.transactions,
+            total: ledger.total,
+            source: 'general_ledger' as const,
+        };
+    }
+
     async listCreditPayments(
         tenantId: string,
         query: ListSupplierCreditPaymentsQueryDto,
@@ -661,7 +695,34 @@ export class SuppliersService {
                 await this.applyAllocations(tx, tenantId, id, payment.id, dto.allocations, dto.amount);
             }
 
-            return payment;
+            // Purchases credit Purchase Payable; without this nothing ever debits
+            // it, so the payable grows forever and the balance sheet overstates
+            // liabilities. PAYMENT (we pay the supplier) reduces the payable;
+            // PAYOUT (we receive from the supplier) increases it — mirroring
+            // dueDelta above, so the voucher and due_balance cannot disagree.
+            const posting = await autoPostFromRules({
+                tx,
+                tenantId,
+                eventType: 'supplier_payment',
+                conditionKey: 'payment_direction',
+                conditionValue: txType === 'PAYMENT' ? 'pay' : 'receive',
+                sourceModule: 'suppliers',
+                sourceType: 'supplier_payment',
+                sourceId: payment.id,
+                amount: dto.amount,
+                description: `Auto-posted supplier ${txType === 'PAYMENT' ? 'payment' : 'receipt'} — ${supplier.name}`,
+                referenceNumber: payment_number,
+                date: payment.created_at,
+                partyType: 'SUPPLIER',
+                partyId: id,
+            });
+
+            return {
+                ...payment,
+                posting_status: posting.postingStatus,
+                voucher_id: posting.voucherId ?? null,
+                voucher_number: posting.voucherNumber ?? null,
+            };
         });
     }
 

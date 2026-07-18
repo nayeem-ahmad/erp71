@@ -147,6 +147,8 @@ export class PurchaseOrdersService {
                     description: `Auto-posted PO ${po.po_number}`,
                     referenceNumber: po.po_number,
                     storeId: po.store_id,
+                    partyType: 'SUPPLIER',
+                    partyId: po.supplier_id ?? undefined,
                 });
 
                 return tx.purchaseOrder.update({

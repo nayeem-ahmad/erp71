@@ -9,7 +9,9 @@
         "db:push": "prisma db push",
         "db:seed": "tsx prisma/seed.ts",
         "db:studio": "prisma studio",
-        "repair:vouchers": "tsx prisma/repair-fabricated-vouchers.ts"
+        "repair:vouchers": "tsx prisma/repair-fabricated-vouchers.ts",
+        "sync:accounting": "tsx prisma/sync-accounting.ts",
+        "reconcile:balances": "tsx prisma/reconcile-party-balances.ts"
     },
     "dependencies": {
         "@erp71/shared-types": "*",

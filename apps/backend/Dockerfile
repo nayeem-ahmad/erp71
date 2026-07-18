@@ -55,8 +55,18 @@ ENV HOSTNAME="0.0.0.0"
 ARG GIT_SHA=unknown
 ENV GIT_SHA=$GIT_SHA
 
-# Sync schema and seed before starting the app.
+# Sync schema, seed, and bring every tenant's accounting defaults up to date
+# before starting the app.
+#
 # DIRECT_URL is overridden with DATABASE_URL so prisma db push uses the
 # internal Render hostname, bypassing the IP allowlist that blocks external
 # connections during preDeployCommand.
-CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
+#
+# sync:accounting runs on every start, after db:seed so it also covers anything
+# the seed just created. It is idempotent and additive-only (see
+# prisma/sync-accounting.ts), and it is the ONLY thing that carries new default
+# accounts/posting rules to tenants that already exist — the bootstrap itself
+# runs only at tenant creation. Without it, adding a rule silently posts nothing
+# on every existing tenant. It joins the && chain deliberately: a failure here
+# means tenants would post to a stale rule set, which must be loud, not skipped.
+CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && node apps/backend/dist/src/main.js"]

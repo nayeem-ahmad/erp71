@@ -1,13 +1,29 @@
 import {
     IsDateString,
+    IsInt,
     IsNumber,
     IsOptional,
     IsString,
     IsUUID,
     Matches,
+    Max,
     Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { PaginationDto } from '../common/pagination.dto';
+
+export class RunSalaryAccrualDto {
+    @Type(() => Number)
+    @IsInt()
+    @Min(2020)
+    year: number;
+
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    @Max(12)
+    month: number;
+}
 
 export class CreateSalaryPaymentDto {
     @IsUUID()

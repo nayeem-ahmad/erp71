@@ -1,5 +1,10 @@
+jest.mock('../accounting/posting.utils', () => ({
+  autoPostFromRules: jest.fn().mockResolvedValue({ postingStatus: 'posted', voucherId: 'v-1' }),
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { CashierSessionsService } from './cashier-sessions.service';
+import { autoPostFromRules } from '../accounting/posting.utils';
 import { DatabaseService } from '../database/database.service';
 import { CountersService } from '../counters/counters.service';
 import { BadRequestException } from '@nestjs/common';
@@ -428,6 +433,54 @@ describe('CashierSessionsService', () => {
       await expect(
         service.addCashTransaction('t1', 'sess-1', 100, 'CASH_IN'),
       ).rejects.toThrow('Cannot add transaction to closed session');
+    });
+
+    describe('posting', () => {
+      const openSession = { id: 'sess-1', tenant_id: 't1', status: 'OPEN', store_id: 'store-1' };
+
+      beforeEach(() => {
+        (autoPostFromRules as jest.Mock).mockClear();
+        (autoPostFromRules as jest.Mock).mockResolvedValue({ postingStatus: 'posted', voucherId: 'v-1' });
+        db.cashierSession.findUnique.mockResolvedValue(openSession);
+        db.cashTransaction.create.mockResolvedValue({ id: 'tx-1' });
+      });
+
+      it('posts a PAYOUT as General Operating Expense / Cash out of the till', async () => {
+        // amount signed negative for cash out — the voucher takes its magnitude.
+        await service.addCashTransaction('t1', 'sess-1', -300, 'PAYOUT', 'tea & snacks');
+
+        expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+          eventType: 'cash_transaction',
+          conditionKey: 'reason_type',
+          conditionValue: 'PAYOUT',
+          sourceModule: 'cashier-sessions',
+          sourceType: 'cash_transaction',
+          sourceId: 'tx-1',
+          amount: 300,
+          storeId: 'store-1',
+        }));
+      });
+
+      it('posts a LOAN with the reason value that resolves to Staff Advances', async () => {
+        await service.addCashTransaction('t1', 'sess-1', -500, 'LOAN');
+
+        expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+          conditionValue: 'LOAN',
+          amount: 500,
+        }));
+      });
+
+      it('does NOT post a DROP — drawer to safe is Cash in Hand on both sides', async () => {
+        await service.addCashTransaction('t1', 'sess-1', -1000, 'DROP');
+
+        expect(autoPostFromRules).not.toHaveBeenCalled();
+      });
+
+      it('does NOT post an OTHER transaction', async () => {
+        await service.addCashTransaction('t1', 'sess-1', 250, 'OTHER');
+
+        expect(autoPostFromRules).not.toHaveBeenCalled();
+      });
     });
   });
 

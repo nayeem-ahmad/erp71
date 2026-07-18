@@ -489,6 +489,20 @@ export const api = {
             },
         );
     },
+    // The GL-derived customer ledger (AR voucher lines tagged to the customer).
+    // Same shape as getCustomerCreditLedger, so the ledger page can read either.
+    getCustomerGlLedger: (id: string, params?: { from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        return fetchWithAuth(`/customers/${id}/gl-ledger${query.toString() ? `?${query.toString()}` : ''}`).then(
+            (r: { transactions?: unknown[] } | unknown[]) => {
+                if (Array.isArray(r)) return { transactions: r, opening_balance: 0, closing_balance: 0, due_balance: 0 };
+                const transactions = r?.transactions ?? [];
+                return { ...r, transactions: Array.isArray(transactions) ? transactions : [] };
+            },
+        );
+    },
     recordCreditPayment: (id: string, data: { amount: number; direction?: 'receive' | 'pay'; notes?: string }) => fetchWithAuth(`/customers/${id}/credit/payment`, {
         method: 'POST',
         body: JSON.stringify(data),
@@ -968,6 +982,20 @@ export const api = {
                     return { transactions: r, opening_balance: 0, closing_balance: 0, due_balance: 0 };
                 }
                 const transactions = r?.transactions ?? r?.items ?? [];
+                return { ...r, transactions: Array.isArray(transactions) ? transactions : [] };
+            },
+        );
+    },
+    // The GL-derived supplier ledger (Purchase Payable voucher lines tagged to the
+    // supplier). Same shape as getSupplierCreditLedger.
+    getSupplierGlLedger: (id: string, params?: { from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        return fetchWithAuth(`/suppliers/${id}/gl-ledger${query.toString() ? `?${query.toString()}` : ''}`).then(
+            (r: { transactions?: unknown[] } | unknown[]) => {
+                if (Array.isArray(r)) return { transactions: r, opening_balance: 0, closing_balance: 0, due_balance: 0 };
+                const transactions = r?.transactions ?? [];
                 return { ...r, transactions: Array.isArray(transactions) ? transactions : [] };
             },
         );

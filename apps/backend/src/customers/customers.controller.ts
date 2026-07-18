@@ -138,6 +138,16 @@ export class CustomersController {
         });
     }
 
+    @Get(':id/gl-ledger')
+    async getGlLedger(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Query('from') from?: string,
+        @Query('to') to?: string,
+    ) {
+        return this.customersService.getGlLedger(tenant.tenantId, id, { from, to });
+    }
+
     @Post(':id/credit/payment')
     async recordCreditPayment(
         @Tenant() tenant: TenantContext,

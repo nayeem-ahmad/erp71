@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient, PostingRuleConditionKey, PostingRuleEventType } from '@prisma/client';
+import { Prisma, PrismaClient, PostingRuleConditionKey, PostingRuleEventType, PartyType } from '@prisma/client';
 import { AccountCategory, AccountType } from './accounting.constants.js';
 
 export interface DefaultAccountingAccountDefinition {
@@ -6,6 +6,8 @@ export interface DefaultAccountingAccountDefinition {
     code?: string;
     type: AccountType;
     category: AccountCategory;
+    /** Set on a control account so autoPostFromRules tags its lines with a party. */
+    party_type?: PartyType;
 }
 
 export interface DefaultAccountingSubgroupDefinition {
@@ -61,6 +63,18 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                         code: '1030',
                         type: AccountType.ASSET,
                         category: AccountCategory.GENERAL,
+                        party_type: PartyType.CUSTOMER,
+                    },
+                    // Cash advanced out of a till (cashier LOAN). A plain account
+                    // for now — the cashier session links to a user, not an
+                    // Employee, so there is no employee party to attribute. When
+                    // Phase 5b adds per-employee salary advances this may split or
+                    // gain a party; see the TODO note.
+                    {
+                        name: 'Staff Advances',
+                        code: '1060',
+                        type: AccountType.ASSET,
+                        category: AccountCategory.GENERAL,
                     },
                 ],
             },
@@ -89,6 +103,31 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
         ],
     },
     {
+        name: 'Non-Current Assets',
+        type: AccountType.ASSET,
+        subgroups: [
+            {
+                name: 'Fixed Assets',
+                accounts: [
+                    {
+                        name: 'Fixed Assets',
+                        code: '1050',
+                        type: AccountType.ASSET,
+                        category: AccountCategory.GENERAL,
+                    },
+                    // Contra-asset (credit balance): accumulated depreciation nets
+                    // against Fixed Assets to give net book value on the balance sheet.
+                    {
+                        name: 'Accumulated Depreciation',
+                        code: '1055',
+                        type: AccountType.ASSET,
+                        category: AccountCategory.GENERAL,
+                    },
+                ],
+            },
+        ],
+    },
+    {
         name: 'Current Liabilities',
         type: AccountType.LIABILITY,
         subgroups: [
@@ -100,6 +139,7 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                         code: '2010',
                         type: AccountType.LIABILITY,
                         category: AccountCategory.GENERAL,
+                        party_type: PartyType.SUPPLIER,
                     },
                 ],
             },
@@ -111,6 +151,20 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                         code: '2020',
                         type: AccountType.LIABILITY,
                         category: AccountCategory.GENERAL,
+                    },
+                ],
+            },
+            {
+                name: 'Payroll',
+                accounts: [
+                    // Control account: salary accrued but not yet paid, one balance
+                    // per employee via the party dimension.
+                    {
+                        name: 'Salary Payable',
+                        code: '2050',
+                        type: AccountType.LIABILITY,
+                        category: AccountCategory.GENERAL,
+                        party_type: PartyType.EMPLOYEE,
                     },
                 ],
             },
@@ -185,6 +239,18 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                         type: AccountType.EXPENSE,
                         category: AccountCategory.GENERAL,
                     },
+                    {
+                        name: 'Depreciation Expense',
+                        code: '5030',
+                        type: AccountType.EXPENSE,
+                        category: AccountCategory.GENERAL,
+                    },
+                    {
+                        name: 'Salary & Wages',
+                        code: '5020',
+                        type: AccountType.EXPENSE,
+                        category: AccountCategory.GENERAL,
+                    },
                 ],
             },
         ],
@@ -241,6 +307,73 @@ export const DEFAULT_POSTING_RULES: DefaultPostingRuleDefinition[] = [
     // ── Expenses ─────────────────────────────────────────────────────────────
     { event_type: 'expense', condition_key: 'payment_mode', condition_value: 'cash', debit_account: 'General Operating Expense', credit_account: 'Cash in Hand', priority: 10 },
     { event_type: 'expense', condition_key: 'payment_mode', condition_value: 'bank', debit_account: 'General Operating Expense', credit_account: 'Main Bank Account', priority: 20 },
+
+    // ── Supplier payments ────────────────────────────────────────────────────
+    // What finally DEBITS Purchase Payable. Purchases credit it on every tenant,
+    // but nothing ever debited it, so the liability grew forever.
+    //
+    // Keyed on payment_direction, not payment_mode, because
+    // SupplierCreditTransaction has no payment_method column — there is no mode to
+    // read. Cash in Hand is therefore the default counter-account, exactly as
+    // customer_payment already assumes. Tenants can repoint the rule; resolving the
+    // account from the payment method is tracked in TODO.md.
+    { event_type: 'supplier_payment', condition_key: 'payment_direction', condition_value: 'pay', debit_account: 'Purchase Payable', credit_account: 'Cash in Hand', priority: 10 },
+    { event_type: 'supplier_payment', condition_key: 'payment_direction', condition_value: 'receive', debit_account: 'Cash in Hand', credit_account: 'Purchase Payable', priority: 20 },
+
+    // ── Depreciation ─────────────────────────────────────────────────────────
+    // Monthly non-cash charge: Dr Depreciation Expense / Cr Accumulated
+    // Depreciation. No party, no payment mode, so condition_key 'none'.
+    { event_type: 'depreciation', condition_key: 'none', condition_value: null, debit_account: 'Depreciation Expense', credit_account: 'Accumulated Depreciation', priority: 10 },
+
+    // ── Fixed-asset acquisition ──────────────────────────────────────────────
+    // Buying an asset: Dr Fixed Assets / Cr <mode paid from>. Mode from the
+    // acquisition payment method via classifyPaymentMode (defaults cash).
+    { event_type: 'asset_acquisition', condition_key: 'payment_mode', condition_value: 'cash', debit_account: 'Fixed Assets', credit_account: 'Cash in Hand', priority: 10 },
+    { event_type: 'asset_acquisition', condition_key: 'payment_mode', condition_value: 'bank', debit_account: 'Fixed Assets', credit_account: 'Main Bank Account', priority: 20 },
+    { event_type: 'asset_acquisition', condition_key: 'payment_mode', condition_value: 'bkash', debit_account: 'Fixed Assets', credit_account: 'bKash Account', priority: 30 },
+    { event_type: 'asset_acquisition', condition_key: 'payment_mode', condition_value: 'nagad', debit_account: 'Fixed Assets', credit_account: 'Nagad Account', priority: 40 },
+
+    // ── Inter-branch fund transfer (cash between branches) ───────────────────
+    // Two legs of one transfer: the source loses cash and gains a receivable from
+    // the branch; the destination gains cash and owes the branch. transfer_scope
+    // carries the phase here (distinct from warehouse-transfer's inter/intra_store
+    // because the event_type differs).
+    { event_type: 'fund_transfer', condition_key: 'transfer_scope', condition_value: 'initiate', debit_account: 'Due from Branches', credit_account: 'Cash in Hand', priority: 10 },
+    { event_type: 'fund_transfer', condition_key: 'transfer_scope', condition_value: 'receive', debit_account: 'Cash in Hand', credit_account: 'Due to Branches', priority: 20 },
+
+    // ── Customer payments ────────────────────────────────────────────────────
+    // Formerly provisioned lazily by ensureCustomerPaymentPostingSetup on a
+    // tenant's first payment; now a plain default so there is ONE provisioning
+    // mechanism the money-model / posting-contract guards can see.
+    { event_type: 'customer_payment', condition_key: 'payment_direction', condition_value: 'receive', debit_account: 'Cash in Hand', credit_account: 'Accounts Receivable', priority: 10 },
+    { event_type: 'customer_payment', condition_key: 'payment_direction', condition_value: 'pay', debit_account: 'Accounts Receivable', credit_account: 'Cash in Hand', priority: 20 },
+
+    // ── Loans ────────────────────────────────────────────────────────────────
+    // Formerly ensureLoanPostingSetup. PAYABLE = we borrowed; RECEIVABLE = we lent.
+    { event_type: 'loan_disbursement', condition_key: 'loan_direction', condition_value: 'PAYABLE', debit_account: 'Cash in Hand', credit_account: 'Loans Payable', priority: 10 },
+    { event_type: 'loan_disbursement', condition_key: 'loan_direction', condition_value: 'RECEIVABLE', debit_account: 'Loans Receivable', credit_account: 'Cash in Hand', priority: 20 },
+    { event_type: 'loan_repayment', condition_key: 'loan_direction', condition_value: 'PAYABLE', debit_account: 'Loans Payable', credit_account: 'Cash in Hand', priority: 10 },
+    { event_type: 'loan_repayment', condition_key: 'loan_direction', condition_value: 'RECEIVABLE', debit_account: 'Cash in Hand', credit_account: 'Loans Receivable', priority: 20 },
+
+    // ── Cashier cash-out ─────────────────────────────────────────────────────
+    // A till PAYOUT is a petty expense; a LOAN is cash advanced to staff. Keyed
+    // on the CashTransaction.type via reason_type. DROP (drawer→safe) and OTHER
+    // deliberately have no rule — both sides are Cash in Hand, so nothing posts.
+    { event_type: 'cash_transaction', condition_key: 'reason_type', condition_value: 'PAYOUT', debit_account: 'General Operating Expense', credit_account: 'Cash in Hand', priority: 10 },
+    { event_type: 'cash_transaction', condition_key: 'reason_type', condition_value: 'LOAN', debit_account: 'Staff Advances', credit_account: 'Cash in Hand', priority: 20 },
+
+    // ── Payroll accrual ──────────────────────────────────────────────────────
+    // Monthly accrual of the expense against the payable: Dr Salary & Wages / Cr
+    // Salary Payable, tagged per employee. Payment (salary_payment) settles it.
+    { event_type: 'salary_accrual', condition_key: 'none', condition_value: null, debit_account: 'Salary & Wages', credit_account: 'Salary Payable', priority: 10 },
+
+    // ── Payroll payment ──────────────────────────────────────────────────────
+    // Settles the accrued payable in cash: Dr Salary Payable / Cr <mode>, tagged
+    // per employee. Mode from the payment_method via classifyPaymentMode.
+    { event_type: 'salary_payment', condition_key: 'payment_mode', condition_value: 'cash', debit_account: 'Salary Payable', credit_account: 'Cash in Hand', priority: 10 },
+    { event_type: 'salary_payment', condition_key: 'payment_mode', condition_value: 'bank', debit_account: 'Salary Payable', credit_account: 'Main Bank Account', priority: 20 },
+    { event_type: 'salary_payment', condition_key: 'payment_mode', condition_value: 'bkash', debit_account: 'Salary Payable', credit_account: 'bKash Account', priority: 30 },
+    { event_type: 'salary_payment', condition_key: 'payment_mode', condition_value: 'nagad', debit_account: 'Salary Payable', credit_account: 'Nagad Account', priority: 40 },
 
     // ── DELIBERATELY ABSENT: fund_movement, inventory_adjustment ─────────────
     // Under periodic inventory these events have no journal entry. Adding a
@@ -301,6 +434,7 @@ export async function bootstrapDefaultAccountingForTenant(
                         code: accountDefinition.code,
                         type: accountDefinition.type,
                         category: accountDefinition.category,
+                        party_type: accountDefinition.party_type ?? null,
                     },
                     create: {
                         tenant_id: tenantId,
@@ -310,6 +444,7 @@ export async function bootstrapDefaultAccountingForTenant(
                         code: accountDefinition.code,
                         type: accountDefinition.type,
                         category: accountDefinition.category,
+                        party_type: accountDefinition.party_type ?? null,
                     },
                 });
             }
@@ -370,7 +505,8 @@ export async function bootstrapDefaultAccountingForTenant(
         });
     }
 
-    await ensureLoanPostingSetup(db, tenantId);
+    // Loan and customer-payment rules are now plain DEFAULT_POSTING_RULES entries
+    // (provisioned in the loop above), not lazy ensure* helpers — one mechanism.
     await ensureInterBranchAccounts(db, tenantId);
 }
 
@@ -442,252 +578,4 @@ export async function ensureInterBranchAccounts(
             category: AccountCategory.GENERAL,
         },
     });
-}
-
-/**
- * Idempotently ensure the loan accounts (Loans Payable / Loans Receivable) and
- * the default loan posting rules exist for a tenant. New tenants get these via
- * the accounting bootstrap; existing tenants get them lazily the first time a
- * loan is created or repaid. Safe to call repeatedly — it returns early once
- * the loan rules are present.
- */
-export async function ensureLoanPostingSetup(
-    db: AccountingBootstrapClient,
-    tenantId: string,
-) {
-    const alreadyConfigured = await db.postingRule.findFirst({
-        where: {
-            tenant_id: tenantId,
-            event_type: 'loan_disbursement',
-            condition_key: 'loan_direction',
-        },
-        select: { id: true },
-    });
-    if (alreadyConfigured) {
-        return;
-    }
-
-    const assetGroup = await db.accountGroup.upsert({
-        where: { tenant_id_name: { tenant_id: tenantId, name: 'Current Assets' } },
-        update: {},
-        create: { tenant_id: tenantId, name: 'Current Assets', type: AccountType.ASSET },
-    });
-    const liabilityGroup = await db.accountGroup.upsert({
-        where: { tenant_id_name: { tenant_id: tenantId, name: 'Current Liabilities' } },
-        update: {},
-        create: { tenant_id: tenantId, name: 'Current Liabilities', type: AccountType.LIABILITY },
-    });
-
-    const receivableSubgroup = await db.accountSubgroup.upsert({
-        where: { group_id_name: { group_id: assetGroup.id, name: 'Loans Receivable' } },
-        update: {},
-        create: { tenant_id: tenantId, group_id: assetGroup.id, name: 'Loans Receivable' },
-    });
-    const payableSubgroup = await db.accountSubgroup.upsert({
-        where: { group_id_name: { group_id: liabilityGroup.id, name: 'Loans Payable' } },
-        update: {},
-        create: { tenant_id: tenantId, group_id: liabilityGroup.id, name: 'Loans Payable' },
-    });
-
-    const loanReceivable = await db.account.upsert({
-        where: { tenant_id_name: { tenant_id: tenantId, name: 'Loans Receivable' } },
-        update: {},
-        create: {
-            tenant_id: tenantId,
-            group_id: assetGroup.id,
-            subgroup_id: receivableSubgroup.id,
-            name: 'Loans Receivable',
-            code: '1035',
-            type: AccountType.ASSET,
-            category: AccountCategory.GENERAL,
-        },
-    });
-    const loanPayable = await db.account.upsert({
-        where: { tenant_id_name: { tenant_id: tenantId, name: 'Loans Payable' } },
-        update: {},
-        create: {
-            tenant_id: tenantId,
-            group_id: liabilityGroup.id,
-            subgroup_id: payableSubgroup.id,
-            name: 'Loans Payable',
-            code: '2020',
-            type: AccountType.LIABILITY,
-            category: AccountCategory.GENERAL,
-        },
-    });
-
-    // Cash is the contra account for both directions. Prefer the canonical
-    // "Cash in Hand"; fall back to any cash-category account.
-    const cashAccount =
-        (await db.account.findFirst({
-            where: { tenant_id: tenantId, name: 'Cash in Hand' },
-            select: { id: true },
-        })) ??
-        (await db.account.findFirst({
-            where: { tenant_id: tenantId, category: AccountCategory.CASH },
-            orderBy: { code: 'asc' },
-            select: { id: true },
-        }));
-
-    if (!cashAccount) {
-        // No cash account to post against — postings will be skipped gracefully
-        // by the engine until the tenant configures rules manually.
-        return;
-    }
-
-    const loanRules: Array<{
-        event_type: PostingRuleEventType;
-        condition_value: string;
-        debit_account_id: string;
-        credit_account_id: string;
-        priority: number;
-    }> = [
-        // Borrowed money: cash comes in, loan liability rises.
-        {
-            event_type: 'loan_disbursement',
-            condition_value: 'PAYABLE',
-            debit_account_id: cashAccount.id,
-            credit_account_id: loanPayable.id,
-            priority: 10,
-        },
-        // Lent money out: loan asset rises, cash goes out.
-        {
-            event_type: 'loan_disbursement',
-            condition_value: 'RECEIVABLE',
-            debit_account_id: loanReceivable.id,
-            credit_account_id: cashAccount.id,
-            priority: 20,
-        },
-        // Repaying borrowed money: loan liability falls, cash goes out.
-        {
-            event_type: 'loan_repayment',
-            condition_value: 'PAYABLE',
-            debit_account_id: loanPayable.id,
-            credit_account_id: cashAccount.id,
-            priority: 10,
-        },
-        // Collecting on money lent: cash comes in, loan asset falls.
-        {
-            event_type: 'loan_repayment',
-            condition_value: 'RECEIVABLE',
-            debit_account_id: cashAccount.id,
-            credit_account_id: loanReceivable.id,
-            priority: 20,
-        },
-    ];
-
-    for (const rule of loanRules) {
-        const exists = await db.postingRule.findFirst({
-            where: {
-                tenant_id: tenantId,
-                event_type: rule.event_type,
-                condition_key: 'loan_direction',
-                condition_value: rule.condition_value,
-            },
-            select: { id: true },
-        });
-        if (exists) {
-            continue;
-        }
-        await db.postingRule.create({
-            data: {
-                tenant_id: tenantId,
-                event_type: rule.event_type,
-                condition_key: 'loan_direction',
-                condition_value: rule.condition_value,
-                debit_account_id: rule.debit_account_id,
-                credit_account_id: rule.credit_account_id,
-                priority: rule.priority,
-                is_active: true,
-            },
-        });
-    }
-}
-
-/**
- * Idempotently ensure default posting rules for customer payment receive/payout.
- * Receive: Dr Cash, Cr Accounts Receivable. Payout: Dr Accounts Receivable, Cr Cash.
- */
-export async function ensureCustomerPaymentPostingSetup(
-    db: AccountingBootstrapClient,
-    tenantId: string,
-) {
-    const alreadyConfigured = await db.postingRule.findFirst({
-        where: {
-            tenant_id: tenantId,
-            event_type: 'customer_payment',
-            condition_key: 'payment_direction',
-        },
-        select: { id: true },
-    });
-    if (alreadyConfigured) {
-        return;
-    }
-
-    const cashAccount =
-        (await db.account.findFirst({
-            where: { tenant_id: tenantId, name: 'Cash in Hand' },
-            select: { id: true },
-        })) ??
-        (await db.account.findFirst({
-            where: { tenant_id: tenantId, category: AccountCategory.CASH },
-            orderBy: { code: 'asc' },
-            select: { id: true },
-        }));
-
-    const arAccount = await db.account.findFirst({
-        where: { tenant_id: tenantId, name: 'Accounts Receivable' },
-        select: { id: true },
-    });
-
-    if (!cashAccount || !arAccount) {
-        return;
-    }
-
-    const rules: Array<{
-        condition_value: string;
-        debit_account_id: string;
-        credit_account_id: string;
-        priority: number;
-    }> = [
-        {
-            condition_value: 'receive',
-            debit_account_id: cashAccount.id,
-            credit_account_id: arAccount.id,
-            priority: 10,
-        },
-        {
-            condition_value: 'pay',
-            debit_account_id: arAccount.id,
-            credit_account_id: cashAccount.id,
-            priority: 20,
-        },
-    ];
-
-    for (const rule of rules) {
-        const exists = await db.postingRule.findFirst({
-            where: {
-                tenant_id: tenantId,
-                event_type: 'customer_payment',
-                condition_key: 'payment_direction',
-                condition_value: rule.condition_value,
-            },
-            select: { id: true },
-        });
-        if (exists) {
-            continue;
-        }
-        await db.postingRule.create({
-            data: {
-                tenant_id: tenantId,
-                event_type: 'customer_payment',
-                condition_key: 'payment_direction',
-                condition_value: rule.condition_value,
-                debit_account_id: rule.debit_account_id,
-                credit_account_id: rule.credit_account_id,
-                priority: rule.priority,
-                is_active: true,
-            },
-        });
-    }
 }

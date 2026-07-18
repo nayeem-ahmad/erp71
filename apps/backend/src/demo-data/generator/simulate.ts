@@ -1,5 +1,4 @@
 import { Prisma, PrismaClient } from '@prisma/client';
-import { ensureCustomerPaymentPostingSetup } from '@erp71/database';
 import { ensureDefaultWarehouse } from '../../database/inventory.utils';
 import { Rng } from './rng';
 import { DemoWriter, type DemoCounts } from './write';
@@ -99,7 +98,6 @@ export async function runSimulation(deps: SimulationDeps): Promise<DemoCounts> {
         await writer.ensureCatalog(tx as Prisma.TransactionClient);
         await writer.ensureParties(tx as Prisma.TransactionClient, CUSTOMER_COUNT, SUPPLIER_COUNT);
         await writer.loadShrinkageReasons(tx as Prisma.TransactionClient);
-        await ensureCustomerPaymentPostingSetup(tx, tenantId);
     }, TX_OPTIONS);
 
     await report('Opening stock', 0);
@@ -124,7 +122,10 @@ export async function runSimulation(deps: SimulationDeps): Promise<DemoCounts> {
             for (let s = 0; s < dailySales; s++) {
                 const store = rng.chance(0.7) ? stores[0] : (stores[1] ?? stores[0]);
                 const hour = rng.int(10, 20);
-                const saleTime = new Date(dayStart.getTime() + hour * 3_600_000);
+                // Clamp to `end` so a sale on the current day is never stamped past
+                // `now` (the 10–20h spread would otherwise put today's late sales in
+                // the future when the run happens before 20:00 UTC).
+                const saleTime = new Date(Math.min(dayStart.getTime() + hour * 3_600_000, end.getTime()));
                 await writer.writeSale(tx, saleTime, store, growth);
             }
 

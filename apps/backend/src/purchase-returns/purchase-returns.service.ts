@@ -5,6 +5,7 @@ import { DatabaseService } from '../database/database.service';
 import { CreatePurchaseReturnDto, UpdatePurchaseReturnDto } from './purchase-return.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
+import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
 
 @Injectable()
 export class PurchaseReturnsService {
@@ -123,6 +124,8 @@ export class PurchaseReturnsService {
                 description: `Auto-posted purchase return ${purchaseReturn.return_number}`,
                 referenceNumber: purchaseReturn.return_number,
                 storeId: purchase.store_id,
+                partyType: 'SUPPLIER',
+                partyId: purchase.supplier_id ?? undefined,
             });
 
             const purchaseReturnWithDetails = await tx.purchaseReturn.findFirst({
@@ -154,38 +157,20 @@ export class PurchaseReturnsService {
             limit,
         });
 
-        const returnIds = result.items.map((item: { id: string }) => item.id);
-        const vouchers = returnIds.length > 0
-            ? await this.db.voucher.findMany({
-                where: {
-                    tenant_id: tenantId,
-                    source_module: 'purchases',
-                    source_type: 'purchase_return',
-                    source_id: { in: returnIds },
-                },
-                select: {
-                    source_id: true,
-                    id: true,
-                    voucher_number: true,
-                    voucher_type: true,
-                },
-            })
-            : [];
-
-        const voucherByReturnId = new Map(vouchers.map((voucher) => [voucher.source_id, voucher]));
+        const summaries = await loadPostingSummaries(
+            this.db,
+            tenantId,
+            'purchases',
+            'purchase_return',
+            result.items.map((item: { id: string }) => item.id),
+        );
 
         return {
             ...result,
-            items: result.items.map((item: Record<string, unknown> & { id: string }) => {
-                const voucher = voucherByReturnId.get(item.id);
-                return {
-                    ...item,
-                    posting_status: voucher ? 'posted' : 'skipped',
-                    voucher_id: voucher?.id ?? null,
-                    voucher_number: voucher?.voucher_number ?? null,
-                    voucher_type: voucher?.voucher_type ?? null,
-                };
-            }),
+            items: result.items.map((item: Record<string, unknown> & { id: string }) => ({
+                ...item,
+                ...(summaries.get(item.id) ?? NO_POSTING_EVENT),
+            })),
         };
     }
 
@@ -199,26 +184,9 @@ export class PurchaseReturnsService {
             throw new NotFoundException('Purchase return not found');
         }
 
-        const voucher = await this.db.voucher.findFirst({
-            where: {
-                tenant_id: tenantId,
-                source_module: 'purchases',
-                source_type: 'purchase_return',
-                source_id: purchaseReturn.id,
-            },
-            select: {
-                id: true,
-                voucher_number: true,
-                voucher_type: true,
-            },
-        });
-
         return {
             ...purchaseReturn,
-            posting_status: voucher ? 'posted' : 'skipped',
-            voucher_id: voucher?.id ?? null,
-            voucher_number: voucher?.voucher_number ?? null,
-            voucher_type: voucher?.voucher_type ?? null,
+            ...(await loadPostingSummary(this.db, tenantId, 'purchases', 'purchase_return', purchaseReturn.id)),
         };
     }
 

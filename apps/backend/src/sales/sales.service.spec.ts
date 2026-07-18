@@ -31,6 +31,10 @@ describe('SalesService', () => {
       productPrice: {
         findMany: jest.fn().mockResolvedValue([]),
       },
+      paymentMethod: {
+        // No custom account by default → posting keeps the rule's mode account.
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       sale: {
         create: jest.fn(),
         findFirst: jest.fn(),
@@ -89,6 +93,9 @@ describe('SalesService', () => {
         findMany: jest.fn(),
         findFirst: jest.fn(),
       },
+      postingEvent: {
+        findMany: jest.fn(),
+      },
       customer: {
         findUnique: jest.fn().mockResolvedValue({ email: 'cust@example.com', name: 'Customer 1', phone: '123456789' }),
       },
@@ -125,6 +132,7 @@ describe('SalesService', () => {
     tx.productSerial.create.mockResolvedValue({});
     db.voucher.findMany.mockResolvedValue([]);
     db.voucher.findFirst.mockResolvedValue(null);
+    db.postingEvent.findMany.mockResolvedValue([]);
   });
 
   describe('create() — Story 10.3: Atomic Sale Transaction', () => {

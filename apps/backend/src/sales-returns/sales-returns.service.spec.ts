@@ -38,6 +38,9 @@ describe('SalesReturnsService', () => {
           findMany: jest.fn(),
           findFirst: jest.fn(),
         },
+        postingEvent: {
+          findMany: jest.fn(),
+        },
       customer: {
           update: jest.fn(),
           findUnique: jest.fn()
@@ -65,6 +68,7 @@ describe('SalesReturnsService', () => {
     });
     db.voucher.findMany.mockResolvedValue([]);
     db.voucher.findFirst.mockResolvedValue(null);
+    db.postingEvent.findMany.mockResolvedValue([]);
   });
 
   it('create() should process return completely and increment stock', async () => {
