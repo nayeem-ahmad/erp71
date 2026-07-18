@@ -82,6 +82,12 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     // ── depreciation ─────────────────────────────────────────────────────────
     { eventType: 'depreciation', conditionKey: 'none', conditionValue: null, emittedBy: 'accounting.service.ts:runDepreciation', expectation: 'rule' },
 
+    // ── cashier cash-out ─────────────────────────────────────────────────────
+    // DROP/OTHER are intentionally absent (both sides are Cash in Hand), so they
+    // are not listed here — only the two that post.
+    { eventType: 'cash_transaction', conditionKey: 'reason_type', conditionValue: 'PAYOUT', emittedBy: 'cashier-sessions.service.ts:addCashTransaction', expectation: 'rule' },
+    { eventType: 'cash_transaction', conditionKey: 'reason_type', conditionValue: 'LOAN', emittedBy: 'cashier-sessions.service.ts:addCashTransaction', expectation: 'rule' },
+
     // ── loans ────────────────────────────────────────────────────────────────
     { eventType: 'loan_disbursement', conditionKey: 'loan_direction', conditionValue: 'PAYABLE', emittedBy: 'loans.service.ts:83', expectation: 'skip', skipReason: 'Provisioned lazily by ensureLoanPostingSetup, not by DEFAULT_POSTING_RULES.' },
     { eventType: 'loan_disbursement', conditionKey: 'loan_direction', conditionValue: 'RECEIVABLE', emittedBy: 'loans.service.ts:83', expectation: 'skip', skipReason: 'Provisioned lazily by ensureLoanPostingSetup, not by DEFAULT_POSTING_RULES.' },

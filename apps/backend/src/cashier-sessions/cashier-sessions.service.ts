@@ -3,6 +3,11 @@ import { DatabaseService } from '../database/database.service';
 import { OpenSessionDto } from './dto/open-session.dto';
 import { CloseSessionDto } from './dto/close-session.dto';
 import { CountersService } from '../counters/counters.service';
+import { autoPostFromRules } from '../accounting/posting.utils';
+
+// CashTransaction.type values that move cash out of the till and must post.
+// DROP (drawer→safe) and OTHER stay unposted — both sides are Cash in Hand.
+const POSTABLE_CASH_TYPES = new Set(['PAYOUT', 'LOAN']);
 
 @Injectable()
 export class CashierSessionsService {
@@ -130,14 +135,37 @@ export class CashierSessionsService {
       throw new BadRequestException('Cannot add transaction to closed session');
     }
 
-    return this.db.cashTransaction.create({
-      data: {
-        tenant_id: tenantId,
-        session_id: sessionId,
-        amount: amount,
-        type: type,
-        description: description,
-      },
+    return this.db.$transaction(async (tx) => {
+      const cashTx = await tx.cashTransaction.create({
+        data: {
+          tenant_id: tenantId,
+          session_id: sessionId,
+          amount: amount,
+          type: type,
+          description: description,
+        },
+      });
+
+      // PAYOUT/LOAN move cash out of the till and must reach the GL. amount is
+      // signed (negative for cash out), so post its magnitude — autoPostFromRules
+      // skips a non-positive amount, which also covers a mistakenly-zero entry.
+      if (POSTABLE_CASH_TYPES.has(type)) {
+        await autoPostFromRules({
+          tx,
+          tenantId,
+          eventType: 'cash_transaction',
+          conditionKey: 'reason_type',
+          conditionValue: type,
+          sourceModule: 'cashier-sessions',
+          sourceType: 'cash_transaction',
+          sourceId: cashTx.id,
+          amount: Math.abs(Number(amount)),
+          description: description ?? `Cashier ${type.toLowerCase()}`,
+          storeId: session.store_id,
+        });
+      }
+
+      return cashTx;
     });
   }
 

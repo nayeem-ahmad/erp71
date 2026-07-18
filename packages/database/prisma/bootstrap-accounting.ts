@@ -65,6 +65,17 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                         category: AccountCategory.GENERAL,
                         party_type: PartyType.CUSTOMER,
                     },
+                    // Cash advanced out of a till (cashier LOAN). A plain account
+                    // for now — the cashier session links to a user, not an
+                    // Employee, so there is no employee party to attribute. When
+                    // Phase 5b adds per-employee salary advances this may split or
+                    // gain a party; see the TODO note.
+                    {
+                        name: 'Staff Advances',
+                        code: '1060',
+                        type: AccountType.ASSET,
+                        category: AccountCategory.GENERAL,
+                    },
                 ],
             },
             {
@@ -293,6 +304,13 @@ export const DEFAULT_POSTING_RULES: DefaultPostingRuleDefinition[] = [
     // Monthly non-cash charge: Dr Depreciation Expense / Cr Accumulated
     // Depreciation. No party, no payment mode, so condition_key 'none'.
     { event_type: 'depreciation', condition_key: 'none', condition_value: null, debit_account: 'Depreciation Expense', credit_account: 'Accumulated Depreciation', priority: 10 },
+
+    // ── Cashier cash-out ─────────────────────────────────────────────────────
+    // A till PAYOUT is a petty expense; a LOAN is cash advanced to staff. Keyed
+    // on the CashTransaction.type via reason_type. DROP (drawer→safe) and OTHER
+    // deliberately have no rule — both sides are Cash in Hand, so nothing posts.
+    { event_type: 'cash_transaction', condition_key: 'reason_type', condition_value: 'PAYOUT', debit_account: 'General Operating Expense', credit_account: 'Cash in Hand', priority: 10 },
+    { event_type: 'cash_transaction', condition_key: 'reason_type', condition_value: 'LOAN', debit_account: 'Staff Advances', credit_account: 'Cash in Hand', priority: 20 },
 
     // ── DELIBERATELY ABSENT: fund_movement, inventory_adjustment ─────────────
     // Under periodic inventory these events have no journal entry. Adding a

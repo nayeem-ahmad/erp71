@@ -171,6 +171,7 @@ enum PostingRuleEventType {
   customer_payment
   supplier_payment
   depreciation
+  cash_transaction
 }
 
 /// A subsidiary-ledger party. Marks a control account (Accounts Receivable,

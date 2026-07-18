@@ -191,7 +191,7 @@ New group **Non-Current Assets** (none exists today):
 | 1045 | Advances to Suppliers | ASSET | supplier advances (D2) | pending |
 | 1050 | Fixed Assets | ASSET | depreciation | **LANDED 2026-07-18** |
 | 1055 | Accumulated Depreciation | ASSET (contra) | depreciation | **LANDED 2026-07-18** |
-| 1060 | Staff Advances | ASSET | cashier `LOAN` + employee salary advances (D4) | pending |
+| 1060 | Staff Advances | ASSET | cashier `LOAN` + employee salary advances (D4) | **LANDED 2026-07-18** (plain account — see note) |
 | 2030 | Customer Advances | LIABILITY | order deposits (D2) | pending |
 | 2050 | Salary Payable | LIABILITY | employee payables (D4) | pending |
 | 5020 | Salary & Wages | EXPENSE | salary payments | pending |
@@ -231,8 +231,8 @@ Remaining, not yet built:
 | `advance_settlement` | `party_type` × customer | Customer Advances / Accounts Receivable |
 | `advance_settlement` | `party_type` × supplier | Purchase Payable / Advances to Suppliers |
 | `depreciation` | `none` | Depreciation Expense / Accumulated Depreciation — **LANDED 2026-07-18** |
-| `cash_transaction` | `reason_type` × PAYOUT | General Operating Expense / Cash in Hand |
-| `cash_transaction` | `reason_type` × LOAN | Staff Advances / Cash in Hand |
+| `cash_transaction` | `reason_type` × PAYOUT | General Operating Expense / Cash in Hand — **LANDED 2026-07-18** |
+| `cash_transaction` | `reason_type` × LOAN | Staff Advances / Cash in Hand — **LANDED 2026-07-18** |
 | `salary_accrual` | `none` | Salary & Wages / Salary Payable |
 | `salary_payment` | `payment_mode` × cash/bank/bkash/nagad | Salary Payable / \<mode\> |
 | `employee_advance` | `payment_mode` × cash/bank/bkash/nagad | Staff Advances / \<mode\> |
@@ -321,10 +321,19 @@ is not deferrable indefinitely.
 `pay_period`, `amount`, `voucher_id`, `@@unique([tenant_id, employee_id, pay_period])`. It gives
 `autoPostFromRules` a real `sourceId` to key idempotency on.
 
-**Monthly accrual runner**, modelled on the depreciation runner (`accounting.service.ts:2269`): a
-`{year, month}` DTO, loop ACTIVE employees, one accrual per employee per period, emit `salary_accrual`
-→ `Dr Salary & Wages / Cr Salary Payable [party: employee]`. Unlike the depreciation runner it must
-run inside a `$transaction` and call `assertFiscalPeriodOpen`.
+**Monthly accrual runner**, modelled on the depreciation runner
+(`accounting.service.ts:runDepreciation`, which now shows the exact shape — one transaction, post per
+entry, write `voucher_id` back, date to period end): a `{year, month}` DTO, loop ACTIVE employees, one
+accrual per employee per period, emit `salary_accrual` → `Dr Salary & Wages / Cr Salary Payable
+[party: employee]`. The depreciation runner already wraps in a `$transaction`; the fiscal-period guard
+comes free by passing the period-end `date` to `autoPostFromRules`.
+
+**Account 1060 (Staff Advances) tension to resolve here.** It landed 2026-07-18 as a **plain**
+account for the cashier `LOAN` case, because a cashier session links to a `user_id`, not an
+`Employee`, so there is no employee party to attribute. When this phase adds per-employee salary
+advances, 1060 either (a) gets marked `party_type: EMPLOYEE` — in which case the cashier `LOAN`
+posting must resolve the cashier's Employee record or it violates the completeness invariant — or (b)
+splits into a separate employee-advance account. Decide before marking 1060.
 
 `salary_payment` then settles it: `Dr Salary Payable / Cr <mode> [party: employee]`. An employee
 ledger is `voucher_details WHERE party_type='EMPLOYEE' AND party_id=X`, and the payable is
