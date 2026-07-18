@@ -89,6 +89,6 @@ describe('money-model contract — known gaps are the ones we expect', () => {
     // look at the list. Update deliberately as gaps are wired.
     it('lists exactly the tracked gaps', () => {
         const gaps = MONEY_MODEL_CONTRACT.filter(isGap).map(modelOf).sort();
-        expect(gaps).toEqual(['FixedAsset', 'OrderDeposit']);
+        expect(gaps).toEqual(['OrderDeposit']);
     });
 });

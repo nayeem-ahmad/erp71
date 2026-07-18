@@ -27,6 +27,8 @@ describe('AccountingService.runDepreciation — posting', () => {
     const db = {
         fixedAsset: {
             findMany: jest.fn(),
+            findUnique: jest.fn(),
+            create: jest.fn(),
             update: jest.fn().mockResolvedValue({}),
         },
         assetDepreciationEntry: {
@@ -124,5 +126,62 @@ describe('AccountingService.runDepreciation — posting', () => {
 
         await expect(service.runDepreciation('tenant-1', { year: 2026, month: 3 } as any))
             .rejects.toThrow('FISCAL_PERIOD_LOCKED');
+    });
+});
+
+describe('AccountingService.createFixedAsset — acquisition posting', () => {
+    let service: AccountingService;
+    const db = {
+        fixedAsset: { findUnique: jest.fn(), create: jest.fn() },
+        $transaction: jest.fn(),
+    };
+
+    beforeEach(async () => {
+        jest.clearAllMocks();
+        db.$transaction.mockImplementation(async (cb: any) => cb(db));
+        (autoPostFromRules as jest.Mock).mockResolvedValue({ postingStatus: 'posted', voucherId: 'v-1' });
+        db.fixedAsset.findUnique.mockResolvedValue(null);
+        db.fixedAsset.create.mockResolvedValue({ id: 'asset-1', name: 'Van', asset_code: 'FA-1', cost: 50000 });
+
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                AccountingService,
+                { provide: DatabaseService, useValue: db },
+                { provide: AuditService, useValue: { log: jest.fn() } },
+                { provide: JobTrackerService, useValue: { track: (_n: string, fn: () => any) => fn() } },
+            ],
+        }).compile();
+        service = module.get(AccountingService);
+    });
+
+    const dto = { assetCode: 'FA-1', name: 'Van', purchaseDate: '2026-05-01', cost: 50000, usefulLifeMonths: 60 };
+
+    it('posts the acquisition Dr Fixed Assets / Cr <mode>, defaulting to cash, dated to the purchase', async () => {
+        await service.createFixedAsset('tenant-1', dto as any);
+
+        expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+            eventType: 'asset_acquisition',
+            conditionKey: 'payment_mode',
+            conditionValue: 'cash',
+            sourceModule: 'accounting',
+            sourceType: 'asset_acquisition',
+            sourceId: 'asset-1',
+            amount: 50000,
+        }));
+        const call = (autoPostFromRules as jest.Mock).mock.calls[0][0];
+        expect((call.date as Date).toISOString().slice(0, 10)).toBe('2026-05-01');
+    });
+
+    it('classifies the payment method when given (bank)', async () => {
+        await service.createFixedAsset('tenant-1', { ...dto, paymentMethod: 'Bank Transfer' } as any);
+
+        expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({ conditionValue: 'bank' }));
+    });
+
+    it('posts inside the same transaction as the asset create, so a posting failure rolls both back', async () => {
+        (autoPostFromRules as jest.Mock).mockRejectedValue(new Error('FISCAL_PERIOD_LOCKED'));
+
+        await expect(service.createFixedAsset('tenant-1', dto as any)).rejects.toThrow('FISCAL_PERIOD_LOCKED');
+        expect(db.$transaction).toHaveBeenCalledTimes(1);
     });
 });

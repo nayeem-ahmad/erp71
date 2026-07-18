@@ -18,6 +18,7 @@ import {
     plBalanceForType,
 } from './report-scope.utils';
 import { assertFiscalPeriodOpen, autoPostFromRules } from './posting.utils';
+import { classifyPaymentMode } from '../sales/classify-payment-mode';
 import { AuditService } from '../audit/audit.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 import { JOB_NAMES } from '../system-health/jobs/job-names';
@@ -2242,19 +2243,43 @@ export class AccountingService {
         });
         if (existing) throw new BadRequestException('An asset with this code already exists.');
 
-        return this.db.fixedAsset.create({
-            data: {
-                tenant_id: tenantId,
-                asset_code: dto.assetCode,
-                name: dto.name,
-                purchase_date: new Date(dto.purchaseDate),
-                cost: dto.cost,
-                residual_value: dto.residualValue ?? 0,
-                useful_life_months: dto.usefulLifeMonths,
-                depreciation_method: (dto.depreciationMethod as any) ?? 'STRAIGHT_LINE',
-                asset_account_id: dto.assetAccountId,
-                depreciation_account_id: dto.depreciationAccountId,
-            },
+        const purchaseDate = new Date(dto.purchaseDate);
+
+        return this.db.$transaction(async (tx) => {
+            const asset = await tx.fixedAsset.create({
+                data: {
+                    tenant_id: tenantId,
+                    asset_code: dto.assetCode,
+                    name: dto.name,
+                    purchase_date: purchaseDate,
+                    cost: dto.cost,
+                    residual_value: dto.residualValue ?? 0,
+                    useful_life_months: dto.usefulLifeMonths,
+                    depreciation_method: (dto.depreciationMethod as any) ?? 'STRAIGHT_LINE',
+                    asset_account_id: dto.assetAccountId,
+                    depreciation_account_id: dto.depreciationAccountId,
+                },
+            });
+
+            // Buying the asset moves money out: Dr Fixed Assets / Cr <mode>. Dated
+            // to the purchase date, so it lands in-period and the fiscal-period
+            // guard blocks acquiring into a locked month.
+            await autoPostFromRules({
+                tx,
+                tenantId,
+                eventType: 'asset_acquisition',
+                conditionKey: 'payment_mode',
+                conditionValue: classifyPaymentMode(dto.paymentMethod ?? 'cash'),
+                sourceModule: 'accounting',
+                sourceType: 'asset_acquisition',
+                sourceId: asset.id,
+                amount: Number(asset.cost),
+                description: `Acquired fixed asset ${asset.name}`,
+                referenceNumber: asset.asset_code,
+                date: purchaseDate,
+            });
+
+            return asset;
         });
     }
 

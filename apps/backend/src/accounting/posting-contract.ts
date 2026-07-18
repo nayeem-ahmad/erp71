@@ -88,6 +88,12 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     { eventType: 'cash_transaction', conditionKey: 'reason_type', conditionValue: 'PAYOUT', emittedBy: 'cashier-sessions.service.ts:addCashTransaction', expectation: 'rule' },
     { eventType: 'cash_transaction', conditionKey: 'reason_type', conditionValue: 'LOAN', emittedBy: 'cashier-sessions.service.ts:addCashTransaction', expectation: 'rule' },
 
+    // ── fixed-asset acquisition ──────────────────────────────────────────────
+    { eventType: 'asset_acquisition', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'accounting.service.ts:createFixedAsset', expectation: 'rule' },
+    { eventType: 'asset_acquisition', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'accounting.service.ts:createFixedAsset', expectation: 'rule' },
+    { eventType: 'asset_acquisition', conditionKey: 'payment_mode', conditionValue: 'bkash', emittedBy: 'accounting.service.ts:createFixedAsset', expectation: 'rule' },
+    { eventType: 'asset_acquisition', conditionKey: 'payment_mode', conditionValue: 'nagad', emittedBy: 'accounting.service.ts:createFixedAsset', expectation: 'rule' },
+
     // ── payroll accrual ──────────────────────────────────────────────────────
     { eventType: 'salary_accrual', conditionKey: 'none', conditionValue: null, emittedBy: 'salary-payments.service.ts:runMonthlyAccrual', expectation: 'rule' },
 

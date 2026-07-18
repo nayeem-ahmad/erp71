@@ -674,6 +674,11 @@ export class CreateFixedAssetDto {
     @IsOptional()
     @IsUUID()
     depreciationAccountId?: string;
+
+    /** How the asset was paid for; classified to a payment mode. Defaults to cash. */
+    @IsOptional()
+    @IsString()
+    paymentMethod?: string;
 }
 
 export class RunDepreciationDto {

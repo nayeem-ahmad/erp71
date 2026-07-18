@@ -45,9 +45,10 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     { model: 'CustomerCreditTransaction', postsVia: 'customer_payment', note: 'PAYMENT/PAYOUT rows post; a CREDIT_SALE row mirrors the Sale, which posts' },
     { model: 'SupplierCreditTransaction', postsVia: 'supplier_payment', note: 'PAYMENT/PAYOUT rows post; a CREDIT_PURCHASE row mirrors the Purchase, which posts' },
 
+    { model: 'FixedAsset', postsVia: 'asset_acquisition', note: 'acquisition posts Dr Fixed Assets / Cr <mode>; depreciation posts separately via AssetDepreciationEntry' },
+
     // ── Gaps: should post, not yet wired ─────────────────────────────────────
     { model: 'OrderDeposit', gap: 'Sales-order deposit takes customer cash but posts nothing; needs Customer Advances + the SalesOrder→Sale conversion. TODO Phase 4/5.' },
-    { model: 'FixedAsset', gap: 'Asset acquisition is not posted (Dr Fixed Assets / Cr Cash|Payable); createFixedAsset only registers the row. Depreciation posts separately via AssetDepreciationEntry. TODO follow-up.' },
 
     // ── Exempt: line items (the parent posts the total) ──────────────────────
     { model: 'SaleItem', exempt: 'Line item of Sale, which posts the total.' },

@@ -17,7 +17,8 @@ export type PostingEventType =
     | 'depreciation'
     | 'cash_transaction'
     | 'salary_accrual'
-    | 'salary_payment';
+    | 'salary_payment'
+    | 'asset_acquisition';
 
 export interface AutoPostInput {
     tx: Prisma.TransactionClient;
@@ -57,7 +58,8 @@ export interface AutoPostInput {
 
 /** The idempotency key for a posting, optionally disambiguated by leg. */
 export function postingIdempotencyKey(tenantId: string, eventType: string, sourceId: string, legKey?: string): string {
-    return `${tenantId}:${eventType}:${sourceId}${legKey ? `:${legKey}` : ''}`;
+    const legSuffix = legKey ? `:${legKey}` : '';
+    return `${tenantId}:${eventType}:${sourceId}${legSuffix}`;
 }
 
 export interface AutoPostResult {
@@ -102,6 +104,8 @@ const VOUCHER_TYPE_BY_EVENT: Record<PostingEventType, string> = {
     salary_accrual: VoucherType.JOURNAL,
     // Cash settling the payable (Dr Salary Payable / Cr <mode>) — cash payment.
     salary_payment: VoucherType.CASH_PAYMENT,
+    // Cash out to buy an asset (Dr Fixed Assets / Cr <mode>) — a cash payment.
+    asset_acquisition: VoucherType.CASH_PAYMENT,
 };
 
 function resolveVoucherType(

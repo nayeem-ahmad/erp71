@@ -325,6 +325,14 @@ export const DEFAULT_POSTING_RULES: DefaultPostingRuleDefinition[] = [
     // Depreciation. No party, no payment mode, so condition_key 'none'.
     { event_type: 'depreciation', condition_key: 'none', condition_value: null, debit_account: 'Depreciation Expense', credit_account: 'Accumulated Depreciation', priority: 10 },
 
+    // ── Fixed-asset acquisition ──────────────────────────────────────────────
+    // Buying an asset: Dr Fixed Assets / Cr <mode paid from>. Mode from the
+    // acquisition payment method via classifyPaymentMode (defaults cash).
+    { event_type: 'asset_acquisition', condition_key: 'payment_mode', condition_value: 'cash', debit_account: 'Fixed Assets', credit_account: 'Cash in Hand', priority: 10 },
+    { event_type: 'asset_acquisition', condition_key: 'payment_mode', condition_value: 'bank', debit_account: 'Fixed Assets', credit_account: 'Main Bank Account', priority: 20 },
+    { event_type: 'asset_acquisition', condition_key: 'payment_mode', condition_value: 'bkash', debit_account: 'Fixed Assets', credit_account: 'bKash Account', priority: 30 },
+    { event_type: 'asset_acquisition', condition_key: 'payment_mode', condition_value: 'nagad', debit_account: 'Fixed Assets', credit_account: 'Nagad Account', priority: 40 },
+
     // ── Cashier cash-out ─────────────────────────────────────────────────────
     // A till PAYOUT is a petty expense; a LOAN is cash advanced to staff. Keyed
     // on the CashTransaction.type via reason_type. DROP (drawer→safe) and OTHER
