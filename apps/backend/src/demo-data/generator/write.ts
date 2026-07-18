@@ -432,9 +432,9 @@ export class DemoWriter {
         const total = money(lines.reduce((s, l) => s + l.price * l.quantity, 0));
 
         // ~40% named customers; of those ~15% buy on full credit (settled later).
-        // Full credit (not partial) keeps posting to a single balanced voucher,
-        // matching sales.service (which reuses one sourceId for both portions and
-        // so drops the paid portion as a duplicate).
+        // The generator uses full credit (not partial) for simplicity — one
+        // balanced voucher. (sales.service now handles a partial down-payment
+        // correctly via legKey, so this is a generator choice, not a workaround.)
         const named = rng.chance(0.4);
         const customerIndex = named ? rng.int(0, this.customers.length - 1) : -1;
         const onCredit = named && rng.chance(0.15);

@@ -289,6 +289,10 @@ export class SalesService {
 
                 if (dto.amountPaid > 0.005) {
                     const primaryPaymentMethod = dto.payments?.[0]?.paymentMethod ?? 'cash';
+                    // A partial down-payment on a credit sale: cash actually came in,
+                    // so it must post too. legKey 'paid' gives it a distinct
+                    // idempotency key from the credit (receivable) leg above, which
+                    // otherwise shares this Sale's key and silently swallowed it.
                     await autoPostFromRules({
                         tx,
                         tenantId,
@@ -298,6 +302,7 @@ export class SalesService {
                         sourceModule: 'sales',
                         sourceType: 'sale',
                         sourceId: sale.id,
+                        legKey: 'paid',
                         amount: dto.amountPaid,
                         description: `Auto-posted paid portion — sale ${sale.serial_number}`,
                         referenceNumber: sale.serial_number,

@@ -4,8 +4,15 @@ import {
     NO_POSTING_EVENT,
 } from './posting-status.util';
 
-const dbWith = (events: unknown[]) => ({
-    postingEvent: { findMany: jest.fn().mockResolvedValue(events) },
+// Defaults each event's idempotency_key to a PRIMARY (keyless) key for its source
+// unless the test supplies one, so existing cases keep working and a leg case can
+// opt in with an explicit `:paid` suffix.
+const dbWith = (events: Array<Record<string, unknown>>) => ({
+    postingEvent: {
+        findMany: jest.fn().mockResolvedValue(
+            events.map((e) => ({ idempotency_key: `tenant-1:sale:${e.source_id}`, ...e })),
+        ),
+    },
 }) as any;
 
 describe('loadPostingSummaries', () => {
@@ -32,6 +39,27 @@ describe('loadPostingSummaries', () => {
             voucher_number: null,
             voucher_type: null,
         });
+    });
+
+    it('prefers the PRIMARY leg when a source has two events (partial credit sale)', async () => {
+        // A partial credit sale posts a keyless receivable leg plus a ":paid" cash
+        // leg. The sale's status/voucher must come from the primary (receivable),
+        // regardless of the order the events come back in.
+        const paidLeg = {
+            source_id: 'sale-1', status: 'posted', last_error: null,
+            idempotency_key: 'tenant-1:sale:sale-1:paid',
+            voucher: { id: 'v-paid', voucher_number: 'CR-PAID', voucher_type: 'cash_receive' },
+        };
+        const primaryLeg = {
+            source_id: 'sale-1', status: 'posted', last_error: null,
+            idempotency_key: 'tenant-1:sale:sale-1',
+            voucher: { id: 'v-credit', voucher_number: 'CR-CREDIT', voucher_type: 'cash_receive' },
+        };
+
+        for (const order of [[paidLeg, primaryLeg], [primaryLeg, paidLeg]]) {
+            const summaries = await loadPostingSummaries(dbWith(order), 'tenant-1', 'sales', 'sale', ['sale-1']);
+            expect(summaries.get('sale-1')?.voucher_id).toBe('v-credit');
+        }
     });
 
     it('reports a pending posting as "pending", not "skipped"', async () => {

@@ -62,22 +62,28 @@ export async function loadPostingSummaries(
             source_id: true,
             status: true,
             last_error: true,
+            idempotency_key: true,
             voucher: { select: { id: true, voucher_number: true, voucher_type: true } },
         },
     });
 
-    return new Map(
-        events.map((event) => [
-            event.source_id,
-            {
-                posting_status: event.status,
-                posting_error: event.last_error,
-                voucher_id: event.voucher?.id ?? null,
-                voucher_number: event.voucher?.voucher_number ?? null,
-                voucher_type: event.voucher?.voucher_type ?? null,
-            },
-        ]),
-    );
+    // A source may have more than one posting event — a partial credit sale posts
+    // a keyless PRIMARY leg (the receivable) plus a legKey leg (the cash). The
+    // primary represents the source's status: its idempotency key ends with the
+    // source id, whereas a leg key appends a suffix (":paid"). Prefer it.
+    const summaries = new Map<string, PostingSummary>();
+    for (const event of events) {
+        const isPrimary = event.idempotency_key.endsWith(`:${event.source_id}`);
+        if (summaries.has(event.source_id) && !isPrimary) continue;
+        summaries.set(event.source_id, {
+            posting_status: event.status,
+            posting_error: event.last_error,
+            voucher_id: event.voucher?.id ?? null,
+            voucher_number: event.voucher?.voucher_number ?? null,
+            voucher_type: event.voucher?.voucher_type ?? null,
+        });
+    }
+    return summaries;
 }
 
 export async function loadPostingSummary(

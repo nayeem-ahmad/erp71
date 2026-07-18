@@ -44,6 +44,20 @@ export interface AutoPostInput {
      */
     partyType?: PartyType;
     partyId?: string;
+    /**
+     * Distinguishes a second posting that shares the same source row. A credit
+     * sale settled with a partial down-payment posts TWO vouchers off one Sale —
+     * the receivable and the cash — which would otherwise collide on the shared
+     * `${tenant}:${eventType}:${sourceId}` idempotency key, silently dropping the
+     * second. Pass a legKey on the SECONDARY leg only; the primary stays keyless
+     * so existing idempotency keys are unchanged.
+     */
+    legKey?: string;
+}
+
+/** The idempotency key for a posting, optionally disambiguated by leg. */
+export function postingIdempotencyKey(tenantId: string, eventType: string, sourceId: string, legKey?: string): string {
+    return `${tenantId}:${eventType}:${sourceId}${legKey ? `:${legKey}` : ''}`;
 }
 
 export interface AutoPostResult {
@@ -186,7 +200,7 @@ export async function assertFiscalPeriodOpen(
 export async function autoPostFromRules(input: AutoPostInput): Promise<AutoPostResult> {
     const conditionKey = input.conditionKey ?? 'none';
     const conditionValue = input.conditionValue ?? null;
-    const idempotencyKey = `${input.tenantId}:${input.eventType}:${input.sourceId}`;
+    const idempotencyKey = postingIdempotencyKey(input.tenantId, input.eventType, input.sourceId, input.legKey);
 
     // Read-only lookup runs before the fiscal-period guard: an already-posted
     // event must short-circuit as a no-op even if its period has since been
