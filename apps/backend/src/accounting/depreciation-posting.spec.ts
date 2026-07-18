@@ -82,6 +82,16 @@ describe('AccountingService.runDepreciation — posting', () => {
         expect(result.results[0].voucher_id).toBe('v-1');
     });
 
+    it('charges to the asset\'s configured expense account when depreciation_account_id is set', async () => {
+        db.fixedAsset.findMany.mockResolvedValue([{ ...asset, depreciation_account_id: 'plant-depr-acct' }]);
+        db.assetDepreciationEntry.findUnique.mockResolvedValue(null);
+        db.assetDepreciationEntry.create.mockResolvedValue({ id: 'entry-1' });
+
+        await service.runDepreciation('tenant-1', { year: 2026, month: 3 } as any);
+
+        expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({ overrideDebitAccountId: 'plant-depr-acct' }));
+    });
+
     it('runs the whole period inside one transaction', async () => {
         db.fixedAsset.findMany.mockResolvedValue([asset]);
         db.assetDepreciationEntry.findUnique.mockResolvedValue(null);
@@ -176,6 +186,12 @@ describe('AccountingService.createFixedAsset — acquisition posting', () => {
         await service.createFixedAsset('tenant-1', { ...dto, paymentMethod: 'Bank Transfer' } as any);
 
         expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({ conditionValue: 'bank' }));
+    });
+
+    it('debits the asset\'s own account when assetAccountId is set', async () => {
+        await service.createFixedAsset('tenant-1', { ...dto, assetAccountId: 'vehicles-acct' } as any);
+
+        expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({ overrideDebitAccountId: 'vehicles-acct' }));
     });
 
     it('posts inside the same transaction as the asset create, so a posting failure rolls both back', async () => {

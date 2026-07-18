@@ -2277,6 +2277,9 @@ export class AccountingService {
                 description: `Acquired fixed asset ${asset.name}`,
                 referenceNumber: asset.asset_code,
                 date: purchaseDate,
+                // Per-asset override: post the cost to this asset's own balance-sheet
+                // account (e.g. Vehicles) instead of the default Fixed Assets.
+                overrideDebitAccountId: dto.assetAccountId,
             });
 
             return asset;
@@ -2361,6 +2364,9 @@ export class AccountingService {
                     description: `Depreciation ${dto.year}-${String(dto.month).padStart(2, '0')} — ${asset.name}`,
                     referenceNumber: asset.asset_code,
                     date: periodDate,
+                    // Per-asset override: charge to this asset's configured expense
+                    // account instead of the default Depreciation Expense.
+                    overrideDebitAccountId: asset.depreciation_account_id ?? undefined,
                 });
 
                 if (posting.voucherId) {
