@@ -63,17 +63,13 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     { eventType: 'expense', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'expenses.service.ts:136', expectation: 'rule' },
 
     // ── customer payments ────────────────────────────────────────────────────
-    // Rules are created lazily by ensureCustomerPaymentPostingSetup, which needs an
-    // 'Accounts Receivable' account to exist. Asserted separately in the spec.
-    { eventType: 'customer_payment', conditionKey: 'payment_direction', conditionValue: 'receive', emittedBy: 'customers.service.ts:566', expectation: 'skip', skipReason: 'Provisioned lazily by ensureCustomerPaymentPostingSetup, not by DEFAULT_POSTING_RULES. Covered by its own test.' },
-    { eventType: 'customer_payment', conditionKey: 'payment_direction', conditionValue: 'pay', emittedBy: 'customers.service.ts:669', expectation: 'skip', skipReason: 'Provisioned lazily by ensureCustomerPaymentPostingSetup, not by DEFAULT_POSTING_RULES. Covered by its own test.' },
+    // Now plain DEFAULT_POSTING_RULES entries (formerly lazy
+    // ensureCustomerPaymentPostingSetup).
+    { eventType: 'customer_payment', conditionKey: 'payment_direction', conditionValue: 'receive', emittedBy: 'customers.service.ts:566', expectation: 'rule' },
+    { eventType: 'customer_payment', conditionKey: 'payment_direction', conditionValue: 'pay', emittedBy: 'customers.service.ts:669', expectation: 'rule' },
 
     // ── supplier payments ────────────────────────────────────────────────────
-    // 'rule', not 'skip': unlike customer_payment (provisioned lazily by
-    // ensureCustomerPaymentPostingSetup), these live in DEFAULT_POSTING_RULES —
-    // the bootstrap creates Purchase Payable and Cash in Hand unconditionally, so
-    // there is nothing to provision lazily around.
-    //
+    // Keyed on payment_direction rather than payment_mode because
     // Keyed on payment_direction rather than payment_mode because
     // SupplierCreditTransaction has no payment_method column. See TODO.md.
     { eventType: 'supplier_payment', conditionKey: 'payment_direction', conditionValue: 'pay', emittedBy: 'suppliers.service.ts:670', expectation: 'rule' },
@@ -108,10 +104,11 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     { eventType: 'salary_payment', conditionKey: 'payment_mode', conditionValue: 'nagad', emittedBy: 'salary-payments.service.ts:create', expectation: 'rule' },
 
     // ── loans ────────────────────────────────────────────────────────────────
-    { eventType: 'loan_disbursement', conditionKey: 'loan_direction', conditionValue: 'PAYABLE', emittedBy: 'loans.service.ts:83', expectation: 'skip', skipReason: 'Provisioned lazily by ensureLoanPostingSetup, not by DEFAULT_POSTING_RULES.' },
-    { eventType: 'loan_disbursement', conditionKey: 'loan_direction', conditionValue: 'RECEIVABLE', emittedBy: 'loans.service.ts:83', expectation: 'skip', skipReason: 'Provisioned lazily by ensureLoanPostingSetup, not by DEFAULT_POSTING_RULES.' },
-    { eventType: 'loan_repayment', conditionKey: 'loan_direction', conditionValue: 'PAYABLE', emittedBy: 'loans.service.ts:175', expectation: 'skip', skipReason: 'Provisioned lazily by ensureLoanPostingSetup, not by DEFAULT_POSTING_RULES.' },
-    { eventType: 'loan_repayment', conditionKey: 'loan_direction', conditionValue: 'RECEIVABLE', emittedBy: 'loans.service.ts:175', expectation: 'skip', skipReason: 'Provisioned lazily by ensureLoanPostingSetup, not by DEFAULT_POSTING_RULES.' },
+    // Now plain DEFAULT_POSTING_RULES entries (formerly lazy ensureLoanPostingSetup).
+    { eventType: 'loan_disbursement', conditionKey: 'loan_direction', conditionValue: 'PAYABLE', emittedBy: 'loans.service.ts:83', expectation: 'rule' },
+    { eventType: 'loan_disbursement', conditionKey: 'loan_direction', conditionValue: 'RECEIVABLE', emittedBy: 'loans.service.ts:83', expectation: 'rule' },
+    { eventType: 'loan_repayment', conditionKey: 'loan_direction', conditionValue: 'PAYABLE', emittedBy: 'loans.service.ts:175', expectation: 'rule' },
+    { eventType: 'loan_repayment', conditionKey: 'loan_direction', conditionValue: 'RECEIVABLE', emittedBy: 'loans.service.ts:175', expectation: 'rule' },
 
     // ── PERIODIC INVENTORY: these MUST post nothing ──────────────────────────
     { eventType: 'fund_movement', conditionKey: 'transfer_scope', conditionValue: 'inter_store', emittedBy: 'warehouse-transfers.service.ts:131', expectation: 'skip', skipReason: 'Periodic inventory: moving own stock between own warehouses is not an economic event. A none-fallback here fabricated Dr Bank / Cr Cash vouchers.' },

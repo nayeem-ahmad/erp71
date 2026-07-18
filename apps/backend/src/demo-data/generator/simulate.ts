@@ -1,5 +1,4 @@
 import { Prisma, PrismaClient } from '@prisma/client';
-import { ensureCustomerPaymentPostingSetup } from '@erp71/database';
 import { ensureDefaultWarehouse } from '../../database/inventory.utils';
 import { Rng } from './rng';
 import { DemoWriter, type DemoCounts } from './write';
@@ -99,7 +98,6 @@ export async function runSimulation(deps: SimulationDeps): Promise<DemoCounts> {
         await writer.ensureCatalog(tx as Prisma.TransactionClient);
         await writer.ensureParties(tx as Prisma.TransactionClient, CUSTOMER_COUNT, SUPPLIER_COUNT);
         await writer.loadShrinkageReasons(tx as Prisma.TransactionClient);
-        await ensureCustomerPaymentPostingSetup(tx, tenantId);
     }, TX_OPTIONS);
 
     await report('Opening stock', 0);

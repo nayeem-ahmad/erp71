@@ -19,11 +19,6 @@ describe('@erp71/database runtime exports', () => {
         'bootstrapDefaultAccountingForTenant',
         'seedDemoAccount',
         'ensureInterBranchAccounts',
-        // Both are imported from '@erp71/database' at runtime by
-        // customers.service.ts and demo-data/generator/simulate.ts, so a .js/.ts
-        // drift on either would break customer-payment posting specifically.
-        'ensureCustomerPaymentPostingSetup',
-        'ensureLoanPostingSetup',
     ])('exports %s as a function from index.js', (name) => {
         expect(typeof database[name]).toBe('function');
     });

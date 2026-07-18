@@ -1,5 +1,4 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ensureLoanPostingSetup } from '@erp71/database';
 import { DatabaseService } from '../database/database.service';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { autoPostFromRules } from '../accounting/posting.utils';
@@ -78,8 +77,6 @@ export class LoansService {
 
             // Make sure loan accounts + posting rules exist for this tenant
             // (lazy for tenants provisioned before the loans feature shipped).
-            await ensureLoanPostingSetup(tx, tenantId);
-
             const result = await autoPostFromRules({
                 tx,
                 tenantId,
@@ -169,8 +166,6 @@ export class LoansService {
             if (newPaid >= Number(loan.principal) - 0.005 && loan.status !== 'CLOSED') {
                 await tx.loan.update({ where: { id: loanId }, data: { status: 'CLOSED' } });
             }
-
-            await ensureLoanPostingSetup(tx, tenantId);
 
             await autoPostFromRules({
                 tx,

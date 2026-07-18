@@ -1,5 +1,4 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
-import { ensureCustomerPaymentPostingSetup } from '@erp71/database';
 import { DatabaseService } from '../database/database.service';
 import { EncryptionService } from '../common/encryption.service';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
@@ -599,8 +598,6 @@ export class CustomersService {
                 data: { due_balance: balanceAfter },
             });
 
-            await ensureCustomerPaymentPostingSetup(tx, tenantId);
-
             const posting = await autoPostFromRules({
                 tx,
                 tenantId,
@@ -680,8 +677,6 @@ export class CustomersService {
         const balanceAfter = isPayout ? currentDue + dto.amount : currentDue - dto.amount;
 
         return this.db.$transaction(async (tx) => {
-            await ensureCustomerPaymentPostingSetup(tx, tenantId);
-
             const payment_number = await this.generatePaymentNumber(tenantId, tx, txType);
 
             const payment = await tx.customerCreditTransaction.create({

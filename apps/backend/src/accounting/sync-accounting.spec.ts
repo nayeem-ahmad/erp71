@@ -1,12 +1,8 @@
 jest.mock('@erp71/database/prisma/bootstrap-accounting', () => ({
     bootstrapDefaultAccountingForTenant: jest.fn(),
-    ensureCustomerPaymentPostingSetup: jest.fn(),
 }));
 
-import {
-    bootstrapDefaultAccountingForTenant,
-    ensureCustomerPaymentPostingSetup,
-} from '@erp71/database/prisma/bootstrap-accounting';
+import { bootstrapDefaultAccountingForTenant } from '@erp71/database/prisma/bootstrap-accounting';
 import { added, applySync, ruleKey, snapshot } from '@erp71/database/prisma/sync-accounting.utils';
 
 const snap = (accounts: string[], rules: string[]) => ({
@@ -19,33 +15,13 @@ describe('sync-accounting — applySync', () => {
 
     beforeEach(() => jest.clearAllMocks());
 
-    it('provisions customer-payment rules, which the bootstrap alone does not', async () => {
-        // The bootstrap calls ensureLoanPostingSetup and ensureInterBranchAccounts
-        // but NOT ensureCustomerPaymentPostingSetup — those rules are otherwise
-        // created lazily on a tenant's first customer payment, so a tenant that has
-        // never taken one has none at all. If this assertion is ever deleted, the
-        // sync silently stops fixing that and nothing else notices.
+    it('brings a tenant up to date through the bootstrap alone', async () => {
+        // customer_payment and loan rules are now plain DEFAULT_POSTING_RULES
+        // entries (not lazy ensure* helpers), so the bootstrap provisions the whole
+        // default set — one mechanism.
         await applySync(client, 'tenant-1');
 
         expect(bootstrapDefaultAccountingForTenant).toHaveBeenCalledWith(client, 'tenant-1');
-        expect(ensureCustomerPaymentPostingSetup).toHaveBeenCalledWith(client, 'tenant-1');
-    });
-
-    it('runs the bootstrap first, so Accounts Receivable exists before the rules that need it', async () => {
-        // ensureCustomerPaymentPostingSetup returns SILENTLY when no 'Accounts
-        // Receivable' account exists. Reversing this order would make it a no-op on
-        // exactly the stale tenants this script exists to repair.
-        const order: string[] = [];
-        (bootstrapDefaultAccountingForTenant as jest.Mock).mockImplementation(async () => {
-            order.push('bootstrap');
-        });
-        (ensureCustomerPaymentPostingSetup as jest.Mock).mockImplementation(async () => {
-            order.push('customer-payment');
-        });
-
-        await applySync(client, 'tenant-1');
-
-        expect(order).toEqual(['bootstrap', 'customer-payment']);
     });
 });
 

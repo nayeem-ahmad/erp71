@@ -4,10 +4,7 @@
  * stays importable — see repair-fabricated-vouchers.utils.ts for the same split.
  */
 import { Prisma, PrismaClient } from '@prisma/client';
-import {
-    bootstrapDefaultAccountingForTenant,
-    ensureCustomerPaymentPostingSetup,
-} from './bootstrap-accounting';
+import { bootstrapDefaultAccountingForTenant } from './bootstrap-accounting';
 
 export type SyncClient = PrismaClient | Prisma.TransactionClient;
 
@@ -55,18 +52,8 @@ export const added = (before: Snapshot, after: Snapshot): Delta => ({
  * this, so the two cannot disagree about what a sync does.
  */
 export async function applySync(client: SyncClient, tenantId: string): Promise<void> {
+    // customer_payment and loan rules are now plain DEFAULT_POSTING_RULES entries
+    // (they used to be provisioned lazily by ensure* helpers), so the bootstrap
+    // alone brings a tenant fully up to date.
     await bootstrapDefaultAccountingForTenant(client, tenantId);
-
-    // MUST be called explicitly and MUST come second.
-    //
-    // The bootstrap does NOT call this — it only calls ensureLoanPostingSetup and
-    // ensureInterBranchAccounts. customer_payment rules are otherwise provisioned
-    // lazily, on a tenant's first customer payment (customers.service.ts:564,643),
-    // so a tenant that has never taken one has no rules for it at all. Verified
-    // against a real database: all three local tenants were missing them.
-    //
-    // It also depends on an 'Accounts Receivable' account and returns SILENTLY if
-    // one does not exist, so running it before the bootstrap would be a no-op on
-    // exactly the stale tenants this script exists to fix.
-    await ensureCustomerPaymentPostingSetup(client, tenantId);
 }

@@ -8,8 +8,6 @@ const seedTemplate = require('./prisma/templates/seed-template.js');
 module.exports = {
     ...prisma,
     bootstrapDefaultAccountingForTenant: accounting.bootstrapDefaultAccountingForTenant,
-    ensureLoanPostingSetup: accounting.ensureLoanPostingSetup,
-    ensureCustomerPaymentPostingSetup: accounting.ensureCustomerPaymentPostingSetup,
     ensureInterBranchAccounts: accounting.ensureInterBranchAccounts,
     DEFAULT_ACCOUNTING_TEMPLATE: accounting.DEFAULT_ACCOUNTING_TEMPLATE,
     DEFAULT_POSTING_RULES: accounting.DEFAULT_POSTING_RULES,
