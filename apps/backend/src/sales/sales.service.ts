@@ -5,6 +5,7 @@ import { applyInventoryMovement, resolveWarehouseId } from '../database/inventor
 import { autoPostFromRules, type AutoPostResult } from '../accounting/posting.utils';
 import { classifyPaymentMode } from './classify-payment-mode';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
+import { resolvePaymentMethodAccountId } from '../accounting/payment-account.util';
 import { previewSaleLoyaltyRedemption, recordSaleLoyalty } from '../loyalty/loyalty-sale.utils';
 import { cursorPaginate, CursorPaginatedResult } from '../common/pagination.dto';
 import { EmailService } from '../email/email.service';
@@ -293,6 +294,8 @@ export class SalesService {
                     // so it must post too. legKey 'paid' gives it a distinct
                     // idempotency key from the credit (receivable) leg above, which
                     // otherwise shares this Sale's key and silently swallowed it.
+                    // The mode account is the debit leg (Dr <mode> / Cr Revenue), so
+                    // a configured PaymentMethod account overrides that side.
                     await autoPostFromRules({
                         tx,
                         tenantId,
@@ -307,10 +310,11 @@ export class SalesService {
                         description: `Auto-posted paid portion — sale ${sale.serial_number}`,
                         referenceNumber: sale.serial_number,
                         storeId: dto.storeId,
+                        overrideDebitAccountId: await resolvePaymentMethodAccountId(tx, tenantId, primaryPaymentMethod),
                     });
                 }
             } else {
-                const primaryPaymentMethod = dto.payments?.[0]?.paymentMethod?.toLowerCase() || 'cash';
+                const primaryPaymentMethod = dto.payments?.[0]?.paymentMethod ?? 'cash';
                 const paymentMode = classifyPaymentMode(primaryPaymentMethod);
 
                 posting = await autoPostFromRules({
@@ -326,6 +330,7 @@ export class SalesService {
                     description: `Auto-posted sale ${sale.serial_number}`,
                     referenceNumber: sale.serial_number,
                     storeId: dto.storeId,
+                    overrideDebitAccountId: await resolvePaymentMethodAccountId(tx, tenantId, primaryPaymentMethod),
                 });
             }
 

@@ -55,6 +55,17 @@ export interface AutoPostInput {
      * so existing idempotency keys are unchanged.
      */
     legKey?: string;
+    /**
+     * Override the rule's debit / credit account for THIS posting. Used when a
+     * tenant-configured PaymentMethod points at its own account (e.g. a custom
+     * "Upay" wallet), so the cash leg posts there instead of the mode-derived
+     * default the rule would pick. The caller passes the override on whichever leg
+     * is the cash/mode side (debit for a receipt, credit for a payment). Omitted →
+     * the rule's account is used, exactly as before. The override account must
+     * belong to the tenant or the posting fails AUTO_POSTING_ACCOUNT_INVALID.
+     */
+    overrideDebitAccountId?: string;
+    overrideCreditAccountId?: string;
 }
 
 /** The idempotency key for a posting, optionally disambiguated by leg. */
@@ -303,15 +314,21 @@ export async function autoPostFromRules(input: AutoPostInput): Promise<AutoPostR
         return { postingStatus: 'skipped' };
     }
 
+    // A PaymentMethod override replaces the rule's account on the cash/mode leg.
+    const debitAccountId = input.overrideDebitAccountId ?? postingRule.debit_account_id;
+    const creditAccountId = input.overrideCreditAccountId ?? postingRule.credit_account_id;
+
     const accounts = await input.tx.account.findMany({
         where: {
             tenant_id: input.tenantId,
-            id: { in: [postingRule.debit_account_id, postingRule.credit_account_id] },
+            id: { in: [debitAccountId, creditAccountId] },
         },
         select: { id: true, party_type: true },
     });
 
-    if (accounts.length !== 2 || postingRule.debit_account_id === postingRule.credit_account_id) {
+    // length !== 2 also catches an override account that is not the tenant's, and
+    // === catches an override that collapses both legs onto one account.
+    if (accounts.length !== 2 || debitAccountId === creditAccountId) {
         await input.tx.postingEvent.update({
             where: { id: postingEvent.id },
             data: {
@@ -354,16 +371,16 @@ export async function autoPostFromRules(input: AutoPostInput): Promise<AutoPostR
             details: {
                 create: [
                     {
-                        account_id: postingRule.debit_account_id,
+                        account_id: debitAccountId,
                         debit_amount: new Prisma.Decimal(input.amount),
                         credit_amount: new Prisma.Decimal(0),
-                        ...partyFieldsFor(postingRule.debit_account_id),
+                        ...partyFieldsFor(debitAccountId),
                     },
                     {
-                        account_id: postingRule.credit_account_id,
+                        account_id: creditAccountId,
                         debit_amount: new Prisma.Decimal(0),
                         credit_amount: new Prisma.Decimal(input.amount),
-                        ...partyFieldsFor(postingRule.credit_account_id),
+                        ...partyFieldsFor(creditAccountId),
                     },
                 ],
             },

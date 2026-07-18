@@ -26,9 +26,14 @@ function buildTx(accountPartyTypes: Record<string, string | null>) {
             }),
         },
         account: {
-            findMany: jest.fn().mockResolvedValue(
-                Object.entries(accountPartyTypes).map(([id, party_type]) => ({ id, party_type })),
-            ),
+            // Respect the `id: { in: [...] }` filter so overridden ids resolve to
+            // exactly the two requested accounts (as the real query does).
+            findMany: jest.fn().mockImplementation(async ({ where }: any) => {
+                const ids: string[] = where.id.in;
+                return Object.entries(accountPartyTypes)
+                    .filter(([id]) => ids.includes(id))
+                    .map(([id, party_type]) => ({ id, party_type }));
+            }),
         },
         voucherSequence: {
             upsert: jest.fn().mockResolvedValue({ next_number: 1, prefix: 'CR' }),
@@ -111,5 +116,45 @@ describe('autoPostFromRules — party dimension', () => {
 
         expect(creditLine.party_id).toBe('sup-1');
         expect(debitLine.party_id).toBeUndefined();
+    });
+});
+
+describe('autoPostFromRules — payment-method account override', () => {
+    it('replaces the rule debit account with the override (custom payment method)', async () => {
+        // The rule would debit "ar" (stand-in for the mode account); a tenant's
+        // PaymentMethod points at "upay-acct", so the cash leg posts there instead.
+        const { tx, captured } = buildTx({ 'upay-acct': null, revenue: null });
+
+        await autoPostFromRules(baseInput(tx, { overrideDebitAccountId: 'upay-acct' }));
+
+        expect(captured.details!.map((d) => d.account_id).sort()).toEqual(['revenue', 'upay-acct']);
+        const debit = captured.details!.find((d) => Number(d.debit_amount) > 0);
+        expect(debit.account_id).toBe('upay-acct');
+    });
+
+    it('replaces the rule credit account with the override', async () => {
+        const { tx, captured } = buildTx({ ar: null, 'upay-acct': null });
+
+        await autoPostFromRules(baseInput(tx, { overrideCreditAccountId: 'upay-acct' }));
+
+        const credit = captured.details!.find((d) => Number(d.credit_amount) > 0);
+        expect(credit.account_id).toBe('upay-acct');
+    });
+
+    it('uses the rule accounts unchanged when no override is given', async () => {
+        const { tx, captured } = buildTx({ ar: null, revenue: null });
+
+        await autoPostFromRules(baseInput(tx, {}));
+
+        expect(captured.details!.map((d) => d.account_id).sort()).toEqual(['ar', 'revenue']);
+    });
+
+    it('fails when the override collapses both legs onto one account', async () => {
+        // Overriding the debit to the same account as the credit is a misconfigured
+        // PaymentMethod (e.g. pointing at the revenue account) — must fail loudly.
+        const { tx } = buildTx({ revenue: null });
+
+        await expect(autoPostFromRules(baseInput(tx, { overrideDebitAccountId: 'revenue' })))
+            .rejects.toThrow('AUTO_POSTING_ACCOUNT_INVALID');
     });
 });

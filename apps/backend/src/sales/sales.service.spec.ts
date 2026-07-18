@@ -31,6 +31,10 @@ describe('SalesService', () => {
       productPrice: {
         findMany: jest.fn().mockResolvedValue([]),
       },
+      paymentMethod: {
+        // No custom account by default → posting keeps the rule's mode account.
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       sale: {
         create: jest.fn(),
         findFirst: jest.fn(),
