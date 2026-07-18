@@ -108,6 +108,15 @@ export class SuppliersController {
         });
     }
 
+    @Get(':id/gl-ledger')
+    getGlLedger(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Query() query: SupplierCreditLedgerQueryDto,
+    ) {
+        return this.suppliersService.getGlLedger(tenant.tenantId, id, { from: query.from, to: query.to });
+    }
+
     @Post(':id/credit/payment')
     recordCreditPayment(
         @Tenant() tenant: TenantContext,

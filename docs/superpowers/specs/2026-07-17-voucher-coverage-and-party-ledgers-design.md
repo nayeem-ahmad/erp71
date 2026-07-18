@@ -439,17 +439,34 @@ was a no-op. **Runs `tsx`, not `ts-node`** (the backend only has `tsx` installed
 `ts-node` is separately broken). **Still rewrites historical financials — deliberately; review the
 dry-run per tenant before live.**
 
+**All six reposters — LANDED 2026-07-18.** Beyond sales + supplier payments: customer payments,
+salary payments, cashier PAYOUT/LOAN, and depreciation (which also links its voucher back to the
+entry). Each reconstruction was checked against its caller; e2e-verified (depreciation + cashier).
+
+**Reconciliation — LANDED 2026-07-18.** `npm run reconcile:balances` (in `packages/database`) diffs
+each party's `due_balance` against the GL-derived balance of their subsidiary ledger (AR net debit /
+AP net credit). Report-only by default — a mismatch is not automatically a bug (GL and `due_balance`
+legitimately diverge on an over-return; before the backfill the GL is incomplete). `--rebuild`
+overwrites `due_balance` from the GL once the backfill has made it the truth. This is the "diff the two
+on real data before deleting anything" step. E2e-verified: due 999 vs GL 700 reported, then rebuilt to
+700.
+
+**Ledger UI repointed — LANDED 2026-07-18.** New `accounting/party-ledger.util.ts` (`buildPartyLedger`)
+builds a party's ledger straight from its tagged control-account voucher lines, in the account's
+natural sign. New `GET /customers/:id/gl-ledger` and `GET /suppliers/:id/gl-ledger` return the same
+shape as the credit-transaction endpoints (mapping debit/credit to the `CREDIT_SALE`/`CREDIT_PURCHASE`
+/`PAYMENT` labels the pages already render), so the customer-ledger and supplier-ledger pages swapped
+their data source with no rendering change. The credit-transaction endpoints stay **alongside** for
+diffing. 6 util tests (mutation-checked) + a real-DB smoke test; backend 104 suites / 1350 green,
+frontend `tsc` clean.
+
 Still open in Phase 8:
 
-- **More reposters** — customer payments, depreciation, salary, cashier cash-outs. Each needs its
-  reconstruction checked against its caller before adding (the direction/mode mapping is the drift
-  risk). The framework (a `Reposter` with `findCandidates`) makes each a small addition.
-- **Repoint the ledger UI** at the GL-derived view (`voucher_details WHERE party_id = X`) and
-  **rebuild `due_balance`** from it. Keep `CustomerCreditTransaction` / `SupplierCreditTransaction`
-  initially and derive the GL ledger alongside them, so the two can be diffed on real data before
-  anything is deleted.
-- **Run the backfill dry-run against production**, review per tenant, then live. Not yet run anywhere
-  but the local dev DB.
+- **Retire the parallel tables** — once `reconcile:balances` shows the GL and
+  `CustomerCreditTransaction` / `SupplierCreditTransaction` agree on real data, drop the parallel
+  tables and the credit-transaction endpoints. Deliberately deferred until the diff is clean on prod.
+- **Run against production** — `sync:accounting` → `backfill:vouchers --dry-run` (review per tenant) →
+  live → `reconcile:balances`. Not yet run anywhere but the local dev DB; needs prod access.
 
 ## Open decisions
 

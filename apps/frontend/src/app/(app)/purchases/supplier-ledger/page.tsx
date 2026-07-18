@@ -135,10 +135,11 @@ function SupplierLedgerContent() {
         const loadLedger = async () => {
             setLedgerLoading(true);
             try {
-                const data = await api.getSupplierCreditLedger(supplierId, {
+                // GL-derived ledger: the Purchase Payable voucher lines tagged to
+                // this supplier, so the ledger reflects what was actually posted.
+                const data = await api.getSupplierGlLedger(supplierId, {
                     from: fromDate || undefined,
                     to: toDate || undefined,
-                    limit: 500,
                 });
                 setDueBalance(Number(data.due_balance ?? 0));
                 setOpeningBalance(Number(data.opening_balance ?? 0));

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { autoPostFromRules } from '../accounting/posting.utils';
+import { buildPartyLedger } from '../accounting/party-ledger.util';
 import { DatabaseService } from '../database/database.service';
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
@@ -418,6 +419,38 @@ export class SuppliersService {
             page,
             limit,
             pages,
+        };
+    }
+
+    /**
+     * The supplier ledger derived from the GENERAL LEDGER — the Purchase Payable
+     * voucher lines tagged to this supplier — rather than from
+     * SupplierCreditTransaction. Same shape as getCreditLedger so the UI can swap
+     * to it; kept alongside so the two can be diffed before the parallel table is
+     * retired.
+     */
+    async getGlLedger(tenantId: string, id: string, params?: { from?: string; to?: string }) {
+        const supplier = await this.db.supplier.findFirst({
+            where: { id, tenant_id: tenantId, deleted_at: null },
+            select: { id: true, name: true, phone: true, due_balance: true },
+        });
+        if (!supplier) throw new NotFoundException('Supplier not found');
+
+        const ledger = await buildPartyLedger(this.db, tenantId, 'SUPPLIER', id, {
+            from: params?.from,
+            to: params?.to,
+            increaseLabel: 'CREDIT_PURCHASE',
+            decreaseLabel: 'PAYMENT',
+        });
+
+        return {
+            supplier: { id: supplier.id, name: supplier.name, phone: supplier.phone },
+            due_balance: Number(supplier.due_balance),
+            opening_balance: ledger.opening_balance,
+            closing_balance: ledger.closing_balance,
+            transactions: ledger.transactions,
+            total: ledger.total,
+            source: 'general_ledger' as const,
         };
     }
 
