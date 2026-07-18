@@ -337,6 +337,14 @@ export const DEFAULT_POSTING_RULES: DefaultPostingRuleDefinition[] = [
     // Salary Payable, tagged per employee. Payment (salary_payment) settles it.
     { event_type: 'salary_accrual', condition_key: 'none', condition_value: null, debit_account: 'Salary & Wages', credit_account: 'Salary Payable', priority: 10 },
 
+    // ── Payroll payment ──────────────────────────────────────────────────────
+    // Settles the accrued payable in cash: Dr Salary Payable / Cr <mode>, tagged
+    // per employee. Mode from the payment_method via classifyPaymentMode.
+    { event_type: 'salary_payment', condition_key: 'payment_mode', condition_value: 'cash', debit_account: 'Salary Payable', credit_account: 'Cash in Hand', priority: 10 },
+    { event_type: 'salary_payment', condition_key: 'payment_mode', condition_value: 'bank', debit_account: 'Salary Payable', credit_account: 'Main Bank Account', priority: 20 },
+    { event_type: 'salary_payment', condition_key: 'payment_mode', condition_value: 'bkash', debit_account: 'Salary Payable', credit_account: 'bKash Account', priority: 30 },
+    { event_type: 'salary_payment', condition_key: 'payment_mode', condition_value: 'nagad', debit_account: 'Salary Payable', credit_account: 'Nagad Account', priority: 40 },
+
     // ── DELIBERATELY ABSENT: fund_movement, inventory_adjustment ─────────────
     // Under periodic inventory these events have no journal entry. Adding a
     // condition_key:'none' rule here is worse than adding nothing, because

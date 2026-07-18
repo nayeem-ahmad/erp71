@@ -16,7 +16,8 @@ export type PostingEventType =
     | 'supplier_payment'
     | 'depreciation'
     | 'cash_transaction'
-    | 'salary_accrual';
+    | 'salary_accrual'
+    | 'salary_payment';
 
 export interface AutoPostInput {
     tx: Prisma.TransactionClient;
@@ -85,6 +86,8 @@ const VOUCHER_TYPE_BY_EVENT: Record<PostingEventType, string> = {
     cash_transaction: VoucherType.CASH_PAYMENT,
     // Non-cash accrual (Dr Salary & Wages / Cr Salary Payable) — a journal voucher.
     salary_accrual: VoucherType.JOURNAL,
+    // Cash settling the payable (Dr Salary Payable / Cr <mode>) — cash payment.
+    salary_payment: VoucherType.CASH_PAYMENT,
 };
 
 function resolveVoucherType(

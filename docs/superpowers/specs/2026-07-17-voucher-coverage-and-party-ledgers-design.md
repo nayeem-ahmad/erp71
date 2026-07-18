@@ -193,8 +193,8 @@ New group **Non-Current Assets** (none exists today):
 | 1055 | Accumulated Depreciation | ASSET (contra) | depreciation | **LANDED 2026-07-18** |
 | 1060 | Staff Advances | ASSET | cashier `LOAN` + employee salary advances (D4) | **LANDED 2026-07-18** (plain account — see note) |
 | 2030 | Customer Advances | LIABILITY | order deposits (D2) | pending |
-| 2050 | Salary Payable | LIABILITY | employee payables (D4) | pending |
-| 5020 | Salary & Wages | EXPENSE | salary payments | pending |
+| 2050 | Salary Payable | LIABILITY | employee payables (D4) | **LANDED 2026-07-18** |
+| 5020 | Salary & Wages | EXPENSE | salary payments | **LANDED 2026-07-18** |
 | 5030 | Depreciation Expense | EXPENSE | depreciation | **LANDED 2026-07-18** |
 | 5040 | Cash Shortage / Overage | EXPENSE | till reconciliation | pending |
 
@@ -233,8 +233,8 @@ Remaining, not yet built:
 | `depreciation` | `none` | Depreciation Expense / Accumulated Depreciation — **LANDED 2026-07-18** |
 | `cash_transaction` | `reason_type` × PAYOUT | General Operating Expense / Cash in Hand — **LANDED 2026-07-18** |
 | `cash_transaction` | `reason_type` × LOAN | Staff Advances / Cash in Hand — **LANDED 2026-07-18** |
-| `salary_accrual` | `none` | Salary & Wages / Salary Payable |
-| `salary_payment` | `payment_mode` × cash/bank/bkash/nagad | Salary Payable / \<mode\> |
+| `salary_accrual` | `none` | Salary & Wages / Salary Payable — **LANDED 2026-07-18** |
+| `salary_payment` | `payment_mode` × cash/bank/bkash/nagad | Salary Payable / \<mode\> — **LANDED 2026-07-18** |
 | `employee_advance` | `payment_mode` × cash/bank/bkash/nagad | Staff Advances / \<mode\> |
 | `advance_settlement` | `party_type` × employee | Salary Payable / Staff Advances |
 
@@ -315,7 +315,19 @@ conversion so the advance clears into AR. Mirror for supplier advances against a
 Without this, advances accumulate and never clear. This is the cost of D2 and it is accepted, but it
 is not deferrable indefinitely.
 
-## Phase 5b — Payroll accrual + employee payment (D4)
+## Phase 5b — Payroll accrual + employee payment (D4) — **LANDED 2026-07-18**
+
+Both halves shipped, in two commits: **(A)** the accrual (`SalaryAccrual` model, monthly runner
+`POST /salary-payments/run-accrual`, `salary_accrual/none` → Dr Salary & Wages / Cr Salary Payable
+[party], accounts 2050/5020, 2050 marked `EMPLOYEE`); **(B)** the payment settlement
+(`salary_payment/payment_mode` → Dr Salary Payable / Cr \<mode\> [party], wired into
+`salary-payments.create` with `update` void-and-reposting and `remove` voiding) **and the constraint
+drop below**. Verified end-to-end against a real DB: accrue 30000 then pay 10000 leaves the employee's
+Salary Payable at 20000 credit — the payable is `accrual − Σ payments`, derived from the GL. The
+`1060` party tension above remains for a future per-employee-advance feature; 2050 is the employee
+control account and is unaffected.
+
+### Design (as built)
 
 **New `SalaryAccrual` model**, mirroring `AssetDepreciationEntry` exactly: `employee_id`,
 `pay_period`, `amount`, `voucher_id`, `@@unique([tenant_id, employee_id, pay_period])`. It gives
@@ -339,16 +351,14 @@ splits into a separate employee-advance account. Decide before marking 1060.
 ledger is `voucher_details WHERE party_type='EMPLOYEE' AND party_id=X`, and the payable is
 `accrual − Σ payments`, derived from the GL rather than from `SalaryPayment` rows.
 
-### Blocker: drop the one-payment-per-month constraint
+### Dropped: the one-payment-per-month constraint (product behaviour change)
 
-`SalaryPayment` carries `@@unique([tenant_id, employee_id, pay_period])`, and `create` throws
-`ConflictException` on a duplicate (`salary-payments.service.ts:66-70`). That permits **exactly one
-payment per employee per month**, which forbids partial payments, installments, and advances against
-the payable — i.e. the whole point of "payments adjusted from there".
-
-The constraint must be dropped. Once the payable lives in the GL, `SalaryPayment` demotes to a
-payment ledger that may hold many rows per period; the balance comes from the vouchers, not the row
-count. This is a product behaviour change (salary advances become possible), taken deliberately:
+`SalaryPayment` carried `@@unique([tenant_id, employee_id, pay_period])`, and `create` threw
+`ConflictException` on a duplicate. That permitted **exactly one payment per employee per month**,
+forbidding partial payments, instalments, and advances — the whole point of "payments adjusted from
+there". **Dropped** (migration `20260718130000_salary_payment_settlement`, replaced by a plain index;
+the duplicate checks in `create`/`update` removed). `SalaryPayment` is now a payment ledger that may
+hold many rows per period; the balance comes from the vouchers, not a row count. Taken deliberately —
 advances are routine for BD SMEs and one-payment-per-month would not survive a real shop.
 
 ### Scope limits

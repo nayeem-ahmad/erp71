@@ -173,6 +173,7 @@ enum PostingRuleEventType {
   depreciation
   cash_transaction
   salary_accrual
+  salary_payment
 }
 
 /// A subsidiary-ledger party. Marks a control account (Accounts Receivable,
@@ -3032,7 +3033,10 @@ model SalaryPayment {
   tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   employee Employee @relation(fields: [employee_id], references: [id])
 
-  @@unique([tenant_id, employee_id, pay_period])
+  // No unique on (employee, period): a period can be settled in several
+  // instalments (and advances), each a row that settles the accrued payable.
+  // The payable balance, not a row count, is the source of truth now.
+  @@index([tenant_id, employee_id, pay_period])
   @@index([tenant_id, payment_date])
   @@index([tenant_id, employee_id])
 }

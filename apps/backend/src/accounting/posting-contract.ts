@@ -91,6 +91,12 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     // ── payroll accrual ──────────────────────────────────────────────────────
     { eventType: 'salary_accrual', conditionKey: 'none', conditionValue: null, emittedBy: 'salary-payments.service.ts:runMonthlyAccrual', expectation: 'rule' },
 
+    // ── payroll payment ──────────────────────────────────────────────────────
+    { eventType: 'salary_payment', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'salary-payments.service.ts:create', expectation: 'rule' },
+    { eventType: 'salary_payment', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'salary-payments.service.ts:create', expectation: 'rule' },
+    { eventType: 'salary_payment', conditionKey: 'payment_mode', conditionValue: 'bkash', emittedBy: 'salary-payments.service.ts:create', expectation: 'rule' },
+    { eventType: 'salary_payment', conditionKey: 'payment_mode', conditionValue: 'nagad', emittedBy: 'salary-payments.service.ts:create', expectation: 'rule' },
+
     // ── loans ────────────────────────────────────────────────────────────────
     { eventType: 'loan_disbursement', conditionKey: 'loan_direction', conditionValue: 'PAYABLE', emittedBy: 'loans.service.ts:83', expectation: 'skip', skipReason: 'Provisioned lazily by ensureLoanPostingSetup, not by DEFAULT_POSTING_RULES.' },
     { eventType: 'loan_disbursement', conditionKey: 'loan_direction', conditionValue: 'RECEIVABLE', emittedBy: 'loans.service.ts:83', expectation: 'skip', skipReason: 'Provisioned lazily by ensureLoanPostingSetup, not by DEFAULT_POSTING_RULES.' },

@@ -281,6 +281,10 @@ const DEFAULT_POSTING_RULES = [
 	{ event_type: 'cash_transaction', condition_key: 'reason_type', condition_value: 'PAYOUT', debit_account: 'General Operating Expense', credit_account: 'Cash in Hand', priority: 10 },
 	{ event_type: 'cash_transaction', condition_key: 'reason_type', condition_value: 'LOAN', debit_account: 'Staff Advances', credit_account: 'Cash in Hand', priority: 20 },
 	{ event_type: 'salary_accrual', condition_key: 'none', condition_value: null, debit_account: 'Salary & Wages', credit_account: 'Salary Payable', priority: 10 },
+	{ event_type: 'salary_payment', condition_key: 'payment_mode', condition_value: 'cash', debit_account: 'Salary Payable', credit_account: 'Cash in Hand', priority: 10 },
+	{ event_type: 'salary_payment', condition_key: 'payment_mode', condition_value: 'bank', debit_account: 'Salary Payable', credit_account: 'Main Bank Account', priority: 20 },
+	{ event_type: 'salary_payment', condition_key: 'payment_mode', condition_value: 'bkash', debit_account: 'Salary Payable', credit_account: 'bKash Account', priority: 30 },
+	{ event_type: 'salary_payment', condition_key: 'payment_mode', condition_value: 'nagad', debit_account: 'Salary Payable', credit_account: 'Nagad Account', priority: 40 },
 
 	// ── DELIBERATELY ABSENT: fund_movement, inventory_adjustment ─────────────
 	// Under periodic inventory these events have no journal entry. Adding a
