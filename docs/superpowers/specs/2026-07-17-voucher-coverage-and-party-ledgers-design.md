@@ -424,15 +424,32 @@ them properly.
 
 ## Phase 8 — Backfill history
 
-Extend the `repair:vouchers` pattern to post vouchers for historical rows that never got one
-(including sales skipped by the `9ffb067` regression, and paid portions dropped by Phase 6). Dry-run,
-review per-tenant with the user, then live. **This rewrites historical financials — deliberately,
-because they are currently wrong.**
+**Backfill script — LANDED 2026-07-18 (built + locally verified; NOT run against any prod DB).**
+`apps/backend/scripts/backfill-vouchers.ts` (`npm run backfill:vouchers`, with `--dry-run` and
+`--tenant=`) re-posts historical source rows that never got a voucher. Safe by construction:
+`autoPostFromRules` is idempotent (a posted row short-circuits — verified: a second run posts 0), a
+row whose historical date is in a **locked** period is left alone and reported (never force-posted),
+and `--dry-run` writes nothing (verified) — the per-tenant review gate. Two reposters shipped: **sales**
+(reconstructs the credit-vs-mode decision from the stored row + first payment, reusing
+`classifyPaymentMode` / `creditDueAmount` to stay in lock-step with `sales.service`; the partial
+paid-portion is dropped to match live, not Phase 6) and **supplier payments** (PAYMENT→pay /
+PAYOUT→receive, tagged with the supplier). Verified end-to-end: a directly-inserted skipped bKash sale
+was reported by the dry-run, then posted Dr bKash Account / Cr Sales Revenue (balanced), and re-running
+was a no-op. **Runs `tsx`, not `ts-node`** (the backend only has `tsx` installed; `seed:demo`'s
+`ts-node` is separately broken). **Still rewrites historical financials — deliberately; review the
+dry-run per tenant before live.**
 
-Repoint the ledger UI at the GL-derived view and rebuild `due_balance` from it. Keep
-`CustomerCreditTransaction` / `SupplierCreditTransaction` initially and derive the GL ledger
-alongside them, so the two can be diffed on real data before anything is deleted. Removing them in
-the same change leaves no way to prove the migration was correct.
+Still open in Phase 8:
+
+- **More reposters** — customer payments, depreciation, salary, cashier cash-outs. Each needs its
+  reconstruction checked against its caller before adding (the direction/mode mapping is the drift
+  risk). The framework (a `Reposter` with `findCandidates`) makes each a small addition.
+- **Repoint the ledger UI** at the GL-derived view (`voucher_details WHERE party_id = X`) and
+  **rebuild `due_balance`** from it. Keep `CustomerCreditTransaction` / `SupplierCreditTransaction`
+  initially and derive the GL ledger alongside them, so the two can be diffed on real data before
+  anything is deleted.
+- **Run the backfill dry-run against production**, review per tenant, then live. Not yet run anywhere
+  but the local dev DB.
 
 ## Open decisions
 
