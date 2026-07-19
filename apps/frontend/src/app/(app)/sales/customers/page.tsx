@@ -15,7 +15,9 @@ import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import { PageShell, Button } from '@/components/ui';
 
 const IMPORT_FIELDS: ImportField[] = [
+    { key: 'customer_code', label: 'Customer Code', required: false },
     { key: 'name', label: 'Name', required: true },
+    { key: 'owner_name', label: 'Owner Name', required: false },
     { key: 'phone', label: 'Phone', required: false },
     { key: 'email', label: 'Email', required: false },
     { key: 'address', label: 'Address', required: false },
@@ -25,7 +27,8 @@ const IMPORT_FIELDS: ImportField[] = [
 interface Customer {
     id: string;
     name: string;
-    phone: string;
+    phone?: string | null;
+    owner_name?: string | null;
     customer_code?: string | null;
     customer_type?: string | null;
     total_spent?: string | number | null;
@@ -147,11 +150,19 @@ export default function CustomersPage() {
                     return (
                         <div>
                             <span className="block text-sm font-bold text-gray-900">{customer.name}</span>
-                            <span className="block text-xs text-gray-400">{customer.phone}</span>
+                            {customer.phone && <span className="block text-xs text-gray-400">{customer.phone}</span>}
                         </div>
                     );
                 },
                 size: 190,
+            }),
+            columnHelper.accessor('owner_name', {
+                header: t.customers.columns.ownerName,
+                cell: (info) => (
+                    <span className="text-sm font-medium text-gray-700">{info.getValue() || '-'}</span>
+                ),
+                size: 150,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('customer_type', {
                 header: t.customers.columns.type,

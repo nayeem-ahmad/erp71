@@ -1,4 +1,4 @@
-import { runImport, ImportConfig } from './import.util';
+import { runImport, describeRowError, ImportConfig } from './import.util';
 
 interface Row { name: string; description: string | null }
 
@@ -77,5 +77,34 @@ describe('runImport', () => {
     const result = await runImport([{ name: '   ' }], 'skip', 'tenant-1', config);
     expect(result.errors).toHaveLength(1);
     expect(config.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('describeRowError', () => {
+  it('names the conflicting fields on a unique violation', () => {
+    expect(describeRowError({ code: 'P2002', meta: { target: ['tenant_id', 'phone'] } }))
+      .toBe('duplicate value for tenant_id, phone');
+  });
+
+  it('explains a foreign-key violation', () => {
+    expect(describeRowError({ code: 'P2003', meta: { field_name: 'customer_group_id' } }))
+      .toMatch(/does not exist/);
+  });
+
+  // Prisma reports a validation failure as a dump of the whole query with the
+  // actual sentence on the last line — showing all of it to a shop owner is noise.
+  it('keeps only the trailing sentence of a Prisma query dump', () => {
+    const err = new Error(
+      '\nInvalid `prisma.customer.create()` invocation:\n\n{\n  data: {\n    name: "Alice",\n+   phone: String\n  }\n}\n\nArgument `phone` is missing.',
+    );
+    expect(describeRowError(err)).toBe('Argument `phone` is missing.');
+  });
+
+  it('passes a plain error message through', () => {
+    expect(describeRowError(new Error('DB error'))).toBe('DB error');
+  });
+
+  it('falls back when there is no message', () => {
+    expect(describeRowError({})).toBe('unknown error');
   });
 });

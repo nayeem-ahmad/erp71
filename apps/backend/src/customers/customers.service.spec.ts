@@ -609,6 +609,150 @@ describe('CustomersService', () => {
         }),
       );
     });
+
+    // Regression: Customer.phone used to be NOT NULL while the import wizard
+    // advertised Phone as optional, so every phone-less row died on a raw
+    // "Argument `phone` is missing" Prisma dump and nothing imported.
+    it('imports a row with no phone', async () => {
+      db.customer.findUnique.mockResolvedValue(null);
+      db.customer.findFirst.mockResolvedValue(null);
+      db.customerGroup.findFirst.mockResolvedValue(null);
+      db.customer.create.mockResolvedValue({});
+
+      const result = await service.importRows(
+        tenantId,
+        [{ name: 'Corner Shop', owner_name: 'Rahim Mia' }],
+        'skip',
+      );
+
+      expect(result).toEqual({ created: 1, updated: 0, skipped: 0, errors: [] });
+      expect(db.customer.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            name: 'Corner Shop',
+            owner_name: 'Rahim Mia',
+            phone: null,
+          }),
+        }),
+      );
+    });
+
+    it('imports the remaining rows when one row fails', async () => {
+      db.customer.findUnique.mockResolvedValue(null);
+      db.customer.findFirst.mockResolvedValue(null);
+      db.customerGroup.findFirst.mockResolvedValue(null);
+      db.customer.create
+        .mockResolvedValueOnce({})
+        .mockRejectedValueOnce(Object.assign(new Error('boom'), { code: 'P2002', meta: { target: ['tenant_id', 'phone'] } }))
+        .mockResolvedValueOnce({});
+
+      const result = await service.importRows(
+        tenantId,
+        [
+          { name: 'Alice', phone: '01711000001' },
+          { name: 'Bob', phone: '01711000002' },
+          { name: 'Carol', phone: '01711000003' },
+        ],
+        'skip',
+      );
+
+      expect(result.created).toBe(2);
+      expect(result.errors).toEqual(['Row 3: duplicate value for tenant_id, phone']);
+    });
+
+    it('uses the customer code from the file and matches duplicates on it', async () => {
+      db.customer.findUnique.mockResolvedValue(null);
+      db.customerGroup.findFirst.mockResolvedValue(null);
+      db.customer.create.mockResolvedValue({});
+
+      const result = await service.importRows(
+        tenantId,
+        [{ customer_code: 'SHOP-42', name: 'Corner Shop' }],
+        'skip',
+      );
+
+      expect(result.created).toBe(1);
+      expect(db.customer.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { tenant_id_customer_code: { tenant_id: tenantId, customer_code: 'SHOP-42' } },
+        }),
+      );
+      expect(db.customer.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ customer_code: 'SHOP-42' }),
+        }),
+      );
+      // An explicit code must not consume a number from the CUST- series.
+      expect(db.customer.findFirst).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('customer code allocation', () => {
+    const tenantId = 'tenant-1';
+
+    it('ignores hand-entered codes when generating the next CUST- number', async () => {
+      db.customer.findUnique.mockResolvedValue(null);
+      db.customer.findFirst.mockResolvedValue({ customer_code: 'CUST-00007' });
+      db.customer.create.mockResolvedValue({ nid: null });
+
+      await service.create(tenantId, { name: 'Alice', phone: '01711000001' } as any);
+
+      expect(db.customer.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { tenant_id: tenantId, customer_code: { startsWith: 'CUST-' } },
+        }),
+      );
+      expect(db.customer.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ customer_code: 'CUST-00008' }),
+        }),
+      );
+    });
+
+    it('rejects a customer code that is already taken', async () => {
+      db.customer.findUnique.mockImplementation(({ where }: any) =>
+        Promise.resolve(where.tenant_id_customer_code ? { id: 'cust-9' } : null),
+      );
+
+      await expect(
+        service.create(tenantId, { name: 'Alice', customer_code: 'SHOP-42' } as any),
+      ).rejects.toThrow(BadRequestException);
+      expect(db.customer.create).not.toHaveBeenCalled();
+    });
+
+    it('retries generation when a concurrent create takes the code', async () => {
+      db.customer.findUnique.mockResolvedValue(null);
+      db.customer.findFirst
+        .mockResolvedValueOnce({ customer_code: 'CUST-00007' })
+        .mockResolvedValueOnce({ customer_code: 'CUST-00008' });
+      db.customer.create
+        .mockRejectedValueOnce(Object.assign(new Error('conflict'), { code: 'P2002', meta: { target: ['tenant_id', 'customer_code'] } }))
+        .mockResolvedValueOnce({ nid: null });
+
+      await service.create(tenantId, { name: 'Alice', phone: '01711000001' } as any);
+
+      expect(db.customer.create).toHaveBeenCalledTimes(2);
+      expect(db.customer.create).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ customer_code: 'CUST-00009' }),
+        }),
+      );
+    });
+
+    it('does not check for a duplicate phone when no phone is given', async () => {
+      db.customer.findUnique.mockResolvedValue(null);
+      db.customer.findFirst.mockResolvedValue(null);
+      db.customer.create.mockResolvedValue({ nid: null });
+
+      await service.create(tenantId, { name: 'Corner Shop', owner_name: 'Rahim Mia' } as any);
+
+      expect(db.customer.findUnique).not.toHaveBeenCalled();
+      expect(db.customer.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ name: 'Corner Shop', owner_name: 'Rahim Mia' }),
+        }),
+      );
+    });
   });
 
   describe('ensureCustomerPaymentPostingSetup — Accounts Receivable dependency', () => {

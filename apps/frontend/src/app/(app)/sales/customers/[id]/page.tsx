@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import {
-    Phone, Mail, ShoppingBag, CreditCard, MapPin, Building2,
+    Phone, Mail, ShoppingBag, CreditCard, MapPin, Building2, UserCog,
     FolderTree, Map, ChevronLeft, ChevronRight, MessageSquare, Wallet,
     Plus, Trash2, CheckCircle2, Send, ClipboardList, AlertCircle, Sparkles, Loader2,
 } from 'lucide-react';
@@ -266,7 +266,8 @@ export default function CustomerProfile() {
                         )}
                     </div>
                     <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4">
-                        <div className="flex items-center text-sm text-gray-600 font-medium"><Phone className="w-4 h-4 mr-2 text-gray-400" /> {customer.phone}</div>
+                        {customer.owner_name && <div className="flex items-center text-sm text-gray-600 font-medium"><UserCog className="w-4 h-4 mr-2 text-gray-400" /> {customer.owner_name}</div>}
+                        {customer.phone && <div className="flex items-center text-sm text-gray-600 font-medium"><Phone className="w-4 h-4 mr-2 text-gray-400" /> {customer.phone}</div>}
                         {customer.email && <div className="flex items-center text-sm text-gray-600 font-medium"><Mail className="w-4 h-4 mr-2 text-gray-400" /> {customer.email}</div>}
                         {customer.address && <div className="flex items-center text-sm text-gray-600 font-medium"><MapPin className="w-4 h-4 mr-2 text-gray-400" /> {customer.address}</div>}
                     </div>

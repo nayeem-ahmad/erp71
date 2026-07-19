@@ -12,12 +12,22 @@ export enum CustomerTypeDto {
 }
 
 export class CreateCustomerDto {
+    /** Left blank, the service generates the next CUST-##### code. */
+    @IsOptional()
+    @IsString()
+    customer_code?: string;
+
     @IsString()
     name: string;
 
+    @IsOptional()
+    @IsString()
+    owner_name?: string;
+
+    @IsOptional()
     @IsString()
     @Matches(/^\+?[0-9\s\-]+$/, { message: 'Invalid phone number format' })
-    phone: string;
+    phone?: string;
 
     @IsOptional()
     @IsEmail()
@@ -78,7 +88,15 @@ export class CreateCustomerDto {
 export class UpdateCustomerDto {
     @IsOptional()
     @IsString()
+    customer_code?: string;
+
+    @IsOptional()
+    @IsString()
     name?: string;
+
+    @IsOptional()
+    @IsString()
+    owner_name?: string;
 
     @IsOptional()
     @IsString()

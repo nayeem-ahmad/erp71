@@ -15,6 +15,7 @@ export const customersMessages = {
             columns: {
                 code: "Kod",
                 customer: "Pelanggan",
+                ownerName: "Pemilik",
                 type: "Jenis",
                 group: "Kumpulan",
                 territory: "Wilayah",
@@ -32,7 +33,10 @@ export const customersMessages = {
             modal: {
                 title: "Pelanggan Baharu",
                 subtitle: "Tambah ke pangkalan data",
+                customerCode: "Kod Pelanggan",
+                customerCodeHint: "Biarkan kosong untuk menjana kod seterusnya secara automatik.",
                 fullName: "Nama Penuh",
+                ownerName: "Nama Pemilik",
                 phoneNumber: "Nombor Telefon",
                 customerType: "Jenis Pelanggan",
                 customerGroup: "Kumpulan Pelanggan",
@@ -42,9 +46,11 @@ export const customersMessages = {
                 organization: "Organisasi",
                 adding: "Menambah...",
                 addCustomer: "Tambah Pelanggan",
-                addFailed: "Gagal menambah pelanggan. Nombor telefon mungkin sudah wujud.",
+                addFailed: "Gagal menambah pelanggan. Nombor telefon atau kod pelanggan mungkin sudah digunakan.",
                 placeholders: {
+                    customerCode: "CUST-00001",
                     name: "Ahmad bin Ali",
+                    ownerName: "Nama pemilik",
                     phone: "+60123456789",
                     email: "ahmad@example.com",
                     address: "123 Jalan Utama...",

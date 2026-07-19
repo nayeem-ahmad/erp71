@@ -36,7 +36,7 @@ export default function CustomerSelection({ customer, setCustomer }: CustomerSel
     useEffect(() => {
         const filtered = customers.filter((c) =>
             c.name.toLowerCase().includes(query.toLowerCase()) ||
-            c.phone.includes(query)
+            (c.phone?.includes(query) ?? false)
         );
         setFilteredCustomers(filtered);
     }, [query, customers]);
