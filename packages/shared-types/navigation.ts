@@ -111,11 +111,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'accounting.vouchers-list': { id: 'accounting.vouchers-list', kind: 'link', icon: 'Receipt', labelKey: 'accounting.links.vouchersList.title', href: '/accounting/vouchers' },
   'accounting.journal': { id: 'accounting.journal', kind: 'link', icon: 'ClipboardList', labelKey: 'accounting.links.journal.title', href: '/accounting/journal' },
   'accounting.ledger': { id: 'accounting.ledger', kind: 'link', icon: 'BookOpen', labelKey: 'accounting.links.ledger.title', href: '/accounting/ledger' },
-  'accounting.transactions': { id: 'accounting.transactions', kind: 'subgroup', icon: 'Wallet', labelKey: 'accounting.hub.transactions' },
-  'accounting.transactions.expenses': { id: 'accounting.transactions.expenses', kind: 'link', icon: 'Receipt', labelKey: 'accounting.links.expenses.title', href: '/accounting/expenses' },
-  'accounting.transactions.expense-categories': { id: 'accounting.transactions.expense-categories', kind: 'link', icon: 'FolderTree', labelKey: 'accounting.links.expenseCategories.title', href: '/accounting/expenses/categories' },
-  'accounting.transactions.expense-reports': { id: 'accounting.transactions.expense-reports', kind: 'link', icon: 'BarChart3', labelKey: 'accounting.links.expenseReports.title', href: '/accounting/expenses/reports' },
-  'accounting.transactions.loans': { id: 'accounting.transactions.loans', kind: 'link', icon: 'HandCoins', labelKey: 'accounting.links.loans.title', href: '/accounting/loans' },
+  'accounting.loans': { id: 'accounting.loans', kind: 'link', icon: 'HandCoins', labelKey: 'accounting.links.loans.title', href: '/accounting/loans' },
   'accounting.reconciliation': { id: 'accounting.reconciliation', kind: 'subgroup', icon: 'GitMerge', labelKey: 'accounting.hub.reconciliation' },
   'accounting.reconciliation.posting-exceptions': { id: 'accounting.reconciliation.posting-exceptions', kind: 'link', icon: 'AlertTriangle', labelKey: 'accounting.links.postingExceptions.title', href: '/accounting/reconciliation' },
   'accounting.reconciliation.bank': { id: 'accounting.reconciliation.bank', kind: 'link', icon: 'GitMerge', labelKey: 'accounting.links.bankReconciliation.title', href: '/accounting/reconciliation/bank' },
@@ -142,6 +138,13 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'accounting.setup.recurring-journals': { id: 'accounting.setup.recurring-journals', kind: 'link', icon: 'RefreshCw', labelKey: 'accounting.links.recurringJournals.title', href: '/accounting/recurring-journals' },
   'accounting.setup.recurring-vouchers': { id: 'accounting.setup.recurring-vouchers', kind: 'link', icon: 'RefreshCw', labelKey: 'accounting.links.recurringVouchers.title', href: '/accounting/recurring-vouchers' },
   'accounting.setup.voucher-templates': { id: 'accounting.setup.voucher-templates', kind: 'link', icon: 'Copy', labelKey: 'accounting.links.voucherTemplates.title', href: '/accounting/voucher-templates' },
+
+  // Expenses is its own sidebar module, but the pages still live under
+  // /accounting/expenses, so the labels stay on the accounting message keys.
+  expenses: { id: 'expenses', kind: 'module', icon: 'Receipt', labelKey: 'sidebar.modules.expenses', moduleKey: 'expenses' },
+  'expenses.list': { id: 'expenses.list', kind: 'link', icon: 'Receipt', labelKey: 'accounting.links.expenses.title', href: '/accounting/expenses', exact: true },
+  'expenses.categories': { id: 'expenses.categories', kind: 'link', icon: 'FolderTree', labelKey: 'accounting.links.expenseCategories.title', href: '/accounting/expenses/categories' },
+  'expenses.reports': { id: 'expenses.reports', kind: 'link', icon: 'BarChart3', labelKey: 'accounting.links.expenseReports.title', href: '/accounting/expenses/reports' },
 
   inventory: { id: 'inventory', kind: 'module', icon: 'Package', labelKey: 'sidebar.modules.inventory', moduleKey: 'inventory' },
   'inventory.overview': { id: 'inventory.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/inventory', exact: true },
@@ -288,11 +291,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('accounting.vouchers-list', 'accounting', 2),
   layoutNode('accounting.journal', 'accounting', 3),
   layoutNode('accounting.ledger', 'accounting', 4),
-  layoutNode('accounting.transactions', 'accounting', 5),
-  layoutNode('accounting.transactions.expenses', 'accounting.transactions', 0),
-  layoutNode('accounting.transactions.expense-categories', 'accounting.transactions', 1),
-  layoutNode('accounting.transactions.expense-reports', 'accounting.transactions', 2),
-  layoutNode('accounting.transactions.loans', 'accounting.transactions', 3),
+  layoutNode('accounting.loans', 'accounting', 5),
   layoutNode('accounting.reconciliation', 'accounting', 6),
   layoutNode('accounting.reconciliation.posting-exceptions', 'accounting.reconciliation', 0),
   layoutNode('accounting.reconciliation.bank', 'accounting.reconciliation', 1),
@@ -320,7 +319,12 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('accounting.setup.recurring-vouchers', 'accounting.setup', 7),
   layoutNode('accounting.setup.voucher-templates', 'accounting.setup', 8),
 
-  layoutNode('inventory', null, 4),
+  layoutNode('expenses', null, 4),
+  layoutNode('expenses.list', 'expenses', 0),
+  layoutNode('expenses.categories', 'expenses', 1),
+  layoutNode('expenses.reports', 'expenses', 2),
+
+  layoutNode('inventory', null, 5),
   layoutNode('inventory.overview', 'inventory', 0),
   layoutNode('inventory.products', 'inventory', 1),
   layoutNode('inventory.transfers', 'inventory', 2),
@@ -337,7 +341,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('inventory.setup.categories', 'inventory.setup', 1),
   layoutNode('inventory.setup.settings', 'inventory.setup', 2),
 
-  layoutNode('crm', null, 5),
+  layoutNode('crm', null, 6),
   layoutNode('crm.overview', 'crm', 0),
   layoutNode('crm.leads', 'crm', 1),
   layoutNode('crm.tasks', 'crm', 2),
@@ -345,9 +349,9 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('crm.customers', 'crm', 4),
   layoutNode('crm.custom-fields', 'crm', 5),
 
-  layoutNode('manufacturing', null, 6),
+  layoutNode('manufacturing', null, 7),
 
-  layoutNode('hr', null, 7),
+  layoutNode('hr', null, 8),
   layoutNode('hr.overview', 'hr', 0),
   layoutNode('hr.employees', 'hr', 1),
   layoutNode('hr.organization', 'hr', 2),
@@ -358,14 +362,14 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('hr.operations.leaves', 'hr.operations', 1),
   layoutNode('hr.operations.salary-payments', 'hr.operations', 2),
 
-  layoutNode('account-settings', null, 8),
+  layoutNode('account-settings', null, 9),
   layoutNode('account-settings.overview', 'account-settings', 0),
   layoutNode('account-settings.profile', 'account-settings', 1),
   layoutNode('account-settings.team', 'account-settings', 2),
   layoutNode('account-settings.billing', 'account-settings', 3),
 
-  layoutNode('support', null, 9),
-  layoutNode('admin', null, 10),
+  layoutNode('support', null, 10),
+  layoutNode('admin', null, 11),
   layoutNode('admin.overview', 'admin', 0),
   layoutNode('admin.tenant-management', 'admin', 1),
   layoutNode('admin.tenant-management.tenants', 'admin.tenant-management', 0),
@@ -374,7 +378,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.users', 'admin', 2),
   layoutNode('admin.feedback', 'admin', 3),
   layoutNode('admin.support', 'admin', 4),
-  layoutNode('help', null, 11),
+  layoutNode('help', null, 12),
 ];
 
 /** Platform-admin console sidebar (admin module only). */

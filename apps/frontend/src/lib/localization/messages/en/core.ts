@@ -240,6 +240,7 @@ export const coreMessages = {
             manufacturing: 'Manufacturing',
             purchase: 'Purchase',
             accounting: 'Accounting',
+            expenses: 'Expenses',
             inventory: 'Inventory',
             reports: 'Reports',
             storefront: 'Storefront',

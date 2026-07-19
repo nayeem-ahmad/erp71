@@ -9,10 +9,10 @@ import { compactDensity } from '@/lib/ui/compact-density';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import {
     ACCOUNTING_DAILY_LINKS,
+    ACCOUNTING_FINANCING_LINKS,
     ACCOUNTING_RECONCILIATION_LINKS,
     ACCOUNTING_REPORT_LINKS,
     ACCOUNTING_SETUP_LINKS,
-    ACCOUNTING_TRANSACTION_LINKS,
 } from '@/lib/accounting-nav';
 import { api } from '@/lib/api';
 import { canAccessAccountingAdvancedReports } from '@/lib/plan-entitlements';
@@ -45,7 +45,7 @@ export default function AccountingPage() {
             }));
 
     const dailyLinks = useMemo(() => mapLinks(ACCOUNTING_DAILY_LINKS), [t, canAccessAdvancedReports]);
-    const transactionLinks = useMemo(() => mapLinks(ACCOUNTING_TRANSACTION_LINKS), [t, canAccessAdvancedReports]);
+    const financingLinks = useMemo(() => mapLinks(ACCOUNTING_FINANCING_LINKS), [t, canAccessAdvancedReports]);
     const reconciliationLinks = useMemo(() => mapLinks(ACCOUNTING_RECONCILIATION_LINKS), [t, canAccessAdvancedReports]);
     const reportLinks = useMemo(() => mapLinks(ACCOUNTING_REPORT_LINKS), [t, canAccessAdvancedReports]);
     const setupLinks = useMemo(() => mapLinks(ACCOUNTING_SETUP_LINKS), [t]);
@@ -63,7 +63,7 @@ export default function AccountingPage() {
                 )}
             />
             <CompactLinkGrid label={t.accounting.hub.dailyOperations} links={dailyLinks} />
-            <CompactLinkGrid label={t.accounting.hub.transactions} links={transactionLinks} />
+            <CompactLinkGrid label={t.accounting.hub.financing} links={financingLinks} />
             <CompactLinkGrid label={t.accounting.hub.reconciliation} links={reconciliationLinks} />
             <CompactLinkGrid label={t.accounting.financialReports} links={reportLinks} />
 
