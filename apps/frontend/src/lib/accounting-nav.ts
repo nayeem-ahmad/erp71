@@ -22,7 +22,6 @@ import {
     Target,
     TrendingUp,
     Upload,
-    Wallet,
     Waves,
 } from 'lucide-react';
 import { routes } from '@/lib/routes';
@@ -102,11 +101,15 @@ export const ACCOUNTING_REPORT_LINKS: AccountingNavItem[] = [
     { key: 'financialRatios', href: routes.accounting.reports.financialRatios, icon: Calculator, accent: 'bg-purple-50 text-purple-700 border-purple-100', advancedOnly: true },
 ];
 
-export const ACCOUNTING_TRANSACTION_LINKS: AccountingNavItem[] = [
+export const ACCOUNTING_FINANCING_LINKS: AccountingNavItem[] = [
+    { key: 'loans', href: routes.accounting.loans, icon: HandCoins, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+];
+
+/** Expenses is its own sidebar module; the pages still live under /accounting/expenses. */
+export const EXPENSE_LINKS: AccountingNavItem[] = [
     { key: 'expenses', href: routes.accounting.expenses, icon: Receipt, accent: 'bg-rose-50 text-rose-700 border-rose-100' },
     { key: 'expenseCategories', href: routes.accounting.expenseCategories, icon: FolderTree, accent: 'bg-orange-50 text-orange-700 border-orange-100' },
     { key: 'expenseReports', href: routes.accounting.expenseReports, icon: BarChart3, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
-    { key: 'loans', href: routes.accounting.loans, icon: HandCoins, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
 ];
 
 export const ACCOUNTING_INTER_BRANCH_LINKS: AccountingNavItem[] = [
@@ -137,92 +140,5 @@ export const ACCOUNTING_DAILY_LINKS: AccountingNavItem[] = [
     { key: 'ledger', href: routes.accounting.ledger, icon: BookOpen, accent: 'bg-violet-50 text-violet-700 border-violet-100' },
 ];
 
-type AccountingNavMessages = {
-    accounting: {
-        links: Record<AccountingLinkKey, { title: string; description: string }>;
-        hub: {
-            transactions: string;
-            reconciliation: string;
-            interBranch: string;
-        };
-    };
-    sidebar: {
-        items: { overview: string };
-        sections: {
-            accountingReports: string;
-            accountingSetup: string;
-        };
-    };
-};
-
-export interface AccountingSidebarNavLink {
-    href: string;
-    icon: LucideIcon;
-    label: string;
-    exact?: boolean;
-    advancedOnly?: boolean;
-}
-
-export interface AccountingSidebarNavSubgroup {
-    type: 'subgroup';
-    key: string;
-    icon: LucideIcon;
-    label: string;
-    children: AccountingSidebarNavLink[];
-}
-
-export type AccountingSidebarNavChild = AccountingSidebarNavLink | AccountingSidebarNavSubgroup;
-
-function toSidebarLink(
-    t: AccountingNavMessages,
-    item: AccountingNavItem,
-): AccountingSidebarNavLink {
-    return {
-        href: item.href,
-        icon: item.icon,
-        label: t.accounting.links[item.key].title,
-        advancedOnly: item.advancedOnly,
-    };
-}
-
-export function buildAccountingSidebarChildren(t: AccountingNavMessages): AccountingSidebarNavChild[] {
-    return [
-        { href: routes.accounting.root, icon: LayoutDashboard, label: t.sidebar.items.overview, exact: true },
-        ...ACCOUNTING_DAILY_LINKS.map((item) => toSidebarLink(t, item)),
-        {
-            type: 'subgroup',
-            key: 'transactions',
-            icon: Wallet,
-            label: t.accounting.hub.transactions,
-            children: ACCOUNTING_TRANSACTION_LINKS.map((item) => toSidebarLink(t, item)),
-        },
-        {
-            type: 'subgroup',
-            key: 'reconciliation',
-            icon: GitMerge,
-            label: t.accounting.hub.reconciliation,
-            children: ACCOUNTING_RECONCILIATION_LINKS.map((item) => toSidebarLink(t, item)),
-        },
-        {
-            type: 'subgroup',
-            key: 'interBranch',
-            icon: GitMerge,
-            label: t.accounting.hub.interBranch,
-            children: ACCOUNTING_INTER_BRANCH_LINKS.map((item) => toSidebarLink(t, item)),
-        },
-        {
-            type: 'subgroup',
-            key: 'reports',
-            icon: BarChart3,
-            label: t.sidebar.sections.accountingReports,
-            children: ACCOUNTING_REPORT_LINKS.map((item) => toSidebarLink(t, item)),
-        },
-        {
-            type: 'subgroup',
-            key: 'setup',
-            icon: Settings,
-            label: t.sidebar.sections.accountingSetup,
-            children: ACCOUNTING_SETUP_LINKS.map((item) => toSidebarLink(t, item)),
-        },
-    ];
-}
+// The sidebar tree itself is built from NAV_REGISTRY / the saved nav layout
+// (see `nav-resolver.ts`); the lists above only drive the accounting hub page.

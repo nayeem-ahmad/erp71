@@ -240,6 +240,7 @@ export const coreMessages = {
                 manufacturing: "ম্যানুফ্যাকচারিং",
                 purchase: "ক্রয়",
                 accounting: "হিসাব",
+                expenses: "খরচ",
                 inventory: "ইনভেন্টরি",
                 reports: "রিপোর্ট",
                 storefront: "স্টোরফ্রন্ট",

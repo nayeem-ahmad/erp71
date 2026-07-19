@@ -28,9 +28,23 @@ describe('nav-resolver', () => {
         });
 
         expect(labels).toContain('Overview');
-        expect(labels).toContain('Transactions & Funds');
+        expect(labels).toContain('Loans');
         expect(labels).toContain('Reports');
         expect(labels).toContain('Settings');
+        // Expenses moved out to its own top-level module.
+        expect(labels).not.toContain('Expense Categories');
+    });
+
+    it('exposes expenses as its own top-level module', () => {
+        const modules = buildNavModulesFromLayout(DEFAULT_TENANT_NAV_LAYOUT, enMessages as Record<string, unknown>);
+
+        const expenses = modules.find((mod) => mod.key === 'expenses');
+        expect(expenses?.label).toBe('Expenses');
+        expect((expenses?.children ?? []).map((child) => 'type' in child ? child.label : child.href)).toEqual([
+            '/accounting/expenses',
+            '/accounting/expenses/categories',
+            '/accounting/expenses/reports',
+        ]);
     });
 
     it('builds platform admin sidebar with platform settings link', () => {

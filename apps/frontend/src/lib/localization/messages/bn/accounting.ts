@@ -108,7 +108,7 @@ export const accountingMessages = {
             exportModalDescription: "অন্তর্ভুক্ত করার জন্য ভাউচারের তারিখ পরিসর নির্বাচন করুন। সব এক্সপোর্ট করতে খালি রাখুন।",
             hub: {
                 dailyOperations: "দৈনিক কার্যক্রম",
-                transactions: "লেনদেন ও তহবিল",
+                financing: "ঋণ ও অর্থায়ন",
                 reconciliation: "রিকনসিলিয়েশন",
                 interBranch: "আন্তঃ-শাখা",
             },

@@ -1277,7 +1277,8 @@ model Customer {
   tenant_id            String
   customer_code        String
   name                 String
-  phone                String
+  owner_name           String?
+  phone                String?
   email                String?
   address              String?
   profile_pic_url      String?

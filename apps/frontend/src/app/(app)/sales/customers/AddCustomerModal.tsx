@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Phone, Mail, MapPin, CreditCard, Percent } from 'lucide-react';
+import { User, Phone, Mail, MapPin, CreditCard, Percent, Hash, UserCog } from 'lucide-react';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -12,7 +12,7 @@ interface AddCustomerModalProps {
 }
 
 const emptyForm = {
-    name: '', phone: '', email: '', address: '', profile_pic_url: '',
+    customer_code: '', name: '', owner_name: '', phone: '', email: '', address: '', profile_pic_url: '',
     customer_type: 'INDIVIDUAL', customer_group_id: '', territory_id: '',
     credit_limit: '', default_discount_pct: '',
 };
@@ -41,9 +41,11 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
         try {
             const payload: any = {
                 name: formData.name,
-                phone: formData.phone,
                 customer_type: formData.customer_type,
             };
+            if (formData.customer_code.trim()) payload.customer_code = formData.customer_code.trim();
+            if (formData.owner_name.trim()) payload.owner_name = formData.owner_name.trim();
+            if (formData.phone.trim()) payload.phone = formData.phone.trim();
             if (formData.email) payload.email = formData.email;
             if (formData.address) payload.address = formData.address;
             if (formData.profile_pic_url) payload.profile_pic_url = formData.profile_pic_url;
@@ -79,6 +81,15 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="col-span-2 space-y-2">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.customerCode} <span className="text-gray-300">({t.common.optional})</span></label>
+                            <div className="relative">
+                                <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input type="text" value={formData.customer_code} onChange={set('customer_code')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.customerCode} />
+                            </div>
+                            <p className="text-xs text-gray-400">{t.customers.modal.customerCodeHint}</p>
+                        </div>
+
+                        <div className="col-span-2 space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.fullName}</label>
                             <div className="relative">
                                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -87,10 +98,18 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.phoneNumber}</label>
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.ownerName} <span className="text-gray-300">({t.common.optional})</span></label>
+                            <div className="relative">
+                                <UserCog className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input type="text" value={formData.owner_name} onChange={set('owner_name')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.ownerName} />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.phoneNumber} <span className="text-gray-300">({t.common.optional})</span></label>
                             <div className="relative">
                                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input required type="text" value={formData.phone} onChange={set('phone')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.phone} />
+                                <input type="text" value={formData.phone} onChange={set('phone')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder={t.customers.modal.placeholders.phone} />
                             </div>
                         </div>
 

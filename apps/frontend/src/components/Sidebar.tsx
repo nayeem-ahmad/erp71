@@ -215,10 +215,12 @@ export default function Sidebar({
                 if (accountingOnlyMode) {
                     if (module.key === 'help') return helpEnabled;
                     if (module.key === 'support') return supportEnabled;
-                    if (module.key === 'accounting') return canAccessAccounting;
+                    // Expenses split out of Accounting but its pages still live
+                    // under /accounting/expenses — same gate, same plan.
+                    if (module.key === 'accounting' || module.key === 'expenses') return canAccessAccounting;
                     return ['dashboard', 'account-settings'].includes(module.key);
                 }
-                if (module.key === 'accounting') return canAccessAccounting;
+                if (module.key === 'accounting' || module.key === 'expenses') return canAccessAccounting;
                 if (module.key === 'admin') return canAccessAdmin;
                 if (module.key === 'help') return helpEnabled;
                 if (module.key === 'support') return supportEnabled;

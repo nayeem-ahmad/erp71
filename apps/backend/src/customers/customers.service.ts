@@ -35,9 +35,14 @@ export class CustomersService {
         return { ...customer, nid: this.decryptNid(customer.nid) };
     }
 
+    /**
+     * Next code in the auto-generated `CUST-#####` series. Scoped to that prefix so
+     * hand-entered codes (`SHOP-12`, `A/114`) sit alongside the series without
+     * derailing it.
+     */
     private async generateCustomerCode(tenantId: string): Promise<string> {
         const last = await this.db.customer.findFirst({
-            where: { tenant_id: tenantId },
+            where: { tenant_id: tenantId, customer_code: { startsWith: 'CUST-' } },
             orderBy: { customer_code: 'desc' },
             select: { customer_code: true },
         });
@@ -47,6 +52,44 @@ export class CustomersService {
         const match = last.customer_code.match(/CUST-(\d+)/);
         const nextNum = match ? parseInt(match[1], 10) + 1 : 1;
         return `CUST-${String(nextNum).padStart(5, '0')}`;
+    }
+
+    private isCustomerCodeConflict(err: any): boolean {
+        const target = err?.meta?.target;
+        const fields = Array.isArray(target) ? target : [target];
+        return err?.code === 'P2002' && fields.includes('customer_code');
+    }
+
+    /**
+     * Runs `create` with a customer code. An explicit code is used as-is (and must
+     * be free); otherwise the next generated code is tried, retrying on the unique
+     * collision that concurrent creates can produce.
+     */
+    private async withCustomerCode<T>(
+        tenantId: string,
+        explicitCode: string | null | undefined,
+        create: (customerCode: string) => Promise<T>,
+    ): Promise<T> {
+        const code = explicitCode?.trim();
+        if (code) {
+            const taken = await this.db.customer.findUnique({
+                where: { tenant_id_customer_code: { tenant_id: tenantId, customer_code: code } },
+                select: { id: true },
+            });
+            if (taken) {
+                throw new BadRequestException(`Customer code "${code}" is already in use.`);
+            }
+            return create(code);
+        }
+
+        for (let attempt = 0; attempt < 5; attempt++) {
+            try {
+                return await create(await this.generateCustomerCode(tenantId));
+            } catch (err: any) {
+                if (!this.isCustomerCodeConflict(err)) throw err;
+            }
+        }
+        throw new BadRequestException('Could not allocate a unique customer code. Please try again.');
     }
 
     private dueDelta(type: 'PAYMENT' | 'PAYOUT', amount: number): number {
@@ -142,34 +185,36 @@ export class CustomersService {
     }
 
     async create(tenantId: string, dto: CreateCustomerDto) {
-        const existing = await this.db.customer.findUnique({
-            where: {
-                tenant_id_phone: {
-                    tenant_id: tenantId,
-                    phone: dto.phone,
+        if (dto.phone) {
+            const existing = await this.db.customer.findUnique({
+                where: {
+                    tenant_id_phone: {
+                        tenant_id: tenantId,
+                        phone: dto.phone,
+                    }
                 }
-            }
-        });
+            });
 
-        if (existing) {
-            throw new BadRequestException('A customer with this phone number already exists.');
+            if (existing) {
+                throw new BadRequestException('A customer with this phone number already exists.');
+            }
         }
 
-        const customer_code = await this.generateCustomerCode(tenantId);
-
-        const { nid, ...rest } = dto;
-        const record = await this.db.customer.create({
-            data: {
-                tenant_id: tenantId,
-                customer_code,
-                ...rest,
-                ...(nid != null ? { nid: this.encryptNid(nid) } : {}),
-            },
-            include: {
-                customerGroup: true,
-                territory: true,
-            }
-        });
+        const { nid, customer_code: requestedCode, ...rest } = dto;
+        const record = await this.withCustomerCode(tenantId, requestedCode, (customer_code) =>
+            this.db.customer.create({
+                data: {
+                    tenant_id: tenantId,
+                    customer_code,
+                    ...rest,
+                    ...(nid != null ? { nid: this.encryptNid(nid) } : {}),
+                },
+                include: {
+                    customerGroup: true,
+                    territory: true,
+                }
+            }),
+        );
         return this.decryptCustomer(record);
     }
 
@@ -182,6 +227,7 @@ export class CustomersService {
         if (opts?.search) {
             where.OR = [
                 { name: { contains: opts.search, mode: 'insensitive' } },
+                { owner_name: { contains: opts.search, mode: 'insensitive' } },
                 { phone: { contains: opts.search } },
                 { customer_code: { contains: opts.search, mode: 'insensitive' } },
             ];
@@ -309,7 +355,23 @@ export class CustomersService {
             }
         }
 
+        if (dto.customer_code && dto.customer_code.trim() !== customer.customer_code) {
+            const duplicate = await this.db.customer.findUnique({
+                where: {
+                    tenant_id_customer_code: {
+                        tenant_id: tenantId,
+                        customer_code: dto.customer_code.trim(),
+                    }
+                },
+                select: { id: true },
+            });
+            if (duplicate) {
+                throw new BadRequestException(`Customer code "${dto.customer_code.trim()}" is already in use.`);
+            }
+        }
+
         const { nid, ...rest } = dto;
+        if (rest.customer_code) rest.customer_code = rest.customer_code.trim();
         const record = await this.db.customer.update({
             where: { id },
             data: {
@@ -779,66 +841,85 @@ export class CustomersService {
         rows: Record<string, unknown>[],
         mode: 'skip' | 'upsert',
     ): Promise<ImportResult> {
+        const text = (value: unknown): string | null => {
+            if (value === undefined || value === null) return null;
+            return String(value).trim() || null;
+        };
+
+        const resolveGroupId = async (name: string | null): Promise<string | null> => {
+            if (!name) return null;
+            const group = await this.db.customerGroup.findFirst({
+                where: { tenant_id: tenantId, name: { equals: name, mode: 'insensitive' } },
+                select: { id: true },
+            });
+            return group?.id ?? null;
+        };
+
         return runImport(rows, mode, tenantId, {
             requiredFields: ['name'],
             castRow: (raw) => ({
+                customer_code: text(raw.customer_code),
                 name: String(raw.name ?? '').trim(),
-                phone: raw.phone ? String(raw.phone).trim() || null : null,
-                email: raw.email ? String(raw.email).trim() || null : null,
-                address: raw.address ? String(raw.address).trim() || null : null,
-                customer_group_name: raw.customer_group_name ? String(raw.customer_group_name).trim() || null : null,
+                owner_name: text(raw.owner_name),
+                phone: text(raw.phone),
+                email: text(raw.email),
+                address: text(raw.address),
+                customer_group_name: text(raw.customer_group_name),
             }),
             findDuplicate: async (row) => {
+                if (row.customer_code) {
+                    const byCode = await this.db.customer.findUnique({
+                        where: {
+                            tenant_id_customer_code: { tenant_id: tenantId, customer_code: row.customer_code },
+                        },
+                        select: { id: true },
+                    });
+                    if (byCode) return byCode.id;
+                }
                 if (row.phone) {
                     const byPhone = await this.db.customer.findUnique({
                         where: { tenant_id_phone: { tenant_id: tenantId, phone: row.phone } },
+                        select: { id: true },
                     });
                     if (byPhone) return byPhone.id;
                 }
                 if (row.email) {
                     const byEmail = await this.db.customer.findFirst({
                         where: { tenant_id: tenantId, email: row.email },
+                        select: { id: true },
                     });
                     if (byEmail) return byEmail.id;
                 }
                 return null;
             },
             create: async (row) => {
-                const customer_code = await this.generateCustomerCode(tenantId);
-                let customer_group_id: string | null = null;
-                if (row.customer_group_name) {
-                    const group = await this.db.customerGroup.findFirst({
-                        where: { tenant_id: tenantId, name: { equals: row.customer_group_name, mode: 'insensitive' } },
-                    });
-                    customer_group_id = group?.id ?? null;
-                }
-                await this.db.customer.create({
-                    data: {
-                        tenant_id: tenantId,
-                        customer_code,
-                        name: row.name,
-                        phone: row.phone ?? undefined,
-                        email: row.email,
-                        address: row.address,
-                        customer_group_id,
-                    },
-                });
+                const customer_group_id = await resolveGroupId(row.customer_group_name);
+                await this.withCustomerCode(tenantId, row.customer_code, (customer_code) =>
+                    this.db.customer.create({
+                        data: {
+                            tenant_id: tenantId,
+                            customer_code,
+                            name: row.name,
+                            owner_name: row.owner_name,
+                            phone: row.phone,
+                            email: row.email,
+                            address: row.address,
+                            customer_group_id,
+                        },
+                    }),
+                );
             },
             update: async (id, row) => {
-                let customer_group_id: string | null | undefined = undefined;
-                if (row.customer_group_name !== null) {
-                    const group = await this.db.customerGroup.findFirst({
-                        where: { tenant_id: tenantId, name: { equals: row.customer_group_name ?? '', mode: 'insensitive' } },
-                    });
-                    customer_group_id = group?.id ?? null;
-                }
+                const customer_group_id =
+                    row.customer_group_name !== null ? await resolveGroupId(row.customer_group_name) : undefined;
                 await this.db.customer.update({
                     where: { id },
                     data: {
                         name: row.name,
-                        ...(row.phone != null ? { phone: row.phone } : {}),
-                        email: row.email ?? undefined,
-                        address: row.address ?? undefined,
+                        ...(row.owner_name !== null ? { owner_name: row.owner_name } : {}),
+                        ...(row.phone !== null ? { phone: row.phone } : {}),
+                        ...(row.email !== null ? { email: row.email } : {}),
+                        ...(row.address !== null ? { address: row.address } : {}),
                         ...(customer_group_id !== undefined ? { customer_group_id } : {}),
                     },
                 });

@@ -240,6 +240,7 @@ export const coreMessages = {
                 manufacturing: "Pembuatan",
                 purchase: "Pembelian",
                 accounting: "Perakaunan",
+                expenses: "Perbelanjaan",
                 inventory: "Inventori",
                 reports: "Laporan",
                 storefront: "Kedai Dalam Talian",

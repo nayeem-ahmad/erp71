@@ -15,6 +15,7 @@ export const customersMessages = {
         "columns": {
             "code": "Code",
             "customer": "Customer",
+            "ownerName": "Owner",
             "type": "Type",
             "group": "Group",
             "territory": "Territory",
@@ -32,7 +33,10 @@ export const customersMessages = {
         "modal": {
             "title": "New Customer",
             "subtitle": "Add to database",
+            "customerCode": "Customer Code",
+            "customerCodeHint": "Leave blank to generate the next code automatically.",
             "fullName": "Full Name",
+            "ownerName": "Owner Name",
             "phoneNumber": "Phone Number",
             "customerType": "Customer Type",
             "customerGroup": "Customer Group",
@@ -42,9 +46,11 @@ export const customersMessages = {
             "organization": "Organization",
             "adding": "Adding...",
             "addCustomer": "Add Customer",
-            "addFailed": "Failed to add customer. Phone might already exist.",
+            "addFailed": "Failed to add customer. The phone number or customer code might already be in use.",
             "placeholders": {
+                "customerCode": "CUST-00001",
                 "name": "John Doe",
+                "ownerName": "Proprietor's name",
                 "phone": "+8801234567890",
                 "email": "john@example.com",
                 "address": "123 Main St..."

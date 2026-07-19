@@ -13,6 +13,31 @@ export interface ImportResult {
   errors: string[];
 }
 
+function fieldList(target: unknown): string {
+  if (Array.isArray(target)) return target.join(', ');
+  return typeof target === 'string' ? target : 'a unique field';
+}
+
+/**
+ * Turns a row failure into one line a shop owner can act on. Prisma errors arrive
+ * as a multi-line dump of the whole query with the actual sentence at the end, so
+ * unwrap the known codes and otherwise keep only that trailing sentence.
+ */
+export function describeRowError(err: any): string {
+  if (err?.code === 'P2002') return `duplicate value for ${fieldList(err?.meta?.target)}`;
+  if (err?.code === 'P2003') return `references a record that does not exist (${fieldList(err?.meta?.field_name)})`;
+  if (err?.code === 'P2025') return 'the record it refers to no longer exists';
+
+  const message = typeof err?.message === 'string' ? err.message : '';
+  if (!message) return 'unknown error';
+
+  const lines = message
+    .split('\n')
+    .map((line: string) => line.trim())
+    .filter(Boolean);
+  return lines[lines.length - 1] ?? 'unknown error';
+}
+
 export async function runImport<T extends object>(
   rawRows: Record<string, unknown>[],
   mode: 'skip' | 'upsert',
@@ -49,7 +74,7 @@ export async function runImport<T extends object>(
         result.created++;
       }
     } catch (err: any) {
-      result.errors.push(`Row ${rowNum}: ${err?.message ?? 'unknown error'}`);
+      result.errors.push(`Row ${rowNum}: ${describeRowError(err)}`);
     }
   }
 

@@ -288,7 +288,9 @@ export class CrmCampaignsService {
         targetSegment: string | null,
         targetGroupId: string | null,
     ) {
-        const where: any = { tenant_id: tenantId, deleted_at: null };
+        // Every channel writes a CrmCampaignRecipient, which requires a phone —
+        // so customers without one are never eligible, whatever the channel.
+        const where: any = { tenant_id: tenantId, deleted_at: null, phone: { not: null } };
 
         if (targetSegment && targetSegment !== 'ALL') {
             where.segment_category = targetSegment;

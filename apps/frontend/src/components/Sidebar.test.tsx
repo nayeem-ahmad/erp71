@@ -133,10 +133,25 @@ describe('Sidebar — Story 30.1', () => {
         expect(screen.queryByText('Accounting')).not.toBeInTheDocument();
     });
 
+    it('shows Expenses as its own module alongside Accounting', () => {
+        render(<Sidebar canAccessAccounting />);
+
+        expect(screen.getByText('Expenses')).toBeInTheDocument();
+    });
+
+    it('hides Expenses when accounting access is not allowed', () => {
+        // Expenses split out of Accounting but its pages still live under
+        // /accounting/expenses, so it stays behind the same gate.
+        render(<Sidebar canAccessAccounting={false} />);
+
+        expect(screen.queryByText('Expenses')).not.toBeInTheDocument();
+    });
+
     it('hides retail modules in accounting-only mode', () => {
         render(<Sidebar canAccessAccounting accountingOnlyMode />);
 
         expect(screen.getByText('Accounting')).toBeInTheDocument();
+        expect(screen.getByText('Expenses')).toBeInTheDocument();
         expect(screen.getByText('Admin')).toBeInTheDocument();
         expect(screen.queryByText('Sales')).not.toBeInTheDocument();
         expect(screen.queryByText('Inventory')).not.toBeInTheDocument();
@@ -245,14 +260,11 @@ describe('Sidebar — Story 30.1', () => {
         render(<Sidebar canAccessAccounting canAccessInventoryReports canAccessAccountingAdvanced />);
 
         await waitFor(() => {
-            expect(screen.getByText('Transactions & Funds')).toBeInTheDocument();
+            expect(screen.getByText('Reconciliation')).toBeInTheDocument();
         });
-        expect(screen.getByText('Reconciliation')).toBeInTheDocument();
+        expect(screen.getByText('Loans')).toBeInTheDocument();
         expect(screen.getByText('Reports')).toBeInTheDocument();
         expect(screen.getByText('Settings')).toBeInTheDocument();
-
-        fireEvent.click(screen.getByText('Transactions & Funds'));
-        expect(screen.getByText('Expense Categories')).toBeInTheDocument();
 
         fireEvent.click(screen.getByText('Reports'));
         expect(screen.getByText('Trial Balance')).toBeInTheDocument();
@@ -329,16 +341,16 @@ describe('Sidebar — Story 30.1', () => {
         render(<Sidebar canAccessAccounting canAccessInventoryReports canAccessAccountingAdvanced />);
 
         await waitFor(() => {
-            expect(screen.getByText('Transactions & Funds')).toBeInTheDocument();
+            expect(screen.getByText('Reconciliation')).toBeInTheDocument();
         });
 
-        fireEvent.click(screen.getByText('Transactions & Funds'));
-        expect(screen.getByText('Expense Categories')).toBeInTheDocument();
+        fireEvent.click(screen.getByText('Reconciliation'));
+        expect(screen.getByText('Bank Reconciliation')).toBeInTheDocument();
 
-        // Opening Reports must collapse Transactions & Funds.
+        // Opening Reports must collapse Reconciliation.
         fireEvent.click(screen.getByText('Reports'));
         expect(screen.getByText('Trial Balance')).toBeInTheDocument();
-        expect(screen.queryByText('Expense Categories')).not.toBeInTheDocument();
+        expect(screen.queryByText('Bank Reconciliation')).not.toBeInTheDocument();
     });
 
     it('opening one top-level module closes another top-level module (accordion)', () => {

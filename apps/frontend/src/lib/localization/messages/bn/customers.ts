@@ -15,6 +15,7 @@ export const customersMessages = {
             columns: {
                 code: "কোড",
                 customer: "গ্রাহক",
+                ownerName: "মালিক",
                 type: "ধরন",
                 group: "গ্রুপ",
                 territory: "টেরিটরি",
@@ -32,7 +33,10 @@ export const customersMessages = {
             modal: {
                 title: "নতুন গ্রাহক",
                 subtitle: "ডাটাবেসে যোগ করুন",
+                customerCode: "গ্রাহক কোড",
+                customerCodeHint: "খালি রাখলে পরবর্তী কোড স্বয়ংক্রিয়ভাবে তৈরি হবে।",
                 fullName: "পূর্ণ নাম",
+                ownerName: "মালিকের নাম",
                 phoneNumber: "ফোন নম্বর",
                 customerType: "গ্রাহকের ধরন",
                 customerGroup: "গ্রাহক গ্রুপ",
@@ -42,9 +46,11 @@ export const customersMessages = {
                 organization: "প্রতিষ্ঠান",
                 adding: "যোগ করা হচ্ছে...",
                 addCustomer: "গ্রাহক যোগ করুন",
-                addFailed: "গ্রাহক যোগ করতে ব্যর্থ। ফোন নম্বর ইতিমধ্যে থাকতে পারে।",
+                addFailed: "গ্রাহক যোগ করতে ব্যর্থ। ফোন নম্বর বা গ্রাহক কোড ইতিমধ্যে ব্যবহৃত হতে পারে।",
                 placeholders: {
+                    customerCode: "CUST-00001",
                     name: "রহিম উদ্দিন",
+                    ownerName: "মালিকের নাম",
                     phone: "+8801234567890",
                     email: "rahim@example.com",
                     address: "১২৩ মেইন রোড...",
