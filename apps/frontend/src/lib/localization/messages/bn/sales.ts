@@ -173,6 +173,7 @@ export const salesMessages = {
                 createQuotation: "ব্যর্থ to create quotation",
                 processReturn: "ব্যর্থ to process return",
                 saveSale: "ব্যর্থ to save sale. Please check your changes and try again.",
+                deleteSale: "বিক্রয় মুছে ফেলা যায়নি",
                 saveQuotation: "ব্যর্থ to save quotation. Please review your changes and try again.",
                 saveReturn: "ব্যর্থ to save return. Please check your changes and try again.",
                 saveOrder: "ব্যর্থ to save: {message}",
@@ -198,6 +199,7 @@ export const salesMessages = {
                 deleteOrder: "Are you sure you want to delete this order?",
                 deleteQuotation: "Are you sure you want to delete this quotation?",
                 deleteReturn: "Are you sure you want to delete this return?",
+                deleteSale: "এই বিক্রয়টি মুছে ফেলবেন? স্টক, পেমেন্ট, লয়্যালটি পয়েন্ট ও হিসাবের এন্ট্রি ফেরত নেওয়া হবে।",
             },
             success: {
                 convertedOrder: "Successfully converted! অর্ডার Number: {orderNumber}",
@@ -332,6 +334,9 @@ export const salesMessages = {
                 completing: "সম্পন্ন হচ্ছে...",
                 completed: "খসড়া সম্পন্ন হয়েছে — স্টক ও হিসাব আপডেট হয়েছে।",
                 completeFailed: "খসড়াটি সম্পন্ন করা যায়নি",
+                delete: "মুছুন",
+                deleting: "মুছে ফেলা হচ্ছে...",
+                deleted: "বিক্রয় মুছে ফেলা হয়েছে — স্টক ও হিসাব ফেরত নেওয়া হয়েছে।",
             },
             invoice: {
                 backToSale: "Back to Sale",

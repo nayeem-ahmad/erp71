@@ -5,9 +5,10 @@ interface LineItemsTableProps {
     items: LineItem[];
     onUpdateItem: (productId: string, updates: Partial<LineItem>) => void;
     onRemoveItem: (productId: string) => void;
+    readOnly?: boolean;
 }
 
-export default function LineItemsTable({ items, onUpdateItem, onRemoveItem }: LineItemsTableProps) {
+export default function LineItemsTable({ items, onUpdateItem, onRemoveItem, readOnly = false }: LineItemsTableProps) {
     const handleQuantityChange = (productId: string, quantity: number) => {
         if (quantity > 0) {
             onUpdateItem(productId, { quantity });
@@ -48,7 +49,7 @@ export default function LineItemsTable({ items, onUpdateItem, onRemoveItem }: Li
                     {items.length === 0 ? (
                         <tr>
                             <td colSpan={9} className="px-3 py-10 text-center text-gray-400">
-                                No items yet — search and add products above.
+                                {readOnly ? 'No items on this sale.' : 'No items yet — search and add products above.'}
                             </td>
                         </tr>
                     ) : (
@@ -70,62 +71,76 @@ export default function LineItemsTable({ items, onUpdateItem, onRemoveItem }: Li
                                     )}
                                 </td>
                                 <td className="px-2 py-1 text-right">
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={item.price}
-                                        onChange={(e) => handlePriceChange(item.productId, parseFloat(e.target.value) || 0)}
-                                        className="w-20 px-1.5 py-0.5 border rounded text-sm text-right"
-                                    />
-                                </td>
-                                <td className="px-2 py-1 text-right">
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        max="100"
-                                        value={item.discount}
-                                        onChange={(e) => handleDiscountChange(item.productId, parseFloat(e.target.value) || 0)}
-                                        className="w-14 px-1.5 py-0.5 border rounded text-sm text-right"
-                                    />
-                                </td>
-                                <td className="px-2 py-1">
-                                    <div className="flex items-center justify-center gap-1">
-                                        <button
-                                            type="button"
-                                            onClick={() => handleQuantityChange(item.productId, item.quantity - 1)}
-                                            className="text-gray-400 hover:text-gray-700"
-                                        >
-                                            <Minus className="w-3.5 h-3.5" />
-                                        </button>
+                                    {readOnly ? (
+                                        <span className="text-gray-700">৳{item.price.toFixed(2)}</span>
+                                    ) : (
                                         <input
                                             type="number"
-                                            min="1"
-                                            value={item.quantity}
-                                            onChange={(e) => handleQuantityChange(item.productId, parseInt(e.target.value) || 1)}
-                                            className="w-12 px-1.5 py-0.5 border rounded text-sm text-center"
+                                            min="0"
+                                            step="0.01"
+                                            value={item.price}
+                                            onChange={(e) => handlePriceChange(item.productId, parseFloat(e.target.value) || 0)}
+                                            className="w-20 px-1.5 py-0.5 border rounded text-sm text-right"
                                         />
-                                        <button
-                                            type="button"
-                                            onClick={() => handleQuantityChange(item.productId, item.quantity + 1)}
-                                            className="text-gray-400 hover:text-gray-700"
-                                        >
-                                            <Plus className="w-3.5 h-3.5" />
-                                        </button>
-                                    </div>
+                                    )}
+                                </td>
+                                <td className="px-2 py-1 text-right">
+                                    {readOnly ? (
+                                        <span className="text-gray-700">{item.discount || 0}</span>
+                                    ) : (
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="100"
+                                            value={item.discount}
+                                            onChange={(e) => handleDiscountChange(item.productId, parseFloat(e.target.value) || 0)}
+                                            className="w-14 px-1.5 py-0.5 border rounded text-sm text-right"
+                                        />
+                                    )}
+                                </td>
+                                <td className="px-2 py-1">
+                                    {readOnly ? (
+                                        <div className="text-center text-gray-700">{item.quantity}</div>
+                                    ) : (
+                                        <div className="flex items-center justify-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleQuantityChange(item.productId, item.quantity - 1)}
+                                                className="text-gray-400 hover:text-gray-700"
+                                            >
+                                                <Minus className="w-3.5 h-3.5" />
+                                            </button>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={item.quantity}
+                                                onChange={(e) => handleQuantityChange(item.productId, parseInt(e.target.value) || 1)}
+                                                className="w-12 px-1.5 py-0.5 border rounded text-sm text-center"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => handleQuantityChange(item.productId, item.quantity + 1)}
+                                                className="text-gray-400 hover:text-gray-700"
+                                            >
+                                                <Plus className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    )}
                                 </td>
                                 <td className="px-2 py-1 text-right text-gray-900 font-semibold whitespace-nowrap">
                                     ৳{calculateLineTotal(item).toFixed(2)}
                                 </td>
                                 <td className="px-2 py-1 text-center">
-                                    <button
-                                        type="button"
-                                        onClick={() => onRemoveItem(item.productId)}
-                                        className="text-red-500 hover:text-red-700"
-                                        title="Remove item"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
+                                    {!readOnly && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onRemoveItem(item.productId)}
+                                            className="text-red-500 hover:text-red-700"
+                                            title="Remove item"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    )}
                                 </td>
                             </tr>
                         ))

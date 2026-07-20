@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { Receipt, Eye, Edit2, FileText } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Receipt, Eye, Edit2, FileText, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import Link from 'next/link';
@@ -13,6 +13,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { PageShell } from '@/components/ui';
+import { toast } from '@/lib/toast';
 
 interface Sale {
     id: string;
@@ -43,6 +44,7 @@ export default function SalesPage() {
     const { t, locale } = useI18n();
     const [sales, setSales] = useState<Sale[]>([]);
     const [loading, setLoading] = useState(true);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     useEffect(() => {
         loadSales();
@@ -58,6 +60,22 @@ export default function SalesPage() {
             setLoading(false);
         }
     };
+
+    const handleDelete = useCallback(async (sale: Sale) => {
+        if (!window.confirm(t.shared.confirm.deleteSale)) return;
+
+        setDeletingId(sale.id);
+        try {
+            await api.deleteSale(sale.id);
+            setSales((prev) => prev.filter((s) => s.id !== sale.id));
+            toast.success(t.sales.detail.deleted);
+        } catch (error: any) {
+            console.error('Failed to delete sale', error);
+            toast.error(error?.message || t.shared.errors.deleteSale);
+        } finally {
+            setDeletingId(null);
+        }
+    }, [t]);
 
     const columns: ColumnDef<Sale, any>[] = useMemo(
         () => [
@@ -196,15 +214,24 @@ export default function SalesPage() {
                         >
                             <Edit2 className="w-4 h-4" />
                         </Link>
+                        <button
+                            type="button"
+                            onClick={() => handleDelete(info.row.original)}
+                            disabled={deletingId === info.row.original.id}
+                            className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 disabled:text-gray-300 transition-colors"
+                            title={t.common.delete}
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
                     </div>
                 ),
                 enableSorting: false,
                 enableColumnFilter: false,
                 enableResizing: false,
-                size: 90,
+                size: 120,
             }),
         ],
-        [t, locale],
+        [t, locale, handleDelete, deletingId],
     );
 
     const filterPresets = useMemo(

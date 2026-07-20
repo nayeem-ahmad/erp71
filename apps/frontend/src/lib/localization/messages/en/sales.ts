@@ -173,6 +173,7 @@ export const salesMessages = {
             createQuotation: 'Failed to create quotation',
             processReturn: 'Failed to process return',
             saveSale: 'Failed to save sale. Please check your changes and try again.',
+            deleteSale: 'Failed to delete sale',
             saveQuotation: 'Failed to save quotation. Please review your changes and try again.',
             saveReturn: 'Failed to save return. Please check your changes and try again.',
             saveOrder: 'Failed to save: {message}',
@@ -198,6 +199,7 @@ export const salesMessages = {
             deleteOrder: 'Are you sure you want to delete this order?',
             deleteQuotation: 'Are you sure you want to delete this quotation?',
             deleteReturn: 'Are you sure you want to delete this return?',
+            deleteSale: 'Delete this sale? Stock, payments, loyalty points and accounting entries will be reversed.',
         },
         success: {
             convertedOrder: 'Successfully converted! Order Number: {orderNumber}',
@@ -332,6 +334,9 @@ export const salesMessages = {
             completing: 'Completing...',
             completed: 'Draft completed — stock and accounts updated.',
             completeFailed: 'Could not complete this draft',
+            delete: 'Delete',
+            deleting: 'Deleting...',
+            deleted: 'Sale deleted — stock and accounts reversed.',
         },
         invoice: {
             backToSale: 'Back to Sale',

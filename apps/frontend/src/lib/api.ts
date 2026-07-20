@@ -1166,6 +1166,7 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    deleteSale: (id: string) => fetchWithAuth(`/sales/${id}`, { method: 'DELETE' }),
     // Cashier sessions
     openCashierSession: (data: any) => fetchWithAuth('/cashier-sessions/open', {
         method: 'POST',

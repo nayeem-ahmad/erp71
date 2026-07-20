@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, Query, UseGuards, UseInterceptors, Patch } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, UseGuards, UseInterceptors, Patch, Delete } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { CreateSaleDto, FinalizeSaleDto, UpdateSaleDto } from './sale.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -53,5 +53,10 @@ export class SalesController {
     @Patch(':id')
     async update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateSaleDto) {
         return this.salesService.update(tenant.tenantId, id, dto);
+    }
+
+    @Delete(':id')
+    async remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.salesService.remove(tenant.tenantId, id);
     }
 }

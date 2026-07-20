@@ -214,4 +214,13 @@ export class UpdateSaleDto {
     @ValidateNested({ each: true })
     @Type(() => UpdatePaymentDto)
     payments?: UpdatePaymentDto[];
+
+    /**
+     * Invoice total including the entry-form adjustments (discount, VAT,
+     * transport, labour, rounding) that are not stored per-line. Omit to let
+     * the total fall back to the sum of the line items.
+     */
+    @IsOptional()
+    @IsNumber()
+    totalAmount?: number;
 }

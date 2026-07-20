@@ -8,6 +8,7 @@ interface PaymentSectionProps {
     total: number;
     customer?: any;
     onPaymentChange: (payments: Payment[]) => void;
+    readOnly?: boolean;
 }
 
 interface DefinedMethod {
@@ -67,10 +68,14 @@ const genericPicks: PickMethod[] = GENERIC_METHODS.map((m) => ({
 function paymentsToAmounts(methods: PickMethod[], payments: Payment[]): Record<string, number> {
     const next: Record<string, number> = {};
     for (const p of payments) {
-        const match = methods.find(
-            (m) => m.name === (p.label || p.method) && canonicalFor(m.type) === p.method,
-        );
-        if (match) next[match.key] = p.amount;
+        // Prefer the exact defined method (name + classification). A payment
+        // reloaded from a saved sale carries only the canonical method string,
+        // so fall back to the first method of that classification — otherwise
+        // an amount taken via "bKash" would come back blank on the edit form.
+        const match =
+            methods.find((m) => m.name === (p.label || p.method) && canonicalFor(m.type) === p.method)
+            ?? methods.find((m) => canonicalFor(m.type) === p.method);
+        if (match) next[match.key] = (next[match.key] || 0) + p.amount;
     }
     return next;
 }
@@ -86,16 +91,18 @@ function amountsToPayments(methods: PickMethod[], amounts: Record<string, number
         }));
 }
 
-export default function PaymentSection({ payments, total, customer, onPaymentChange }: PaymentSectionProps) {
+export default function PaymentSection({ payments, total, customer, onPaymentChange, readOnly = false }: PaymentSectionProps) {
     const [definedMethods, setDefinedMethods] = useState<DefinedMethod[]>([]);
     const [amounts, setAmounts] = useState<Record<string, number>>({});
     const [added, setAdded] = useState<string[]>([]); // ids explicitly added via picker
 
     useEffect(() => {
+        // Read-only renders the recorded payments verbatim — no picker to fill.
+        if (readOnly) return;
         api.getPaymentMethods()
             .then((data) => setDefinedMethods(data ?? []))
             .catch((err) => console.error('Failed to load payment methods', err));
-    }, []);
+    }, [readOnly]);
 
     const activeSorted = useMemo(
         () => definedMethods
@@ -201,10 +208,21 @@ export default function PaymentSection({ payments, total, customer, onPaymentCha
             )}
 
             <div className="space-y-1.5 rounded border p-2">
-                {visibleMethods.map(renderMethodRow)}
+                {!readOnly && visibleMethods.map(renderMethodRow)}
+                {readOnly && payments.length === 0 && (
+                    <p className="text-sm text-gray-400">No payments recorded.</p>
+                )}
+                {readOnly && payments.map((p, i) => (
+                    <div key={`${p.label || p.method}-${i}`} className="flex items-center gap-2">
+                        <span className="flex-1 min-w-0 truncate text-sm font-medium text-gray-700">
+                            {p.label || p.method}
+                        </span>
+                        <span className="text-sm text-gray-900">৳{p.amount.toFixed(2)}</span>
+                    </div>
+                ))}
             </div>
 
-            {addableMethods.length > 0 && (
+            {!readOnly && addableMethods.length > 0 && (
                 <div>
                     <select
                         aria-label="Add payment method"

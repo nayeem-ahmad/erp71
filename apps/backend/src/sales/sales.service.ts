@@ -2,7 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, Logger } from '@nes
 import { DatabaseService } from '../database/database.service';
 import { CreateSaleDto, FinalizeSaleDto, UpdateSaleDto } from './sale.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
-import { autoPostFromRules, type AutoPostResult } from '../accounting/posting.utils';
+import { autoPostFromRules, voidAutoPostedVoucher, type AutoPostResult } from '../accounting/posting.utils';
 import { classifyPaymentMode } from './classify-payment-mode';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
 import { resolvePaymentMethodAccountId } from '../accounting/payment-account.util';
@@ -786,10 +786,14 @@ export class SalesService {
                 }
             }
 
-            // 3. Recalculate totals if items changed
-            const totalAmount = dto.items
-                ? dto.items.reduce((sum, i) => sum + i.quantity * i.priceAtSale, 0)
-                : undefined;
+            // 3. Recalculate totals if items changed. An explicit totalAmount
+            // wins: the entry form's adjustments (discount, VAT, transport,
+            // labour, rounding) live only in the total, not on the lines, so
+            // recomputing from lines alone would silently drop them.
+            const totalAmount = dto.totalAmount
+                ?? (dto.items
+                    ? dto.items.reduce((sum, i) => sum + i.quantity * i.priceAtSale, 0)
+                    : undefined);
             const amountPaid = dto.payments
                 ? dto.payments.reduce((sum, p) => sum + p.amount, 0)
                 : undefined;
@@ -839,6 +843,113 @@ export class SalesService {
                     payments: true,
                 },
             });
+        });
+    }
+
+    /**
+     * Delete a sale and undo everything it posted: stock, warranty serials,
+     * loyalty points, customer credit/due, lifetime spend and the accounting
+     * vouchers. Refused outright when another document already references the
+     * sale (returns, warranty claims, delivery orders) — those must be reversed
+     * on their own terms first, or the books would silently lose their anchor.
+     * A DRAFT posted nothing, so it is simply removed.
+     */
+    async remove(tenantId: string, id: string) {
+        return this.db.$transaction(async (tx) => {
+            const sale = await tx.sale.findFirst({
+                where: { id, tenant_id: tenantId },
+                include: {
+                    items: true,
+                    returns: { select: { id: true } },
+                    warrantyClaims: { select: { id: true } },
+                    deliveryOrders: { select: { id: true } },
+                },
+            });
+
+            if (!sale) {
+                throw new NotFoundException('Sale not found');
+            }
+
+            if (sale.returns.length > 0) {
+                throw new BadRequestException('This sale has returns against it — delete or reverse them first.');
+            }
+            if (sale.warrantyClaims.length > 0) {
+                throw new BadRequestException('This sale has warranty claims against it — resolve them first.');
+            }
+            if (sale.deliveryOrders.length > 0) {
+                throw new BadRequestException('This sale has delivery orders against it — cancel them first.');
+            }
+
+            // A draft never touched stock, loyalty, credit or the ledger.
+            if (sale.status !== 'DRAFT') {
+                const warehouseId = await resolveWarehouseId(tx, tenantId, sale.store_id, undefined, 'sale');
+                for (const item of sale.items) {
+                    await applyInventoryMovement(tx, {
+                        tenantId,
+                        productId: item.product_id,
+                        warehouseId,
+                        quantityDelta: item.quantity,
+                        movementType: 'SALE_DELETE_REVERSAL',
+                        referenceType: 'SALE',
+                        referenceId: id,
+                    });
+                }
+
+                // Return any warranty serials this sale consumed to stock.
+                await tx.productSerial.updateMany({
+                    where: { tenant_id: tenantId, source_type: 'SALE', source_id: id },
+                    data: { status: 'IN_STOCK', source_type: null, source_id: null, sold_at: null },
+                });
+
+                if (sale.customer_id) {
+                    // Loyalty: net out every point movement this sale caused.
+                    const loyaltyTxns = await tx.loyaltyTransaction.findMany({
+                        where: { tenantId, saleId: id },
+                        select: { points: true },
+                    });
+                    const netPoints = loyaltyTxns.reduce((sum, l) => sum + l.points, 0);
+                    if (netPoints !== 0) {
+                        await tx.customer.update({
+                            where: { id: sale.customer_id },
+                            data: { loyalty_points: { decrement: netPoints } },
+                        });
+                    }
+                    await tx.loyaltyTransaction.deleteMany({ where: { tenantId, saleId: id } });
+
+                    // Credit: drop the CREDIT_SALE row and take its amount back
+                    // off the customer's outstanding due.
+                    const creditTxns = await tx.customerCreditTransaction.findMany({
+                        where: {
+                            tenant_id: tenantId,
+                            reference_type: 'SALE',
+                            reference_id: id,
+                        },
+                        select: { id: true, amount: true },
+                    });
+                    const creditTotal = creditTxns.reduce((sum, c) => sum + Number(c.amount), 0);
+                    await tx.customerCreditTransaction.deleteMany({
+                        where: { id: { in: creditTxns.map((c) => c.id) } },
+                    });
+
+                    await tx.customer.update({
+                        where: { id: sale.customer_id },
+                        data: {
+                            total_spent: { decrement: Number(sale.total_amount) },
+                            ...(creditTotal !== 0 && { due_balance: { decrement: creditTotal } }),
+                        },
+                    });
+                }
+
+                // Both legs: the main sale voucher and, on a credit sale with a
+                // down-payment, the separate 'paid' leg.
+                await voidAutoPostedVoucher(tx, tenantId, 'sale', id);
+                await voidAutoPostedVoucher(tx, tenantId, 'sale', id, 'paid');
+            }
+
+            // Items and payment records cascade off the sale.
+            await tx.sale.delete({ where: { id } });
+
+            return { deleted: true, id };
         });
     }
 

@@ -173,6 +173,7 @@ export const salesMessages = {
                 createQuotation: "Gagal to create quotation",
                 processReturn: "Gagal to process return",
                 saveSale: "Gagal to save sale. Please check your changes and try again.",
+                deleteSale: "Gagal memadam jualan",
                 saveQuotation: "Gagal to save quotation. Please review your changes and try again.",
                 saveReturn: "Gagal to save return. Please check your changes and try again.",
                 saveOrder: "Gagal to save: {message}",
@@ -198,6 +199,7 @@ export const salesMessages = {
                 deleteOrder: "Are you sure you want to delete this order?",
                 deleteQuotation: "Are you sure you want to delete this quotation?",
                 deleteReturn: "Are you sure you want to delete this return?",
+                deleteSale: "Padam jualan ini? Stok, pembayaran, mata kesetiaan dan catatan perakaunan akan diterbalikkan.",
             },
             success: {
                 convertedOrder: "Successfully converted! Pesanan Number: {orderNumber}",
@@ -332,6 +334,9 @@ export const salesMessages = {
                 completing: "Menyelesaikan...",
                 completed: "Draf selesai — stok dan akaun dikemas kini.",
                 completeFailed: "Tidak dapat menyelesaikan draf ini",
+                delete: "Padam",
+                deleting: "Memadam...",
+                deleted: "Jualan dipadam — stok dan akaun diterbalikkan.",
             },
             invoice: {
                 backToSale: "Back to Sale",
