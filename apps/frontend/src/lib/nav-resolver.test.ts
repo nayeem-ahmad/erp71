@@ -29,8 +29,10 @@ describe('nav-resolver', () => {
 
         expect(labels).toContain('Overview');
         expect(labels).toContain('Loans');
-        expect(labels).toContain('Reports');
-        expect(labels).toContain('Settings');
+        expect(labels).toContain('Accounting Reports');
+        expect(labels).toContain('Accounting Setup');
+        // Reconciliation was dissolved — its links hang directly off the module.
+        expect(labels).toContain('Bank Reconciliation');
         // Expenses moved out to its own top-level module.
         expect(labels).not.toContain('Expense Categories');
     });

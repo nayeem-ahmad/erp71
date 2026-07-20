@@ -22,7 +22,7 @@ describe('AccountingPage — Story 30.1', () => {
     it('renders the accounting landing page with core navigation cards', () => {
         render(<AccountingPage />);
 
-        expect(screen.getByText('Settings')).toBeInTheDocument();
+        expect(screen.getByText('Accounting Setup')).toBeInTheDocument();
         expect(screen.getByText('Chart of Accounts')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /export/i })).toBeInTheDocument();
         expect(screen.getByText('Voucher Entry')).toBeInTheDocument();
