@@ -257,7 +257,7 @@ export const salesMessages = {
             storefront: 'Online Storefront',
             customersCrm: 'Customers & CRM',
             reports: 'Sales Reports',
-            setup: 'Setup',
+            setup: 'Sales Settings',
             links: {
                 pos: { title: 'Point of Sale', description: 'Fast checkout for walk-in and counter sales.' },
                 allSales: { title: 'Sales', description: 'Browse, search, and review every completed transaction.' },

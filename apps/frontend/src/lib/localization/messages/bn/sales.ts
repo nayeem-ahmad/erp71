@@ -257,7 +257,7 @@ export const salesMessages = {
                 storefront: "অনলাইন স্টোরফ্রন্ট",
                 customersCrm: "গ্রাহক ও CRM",
                 reports: "বিক্রয় রিপোর্ট",
-                setup: "সেটআপ",
+                setup: "বিক্রয় সেটিংস",
                 links: {
                     pos: { title: "পয়েন্ট অফ সেল", description: "কাউন্টার ও ওয়াক-ইন বিক্রয়।" },
                     allSales: { title: "বিক্রয়", description: "সব লেনদেন খুঁজুন ও পর্যালোচনা করুন।" },
