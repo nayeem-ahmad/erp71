@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
     ArrayMinSize,
     IsArray,
+    IsBoolean,
     IsDateString,
     IsNotEmpty,
     IsNumber,
@@ -97,6 +98,62 @@ export class CreateSaleDto {
     @IsOptional()
     @IsNumber()
     pointsToRedeem?: number;
+
+    /**
+     * Park the entry as a DRAFT: the sale and its lines are stored, but nothing
+     * is posted — no stock movement, credit check, loyalty, or accounting entry.
+     */
+    @IsOptional()
+    @IsBoolean()
+    isDraft?: boolean;
+}
+
+/**
+ * Turning a DRAFT into a real sale. Every field is optional: omit them all to
+ * post the draft exactly as it was parked, or supply the ones the user edited
+ * on the way out (warranty serials can only arrive here — a draft has none).
+ */
+export class FinalizeSaleDto {
+    @IsOptional()
+    @IsString()
+    customerId?: string | null;
+
+    @IsOptional()
+    @IsArray()
+    @ArrayMinSize(1)
+    @ValidateNested({ each: true })
+    @Type(() => CreateSaleItemDto)
+    items?: CreateSaleItemDto[];
+
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => CreatePaymentDto)
+    payments?: CreatePaymentDto[];
+
+    @IsOptional()
+    @IsNumber()
+    totalAmount?: number;
+
+    @IsOptional()
+    @IsNumber()
+    amountPaid?: number;
+
+    @IsOptional()
+    @IsNumber()
+    discountAmount?: number;
+
+    @IsOptional()
+    @IsNumber()
+    pointsToRedeem?: number;
+
+    @IsOptional()
+    @IsString()
+    note?: string;
+
+    @IsOptional()
+    @IsDateString()
+    saleDate?: string;
 }
 
 export class UpdateSaleItemDto {

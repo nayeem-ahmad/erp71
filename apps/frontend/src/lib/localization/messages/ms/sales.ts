@@ -30,6 +30,7 @@ export const salesMessages = {
             version: "v{version}",
             statuses: {
                 sale: {
+                    DRAFT: "Draf",
                     COMPLETED: "Selesai",
                     REFUNDED: "Dibayar Balik",
                     PARTIAL_REFUND: "Bayaran Balik Separa",
@@ -301,6 +302,7 @@ export const salesMessages = {
                 actions: "Actions",
             },
             filterPresets: {
+                draft: "Draf",
                 completed: "Selesai",
                 refunded: "Dibayar Balik",
                 partialRefund: "Bayaran Balik Separa",
@@ -325,6 +327,11 @@ export const salesMessages = {
                 notePlaceholder: "Add a note about this sale...",
                 saveAllChanges: "Simpan Semua Changes",
                 saving: "Saving...",
+                draftBanner: "Ini draf — belum ada apa-apa direkod ke stok atau akaun.",
+                completeSale: "Selesaikan Jualan",
+                completing: "Menyelesaikan...",
+                completed: "Draf selesai — stok dan akaun dikemas kini.",
+                completeFailed: "Tidak dapat menyelesaikan draf ini",
             },
             invoice: {
                 backToSale: "Back to Sale",

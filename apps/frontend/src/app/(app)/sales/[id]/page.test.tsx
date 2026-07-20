@@ -24,10 +24,15 @@ jest.mock('@/lib/api', () => ({
     api: {
         getSale: jest.fn(),
         updateSale: jest.fn(),
+        finalizeSale: jest.fn(),
         getCustomers: jest.fn(),
         getProducts: jest.fn(),
         getPaymentMethods: jest.fn(),
     },
+}));
+
+jest.mock('@/lib/toast', () => ({
+    toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
 
 jest.mock('@/lib/format', () => ({
@@ -69,6 +74,7 @@ jest.mock('lucide-react', () => ({
     User: () => <span data-testid="icon-user" />,
     Download: () => <span data-testid="icon-download" />,
     ChevronRight: () => <span data-testid="icon-chevron-right" />,
+    Check: () => <span data-testid="icon-check" />,
 }));
 
 const mockSale = {
@@ -408,5 +414,74 @@ describe('SaleDetailPage - edit mode', () => {
 
         // The existing saved payment's raw value ('CASH') round-trips as a selectable option.
         expect(screen.getByDisplayValue('CASH')).toBeInTheDocument();
+    });
+});
+
+describe('SaleDetailPage - drafts', () => {
+    const draftSale = { ...mockSale, status: 'DRAFT' };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        const api = getApi();
+        api.getSale.mockResolvedValue(draftSale);
+        api.getCustomers.mockResolvedValue([]);
+        api.getProducts.mockResolvedValue([]);
+        api.getPaymentMethods.mockResolvedValue([]);
+        api.finalizeSale.mockResolvedValue({ ...draftSale, status: 'COMPLETED' });
+        require('next/navigation').useSearchParams.mockReturnValue({ get: () => null });
+    });
+
+    it('shows the draft banner and a Complete Sale action', async () => {
+        render(<SaleDetailPage />);
+        await waitFor(() => {
+            expect(screen.getByText(enMessages.sales.detail.draftBanner)).toBeInTheDocument();
+        });
+        expect(screen.getByText(enMessages.sales.detail.completeSale)).toBeInTheDocument();
+    });
+
+    it('finalizes the draft and reloads the sale', async () => {
+        const api = getApi();
+        render(<SaleDetailPage />);
+        await waitFor(() => screen.getByText(enMessages.sales.detail.completeSale));
+
+        fireEvent.click(screen.getByText(enMessages.sales.detail.completeSale));
+
+        await waitFor(() => {
+            expect(api.finalizeSale).toHaveBeenCalledWith('test-sale-1');
+        });
+        // Reloaded so the status badge reflects the posted sale
+        expect(api.getSale).toHaveBeenCalledTimes(2);
+    });
+
+    it('surfaces the backend reason when finalizing fails', async () => {
+        const api = getApi();
+        const { toast } = require('@/lib/toast');
+        api.finalizeSale.mockRejectedValue(new Error('Insufficient stock for Gadget X'));
+
+        render(<SaleDetailPage />);
+        await waitFor(() => screen.getByText(enMessages.sales.detail.completeSale));
+        fireEvent.click(screen.getByText(enMessages.sales.detail.completeSale));
+
+        await waitFor(() => {
+            expect(toast.error).toHaveBeenCalledWith('Insufficient stock for Gadget X');
+        });
+    });
+
+    it('offers no other status on a draft in edit mode', async () => {
+        require('next/navigation').useSearchParams.mockReturnValue({
+            get: (k: string) => (k === 'edit' ? 'true' : null),
+        });
+        render(<SaleDetailPage />);
+
+        await waitFor(() => screen.getByText(enMessages.shared.editMode.sale));
+        const statusSelect = screen.getByDisplayValue(enMessages.shared.statuses.sale.DRAFT) as HTMLSelectElement;
+        expect(statusSelect.options).toHaveLength(1);
+    });
+
+    it('does not show the Complete Sale action on a posted sale', async () => {
+        getApi().getSale.mockResolvedValue(mockSale);
+        render(<SaleDetailPage />);
+        await waitFor(() => screen.getAllByRole('heading', { level: 1 }));
+        expect(screen.queryByText(enMessages.sales.detail.completeSale)).not.toBeInTheDocument();
     });
 });
