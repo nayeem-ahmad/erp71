@@ -7,11 +7,12 @@ import { formatBDT, formatDate } from '@/lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
-import CreateQuotationModal from './CreateQuotationModal';
+import { compactDensity } from '@/lib/ui/compact-density';
+import { routes } from '@/lib/routes';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell, Button } from '@/components/ui';
+import { PageShell } from '@/components/ui';
 
 interface Quotation {
     id: string;
@@ -42,7 +43,6 @@ export default function QuotesPage() {
     const { t, locale } = useI18n();
     const [quotes, setQuotes] = useState<Quotation[]>([]);
     const [loading, setLoading] = useState(true);
-    const [isModalOpen, setIsModalOpen] = useState(false);
 
     useEffect(() => {
         loadQuotes();
@@ -261,13 +261,13 @@ export default function QuotesPage() {
                         'sales',
                     )}
                     actions={
-                        <Button type="button" variant="primary" size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setIsModalOpen(true)}>
+                        <Link href={routes.sales.quoteNew} className={`${compactDensity.btnPrimary} bg-primary hover:bg-primary-hover text-white`}>
+                            <Plus className="w-4 h-4" />
                             {t.quotes.newQuotation}
-                        </Button>
+                        </Link>
                     }
                 />
 
-                <CreateQuotationModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={loadQuotes} />
 
                 <DataTable<Quotation>
                     tableId="sales-quotations"

@@ -6,13 +6,14 @@ import { api } from '@/lib/api';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
-import IssueReturnModal from './IssueReturnModal';
+import { compactDensity } from '@/lib/ui/compact-density';
+import { routes } from '@/lib/routes';
 import { PostingBadge } from '@/components/PostingBadge';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell, Button } from '@/components/ui';
+import { PageShell } from '@/components/ui';
 
 interface SalesReturn {
     id: string;
@@ -39,7 +40,6 @@ export default function ReturnsPage() {
     const { t, locale } = useI18n();
     const [returns, setReturns] = useState<SalesReturn[]>([]);
     const [loading, setLoading] = useState(true);
-    const [isModalOpen, setIsModalOpen] = useState(false);
 
     useEffect(() => {
         loadReturns();
@@ -253,13 +253,13 @@ export default function ReturnsPage() {
                         'sales',
                     )}
                     actions={
-                        <Button type="button" variant="danger" size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setIsModalOpen(true)}>
+                        <Link href={routes.sales.returnNew} className={`${compactDensity.btnPrimary} bg-danger hover:bg-red-700 text-white`}>
+                            <Plus className="w-4 h-4" />
                             {t.returns.processReturn}
-                        </Button>
+                        </Link>
                     }
                 />
 
-                <IssueReturnModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={loadReturns} />
 
                 <DataTable<SalesReturn>
                     tableId="sales-returns"

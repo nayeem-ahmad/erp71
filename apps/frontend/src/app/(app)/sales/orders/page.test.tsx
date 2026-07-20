@@ -67,19 +67,6 @@ jest.mock('@/components/data-table', () => ({
     ),
 }));
 
-jest.mock('./CreateOrderModal', () => ({
-    __esModule: true,
-    default: ({ isOpen, onClose, onSuccess }: any) =>
-        isOpen ? (
-            <div data-testid="create-modal">
-                <button onClick={onClose}>Close Modal</button>
-                <button onClick={onSuccess}>
-                    Create Order
-                </button>
-            </div>
-        ) : null,
-}));
-
 const mockOrders = [
     {
         id: 'ord-1',
@@ -177,40 +164,14 @@ describe('OrdersPage', () => {
         });
     });
 
-    it('renders New Order button in toolbar', async () => {
+    it('links to the /sales/orders/new entry page from the toolbar', async () => {
         render(<OrdersPage />);
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /new order/i })).toBeInTheDocument();
-        });
+        const link = await screen.findByRole('link', { name: /new order/i });
+        expect(link).toHaveAttribute('href', '/sales/orders/new');
     });
 
-    it('opens create modal when New Order is clicked', async () => {
-        render(<OrdersPage />);
-        await waitFor(() => screen.getByRole('button', { name: /new order/i }));
-        fireEvent.click(screen.getByRole('button', { name: /new order/i }));
-        expect(screen.getByTestId('create-modal')).toBeInTheDocument();
-    });
 
-    it('closes create modal when Close is clicked', async () => {
-        render(<OrdersPage />);
-        await waitFor(() => screen.getByRole('button', { name: /new order/i }));
-        fireEvent.click(screen.getByRole('button', { name: /new order/i }));
-        fireEvent.click(screen.getByRole('button', { name: /close modal/i }));
-        expect(screen.queryByTestId('create-modal')).not.toBeInTheDocument();
-    });
 
-    it('reloads orders when modal reports success', async () => {
-        const { api } = require('@/lib/api');
-        render(<OrdersPage />);
-        await waitFor(() => screen.getByRole('button', { name: /new order/i }));
-        fireEvent.click(screen.getByRole('button', { name: /new order/i }));
-        expect(screen.getByTestId('create-modal')).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: /create order/i }));
-        await waitFor(() => {
-            // getOrders called again after success
-            expect(api.getOrders).toHaveBeenCalledTimes(2);
-        });
-    });
 
     it('calls getOrders on mount', async () => {
         const { api } = require('@/lib/api');

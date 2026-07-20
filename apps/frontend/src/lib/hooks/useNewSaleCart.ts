@@ -10,6 +10,13 @@ export interface LineItem {
     discount: number;
     /** Stock on hand when the product was picked — shown for reference only. */
     availableQty?: number;
+    /**
+     * Id of the line this one derives from, where the document is built from
+     * another (a sales return carries the originating sale_item id here).
+     */
+    sourceLineId?: string;
+    /** Upper bound on quantity, e.g. units of a sale line not yet returned. */
+    maxQuantity?: number;
 }
 
 export interface Payment {

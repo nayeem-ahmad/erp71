@@ -61,19 +61,6 @@ jest.mock('@/components/data-table', () => ({
     ),
 }));
 
-jest.mock('./IssueReturnModal', () => ({
-    __esModule: true,
-    default: ({ isOpen, onClose, onSuccess }: any) =>
-        isOpen ? (
-            <div data-testid="issue-modal">
-                <button onClick={onClose}>Close Modal</button>
-                <button onClick={onSuccess}>
-                    Submit Return
-                </button>
-            </div>
-        ) : null,
-}));
-
 jest.mock('@/components/PostingBadge', () => ({
     PostingBadge: ({ status }: any) => <span data-testid="posting-badge">{status}</span>,
 }));
@@ -166,40 +153,14 @@ describe('ReturnsPage', () => {
         });
     });
 
-    it('renders Process Return button in toolbar', async () => {
+    it('links to the /sales/returns/new entry page from the toolbar', async () => {
         render(<ReturnsPage />);
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /process return/i })).toBeInTheDocument();
-        });
+        const link = await screen.findByRole('link', { name: /process return/i });
+        expect(link).toHaveAttribute('href', '/sales/returns/new');
     });
 
-    it('opens issue return modal when Process Return is clicked', async () => {
-        render(<ReturnsPage />);
-        await waitFor(() => screen.getByRole('button', { name: /process return/i }));
-        fireEvent.click(screen.getByRole('button', { name: /process return/i }));
-        expect(screen.getByTestId('issue-modal')).toBeInTheDocument();
-    });
 
-    it('closes modal when Close is clicked', async () => {
-        render(<ReturnsPage />);
-        await waitFor(() => screen.getByRole('button', { name: /process return/i }));
-        fireEvent.click(screen.getByRole('button', { name: /process return/i }));
-        fireEvent.click(screen.getByRole('button', { name: /close modal/i }));
-        expect(screen.queryByTestId('issue-modal')).not.toBeInTheDocument();
-    });
 
-    it('reloads returns when modal reports success', async () => {
-        const { api } = require('@/lib/api');
-        render(<ReturnsPage />);
-        await waitFor(() => screen.getByRole('button', { name: /process return/i }));
-        fireEvent.click(screen.getByRole('button', { name: /process return/i }));
-        expect(screen.getByTestId('issue-modal')).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: /submit return/i }));
-        await waitFor(() => {
-            // getReturns called again on success
-            expect(api.getReturns).toHaveBeenCalledTimes(2);
-        });
-    });
 
     it('calls getReturns on mount', async () => {
         const { api } = require('@/lib/api');

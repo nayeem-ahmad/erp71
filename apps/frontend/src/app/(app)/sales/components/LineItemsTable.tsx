@@ -5,14 +5,41 @@ interface LineItemsTableProps {
     items: LineItem[];
     onUpdateItem: (productId: string, updates: Partial<LineItem>) => void;
     onRemoveItem: (productId: string) => void;
+    /** Freeze every field — viewing an existing document rather than editing it. */
     readOnly?: boolean;
+    /**
+     * Columns are opt-out because not every document persists every field:
+     * sales orders and quotations store only productId/quantity/price, so
+     * showing a per-line discount there would silently drop it on save.
+     */
+    showDiscount?: boolean;
+    showAvailable?: boolean;
+    /** Returns price their source sale line — the amount is not negotiable. */
+    readOnlyPrice?: boolean;
+    /** Hard cap per line, e.g. the un-returned quantity of a sale item. */
+    maxQuantityOf?: (item: LineItem) => number | undefined;
+    emptyMessage?: string;
 }
 
-export default function LineItemsTable({ items, onUpdateItem, onRemoveItem, readOnly = false }: LineItemsTableProps) {
+export default function LineItemsTable({
+    items,
+    onUpdateItem,
+    onRemoveItem,
+    readOnly = false,
+    showDiscount = true,
+    showAvailable = true,
+    readOnlyPrice = false,
+    maxQuantityOf,
+    emptyMessage,
+}: LineItemsTableProps) {
+    const priceFrozen = readOnly || readOnlyPrice;
+    const columnCount = 6 + (showDiscount ? 1 : 0) + (showAvailable ? 1 : 0);
+
     const handleQuantityChange = (productId: string, quantity: number) => {
-        if (quantity > 0) {
-            onUpdateItem(productId, { quantity });
-        }
+        if (quantity <= 0) return;
+        const item = items.find((entry) => entry.productId === productId);
+        const max = item && maxQuantityOf ? maxQuantityOf(item) : undefined;
+        onUpdateItem(productId, { quantity: max == null ? quantity : Math.min(quantity, max) });
     };
 
     const handlePriceChange = (productId: string, price: number) => {
@@ -37,9 +64,11 @@ export default function LineItemsTable({ items, onUpdateItem, onRemoveItem, read
                         <th className="px-2 py-1.5 text-left font-semibold w-8">#</th>
                         <th className="px-2 py-1.5 text-left font-semibold">Name</th>
                         <th className="px-2 py-1.5 text-left font-semibold hidden md:table-cell">Group</th>
-                        <th className="px-2 py-1.5 text-right font-semibold hidden md:table-cell">Avail</th>
+                        {showAvailable && (
+                            <th className="px-2 py-1.5 text-right font-semibold hidden md:table-cell">Avail</th>
+                        )}
                         <th className="px-2 py-1.5 text-right font-semibold">Price</th>
-                        <th className="px-2 py-1.5 text-right font-semibold">Disc %</th>
+                        {showDiscount && <th className="px-2 py-1.5 text-right font-semibold">Disc %</th>}
                         <th className="px-2 py-1.5 text-center font-semibold">Qty</th>
                         <th className="px-2 py-1.5 text-right font-semibold">Total</th>
                         <th className="px-2 py-1.5 w-8"></th>
@@ -48,8 +77,9 @@ export default function LineItemsTable({ items, onUpdateItem, onRemoveItem, read
                 <tbody>
                     {items.length === 0 ? (
                         <tr>
-                            <td colSpan={9} className="px-3 py-10 text-center text-gray-400">
-                                {readOnly ? 'No items on this sale.' : 'No items yet — search and add products above.'}
+                            <td colSpan={columnCount} className="px-3 py-10 text-center text-gray-400">
+                                {emptyMessage
+                                    ?? (readOnly ? 'No items on this sale.' : 'No items yet — search and add products above.')}
                             </td>
                         </tr>
                     ) : (
@@ -61,17 +91,19 @@ export default function LineItemsTable({ items, onUpdateItem, onRemoveItem, read
                                     {item.group}
                                     {item.subgroup && ` → ${item.subgroup}`}
                                 </td>
-                                <td className="px-2 py-1 text-right text-xs hidden md:table-cell">
-                                    {item.availableQty == null ? (
-                                        <span className="text-gray-400">—</span>
-                                    ) : (
-                                        <span className={item.quantity > item.availableQty ? 'text-amber-600 font-medium' : 'text-gray-500'}>
-                                            {item.availableQty}
-                                        </span>
-                                    )}
-                                </td>
+                                {showAvailable && (
+                                    <td className="px-2 py-1 text-right text-xs hidden md:table-cell">
+                                        {item.availableQty == null ? (
+                                            <span className="text-gray-400">—</span>
+                                        ) : (
+                                            <span className={item.quantity > item.availableQty ? 'text-amber-600 font-medium' : 'text-gray-500'}>
+                                                {item.availableQty}
+                                            </span>
+                                        )}
+                                    </td>
+                                )}
                                 <td className="px-2 py-1 text-right">
-                                    {readOnly ? (
+                                    {priceFrozen ? (
                                         <span className="text-gray-700">৳{item.price.toFixed(2)}</span>
                                     ) : (
                                         <input
@@ -84,20 +116,22 @@ export default function LineItemsTable({ items, onUpdateItem, onRemoveItem, read
                                         />
                                     )}
                                 </td>
-                                <td className="px-2 py-1 text-right">
-                                    {readOnly ? (
-                                        <span className="text-gray-700">{item.discount || 0}</span>
-                                    ) : (
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            max="100"
-                                            value={item.discount}
-                                            onChange={(e) => handleDiscountChange(item.productId, parseFloat(e.target.value) || 0)}
-                                            className="w-14 px-1.5 py-0.5 border rounded text-sm text-right"
-                                        />
-                                    )}
-                                </td>
+                                {showDiscount && (
+                                    <td className="px-2 py-1 text-right">
+                                        {readOnly ? (
+                                            <span className="text-gray-700">{item.discount || 0}</span>
+                                        ) : (
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                value={item.discount}
+                                                onChange={(e) => handleDiscountChange(item.productId, parseFloat(e.target.value) || 0)}
+                                                className="w-14 px-1.5 py-0.5 border rounded text-sm text-right"
+                                            />
+                                        )}
+                                    </td>
+                                )}
                                 <td className="px-2 py-1">
                                     {readOnly ? (
                                         <div className="text-center text-gray-700">{item.quantity}</div>
@@ -113,6 +147,7 @@ export default function LineItemsTable({ items, onUpdateItem, onRemoveItem, read
                                             <input
                                                 type="number"
                                                 min="1"
+                                                max={maxQuantityOf?.(item)}
                                                 value={item.quantity}
                                                 onChange={(e) => handleQuantityChange(item.productId, parseInt(e.target.value) || 1)}
                                                 className="w-12 px-1.5 py-0.5 border rounded text-sm text-center"

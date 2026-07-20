@@ -15,6 +15,13 @@ interface TotalsFooterProps {
     previousDue?: number;
     readOnly?: boolean;
     /**
+     * Document-level discount, VAT, transport, labor and rounding. Off for
+     * documents whose API stores only a total (sales orders, quotations) —
+     * showing the breakdown there would imply it survives the save.
+     */
+    showAdjustments?: boolean;
+    totalLabel?: string;
+    /**
      * Label for the free-form adjustment row. An existing sale stores only its
      * final total, so the gap between the line subtotal and that total is
      * carried here as one "Adjustment" rather than a fake rounding figure.
@@ -31,6 +38,8 @@ export default function TotalsFooter({
     tenantVatRate,
     previousDue = 0,
     readOnly = false,
+    showAdjustments = true,
+    totalLabel = 'Total',
     roundingLabel = 'Rounding',
 }: TotalsFooterProps) {
     const inputClass = 'w-16 px-1.5 py-0.5 border rounded text-xs text-right';
@@ -56,7 +65,7 @@ export default function TotalsFooter({
                 <span className="font-medium">{amount(totals.subtotal)}</span>
             </div>
 
-            {readOnly ? (
+            {!showAdjustments ? null : readOnly ? (
                 rows.map((row) => (
                     <div key={row.label} className="flex justify-between items-center">
                         <span className="text-gray-500">{row.label}</span>
@@ -125,7 +134,7 @@ export default function TotalsFooter({
             )}
 
             <div className="border-t pt-2 mt-1 flex justify-between items-center">
-                <span className="font-semibold text-gray-900">Total</span>
+                <span className="font-semibold text-gray-900">{totalLabel}</span>
                 <span className="text-lg font-bold text-blue-600">{amount(totals.total)}</span>
             </div>
 

@@ -61,19 +61,6 @@ jest.mock('@/components/data-table', () => ({
     ),
 }));
 
-jest.mock('./CreateQuotationModal', () => ({
-    __esModule: true,
-    default: ({ isOpen, onClose, onSuccess }: any) =>
-        isOpen ? (
-            <div data-testid="create-modal">
-                <button onClick={onClose}>Close Modal</button>
-                <button onClick={onSuccess}>
-                    Create Quote
-                </button>
-            </div>
-        ) : null,
-}));
-
 const mockQuotes = [
     {
         id: 'q-1',
@@ -165,41 +152,14 @@ describe('QuotesPage', () => {
         });
     });
 
-    it('renders New Quotation button in toolbar', async () => {
+    it('links to the /sales/quotes/new entry page from the toolbar', async () => {
         render(<QuotesPage />);
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /new quotation/i })).toBeInTheDocument();
-        });
+        const link = await screen.findByRole('link', { name: /new quotation/i });
+        expect(link).toHaveAttribute('href', '/sales/quotes/new');
     });
 
-    it('opens create modal when New Quotation is clicked', async () => {
-        render(<QuotesPage />);
-        await waitFor(() => screen.getByRole('button', { name: /new quotation/i }));
-        fireEvent.click(screen.getByRole('button', { name: /new quotation/i }));
-        expect(screen.getByTestId('create-modal')).toBeInTheDocument();
-    });
 
-    it('closes create modal when Close is clicked', async () => {
-        render(<QuotesPage />);
-        await waitFor(() => screen.getByRole('button', { name: /new quotation/i }));
-        fireEvent.click(screen.getByRole('button', { name: /new quotation/i }));
-        fireEvent.click(screen.getByRole('button', { name: /close modal/i }));
-        expect(screen.queryByTestId('create-modal')).not.toBeInTheDocument();
-    });
 
-    it('closes modal and reloads after quote is created', async () => {
-        const { api } = require('@/lib/api');
-        render(<QuotesPage />);
-        await waitFor(() => screen.getByRole('button', { name: /new quotation/i }));
-        fireEvent.click(screen.getByRole('button', { name: /new quotation/i }));
-        expect(screen.getByTestId('create-modal')).toBeInTheDocument();
-        // Clicking Create Quote triggers onSuccess which calls loadQuotes
-        fireEvent.click(screen.getByRole('button', { name: /create quote/i }));
-        await waitFor(() => {
-            // getQuotations called again on success
-            expect(api.getQuotations).toHaveBeenCalledTimes(2);
-        });
-    });
 
     it('calls deleteQuotation after confirmation', async () => {
         const { api } = require('@/lib/api');
