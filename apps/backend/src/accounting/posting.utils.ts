@@ -404,14 +404,19 @@ export async function autoPostFromRules(input: AutoPostInput): Promise<AutoPostR
     };
 }
 
-/** Remove auto-posted voucher + posting event so the source can be reposted or deleted. */
+/**
+ * Remove auto-posted voucher + posting event so the source can be reposted or
+ * deleted. Pass `legKey` to target a specific leg when the source posted more
+ * than one (e.g. a credit sale's `paid` down-payment leg).
+ */
 export async function voidAutoPostedVoucher(
     tx: Prisma.TransactionClient,
     tenantId: string,
     eventType: PostingEventType,
     sourceId: string,
+    legKey?: string,
 ): Promise<void> {
-    const idempotencyKey = `${tenantId}:${eventType}:${sourceId}`;
+    const idempotencyKey = postingIdempotencyKey(tenantId, eventType, sourceId, legKey);
     const event = await tx.postingEvent.findUnique({
         where: {
             tenant_id_idempotency_key: {

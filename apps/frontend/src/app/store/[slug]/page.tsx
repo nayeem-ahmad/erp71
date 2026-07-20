@@ -355,7 +355,7 @@ export default function StorefrontPage() {
                     <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 lg:py-32 w-full">
                         <div className="max-w-3xl">
                             <p className="text-white/80 uppercase tracking-[0.35em] text-xs sm:text-sm mb-5">{home.seasonalCollection}</p>
-                            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black text-white tracking-tight leading-[0.95]">
+                            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white tracking-tight leading-tight">
                                 {heroHeadline}
                             </h1>
                             <p className="mt-6 max-w-2xl text-base sm:text-lg lg:text-xl text-white/80 leading-8">
@@ -467,7 +467,7 @@ export default function StorefrontPage() {
                                                 <div className="text-sm text-gray-500 mb-1.5 font-medium">{product.group_name || m.categoryFallback}</div>
                                                 <h3 className="font-bold text-gray-900 leading-snug mb-3 line-clamp-2">{product.name}</h3>
                                                 <div className="flex items-center gap-2 mt-auto pt-2 border-t border-gray-50">
-                                                    <span className="font-black text-lg">{formatBDT(price)}</span>
+                                                    <span className="font-bold text-lg">{formatBDT(price)}</span>
                                                     {onSale && (
                                                         <span className="text-sm text-gray-400 line-through">{formatOptionalPrice(product.compare_at_price)}</span>
                                                     )}
@@ -487,7 +487,7 @@ export default function StorefrontPage() {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
                         <div className="col-span-1 md:col-span-2">
-                            <Link href={`/store/${slug}`} className="text-2xl font-black tracking-tighter mb-6 block">
+                            <Link href={`/store/${slug}`} className="text-2xl font-bold tracking-tight mb-6 block">
                                 {data.tenant.name}
                             </Link>
                             <p className="text-gray-400 max-w-md leading-relaxed">

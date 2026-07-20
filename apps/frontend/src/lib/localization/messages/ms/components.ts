@@ -86,7 +86,8 @@ export const componentsMessages = {
             unsupported: 'Navigasi suara memerlukan Chrome, Edge, atau Safari pada HTTPS atau localhost.',
             micDenied: 'Kebenaran mikrofon ditolak. Benarkan akses mikrofon dalam tetapan pelayar.',
             listenError: 'Tidak dapat memulakan pengecaman suara. Cuba lagi.',
-            networkError: 'Pengecaman suara memerlukan sambungan internet.',
+            networkError: 'Anda nampaknya di luar talian. Pengecaman suara memerlukan sambungan internet.',
+            serviceUnreachable: 'Tidak dapat menghubungi perkhidmatan pertuturan. Pelayar menghantar suara ke pelayan Google — VPN, penyekat iklan, firewall atau binaan Chromium tanpa kunci pertuturan (cth. Brave) boleh menyekatnya. Cuba Chrome atau Edge.',
             audioCaptureError: 'Tidak dapat mengakses mikrofon. Semak tetapan peranti dan pelayar.',
             insecureContext: 'Navigasi suara hanya berfungsi pada HTTPS atau localhost.',
             targets: {

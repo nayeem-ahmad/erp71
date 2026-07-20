@@ -8,7 +8,7 @@ import { formatBDT, formatDate } from '@/lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
-import CreateOrderModal from './CreateOrderModal';
+import { compactDensity } from '@/lib/ui/compact-density';
 import StorefrontOrdersPanel from './StorefrontOrdersPanel';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -55,7 +55,6 @@ export default function OrdersPage() {
     const activeTab: OrdersTab = searchParams.get('tab') === 'online' ? 'online' : 'sales';
     const [orders, setOrders] = useState<SalesOrder[]>([]);
     const [loading, setLoading] = useState(true);
-    const [isModalOpen, setIsModalOpen] = useState(false);
 
     const setActiveTab = useCallback((tab: OrdersTab) => {
         const params = new URLSearchParams(searchParams.toString());
@@ -275,13 +274,13 @@ export default function OrdersPage() {
                     )}
                     actions={
                         activeTab === 'sales' ? (
-                            <button
-                                onClick={() => setIsModalOpen(true)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                            <Link
+                                href={routes.sales.orderNew}
+                                className={`${compactDensity.btnPrimary} bg-primary hover:bg-primary-hover text-white`}
                             >
                                 <Plus className="w-4 h-4" />
                                 {t.orders.newOrder}
-                            </button>
+                            </Link>
                         ) : null
                     }
                 />
@@ -311,7 +310,6 @@ export default function OrdersPage() {
                     </button>
                 </div>
 
-                <CreateOrderModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={loadOrders} />
 
                 {activeTab === 'online' ? (
                     <StorefrontOrdersPanel />

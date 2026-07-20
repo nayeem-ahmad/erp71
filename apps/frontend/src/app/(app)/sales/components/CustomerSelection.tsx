@@ -6,9 +6,10 @@ import { X, Search } from 'lucide-react';
 interface CustomerSelectionProps {
     customer: any;
     setCustomer: (customer: any) => void;
+    readOnly?: boolean;
 }
 
-export default function CustomerSelection({ customer, setCustomer }: CustomerSelectionProps) {
+export default function CustomerSelection({ customer, setCustomer, readOnly = false }: CustomerSelectionProps) {
     const [query, setQuery] = useState('');
     const [customers, setCustomers] = useState<any[]>([]);
     const [filteredCustomers, setFilteredCustomers] = useState<any[]>([]);
@@ -20,8 +21,9 @@ export default function CustomerSelection({ customer, setCustomer }: CustomerSel
     const optionRefs = useRef<(HTMLDivElement | null)[]>([]);
 
     useEffect(() => {
-        loadCustomers();
-    }, []);
+        // Nothing to pick from when the sale is only being viewed.
+        if (!readOnly) loadCustomers();
+    }, [readOnly]);
 
     const loadCustomers = async () => {
         try {
@@ -93,6 +95,22 @@ export default function CustomerSelection({ customer, setCustomer }: CustomerSel
         setCustomer(null);
         setQuery('');
     };
+
+    if (readOnly) {
+        return (
+            <div className="rounded border bg-gray-50 px-2.5 py-1.5">
+                <div className="text-sm font-medium text-gray-900">
+                    {customer?.name ?? <span className="text-gray-400">Walk-in customer</span>}
+                </div>
+                {customer && (
+                    <div className="text-xs text-gray-500">
+                        {customer.phone}
+                        {customer.address ? ` · ${customer.address}` : ''}
+                    </div>
+                )}
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col gap-1">

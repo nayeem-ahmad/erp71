@@ -1,19 +1,17 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { ChevronLeft, Printer, ChevronDown } from 'lucide-react';
+import { Printer, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { useI18n } from '@/lib/i18n';
-import { formatBDT, toDatetimeLocal } from '@/lib/format';
-import CustomerSelection from './components/CustomerSelection';
-import ProductSearch, { availableQtyOf } from './components/ProductSearch';
-import VoiceEntryInput from '@/components/VoiceEntryInput';
+import { toDatetimeLocal } from '@/lib/format';
+import { availableQtyOf } from '../components/ProductSearch';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
-import LineItemsTable from './components/LineItemsTable';
-import TotalsFooter from './components/TotalsFooter';
-import PaymentSection from './components/PaymentSection';
-import SalesHeader from './components/SalesHeader';
+import SaleEntryLayout, {
+    computeSaleTotals,
+    EMPTY_ADJUSTMENTS,
+    type SaleAdjustments,
+} from '../components/SaleEntryLayout';
 import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
 import { printSalesInvoice, PAPER_SIZES, type PaperSize } from '@/lib/sales-invoice-printer';
 import { toast } from '@/lib/toast';
@@ -21,7 +19,6 @@ import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { canKeepDue, creditDueAmount } from '@/lib/customer-credit';
 
 export default function NewSalePage() {
-    const { t } = useI18n();
     const {
         items,
         customer,
@@ -47,12 +44,7 @@ export default function NewSalePage() {
     const [paperSize, setPaperSize] = useState<PaperSize>('A4');
     const [saleDate, setSaleDate] = useState<string>(() => toDatetimeLocal(new Date()));
     const printMenuRef = useRef<HTMLDivElement>(null);
-    const [adjustments, setAdjustments] = useState({
-        discountPercent: 0,
-        rounding: 0,
-        transportCost: 0,
-        laborCost: 0,
-    });
+    const [adjustments, setAdjustments] = useState<SaleAdjustments>(EMPTY_ADJUSTMENTS);
 
     useEffect(() => {
         loadPageData();
@@ -64,26 +56,11 @@ export default function NewSalePage() {
     );
     useDismissOnClickOutside(showPaperMenu, isInsidePrintMenu, () => setShowPaperMenu(false));
 
-    const totals = useMemo(() => {
-        const subtotal = items.reduce((sum, item) => sum + item.quantity * item.price, 0);
-        const discount = subtotal * (adjustments.discountPercent / 100);
-        const afterDiscount = subtotal - discount;
-        const vat = afterDiscount * ((salesSettings?.tenant?.default_vat_rate || 0) / 100);
-        const total =
-            afterDiscount
-            + vat
-            + (adjustments.transportCost || 0)
-            + (adjustments.laborCost || 0)
-            + (adjustments.rounding || 0);
-
-        return {
-            subtotal,
-            discount,
-            vat,
-            total,
-            ...adjustments,
-        };
-    }, [items, adjustments, salesSettings]);
+    const vatRate = salesSettings?.tenant?.default_vat_rate || 0;
+    const totals = useMemo(
+        () => computeSaleTotals(items, adjustments, vatRate),
+        [items, adjustments, vatRate],
+    );
 
     const loadPageData = async () => {
         try {
@@ -242,10 +219,8 @@ export default function NewSalePage() {
 
             // Clear cart and show success
             clearCart();
+            setAdjustments(EMPTY_ADJUSTMENTS);
             toast.success(`Sale created successfully!\nSale #: ${response.serial_number}`);
-
-            // Optionally redirect to sales list or new sale
-            // router.push('/sales');
         } catch (error: any) {
             const errorMsg = error.message || 'Failed to create sale';
             console.error('Sale creation error:', error);
@@ -267,6 +242,7 @@ export default function NewSalePage() {
         try {
             const response = await api.createNewSale(buildSaleData(true));
             clearCart();
+            setAdjustments(EMPTY_ADJUSTMENTS);
             toast.success(`Draft saved.\nRef: ${response.reference_number || response.serial_number}`);
         } catch (error: any) {
             console.error('Draft save error:', error);
@@ -281,140 +257,91 @@ export default function NewSalePage() {
     }
 
     return (
-        <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-y-auto lg:overflow-hidden bg-gray-50 text-sm">
-            {/* Top strip: title + sale meta fields, one slim row */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 border-b bg-white flex-shrink-0">
-                <div className="flex items-center gap-2">
-                    <Link href="/sales/list" className="text-gray-400 hover:text-gray-700">
-                        <ChevronLeft className="w-5 h-5" />
+        <SaleEntryLayout
+            title="New Sale"
+            backHref="/sales/list"
+            refNumber={refNumber}
+            setRefNumber={setRefNumber}
+            currentUser={currentUser}
+            saleDate={saleDate}
+            setSaleDate={setSaleDate}
+            customer={customer}
+            setCustomer={setCustomer}
+            items={items}
+            onUpdateItem={updateItem}
+            onRemoveItem={removeItem}
+            onAddProduct={handleAddItem}
+            onVoiceResult={handleVoiceSale}
+            description={description}
+            setDescription={setDescription}
+            totals={totals}
+            onTotalsChange={(patch) => setAdjustments((prev) => ({ ...prev, ...patch }))}
+            tenantVatRate={vatRate}
+            payments={payments}
+            onPaymentChange={updatePayment}
+            onSubmit={handleSubmit}
+            actions={
+                <>
+                    <Link
+                        href="/sales/list"
+                        className="px-3 py-2 border rounded text-gray-700 hover:bg-gray-50 text-sm"
+                    >
+                        Cancel
                     </Link>
-                    <h1 className="text-base font-bold text-gray-900 whitespace-nowrap">New Sale</h1>
-                </div>
-                <div className="h-5 w-px bg-gray-200 hidden sm:block" />
-                <SalesHeader
-                    refNumber={refNumber}
-                    setRefNumber={setRefNumber}
-                    currentUser={currentUser}
-                    saleDate={saleDate}
-                    setSaleDate={setSaleDate}
-                />
-            </div>
-
-            {/* Body: left work area + right summary/payment panel. On mobile this
-                flows at natural height so the page scrolls; at lg+ it fills the
-                viewport and only the item list scrolls. */}
-            <div className="flex flex-col lg:flex-1 lg:flex-row lg:overflow-hidden">
-                {/* Left work area */}
-                <div className="flex flex-col lg:flex-1 lg:overflow-hidden p-3 gap-2 min-w-0">
-                    <div className="flex flex-col sm:flex-row gap-2 flex-shrink-0">
-                        <div className="sm:w-72 flex-shrink-0">
-                            <CustomerSelection customer={customer} setCustomer={setCustomer} />
+                    <button
+                        type="button"
+                        onClick={handleSaveDraft}
+                        disabled={savingDraft || submitting || items.length === 0}
+                        className="px-3 py-2 border rounded text-gray-700 hover:bg-gray-50 disabled:text-gray-400 text-sm"
+                        title="Save without posting stock, payment or accounting entries"
+                    >
+                        {savingDraft ? 'Saving…' : 'Save Draft'}
+                    </button>
+                    {/* Print button with paper-size dropdown */}
+                    <div className="relative" ref={printMenuRef}>
+                        <div className="flex items-center border rounded overflow-hidden">
+                            <button
+                                type="button"
+                                onClick={() => handlePrint()}
+                                className="px-3 py-2 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 text-sm"
+                            >
+                                <Printer className="w-4 h-4" />
+                                {paperSize}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setShowPaperMenu((v) => !v)}
+                                className="px-1.5 py-2 border-l text-gray-500 hover:bg-gray-50"
+                                title="Choose paper size"
+                            >
+                                <ChevronDown className="w-4 h-4" />
+                            </button>
                         </div>
-                        <div className="flex-1 min-w-0">
-                            <VoiceEntryInput entryType="sale" onResult={handleVoiceSale} inline>
-                                <ProductSearch onProductSelect={handleAddItem} />
-                            </VoiceEntryInput>
-                        </div>
-                    </div>
-
-                    {/* Item list — the only scrolling region on desktop */}
-                    <div className="min-h-[240px] lg:flex-1 lg:min-h-0 lg:overflow-hidden">
-                        <LineItemsTable items={items} onUpdateItem={updateItem} onRemoveItem={removeItem} />
-                    </div>
-
-                    {/* Note */}
-                    <input
-                        type="text"
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        placeholder="Note (optional)…"
-                        className="w-full border rounded px-2 py-1.5 text-sm flex-shrink-0"
-                    />
-                </div>
-
-                {/* Right panel: totals, payment, actions */}
-                <div className="w-full lg:w-80 flex-shrink-0 border-t lg:border-t-0 lg:border-l bg-white flex flex-col lg:overflow-hidden">
-                    <div className="lg:flex-1 lg:overflow-y-auto p-3 space-y-3">
-                        <TotalsFooter
-                            totals={totals}
-                            onTotalsChange={(patch) => setAdjustments((prev) => ({ ...prev, ...patch }))}
-                            tenantVatRate={salesSettings?.tenant?.default_vat_rate || 0}
-                            previousDue={Number(customer?.due_balance ?? 0)}
-                        />
-                        <div className="border-t pt-3">
-                            <PaymentSection
-                                payments={payments}
-                                total={totals.total}
-                                customer={customer}
-                                onPaymentChange={updatePayment}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Actions pinned to panel bottom. Extra bottom padding on desktop
-                        keeps the primary button clear of the floating feedback widget. */}
-                    <div className="flex flex-wrap items-center gap-2 p-3 pb-20 lg:pb-16 border-t flex-shrink-0">
-                        <Link
-                            href="/sales/list"
-                            className="px-3 py-2 border rounded text-gray-700 hover:bg-gray-50 text-sm"
-                        >
-                            Cancel
-                        </Link>
-                        <button
-                            type="button"
-                            onClick={handleSaveDraft}
-                            disabled={savingDraft || submitting || items.length === 0}
-                            className="px-3 py-2 border rounded text-gray-700 hover:bg-gray-50 disabled:text-gray-400 text-sm"
-                            title="Save without posting stock, payment or accounting entries"
-                        >
-                            {savingDraft ? 'Saving…' : 'Save Draft'}
-                        </button>
-                        {/* Print button with paper-size dropdown */}
-                        <div className="relative" ref={printMenuRef}>
-                            <div className="flex items-center border rounded overflow-hidden">
-                                <button
-                                    type="button"
-                                    onClick={() => handlePrint()}
-                                    className="px-3 py-2 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 text-sm"
-                                >
-                                    <Printer className="w-4 h-4" />
-                                    {paperSize}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPaperMenu((v) => !v)}
-                                    className="px-1.5 py-2 border-l text-gray-500 hover:bg-gray-50"
-                                    title="Choose paper size"
-                                >
-                                    <ChevronDown className="w-4 h-4" />
-                                </button>
+                        {showPaperMenu && (
+                            <div className="absolute right-0 bottom-full mb-1 z-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
+                                <p className="px-3 py-1 text-xs font-bold text-gray-400 uppercase tracking-wider">Paper Size</p>
+                                {PAPER_SIZES.map((size) => (
+                                    <button
+                                        key={size}
+                                        type="button"
+                                        onClick={() => { setPaperSize(size); handlePrint(size); }}
+                                        className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 ${paperSize === size ? 'font-bold text-blue-600' : 'text-gray-700'}`}
+                                    >
+                                        {size === 'Thermal80' ? '80mm Thermal' : size === 'Thermal58' ? '58mm Thermal' : size}
+                                    </button>
+                                ))}
                             </div>
-                            {showPaperMenu && (
-                                <div className="absolute right-0 bottom-full mb-1 z-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
-                                    <p className="px-3 py-1 text-xs font-bold text-gray-400 uppercase tracking-wider">Paper Size</p>
-                                    {PAPER_SIZES.map((size) => (
-                                        <button
-                                            key={size}
-                                            type="button"
-                                            onClick={() => { setPaperSize(size); handlePrint(size); }}
-                                            className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 ${paperSize === size ? 'font-bold text-blue-600' : 'text-gray-700'}`}
-                                        >
-                                            {size === 'Thermal80' ? '80mm Thermal' : size === 'Thermal58' ? '58mm Thermal' : size}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                        <button
-                            type="submit"
-                            disabled={submitting || savingDraft || items.length === 0}
-                            className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 text-sm font-medium"
-                        >
-                            {submitting ? 'Creating…' : 'Create Sale'}
-                        </button>
+                        )}
                     </div>
-                </div>
-            </div>
-        </form>
+                    <button
+                        type="submit"
+                        disabled={submitting || savingDraft || items.length === 0}
+                        className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 text-sm font-medium"
+                    >
+                        {submitting ? 'Creating…' : 'Create Sale'}
+                    </button>
+                </>
+            }
+        />
     );
 }

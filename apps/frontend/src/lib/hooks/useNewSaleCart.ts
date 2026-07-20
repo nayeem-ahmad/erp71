@@ -10,6 +10,13 @@ export interface LineItem {
     discount: number;
     /** Stock on hand when the product was picked — shown for reference only. */
     availableQty?: number;
+    /**
+     * Id of the line this one derives from, where the document is built from
+     * another (a sales return carries the originating sale_item id here).
+     */
+    sourceLineId?: string;
+    /** Upper bound on quantity, e.g. units of a sale line not yet returned. */
+    maxQuantity?: number;
 }
 
 export interface Payment {
@@ -57,6 +64,21 @@ export function useNewSaleCart() {
         setPayments(payments);
     }, []);
 
+    /** Replace the whole cart at once — used to seed it from an existing sale. */
+    const loadCart = useCallback((next: {
+        items: LineItem[];
+        customer?: any;
+        description?: string;
+        refNumber?: string;
+        payments?: Payment[];
+    }) => {
+        setItems(next.items);
+        setCustomer(next.customer ?? null);
+        setDescription(next.description ?? '');
+        setRefNumber(next.refNumber ?? '');
+        setPayments(next.payments ?? []);
+    }, []);
+
     const clearCart = useCallback(() => {
         setItems([]);
         setCustomer(null);
@@ -78,6 +100,7 @@ export function useNewSaleCart() {
         updateItem,
         removeItem,
         updatePayment,
+        loadCart,
         clearCart,
     };
 }

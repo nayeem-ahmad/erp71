@@ -47,7 +47,7 @@ export default function StorefrontHeader({
                 <div className="flex items-center justify-between h-20 gap-4">
                     <Link
                         href={`/store/${slug}`}
-                        className="text-xl sm:text-2xl font-black tracking-tighter truncate min-w-0"
+                        className="text-xl sm:text-2xl font-bold tracking-tight truncate min-w-0"
                     >
                         {storeName}
                     </Link>

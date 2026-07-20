@@ -1,0 +1,188 @@
+import { Trash2, Minus, Plus } from 'lucide-react';
+import { LineItem } from '@/lib/hooks/useNewSaleCart';
+
+interface LineItemsTableProps {
+    items: LineItem[];
+    onUpdateItem: (productId: string, updates: Partial<LineItem>) => void;
+    onRemoveItem: (productId: string) => void;
+    /** Freeze every field — viewing an existing document rather than editing it. */
+    readOnly?: boolean;
+    /**
+     * Columns are opt-out because not every document persists every field:
+     * sales orders and quotations store only productId/quantity/price, so
+     * showing a per-line discount there would silently drop it on save.
+     */
+    showDiscount?: boolean;
+    showAvailable?: boolean;
+    /** Returns price their source sale line — the amount is not negotiable. */
+    readOnlyPrice?: boolean;
+    /** Hard cap per line, e.g. the un-returned quantity of a sale item. */
+    maxQuantityOf?: (item: LineItem) => number | undefined;
+    emptyMessage?: string;
+}
+
+export default function LineItemsTable({
+    items,
+    onUpdateItem,
+    onRemoveItem,
+    readOnly = false,
+    showDiscount = true,
+    showAvailable = true,
+    readOnlyPrice = false,
+    maxQuantityOf,
+    emptyMessage,
+}: LineItemsTableProps) {
+    const priceFrozen = readOnly || readOnlyPrice;
+    const columnCount = 6 + (showDiscount ? 1 : 0) + (showAvailable ? 1 : 0);
+
+    const handleQuantityChange = (productId: string, quantity: number) => {
+        if (quantity <= 0) return;
+        const item = items.find((entry) => entry.productId === productId);
+        const max = item && maxQuantityOf ? maxQuantityOf(item) : undefined;
+        onUpdateItem(productId, { quantity: max == null ? quantity : Math.min(quantity, max) });
+    };
+
+    const handlePriceChange = (productId: string, price: number) => {
+        onUpdateItem(productId, { price: Math.max(0, price) });
+    };
+
+    const handleDiscountChange = (productId: string, discount: number) => {
+        onUpdateItem(productId, { discount: Math.max(0, discount) });
+    };
+
+    const calculateLineTotal = (item: LineItem) => {
+        const subtotal = item.quantity * item.price;
+        return subtotal - subtotal * (item.discount / 100);
+    };
+
+    return (
+        <div className="h-full overflow-hidden rounded border bg-white flex flex-col">
+            <div className="flex-1 overflow-y-auto overflow-x-auto">
+            <table className="w-full text-sm min-w-[620px]">
+                <thead className="sticky top-0 z-10 bg-gray-50 border-b">
+                    <tr className="text-[11px] uppercase tracking-wide text-gray-500">
+                        <th className="px-2 py-1.5 text-left font-semibold w-8">#</th>
+                        <th className="px-2 py-1.5 text-left font-semibold">Name</th>
+                        <th className="px-2 py-1.5 text-left font-semibold hidden md:table-cell">Group</th>
+                        {showAvailable && (
+                            <th className="px-2 py-1.5 text-right font-semibold hidden md:table-cell">Avail</th>
+                        )}
+                        <th className="px-2 py-1.5 text-right font-semibold">Price</th>
+                        {showDiscount && <th className="px-2 py-1.5 text-right font-semibold">Disc %</th>}
+                        <th className="px-2 py-1.5 text-center font-semibold">Qty</th>
+                        <th className="px-2 py-1.5 text-right font-semibold">Total</th>
+                        <th className="px-2 py-1.5 w-8"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {items.length === 0 ? (
+                        <tr>
+                            <td colSpan={columnCount} className="px-3 py-10 text-center text-gray-400">
+                                {emptyMessage
+                                    ?? (readOnly ? 'No items on this sale.' : 'No items yet — search and add products above.')}
+                            </td>
+                        </tr>
+                    ) : (
+                        items.map((item, index) => (
+                            <tr key={item.productId} className="border-b last:border-b-0 hover:bg-gray-50">
+                                <td className="px-2 py-1 text-gray-500">{index + 1}</td>
+                                <td className="px-2 py-1 text-gray-900 font-medium">{item.name}</td>
+                                <td className="px-2 py-1 text-gray-500 text-xs hidden md:table-cell">
+                                    {item.group}
+                                    {item.subgroup && ` → ${item.subgroup}`}
+                                </td>
+                                {showAvailable && (
+                                    <td className="px-2 py-1 text-right text-xs hidden md:table-cell">
+                                        {item.availableQty == null ? (
+                                            <span className="text-gray-400">—</span>
+                                        ) : (
+                                            <span className={item.quantity > item.availableQty ? 'text-amber-600 font-medium' : 'text-gray-500'}>
+                                                {item.availableQty}
+                                            </span>
+                                        )}
+                                    </td>
+                                )}
+                                <td className="px-2 py-1 text-right">
+                                    {priceFrozen ? (
+                                        <span className="text-gray-700">৳{item.price.toFixed(2)}</span>
+                                    ) : (
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={item.price}
+                                            onChange={(e) => handlePriceChange(item.productId, parseFloat(e.target.value) || 0)}
+                                            className="w-20 px-1.5 py-0.5 border rounded text-sm text-right"
+                                        />
+                                    )}
+                                </td>
+                                {showDiscount && (
+                                    <td className="px-2 py-1 text-right">
+                                        {readOnly ? (
+                                            <span className="text-gray-700">{item.discount || 0}</span>
+                                        ) : (
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                value={item.discount}
+                                                onChange={(e) => handleDiscountChange(item.productId, parseFloat(e.target.value) || 0)}
+                                                className="w-14 px-1.5 py-0.5 border rounded text-sm text-right"
+                                            />
+                                        )}
+                                    </td>
+                                )}
+                                <td className="px-2 py-1">
+                                    {readOnly ? (
+                                        <div className="text-center text-gray-700">{item.quantity}</div>
+                                    ) : (
+                                        <div className="flex items-center justify-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleQuantityChange(item.productId, item.quantity - 1)}
+                                                className="text-gray-400 hover:text-gray-700"
+                                            >
+                                                <Minus className="w-3.5 h-3.5" />
+                                            </button>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max={maxQuantityOf?.(item)}
+                                                value={item.quantity}
+                                                onChange={(e) => handleQuantityChange(item.productId, parseInt(e.target.value) || 1)}
+                                                className="w-12 px-1.5 py-0.5 border rounded text-sm text-center"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => handleQuantityChange(item.productId, item.quantity + 1)}
+                                                className="text-gray-400 hover:text-gray-700"
+                                            >
+                                                <Plus className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    )}
+                                </td>
+                                <td className="px-2 py-1 text-right text-gray-900 font-semibold whitespace-nowrap">
+                                    ৳{calculateLineTotal(item).toFixed(2)}
+                                </td>
+                                <td className="px-2 py-1 text-center">
+                                    {!readOnly && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onRemoveItem(item.productId)}
+                                            className="text-red-500 hover:text-red-700"
+                                            title="Remove item"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                </td>
+                            </tr>
+                        ))
+                    )}
+                </tbody>
+            </table>
+            </div>
+        </div>
+    );
+}

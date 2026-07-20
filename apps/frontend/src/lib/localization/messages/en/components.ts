@@ -86,7 +86,8 @@ export const componentsMessages = {
         unsupported: 'Voice navigation needs Chrome, Edge, or Safari on HTTPS or localhost.',
         micDenied: 'Microphone permission denied. Allow mic access in your browser settings.',
         listenError: 'Could not start voice recognition. Try again.',
-        networkError: 'Voice recognition needs an internet connection.',
+        networkError: 'You appear to be offline. Voice recognition needs an internet connection.',
+        serviceUnreachable: 'Could not reach the speech service. Your browser sends voice to Google’s servers — a VPN, ad blocker, firewall, or a Chromium build without speech keys (e.g. Brave) can block it. Try Chrome or Edge.',
         audioCaptureError: 'Could not access your microphone. Check device and browser settings.',
         insecureContext: 'Voice navigation only works on HTTPS or localhost.',
         targets: {

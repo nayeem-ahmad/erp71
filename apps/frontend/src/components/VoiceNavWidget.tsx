@@ -11,6 +11,7 @@ import {
     extractBestTranscript,
     getSpeechRecognitionCtor,
     getVoiceNavHintIds,
+    isBrowserOffline,
     isSpeechRecognitionSupported,
     matchVoiceNav,
     requestMicrophoneAccess,
@@ -20,6 +21,9 @@ import {
 } from '@/lib/voice-nav';
 
 const LISTEN_TIMEOUT_MS = 6_000;
+/** Chromium often reports a spurious `network` error on the first attempt; retry before giving up. */
+const MAX_NETWORK_ATTEMPTS = 3;
+const NETWORK_RETRY_DELAY_MS = 500;
 
 export default function VoiceNavWidget() {
     const { t, locale } = useI18n();
@@ -32,6 +36,8 @@ export default function VoiceNavWidget() {
     const heardRef = useRef<string | null>(null);
     const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const networkAttemptsRef = useRef(0);
     const handledRef = useRef(false);
     const startingRef = useRef(false);
     const rootRef = useRef<HTMLDivElement>(null);
@@ -49,8 +55,16 @@ export default function VoiceNavWidget() {
         }
     }, []);
 
+    const clearRetryTimer = useCallback(() => {
+        if (retryTimerRef.current) {
+            clearTimeout(retryTimerRef.current);
+            retryTimerRef.current = null;
+        }
+    }, []);
+
     const stopListening = useCallback(() => {
         clearListenTimeout();
+        clearRetryTimer();
         const recognition = recognitionRef.current;
         recognitionRef.current = null;
         if (recognition) {
@@ -65,12 +79,13 @@ export default function VoiceNavWidget() {
             }
         }
         setListening(false);
-    }, [clearListenTimeout]);
+    }, [clearListenTimeout, clearRetryTimer]);
 
     useEffect(() => () => {
         clearListenTimeout();
+        clearRetryTimer();
         recognitionRef.current?.abort();
-    }, [clearListenTimeout]);
+    }, [clearListenTimeout, clearRetryTimer]);
 
     const navigateToMatch = useCallback((transcript: string) => {
         const match = matchVoiceNav(transcript);
@@ -104,7 +119,9 @@ export default function VoiceNavWidget() {
                 toast.error(m.micDenied);
                 break;
             case 'network':
-                toast.error(m.networkError);
+                // `network` covers both "device is offline" and "speech backend unreachable" —
+                // the latter happens on perfectly good connections (VPN/ad blocker/Brave).
+                toast.error(isBrowserOffline() ? m.networkError : m.serviceUnreachable);
                 break;
             case 'audio-capture':
                 toast.error(m.audioCaptureError);
@@ -167,17 +184,37 @@ export default function VoiceNavWidget() {
 
         recognition.onerror = (event) => {
             const code = classifySpeechRecognitionError(event.error);
-            if (code === 'language-not-supported' && langIndex + 1 < langChain.length) {
+            const canFallBackLang = langIndex + 1 < langChain.length;
+
+            if (code === 'language-not-supported' && canFallBackLang) {
                 recognitionRef.current = null;
                 launchRecognition(langChain[langIndex + 1], langChain, langIndex + 1);
                 return;
             }
+
+            if (code === 'network' && !isBrowserOffline()) {
+                networkAttemptsRef.current += 1;
+                if (networkAttemptsRef.current < MAX_NETWORK_ATTEMPTS) {
+                    // Some locales route to a backend the browser cannot reach; fall through to
+                    // en-US first, then retry once more before surfacing an error.
+                    const nextIndex = canFallBackLang ? langIndex + 1 : langIndex;
+                    recognitionRef.current = null;
+                    clearRetryTimer();
+                    retryTimerRef.current = setTimeout(() => {
+                        retryTimerRef.current = null;
+                        launchRecognition(langChain[nextIndex], langChain, nextIndex);
+                    }, NETWORK_RETRY_DELAY_MS);
+                    return;
+                }
+            }
+
             stopListening();
             toastForSpeechError(code);
         };
 
         recognition.onend = () => {
             clearListenTimeout();
+            if (retryTimerRef.current) return; // a retry is already queued; stay in listening state
             setListening(false);
             recognitionRef.current = null;
             if (!handledRef.current && heardRef.current) {
@@ -201,7 +238,7 @@ export default function VoiceNavWidget() {
             stopListening();
             toast.error(m.listenError);
         }
-    }, [clearListenTimeout, handleTranscript, m, stopListening, toastForSpeechError]);
+    }, [clearListenTimeout, clearRetryTimer, handleTranscript, m, stopListening, toastForSpeechError]);
 
     const startListening = useCallback(async () => {
         if (startingRef.current) return;
@@ -226,6 +263,7 @@ export default function VoiceNavWidget() {
             }
 
             setHintOpen(false);
+            networkAttemptsRef.current = 0;
             const langChain = speechLocaleFallbackChain(locale);
             launchRecognition(langChain[0], langChain, 0);
         } finally {
