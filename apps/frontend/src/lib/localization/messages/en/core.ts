@@ -313,7 +313,7 @@ export const coreMessages = {
             valuation: 'Valuation',
             orders: 'Orders',
             storefrontOrders: 'Online Orders',
-            storefrontSettings: 'Settings',
+            storefrontSettings: 'Storefront',
             tenants: 'Tenants',
             tenantPayments: 'Tenant Payments',
             tenantLedger: 'Tenant Ledger',

@@ -312,7 +312,7 @@ export const coreMessages = {
                 valuation: "Penilaian",
                 orders: "Pesanan",
                 storefrontOrders: "Pesanan Dalam Talian",
-                storefrontSettings: "Tetapan",
+                storefrontSettings: "Kedai Dalam Talian",
                 tenants: "Penyewa",
                 tenantPayments: "Pembayaran Penyewa",
                 tenantLedger: "Lejar Penyewa",
