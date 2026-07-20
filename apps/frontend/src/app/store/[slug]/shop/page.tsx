@@ -442,7 +442,7 @@ export default function StorefrontShopPage() {
             <main className="py-14 sm:py-16">
                 <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="mb-8">
-                        <h1 className="text-4xl sm:text-5xl font-black tracking-tight">{shop.title}</h1>
+                        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">{shop.title}</h1>
                         <p className="text-gray-500 mt-2">
                             {activeCategoryFilter === 'ALL' ? shop.browseAll : formatMessage(shop.browsingCategory, { category: activeCategoryFilter })}
                         </p>
@@ -557,44 +557,44 @@ export default function StorefrontShopPage() {
                                     <p className="text-lg font-medium">{shop.noFilteredProducts}</p>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                                     {visibleProducts.map((product) => {
                                         const price = toNumber(product.selling_price);
                                         const comparePrice = toNumber(product.compare_at_price);
                                         const onSale = comparePrice > price;
 
                                         return (
-                                            <article key={product.id} className="bg-white rounded-2xl shadow-sm hover:shadow-lg transition-shadow border border-gray-100 overflow-hidden flex flex-col">
-                                                <div className="relative aspect-[4/5] bg-gray-100 overflow-hidden">
+                                            <article key={product.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow border border-gray-100 overflow-hidden flex flex-col">
+                                                <div className="relative aspect-square bg-gray-100 overflow-hidden">
                                                     {product.image_url ? (
                                                         <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
                                                     ) : (
                                                         <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
-                                                            <Package className="w-12 h-12 text-gray-300" />
+                                                            <Package className="w-8 h-8 text-gray-300" />
                                                         </div>
                                                     )}
 
                                                     {onSale && (
-                                                        <div className="absolute top-4 left-4 bg-white text-black text-xs font-bold px-3 py-1.5 rounded-full shadow-sm">
+                                                        <div className="absolute top-2 left-2 bg-white text-black text-[10px] font-bold px-2 py-1 rounded-full shadow-sm">
                                                             {m.sale}
                                                         </div>
                                                     )}
                                                 </div>
 
-                                                <div className="p-5 flex flex-col flex-1">
-                                                    <div className="text-sm text-gray-500 mb-1.5 font-medium">{product.group_name || m.categoryFallback}</div>
-                                                    <h3 className="font-semibold text-gray-900 leading-snug mb-3">{product.name}</h3>
-                                                    <div className="flex items-center gap-2 mt-auto pt-2 border-t border-gray-50">
-                                                        <span className="font-black text-lg">{formatBDT(price)}</span>
+                                                <div className="p-3 flex flex-col flex-1">
+                                                    <div className="text-xs text-gray-500 mb-1 font-medium truncate">{product.group_name || m.categoryFallback}</div>
+                                                    <h3 className="text-sm font-semibold text-gray-900 leading-snug mb-2 line-clamp-2">{product.name}</h3>
+                                                    <div className="flex flex-wrap items-baseline gap-x-2 mt-auto">
+                                                        <span className="font-bold text-sm">{formatBDT(price)}</span>
                                                         {onSale && (
-                                                            <span className="text-sm text-gray-400 line-through">{formatOptionalPrice(product.compare_at_price)}</span>
+                                                            <span className="text-xs text-gray-400 line-through">{formatOptionalPrice(product.compare_at_price)}</span>
                                                         )}
                                                     </div>
                                                     <button
                                                         type="button"
                                                         onClick={() => addToCart(product)}
                                                         disabled={product.stock_quantity <= 0}
-                                                        className="mt-4 inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 transition-colors disabled:bg-gray-300"
+                                                        className="mt-2.5 inline-flex min-h-touch items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 transition-colors disabled:bg-gray-300"
                                                     >
                                                         {product.stock_quantity > 0 ? m.addToCart : m.outOfStock}
                                                     </button>

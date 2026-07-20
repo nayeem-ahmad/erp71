@@ -74,7 +74,7 @@ export default function StorefrontSignInPage() {
         <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
             <div className="w-full max-w-md">
                 <div className="mb-8 text-center">
-                    <Link href={`/store/${slug}`} className="text-2xl font-black tracking-tighter text-gray-900">
+                    <Link href={`/store/${slug}`} className="text-2xl font-bold tracking-tight text-gray-900">
                         {storeName || m.storeFallback}
                     </Link>
                     <h1 className="mt-4 text-xl font-bold text-gray-800">{a.signInTitle}</h1>
