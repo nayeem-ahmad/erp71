@@ -151,6 +151,15 @@ export async function requestMicrophoneAccess(): Promise<MicPermissionResult> {
     }
 }
 
+/**
+ * A `network` speech error does NOT mean the device is offline: the browser streams audio to a
+ * remote speech backend (Google's for Chromium, Apple's for Safari), which a VPN, ad blocker,
+ * firewall, or a Chromium build shipped without speech API keys can block on its own.
+ */
+export function isBrowserOffline(): boolean {
+    return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
 export type SpeechRecognitionErrorCode =
     | 'not-allowed'
     | 'aborted'
