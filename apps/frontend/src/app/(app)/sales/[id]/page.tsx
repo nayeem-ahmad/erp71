@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Printer, Save, Package, CreditCard, FileText, Pencil, Plus, Trash2, X, Search, User, Download } from 'lucide-react';
+import { Printer, Save, Package, CreditCard, FileText, Pencil, Plus, Trash2, X, Search, User, Download, Check } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT, toDatetimeLocal } from '@/lib/format';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
@@ -12,6 +12,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { PageShell } from '@/components/ui';
+import { toast } from '@/lib/toast';
 
 interface EditItem {
     productId: string;
@@ -58,7 +59,9 @@ function SaleDetailPageContent() {
     const [sale, setSale] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [finalizing, setFinalizing] = useState(false);
     const isEditMode = searchParams.get('edit') === 'true';
+    const isDraft = sale?.status === 'DRAFT';
 
     // Edit state
     const [editCustomerId, setEditCustomerId] = useState<string | null>(null);
@@ -152,6 +155,24 @@ function SaleDetailPageContent() {
             alert(t.shared.errors.saveSale);
         } finally {
             setSaving(false);
+        }
+    };
+
+    // Post a parked draft for real. The backend re-runs the full sale path
+    // (stock, credit, loyalty, accounting) against whatever the draft holds now,
+    // so nothing needs to be sent from here.
+    const handleCompleteDraft = async () => {
+        if (!sale) return;
+        setFinalizing(true);
+        try {
+            await api.finalizeSale(sale.id);
+            await loadSale(sale.id);
+            toast.success(t.sales.detail.completed);
+        } catch (error: any) {
+            console.error('Failed to finalize draft', error);
+            toast.error(error?.message || t.sales.detail.completeFailed);
+        } finally {
+            setFinalizing(false);
         }
     };
 
@@ -330,6 +351,13 @@ function SaleDetailPageContent() {
     return (
         <PageShell>
             <div className="max-w-4xl mx-auto space-y-6">
+                {/* Draft notice — nothing has hit stock or the ledger yet */}
+                {isDraft && !isEditMode && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-3 text-sm text-amber-800">
+                        {t.sales.detail.draftBanner}
+                    </div>
+                )}
+
                 {/* Edit Mode Banner */}
                 {isEditMode && (
                     <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-3 flex items-center justify-between">
@@ -372,6 +400,16 @@ function SaleDetailPageContent() {
                     actions={
                         !isEditMode ? (
                             <>
+                                {isDraft && (
+                                    <button
+                                        onClick={handleCompleteDraft}
+                                        disabled={finalizing}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 transition-all disabled:bg-gray-400"
+                                    >
+                                        <Check className="w-4 h-4" />
+                                        <span>{finalizing ? t.sales.detail.completing : t.sales.detail.completeSale}</span>
+                                    </button>
+                                )}
                                 <button
                                     onClick={() => router.push(`/sales/${sale.id}?edit=true`)}
                                     className="bg-white hover:bg-amber-50 text-gray-700 hover:text-amber-700 border border-gray-200 hover:border-amber-300 px-5 py-2.5 rounded-xl text-xs font-semibold shadow-sm flex items-center space-x-2 transition-all"
@@ -415,7 +453,9 @@ function SaleDetailPageContent() {
                                 onChange={e => setEditStatus(e.target.value)}
                                 className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300"
                             >
-                                {SALE_STATUSES.map(s => (
+                                {/* A draft can only leave DRAFT via Complete Sale,
+                                    which runs the real posting path. */}
+                                {(isDraft ? ['DRAFT'] : SALE_STATUSES).map(s => (
                                     <option key={s} value={s}>
                                         {t.shared.statuses.sale[s as keyof typeof t.shared.statuses.sale] ?? s.replace(/_/g, ' ')}
                                     </option>

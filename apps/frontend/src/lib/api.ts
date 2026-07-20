@@ -2196,6 +2196,12 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    /** Post a parked DRAFT sale for real (stock, payments, accounting). */
+    finalizeSale: (id: string, data: any = {}) => fetchWithAuth(`/sales/${id}/finalize`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     updateProfileAvatar: (formData: FormData) =>
         fetchWithAuth('/auth/me/avatar', {
             method: 'PATCH',

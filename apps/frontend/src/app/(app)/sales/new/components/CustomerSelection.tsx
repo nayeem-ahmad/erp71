@@ -14,8 +14,10 @@ export default function CustomerSelection({ customer, setCustomer }: CustomerSel
     const [filteredCustomers, setFilteredCustomers] = useState<any[]>([]);
     const [showDropdown, setShowDropdown] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [highlight, setHighlight] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const optionRefs = useRef<(HTMLDivElement | null)[]>([]);
 
     useEffect(() => {
         loadCustomers();
@@ -39,7 +41,13 @@ export default function CustomerSelection({ customer, setCustomer }: CustomerSel
             (c.phone?.includes(query) ?? false)
         );
         setFilteredCustomers(filtered);
+        setHighlight(0);
     }, [query, customers]);
+
+    // Keep the highlighted row visible while arrowing through a long list.
+    useEffect(() => {
+        optionRefs.current[highlight]?.scrollIntoView({ block: 'nearest' });
+    }, [highlight]);
 
     const isInside = useCallback(
         (target: Node) =>
@@ -55,6 +63,30 @@ export default function CustomerSelection({ customer, setCustomer }: CustomerSel
         setCustomer(cust);
         setQuery('');
         setShowDropdown(false);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (!showDropdown || filteredCustomers.length === 0) {
+            if (e.key === 'ArrowDown') {
+                setShowDropdown(true);
+                e.preventDefault();
+            }
+            return;
+        }
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHighlight((i) => (i + 1) % filteredCustomers.length);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlight((i) => (i - 1 + filteredCustomers.length) % filteredCustomers.length);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const cust = filteredCustomers[highlight];
+            if (cust) handleSelectCustomer(cust);
+        } else if (e.key === 'Escape') {
+            setShowDropdown(false);
+        }
     };
 
     const handleClearCustomer = () => {
@@ -75,6 +107,7 @@ export default function CustomerSelection({ customer, setCustomer }: CustomerSel
                         setShowDropdown(true);
                     }}
                     onFocus={() => setShowDropdown(true)}
+                    onKeyDown={handleKeyDown}
                     placeholder={customer ? customer.name : 'Customer — search by name or phone…'}
                     className="w-full pl-8 pr-8 py-1.5 border rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-transparent"
                 />
@@ -101,11 +134,13 @@ export default function CustomerSelection({ customer, setCustomer }: CustomerSel
                                 {query ? 'No customers found' : 'Start typing to search'}
                             </div>
                         ) : (
-                            filteredCustomers.map((cust) => (
+                            filteredCustomers.map((cust, index) => (
                                 <div
                                     key={cust.id}
+                                    ref={(el) => { optionRefs.current[index] = el; }}
                                     onClick={() => handleSelectCustomer(cust)}
-                                    className="px-3 py-2 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+                                    onMouseEnter={() => setHighlight(index)}
+                                    className={`px-3 py-2 cursor-pointer border-b last:border-b-0 ${index === highlight ? 'bg-blue-50' : ''}`}
                                 >
                                     <div className="font-medium text-gray-900 text-sm">{cust.name}</div>
                                     <div className="text-xs text-gray-500">

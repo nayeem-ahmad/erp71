@@ -11,12 +11,14 @@ interface TotalsFooterProps {
     };
     onTotalsChange: (newTotals: any) => void;
     tenantVatRate: number;
+    /** Outstanding balance the selected customer already owes, if any. */
+    previousDue?: number;
 }
 
 // Dense totals summary for the right panel. Adjustment inputs (discount %,
 // transport, labor, rounding) sit inline on the same row as their value so
 // every field stays visible without a separate grid.
-export default function TotalsFooter({ totals, onTotalsChange, tenantVatRate }: TotalsFooterProps) {
+export default function TotalsFooter({ totals, onTotalsChange, tenantVatRate, previousDue = 0 }: TotalsFooterProps) {
     const inputClass = 'w-16 px-1.5 py-0.5 border rounded text-xs text-right';
 
     return (
@@ -87,6 +89,15 @@ export default function TotalsFooter({ totals, onTotalsChange, tenantVatRate }: 
                 <span className="font-semibold text-gray-900">Total</span>
                 <span className="text-lg font-bold text-blue-600">৳{totals.total.toFixed(2)}</span>
             </div>
+
+            {/* What the customer already owed before this sale — informational
+                only; it is never rolled into the sale total. */}
+            {previousDue > 0.005 && (
+                <div className="flex justify-between items-center">
+                    <span className="text-gray-500">Previous Due</span>
+                    <span className="font-medium text-amber-600">৳{previousDue.toFixed(2)}</span>
+                </div>
+            )}
         </div>
     );
 }

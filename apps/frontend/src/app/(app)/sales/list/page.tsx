@@ -31,6 +31,7 @@ interface Sale {
 }
 
 const statusColors: Record<string, string> = {
+    DRAFT: 'bg-gray-50 text-gray-600 border-gray-200',
     COMPLETED: 'bg-green-50 text-green-700 border-green-200',
     REFUNDED: 'bg-danger-light text-danger-text border-red-200',
     PARTIAL_REFUND: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -208,6 +209,7 @@ export default function SalesPage() {
 
     const filterPresets = useMemo(
         () => [
+            { label: t.sales.filterPresets.draft, filters: [{ id: 'status', value: 'DRAFT' }] },
             { label: t.sales.filterPresets.completed, filters: [{ id: 'status', value: 'COMPLETED' }] },
             { label: t.sales.filterPresets.refunded, filters: [{ id: 'status', value: 'REFUNDED' }] },
             { label: t.sales.filterPresets.partialRefund, filters: [{ id: 'status', value: 'PARTIAL_REFUND' }] },

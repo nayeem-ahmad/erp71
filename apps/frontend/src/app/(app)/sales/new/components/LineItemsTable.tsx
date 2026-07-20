@@ -14,6 +14,10 @@ export default function LineItemsTable({ items, onUpdateItem, onRemoveItem }: Li
         }
     };
 
+    const handlePriceChange = (productId: string, price: number) => {
+        onUpdateItem(productId, { price: Math.max(0, price) });
+    };
+
     const handleDiscountChange = (productId: string, discount: number) => {
         onUpdateItem(productId, { discount: Math.max(0, discount) });
     };
@@ -26,12 +30,13 @@ export default function LineItemsTable({ items, onUpdateItem, onRemoveItem }: Li
     return (
         <div className="h-full overflow-hidden rounded border bg-white flex flex-col">
             <div className="flex-1 overflow-y-auto overflow-x-auto">
-            <table className="w-full text-sm min-w-[560px]">
+            <table className="w-full text-sm min-w-[620px]">
                 <thead className="sticky top-0 z-10 bg-gray-50 border-b">
                     <tr className="text-[11px] uppercase tracking-wide text-gray-500">
                         <th className="px-2 py-1.5 text-left font-semibold w-8">#</th>
                         <th className="px-2 py-1.5 text-left font-semibold">Name</th>
                         <th className="px-2 py-1.5 text-left font-semibold hidden md:table-cell">Group</th>
+                        <th className="px-2 py-1.5 text-right font-semibold hidden md:table-cell">Avail</th>
                         <th className="px-2 py-1.5 text-right font-semibold">Price</th>
                         <th className="px-2 py-1.5 text-right font-semibold">Disc %</th>
                         <th className="px-2 py-1.5 text-center font-semibold">Qty</th>
@@ -42,7 +47,7 @@ export default function LineItemsTable({ items, onUpdateItem, onRemoveItem }: Li
                 <tbody>
                     {items.length === 0 ? (
                         <tr>
-                            <td colSpan={8} className="px-3 py-10 text-center text-gray-400">
+                            <td colSpan={9} className="px-3 py-10 text-center text-gray-400">
                                 No items yet — search and add products above.
                             </td>
                         </tr>
@@ -55,7 +60,25 @@ export default function LineItemsTable({ items, onUpdateItem, onRemoveItem }: Li
                                     {item.group}
                                     {item.subgroup && ` → ${item.subgroup}`}
                                 </td>
-                                <td className="px-2 py-1 text-right text-gray-900 whitespace-nowrap">৳{item.price.toFixed(2)}</td>
+                                <td className="px-2 py-1 text-right text-xs hidden md:table-cell">
+                                    {item.availableQty == null ? (
+                                        <span className="text-gray-400">—</span>
+                                    ) : (
+                                        <span className={item.quantity > item.availableQty ? 'text-amber-600 font-medium' : 'text-gray-500'}>
+                                            {item.availableQty}
+                                        </span>
+                                    )}
+                                </td>
+                                <td className="px-2 py-1 text-right">
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={item.price}
+                                        onChange={(e) => handlePriceChange(item.productId, parseFloat(e.target.value) || 0)}
+                                        className="w-20 px-1.5 py-0.5 border rounded text-sm text-right"
+                                    />
+                                </td>
                                 <td className="px-2 py-1 text-right">
                                     <input
                                         type="number"

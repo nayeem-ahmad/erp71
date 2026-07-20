@@ -8,6 +8,8 @@ export interface LineItem {
     subgroup?: string;
     quantity: number;
     discount: number;
+    /** Stock on hand when the product was picked — shown for reference only. */
+    availableQty?: number;
 }
 
 export interface Payment {

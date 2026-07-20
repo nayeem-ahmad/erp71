@@ -30,6 +30,7 @@ export const salesMessages = {
         version: 'v{version}',
         statuses: {
             sale: {
+                DRAFT: 'Draft',
                 COMPLETED: 'Completed',
                 REFUNDED: 'Refunded',
                 PARTIAL_REFUND: 'Partial Refund',
@@ -301,6 +302,7 @@ export const salesMessages = {
             actions: 'Actions',
         },
         filterPresets: {
+            draft: 'Draft',
             completed: 'Completed',
             refunded: 'Refunded',
             partialRefund: 'Partial Refund',
@@ -325,6 +327,11 @@ export const salesMessages = {
             notePlaceholder: 'Add a note about this sale...',
             saveAllChanges: 'Save All Changes',
             saving: 'Saving...',
+            draftBanner: 'This is a draft — nothing has been posted to stock or accounts yet.',
+            completeSale: 'Complete Sale',
+            completing: 'Completing...',
+            completed: 'Draft completed — stock and accounts updated.',
+            completeFailed: 'Could not complete this draft',
         },
         invoice: {
             backToSale: 'Back to Sale',

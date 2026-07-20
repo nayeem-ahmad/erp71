@@ -219,6 +219,171 @@ describe('SalesService', () => {
     });
   });
 
+  describe('create() — drafts', () => {
+    const draftDto = {
+      storeId: 'store-1',
+      customerId: 'cust-1',
+      // Deliberately inconsistent with the line total: a draft is stored as
+      // entered, so no total/credit validation runs.
+      totalAmount: 999,
+      amountPaid: 0,
+      items: [{ productId: 'prod-1', quantity: 2, priceAtSale: 15 }],
+      isDraft: true,
+    };
+
+    beforeEach(() => {
+      tx.product.count = jest.fn().mockResolvedValue(1);
+      tx.sale.create.mockResolvedValue({ id: 'draft-1', serial_number: 'SL-1', total_amount: 999 });
+      tx.saleItem.create.mockResolvedValue({});
+    });
+
+    it('stores the sale as DRAFT with its lines and posts nothing', async () => {
+      const result = await service.create('tenant-1', 'user-1', draftDto);
+
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'DRAFT', total_amount: 999, amount_paid: 0 }),
+        }),
+      );
+      expect(tx.saleItem.create).toHaveBeenCalledWith({
+        data: { sale_id: 'draft-1', product_id: 'prod-1', quantity: 2, price_at_sale: 15 },
+      });
+      expect(applyInventoryMovement).not.toHaveBeenCalled();
+      expect(autoPostFromRules).not.toHaveBeenCalled();
+      expect(tx.customer.update).not.toHaveBeenCalled();
+      expect(tx.customerCreditTransaction.create).not.toHaveBeenCalled();
+      expect(result.posting_status).toBe('skipped');
+    });
+
+    it('rejects a draft referencing a product that no longer exists', async () => {
+      tx.product.count.mockResolvedValue(0);
+
+      await expect(service.create('tenant-1', 'user-1', draftDto)).rejects.toThrow(BadRequestException);
+      expect(tx.sale.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('finalizeDraft()', () => {
+    const draftRow = {
+      id: 'draft-1',
+      tenant_id: 'tenant-1',
+      store_id: 'store-1',
+      counter_id: null,
+      customer_id: 'cust-1',
+      serial_number: 'SL-1',
+      reference_number: '2607-001',
+      status: 'DRAFT',
+      total_amount: 30,
+      amount_paid: 30,
+      note: 'parked',
+      items: [{ product_id: 'prod-1', quantity: 2, price_at_sale: 15 }],
+      payments: [{ payment_method: 'Cash', amount: 30, account_id: null }],
+    };
+
+    beforeEach(() => {
+      tx.sale.findFirst.mockResolvedValue(draftRow);
+      tx.sale.update.mockResolvedValue({
+        ...draftRow,
+        status: 'COMPLETED',
+        customer_id: 'cust-1',
+      });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.paymentRecord.create.mockResolvedValue({});
+    });
+
+    it('posts the parked draft: stock, lines, payments, customer spend and voucher', async () => {
+      const result = await service.finalizeDraft('tenant-1', 'user-1', 'draft-1');
+
+      // Parked lines/payments are replaced by what actually posts
+      expect(tx.saleItem.deleteMany).toHaveBeenCalledWith({ where: { sale_id: 'draft-1' } });
+      expect(tx.paymentRecord.deleteMany).toHaveBeenCalledWith({ where: { sale_id: 'draft-1' } });
+      expect(tx.paymentRecord.create).toHaveBeenCalledWith({
+        data: { sale_id: 'draft-1', payment_method: 'Cash', amount: 30, account_id: null },
+      });
+
+      expect(applyInventoryMovement).toHaveBeenCalledWith(
+        tx,
+        expect.objectContaining({ productId: 'prod-1', quantityDelta: -2, movementType: 'SALE' }),
+      );
+      expect(tx.sale.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'draft-1' },
+          data: expect.objectContaining({ status: 'COMPLETED', total_amount: 30 }),
+        }),
+      );
+      expect(tx.customer.update).toHaveBeenCalledWith({
+        where: { id: 'cust-1' },
+        data: { total_spent: { increment: 30 } },
+      });
+      expect(autoPostFromRules).toHaveBeenCalled();
+      expect(result.status).toBe('COMPLETED');
+    });
+
+    it('accepts edited items and payments on the way out', async () => {
+      await service.finalizeDraft('tenant-1', 'user-1', 'draft-1', {
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 15 }],
+        payments: [{ paymentMethod: 'Cash', amount: 15 }],
+        totalAmount: 15,
+      });
+
+      expect(applyInventoryMovement).toHaveBeenCalledWith(
+        tx,
+        expect.objectContaining({ quantityDelta: -1 }),
+      );
+      expect(tx.sale.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ total_amount: 15, amount_paid: 15 }),
+        }),
+      );
+    });
+
+    it('refuses to finalize a sale that is not a draft', async () => {
+      tx.sale.findFirst.mockResolvedValue({ ...draftRow, status: 'COMPLETED' });
+
+      await expect(service.finalizeDraft('tenant-1', 'user-1', 'draft-1')).rejects.toThrow(BadRequestException);
+      expect(applyInventoryMovement).not.toHaveBeenCalled();
+    });
+
+    it('leaves the draft untouched when stock is insufficient', async () => {
+      (applyInventoryMovement as jest.Mock).mockRejectedValueOnce(new BadRequestException('Insufficient stock'));
+
+      await expect(service.finalizeDraft('tenant-1', 'user-1', 'draft-1')).rejects.toThrow(BadRequestException);
+      // The whole finalize runs in one transaction, so the status flip rolls back
+      expect(autoPostFromRules).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('update() — drafts', () => {
+    beforeEach(() => {
+      tx.sale.findFirst.mockResolvedValue({
+        id: 'draft-1',
+        store_id: 'store-1',
+        customer_id: 'cust-1',
+        status: 'DRAFT',
+        total_amount: 30,
+        items: [{ product_id: 'prod-1', quantity: 2 }],
+        payments: [],
+      });
+      tx.sale.update.mockResolvedValue({ id: 'draft-1' });
+      tx.saleItem.create.mockResolvedValue({});
+    });
+
+    it('does not move stock when a draft is edited', async () => {
+      await service.update('tenant-1', 'draft-1', {
+        items: [{ productId: 'prod-1', quantity: 5, priceAtSale: 15 }],
+      });
+
+      expect(applyInventoryMovement).not.toHaveBeenCalled();
+      expect(tx.customer.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses to complete a draft through the update path', async () => {
+      await expect(
+        service.update('tenant-1', 'draft-1', { status: 'COMPLETED' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
   describe('create() — customer credit / keeping due', () => {
     it('records a credit sale when payment is short and within credit limit', async () => {
       tx.customer.findFirst.mockResolvedValue({

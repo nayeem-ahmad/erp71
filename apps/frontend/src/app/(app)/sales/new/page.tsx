@@ -7,7 +7,7 @@ import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { formatBDT, toDatetimeLocal } from '@/lib/format';
 import CustomerSelection from './components/CustomerSelection';
-import ProductSearch from './components/ProductSearch';
+import ProductSearch, { availableQtyOf } from './components/ProductSearch';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 import LineItemsTable from './components/LineItemsTable';
@@ -41,6 +41,7 @@ export default function NewSalePage() {
     const [salesSettings, setSalesSettings] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [savingDraft, setSavingDraft] = useState(false);
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [showPaperMenu, setShowPaperMenu] = useState(false);
     const [paperSize, setPaperSize] = useState<PaperSize>('A4');
@@ -134,17 +135,24 @@ export default function NewSalePage() {
         );
     };
 
-    const handleAddItem = (product: any, quantity = 1) => {
+    const handleAddItem = (
+        product: any,
+        options?: { quantity?: number; price?: number; availableQty?: number },
+    ) => {
         addItem({
             productId: product.id,
             name: product.name,
             // API serializes Decimal price as a string; coerce to number so
             // cart math and `.toFixed()` downstream work correctly.
-            price: Number(product.price),
+            price: options?.price ?? Number(product.price),
             group: product.group?.name,
             subgroup: product.subgroup?.name,
-            quantity,
+            quantity: options?.quantity ?? 1,
             discount: 0,
+            // Voice-entry products come without stock rows — leave availableQty
+            // undefined there rather than claiming zero stock.
+            availableQty: options?.availableQty
+                ?? (Array.isArray(product.stocks) ? availableQtyOf(product) : undefined),
         });
     };
 
@@ -152,7 +160,7 @@ export default function NewSalePage() {
         let added = 0;
         for (const item of result.items) {
             if (item.matched && item.product) {
-                handleAddItem(item.product, item.quantity);
+                handleAddItem(item.product, { quantity: item.quantity });
                 added++;
             }
         }
@@ -194,6 +202,31 @@ export default function NewSalePage() {
         return { valid: errors.length === 0, errors };
     };
 
+    const buildSaleData = (isDraft: boolean) => ({
+        // The active branch/store is persisted in localStorage and sent
+        // as x-store-id on every request; the sale body needs the same id.
+        // (Owners have no currentUser.store_id, so don't rely on it.)
+        storeId: localStorage.getItem('store_id') || '',
+        referenceNumber: refNumber || undefined,
+        customerId: customer?.id,
+        items: items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            priceAtSale: item.price,
+        })),
+        totalAmount: totals.total,
+        amountPaid: payments.reduce((sum, p) => sum + p.amount, 0),
+        discountAmount: totals.discount > 0 ? totals.discount : undefined,
+        note: description || undefined,
+        saleDate: saleDate ? new Date(saleDate).toISOString() : undefined,
+        payments: payments.map((p) => ({
+            paymentMethod: p.method,
+            amount: p.amount,
+            accountId: p.accountId,
+        })),
+        ...(isDraft ? { isDraft: true } : {}),
+    });
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -205,31 +238,7 @@ export default function NewSalePage() {
 
         setSubmitting(true);
         try {
-            const saleData = {
-                // The active branch/store is persisted in localStorage and sent
-                // as x-store-id on every request; the sale body needs the same id.
-                // (Owners have no currentUser.store_id, so don't rely on it.)
-                storeId: localStorage.getItem('store_id') || '',
-                referenceNumber: refNumber || undefined,
-                customerId: customer?.id,
-                items: items.map((item) => ({
-                    productId: item.productId,
-                    quantity: item.quantity,
-                    priceAtSale: item.price,
-                })),
-                totalAmount: totals.total,
-                amountPaid: payments.reduce((sum, p) => sum + p.amount, 0),
-                discountAmount: totals.discount > 0 ? totals.discount : undefined,
-                note: description || undefined,
-                saleDate: saleDate ? new Date(saleDate).toISOString() : undefined,
-                payments: payments.map((p) => ({
-                    paymentMethod: p.method,
-                    amount: p.amount,
-                    accountId: p.accountId,
-                })),
-            };
-
-            const response = await api.createNewSale(saleData);
+            const response = await api.createNewSale(buildSaleData(false));
 
             // Clear cart and show success
             clearCart();
@@ -243,6 +252,27 @@ export default function NewSalePage() {
             toast.error(errorMsg);
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    // A draft is parked as-is: no stock, payment or credit validation runs, and
+    // the backend posts nothing. Only "has at least one item" is required.
+    const handleSaveDraft = async () => {
+        if (items.length === 0) {
+            toast.error('Add at least one item before saving a draft');
+            return;
+        }
+
+        setSavingDraft(true);
+        try {
+            const response = await api.createNewSale(buildSaleData(true));
+            clearCart();
+            toast.success(`Draft saved.\nRef: ${response.reference_number || response.serial_number}`);
+        } catch (error: any) {
+            console.error('Draft save error:', error);
+            toast.error(error.message || 'Failed to save draft');
+        } finally {
+            setSavingDraft(false);
         }
     };
 
@@ -282,7 +312,7 @@ export default function NewSalePage() {
                         </div>
                         <div className="flex-1 min-w-0">
                             <VoiceEntryInput entryType="sale" onResult={handleVoiceSale} inline>
-                                <ProductSearch onProductSelect={(product) => handleAddItem(product)} />
+                                <ProductSearch onProductSelect={handleAddItem} />
                             </VoiceEntryInput>
                         </div>
                     </div>
@@ -309,6 +339,7 @@ export default function NewSalePage() {
                             totals={totals}
                             onTotalsChange={(patch) => setAdjustments((prev) => ({ ...prev, ...patch }))}
                             tenantVatRate={salesSettings?.tenant?.default_vat_rate || 0}
+                            previousDue={Number(customer?.due_balance ?? 0)}
                         />
                         <div className="border-t pt-3">
                             <PaymentSection
@@ -322,13 +353,22 @@ export default function NewSalePage() {
 
                     {/* Actions pinned to panel bottom. Extra bottom padding on desktop
                         keeps the primary button clear of the floating feedback widget. */}
-                    <div className="flex items-center gap-2 p-3 pb-20 lg:pb-16 border-t flex-shrink-0">
+                    <div className="flex flex-wrap items-center gap-2 p-3 pb-20 lg:pb-16 border-t flex-shrink-0">
                         <Link
                             href="/sales/list"
                             className="px-3 py-2 border rounded text-gray-700 hover:bg-gray-50 text-sm"
                         >
                             Cancel
                         </Link>
+                        <button
+                            type="button"
+                            onClick={handleSaveDraft}
+                            disabled={savingDraft || submitting || items.length === 0}
+                            className="px-3 py-2 border rounded text-gray-700 hover:bg-gray-50 disabled:text-gray-400 text-sm"
+                            title="Save without posting stock, payment or accounting entries"
+                        >
+                            {savingDraft ? 'Saving…' : 'Save Draft'}
+                        </button>
                         {/* Print button with paper-size dropdown */}
                         <div className="relative" ref={printMenuRef}>
                             <div className="flex items-center border rounded overflow-hidden">
@@ -367,7 +407,7 @@ export default function NewSalePage() {
                         </div>
                         <button
                             type="submit"
-                            disabled={submitting || items.length === 0}
+                            disabled={submitting || savingDraft || items.length === 0}
                             className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 text-sm font-medium"
                         >
                             {submitting ? 'Creating…' : 'Create Sale'}

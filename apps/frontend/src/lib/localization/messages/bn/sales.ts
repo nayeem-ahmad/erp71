@@ -30,6 +30,7 @@ export const salesMessages = {
             version: "v{version}",
             statuses: {
                 sale: {
+                    DRAFT: "খসড়া",
                     COMPLETED: "সম্পন্ন",
                     REFUNDED: "ফেরত দেওয়া",
                     PARTIAL_REFUND: "আংশিক ফেরত",
@@ -301,6 +302,7 @@ export const salesMessages = {
                 actions: "Actions",
             },
             filterPresets: {
+                draft: "খসড়া",
                 completed: "সম্পন্ন",
                 refunded: "ফেরত দেওয়া",
                 partialRefund: "আংশিক ফেরত",
@@ -325,6 +327,11 @@ export const salesMessages = {
                 notePlaceholder: "Add a note about this sale...",
                 saveAllChanges: "সংরক্ষণ সব Changes",
                 saving: "Saving...",
+                draftBanner: "এটি একটি খসড়া — স্টক বা হিসাবে এখনও কিছু যোগ হয়নি।",
+                completeSale: "বিক্রয় সম্পন্ন করুন",
+                completing: "সম্পন্ন হচ্ছে...",
+                completed: "খসড়া সম্পন্ন হয়েছে — স্টক ও হিসাব আপডেট হয়েছে।",
+                completeFailed: "খসড়াটি সম্পন্ন করা যায়নি",
             },
             invoice: {
                 backToSale: "Back to Sale",
