@@ -257,7 +257,7 @@ export const salesMessages = {
                 storefront: "Kedai Dalam Talian",
                 customersCrm: "Pelanggan & CRM",
                 reports: "Laporan Jualan",
-                setup: "Tetapan Jualan",
+                setup: "Persediaan Jualan",
                 links: {
                     pos: { title: "Titik Jualan", description: "Jualan kaunter dan walk-in." },
                     allSales: { title: "Jualan", description: "Cari dan semak semua transaksi." },
