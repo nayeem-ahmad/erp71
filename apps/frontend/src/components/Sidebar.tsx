@@ -788,15 +788,12 @@ export default function Sidebar({
                                                         </button>
                                                         {subgroupOpen && (
                                                             <div className="mt-0.5 space-y-0.5">
-                                                                {child.children.map(({ href, icon: LinkIcon, label, exact, advancedOnly }) => {
+                                                                {child.children.map(({ href, icon: LinkIcon, label, exact }) => {
                                                                     const active = isActive(href, exact);
                                                                     return (
                                                                         <Link key={href} href={href} className={childLinkCls(active, true)}>
                                                                             <LinkIcon className={`flex-shrink-0 w-3.5 h-3.5 ${active ? 'text-blue-600' : ''}`} />
                                                                             <span className={navLabelCls}>{label}</span>
-                                                                            {advancedOnly && (
-                                                                                <span className="ml-auto text-[9px] font-black uppercase tracking-widest text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md">Advanced</span>
-                                                                            )}
                                                                         </Link>
                                                                     );
                                                                 })}
@@ -820,9 +817,6 @@ export default function Sidebar({
                                                 <Link key={href} href={href} className={childLinkCls(active)}>
                                                     <ChildIcon className={`flex-shrink-0 w-4 h-4 ${active ? 'text-blue-600' : ''}`} />
                                                     <span className={navLabelCls}>{label}</span>
-                                                    {mod.key === 'reports' && href.includes('/reports/') && (
-                                                        <span className="ml-auto text-[9px] font-black uppercase tracking-widest text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md">Advanced</span>
-                                                    )}
                                                 </Link>
                                             );
                                         })}

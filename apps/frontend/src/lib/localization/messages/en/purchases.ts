@@ -59,7 +59,7 @@ export const purchasesMessages = {
             payables: 'Payables',
             orderFlow: 'Orders & Receipts',
             reports: 'Purchase Reports',
-            setup: 'Setup',
+            setup: 'Purchase Setup',
             links: {
                 allPurchases: { title: 'All Purchases', description: 'Browse and search every stock receipt and supplier purchase.' },
                 supplierPayments: { title: 'Supplier Payments', description: 'Record payments against outstanding supplier balances.' },

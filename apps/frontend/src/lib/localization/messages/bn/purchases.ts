@@ -59,7 +59,7 @@ export const purchasesMessages = {
                 payables: "পাওনা",
                 orderFlow: "অর্ডার ও রসিদ",
                 reports: "ক্রয় রিপোর্ট",
-                setup: "সেটআপ",
+                setup: "ক্রয় সেটআপ",
                 links: {
                     allPurchases: { title: "সব ক্রয়", description: "সব স্টক রসিদ ও সরবরাহকারী ক্রয় খুঁজুন।" },
                     supplierPayments: { title: "সরবরাহকারী পেমেন্ট", description: "বকেয়া ব্যালেন্সের বিপরীতে পেমেন্ট রেকর্ড করুন।" },

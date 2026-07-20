@@ -59,7 +59,7 @@ export const purchasesMessages = {
                 payables: 'Hutang',
                 orderFlow: 'Pesanan & Penerimaan',
                 reports: 'Laporan Pembelian',
-                setup: 'Persediaan',
+                setup: 'Persediaan Pembelian',
                 links: {
                     allPurchases: { title: 'Semua Pembelian', description: 'Layari dan cari setiap penerimaan stok dan pembelian pembekal.' },
                     supplierPayments: { title: 'Bayaran Pembekal', description: 'Rekod bayaran terhadap baki tertunggak pembekal.' },

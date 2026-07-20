@@ -229,7 +229,8 @@ describe('Sidebar — Story 30.1', () => {
         // Open Purchase group
         fireEvent.click(screen.getByText('Purchase'));
         expect(screen.getByText('Purchase Reports')).toBeInTheDocument();
-        expect(screen.getByText('Payables')).toBeInTheDocument();
+        // Payables was dissolved — its links hang directly off the module.
+        expect(screen.getByText('Supplier Payment')).toBeInTheDocument();
 
         // Open Inventory group
         fireEvent.click(screen.getByText('Inventory'));
@@ -246,7 +247,7 @@ describe('Sidebar — Story 30.1', () => {
         // Open Purchase group
         fireEvent.click(screen.getByText('Purchase'));
         expect(screen.queryByText('Purchase Reports')).not.toBeInTheDocument();
-        expect(screen.getByText('Payables')).toBeInTheDocument();
+        expect(screen.getByText('Supplier Payment')).toBeInTheDocument();
 
         // Open Inventory group
         fireEvent.click(screen.getByText('Inventory'));
@@ -260,13 +261,14 @@ describe('Sidebar — Story 30.1', () => {
         render(<Sidebar canAccessAccounting canAccessInventoryReports canAccessAccountingAdvanced />);
 
         await waitFor(() => {
-            expect(screen.getByText('Reconciliation')).toBeInTheDocument();
+            // Reconciliation was dissolved — its links hang directly off the module.
+            expect(screen.getByText('Bank Reconciliation')).toBeInTheDocument();
         });
         expect(screen.getByText('Loans')).toBeInTheDocument();
-        expect(screen.getByText('Reports')).toBeInTheDocument();
-        expect(screen.getByText('Settings')).toBeInTheDocument();
+        expect(screen.getByText('Accounting Reports')).toBeInTheDocument();
+        expect(screen.getByText('Accounting Setup')).toBeInTheDocument();
 
-        fireEvent.click(screen.getByText('Reports'));
+        fireEvent.click(screen.getByText('Accounting Reports'));
         expect(screen.getByText('Trial Balance')).toBeInTheDocument();
         expect(screen.getByText('Comparative P&L')).toBeInTheDocument();
     });
@@ -275,9 +277,9 @@ describe('Sidebar — Story 30.1', () => {
         render(<Sidebar canAccessAccounting canAccessAccountingAdvanced={false} />);
 
         await waitFor(() => {
-            expect(screen.getByText('Reports')).toBeInTheDocument();
+            expect(screen.getByText('Accounting Reports')).toBeInTheDocument();
         });
-        fireEvent.click(screen.getByText('Reports'));
+        fireEvent.click(screen.getByText('Accounting Reports'));
         expect(screen.getByText('Profit & Loss')).toBeInTheDocument();
         expect(screen.queryByText('Comparative P&L')).not.toBeInTheDocument();
         expect(screen.queryByText('Budget vs. Actual')).not.toBeInTheDocument();
@@ -341,16 +343,16 @@ describe('Sidebar — Story 30.1', () => {
         render(<Sidebar canAccessAccounting canAccessInventoryReports canAccessAccountingAdvanced />);
 
         await waitFor(() => {
-            expect(screen.getByText('Reconciliation')).toBeInTheDocument();
+            expect(screen.getByText('Accounting Setup')).toBeInTheDocument();
         });
 
-        fireEvent.click(screen.getByText('Reconciliation'));
-        expect(screen.getByText('Bank Reconciliation')).toBeInTheDocument();
+        fireEvent.click(screen.getByText('Accounting Setup'));
+        expect(screen.getByText('Chart of Accounts')).toBeInTheDocument();
 
-        // Opening Reports must collapse Reconciliation.
-        fireEvent.click(screen.getByText('Reports'));
+        // Opening Accounting Reports must collapse Accounting Setup.
+        fireEvent.click(screen.getByText('Accounting Reports'));
         expect(screen.getByText('Trial Balance')).toBeInTheDocument();
-        expect(screen.queryByText('Bank Reconciliation')).not.toBeInTheDocument();
+        expect(screen.queryByText('Chart of Accounts')).not.toBeInTheDocument();
     });
 
     it('opening one top-level module closes another top-level module (accordion)', () => {
@@ -369,10 +371,10 @@ describe('Sidebar — Story 30.1', () => {
         render(<Sidebar canAccessAccounting canAccessInventoryReports canAccessAccountingAdvanced />);
 
         await waitFor(() => {
-            expect(screen.getByText('Reports')).toBeInTheDocument();
+            expect(screen.getByText('Accounting Reports')).toBeInTheDocument();
         });
 
-        fireEvent.click(screen.getByText('Reports'));
+        fireEvent.click(screen.getByText('Accounting Reports'));
 
         const saved = JSON.parse(localStorage.getItem('sidebar-open-groups') ?? '{}');
         const openKeys = Object.entries(saved).filter(([, v]) => v).map(([k]) => k);
