@@ -36,6 +36,7 @@ describe('PlatformSettingsService', () => {
                 help: false,
                 voice: false,
                 manufacturing: true,
+                aiChat: false,
             });
         });
 
@@ -54,6 +55,7 @@ describe('PlatformSettingsService', () => {
                 help: false,
                 voice: true,
                 manufacturing: false,
+                aiChat: false,
             });
         });
     });

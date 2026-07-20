@@ -46,6 +46,13 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
     ai: {
         api_key: { isSecret: true },
         default_model: { isSecret: false, default: 'anthropic/claude-haiku-4.5' },
+        // The data chatbot routes across an 8-tool menu, which is harder than the
+        // single-shot AI features; it can be pointed at a stronger model without
+        // moving everything else. Blank falls back to `default_model`.
+        chat_model: { isSecret: false },
+        // Per-tenant per-day ceiling on chatbot model round-trips, independent of
+        // the monthly credit allowance a single bad day could otherwise exhaust.
+        chat_daily_turn_cap: { isSecret: false, default: '200' },
     },
     general: {
         platform_name:    { isSecret: false, default: 'ERP71' },
@@ -56,6 +63,7 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
         help_enabled:     { isSecret: false, default: 'false' },
         voice_enabled:    { isSecret: false, default: 'false' },
         manufacturing_enabled: { isSecret: false, default: 'true' },
+        ai_chat_enabled:  { isSecret: false, default: 'false' },
         default_signup_plan:   { isSecret: false, default: 'STANDARD' },
     },
     navigation: {

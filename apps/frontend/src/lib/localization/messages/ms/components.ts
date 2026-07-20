@@ -124,4 +124,24 @@ export const componentsMessages = {
                 'voucher-entry': 'voucher entry',
             },
         },
-    } as const;
+            aiChatWidget: {
+            openAria: "Tanya pembantu perniagaan",
+            closeAria: "Tutup",
+            title: "Pembantu perniagaan",
+            newChat: "Sembang baharu",
+            thinking: "Mencari data anda…",
+            sendAria: "Hantar",
+            placeholder: "Tanya tentang jualan, stok, pelanggan…",
+            disclaimer: "Jawapan datang daripada data anda sendiri. Semak sumber di bawah setiap jawapan.",
+            sources: "Sumber",
+            emptyHeading: "Tanya tentang perniagaan anda",
+            emptyDescription: "Saya hanya boleh membaca data anda — saya tidak boleh mengubah apa-apa.",
+            genericError: "Sesuatu tidak kena. Sila cuba lagi.",
+            suggestions: {
+                s1: "Berapa banyak jualan bulan lepas?",
+                s2: "Apa yang perlu distok semula?",
+                s3: "Siapa berhutang paling banyak?",
+                s4: "Apakah 5 produk terbaik bulan ini?",
+            },
+        },
+} as const;

@@ -32,7 +32,24 @@ type AiUsageSummary = {
 const FEATURE_LABELS: Record<string, string> = {
     report_narration: 'Report Narration',
     message_drafter: 'Message Drafter',
+    data_chat: 'AI Assistant',
 };
+
+/**
+ * Credits spent per feature this period. The assistant bills one row per model
+ * round-trip, so a single question can appear several times in the raw log —
+ * this rollup is what makes a heavy chat user visible at a glance.
+ */
+function featureBreakdown(logs: AiUsageLogEntry[]): Array<{ feature: string; credits: number; requests: number }> {
+    const byFeature = new Map<string, { feature: string; credits: number; requests: number }>();
+    for (const log of logs) {
+        const row = byFeature.get(log.feature) ?? { feature: log.feature, credits: 0, requests: 0 };
+        row.credits += log.credits_used;
+        row.requests += 1;
+        byFeature.set(log.feature, row);
+    }
+    return Array.from(byFeature.values()).sort((a, b) => b.credits - a.credits);
+}
 
 function formatDate(iso: string) {
     return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -157,6 +174,30 @@ export default function AiCreditsPage() {
             </div>
 
             {/* Usage log */}
+            {summary.logs.length > 0 ? (
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+                        <BarChart2 size={18} className="text-gray-500" />
+                        <h2 className="font-semibold text-gray-900">Credits by feature</h2>
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                        {featureBreakdown(summary.logs).map((row) => (
+                            <div key={row.feature} className="flex items-center justify-between px-6 py-3 text-sm">
+                                <span className="font-medium text-gray-800">
+                                    {FEATURE_LABELS[row.feature] ?? row.feature}
+                                </span>
+                                <span className="text-gray-500 text-xs">
+                                    {row.requests} request{row.requests === 1 ? '' : 's'}
+                                </span>
+                                <span className="font-semibold text-gray-900">
+                                    {Math.round(row.credits * 100) / 100} credits
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ) : null}
+
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
                     <BarChart2 size={18} className="text-gray-500" />

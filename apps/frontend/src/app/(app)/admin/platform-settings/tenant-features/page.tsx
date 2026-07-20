@@ -16,6 +16,7 @@ type FeatureSettings = {
     help_enabled: string;
     voice_enabled: string;
     manufacturing_enabled: string;
+    ai_chat_enabled: string;
 };
 
 const DEFAULTS: FeatureSettings = {
@@ -24,19 +25,21 @@ const DEFAULTS: FeatureSettings = {
     help_enabled: 'false',
     voice_enabled: 'false',
     manufacturing_enabled: 'true',
+    ai_chat_enabled: 'false',
 };
 
 type FeatureToggleKey = keyof FeatureSettings;
 
 const FEATURE_TOGGLES: Array<{
     key: FeatureToggleKey;
-    labelKey: 'feedback' | 'support' | 'help' | 'voice' | 'manufacturing';
+    labelKey: 'feedback' | 'support' | 'help' | 'voice' | 'manufacturing' | 'aiChat';
 }> = [
     { key: 'feedback_enabled', labelKey: 'feedback' },
     { key: 'support_enabled', labelKey: 'support' },
     { key: 'help_enabled', labelKey: 'help' },
     { key: 'voice_enabled', labelKey: 'voice' },
     { key: 'manufacturing_enabled', labelKey: 'manufacturing' },
+    { key: 'ai_chat_enabled', labelKey: 'aiChat' },
 ];
 
 function FeatureSwitch({
@@ -86,6 +89,7 @@ export default function PlatformTenantFeaturesPage() {
                     help_enabled: d.help_enabled ?? DEFAULTS.help_enabled,
                     voice_enabled: d.voice_enabled ?? DEFAULTS.voice_enabled,
                     manufacturing_enabled: d.manufacturing_enabled ?? DEFAULTS.manufacturing_enabled,
+                    ai_chat_enabled: d.ai_chat_enabled ?? DEFAULTS.ai_chat_enabled,
                 });
             })
             .catch(() => toast.error(c.loadFailed))

@@ -8,5 +8,6 @@ import { InventoryReportsService } from './inventory-reports.service';
     imports: [DatabaseModule],
     controllers: [InventoryReportsController],
     providers: [InventoryReportsService, SubscriptionAccessGuard],
+    exports: [InventoryReportsService],
 })
 export class InventoryReportsModule {}

@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsObject, IsIn } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsObject, IsIn, MaxLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class NarrateReportDto {
@@ -81,6 +81,24 @@ export class DraftMessageDto {
     customerContext: Record<string, unknown>;
 
     @ApiPropertyOptional({ description: 'Optional locale for the response (en or bn)' })
+    @IsString()
+    @IsOptional()
+    locale?: string;
+}
+
+export class ChatDto {
+    @ApiPropertyOptional({ description: 'Existing conversation to continue. Omit to start a new thread.' })
+    @IsString()
+    @IsOptional()
+    conversationId?: string;
+
+    @ApiProperty({ description: 'The question to ask about the business data' })
+    @IsString()
+    @IsNotEmpty()
+    @MaxLength(2000)
+    message: string;
+
+    @ApiPropertyOptional({ description: 'Preferred reply language (en or bn)' })
     @IsString()
     @IsOptional()
     locale?: string;

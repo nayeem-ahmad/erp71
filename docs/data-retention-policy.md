@@ -10,6 +10,7 @@ Effective date: 2026-06-12
 | Email verification tokens | Until used or 24h expiry | Deleted on successful verification |
 | In-app notifications | 30 days | Daily purge cron |
 | Audit logs | 90 days | Daily purge cron |
+| AI assistant conversations | 180 days since last activity | Daily purge cron (messages cascade with the thread) |
 | VPS database backups | 30 days | `scripts/vps-backup.sh` prune |
 | Logical DB dumps (`scripts/backup-db.sh`) | 30 days | Script prune |
 
