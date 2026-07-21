@@ -33,7 +33,7 @@ describe('ManufacturingController — subscription guard', () => {
     } as any;
 
     const platformSettings = {
-        isFeatureEnabled: jest.fn().mockResolvedValue(true),
+        isFeatureEnabledForTenant: jest.fn().mockResolvedValue(true),
     } as any;
 
     class MockJwtAuthGuard {
@@ -71,7 +71,7 @@ describe('ManufacturingController — subscription guard', () => {
     afterEach(() => app?.close());
 
     beforeEach(() => {
-        platformSettings.isFeatureEnabled.mockResolvedValue(true);
+        platformSettings.isFeatureEnabledForTenant.mockResolvedValue(true);
     });
 
     it('blocks STANDARD plan subscribers with 403', async () => {
@@ -155,7 +155,7 @@ describe('ManufacturingController — subscription guard', () => {
             status: 'ACTIVE',
             plan: { code: 'PREMIUM', features_json: { premiumManufacturing: true } },
         });
-        platformSettings.isFeatureEnabled.mockResolvedValue(false);
+        platformSettings.isFeatureEnabledForTenant.mockResolvedValue(false);
         await buildApp();
 
         const res = await request(app.getHttpServer())
