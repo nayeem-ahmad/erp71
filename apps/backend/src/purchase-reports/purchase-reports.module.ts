@@ -9,5 +9,6 @@ import { PurchaseReportsService } from './purchase-reports.service';
     imports: [DatabaseModule],
     controllers: [PurchaseReportsController],
     providers: [PurchaseReportsService, SubscriptionAccessGuard, TenantRoleGuard],
+    exports: [PurchaseReportsService],
 })
 export class PurchaseReportsModule {}

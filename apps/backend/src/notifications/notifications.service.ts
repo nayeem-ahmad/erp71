@@ -616,11 +616,19 @@ export class NotificationsService {
             where: { created_at: { lt: notifCutoff } },
         });
 
+        // Purge AI chatbot threads older than 180 days. Messages cascade with the
+        // conversation, and they hold quoted business figures, so they are not
+        // kept for the life of the tenant the way source records are.
+        const chatCutoff = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+        const { count: chatRows } = await this.db.aiConversation.deleteMany({
+            where: { updated_at: { lt: chatCutoff } },
+        });
+
         // Purge job-run history older than 30 days (system-health observability)
         const jobRows = await this.jobTracker.purgeOlderThan(30);
 
         this.logger.log(
-            `[DataRetention] Purged: ${pwTokens} pw-reset tokens, ${evTokens} verification tokens, ${auditRows} audit logs, ${notifRows} notifications, ${jobRows} job runs`,
+            `[DataRetention] Purged: ${pwTokens} pw-reset tokens, ${evTokens} verification tokens, ${auditRows} audit logs, ${notifRows} notifications, ${chatRows} AI conversations, ${jobRows} job runs`,
         );
     }
 }

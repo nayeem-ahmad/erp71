@@ -49,6 +49,9 @@ describe('NotificationsService', () => {
       auditLog: {
         deleteMany: jest.fn(),
       },
+      aiConversation: {
+        deleteMany: jest.fn(),
+      },
       $queryRaw: jest.fn(),
       $transaction: jest.fn().mockImplementation(async (cb: any) => cb(db)),
     };
@@ -649,6 +652,7 @@ describe('NotificationsService', () => {
       db.emailVerificationToken.deleteMany.mockResolvedValue({ count: 2 });
       db.auditLog.deleteMany.mockResolvedValue({ count: 100 });
       db.notification.deleteMany.mockResolvedValue({ count: 50 });
+      db.aiConversation.deleteMany.mockResolvedValue({ count: 5 });
 
       await service.purgeExpiredData();
 
@@ -677,6 +681,11 @@ describe('NotificationsService', () => {
           where: { created_at: expect.any(Object) },
         }),
       );
+      expect(db.aiConversation.deleteMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { updated_at: expect.any(Object) },
+        }),
+      );
     });
 
     it('completes without error when nothing to purge', async () => {
@@ -684,6 +693,7 @@ describe('NotificationsService', () => {
       db.emailVerificationToken.deleteMany.mockResolvedValue({ count: 0 });
       db.auditLog.deleteMany.mockResolvedValue({ count: 0 });
       db.notification.deleteMany.mockResolvedValue({ count: 0 });
+      db.aiConversation.deleteMany.mockResolvedValue({ count: 0 });
 
       await expect(service.purgeExpiredData()).resolves.not.toThrow();
     });

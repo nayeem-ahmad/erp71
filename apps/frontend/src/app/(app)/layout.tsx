@@ -10,6 +10,7 @@ import LanguageSwitcher from '@/components/LanguageSwitcher';
 import DemoSandboxBanner from '@/components/DemoSandboxBanner';
 import FeedbackWidget from '@/components/FeedbackWidget';
 import VoiceNavWidget from '@/components/VoiceNavWidget';
+import AiChatWidget from '@/components/AiChatWidget';
 import AppHeaderMobileMenu from '@/components/AppHeaderMobileMenu';
 import Toaster from '@/components/Toaster';
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
@@ -243,6 +244,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const canAccessInventoryReports = Boolean(hasInventoryReportEntitlement);
     const canAccessAccountingAdvanced = Boolean(hasAccountingAdvancedEntitlement);
     const canAccessVoice = platformFeatures.voice && hasPlanEntitlement(planFeatures, 'premiumVoice');
+    // Same two gates as every other AI feature: the platform kill switch and the
+    // plan entitlement. Tool-level permissions are enforced server-side.
+    const canAccessAiChat =
+        platformFeatures.aiChat
+        && hasPlanEntitlement(planFeatures, 'premiumAi')
+        && !inPlatformAdminMode
+        && !inRefereeMode;
     const effectivePlatformFeatures: PlatformFeatures = {
         ...platformFeatures,
         voice: canAccessVoice,
@@ -438,6 +446,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                         </div>
                         <AppHeaderMobileMenu />
                         {platformFeatures.feedback ? <FeedbackWidget /> : null}
+                        {canAccessAiChat ? <AiChatWidget /> : null}
                         <NotificationBell />
                         <div className="h-8 w-px bg-gray-200 hidden sm:block" />
                         <AvatarDropdown

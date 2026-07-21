@@ -40,6 +40,29 @@ type OpenRouterUsage = {
     prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
 };
 
+/** OpenRouter tool-call wire shape, shared by the chat agent loop. */
+export type ChatToolCall = {
+    id: string;
+    type: 'function';
+    function: { name: string; arguments: string };
+};
+
+export type ChatCompletionMessage = {
+    role: 'system' | 'user' | 'assistant' | 'tool';
+    content: string;
+    tool_calls?: ChatToolCall[];
+    tool_call_id?: string;
+};
+
+export type ChatToolDefinition = {
+    type: 'function';
+    function: { name: string; description: string; parameters: Record<string, unknown> };
+};
+
+/** Per-request timeout for a tool-calling completion, and transient-failure retries. */
+const CHAT_REQUEST_TIMEOUT_MS = 120_000;
+const CHAT_MAX_ATTEMPTS = 3;
+
 type OpenRouterChatResponse = {
     choices?: Array<{ message?: { content?: string | null } }>;
     usage?: OpenRouterUsage;
@@ -77,6 +100,12 @@ export class AiService {
         const dbModel = await this.platformSettings.getRawValue('ai', 'default_model');
         const model = dbModel ?? process.env.OPENROUTER_DEFAULT_MODEL ?? DEFAULT_MODEL;
         return this.normalizeModel(model);
+    }
+
+    /** Model for the data chatbot — its own override, falling back to the platform default. */
+    async getChatModel(): Promise<string> {
+        const override = (await this.platformSettings.getRawValue('ai', 'chat_model'))?.trim();
+        return override ? this.normalizeModel(override) : this.getDefaultModel();
     }
 
     async testConnection(): Promise<{ success: boolean; model: string; message: string }> {
@@ -449,21 +478,31 @@ Rules:
 
         const normalizedModel = this.normalizeModel(model);
         const { text, usage } = await this.callOpenRouter(apiKey, normalizedModel, systemPrompt, userMessage, maxTokens);
+        await this.logUsage(tenantId, feature, normalizedModel, usage);
+        return text;
+    }
 
-        const inputTokens = usage.prompt_tokens;
-        const outputTokens = usage.completion_tokens;
+    /**
+     * Records one model round-trip against the tenant's credit allowance and
+     * returns the credits it consumed. The chat agent loop calls this per
+     * iteration — billing only the final round-trip would under-charge a
+     * multi-lookup question by most of its real cost.
+     */
+    async logUsage(tenantId: string, feature: string, model: string, usage: OpenRouterUsage): Promise<number> {
+        const inputTokens = usage.prompt_tokens ?? 0;
+        const outputTokens = usage.completion_tokens ?? 0;
         const cacheRead = usage.prompt_tokens_details?.cached_tokens ?? 0;
         const cacheWrite = usage.prompt_tokens_details?.cache_write_tokens ?? 0;
         const totalTokens = usage.total_tokens || inputTokens + outputTokens + cacheRead + cacheWrite;
 
-        const costUsd = usage.cost ?? this.estimateCost(normalizedModel, inputTokens, outputTokens);
+        const costUsd = usage.cost ?? this.estimateCost(model, inputTokens, outputTokens);
         const creditsUsed = totalTokens / AI_TOKENS_PER_CREDIT;
 
         await this.db.aiUsageLog.create({
             data: {
                 tenant_id: tenantId,
                 feature,
-                model: normalizedModel,
+                model,
                 input_tokens: inputTokens,
                 output_tokens: outputTokens,
                 cache_read_tokens: cacheRead,
@@ -473,7 +512,90 @@ Rules:
             },
         });
 
-        return text;
+        return creditsUsed;
+    }
+
+    /**
+     * Multi-message, tool-calling completion — the agent-loop sibling of
+     * `callOpenRouter`, which is hardwired to a single system+user pair and is
+     * deliberately left alone. Transient failures are retried: undici surfaces a
+     * dropped socket as `TypeError: terminated`, and OpenRouter returns 429/5xx
+     * under load. Retrying is safe because the caller only commits the assistant
+     * message after a successful return.
+     */
+    async callOpenRouterWithTools(
+        model: string,
+        messages: ChatCompletionMessage[],
+        tools: ChatToolDefinition[],
+        maxTokens = 1024,
+    ): Promise<{ message: { content: string | null; tool_calls?: ChatToolCall[] }; usage: OpenRouterUsage }> {
+        const apiKey = await this.getApiKey();
+        if (!apiKey) {
+            throw new InternalServerErrorException('AI service is not configured. Set an OpenRouter API key.');
+        }
+
+        const payload: Record<string, unknown> = { model, messages, max_tokens: maxTokens };
+        // Omit `tools` entirely when empty — some providers reject an empty array,
+        // and an empty array is how the loop forces a final text answer.
+        if (tools.length > 0) payload.tools = tools;
+
+        let lastError = '';
+        for (let attempt = 1; attempt <= CHAT_MAX_ATTEMPTS; attempt++) {
+            try {
+                return await this.requestToolCompletion(apiKey, payload);
+            } catch (err: unknown) {
+                lastError = err instanceof Error ? err.message : String(err);
+                if (attempt === CHAT_MAX_ATTEMPTS) break;
+                await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+            }
+        }
+        throw new InternalServerErrorException(`AI service error: ${lastError}`);
+    }
+
+    private async requestToolCompletion(
+        apiKey: string,
+        payload: Record<string, unknown>,
+    ): Promise<{ message: { content: string | null; tool_calls?: ChatToolCall[] }; usage: OpenRouterUsage }> {
+        const referer = process.env.FRONTEND_URL ?? 'https://erp71.com';
+        const title = process.env.OPENROUTER_APP_NAME ?? 'ERP71';
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), CHAT_REQUEST_TIMEOUT_MS);
+
+        try {
+            const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                    'HTTP-Referer': referer,
+                    'X-OpenRouter-Title': title,
+                },
+                body: JSON.stringify(payload),
+                signal: controller.signal,
+            });
+
+            // Read the body inside the guarded scope: a mid-stream socket drop
+            // throws here, and that is a retryable failure like any other.
+            const body = (await response.json()) as {
+                choices?: Array<{ message?: { content?: string | null; tool_calls?: ChatToolCall[] } }>;
+                usage?: OpenRouterUsage;
+                error?: { message?: string };
+            };
+
+            if (!response.ok) {
+                throw new Error(body.error?.message ?? `OpenRouter request failed (${response.status})`);
+            }
+
+            return {
+                message: {
+                    content: body.choices?.[0]?.message?.content ?? '',
+                    tool_calls: body.choices?.[0]?.message?.tool_calls,
+                },
+                usage: body.usage ?? { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+            };
+        } finally {
+            clearTimeout(timer);
+        }
     }
 
     private estimateCost(model: string, inputTokens: number, outputTokens: number): number {
@@ -531,7 +653,7 @@ Rules:
         return { text, usage };
     }
 
-    private async enforceCredits(tenantId: string): Promise<void> {
+    async enforceCredits(tenantId: string): Promise<void> {
         const subscription = await this.db.tenantSubscription.findUnique({
             where: { tenant_id: tenantId },
             include: { plan: true },

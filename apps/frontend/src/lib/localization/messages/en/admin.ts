@@ -569,6 +569,10 @@ export const adminMessages = {
                 label: 'Manufacturing',
                 hint: 'Manufacturing module (BOM recipes and production jobs) for Premium-plan tenants. On by default — use this as a kill switch.',
             },
+            aiChat: {
+                label: 'AI Assistant',
+                hint: 'Business data chatbot in the header. Requires a Premium plan and consumes AI credits. Off by default.',
+            },
             saved: 'Tenant feature settings saved.',
         },
         sms: {
