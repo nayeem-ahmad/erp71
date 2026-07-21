@@ -1,6 +1,6 @@
 'use client';
 
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import AdminTenantsPage from './page';
 
 jest.mock('@/components/data-table', () => ({
@@ -21,6 +21,8 @@ jest.mock('@/lib/api', () => ({
         getAdminTenants: jest.fn(),
         getAdminTenant: jest.fn(),
         getAdminTenantNavOverride: jest.fn(),
+        getAdminTenantFeatures: jest.fn(),
+        updateAdminTenantFeatures: jest.fn(),
         updateAdminTenantSubscription: jest.fn(),
         updateAdminTenantLocalization: jest.fn(),
         suspendTenant: jest.fn(),
@@ -74,6 +76,11 @@ describe('AdminTenantsPage', () => {
         api.getAdminTenants.mockResolvedValue([]);
         api.getAdminTenant.mockResolvedValue(mockTenantDetail);
         api.getAdminTenantNavOverride.mockResolvedValue(null);
+        api.getAdminTenantFeatures.mockResolvedValue({
+            platform_defaults: { feedback: false, support: false, help: false, voice: false, manufacturing: true, aiChat: false },
+            overrides: {},
+            effective: { feedback: false, support: false, help: false, voice: false, manufacturing: true, aiChat: false },
+        });
         api.updateAdminTenantSubscription.mockResolvedValue({});
         api.suspendTenant.mockResolvedValue({});
         api.impersonateTenant.mockResolvedValue({
@@ -138,6 +145,48 @@ describe('AdminTenantsPage', () => {
         await waitFor(() => {
             expect(api.getAdminTenant).toHaveBeenCalledWith('tenant1');
             expect(screen.getByRole('button', { name: /impersonate owner/i })).toBeInTheDocument();
+        });
+    });
+
+    it('saves per-tenant feature overrides as a tri-state, clearing on Inherit', async () => {
+        const { api } = require('@/lib/api');
+        api.getAdminTenants.mockResolvedValue(mockTenants);
+        api.getAdminTenantFeatures.mockResolvedValue({
+            platform_defaults: { feedback: false, support: false, help: false, voice: false, manufacturing: true, aiChat: false },
+            overrides: { aiChat: true },
+            effective: { feedback: false, support: false, help: false, voice: false, manufacturing: true, aiChat: true },
+        });
+        api.updateAdminTenantFeatures.mockResolvedValue({
+            platform_defaults: { feedback: false, support: false, help: false, voice: false, manufacturing: true, aiChat: false },
+            overrides: { aiChat: true },
+            effective: { feedback: false, support: false, help: false, voice: false, manufacturing: true, aiChat: true },
+        });
+
+        render(<AdminTenantsPage />);
+        await waitFor(() => screen.getByText('Acme Corp'));
+        fireEvent.click(screen.getByRole('button', { name: /view \/ edit tenant/i }));
+
+        await waitFor(() => expect(screen.getByText('Feature access')).toBeInTheDocument());
+
+        // The unset features show what Inherit currently resolves to, from the platform defaults.
+        expect(screen.getAllByText('Inheriting: On')).toHaveLength(1);   // manufacturing
+        expect(screen.getAllByText('Inheriting: Off')).toHaveLength(4);  // feedback/support/help/voice
+        expect(screen.getAllByText('Overridden for this tenant.')).toHaveLength(1); // aiChat
+
+        // Pin Voice on for this tenant; every other feature keeps its current state.
+        const voiceRow = screen.getByText('Voice').closest('div')!.parentElement!;
+        fireEvent.click(within(voiceRow).getByRole('button', { name: 'On' }));
+        fireEvent.click(screen.getByRole('button', { name: /save features/i }));
+
+        await waitFor(() => {
+            expect(api.updateAdminTenantFeatures).toHaveBeenCalledWith('tenant1', {
+                feedback: null,
+                support: null,
+                help: null,
+                voice: true,
+                manufacturing: null,
+                aiChat: true,
+            });
         });
     });
 

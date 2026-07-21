@@ -25,6 +25,7 @@ import { PasswordResetService } from '../password-reset/password-reset.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SmsCreditService } from '../sms/sms-credit.service';
 import { DemoDataService } from '../demo-data/demo-data.service';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 
 describe('AdminTenantsService', () => {
   let service: AdminTenantsService;
@@ -37,6 +38,7 @@ describe('AdminTenantsService', () => {
   let notificationsService: any;
   let smsCreditService: any;
   let demoDataService: any;
+  let platformSettingsService: any;
 
   const makeTenant = (overrides: any = {}) => ({
     id: 't-1',
@@ -141,6 +143,16 @@ describe('AdminTenantsService', () => {
       startBatchForTenant: jest.fn().mockResolvedValue({ batchId: 'batch-1', batchNumber: 1 }),
       getStatus: jest.fn().mockResolvedValue(null),
     };
+    platformSettingsService = {
+      getPlatformFeatures: jest.fn().mockResolvedValue({
+        feedback: false,
+        support: false,
+        help: false,
+        voice: false,
+        manufacturing: true,
+        aiChat: false,
+      }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -154,6 +166,7 @@ describe('AdminTenantsService', () => {
         { provide: NotificationsService, useValue: notificationsService },
         { provide: SmsCreditService, useValue: smsCreditService },
         { provide: DemoDataService, useValue: demoDataService },
+        { provide: PlatformSettingsService, useValue: platformSettingsService },
       ],
     }).compile();
 
@@ -1083,6 +1096,94 @@ describe('AdminTenantsService', () => {
           await service.setBusinessType('t1', { businessType: 'SURGICAL_MEDICAL' }, 'admin1');
 
           expect(seedBusinessTypeTemplate).not.toHaveBeenCalled();
+      });
+  });
+
+  /* ------------------------------------------------------------------ */
+  /*  tenant feature overrides                                            */
+  /* ------------------------------------------------------------------ */
+
+  describe('getFeatures', () => {
+      it('reports platform defaults, the tenant overrides, and the effective result', async () => {
+          db.tenant.findFirst.mockResolvedValue({ feature_overrides: { voice: true, manufacturing: false } });
+
+          const result = await service.getFeatures('t1');
+
+          expect(result.platform_defaults.voice).toBe(false);
+          expect(result.overrides).toEqual({ voice: true, manufacturing: false });
+          // Override wins over the platform default in both directions.
+          expect(result.effective.voice).toBe(true);
+          expect(result.effective.manufacturing).toBe(false);
+          // A feature with no override still follows the platform default.
+          expect(result.effective.aiChat).toBe(false);
+      });
+
+      it('ignores junk stored in the JSON column', async () => {
+          db.tenant.findFirst.mockResolvedValue({
+              feature_overrides: { voice: 'yes', notAFeature: true, aiChat: true },
+          });
+
+          const result = await service.getFeatures('t1');
+
+          expect(result.overrides).toEqual({ aiChat: true });
+          expect(result.effective.voice).toBe(false);
+      });
+
+      it('throws NotFoundException for an unknown or deleted tenant', async () => {
+          db.tenant.findFirst.mockResolvedValue(null);
+
+          await expect(service.getFeatures('nope')).rejects.toBeInstanceOf(NotFoundException);
+      });
+  });
+
+  describe('updateFeatures', () => {
+      it('pins a feature on for this tenant and audits the change', async () => {
+          db.tenant.findFirst.mockResolvedValue({ feature_overrides: {} });
+
+          await service.updateFeatures('t1', { voice: true }, 'admin1');
+
+          expect(db.tenant.update).toHaveBeenCalledWith({
+              where: { id: 't1' },
+              data: { feature_overrides: { voice: true } },
+          });
+          expect(auditService.log).toHaveBeenCalledWith(
+              'tenant.features.update',
+              'Tenant',
+              { userId: 'admin1' },
+              't1',
+              { feature_overrides: { voice: true } },
+          );
+      });
+
+      it('clears an override on null so the tenant inherits the platform default again', async () => {
+          db.tenant.findFirst.mockResolvedValue({ feature_overrides: { voice: true, aiChat: true } });
+
+          await service.updateFeatures('t1', { voice: null }, 'admin1');
+
+          expect(db.tenant.update).toHaveBeenCalledWith({
+              where: { id: 't1' },
+              data: { feature_overrides: { aiChat: true } },
+          });
+      });
+
+      it('leaves features the payload omits untouched', async () => {
+          db.tenant.findFirst.mockResolvedValue({ feature_overrides: { aiChat: false } });
+
+          await service.updateFeatures('t1', { voice: true }, 'admin1');
+
+          expect(db.tenant.update).toHaveBeenCalledWith({
+              where: { id: 't1' },
+              data: { feature_overrides: { aiChat: false, voice: true } },
+          });
+      });
+
+      it('throws NotFoundException for an unknown or deleted tenant', async () => {
+          db.tenant.findFirst.mockResolvedValue(null);
+
+          await expect(service.updateFeatures('nope', { voice: true }, 'admin1')).rejects.toBeInstanceOf(
+              NotFoundException,
+          );
+          expect(db.tenant.update).not.toHaveBeenCalled();
       });
   });
 

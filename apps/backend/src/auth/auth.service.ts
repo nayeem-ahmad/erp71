@@ -20,6 +20,7 @@ import {
     isSelfServeSubscriptionPlan,
     DEFAULT_MOBILE_COUNTRY_CODE,
     normalizeMobileToE164,
+    resolveTenantFeatures,
 } from '@erp71/shared-types';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ReferralsService } from '../referrals/referrals.service';
@@ -629,9 +630,17 @@ export class AuthService {
             ? await this.planEntitlements.getFeaturesForTenant(membership.tenant_id)
             : undefined;
 
+        // Platform switches with this tenant's own ON/OFF overrides applied, so the
+        // shell gates on what a super-admin set for *this* workspace.
+        const platformFeatures = await this.platformSettings
+            .getPlatformFeatures()
+            .then((features) => resolveTenantFeatures(features, membership.tenant.feature_overrides))
+            .catch(() => DEFAULT_PLATFORM_FEATURES);
+
         return {
             id: membership.tenant.id,
             name: membership.tenant.name,
+            platform_features: platformFeatures,
             default_locale: membership.tenant.default_locale,
             localization_enabled: membership.tenant.localization_enabled,
             secondary_locale: membership.tenant.secondary_locale,

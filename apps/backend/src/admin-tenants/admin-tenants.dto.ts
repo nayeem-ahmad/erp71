@@ -42,6 +42,20 @@ export class UpdateAdminTenantLocalizationDto {
     secondary_locale?: 'bn' | 'ms' | null;
 }
 
+/**
+ * Per-feature tri-state: `true`/`false` pin the feature for this tenant, `null`
+ * clears the override so the tenant inherits the platform default again. Keys
+ * left out of the payload are untouched.
+ */
+export class UpdateAdminTenantFeaturesDto {
+    @IsOptional() @IsBoolean() feedback?: boolean | null;
+    @IsOptional() @IsBoolean() support?: boolean | null;
+    @IsOptional() @IsBoolean() help?: boolean | null;
+    @IsOptional() @IsBoolean() voice?: boolean | null;
+    @IsOptional() @IsBoolean() manufacturing?: boolean | null;
+    @IsOptional() @IsBoolean() aiChat?: boolean | null;
+}
+
 export class SuspendTenantDto {
     @IsOptional() @IsString() reason?: string;
 }

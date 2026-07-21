@@ -7,7 +7,22 @@ export type CategoryRow = {
     share: number;
 };
 
-const PALETTE = ['#2563eb', '#059669', '#f59e0b', '#06b6d4', '#db2777', '#e2e8f0'];
+/**
+ * Six categorical hues, validated on the white card surface: all inside the
+ * lightness band and above the chroma floor, worst adjacent pair ΔE 9.1 under
+ * simulated colour-vision deficiency and 19.6 with normal vision.
+ *
+ * Three of these sit below 3:1 contrast against white, so the legend always
+ * prints the share as text — colour never carries the meaning on its own.
+ */
+export const CATEGORY_PALETTE = ['#2563eb', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'] as const;
+
+const SIZE = 132;
+const RADIUS = 52;
+const STROKE = 19;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+// Separates neighbouring arcs with the card surface rather than a drawn border.
+const GAP = 2;
 
 export function SalesByCategoryDonut({
     rows,
@@ -26,32 +41,63 @@ export function SalesByCategoryDonut({
         );
     }
 
+    const total = rows.reduce((sum, row) => sum + row.share, 0) || 100;
+
     let cursor = 0;
-    const stops = rows
-        .map((row, i) => {
-            const start = cursor;
-            cursor += row.share;
-            return `${PALETTE[i % PALETTE.length]} ${start}% ${cursor}%`;
-        })
-        .join(', ');
+    const arcs = rows.map((row, index) => {
+        const length = (row.share / total) * CIRCUMFERENCE;
+        const offset = cursor;
+        cursor += length;
+        return {
+            key: row.categoryId ?? row.categoryName,
+            color: CATEGORY_PALETTE[index % CATEGORY_PALETTE.length],
+            visible: Math.max(1, length - GAP),
+            offset,
+        };
+    });
 
     return (
-        <div className="flex items-center gap-4">
-            <div
-                className="relative h-24 w-24 shrink-0 rounded-full"
-                style={{ background: `conic-gradient(${stops})` }}
-                aria-hidden="true"
-            >
-                <div className="absolute inset-6 flex flex-col items-center justify-center rounded-full bg-white">
-                    <span className="text-xs font-extrabold text-gray-900">{totalLabel}</span>
+        <div className="flex flex-wrap items-center gap-4">
+            <div className="relative shrink-0" style={{ width: SIZE, height: SIZE }}>
+                <svg
+                    viewBox={`0 0 ${SIZE} ${SIZE}`}
+                    width={SIZE}
+                    height={SIZE}
+                    className="-rotate-90"
+                    role="img"
+                    aria-label={`Revenue share by category, total ${totalLabel}`}
+                >
+                    {arcs.map((arc) => (
+                        <circle
+                            key={arc.key}
+                            data-testid="donut-arc"
+                            cx={SIZE / 2}
+                            cy={SIZE / 2}
+                            r={RADIUS}
+                            fill="none"
+                            stroke={arc.color}
+                            strokeWidth={STROKE}
+                            strokeDasharray={`${arc.visible} ${CIRCUMFERENCE - arc.visible}`}
+                            strokeDashoffset={-arc.offset}
+                        />
+                    ))}
+                </svg>
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                    <span data-testid="donut-total" className="text-sm font-extrabold tracking-tight text-gray-900">
+                        {totalLabel}
+                    </span>
+                    <span className="text-[9px] font-bold uppercase tracking-wide text-gray-400">Total</span>
                 </div>
             </div>
-            <ul className="min-w-0 flex-1 space-y-1">
-                {rows.map((row, i) => (
-                    <li key={row.categoryId ?? row.categoryName} className="flex items-center gap-2 text-[11px] text-gray-700">
-                        <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: PALETTE[i % PALETTE.length] }} />
+            <ul className="min-w-[150px] flex-1 space-y-1">
+                {rows.map((row, index) => (
+                    <li key={row.categoryId ?? row.categoryName} className="flex items-center gap-2 text-[11px] text-gray-600">
+                        <span
+                            className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                            style={{ background: CATEGORY_PALETTE[index % CATEGORY_PALETTE.length] }}
+                        />
                         <span className="truncate">{row.categoryName}</span>
-                        <span className="ml-auto font-extrabold text-gray-900">{Math.round(row.share)}%</span>
+                        <span className="ml-auto font-extrabold tabular-nums text-gray-900">{Math.round(row.share)}%</span>
                     </li>
                 ))}
             </ul>

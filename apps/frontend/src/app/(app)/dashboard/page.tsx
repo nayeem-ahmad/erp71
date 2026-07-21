@@ -6,12 +6,14 @@ import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { isAccountingOnlyPlan } from '@/lib/plan-entitlements';
 import { formatMessage, useI18n } from '@/lib/i18n';
-import { rangeToWindow } from '@/lib/dashboard-range';
+import { previousWindow, rangeToWindow } from '@/lib/dashboard-range';
+import { periodDelta } from '@/lib/dashboard-delta';
 import FrequentQuickLinks from '@/components/dashboard/FrequentQuickLinks';
 import { DashboardHeader, type DashboardRange } from '@/components/dashboard/DashboardHeader';
 import { HealthKpiTile } from '@/components/dashboard/HealthKpiTile';
 import { AttentionStrip, type AttentionItem } from '@/components/dashboard/AttentionStrip';
 import { SalesByCategoryDonut, type CategoryRow } from '@/components/dashboard/SalesByCategoryDonut';
+import { CashFlowChart } from '@/components/dashboard/CashFlowChart';
 import { RankedListPanel, type RankedItem } from '@/components/dashboard/RankedListPanel';
 import PageShell from '@/components/ui/compact/PageShell';
 
@@ -113,6 +115,7 @@ export default function DashboardPage() {
     const [renewalEnd, setRenewalEnd] = useState<string | null>(null);
 
     const [financialSnapshot, setFinancialSnapshot] = useState<FinancialKpiResponse | null>(null);
+    const [previousSnapshot, setPreviousSnapshot] = useState<FinancialKpiResponse | null>(null);
     const [financialTrendSnapshot, setFinancialTrendSnapshot] = useState<FinancialTrendResponse | null>(null);
     const [categoryData, setCategoryData] = useState<CategoryResponse | null>(null);
     const [productReport, setProductReport] = useState<ProductReportRow[]>([]);
@@ -153,9 +156,11 @@ export default function DashboardPage() {
             }
 
             const win = rangeToWindow(range);
+            const prevWin = previousWindow(win);
 
-            const [kpisRes, trendRes, productsRes, salesRes, categoryRes, productRepRes, customerRepRes] = await Promise.allSettled([
+            const [kpisRes, prevKpisRes, trendRes, productsRes, salesRes, categoryRes, productRepRes, customerRepRes] = await Promise.allSettled([
                 api.getFinancialKpis(win),
+                api.getFinancialKpis(prevWin),
                 api.getFinancialTrends(win),
                 includeRetailPanels ? api.getProducts() : Promise.resolve([]),
                 includeRetailPanels ? api.getSales() : Promise.resolve([]),
@@ -165,6 +170,10 @@ export default function DashboardPage() {
             ]);
 
             if (cancelled) return;
+
+            // A failed comparison window is not an error worth surfacing — the tiles
+            // simply fall back to showing no delta.
+            setPreviousSnapshot(prevKpisRes.status === 'fulfilled' ? prevKpisRes.value : null);
 
             if (kpisRes.status === 'fulfilled') {
                 setFinancialSnapshot(kpisRes.value);
@@ -300,36 +309,48 @@ export default function DashboardPage() {
         avatarInitials: initialsOf(row.customer.name),
     }));
 
+    const previousKpis = previousSnapshot?.kpis ?? null;
+    const previousNetProfit = previousKpis ? previousKpis.gross_revenue - previousKpis.operating_expense : null;
+    const deltaContext = range === 'today'
+        ? copy.vsPreviousToday
+        : range === 'week' ? copy.vsPreviousWeek : copy.vsPreviousMonth;
+
+    // Each flow KPI is compared against the same figure over the preceding window
+    // of equal length. Without that window there is nothing honest to compare to.
+    const compare = (current: number, previous: number | null | undefined) =>
+        previous == null ? { label: '—', positive: true } : periodDelta(current, previous);
+
     const healthTiles = [
         {
             key: 'sales',
             title: copy.kpiSales,
             value: formatBDT(financialKpis.gross_revenue, { locale }),
             series: salesSeries,
-            delta: trendDelta(salesSeries),
+            delta: compare(financialKpis.gross_revenue, previousKpis?.gross_revenue),
         },
         {
             key: 'net-profit',
             title: copy.kpiNetProfit,
             value: formatBDT(netProfit, { locale }),
             series: profitSeries,
-            delta: trendDelta(profitSeries),
+            delta: compare(netProfit, previousNetProfit),
         },
         {
             key: 'cash',
             title: copy.kpiCashInHand,
             value: formatBDT(financialKpis.net_cash_movement, { locale }),
             series: cashSeries,
-            delta: trendDelta(cashSeries),
+            delta: compare(financialKpis.net_cash_movement, previousKpis?.net_cash_movement),
         },
         {
             key: 'receivables',
             title: copy.kpiReceivables,
             value: receivable == null ? copy.notConfigured : formatBDT(receivable, { locale }),
             series: [] as number[],
-            // Receivables are money owed to the business; a positive balance isn't a "down"
-            // signal, so the tile's delta is always rendered as neutral/positive (not red).
+            // Receivables are a balance, not a flow: comparing it against the previous
+            // window would read as a trend when it is just the amount currently owed.
             delta: { label: '—', positive: true },
+            noContext: true,
         },
     ];
 
@@ -375,6 +396,7 @@ export default function DashboardPage() {
                                         value={tile.value}
                                         delta={tile.delta.label}
                                         deltaPositive={tile.delta.positive}
+                                        deltaContext={tile.noContext || tile.delta.label === '—' ? undefined : deltaContext}
                                         points={tile.series}
                                     />
                                 ))}
@@ -416,7 +438,17 @@ export default function DashboardPage() {
                             {isFinancialLoading ? (
                                 <div className="h-40 animate-pulse rounded-lg bg-gray-100" />
                             ) : (
-                                <CashFlowChart points={financialTrends} locale={locale} />
+                                <CashFlowChart
+                                    points={financialTrends}
+                                    locale={locale}
+                                    labels={{
+                                        inflow: copy.inflow,
+                                        outflow: copy.outflow,
+                                        net: copy.netFlow,
+                                        empty: copy.noAccountingMovement,
+                                        emptyHint: copy.noCashMovementPeriod,
+                                    }}
+                                />
                             )}
                         </div>
 
@@ -470,21 +502,6 @@ export default function DashboardPage() {
     );
 }
 
-function trendDelta(series: number[]): { label: string; positive: boolean } {
-    const filtered = series.filter((value) => Number.isFinite(value));
-    if (filtered.length < 2) {
-        return { label: '—', positive: true };
-    }
-    const first = filtered[0];
-    const last = filtered[filtered.length - 1];
-    const diff = last - first;
-    const positive = diff >= 0;
-    const pct = first !== 0
-        ? Math.round((diff / Math.abs(first)) * 100)
-        : (last !== 0 ? 100 : 0);
-    return { label: `${positive ? '▲' : '▼'} ${Math.abs(pct)}%`, positive };
-}
-
 function initialsOf(name: string): string {
     return name
         .trim()
@@ -492,65 +509,6 @@ function initialsOf(name: string): string {
         .slice(0, 2)
         .map((part) => part.charAt(0).toUpperCase())
         .join('') || '?';
-}
-
-function CashFlowChart({ points, locale }: { points: FinancialTrendPoint[]; locale: string }) {
-    const { t } = useI18n();
-    const copy = t.dashboardHome;
-
-    if (points.length === 0 || !points.some((point) => point.cash_inflow !== 0 || point.cash_outflow !== 0)) {
-        return (
-            <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center">
-                <p className="text-xs font-medium text-gray-400">{copy.noAccountingMovement}</p>
-                <p className="mt-1 text-xs text-gray-500">{copy.noCashMovementPeriod}</p>
-            </div>
-        );
-    }
-
-    const peak = Math.max(...points.flatMap((point) => [point.cash_inflow, point.cash_outflow]), 1);
-    const labelInterval = points.length > 14 ? Math.ceil(points.length / 7) : 1;
-
-    return (
-        <div>
-            <div className="flex items-center gap-3 text-xs font-medium text-gray-500">
-                <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />{copy.inflow}</span>
-                <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-danger" />{copy.outflow}</span>
-            </div>
-            <div className="w-full rounded-lg border border-gray-100 bg-gray-50/60 p-3">
-                <div className="flex h-40 w-full items-end gap-px sm:gap-1">
-                    {points.map((point, index) => {
-                        const showLabel = index === 0
-                            || index === points.length - 1
-                            || index % labelInterval === 0
-                            || point.cash_inflow !== 0
-                            || point.cash_outflow !== 0;
-
-                        return (
-                            <div key={point.date} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1.5">
-                                <div className="flex h-40 w-full max-w-8 items-end justify-center gap-px sm:gap-0.5">
-                                    <div
-                                        aria-label={formatMessage(copy.cashInflowAria, { date: point.date })}
-                                        className="w-[42%] max-w-3 rounded-t-sm bg-emerald-500 transition-all"
-                                        style={{ height: `${Math.max((point.cash_inflow / peak) * 100, point.cash_inflow > 0 ? 6 : 0)}%` }}
-                                    />
-                                    <div
-                                        aria-label={formatMessage(copy.cashOutflowAria, { date: point.date })}
-                                        className="w-[42%] max-w-3 rounded-t-sm bg-danger transition-all"
-                                        style={{ height: `${Math.max((point.cash_outflow / peak) * 100, point.cash_outflow > 0 ? 6 : 0)}%` }}
-                                    />
-                                </div>
-                                <span className="w-full truncate text-center text-[9px] font-bold uppercase tracking-tight text-gray-400 sm:text-[10px]">
-                                    {showLabel
-                                        ? new Date(point.date).toLocaleDateString(locale, { month: 'short', day: 'numeric' })
-                                        : ''}
-                                </span>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-        </div>
-    );
 }
 
 function ActivityItem({ title, description, time }: { title: string; description: string; time: string }) {

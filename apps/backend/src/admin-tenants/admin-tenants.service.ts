@@ -14,9 +14,14 @@ import {
     UserRole,
     normalizeMobileToE164,
     normalizePlanFeatures,
+    parseTenantFeatureOverrides,
+    PLATFORM_FEATURE_KEYS,
     resolveAiCreditsMonthly,
+    resolveTenantFeatures,
     SubscriptionPlanCode,
+    type TenantFeatureOverrides,
 } from '@erp71/shared-types';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PasswordResetService } from '../password-reset/password-reset.service';
 import { getPlatformAdminEmails, isPlatformAdminEmail } from '../auth/platform-admin.util';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -32,6 +37,7 @@ import {
     DeleteTenantDto,
     UpdateAdminTenantSubscriptionDto,
     UpdateAdminTenantLocalizationDto,
+    UpdateAdminTenantFeaturesDto,
     CreateAdminTenantDto,
     RecordTenantPaymentDto,
     RecordTenantRefundDto,
@@ -57,6 +63,7 @@ export class AdminTenantsService {
         private readonly notificationsService: NotificationsService,
         private readonly smsCreditService: SmsCreditService,
         private readonly demoDataService: DemoDataService,
+        private readonly platformSettings: PlatformSettingsService,
     ) {}
 
     private resolveMobileFields(
@@ -373,6 +380,66 @@ export class AdminTenantsService {
         }
 
         return result;
+    }
+
+    /**
+     * Feature state for one tenant: the platform defaults, this tenant's explicit
+     * overrides, and the effective result the tenant's users actually see.
+     */
+    async getFeatures(tenantId: string) {
+        const tenant = await this.db.tenant.findFirst({
+            where: { id: tenantId, ...ACTIVE_TENANT_FILTER },
+            select: { feature_overrides: true },
+        });
+        if (!tenant) {
+            throw new NotFoundException('Tenant not found');
+        }
+
+        const platform = await this.platformSettings.getPlatformFeatures();
+        const overrides = parseTenantFeatureOverrides(tenant.feature_overrides);
+        return {
+            platform_defaults: platform,
+            overrides,
+            effective: resolveTenantFeatures(platform, overrides),
+        };
+    }
+
+    async updateFeatures(
+        tenantId: string,
+        dto: UpdateAdminTenantFeaturesDto,
+        adminUserId: string,
+    ) {
+        const tenant = await this.db.tenant.findFirst({
+            where: { id: tenantId, ...ACTIVE_TENANT_FILTER },
+            select: { feature_overrides: true },
+        });
+        if (!tenant) {
+            throw new NotFoundException('Tenant not found');
+        }
+
+        // `null` clears an override (back to inherit); an omitted key is left alone.
+        const overrides: TenantFeatureOverrides = parseTenantFeatureOverrides(tenant.feature_overrides);
+        for (const key of PLATFORM_FEATURE_KEYS) {
+            const value = dto[key];
+            if (value === undefined) continue;
+            if (value === null) delete overrides[key];
+            else overrides[key] = value;
+        }
+
+        await this.db.tenant.update({
+            where: { id: tenantId },
+            data: { feature_overrides: overrides },
+        });
+
+        await this.auditService.log(
+            'tenant.features.update',
+            'Tenant',
+            { userId: adminUserId },
+            tenantId,
+            { feature_overrides: overrides },
+        );
+
+        return this.getFeatures(tenantId);
     }
 
     async updateLocalization(

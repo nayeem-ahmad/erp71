@@ -189,6 +189,21 @@ export const adminMessages = {
             saveFailed: 'Failed to update language settings.',
             secondaryRequired: 'Choose a second language before enabling switching.',
         },
+        featureControls: {
+            badge: 'Features',
+            title: 'Feature access',
+            description: 'Switch platform features on or off for this tenant only. Inherit follows the platform-wide default.',
+            inherit: 'Inherit',
+            on: 'On',
+            off: 'Off',
+            inheritingOn: 'Inheriting: On',
+            inheritingOff: 'Inheriting: Off',
+            overriddenNote: 'Overridden for this tenant.',
+            save: 'Save features',
+            saved: 'Tenant feature access updated.',
+            saveFailed: 'Failed to update tenant feature access.',
+            planNote: 'Turning a feature on here does not grant the plan entitlement it also requires.',
+        },
         businessTypeControls: {
             badge: 'Catalog',
             title: 'Business type & starter catalog',
@@ -548,7 +563,7 @@ export const adminMessages = {
         tenantFeatures: {
             title: 'Tenant Features',
             description: 'Control which assist features and modules are available to shop users.',
-            hint: 'Changes apply to every tenant on the platform immediately.',
+            hint: 'These are the platform-wide defaults. A tenant with its own override in Tenants → Feature access is unaffected.',
             feedback: {
                 label: 'Feedback',
                 hint: 'Floating feedback widget in the bottom-right corner. Off by default.',
