@@ -491,6 +491,7 @@ model Tenant {
   salaryAccruals    SalaryAccrual[]
   smsTransactions   SmsTransaction[]
   aiUsageLogs       AiUsageLog[]
+  aiConversations   AiConversation[]
   paymentMethods    PaymentMethod[]
   salesSettings     SalesSettings?
   navLayout         TenantNavLayout?
@@ -3085,6 +3086,40 @@ model AiUsageLog {
 
   @@index([tenant_id, created_at])
   @@index([tenant_id, feature, created_at])
+}
+
+/// A data-chatbot thread. Scoped to one user inside one tenant — threads are
+/// private to their author, not shared across the tenant.
+model AiConversation {
+  id         String   @id @default(cuid())
+  tenant_id  String
+  user_id    String
+  /// First user message, truncated. Set on the first turn, used as the list label.
+  title      String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant   Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  messages AiMessage[]
+
+  @@index([tenant_id, user_id, updated_at])
+}
+
+model AiMessage {
+  id              String   @id @default(cuid())
+  conversation_id String
+  role            String // 'user' | 'assistant'
+  content         String   @db.Text
+  /// Summary of the tools this turn ran: [{ name, args, rowCount, ms, error? }].
+  /// Deliberately excludes tool result payloads — those are a second copy of
+  /// tenant business data and are not needed for the UI or the audit trail.
+  tool_calls_json Json?
+  credits_used    Float    @default(0)
+  created_at      DateTime @default(now())
+
+  conversation AiConversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+
+  @@index([conversation_id, created_at])
 }
 
 // ── Support Chat ──────────────────────────────────────────────────────────────

@@ -562,6 +562,10 @@ export const adminMessages = {
                     label: "Manufacturing",
                     hint: "Manufacturing module (BOM recipes and production jobs) for Premium-plan tenants. On by default — use this as a kill switch.",
                 },
+                aiChat: {
+                    label: "এআই সহকারী",
+                    hint: "হেডারে ব্যবসার ডেটা চ্যাটবট। প্রিমিয়াম প্ল্যান লাগে এবং এআই ক্রেডিট খরচ করে। ডিফল্টে বন্ধ।",
+                },
                 saved: "Tenant feature settings saved.",
             },
             sms: {

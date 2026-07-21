@@ -562,6 +562,10 @@ export const adminMessages = {
                     label: 'Pembuatan',
                     hint: 'Modul Pembuatan (resipi BOM dan pesanan kerja pengeluaran) untuk penyewa pelan Premium. Diaktifkan secara lalai — guna ini sebagai suis kecemasan.',
                 },
+                aiChat: {
+                    label: "Pembantu AI",
+                    hint: "Chatbot data perniagaan di pengepala. Memerlukan pelan Premium dan menggunakan kredit AI. Dimatikan secara lalai.",
+                },
                 saved: 'Tetapan ciri penyewa disimpan.',
             },
             sms: {

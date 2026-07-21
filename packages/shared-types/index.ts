@@ -815,6 +815,7 @@ export interface PlatformFeatures {
   help: boolean;
   voice: boolean;
   manufacturing: boolean;
+  aiChat: boolean;
 }
 
 export const DEFAULT_PLATFORM_FEATURES: PlatformFeatures = {
@@ -823,6 +824,7 @@ export const DEFAULT_PLATFORM_FEATURES: PlatformFeatures = {
   help: false,
   voice: false,
   manufacturing: false,
+  aiChat: false,
 };
 
 const PLATFORM_FEATURE_SETTING_KEYS: Record<keyof PlatformFeatures, string> = {
@@ -831,6 +833,7 @@ const PLATFORM_FEATURE_SETTING_KEYS: Record<keyof PlatformFeatures, string> = {
   help: 'help_enabled',
   voice: 'voice_enabled',
   manufacturing: 'manufacturing_enabled',
+  aiChat: 'ai_chat_enabled',
 };
 
 /** Parses general-group platform settings into feature booleans (`'true'` only). */
@@ -843,6 +846,7 @@ export function parsePlatformFeatures(
     help: settings[PLATFORM_FEATURE_SETTING_KEYS.help] === 'true',
     voice: settings[PLATFORM_FEATURE_SETTING_KEYS.voice] === 'true',
     manufacturing: settings[PLATFORM_FEATURE_SETTING_KEYS.manufacturing] === 'true',
+    aiChat: settings[PLATFORM_FEATURE_SETTING_KEYS.aiChat] === 'true',
   };
 }
 
@@ -911,6 +915,67 @@ export interface AiUsageLogEntry {
   cost_usd: number;
   created_at: string;
 }
+
+// ---------------------------------------------------------------------------
+// AI data chatbot
+// ---------------------------------------------------------------------------
+
+/**
+ * One tool the assistant ran while answering. Deliberately carries no result
+ * payload — enough to show the user (and an auditor) what was looked at, not a
+ * second copy of the business data itself.
+ */
+export interface AiChatToolCall {
+  name: string;
+  args: Record<string, unknown>;
+  rowCount?: number;
+  ms?: number;
+  error?: string;
+}
+
+export interface AiChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  tool_calls?: AiChatToolCall[];
+  credits_used?: number;
+  created_at: string;
+}
+
+export interface AiChatResponse {
+  conversation_id: string;
+  message: AiChatMessage;
+  /** Credits consumed by this turn across every model round-trip it took. */
+  credits_used: number;
+  /** True when the agent hit its round-trip cap before finishing. */
+  truncated: boolean;
+}
+
+export interface AiChatConversationSummary {
+  id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+}
+
+export interface AiChatConversationDetail extends AiChatConversationSummary {
+  messages: AiChatMessage[];
+}
+
+/** Tool names the assistant may expose, in the order they are offered to the model. */
+export const AI_CHAT_TOOL_NAMES = [
+  "sales_summary",
+  "top_products",
+  "low_stock",
+  "stock_on_hand",
+  "customer_lookup",
+  "receivables_aging",
+  "expense_summary",
+  "purchase_summary",
+] as const;
+
+export type AiChatToolName = (typeof AI_CHAT_TOOL_NAMES)[number];
 
 export interface SystemHealthReport {
   /** Worst-of rollup across all checks (optional/disabled deps excluded). */

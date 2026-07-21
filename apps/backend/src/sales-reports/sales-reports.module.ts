@@ -9,5 +9,6 @@ import { SalesReportsService } from './sales-reports.service';
     imports: [DatabaseModule],
     controllers: [SalesReportsController],
     providers: [SalesReportsService, SubscriptionAccessGuard, StorePermissionGuard],
+    exports: [SalesReportsService],
 })
 export class SalesReportsModule {}

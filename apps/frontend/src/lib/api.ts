@@ -1,3 +1,9 @@
+import type {
+    AiChatConversationDetail,
+    AiChatConversationSummary,
+    AiChatResponse,
+} from '@erp71/shared-types';
+
 const DEFAULT_PROD_API_BASE = 'https://erp71-backend.onrender.com';
 // In dev (remote container) use a relative path so browser calls go to the
 // Next.js dev server which proxies them to the backend via next.config rewrites.
@@ -2162,6 +2168,18 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    // AI data chatbot
+    aiChat: (data: { message: string; conversationId?: string; locale?: string }): Promise<AiChatResponse> =>
+        fetchWithAuth('/ai/chat', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    getAiChatTools: (): Promise<{ tools: string[] }> => fetchWithAuth('/ai/chat/tools'),
+    getAiConversations: (): Promise<AiChatConversationSummary[]> => fetchWithAuth('/ai/chat/conversations'),
+    getAiConversation: (id: string): Promise<AiChatConversationDetail> =>
+        fetchWithAuth(`/ai/chat/conversations/${id}`),
+    deleteAiConversation: (id: string) => fetchWithAuth(`/ai/chat/conversations/${id}`, { method: 'DELETE' }),
     // Payment Methods
     getPaymentMethods: (type?: string) => {
         const q = type ? `?type=${type}` : '';
