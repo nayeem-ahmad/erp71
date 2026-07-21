@@ -827,6 +827,44 @@ export const DEFAULT_PLATFORM_FEATURES: PlatformFeatures = {
   aiChat: false,
 };
 
+export type PlatformFeatureKey = keyof PlatformFeatures;
+
+export const PLATFORM_FEATURE_KEYS: PlatformFeatureKey[] = [
+  'feedback',
+  'support',
+  'help',
+  'voice',
+  'manufacturing',
+  'aiChat',
+];
+
+/**
+ * Per-tenant overrides of the platform-wide feature switches.
+ * A missing key means "inherit the platform default"; an explicit boolean wins
+ * over the platform setting, so a feature can be piloted on (or pulled) for a
+ * single tenant without touching everyone else.
+ */
+export type TenantFeatureOverrides = Partial<Record<PlatformFeatureKey, boolean>>;
+
+/** Narrows an untrusted JSON blob (Prisma `Json` column, request body) to known keys. */
+export function parseTenantFeatureOverrides(raw: unknown): TenantFeatureOverrides {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const source = raw as Record<string, unknown>;
+  const overrides: TenantFeatureOverrides = {};
+  for (const key of PLATFORM_FEATURE_KEYS) {
+    if (typeof source[key] === 'boolean') overrides[key] = source[key] as boolean;
+  }
+  return overrides;
+}
+
+/** Platform defaults with the tenant's explicit overrides applied on top. */
+export function resolveTenantFeatures(
+  platform: PlatformFeatures,
+  overrides: unknown,
+): PlatformFeatures {
+  return { ...platform, ...parseTenantFeatureOverrides(overrides) };
+}
+
 const PLATFORM_FEATURE_SETTING_KEYS: Record<keyof PlatformFeatures, string> = {
   feedback: 'feedback_enabled',
   support: 'support_enabled',

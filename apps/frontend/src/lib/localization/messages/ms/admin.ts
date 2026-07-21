@@ -189,6 +189,21 @@ export const adminMessages = {
                 saveFailed: 'Gagal mengemas kini tetapan bahasa.',
                 secondaryRequired: 'Pilih bahasa kedua sebelum mendayakan pertukaran.',
             },
+            featureControls: {
+                badge: 'Ciri',
+                title: 'Akses ciri',
+                description: 'Hidupkan atau matikan ciri platform untuk penyewa ini sahaja. Warisi mengikut tetapan lalai seluruh platform.',
+                inherit: 'Warisi',
+                on: 'Hidup',
+                off: 'Mati',
+                inheritingOn: 'Mewarisi: Hidup',
+                inheritingOff: 'Mewarisi: Mati',
+                overriddenNote: 'Ditindih untuk penyewa ini.',
+                save: 'Simpan ciri',
+                saved: 'Akses ciri penyewa dikemas kini.',
+                saveFailed: 'Gagal mengemas kini akses ciri penyewa.',
+                planNote: 'Menghidupkan ciri di sini tidak memberikan kelayakan pelan yang turut diperlukan.',
+            },
             businessTypeControls: {
                 badge: 'Katalog',
                 title: 'Jenis perniagaan & katalog permulaan',
@@ -541,7 +556,7 @@ export const adminMessages = {
             tenantFeatures: {
                 title: 'Ciri Penyewa',
                 description: 'Kawal ciri bantuan dan modul yang tersedia kepada pengguna kedai.',
-                hint: 'Perubahan dikenakan kepada setiap penyewa di platform serta-merta.',
+                hint: 'Ini ialah tetapan lalai seluruh platform. Penyewa yang mempunyai tindihan sendiri dalam Penyewa → Akses ciri tidak terjejas.',
                 feedback: {
                     label: 'Maklum Balas',
                     hint: 'Widget maklum balas terapung di sudut kanan bawah. Dimatikan secara lalai.',

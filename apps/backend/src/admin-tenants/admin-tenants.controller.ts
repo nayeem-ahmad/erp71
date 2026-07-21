@@ -7,6 +7,7 @@ import {
     ListAdminTenantLedgerQueryDto,
     UpdateAdminTenantSubscriptionDto,
     UpdateAdminTenantLocalizationDto,
+    UpdateAdminTenantFeaturesDto,
     SuspendTenantDto,
     DeleteTenantDto,
     CreateAdminTenantDto,
@@ -65,6 +66,20 @@ export class AdminTenantsController {
         @Request() req: any,
     ) {
         return this.adminTenantsService.updateLocalization(tenantId, dto, req.user.userId);
+    }
+
+    @Get(':tenantId/features')
+    getFeatures(@Param('tenantId') tenantId: string) {
+        return this.adminTenantsService.getFeatures(tenantId);
+    }
+
+    @Patch(':tenantId/features')
+    updateFeatures(
+        @Param('tenantId') tenantId: string,
+        @Body() dto: UpdateAdminTenantFeaturesDto,
+        @Request() req: any,
+    ) {
+        return this.adminTenantsService.updateFeatures(tenantId, dto, req.user.userId);
     }
 
     @Patch(':tenantId/business-type')

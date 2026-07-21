@@ -189,6 +189,21 @@ export const adminMessages = {
                 saveFailed: "ভাষা সেটিংস আপডেট করা যায়নি।",
                 secondaryRequired: "স্যুইচিং সক্রিয় করতে দ্বিতীয় ভাষা বেছে নিন।",
             },
+            featureControls: {
+                badge: "ফিচার",
+                title: "ফিচার অ্যাক্সেস",
+                description: "শুধু এই টেন্যান্টের জন্য প্ল্যাটফর্ম ফিচার চালু বা বন্ধ করুন। ইনহেরিট প্ল্যাটফর্মের ডিফল্ট অনুসরণ করে।",
+                inherit: "ইনহেরিট",
+                on: "চালু",
+                off: "বন্ধ",
+                inheritingOn: "ইনহেরিট করছে: চালু",
+                inheritingOff: "ইনহেরিট করছে: বন্ধ",
+                overriddenNote: "এই টেন্যান্টের জন্য ওভাররাইড করা হয়েছে।",
+                save: "ফিচার সংরক্ষণ",
+                saved: "টেন্যান্ট ফিচার অ্যাক্সেস আপডেট হয়েছে।",
+                saveFailed: "টেন্যান্ট ফিচার অ্যাক্সেস আপডেট করা যায়নি।",
+                planNote: "এখানে ফিচার চালু করলেও এর জন্য প্রয়োজনীয় প্ল্যান এনটাইটেলমেন্ট দেওয়া হয় না।",
+            },
             businessTypeControls: {
                 badge: "ক্যাটালগ",
                 title: "ব্যবসার ধরন ও প্রারম্ভিক ক্যাটালগ",
@@ -541,7 +556,7 @@ export const adminMessages = {
             tenantFeatures: {
                 title: "Tenant Features",
                 description: "Control which assist features and modules are available to shop users.",
-                hint: "Changes apply to every tenant on the platform immediately.",
+                hint: "এগুলো প্ল্যাটফর্ম-ব্যাপী ডিফল্ট। টেন্যান্টস → ফিচার অ্যাক্সেস-এ নিজস্ব ওভাররাইড থাকা টেন্যান্ট প্রভাবিত হবে না।",
                 feedback: {
                     label: "Feedback",
                     hint: "Floating feedback widget in the bottom-right corner. Off by default.",

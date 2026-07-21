@@ -381,6 +381,10 @@ model Tenant {
   business_type        String?  // e.g. SURGICAL_MEDICAL, PHARMACY, GROCERY, COMPUTER_HARDWARE
   deleted_at           DateTime?
 
+  /// Per-tenant overrides of the platform feature switches, e.g. `{"voice": true}`.
+  /// A missing key inherits the platform default; an explicit boolean wins over it.
+  feature_overrides    Json     @default("{}")
+
   loyalty_points_enabled Boolean  @default(false)
   loyalty_earn_rate      Decimal? @db.Decimal(8, 4)  // points per BDT (e.g. 1.0 = 1 point per ৳1)
   loyalty_redeem_rate    Decimal? @db.Decimal(8, 4)  // BDT value per point (e.g. 0.01 = 1 point = ৳0.01)

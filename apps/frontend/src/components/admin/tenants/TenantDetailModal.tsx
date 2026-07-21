@@ -2,8 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Building2, Database, Download, Loader2, LogIn, RotateCcw, ShieldCheck, Trash2, UserX, Users } from 'lucide-react';
-import { BUSINESS_TYPE_LABELS, BUSINESS_TYPE_VALUES, BUSINESS_TYPES_WITH_TEMPLATE } from '@erp71/shared-types';
-import { api } from '@/lib/api';
+import {
+    BUSINESS_TYPE_LABELS,
+    BUSINESS_TYPE_VALUES,
+    BUSINESS_TYPES_WITH_TEMPLATE,
+    PLATFORM_FEATURE_KEYS,
+    type PlatformFeatureKey,
+} from '@erp71/shared-types';
+import { api, type AdminTenantFeatures } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import type { DiscountType, PlanCode, SecondaryLocale, TenantRecord } from './types';
@@ -24,6 +30,48 @@ type DemoBatch = {
     batch_number: number;
     error?: string | null;
 };
+
+/** Tri-state per feature: follow the platform default, or pin it on/off for this tenant. */
+type FeatureChoice = 'inherit' | 'on' | 'off';
+
+type FeatureDraft = Record<PlatformFeatureKey, FeatureChoice>;
+
+function toFeatureDraft(features: AdminTenantFeatures | null): FeatureDraft {
+    const draft = {} as FeatureDraft;
+    for (const key of PLATFORM_FEATURE_KEYS) {
+        const override = features?.overrides?.[key];
+        draft[key] = override === undefined ? 'inherit' : override ? 'on' : 'off';
+    }
+    return draft;
+}
+
+function FeatureChoiceGroup({
+    value,
+    labels,
+    onChange,
+}: {
+    value: FeatureChoice;
+    labels: Record<FeatureChoice, string>;
+    onChange: (next: FeatureChoice) => void;
+}) {
+    return (
+        <div className="inline-flex flex-shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white">
+            {(['inherit', 'on', 'off'] as const).map((choice) => (
+                <button
+                    key={choice}
+                    type="button"
+                    aria-pressed={value === choice}
+                    onClick={() => onChange(choice)}
+                    className={`min-h-touch px-3 py-2 text-xs font-semibold transition ${
+                        value === choice ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                >
+                    {labels[choice]}
+                </button>
+            ))}
+        </div>
+    );
+}
 
 function InfoCard({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
     return (
@@ -46,7 +94,9 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
     const lc = m.localizationControls;
     const nc = m.navLayoutControls;
     const bt = m.businessTypeControls;
+    const fc = m.featureControls;
     const dd = m.demoData;
+    const featureLabels = t.admin.platformSettings.tenantFeatures;
 
     const [tenant, setTenant] = useState<TenantRecord | null>(null);
     const [loading, setLoading] = useState(false);
@@ -58,6 +108,9 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
     const [isImpersonating, setIsImpersonating] = useState(false);
     const [tenantNavKind, setTenantNavKind] = useState<'none' | 'custom' | 'pinned_default'>('none');
     const [isResettingTenantNav, setIsResettingTenantNav] = useState(false);
+    const [features, setFeatures] = useState<AdminTenantFeatures | null>(null);
+    const [featureDraft, setFeatureDraft] = useState<FeatureDraft>(() => toFeatureDraft(null));
+    const [isSavingFeatures, setIsSavingFeatures] = useState(false);
     const [businessTypeDraft, setBusinessTypeDraft] = useState('');
     const [isSavingBusinessType, setIsSavingBusinessType] = useState(false);
     const [isImportingCatalog, setIsImportingCatalog] = useState(false);
@@ -109,12 +162,15 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
         setLoading(true);
         setError('');
         try {
-            const [detail, navOverride] = await Promise.all([
+            const [detail, navOverride, tenantFeatures] = await Promise.all([
                 api.getAdminTenant(id),
                 api.getAdminTenantNavOverride(id).catch(() => null),
+                api.getAdminTenantFeatures(id).catch(() => null),
             ]);
             setTenant(detail);
             setTenantNavKind(navOverride?.kind ?? 'none');
+            setFeatures(tenantFeatures);
+            setFeatureDraft(toFeatureDraft(tenantFeatures));
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : m.loadDetailFailed);
             setTenant(null);
@@ -220,6 +276,28 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
             setError(err instanceof Error ? err.message : lc.saveFailed);
         } finally {
             setIsSavingLocalization(false);
+        }
+    };
+
+    const saveFeatures = async () => {
+        if (!tenant) return;
+        setIsSavingFeatures(true);
+        setError('');
+        try {
+            const payload = Object.fromEntries(
+                PLATFORM_FEATURE_KEYS.map((key) => [
+                    key,
+                    featureDraft[key] === 'inherit' ? null : featureDraft[key] === 'on',
+                ]),
+            );
+            const updated = await api.updateAdminTenantFeatures(tenant.id, payload);
+            setFeatures(updated);
+            setFeatureDraft(toFeatureDraft(updated));
+            onToast(fc.saved);
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : fc.saveFailed);
+        } finally {
+            setIsSavingFeatures(false);
         }
     };
 
@@ -525,6 +603,50 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                 >
                                     {isSavingLocalization ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                                     {lc.save}
+                                </button>
+                            </div>
+
+                            <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-5 space-y-4">
+                                <div>
+                                    <p className="text-[10px] font-medium text-blue-400">{fc.badge}</p>
+                                    <h3 className="mt-2 text-lg font-bold tracking-tight text-blue-900">{fc.title}</h3>
+                                    <p className="mt-1 text-xs text-blue-700/80">{fc.description}</p>
+                                </div>
+                                <div className="space-y-3">
+                                    {PLATFORM_FEATURE_KEYS.map((key) => {
+                                        const choice = featureDraft[key];
+                                        const inheritedOn = features?.platform_defaults?.[key] ?? false;
+                                        return (
+                                            <div
+                                                key={key}
+                                                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-100 bg-white px-4 py-3"
+                                            >
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-semibold text-gray-800">{featureLabels[key].label}</p>
+                                                    <p className="mt-0.5 text-xs text-gray-500">
+                                                        {choice === 'inherit'
+                                                            ? (inheritedOn ? fc.inheritingOn : fc.inheritingOff)
+                                                            : fc.overriddenNote}
+                                                    </p>
+                                                </div>
+                                                <FeatureChoiceGroup
+                                                    value={choice}
+                                                    labels={{ inherit: fc.inherit, on: fc.on, off: fc.off }}
+                                                    onChange={(next) => setFeatureDraft((current) => ({ ...current, [key]: next }))}
+                                                />
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                <p className="text-xs text-blue-700/70">{fc.planNote}</p>
+                                <button
+                                    type="button"
+                                    onClick={() => void saveFeatures()}
+                                    disabled={isSavingFeatures}
+                                    className="inline-flex min-h-touch items-center rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
+                                >
+                                    {isSavingFeatures ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                                    {fc.save}
                                 </button>
                             </div>
 

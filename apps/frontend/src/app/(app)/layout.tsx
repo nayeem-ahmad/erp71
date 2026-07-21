@@ -63,7 +63,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const [resendingVerification, setResendingVerification] = useState(false);
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const [workspaceEpoch, setWorkspaceEpoch] = useState(0);
-    const [platformFeatures, setPlatformFeatures] = useState<PlatformFeatures>(DEFAULT_PLATFORM_FEATURES);
+    const [accountPlatformFeatures, setAccountPlatformFeatures] = useState<PlatformFeatures>(DEFAULT_PLATFORM_FEATURES);
     const [tenantNavLayout, setTenantNavLayout] = useState<NavLayoutNode[]>(DEFAULT_TENANT_NAV_LAYOUT);
     const [platformAdminNavLayout, setPlatformAdminNavLayout] = useState<NavLayoutNode[]>(DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT);
     const [posEnabled, setPosEnabled] = useState(true);
@@ -131,7 +131,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 }
             }
             setUser(me);
-            setPlatformFeatures(me?.platform_features ?? DEFAULT_PLATFORM_FEATURES);
+            setAccountPlatformFeatures(me?.platform_features ?? DEFAULT_PLATFORM_FEATURES);
             setShowEmailVerificationBanner(!me?.email_verified);
             const isDemo = Boolean(me?.is_demo) || localStorage.getItem('demo_session') === '1';
             setShowDemoBanner(isDemo && localStorage.getItem('demo_banner_dismissed') !== '1');
@@ -157,6 +157,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const activeTenant = (inPlatformAdminMode || inRefereeMode)
         ? null
         : user?.tenants?.find((tenant: any) => tenant.id === activeTenantId) || user?.tenants?.[0];
+
+    // Each tenant carries the platform switches with its own super-admin overrides
+    // already applied; the account-level set is the fallback outside a workspace.
+    const platformFeatures: PlatformFeatures = activeTenant?.platform_features ?? accountPlatformFeatures;
 
     useEffect(() => {
         if (inPlatformAdminMode || inRefereeMode) return;

@@ -2,7 +2,17 @@ import type {
     AiChatConversationDetail,
     AiChatConversationSummary,
     AiChatResponse,
+    PlatformFeatureKey,
+    PlatformFeatures,
+    TenantFeatureOverrides,
 } from '@erp71/shared-types';
+
+/** Per-tenant feature state: platform defaults, this tenant's overrides, and the result. */
+export type AdminTenantFeatures = {
+    platform_defaults: PlatformFeatures;
+    overrides: TenantFeatureOverrides;
+    effective: PlatformFeatures;
+};
 
 const DEFAULT_PROD_API_BASE = 'https://erp71-backend.onrender.com';
 // In dev (remote container) use a relative path so browser calls go to the
@@ -1310,6 +1320,17 @@ export const api = {
         tenantId: string,
         data: { localization_enabled?: boolean; secondary_locale?: 'bn' | 'ms' | null },
     ) => fetchWithAuth(`/admin/tenants/${tenantId}/localization`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    getAdminTenantFeatures: (tenantId: string): Promise<AdminTenantFeatures> =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/features`),
+    /** `null` for a feature clears the override so the tenant inherits the platform default. */
+    updateAdminTenantFeatures: (
+        tenantId: string,
+        data: Partial<Record<PlatformFeatureKey, boolean | null>>,
+    ): Promise<AdminTenantFeatures> => fetchWithAuth(`/admin/tenants/${tenantId}/features`, {
         method: 'PATCH',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },

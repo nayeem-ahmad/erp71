@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { parsePlatformFeatures, type PlatformFeatures } from '@erp71/shared-types';
+import { parsePlatformFeatures, resolveTenantFeatures, type PlatformFeatures } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { encryptValue, decryptValue } from './crypto.util';
 
@@ -172,6 +172,26 @@ export class PlatformSettingsService {
 
     async isFeatureEnabled(feature: keyof PlatformFeatures): Promise<boolean> {
         const features = await this.getPlatformFeatures();
+        return features[feature];
+    }
+
+    /** Platform switches with the tenant's own ON/OFF overrides applied on top. */
+    async getFeaturesForTenant(tenantId?: string | null): Promise<PlatformFeatures> {
+        const platform = await this.getPlatformFeatures();
+        if (!tenantId) return platform;
+
+        const tenant = await this.db.tenant.findUnique({
+            where: { id: tenantId },
+            select: { feature_overrides: true },
+        });
+        return resolveTenantFeatures(platform, tenant?.feature_overrides);
+    }
+
+    async isFeatureEnabledForTenant(
+        feature: keyof PlatformFeatures,
+        tenantId?: string | null,
+    ): Promise<boolean> {
+        const features = await this.getFeaturesForTenant(tenantId);
         return features[feature];
     }
 }
