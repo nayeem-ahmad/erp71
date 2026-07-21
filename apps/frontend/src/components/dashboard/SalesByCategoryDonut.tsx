@@ -17,9 +17,11 @@ export type CategoryRow = {
  */
 export const CATEGORY_PALETTE = ['#2563eb', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'] as const;
 
-const SIZE = 132;
-const RADIUS = 52;
-const STROKE = 19;
+// Sized so the hole clears ~110px: the total is a taka figure that runs to six
+// or seven digits, and at the previous 132/52/19 it overflowed and clipped.
+const SIZE = 168;
+const RADIUS = 66;
+const STROKE = 22;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 // Separates neighbouring arcs with the card surface rather than a drawn border.
 const GAP = 2;
@@ -27,10 +29,12 @@ const GAP = 2;
 export function SalesByCategoryDonut({
     rows,
     totalLabel,
+    totalTitle,
     emptyLabel,
 }: {
     rows: CategoryRow[];
     totalLabel: string;
+    totalTitle?: string;
     emptyLabel: string;
 }) {
     if (!rows.length) {
@@ -56,8 +60,11 @@ export function SalesByCategoryDonut({
         };
     });
 
+    // h-full only where the grid stretches this card to match the cash-flow card
+    // beside it; on mobile the card is auto-height and 100% would push the
+    // wrapped legend past the card's own padding.
     return (
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-4 lg:h-full">
             <div className="relative shrink-0" style={{ width: SIZE, height: SIZE }}>
                 <svg
                     viewBox={`0 0 ${SIZE} ${SIZE}`}
@@ -82,22 +89,34 @@ export function SalesByCategoryDonut({
                         />
                     ))}
                 </svg>
-                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                    <span data-testid="donut-total" className="text-sm font-extrabold tracking-tight text-gray-900">
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-2">
+                    <span
+                        data-testid="donut-total"
+                        title={totalTitle}
+                        className="max-w-full truncate text-[13px] font-extrabold tabular-nums tracking-tight text-gray-900"
+                    >
                         {totalLabel}
                     </span>
                     <span className="text-[9px] font-bold uppercase tracking-wide text-gray-400">Total</span>
                 </div>
             </div>
-            <ul className="min-w-[150px] flex-1 space-y-1">
+            {/* Share sits immediately before the name: right-aligned in its own
+                narrow column, so the figures still line up for scanning, but a
+                short category name never strands its percentage across the card. */}
+            <ul className="w-full min-w-[150px] max-w-[280px] flex-1 space-y-1.5">
                 {rows.map((row, index) => (
-                    <li key={row.categoryId ?? row.categoryName} className="flex items-center gap-2 text-[11px] text-gray-600">
+                    <li
+                        key={row.categoryId ?? row.categoryName}
+                        className="grid grid-cols-[10px_2.25rem_1fr] items-center gap-x-2 text-[11px] text-gray-600"
+                    >
                         <span
-                            className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                            className="h-2.5 w-2.5 rounded-sm"
                             style={{ background: CATEGORY_PALETTE[index % CATEGORY_PALETTE.length] }}
                         />
-                        <span className="truncate">{row.categoryName}</span>
-                        <span className="ml-auto font-extrabold tabular-nums text-gray-900">{Math.round(row.share)}%</span>
+                        <span className="text-right font-extrabold tabular-nums text-gray-900">
+                            {Math.round(row.share)}%
+                        </span>
+                        <span className="truncate" title={row.categoryName}>{row.categoryName}</span>
                     </li>
                 ))}
             </ul>

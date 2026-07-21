@@ -44,6 +44,20 @@ describe('SalesByCategoryDonut', () => {
         render(<SalesByCategoryDonut rows={rows} totalLabel="৳500" emptyLabel="No sales" />);
         expect(screen.getByTestId('donut-total')).toHaveTextContent('৳500');
     });
+
+    it('keeps the exact total reachable when the ring shows a rounded one', () => {
+        // The hole is ~110px wide, so the label is rounded; the precise figure
+        // must still be available rather than lost.
+        render(
+            <SalesByCategoryDonut
+                rows={rows}
+                totalLabel="৳ 339,042"
+                totalTitle="৳ 339,042.00"
+                emptyLabel="No sales"
+            />,
+        );
+        expect(screen.getByTestId('donut-total')).toHaveAttribute('title', '৳ 339,042.00');
+    });
 });
 
 describe('CATEGORY_PALETTE', () => {

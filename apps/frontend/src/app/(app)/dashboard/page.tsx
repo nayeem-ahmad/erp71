@@ -460,7 +460,10 @@ export default function DashboardPage() {
                                 ) : (
                                     <SalesByCategoryDonut
                                         rows={categoryRows}
-                                        totalLabel={formatBDT(categoryTotal, { locale })}
+                                        // Decimals on a six-figure taka total overflow the ring;
+                                        // the exact figure stays available on hover.
+                                        totalLabel={formatBDT(categoryTotal, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                        totalTitle={formatBDT(categoryTotal, { locale })}
                                         emptyLabel={copy.salesByCategoryEmpty}
                                     />
                                 )}
