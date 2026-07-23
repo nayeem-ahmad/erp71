@@ -8,6 +8,7 @@
         "generate": "prisma generate",
         "db:push": "prisma db push",
         "db:seed": "tsx prisma/seed.ts",
+        "db:seed:platform": "tsx prisma/seed-platform.ts",
         "db:studio": "prisma studio",
         "repair:vouchers": "tsx prisma/repair-fabricated-vouchers.ts",
         "sync:accounting": "tsx prisma/sync-accounting.ts",

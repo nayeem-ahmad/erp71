@@ -55,12 +55,18 @@ ENV HOSTNAME="0.0.0.0"
 ARG GIT_SHA=unknown
 ENV GIT_SHA=$GIT_SHA
 
-# Sync schema, seed, and bring every tenant's accounting defaults up to date
-# before starting the app.
+# Sync schema, sync the platform catalog, and bring every tenant's accounting
+# defaults up to date before starting the app.
 #
 # DIRECT_URL is overridden with DATABASE_URL so prisma db push uses the
 # internal Render hostname, bypassing the IP allowlist that blocks external
 # connections during preDeployCommand.
+#
+# db:seed:platform — NOT db:seed. This runs on every container start, including
+# unattended restarts, so it may only touch platform reference data (subscription
+# plans + addon modules), which the app reads at runtime and which must track the
+# deployed code. prisma/seed.ts is dev/demo fixtures: it writes business data and
+# resets known passwords, and must never run here.
 #
 # sync:accounting runs on every start, after db:seed so it also covers anything
 # the seed just created. It is idempotent and additive-only (see
@@ -69,4 +75,4 @@ ENV GIT_SHA=$GIT_SHA
 # runs only at tenant creation. Without it, adding a rule silently posts nothing
 # on every existing tenant. It joins the && chain deliberately: a failure here
 # means tenants would post to a stale rule set, which must be loud, not skipped.
-CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
+CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
