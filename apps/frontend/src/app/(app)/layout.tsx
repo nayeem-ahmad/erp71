@@ -162,11 +162,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     // already applied; the account-level set is the fallback outside a workspace.
     const platformFeatures: PlatformFeatures = activeTenant?.platform_features ?? accountPlatformFeatures;
 
+    // Setup is dismissed per workspace (server-side), so a new browser or a teammate's
+    // first login never re-opens it. The localStorage flag is only a same-tab shortcut
+    // for the moment between dismissing and /auth/me catching up.
+    const onboardingDismissed = activeTenant?.onboarding_dismissed === true;
+
     useEffect(() => {
         if (inPlatformAdminMode || inRefereeMode) return;
-        const done = localStorage.getItem('onboarding_complete');
+        const done = onboardingDismissed || localStorage.getItem('onboarding_complete');
         if (!done && pathname === routes.home) setShowOnboardingBanner(true);
-    }, [pathname, inPlatformAdminMode, inRefereeMode]);
+    }, [pathname, inPlatformAdminMode, inRefereeMode, onboardingDismissed]);
 
     const refreshSalesSettings = useCallback(() => {
         if (inPlatformAdminMode || inRefereeMode) {
@@ -211,12 +216,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             if (pathname === routes.home) router.replace(routes.referralsPortal);
             return;
         }
-        const done = localStorage.getItem('onboarding_complete');
+        const done = onboardingDismissed || localStorage.getItem('onboarding_complete');
         if (done) return;
         if (pathname === routes.home) {
             router.replace(routes.onboarding);
         }
-    }, [hasResolvedUser, pathname, router, inPlatformAdminMode, inRefereeMode]);
+    }, [hasResolvedUser, pathname, router, inPlatformAdminMode, inRefereeMode, onboardingDismissed]);
 
     const tenantStores = activeTenant?.stores || [];
     const primaryRole = activeTenant?.role;
@@ -527,7 +532,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                                 {t.dashboardLayout.startSetup}
                             </button>
                             <button
-                                onClick={() => { localStorage.setItem('onboarding_complete', '1'); setShowOnboardingBanner(false); }}
+                                onClick={() => {
+                                    localStorage.setItem('onboarding_complete', '1');
+                                    setShowOnboardingBanner(false);
+                                    api.dismissOnboarding().catch(() => { /* retried on the next dismiss */ });
+                                }}
                                 className="text-blue-200 hover:text-white transition-colors"
                                 aria-label="Dismiss"
                             >

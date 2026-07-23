@@ -72,6 +72,13 @@ export class AuthController {
     }
 
     @UseGuards(JwtAuthGuard)
+    @Post('onboarding/dismiss')
+    async dismissOnboarding(@Request() req) {
+        const tenantId = req.tenantId || (req.headers['x-tenant-id'] as string | undefined);
+        return this.authService.dismissOnboarding(req.user.userId, tenantId);
+    }
+
+    @UseGuards(JwtAuthGuard)
     @Get('me')
     async getMe(@Request() req) {
         return this.authService.getMe(req.user.userId);

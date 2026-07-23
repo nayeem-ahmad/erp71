@@ -14,8 +14,14 @@ type Step = 'store' | 'products' | 'pos' | 'done';
 
 const STEP_ORDER: Step[] = ['store', 'products', 'pos', 'done'];
 
+/**
+ * Finishing or skipping setup is a workspace-level decision, so it's persisted on
+ * the tenant; the localStorage flag only makes the current tab react instantly.
+ * Navigation must not wait on (or be blocked by) the network call.
+ */
 function markOnboardingComplete() {
     localStorage.setItem('onboarding_complete', '1');
+    api.dismissOnboarding().catch(() => { /* retried on the next dismiss */ });
 }
 
 function StepIndicator({ current, labels }: { current: Step; labels: Record<Step, string> }) {

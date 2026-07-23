@@ -379,6 +379,9 @@ model Tenant {
   vat_registration_no  String?                      // NBR VAT registration number
   business_tin         String?                      // Tax Identification Number
   business_type        String?  // e.g. SURGICAL_MEDICAL, PHARMACY, GROCERY, COMPUTER_HARDWARE
+  /// When the setup wizard was finished or skipped for this workspace. Set once
+  /// by whoever dismisses it; every member on every device then skips onboarding.
+  onboarding_dismissed_at DateTime?
   deleted_at           DateTime?
 
   /// Per-tenant overrides of the platform feature switches, e.g. `{"voice": true}`.
