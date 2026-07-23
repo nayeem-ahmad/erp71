@@ -8,279 +8,53 @@ import { bootstrapDefaultAccountingForTenant } from './bootstrap-accounting';
 import { seedDemoAccount, DEMO_ACCOUNT_EMAIL } from './seed-demo';
 import { ROLE_DEFAULT_PERMISSIONS, UserRole, resolveBaseUserRole, SYSTEM_TENANT_ROLE_TO_USER_ROLE } from '@erp71/shared-types';
 import { seedDefaultTenantRoles } from './tenant-role.seed';
+import { seedPlatformReferenceData } from './seed-platform';
 
 const prisma = new PrismaClient();
 
+/**
+ * Development and demo fixtures — a whole fake business: users with known
+ * passwords, "Dhaka Retail Co.", stores, products, customers, suppliers, sales,
+ * purchases, employees, plus the public demo sandbox.
+ *
+ * THIS MUST NEVER RUN AGAINST PRODUCTION. It writes business data, so on a real
+ * database it invents tenants and rewrites rows that belong to actual customers.
+ *
+ * Production deploys run `db:seed:platform` instead, which syncs only the plan
+ * and addon catalog. See seed-platform.ts. The guard below is a backstop in case
+ * a deploy path ever points back here by mistake.
+ */
+function assertNotProduction() {
+    if (process.env.NODE_ENV !== 'production') return;
+    if (process.env.ALLOW_PROD_SEED === '1') {
+        console.warn('⚠️   ALLOW_PROD_SEED=1 — running demo fixtures against a production environment.');
+        return;
+    }
+
+    throw new Error(
+        'Refusing to run demo fixtures with NODE_ENV=production.\n' +
+        'This seed creates fake tenants, users and transactions and resets known passwords.\n' +
+        'Production deploys should run `npm run db:seed:platform --workspace=@erp71/database`,\n' +
+        'which syncs the subscription plan and addon catalog only.\n' +
+        'If you genuinely intend to seed fixtures here, re-run with ALLOW_PROD_SEED=1.',
+    );
+}
+
 async function main() {
+    assertNotProduction();
+
     const passwordHash = await bcrypt.hash('password123', 10);
 
-    const upsertPlan = (data: {
-        code: 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
-        name: string;
-        description: string;
-        monthly_price: number;
-        yearly_price: number;
-        is_active?: boolean;
-        features_json: Record<string, unknown>;
-        marketing_features_json?: string[];
-    }) => {
-        const isActive = data.is_active ?? true;
-
-        return prisma.subscriptionPlan.upsert({
-            where: { code: data.code },
-            update: {
-                name: data.name,
-                description: data.description,
-                monthly_price: data.monthly_price,
-                yearly_price: data.yearly_price,
-                is_active: isActive,
-                features_json: data.features_json,
-                marketing_features_json: data.marketing_features_json ?? [],
-            },
-            create: {
-                code: data.code,
-                name: data.name,
-                description: data.description,
-                monthly_price: data.monthly_price,
-                yearly_price: data.yearly_price,
-                is_active: isActive,
-                features_json: data.features_json,
-                marketing_features_json: data.marketing_features_json ?? [],
-            },
-        });
-    };
-
-    await upsertPlan({
-        code: 'FREE',
-        name: 'Free',
-        description: 'Legacy fallback plan — not offered for new signups',
-        monthly_price: 0,
-        yearly_price: 0,
-        is_active: false,
-        features_json: {
-            maxStores: 1,
-            maxUsers: 1,
-            maxSkus: 100,
-            premiumAccounting: false,
-            premiumInventoryReports: false,
-            premiumCrm: false,
-            multiStore: false,
-            apiAccess: false,
-            accountingOnly: false,
-            premiumAccountingAdvanced: false,
-            premiumAi: false,
-            premiumVoice: false,
-            planRank: 0,
-            aiCreditsMonthly: 0,
-        },
-        marketing_features_json: [
-            'Basic POS terminal',
-            '1 user account',
-            '1 store location',
-            'Up to 100 products',
-            'Community support',
-        ],
-    });
-
-    await upsertPlan({
-        code: 'BASIC',
-        name: 'Basic',
-        description: 'Core retail operations for growing single-branch businesses',
-        monthly_price: 499,
-        yearly_price: 4990,
-        features_json: {
-            maxStores: 1,
-            maxUsers: 3,
-            maxSkus: 2000,
-            premiumAccounting: false,
-            premiumInventoryReports: false,
-            premiumCrm: false,
-            multiStore: false,
-            apiAccess: false,
-            accountingOnly: false,
-            premiumAccountingAdvanced: false,
-            premiumAi: false,
-            premiumVoice: false,
-            planRank: 1,
-            aiCreditsMonthly: 100,
-        },
-        marketing_features_json: [
-            'Full POS terminal',
-            'Inventory management',
-            'Purchase orders',
-            '3 user accounts',
-            '1 store location',
-            'Up to 2,000 products',
-            'Email support',
-        ],
-    });
-
-    await upsertPlan({
-        code: 'ACCOUNTING',
-        name: 'Accounting',
-        description: 'Focused pack for bookkeeping: full accounting module, financial reports, expenses, and fund management',
-        monthly_price: 749,
-        yearly_price: 7490,
-        features_json: {
-            maxStores: 1,
-            maxUsers: 5,
-            maxSkus: 5000,
-            premiumAccounting: true,
-            premiumInventoryReports: false,
-            premiumCrm: false,
-            multiStore: false,
-            apiAccess: false,
-            accountingOnly: true,
-            premiumAccountingAdvanced: true,
-            premiumAi: false,
-            premiumVoice: false,
-            planRank: 0,
-            aiCreditsMonthly: 0,
-        },
-        marketing_features_json: [
-            'Full accounting module',
-            'Financial reports (P&L, balance sheet, cashbook)',
-            'Expense & fund management',
-            'Loan tracking',
-            '5 user accounts',
-            '1 store location',
-            'Email support',
-        ],
-    });
-
-    await upsertPlan({
-        code: 'STANDARD',
-        name: 'Standard',
-        description: 'Advanced retail operations with multi-branch and analytics support',
-        monthly_price: 999,
-        yearly_price: 9990,
-        features_json: {
-            maxStores: 3,
-            maxUsers: 10,
-            maxSkus: 20000,
-            premiumAccounting: true,
-            premiumInventoryReports: true,
-            premiumCrm: true,
-            multiStore: true,
-            apiAccess: false,
-            accountingOnly: false,
-            premiumAccountingAdvanced: false,
-            premiumAi: false,
-            premiumVoice: false,
-            planRank: 2,
-            aiCreditsMonthly: 0,
-        },
-        marketing_features_json: [
-            'Everything in BASIC',
-            'Accounting module',
-            'Financial reports',
-            'Sales orders',
-            'Customer management',
-            'Supplier management',
-            'E-commerce storefront',
-            '3 store locations',
-            '10 user accounts',
-            'Priority email support',
-        ],
-    });
-
-    const premiumPlan = await upsertPlan({
-        code: 'PREMIUM',
-        name: 'Premium',
-        description: 'Full retail suite with advanced automation, accounting, and integrations',
-        monthly_price: 1499,
-        yearly_price: 14990,
-        features_json: {
-            maxStores: 10,
-            maxUsers: 30,
-            maxSkus: -1,
-            premiumAccounting: true,
-            premiumInventoryReports: true,
-            premiumCrm: true,
-            multiStore: true,
-            apiAccess: true,
-            accountingOnly: false,
-            premiumAccountingAdvanced: true,
-            premiumManufacturing: true,
-            premiumAi: true,
-            premiumVoice: true,
-            planRank: 3,
-            aiCreditsMonthly: 2000,
-        },
-        marketing_features_json: [
-            'Everything in STANDARD',
-            'Manufacturing / BOM',
-            'White-label branding',
-            'Public API access',
-            '10 store locations',
-            '30 user accounts',
-            'Unlimited products',
-            'Priority phone & chat support',
-        ],
-    });
-
-    // ── Add-on module catalog ───────────────────────────────────────────────
-    // Storefront and Book Publishing are intentionally not seeded here yet —
-    // storefront needs a grandfathering decision before it can be paywalled,
-    // and Book Publishing has no backend module yet (see TODO.md).
-    const upsertAddon = (data: {
-        code: string;
-        name: string;
-        description: string;
-        category: string;
-        monthly_price: number;
-        yearly_price: number;
-        sort_order: number;
-        features_json: Record<string, unknown>;
-    }) => prisma.addonModule.upsert({
-        where: { code: data.code },
-        update: {
-            name: data.name,
-            description: data.description,
-            category: data.category,
-            monthly_price: data.monthly_price,
-            yearly_price: data.yearly_price,
-            sort_order: data.sort_order,
-            features_json: data.features_json,
-        },
-        create: {
-            code: data.code,
-            name: data.name,
-            description: data.description,
-            category: data.category,
-            monthly_price: data.monthly_price,
-            yearly_price: data.yearly_price,
-            sort_order: data.sort_order,
-            features_json: data.features_json,
-        },
-    });
-
-    await upsertAddon({
-        code: 'MANUFACTURING',
-        name: 'Manufacturing',
-        description: 'BOM, production jobs, wastage recording, and production cost/yield analytics — buy standalone on any plan instead of upgrading to Premium.',
-        category: 'operations',
-        monthly_price: 999,
-        yearly_price: 9990,
-        sort_order: 10,
-        features_json: { premiumManufacturing: true },
-    });
-
-    await upsertAddon({
-        code: 'ADVANCED_ACCOUNTING',
-        name: 'Advanced Accounting',
-        description: 'Comparative P&L, budget vs actual, cash flow, and financial ratios for tenants on plans below PREMIUM.',
-        category: 'accounting',
-        monthly_price: 599,
-        yearly_price: 5990,
-        sort_order: 20,
-        features_json: { premiumAccountingAdvanced: true },
-    });
+    // Plans and addons are platform reference data, not fixtures — shared with
+    // the production deploy path so both stay in sync from one definition.
+    const { PREMIUM: premiumPlan } = await seedPlatformReferenceData(prisma);
 
     // ── 1. Users ────────────────────────────────────────────────────────────
+    // `update` deliberately leaves passwordHash alone, matching the two users
+    // below: re-seeding must never undo a password someone has since changed.
     const adminUser = await prisma.user.upsert({
         where: { email: 'nayeem.ahmad@gmail.com' },
-        update: { name: 'Nayeem Ahmad', passwordHash },
+        update: { name: 'Nayeem Ahmad' },
         create: { email: 'nayeem.ahmad@gmail.com', name: 'Nayeem Ahmad', passwordHash },
     });
 

@@ -92,9 +92,11 @@ docker exec retail-saas-db-1 psql -U "$PG_SUPERUSER" -d postgres -tc \
 echo "==> Building erp71 images"
 docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build
 
-echo "==> Syncing database schema and seeding"
+# Platform catalog only (subscription plans + addon modules). prisma/seed.ts is
+# dev/demo fixtures — it writes business data and must never run against prod.
+echo "==> Syncing database schema and platform catalog"
 docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" run --rm backend sh -lc \
-  'npx prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate --accept-data-loss && npx tsx packages/database/prisma/seed.ts'
+  'npx prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate --accept-data-loss && npx tsx packages/database/prisma/seed-platform.ts'
 
 echo "==> Starting erp71 stack"
 docker compose -p "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d
