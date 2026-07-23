@@ -1278,6 +1278,9 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    // Records "setup finished/skipped" on the workspace so the wizard stays gone for
+    // every member on every device — localStorage alone can't survive a new browser.
+    dismissOnboarding: () => fetchWithAuth('/auth/onboarding/dismiss', { method: 'POST' }),
     getBillingSummary: () => fetchWithAuth('/billing/summary'),
     createBillingCheckoutSession: (data: any) => fetchWithAuth('/billing/checkout-session', {
         method: 'POST',

@@ -611,6 +611,38 @@ export class AuthService {
         return { tenant, store };
     }
 
+    /**
+     * Mark the store-setup wizard as finished or skipped for a workspace.
+     *
+     * The flag lives on the tenant, not the browser: once anyone (in practice the
+     * owner) dismisses setup, no member is prompted again on any device. Idempotent —
+     * re-dismissing keeps the original timestamp.
+     */
+    async dismissOnboarding(userId: string, tenantId?: string) {
+        const membership = tenantId
+            ? await this.db.tenantUser.findFirst({
+                where: { user_id: userId, tenant_id: tenantId, tenant: { deleted_at: null } },
+                select: { tenant_id: true },
+            })
+            : await this.db.tenantUser.findFirst({
+                where: { user_id: userId, tenant: { deleted_at: null } },
+                select: { tenant_id: true },
+            });
+
+        if (!membership) {
+            // No workspace yet (e.g. signup abandoned before provisioning) — nothing
+            // to persist, but the caller shouldn't fail because of it.
+            return { onboarding_dismissed: false };
+        }
+
+        await this.db.tenant.updateMany({
+            where: { id: membership.tenant_id, onboarding_dismissed_at: null },
+            data: { onboarding_dismissed_at: new Date() },
+        });
+
+        return { onboarding_dismissed: true };
+    }
+
     private async mapTenantMembership(
         membership: any,
         allStoreAccess: any[] = [],
@@ -642,6 +674,7 @@ export class AuthService {
             name: membership.tenant.name,
             platform_features: platformFeatures,
             default_locale: membership.tenant.default_locale,
+            onboarding_dismissed: !!membership.tenant.onboarding_dismissed_at,
             localization_enabled: membership.tenant.localization_enabled,
             secondary_locale: membership.tenant.secondary_locale,
             role: membership.role,
