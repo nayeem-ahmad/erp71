@@ -402,6 +402,16 @@ describe('AnomalyDetectionService — scan shape', () => {
 
         expect(result.totalFlags).toBe(1);
         expect(result.anomalies[0].type).toBe('duplicate_invoice');
+        // Naming the casualty is the point: an empty list from a detector that
+        // never ran is indistinguishable from one that found nothing, and the
+        // caller would otherwise report a clean bill of health for a broken query.
+        expect(result.failedDetectors).toEqual(['sale_lines']);
+    });
+
+    it('reports no failures on a scan where every query ran', async () => {
+        const { db } = makeDb([[], [], [], [], [], []]);
+        const result = await new AnomalyDetectionService(db).scan('tenant-1', WINDOW);
+        expect(result.failedDetectors).toEqual([]);
     });
 
     it('exposes every declared type in ANOMALY_TYPES', () => {

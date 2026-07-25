@@ -121,6 +121,12 @@ export interface AnomalyScanResult {
     totalImpact: number;
     /** True when a detector hit its fetch cap and the list is incomplete. */
     truncatedDetectors: string[];
+    /**
+     * Detectors whose query failed. Load-bearing: without it a broken query is
+     * indistinguishable from a clean scan, and the caller reports "nothing is
+     * wrong" for checks that never ran.
+     */
+    failedDetectors: string[];
     anomalies: Anomaly[];
 }
 
@@ -194,35 +200,36 @@ export class AnomalyDetectionService {
             : ANOMALY_TYPES;
         const wanted = new Set(requested);
         const truncated: string[] = [];
+        const failed: string[] = [];
 
         // Each detector is one round-trip and they do not depend on each other.
         const [salesLines, purchaseLines, dupSales, dupPurchases, backdated, overRefunded] = await Promise.all([
-            this.runDetector('sale_lines', truncated, () =>
+            this.runDetector('sale_lines', truncated, failed, () =>
                 anyWanted(wanted, ['sold_below_cost', 'zero_price_line', 'price_below_norm', 'price_above_norm', 'quantity_outlier'])
                     ? this.saleLineAnomalies(tenantId, { windowFrom, windowTo, baselineFrom, storeId: options.storeId, preset })
                     : Promise.resolve([]),
             ),
-            this.runDetector('purchase_lines', truncated, () =>
+            this.runDetector('purchase_lines', truncated, failed, () =>
                 anyWanted(wanted, ['cost_above_selling_price', 'cost_above_norm', 'cost_below_norm', 'zero_cost_line', 'purchase_quantity_outlier'])
                     ? this.purchaseLineAnomalies(tenantId, { windowFrom, windowTo, baselineFrom, storeId: options.storeId, preset })
                     : Promise.resolve([]),
             ),
-            this.runDetector('duplicate_invoice', truncated, () =>
+            this.runDetector('duplicate_invoice', truncated, failed, () =>
                 wanted.has('duplicate_invoice')
                     ? this.duplicateSales(tenantId, windowFrom, windowTo, options.storeId)
                     : Promise.resolve([]),
             ),
-            this.runDetector('duplicate_purchase', truncated, () =>
+            this.runDetector('duplicate_purchase', truncated, failed, () =>
                 wanted.has('duplicate_purchase')
                     ? this.duplicatePurchases(tenantId, windowFrom, windowTo, options.storeId)
                     : Promise.resolve([]),
             ),
-            this.runDetector('backdated_entry', truncated, () =>
+            this.runDetector('backdated_entry', truncated, failed, () =>
                 wanted.has('backdated_entry')
                     ? this.backdatedSales(tenantId, windowFrom, windowTo, options.storeId, preset.backdatedDays)
                     : Promise.resolve([]),
             ),
-            this.runDetector('refund_exceeds_sale', truncated, () =>
+            this.runDetector('refund_exceeds_sale', truncated, failed, () =>
                 wanted.has('refund_exceeds_sale')
                     ? this.overRefundedSales(tenantId, windowFrom, windowTo, options.storeId)
                     : Promise.resolve([]),
@@ -260,6 +267,7 @@ export class AnomalyDetectionService {
             byType,
             totalImpact: round2(totalImpact),
             truncatedDetectors: truncated,
+            failedDetectors: failed,
             anomalies: all,
         };
     }
@@ -272,6 +280,7 @@ export class AnomalyDetectionService {
     private async runDetector(
         name: string,
         truncated: string[],
+        failed: string[],
         run: () => Promise<Anomaly[]>,
     ): Promise<Anomaly[]> {
         try {
@@ -280,6 +289,7 @@ export class AnomalyDetectionService {
             return rows;
         } catch (error) {
             this.logger.error(`Anomaly detector "${name}" failed: ${(error as Error).message}`);
+            failed.push(name);
             return [];
         }
     }

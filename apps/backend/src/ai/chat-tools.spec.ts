@@ -839,6 +839,7 @@ describe('transaction_anomalies', () => {
         byType: { sold_below_cost: 1 },
         totalImpact: 12000.456,
         truncatedDetectors: [],
+        failedDetectors: [],
         anomalies: [anomaly()],
         ...overrides,
     });
@@ -910,6 +911,23 @@ describe('transaction_anomalies', () => {
 
         expect(result.rows).toEqual([]);
         expect(result.note).toContain('clean result');
+    });
+
+    /**
+     * The worst answer this tool could give is "nothing is wrong" for checks
+     * that errored — the row list is empty either way, so the distinction has to
+     * be carried explicitly or a broken query reads as a clean audit.
+     */
+    it('refuses to call a scan clean when a check failed to run', async () => {
+        const deps = withScan(
+            scanResult({ totalFlags: 0, anomalies: [], byType: {}, bySeverity: { high: 0, medium: 0, low: 0 }, failedDetectors: ['sale_lines'] }),
+        );
+
+        const result: any = await run('transaction_anomalies', { from: '2026-07-01', to: '2026-07-31' }, deps);
+
+        expect(result.failedChecks).toEqual(['sale_lines']);
+        expect(result.note).toContain('NOT a clean result');
+        expect(result.note).not.toContain('That is a clean');
     });
 
     it('tells the model when a detector stopped looking', async () => {

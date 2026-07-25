@@ -105,14 +105,24 @@ export const AUDIT_TOOLS: ChatTool[] = [
                 // one means a detector stopped looking, so "no other problems"
                 // would be a false statement rather than a short list.
                 incompleteChecks: result.truncatedDetectors.length ? result.truncatedDetectors : null,
-                // A clean scan is a real answer, and the model reads an empty
-                // rows array as "the tool failed" often enough to be worth saying.
+                failedChecks: result.failedDetectors.length ? result.failedDetectors : null,
+                // A clean scan is a real answer, and the model reads an empty rows
+                // array as "the tool failed" often enough to be worth saying. But
+                // it is only clean if every check actually ran — a scan whose
+                // queries errored produces the same empty array, and reporting
+                // that as "nothing is wrong" is the worst answer this tool could
+                // give. Failure is stated first and the reassurance withheld.
                 ...(result.totalFlags === 0
                     ? {
                           note: [
                               note,
-                              'Nothing tripped any check for this period at this sensitivity. That is a clean result, ' +
-                                  'not a missing one — say so plainly, and mention which checks ran if the user asks.',
+                              result.failedDetectors.length
+                                  ? `These checks could not run: ${result.failedDetectors.join(', ')}. No flags were ` +
+                                    'found, but this is NOT a clean result — say the scan was incomplete and name ' +
+                                    'what did not run. Do not tell the user nothing is wrong.'
+                                  : 'Nothing tripped any check for this period at this sensitivity. That is a clean ' +
+                                    'result, not a missing one — say so plainly, and mention which checks ran if the ' +
+                                    'user asks.',
                           ]
                               .filter(Boolean)
                               .join(' '),
