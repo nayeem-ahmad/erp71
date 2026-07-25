@@ -4,7 +4,7 @@ import { RequiresFeature } from '../auth/subscription-access.decorator';
 import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
-import { GetInventoryValuationDto, GetReorderSuggestionsDto, GetShrinkageSummaryDto } from './inventory-reports.dto';
+import { GetInventoryValuationDto, GetReorderSuggestionsDto, GetShrinkageSummaryDto, GetStockAgingDto } from './inventory-reports.dto';
 import { InventoryReportsService } from './inventory-reports.service';
 
 @Controller('inventory-reports')
@@ -22,6 +22,11 @@ export class InventoryReportsController {
     @Get('valuation')
     getInventoryValuation(@Tenant() tenant: TenantContext, @Query() query: GetInventoryValuationDto) {
         return this.service.getInventoryValuation(tenant.tenantId, query);
+    }
+
+    @Get('stock-aging')
+    getStockAging(@Tenant() tenant: TenantContext, @Query() query: GetStockAgingDto) {
+        return this.service.getStockAging(tenant.tenantId, query);
     }
 
     @Get('shrinkage-summary')

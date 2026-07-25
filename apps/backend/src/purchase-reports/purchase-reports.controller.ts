@@ -5,7 +5,7 @@ import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { TenantRoleGuard } from '../auth/tenant-role.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
-import { GetPurchaseSummaryDto, GetPurchasesByProductDto, GetPurchasesBySupplierDto } from './purchase-reports.dto';
+import { GetPurchaseSummaryDto, GetPurchaseTrendDto, GetPurchasesByProductDto, GetPurchasesBySupplierDto } from './purchase-reports.dto';
 import { PurchaseReportsService } from './purchase-reports.service';
 
 @Controller('purchase-reports')
@@ -18,6 +18,11 @@ export class PurchaseReportsController {
     @Get('summary')
     getPurchaseSummary(@Tenant() tenant: TenantContext, @Query() query: GetPurchaseSummaryDto) {
         return this.service.getPurchaseSummary(tenant.tenantId, query);
+    }
+
+    @Get('trend')
+    getPurchaseTrend(@Tenant() tenant: TenantContext, @Query() query: GetPurchaseTrendDto) {
+        return this.service.getPurchaseTrend(tenant.tenantId, query);
     }
 
     @Get('by-product')

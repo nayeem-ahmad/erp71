@@ -1,6 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { GetInventoryValuationDto, GetReorderSuggestionsDto, GetShrinkageSummaryDto } from './inventory-reports.dto';
+import { GetInventoryValuationDto, GetReorderSuggestionsDto, GetShrinkageSummaryDto, GetStockAgingDto } from './inventory-reports.dto';
+
+/** Buckets stock is sorted into by how long it has sat without moving. */
+const AGING_BUCKETS = [
+    { key: 'days_0_30', label: '0-30 days', maxDays: 30 },
+    { key: 'days_31_60', label: '31-60 days', maxDays: 60 },
+    { key: 'days_61_90', label: '61-90 days', maxDays: 90 },
+    { key: 'days_91_180', label: '91-180 days', maxDays: 180 },
+    { key: 'days_180_plus', label: 'Over 180 days', maxDays: Number.POSITIVE_INFINITY },
+] as const;
 
 @Injectable()
 export class InventoryReportsService {
@@ -138,6 +147,136 @@ export class InventoryReportsService {
         };
     }
 
+    /**
+     * Stock that is not selling: quantity on hand paired with how long it has
+     * been since anything left the shelf.
+     *
+     * "Days since last sold" comes from the inventory movement ledger rather
+     * than sale rows, so a warehouse filter actually narrows it — a product can
+     * be selling briskly in one branch while the same units sit dead in another,
+     * and a tenant-wide last-sold date would hide exactly that.
+     *
+     * Products that have never had an outbound movement report `null` days and
+     * are counted separately; treating "never sold" as a very large number would
+     * bury genuinely stale stock underneath brand-new arrivals.
+     */
+    async getStockAging(tenantId: string, query: GetStockAgingDto) {
+        const slowMovingAfterDays = query.slowMovingAfterDays ?? 60;
+        const now = Date.now();
+
+        const products = await this.db.product.findMany({
+            where: {
+                tenant_id: tenantId,
+                deleted_at: null,
+                ...(query.groupId ? { group_id: query.groupId } : {}),
+                ...(query.subgroupId ? { subgroup_id: query.subgroupId } : {}),
+            },
+            select: {
+                id: true,
+                name: true,
+                sku: true,
+                price: true,
+                group: { select: { id: true, name: true } },
+                stocks: {
+                    where: query.warehouseId ? { warehouse_id: query.warehouseId } : undefined,
+                    select: { quantity: true },
+                },
+            },
+        });
+
+        const inStock = products
+            .map((product) => ({
+                product,
+                quantity: product.stocks.reduce((sum, stock) => sum + stock.quantity, 0),
+            }))
+            .filter((row) => row.quantity > 0);
+
+        // One grouped query for the whole catalogue rather than a query per
+        // product: a mid-sized shop has thousands of SKUs and the per-product
+        // version turns this report into a timeout.
+        const lastOutbound = await this.db.inventoryMovement.groupBy({
+            by: ['product_id'],
+            where: {
+                tenant_id: tenantId,
+                movement_type: 'SALE',
+                ...(query.warehouseId ? { warehouse_id: query.warehouseId } : {}),
+                product_id: { in: inStock.map((row) => row.product.id) },
+            },
+            _max: { created_at: true },
+        });
+
+        const lastSoldAt = new Map<string, Date>();
+        for (const row of lastOutbound) {
+            if (row._max.created_at) lastSoldAt.set(row.product_id, row._max.created_at);
+        }
+
+        const rows = inStock.map(({ product, quantity }) => {
+            const lastSold = lastSoldAt.get(product.id) ?? null;
+            const daysSinceLastSale = lastSold
+                ? Math.max(0, Math.floor((now - lastSold.getTime()) / (24 * 60 * 60 * 1000)))
+                : null;
+            const unitValue = Number(product.price || 0);
+            const bucket =
+                daysSinceLastSale === null
+                    ? 'never_sold'
+                    : (AGING_BUCKETS.find((b) => daysSinceLastSale <= b.maxDays)?.key ?? 'days_180_plus');
+
+            return {
+                product: {
+                    id: product.id,
+                    name: product.name,
+                    sku: product.sku,
+                    group: product.group ? { id: product.group.id, name: product.group.name } : null,
+                },
+                quantity,
+                unitValue,
+                stockValue: quantity * unitValue,
+                lastSoldAt: lastSold ? lastSold.toISOString().slice(0, 10) : null,
+                daysSinceLastSale,
+                bucket,
+                isSlowMoving: daysSinceLastSale === null || daysSinceLastSale >= slowMovingAfterDays,
+            };
+        });
+
+        const bucketTotals = [...AGING_BUCKETS.map((b) => ({ key: b.key, label: b.label })), { key: 'never_sold', label: 'Never sold' }]
+            .map(({ key, label }) => {
+                const inBucket = rows.filter((row) => row.bucket === key);
+                return {
+                    bucket: key,
+                    label,
+                    productCount: inBucket.length,
+                    quantity: inBucket.reduce((sum, row) => sum + row.quantity, 0),
+                    stockValue: inBucket.reduce((sum, row) => sum + row.stockValue, 0),
+                };
+            });
+
+        const slowMoving = rows.filter((row) => row.isSlowMoving);
+        const totalStockValue = rows.reduce((sum, row) => sum + row.stockValue, 0);
+        const slowMovingValue = slowMoving.reduce((sum, row) => sum + row.stockValue, 0);
+
+        return {
+            summary: {
+                slowMovingAfterDays,
+                productsInStock: rows.length,
+                totalStockValue,
+                slowMovingProducts: slowMoving.length,
+                slowMovingValue,
+                slowMovingShareOfValuePct: totalStockValue > 0 ? (slowMovingValue / totalStockValue) * 100 : 0,
+                neverSoldProducts: rows.filter((row) => row.daysSinceLastSale === null).length,
+                valuationBasis: 'CURRENT_SELLING_PRICE',
+            },
+            buckets: bucketTotals,
+            rows: rows.sort((a, b) => {
+                // Stalest first, with never-sold stock at the very top — that is
+                // the capital most at risk, and it is what the report is for.
+                const aDays = a.daysSinceLastSale ?? Number.POSITIVE_INFINITY;
+                const bDays = b.daysSinceLastSale ?? Number.POSITIVE_INFINITY;
+                if (aDays !== bDays) return bDays - aDays;
+                return b.stockValue - a.stockValue;
+            }),
+        };
+    }
+
     async getShrinkageSummary(tenantId: string, query: GetShrinkageSummaryDto) {
         const rows = await this.db.inventoryShrinkage.findMany({
             where: {
@@ -239,7 +378,10 @@ function buildDateWindow(from?: string, to?: string) {
             if (!Number.isNaN(date.getTime())) where.created_at.gte = date;
         }
         if (to) {
-            const date = new Date(to);
+            // A bare YYYY-MM-DD upper bound covers the whole day; parsed as-is it
+            // would be midnight and drop everything recorded on the last day.
+            const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(to.trim());
+            const date = new Date(dateOnly ? `${to.trim()}T23:59:59.999Z` : to);
             if (!Number.isNaN(date.getTime())) where.created_at.lte = date;
         }
     }

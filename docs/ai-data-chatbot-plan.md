@@ -1,6 +1,8 @@
 # AI Data Chatbot — Implementation Plan
 
-**Status:** implemented on `feat/ai-data-chatbot` (2026-07-21) — Phases 1–4 landed, Phase 5 deferred
+**Status:** Phases 1–4 landed on `feat/ai-data-chatbot` (2026-07-21); Phase 5 landed on
+`feat/ai-chat-tool-surface` (2026-07-25) — tool surface widened 8 → 29, with the report APIs
+behind it. SSE streaming and chart rendering remain deferred (now Phase 6).
 **Owner:** —
 **Written:** 2026-07-21
 
@@ -304,8 +306,15 @@ Model it on `VoiceNavWidget.tsx` (header-mounted, i18n'd, already handles the mi
 **Phase 4 — hardening**: credit accounting verified against OpenRouter dashboard, per-day cap,
 throttler, retention cron, `/settings/ai-credits` per-feature breakdown, tests (§12)
 
-**Phase 5 (later)**: SSE streaming, branch/consolidated tools, chart rendering, "why did this
-number change" follow-ups, Bangla quality pass.
+**Phase 5 (landed 2026-07-25)**: tool surface widened 8 → 29, with the report APIs behind it.
+The three changes that mattered were shape, not count — `compareTo` (prior window computed in
+the report layer, never by the model), a single `groupBy` breakdown in place of one endpoint
+per dimension, and `resolve_entity` (without it the model's only way to filter by a named
+product or supplier was to invent an id). "Why did this number change" became `top_movers`.
+Also: paging on list tools, parallel tool calls within a turn, `MAX_TURNS` 5 → 8, and a
+module filter so accounting-only tenants stop being offered inventory tools.
+
+**Phase 6 (later)**: SSE streaming, chart rendering in chat, Bangla quality pass.
 
 ---
 

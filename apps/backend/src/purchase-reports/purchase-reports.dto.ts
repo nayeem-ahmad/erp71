@@ -1,4 +1,25 @@
-import { IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
+import { COMPARISON_MODES, TREND_GRANULARITIES, type ComparisonMode, type TrendGranularity } from '../sales-reports/sales-reports.dto';
+
+export class GetPurchaseTrendDto {
+    @IsOptional()
+    @IsUUID()
+    storeId?: string;
+
+    @IsString()
+    from: string;
+
+    @IsString()
+    to: string;
+
+    @IsOptional()
+    @IsIn(TREND_GRANULARITIES)
+    granularity?: TrendGranularity;
+
+    @IsOptional()
+    @IsIn(COMPARISON_MODES)
+    compareTo?: ComparisonMode;
+}
 
 export class GetPurchaseSummaryDto {
     @IsOptional()
