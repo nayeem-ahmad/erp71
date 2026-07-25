@@ -6,6 +6,7 @@ import SuppliersPage from './page';
 jest.mock('@/lib/api', () => ({
     api: {
         getSuppliers: jest.fn(),
+        getSuppliersPaged: jest.fn(),
         createSupplier: jest.fn(),
         updateSupplier: jest.fn(),
         deleteSupplier: jest.fn(),
@@ -25,13 +26,13 @@ jest.mock('next/navigation', () => ({
 describe('SuppliersPage', () => {
     beforeEach(() => {
         const { api } = require('@/lib/api');
-        api.getSuppliers.mockResolvedValue([]);
+        api.getSuppliersPaged.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 1 });
         jest.clearAllMocks();
     });
 
     it('renders the page heading', async () => {
         const { api } = require('@/lib/api');
-        api.getSuppliers.mockResolvedValue([]);
+        api.getSuppliersPaged.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 1 });
         render(<SuppliersPage />);
         await waitFor(() => {
             expect(screen.getByRole('heading', { name: 'Suppliers' })).toBeInTheDocument();
@@ -40,7 +41,8 @@ describe('SuppliersPage', () => {
 
     it('displays loaded supplier data', async () => {
         const { api } = require('@/lib/api');
-        api.getSuppliers.mockResolvedValue([
+        api.getSuppliersPaged.mockResolvedValue({
+            items: [
             {
                 id: '1',
                 name: 'Dhaka Traders Ltd',
@@ -49,7 +51,12 @@ describe('SuppliersPage', () => {
                 address: '123 Motijheel, Dhaka',
                 created_at: '2025-01-01T00:00:00Z',
             },
-        ]);
+            ],
+            total: 1,
+            page: 1,
+            limit: 20,
+            pages: 1,
+        });
         render(<SuppliersPage />);
         await waitFor(() => {
             expect(screen.getByText('Dhaka Traders Ltd')).toBeInTheDocument();
@@ -58,7 +65,7 @@ describe('SuppliersPage', () => {
 
     it('handles empty state', async () => {
         const { api } = require('@/lib/api');
-        api.getSuppliers.mockResolvedValue([]);
+        api.getSuppliersPaged.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 1 });
         render(<SuppliersPage />);
         await waitFor(() => {
             expect(screen.getByText('No suppliers yet. Add your first supplier.')).toBeInTheDocument();
@@ -67,7 +74,7 @@ describe('SuppliersPage', () => {
 
     it('renders the New Supplier button', async () => {
         const { api } = require('@/lib/api');
-        api.getSuppliers.mockResolvedValue([]);
+        api.getSuppliersPaged.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 1 });
         render(<SuppliersPage />);
         await waitFor(() => {
             expect(screen.getByText('New Supplier')).toBeInTheDocument();

@@ -89,17 +89,10 @@ export default function LoansPage() {
                 api.getLoans({
                     direction: directionFilter || undefined,
                     status: statusFilter || undefined,
-                    limit: 100,
                 }),
                 api.getLoanSummary(),
             ]);
-            setLoans(
-                Array.isArray(loansData)
-                    ? loansData
-                    : Array.isArray(loansData?.items)
-                      ? loansData.items
-                      : [],
-            );
+            setLoans(loansData ?? []);
             setSummary(summaryData ?? null);
         } catch (error) {
             console.error('Failed to load loans', error);

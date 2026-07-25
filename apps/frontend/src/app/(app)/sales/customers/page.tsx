@@ -12,7 +12,8 @@ import { DataTable } from '@/components/data-table';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
-import { PageShell, Button } from '@/components/ui';
+import { PageShell, Button, Input } from '@/components/ui';
+import { useServerList } from '@/hooks/useServerList';
 
 const IMPORT_FIELDS: ImportField[] = [
     { key: 'customer_code', label: 'Customer Code', required: false },
@@ -62,8 +63,6 @@ const columnHelper = createColumnHelper<Customer>();
 
 export default function CustomersPage() {
     const { t } = useI18n();
-    const [customers, setCustomers] = useState<Customer[]>([]);
-    const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
     const [segmentStats, setSegmentStats] = useState<SegmentStats | null>(null);
@@ -77,21 +76,34 @@ export default function CustomersPage() {
         Regular: { bg: 'bg-gray-50 border-gray-200', text: 'text-gray-700', bar: 'bg-gray-400', icon: <UserCheck className="w-5 h-5 text-gray-400" /> },
     }), []);
 
+    const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [segment, setSegment] = useState('');
+    const [customerType, setCustomerType] = useState('');
+
     useEffect(() => {
-        loadCustomers();
+        const timer = setTimeout(() => setDebouncedSearch(search), 300);
+        return () => clearTimeout(timer);
+    }, [search]);
+
+    const {
+        items: customers,
+        loading,
+        serverPagination,
+        reload: loadCustomers,
+    } = useServerList<Customer>({
+        fetch: (p) => api.getCustomersPaged({
+            search: debouncedSearch || undefined,
+            segment: segment || undefined,
+            customerType: customerType || undefined,
+            ...p,
+        }),
+        deps: [debouncedSearch, segment, customerType],
+    });
+
+    useEffect(() => {
         loadSegmentStats();
     }, []);
-
-    const loadCustomers = async () => {
-        try {
-            const data = await api.getCustomers();
-            setCustomers(Array.isArray(data) ? data : (data?.items ?? data));
-        } catch (error) {
-            console.error('Failed to load customers', error);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const loadSegmentStats = async () => {
         try {
@@ -272,14 +284,26 @@ export default function CustomersPage() {
         [t],
     );
 
+    // Server-side equivalents of the old client-side presets: filtering the loaded rows
+    // would only ever narrow the current page, hiding matches on every other page.
+    const activePreset = segment === 'VIP' ? 'vip'
+        : segment === 'At-Risk' ? 'atRisk'
+        : customerType === 'ORGANIZATION' ? 'organizations'
+        : '';
     const filterPresets = useMemo(
         () => [
-            { label: t.customers.filters.vip, filters: [{ id: 'segment_category', value: 'VIP' }] },
-            { label: t.customers.filters.atRisk, filters: [{ id: 'segment_category', value: 'At-Risk' }] },
-            { label: t.customers.filters.organizations, filters: [{ id: 'customer_type', value: 'ORGANIZATION' }] },
+            { key: 'vip', label: t.customers.filters.vip, segment: 'VIP', customerType: '' },
+            { key: 'atRisk', label: t.customers.filters.atRisk, segment: 'At-Risk', customerType: '' },
+            { key: 'organizations', label: t.customers.filters.organizations, segment: '', customerType: 'ORGANIZATION' },
         ],
         [t],
     );
+
+    const applyPreset = (preset: { key: string; segment: string; customerType: string }) => {
+        const clearing = activePreset === preset.key;
+        setSegment(clearing ? '' : preset.segment);
+        setCustomerType(clearing ? '' : preset.customerType);
+    };
 
     return (
         <PageShell>
@@ -358,6 +382,29 @@ export default function CustomersPage() {
                     <div className="bg-white border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-700">{evalMessage}</div>
                 )}
 
+                <div className="bg-white border border-gray-100 rounded-lg p-3 flex flex-wrap gap-2 items-center">
+                    <Input
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder={t.customers.searchPlaceholder}
+                        className="max-w-xs"
+                    />
+                    {filterPresets.map((preset) => (
+                        <button
+                            key={preset.key}
+                            type="button"
+                            onClick={() => applyPreset(preset)}
+                            className={`min-h-touch px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                                activePreset === preset.key
+                                    ? 'bg-blue-600 text-white border-blue-600'
+                                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                            }`}
+                        >
+                            {preset.label}
+                        </button>
+                    ))}
+                </div>
+
                 <DataTable<Customer>
                     tableId="customers"
                     columns={columns}
@@ -366,8 +413,8 @@ export default function CustomersPage() {
                     isLoading={loading}
                     emptyMessage={t.customers.emptyMessage}
                     emptyIcon={<Users className="w-16 h-16 text-gray-200" />}
-                    searchPlaceholder={t.customers.searchPlaceholder}
-                    filterPresets={filterPresets}
+                    showSearch={false}
+                    serverPagination={serverPagination}
                 />
             
         </PageShell>

@@ -32,8 +32,14 @@ export class SuppliersController {
     }
 
     @Get()
-    findAll(@Tenant() tenant: TenantContext, @Query() query: PaginationDto) {
-        return this.suppliersService.findAll(tenant.tenantId, query.page, query.limit);
+    findAll(
+        @Tenant() tenant: TenantContext,
+        @Query() query: PaginationDto,
+        @Query('search') search?: string,
+        @Query('sortBy') sortBy?: string,
+        @Query('sortDir') sortDir?: string,
+    ) {
+        return this.suppliersService.findAll(tenant.tenantId, query.page, query.limit, { search, sortBy, sortDir });
     }
 
     @Get('credit/payments')

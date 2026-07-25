@@ -190,8 +190,7 @@ export default function DashboardPage() {
             }
 
             if (productsRes.status === 'fulfilled') {
-                const fetchedProducts = productsRes.value;
-                const list: ProductRow[] = Array.isArray(fetchedProducts) ? fetchedProducts : fetchedProducts?.data ?? [];
+                const list: ProductRow[] = productsRes.value ?? [];
                 setLowStockCount(list.filter((p) => p.reorder_level != null && (p.stock_quantity ?? 0) <= p.reorder_level).length);
             } else {
                 setLowStockCount(0);

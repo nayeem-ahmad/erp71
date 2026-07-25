@@ -58,6 +58,7 @@ describe('InventoryService', () => {
             },
             inventoryMovement: {
                 findMany: jest.fn(),
+                count: jest.fn().mockResolvedValue(0),
             },
             $transaction: jest.fn().mockImplementation(async (cb: any) => cb(db)),
         };
@@ -736,29 +737,57 @@ describe('InventoryService', () => {
     describe('getLedger', () => {
         const tenantId = 'tenant-1';
 
-        it('should return ledger entries with default limit 200', async () => {
+        it('should return a paginated page carrying the server total', async () => {
             const movements = [{ id: 'mv-1', movement_type: 'PURCHASE' }];
             db.inventoryMovement.findMany.mockResolvedValue(movements);
+            db.inventoryMovement.count.mockResolvedValue(4213);
 
             const result = await service.getLedger(tenantId, {} as any);
 
             expect(db.inventoryMovement.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
                     where: { tenant_id: tenantId },
-                    take: 200,
+                    skip: 0,
+                    take: 50,
                     orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
                 }),
             );
-            expect(result).toEqual(movements);
+            // The total is the row count in the database, not the length of this page —
+            // that is what the list footer reports.
+            expect(result).toEqual({ items: movements, total: 4213, page: 1, limit: 50, pages: 85 });
         });
 
         it('should apply custom limit', async () => {
             db.inventoryMovement.findMany.mockResolvedValue([]);
 
-            await service.getLedger(tenantId, { limit: 50 } as any);
+            await service.getLedger(tenantId, { limit: 20 } as any);
 
             expect(db.inventoryMovement.findMany).toHaveBeenCalledWith(
-                expect.objectContaining({ take: 50 }),
+                expect.objectContaining({ take: 20 }),
+            );
+        });
+
+        it('should skip earlier pages when page > 1', async () => {
+            db.inventoryMovement.findMany.mockResolvedValue([]);
+
+            await service.getLedger(tenantId, { page: 3, limit: 20 } as any);
+
+            expect(db.inventoryMovement.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ skip: 40, take: 20 }),
+            );
+        });
+
+        it('should only honour allowlisted sort keys', async () => {
+            db.inventoryMovement.findMany.mockResolvedValue([]);
+
+            await service.getLedger(tenantId, { sortBy: 'quantity', sortDir: 'asc' } as any);
+            expect(db.inventoryMovement.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ orderBy: { quantity: 'asc' } }),
+            );
+
+            await service.getLedger(tenantId, { sortBy: 'id); DROP TABLE', sortDir: 'asc' } as any);
+            expect(db.inventoryMovement.findMany).toHaveBeenLastCalledWith(
+                expect.objectContaining({ orderBy: [{ created_at: 'desc' }, { id: 'desc' }] }),
             );
         });
 

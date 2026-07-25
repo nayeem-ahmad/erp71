@@ -76,17 +76,10 @@ function ExpensesPageContent() {
                     from: fromDate || undefined,
                     to: toDate || undefined,
                     categoryId: categoryFilter || undefined,
-                    limit: 100,
                 }),
                 api.getExpenseCategories(),
             ]);
-            setEntries(
-                Array.isArray(entriesData)
-                    ? entriesData
-                    : Array.isArray(entriesData?.items)
-                      ? entriesData.items
-                      : [],
-            );
+            setEntries(entriesData ?? []);
             setCategories(Array.isArray(categoriesData) ? categoriesData : []);
         } catch (error) {
             console.error('Failed to load expenses', error);

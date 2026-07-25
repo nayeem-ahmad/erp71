@@ -5,6 +5,7 @@ import { DatabaseService } from '../database/database.service';
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { paginate } from '../common/pagination.dto';
+import { resolveOrderBy, SortableMap } from '../common/sort.util';
 import {
     AllocateSupplierPaymentDto,
     CreateSupplierDto,
@@ -16,6 +17,15 @@ import {
     UpdateSupplierDto,
 } from './supplier.dto';
 import { runImport, ImportResult } from '../common/import.util';
+
+const SUPPLIER_SORTABLE: SortableMap = {
+    name: (dir) => ({ name: dir }),
+    phone: (dir) => ({ phone: dir }),
+    email: (dir) => ({ email: dir }),
+    due_balance: (dir) => ({ due_balance: dir }),
+    created_at: (dir) => ({ created_at: dir }),
+};
+const SUPPLIER_DEFAULT_ORDER = { name: 'asc' as const };
 
 @Injectable()
 export class SuppliersService {
@@ -41,12 +51,27 @@ export class SuppliersService {
         });
     }
 
-    async findAll(tenantId: string, page = 1, limit = 100): Promise<PaginatedResult<unknown>> {
+    async findAll(
+        tenantId: string,
+        page = 1,
+        limit = 100,
+        opts?: { search?: string; sortBy?: string; sortDir?: string },
+    ): Promise<PaginatedResult<unknown>> {
+        const where: any = { tenant_id: tenantId, deleted_at: null };
+        if (opts?.search) {
+            where.OR = [
+                { name: { contains: opts.search, mode: 'insensitive' } },
+                { phone: { contains: opts.search } },
+                { email: { contains: opts.search, mode: 'insensitive' } },
+                { address: { contains: opts.search, mode: 'insensitive' } },
+            ];
+        }
+
         return paginatedFindMany({
             findMany: (args) => this.db.supplier.findMany(args as any),
             count: (args) => this.db.supplier.count(args as any),
-            where: { tenant_id: tenantId, deleted_at: null },
-            orderBy: { name: 'asc' },
+            where,
+            orderBy: resolveOrderBy(opts?.sortBy, opts?.sortDir, SUPPLIER_SORTABLE, SUPPLIER_DEFAULT_ORDER),
             page,
             limit,
         });

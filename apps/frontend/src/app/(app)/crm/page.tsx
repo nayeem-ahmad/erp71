@@ -64,7 +64,7 @@ export default function CrmHubPage() {
 
     useEffect(() => {
         api.getCrmTaskSummary().then(setTaskSummary).catch(() => null);
-        api.getCrmCampaigns({ limit: 3 }).then((data) => setRecentCampaigns(data?.items ?? data ?? [])).catch(() => null);
+        api.getCrmCampaigns().then((data) => setRecentCampaigns(data.slice(0, 3))).catch(() => null);
     }, []);
 
     const sections: HubSectionConfig[] = useMemo(() => {

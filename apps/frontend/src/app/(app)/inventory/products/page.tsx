@@ -13,8 +13,9 @@ import CreatePurchaseModal from '../../purchases/CreatePurchaseModal';
 import ProductImage from '@/components/ProductImage';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { Button } from '@/components/ui';
+import { Button, Input, Select } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { useServerList } from '@/hooks/useServerList';
 
 interface Product {
     id: string;
@@ -43,8 +44,6 @@ function pluralize(count: number, singular: string, plural: string) {
 
 export default function InventoryPage() {
     const { t } = useI18n();
-    const [products, setProducts] = useState<Product[]>([]);
-    const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [importStatus, setImportStatus] = useState<string | null>(null);
     const [isImporting, setIsImporting] = useState(false);
@@ -58,29 +57,38 @@ export default function InventoryPage() {
     const [selectedGroupId, setSelectedGroupId] = useState('');
     const [selectedSubgroupId, setSelectedSubgroupId] = useState('');
     const [showUncategorized, setShowUncategorized] = useState(false);
+    const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [stockStatus, setStockStatus] = useState('');
+
+    // Debounce typing so each keystroke doesn't fire a query
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(search), 300);
+        return () => clearTimeout(timer);
+    }, [search]);
+
+    const {
+        items: products,
+        loading,
+        serverPagination,
+        reload: loadProducts,
+        setItems: setProducts,
+    } = useServerList<Product>({
+        fetch: (p) => api.getProductsPaged({
+            groupId: showUncategorized ? undefined : selectedGroupId || undefined,
+            subgroupId: showUncategorized ? undefined : selectedSubgroupId || undefined,
+            uncategorized: showUncategorized,
+            search: debouncedSearch || undefined,
+            stockStatus: stockStatus || undefined,
+            ...p,
+        }),
+        deps: [selectedGroupId, selectedSubgroupId, showUncategorized, debouncedSearch, stockStatus],
+        initialSort: { id: 'name', desc: false },
+    });
 
     useEffect(() => {
-        void Promise.all([loadProducts(), loadCategoryOptions()]);
+        void loadCategoryOptions();
     }, []);
-
-    useEffect(() => {
-        void loadProducts();
-    }, [selectedGroupId, selectedSubgroupId, showUncategorized]);
-
-    const loadProducts = async () => {
-        try {
-            const data = await api.getProducts({
-                groupId: showUncategorized ? undefined : selectedGroupId || undefined,
-                subgroupId: showUncategorized ? undefined : selectedSubgroupId || undefined,
-                uncategorized: showUncategorized,
-            });
-            setProducts(data);
-        } catch (error) {
-            console.error('Failed to load products', error);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const loadCategoryOptions = async () => {
         try {
@@ -351,11 +359,14 @@ export default function InventoryPage() {
         [t],
     );
 
-    const filterPresets = useMemo(
+    // Server-side equivalents of the old client-side filter presets. They must be sent to
+    // the API rather than applied to the loaded rows — a client filter would only ever
+    // narrow the current page, so "low stock" would miss every low-stock product on page 2.
+    const stockStatusOptions = useMemo(
         () => [
-            { label: t.inventory.filterPresets.inStock, filters: [{ id: 'status', value: 'IN' }] },
-            { label: t.inventory.filterPresets.lowStock, filters: [{ id: 'status', value: 'LOW' }] },
-            { label: t.inventory.filterPresets.outOfStock, filters: [{ id: 'status', value: 'OUT' }] },
+            { value: 'IN', label: t.inventory.filterPresets.inStock },
+            { value: 'LOW', label: t.inventory.filterPresets.lowStock },
+            { value: 'OUT', label: t.inventory.filterPresets.outOfStock },
         ],
         [t],
     );
@@ -435,6 +446,23 @@ export default function InventoryPage() {
                 )}
 
                 <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
+                    <div className="min-w-[220px] flex-1">
+                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.common.search}</label>
+                        <Input
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder={t.inventory.dataTable.searchPlaceholder}
+                        />
+                    </div>
+                    <div className="min-w-[180px]">
+                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.inventory.columns.status}</label>
+                        <Select value={stockStatus} onChange={(e) => setStockStatus(e.target.value)}>
+                            <option value="">{t.common.all}</option>
+                            {stockStatusOptions.map((option) => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                        </Select>
+                    </div>
                     <div className="min-w-[220px] flex-1">
                         <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{t.inventory.filters.groupFilter}</label>
                         <select
@@ -534,8 +562,8 @@ export default function InventoryPage() {
                     isLoading={loading}
                     emptyMessage={t.inventory.dataTable.emptyMessage}
                     emptyIcon={<Package className="w-16 h-16 text-gray-200" />}
-                    searchPlaceholder={t.inventory.dataTable.searchPlaceholder}
-                    filterPresets={filterPresets}
+                    showSearch={false}
+                    serverPagination={serverPagination}
                 />
     </PageShell>
     );

@@ -53,8 +53,7 @@ export default function DiscountCodesPage() {
     async function loadCodes() {
         setLoading(true);
         try {
-            const data = await api.getDiscountCodes();
-            setCodes(Array.isArray(data) ? data : data?.data ?? []);
+            setCodes(await api.getDiscountCodes());
         } catch {
             setError(m.loadFailed);
         } finally {

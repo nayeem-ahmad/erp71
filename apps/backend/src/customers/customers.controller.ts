@@ -43,11 +43,19 @@ export class CustomersController {
         @Query('page') page?: string,
         @Query('limit') limit?: string,
         @Query('search') search?: string,
+        @Query('segment') segment?: string,
+        @Query('customerType') customerType?: string,
+        @Query('sortBy') sortBy?: string,
+        @Query('sortDir') sortDir?: string,
     ) {
         return this.customersService.findAll(tenant.tenantId, {
             page: page ? parseInt(page, 10) : undefined,
             limit: limit ? parseInt(limit, 10) : undefined,
             search,
+            segment,
+            customerType,
+            sortBy,
+            sortDir,
         });
     }
 

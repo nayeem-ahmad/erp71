@@ -123,8 +123,7 @@ export default function CustomerProfile() {
     const loadTasks = async () => {
         setTasksLoading(true);
         try {
-            const data = await api.getCrmTasks({ customerId: id as string, limit: 50 });
-            setTasks(data?.items ?? data ?? []);
+            setTasks(await api.getCrmTasks({ customerId: id as string }));
         } finally {
             setTasksLoading(false);
         }

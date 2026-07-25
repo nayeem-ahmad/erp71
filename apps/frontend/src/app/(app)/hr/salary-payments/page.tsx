@@ -75,12 +75,11 @@ export default function SalaryPaymentsPage() {
                     from: fromDate || undefined,
                     to: toDate || undefined,
                     employeeId: employeeFilter || undefined,
-                    limit: 100,
                 }),
-                api.getEmployees({ status: 'ACTIVE', limit: 200 }),
+                api.getEmployees({ status: 'ACTIVE' }),
             ]);
-            setPayments(Array.isArray(paymentsData?.items) ? paymentsData.items : []);
-            setEmployees(Array.isArray(employeesData) ? employeesData : (employeesData?.items ?? []));
+            setPayments(paymentsData ?? []);
+            setEmployees(employeesData ?? []);
         } catch (error) {
             console.error('Failed to load salary payments', error);
         } finally {

@@ -6,6 +6,7 @@ import InventoryPage from './page';
 jest.mock('@/lib/api', () => ({
     api: {
         getProducts: jest.fn(),
+        getProductsPaged: jest.fn(),
         getProductGroups: jest.fn(),
         getProductSubgroups: jest.fn(),
         createProduct: jest.fn(),
@@ -98,7 +99,7 @@ describe('InventoryPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         const { api } = require('@/lib/api');
-        api.getProducts.mockResolvedValue(mockProducts);
+        api.getProductsPaged.mockResolvedValue({ items: mockProducts, total: mockProducts.length, page: 1, limit: 20, pages: 1 });
         api.getProductGroups.mockResolvedValue([{ id: 'grp-1', name: 'Electronics' }]);
         api.getProductSubgroups.mockResolvedValue([
             { id: 'sub-1', name: 'Gadgets', group_id: 'grp-1' },
@@ -115,11 +116,11 @@ describe('InventoryPage', () => {
         expect(screen.getByRole('heading', { name: 'Products' })).toBeInTheDocument();
     });
 
-    it('calls getProducts on mount', async () => {
+    it('calls getProductsPaged on mount', async () => {
         const { api } = require('@/lib/api');
         render(<InventoryPage />);
         await waitFor(() => {
-            expect(api.getProducts).toHaveBeenCalled();
+            expect(api.getProductsPaged).toHaveBeenCalled();
         });
     });
 
@@ -194,7 +195,7 @@ describe('InventoryPage', () => {
 
     it('renders empty message when no products', async () => {
         const { api } = require('@/lib/api');
-        api.getProducts.mockResolvedValue([]);
+        api.getProductsPaged.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 1 });
         render(<InventoryPage />);
         await waitFor(() => {
             expect(screen.getByTestId('empty-message')).toHaveTextContent('No products found');

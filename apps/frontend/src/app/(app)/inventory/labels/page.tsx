@@ -74,7 +74,7 @@ export default function PrintLabelsPage() {
     // Load products on mount
     useEffect(() => {
         setLoading(true);
-        api.getProducts({ limit: 100 })
+        api.getProducts()
             .then((items: Product[]) => {
                 setProducts(Array.isArray(items) ? items : []);
             })

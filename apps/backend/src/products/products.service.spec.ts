@@ -154,6 +154,83 @@ describe('ProductsService', () => {
       expect(result.items).toHaveLength(2);
       expect(result.total).toBe(2);
     });
+
+    it('should report the database total, not the size of the page returned', async () => {
+      db.product.findMany.mockResolvedValue([{ id: 'p1', name: 'A', stocks: [] }]);
+      db.product.count.mockResolvedValue(4213);
+
+      const result = await service.findAll('tenant-1', { page: 1, limit: 20 });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.total).toBe(4213);
+      expect(result.pages).toBe(211);
+    });
+
+    it('should search name and sku server-side', async () => {
+      db.product.findMany.mockResolvedValue([]);
+      db.product.count.mockResolvedValue(0);
+
+      await service.findAll('tenant-1', { search: 'rice' });
+
+      expect(db.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [
+              { name: { contains: 'rice', mode: 'insensitive' } },
+              { sku: { contains: 'rice', mode: 'insensitive' } },
+            ],
+          }),
+        }),
+      );
+    });
+
+    it('should translate stock status into a default-warehouse stock filter', async () => {
+      db.product.findMany.mockResolvedValue([]);
+      db.product.count.mockResolvedValue(0);
+
+      // OUT uses `none` so a product with no stock row at all still counts as out of stock.
+      await service.findAll('tenant-1', { stockStatus: 'OUT' });
+      expect(db.product.findMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            stocks: { none: { warehouse: { is_default: true }, quantity: { gt: 0 } } },
+          }),
+        }),
+      );
+
+      await service.findAll('tenant-1', { stockStatus: 'LOW' });
+      expect(db.product.findMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            stocks: { some: { warehouse: { is_default: true }, quantity: { gt: 0, lte: 10 } } },
+          }),
+        }),
+      );
+
+      await service.findAll('tenant-1', { stockStatus: 'IN' });
+      expect(db.product.findMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            stocks: { some: { warehouse: { is_default: true }, quantity: { gt: 10 } } },
+          }),
+        }),
+      );
+    });
+
+    it('should ignore a sort key that is not allowlisted', async () => {
+      db.product.findMany.mockResolvedValue([]);
+      db.product.count.mockResolvedValue(0);
+
+      await service.findAll('tenant-1', { sortBy: 'price', sortDir: 'desc' });
+      expect(db.product.findMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({ orderBy: { price: 'desc' } }),
+      );
+
+      await service.findAll('tenant-1', { sortBy: 'no_such_column', sortDir: 'desc' });
+      expect(db.product.findMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({ orderBy: { name: 'asc' } }),
+      );
+    });
   });
 
   describe('findOne()', () => {

@@ -51,8 +51,7 @@ export default function EmployeesPage() {
 
     const loadEmployees = async () => {
         try {
-            const data = await api.getEmployees();
-            setEmployees(Array.isArray(data) ? data : (data?.items ?? []));
+            setEmployees(await api.getEmployees());
         } catch (error) {
             console.error('Failed to load employees', error);
         } finally {

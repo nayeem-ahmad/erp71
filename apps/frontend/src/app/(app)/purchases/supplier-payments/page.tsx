@@ -123,7 +123,6 @@ function SupplierPaymentsContent() {
                     from: fromDate || undefined,
                     to: toDate || undefined,
                     supplierId: supplierFilter || undefined,
-                    limit: 100,
                 }),
                 api.getSuppliers(),
             ]);

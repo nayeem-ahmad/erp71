@@ -81,9 +81,8 @@ export default function LeavesPage() {
             const data = await api.getLeaveRequests({
                 status: statusFilter || undefined,
                 employeeId: employeeFilter || undefined,
-                limit: 100,
             });
-            setRequests(Array.isArray(data) ? data : (data?.items ?? []));
+            setRequests(data ?? []);
         } catch (err) {
             console.error('Failed to load leave requests', err);
         } finally {
@@ -104,9 +103,7 @@ export default function LeavesPage() {
     }, []);
 
     useEffect(() => {
-        api.getEmployees({ limit: 200 }).then((data: any) => {
-            setEmployees(Array.isArray(data) ? data : (data?.items ?? []));
-        }).catch(() => {});
+        api.getEmployees().then(setEmployees).catch(() => {});
     }, []);
 
     useEffect(() => { loadRequests(); }, [loadRequests]);

@@ -63,7 +63,7 @@ function errorJson(status: number, statusText: string, body?: unknown) {
 }
 
 /** The API module under test (imported after mocks are wired). */
-import { fetchWithAuth, fetchBlobWithAuth, fetchPaginated, api } from './api';
+import { fetchWithAuth, fetchBlobWithAuth, fetchPaginated, fetchAllPages, fetchAllCursorPages, api } from './api';
 
 // ---------------------------------------------------------------------------
 // Shared beforeEach
@@ -169,6 +169,70 @@ describe('fetchPaginated', () => {
 
         expect(result.items).toEqual([{ id: 1 }, { id: 2 }]);
         expect(result.total).toBe(2);
+    });
+
+    it('reads a { data: { items } } envelope from an unpaginated service', async () => {
+        mockFetch.mockReturnValue(okJson({ data: { items: [{ id: 'a' }] } }));
+
+        const result = await fetchPaginated('/some-list');
+
+        expect(result.items).toEqual([{ id: 'a' }]);
+        expect(result.total).toBe(1);
+    });
+});
+
+describe('fetchAllPages', () => {
+    it('walks every page and concatenates the rows', async () => {
+        mockFetch
+            .mockReturnValueOnce(okJson({ data: [{ id: 'a' }], meta: { total: 3, page: 1, limit: 100, pages: 3 } }))
+            .mockReturnValueOnce(okJson({ data: [{ id: 'b' }], meta: { total: 3, page: 2, limit: 100, pages: 3 } }))
+            .mockReturnValueOnce(okJson({ data: [{ id: 'c' }], meta: { total: 3, page: 3, limit: 100, pages: 3 } }));
+
+        const rows = await fetchAllPages('/things');
+
+        expect(rows).toEqual([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
+        expect(mockFetch).toHaveBeenCalledTimes(3);
+    });
+
+    it('issues a single request for an endpoint that is not paginated', async () => {
+        mockFetch.mockReturnValue(okJson({ data: [{ id: 'a' }, { id: 'b' }] }));
+
+        const rows = await fetchAllPages('/things');
+
+        expect(rows).toHaveLength(2);
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('preserves existing query params when appending paging', async () => {
+        mockFetch.mockReturnValue(okJson({ data: [], meta: { total: 0, pages: 1 } }));
+
+        await fetchAllPages('/things?groupId=g1');
+
+        expect(mockFetch.mock.calls[0][0]).toContain('/things?groupId=g1&page=1&limit=100');
+    });
+
+    it('stops early when a page comes back empty', async () => {
+        mockFetch
+            .mockReturnValueOnce(okJson({ data: [{ id: 'a' }], meta: { total: 9, page: 1, limit: 100, pages: 9 } }))
+            .mockReturnValueOnce(okJson({ data: [], meta: { total: 9, page: 2, limit: 100, pages: 9 } }));
+
+        const rows = await fetchAllPages('/things');
+
+        expect(rows).toEqual([{ id: 'a' }]);
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('fetchAllCursorPages', () => {
+    it('follows nextCursor until hasMore is false', async () => {
+        mockFetch
+            .mockReturnValueOnce(okJson({ data: { items: [{ id: 'a' }], nextCursor: 'a', hasMore: true } }))
+            .mockReturnValueOnce(okJson({ data: { items: [{ id: 'b' }], nextCursor: null, hasMore: false } }));
+
+        const rows = await fetchAllCursorPages('/sales');
+
+        expect(rows).toEqual([{ id: 'a' }, { id: 'b' }]);
+        expect(mockFetch.mock.calls[1][0]).toContain('cursor=a');
     });
 
     it('throws with message from JSON error body (string)', async () => {
@@ -334,29 +398,32 @@ function lastOpts() { return lastCall()[1]; }
 // ---------------------------------------------------------------------------
 
 describe('api.getProducts', () => {
-    it('fetches /products with default limit=100', async () => {
-        mockOk({ data: { items: [{ id: '1' }] } });
+    it('fetches the first page at the max page size', async () => {
+        mockOk({ data: [{ id: '1' }], meta: { total: 1, page: 1, limit: 100, pages: 1 } });
         await api.getProducts();
-        expect(lastUrl()).toContain('/products?limit=100');
+        expect(lastUrl()).toContain('/products?page=1&limit=100');
     });
 
     it('passes groupId and subgroupId params', async () => {
-        mockOk({ data: { items: [] } });
+        mockOk({ data: [], meta: { total: 0, pages: 1 } });
         await api.getProducts({ groupId: 'g1', subgroupId: 'sg1' });
         expect(lastUrl()).toContain('groupId=g1');
         expect(lastUrl()).toContain('subgroupId=sg1');
     });
 
     it('passes uncategorized=true', async () => {
-        mockOk({ data: { items: [] } });
+        mockOk({ data: [], meta: { total: 0, pages: 1 } });
         await api.getProducts({ uncategorized: true });
         expect(lastUrl()).toContain('uncategorized=true');
     });
 
-    it('passes custom limit and page', async () => {
-        mockOk({ data: { items: [] } });
-        await api.getProducts({ limit: 50, page: 2 });
-        expect(lastUrl()).toContain('limit=50');
+    it('walks every page so lookups are not truncated at 100', async () => {
+        mockOk({ data: [{ id: 'p1' }], meta: { total: 2, page: 1, limit: 100, pages: 2 } });
+        mockOk({ data: [{ id: 'p2' }], meta: { total: 2, page: 2, limit: 100, pages: 2 } });
+
+        const result = await api.getProducts();
+
+        expect(result).toEqual([{ id: 'p1' }, { id: 'p2' }]);
         expect(lastUrl()).toContain('page=2');
     });
 
@@ -370,6 +437,26 @@ describe('api.getProducts', () => {
         mockOk({ data: [{ id: 'p1' }] });
         const result = await api.getProducts();
         expect(result).toEqual([{ id: 'p1' }]);
+    });
+});
+
+describe('api.getProductsPaged', () => {
+    it('preserves the server total instead of the page length', async () => {
+        mockOk({ data: [{ id: 'p1' }], meta: { total: 4213, page: 1, limit: 20, pages: 211 } });
+
+        const result = await api.getProductsPaged({ page: 1, limit: 20 });
+
+        expect(result.items).toEqual([{ id: 'p1' }]);
+        expect(result.total).toBe(4213);
+    });
+
+    it('sends search, stock status and sort to the server', async () => {
+        mockOk({ data: [], meta: { total: 0 } });
+        await api.getProductsPaged({ search: 'rice', stockStatus: 'LOW', sortBy: 'price', sortDir: 'desc' });
+        expect(lastUrl()).toContain('search=rice');
+        expect(lastUrl()).toContain('stockStatus=LOW');
+        expect(lastUrl()).toContain('sortBy=price');
+        expect(lastUrl()).toContain('sortDir=desc');
     });
 });
 
@@ -913,10 +1000,10 @@ describe('api.updateSale', () => {
 // ---------------------------------------------------------------------------
 
 describe('api.getCustomers', () => {
-    it('fetches /customers with default limit=100', async () => {
-        mockOk({ data: { items: [] } });
+    it('walks every page so customer pickers are not truncated', async () => {
+        mockOk({ data: [], meta: { total: 0, page: 1, limit: 100, pages: 1 } });
         await api.getCustomers();
-        expect(lastUrl()).toContain('/customers?limit=100');
+        expect(lastUrl()).toContain('/customers?page=1&limit=100');
     });
 
     it('passes search param', async () => {
@@ -2529,13 +2616,12 @@ describe('api.getAdminUsers', () => {
         expect(lastUrl()).toContain('/admin/users');
     });
 
-    it('appends search, page, limit', async () => {
+    it('appends search and walks pages itself', async () => {
         mockOk({ data: [] });
-        await api.getAdminUsers({ search: 'alice', page: 2, limit: 25 });
+        await api.getAdminUsers({ search: 'alice' });
         const url = lastUrl();
         expect(url).toContain('search=alice');
-        expect(url).toContain('page=2');
-        expect(url).toContain('limit=25');
+        expect(url).toContain('page=1&limit=100');
     });
 });
 
@@ -2731,18 +2817,16 @@ describe('api.updateWarrantyClaimStatus', () => {
 // ---------------------------------------------------------------------------
 
 describe('api.getEmployees', () => {
-    it('fetches /employees with default limit=100', async () => {
-        mockOk({ data: { items: [] } });
+    it('walks every page so employee pickers are not truncated', async () => {
+        mockOk({ data: [], meta: { total: 0, page: 1, limit: 100, pages: 1 } });
         await api.getEmployees();
-        expect(lastUrl()).toContain('/employees?limit=100');
+        expect(lastUrl()).toContain('/employees?page=1&limit=100');
     });
 
     it('appends all optional params', async () => {
         mockOk({ data: { items: [] } });
-        await api.getEmployees({ page: 2, limit: 50, search: 'John', status: 'ACTIVE', departmentId: 'd1' });
+        await api.getEmployees({ search: 'John', status: 'ACTIVE', departmentId: 'd1' });
         const url = lastUrl();
-        expect(url).toContain('page=2');
-        expect(url).toContain('limit=50');
         expect(url).toContain('search=John');
         expect(url).toContain('status=ACTIVE');
         expect(url).toContain('departmentId=d1');
@@ -2852,7 +2936,7 @@ describe('api.getAttendance', () => {
 
     it('appends all params', async () => {
         mockOk({ data: [] });
-        await api.getAttendance({ employeeId: 'e1', startDate: '2026-01-01', endDate: '2026-06-01', status: 'PRESENT', page: 1, limit: 20 });
+        await api.getAttendance({ employeeId: 'e1', startDate: '2026-01-01', endDate: '2026-06-01', status: 'PRESENT' });
         const url = lastUrl();
         expect(url).toContain('employeeId=e1');
         expect(url).toContain('startDate=2026-01-01');
@@ -2956,7 +3040,7 @@ describe('api.getLeaveRequests', () => {
 
     it('appends filter params', async () => {
         mockOk({ data: [] });
-        await api.getLeaveRequests({ employeeId: 'e1', status: 'PENDING', page: 1, limit: 10 });
+        await api.getLeaveRequests({ employeeId: 'e1', status: 'PENDING' });
         const url = lastUrl();
         expect(url).toContain('employeeId=e1');
         expect(url).toContain('status=PENDING');
