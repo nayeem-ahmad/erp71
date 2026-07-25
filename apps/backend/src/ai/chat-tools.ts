@@ -1,3 +1,4 @@
+import { AUDIT_TOOLS } from './tools/audit.tools';
 import { FINANCE_TOOLS } from './tools/finance.tools';
 import { INVENTORY_TOOLS } from './tools/inventory.tools';
 import { META_TOOLS } from './tools/meta.tools';
@@ -24,6 +25,11 @@ export const CHAT_TOOLS: ChatTool[] = [
     ...PARTY_TOOLS,
     ...FINANCE_TOOLS,
     ...OPERATIONS_TOOLS,
+    // The only tool that goes looking for problems rather than answering a
+    // question, so it sits apart from the reporting tools it would otherwise be
+    // confused with. A question about what happened wants a report; a question
+    // about whether anything is *wrong* wants this.
+    ...AUDIT_TOOLS,
     // Last on purpose. Everything above answers from the tenant's own database,
     // which is what almost every question wants; the web is the fallback for the
     // minority that reach outside, and reading the list in that order is the

@@ -13,6 +13,7 @@ import { PurchaseReportsService } from '../purchase-reports/purchase-reports.ser
 import { SalesReportsService } from '../sales-reports/sales-reports.service';
 import { SuppliersService } from '../suppliers/suppliers.service';
 import { AiService, type ChatCompletionMessage } from './ai.service';
+import { AnomalyDetectionService } from './anomaly-detection.service';
 import { ChatDataService } from './chat-data.service';
 import { WebSearchService } from './web-search.service';
 import {
@@ -74,6 +75,7 @@ export class ChatService {
         private readonly accounting: AccountingService,
         private readonly chatData: ChatDataService,
         private readonly webSearch: WebSearchService,
+        private readonly anomalyDetection: AnomalyDetectionService,
     ) {}
 
     private get deps(): ChatToolDeps {
@@ -87,6 +89,7 @@ export class ChatService {
             accounting: this.accounting,
             data: this.chatData,
             web: this.webSearch,
+            anomalies: this.anomalyDetection,
         };
     }
 
@@ -482,6 +485,14 @@ export class ChatService {
             '- For a slice of sales, use sales_breakdown with the right groupBy rather than looking for a dedicated tool.',
             '- Sales reports come from invoices; accounting statements come from posted vouchers. They can legitimately differ. Say which source a figure came from when both could apply.',
             '- Before reporting a zero or an empty list as an answer, consider calling describe_capabilities — a period with no data and a business that never recorded that data need different answers.',
+            '- "Is anything wrong", "check for mistakes", "any unusual transactions", "is anyone stealing" — use transaction_anomalies. Do not try to spot outliers yourself by listing documents and eyeballing the amounts; you cannot see line items, and the tool has already done the comparison against this business\'s own history.',
+            '',
+            'REPORTING ANOMALIES:',
+            '- A flag is a statistical difference from this business\'s own past, not a finding. Say what was observed, what it was compared against, and how many past transactions that comparison came from.',
+            '- Rank by the taka at stake and lead with those. A ৳40 discrepancy and a ৳40,000 one are not the same message.',
+            '- Offer the ordinary explanation first: most flags are data-entry slips, then genuine one-off deals, then real errors. Suggest what to check, and let the user judge.',
+            '- Never accuse anyone. `enteredBy` is who keyed the record, which is not who caused the problem. Do not name a person as responsible for a flag, and do not describe anything as theft or fraud — say what the numbers show and stop there.',
+            '- A scan with no flags is a real answer. Say the period came back clean rather than implying the check failed.',
             '',
             ...(hasWeb
                 ? [
