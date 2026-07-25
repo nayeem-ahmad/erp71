@@ -49,7 +49,8 @@ export class FeedbackController {
 
     @Post()
     async create(@Tenant() tenant: TenantContext, @Body() dto: CreateFeedbackDto) {
-        if (!await this.platformSettings.isFeatureEnabled('feedback')) {
+        // Per-tenant override wins over the platform default — see ChatService.assertEnabled.
+        if (!await this.platformSettings.isFeatureEnabledForTenant('feedback', tenant.tenantId)) {
             throw new ForbiddenException('Feedback is not available');
         }
 

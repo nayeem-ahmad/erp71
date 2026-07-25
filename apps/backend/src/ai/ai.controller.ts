@@ -22,7 +22,8 @@ export class AiController {
     ) {}
 
     private async assertVoiceEnabled(tenantId: string) {
-        if (!await this.platformSettings.isFeatureEnabled('voice')) {
+        // Per-tenant override wins over the platform default — see ChatService.assertEnabled.
+        if (!await this.platformSettings.isFeatureEnabledForTenant('voice', tenantId)) {
             throw new ServiceUnavailableException('Voice features are not available');
         }
         await this.planEntitlements.assertEntitlement(tenantId, 'premiumVoice');
@@ -98,7 +99,7 @@ export class AiController {
     @UseGuards(JwtAuthGuard)
     @UseInterceptors(TenantInterceptor)
     async chatTools(@Tenant() tenant: TenantContext) {
-        await this.chatService.assertEnabled();
+        await this.chatService.assertEnabled(tenant.tenantId);
         const tools = await this.chatService.resolveTools(tenant);
         return { tools: tools.map((t) => t.name) };
     }
