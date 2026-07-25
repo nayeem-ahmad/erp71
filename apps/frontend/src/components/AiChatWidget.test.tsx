@@ -96,6 +96,64 @@ describe('AiChatWidget', () => {
         expect(screen.getByText(/2026-06-01 → 2026-06-30, 12 rows/)).toBeInTheDocument();
     });
 
+    /**
+     * A web claim has no report page to link to, so the source itself is the only
+     * thing that makes it auditable. It must reach the panel as a real link.
+     */
+    it('links the pages a web search actually read', async () => {
+        api.aiChat.mockResolvedValue({
+            conversation_id: 'conv-1',
+            credits_used: 8,
+            truncated: false,
+            message: {
+                id: 'm1',
+                role: 'assistant',
+                content: 'Coarse rice is about ৳58/kg wholesale.',
+                tool_calls: [
+                    {
+                        name: 'web_search',
+                        args: { query: 'wholesale rice price Bangladesh' },
+                        urls: ['https://www.tbsnews.net/rice-prices'],
+                    },
+                ],
+                created_at: '2026-07-21T10:00:00Z',
+            },
+        });
+        openPanel();
+        ask('what is rice going for wholesale?');
+
+        fireEvent.click(await screen.findByRole('button', { name: /Sources \(1\)/ }));
+
+        expect(screen.getByText(/“wholesale rice price Bangladesh”/)).toBeInTheDocument();
+        // Shown by domain — the full URL does not fit a 380px panel.
+        const link = screen.getByRole('link', { name: 'tbsnews.net' });
+        expect(link).toHaveAttribute('href', 'https://www.tbsnews.net/rice-prices');
+        expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+    });
+
+    /** A refused search produced no data, so it is not a source. */
+    it('leaves a refused tool call out of the sources list', async () => {
+        api.aiChat.mockResolvedValue({
+            conversation_id: 'conv-1',
+            credits_used: 2,
+            truncated: false,
+            message: {
+                id: 'm1',
+                role: 'assistant',
+                content: 'Let me check your reports instead.',
+                tool_calls: [
+                    { name: 'web_search', args: { query: 'our sales' }, error: 'use the report tools instead' },
+                ],
+                created_at: '2026-07-21T10:00:00Z',
+            },
+        });
+        openPanel();
+        ask('our sales on the web?');
+
+        await screen.findByText('Let me check your reports instead.');
+        expect(screen.queryByRole('button', { name: /Sources/ })).not.toBeInTheDocument();
+    });
+
     it('shows a failed request inline in the thread rather than as a toast', async () => {
         api.aiChat.mockRejectedValue(new Error('AI credit limit reached'));
         openPanel();

@@ -19,6 +19,7 @@ function makeService(overrides: {
     replies?: Array<{ content: string | null; tool_calls?: any[] }>;
     featureEnabled?: boolean;
     planFeatures?: Record<string, boolean | number>;
+    webSearchEnabled?: boolean;
 } = {}) {
     const granted = new Set<string>(overrides.grantedPermissions ?? []);
     const replies = overrides.replies ?? [{ content: 'ok' }];
@@ -88,6 +89,14 @@ function makeService(overrides: {
         resolveEntity: jest.fn().mockResolvedValue([]),
     };
 
+    const webSearch: any = {
+        isEnabled: jest.fn().mockResolvedValue(overrides.webSearchEnabled ?? false),
+        extractUrls: jest.fn().mockReturnValue([]),
+        normalizeUrl: jest.fn((url: string) => url),
+        search: jest.fn(),
+        fetchPage: jest.fn(),
+    };
+
     const service = new ChatService(
         db,
         ai,
@@ -101,18 +110,55 @@ function makeService(overrides: {
         {} as any, // expenses
         {} as any, // accounting
         chatData,
+        webSearch,
     );
 
-    return { service, db, ai, platformSettings, planEntitlements, salesReports, chatData };
+    return { service, db, ai, platformSettings, planEntitlements, salesReports, chatData, webSearch };
 }
 
+const FLAGGED_TOOLS = CHAT_TOOLS.filter((tool) => tool.featureFlag);
+
 describe('ChatService.resolveTools', () => {
-    it('gives an OWNER every tool without consulting per-store grants', async () => {
+    it('gives an OWNER every unflagged tool without consulting per-store grants', async () => {
         const { service, db } = makeService();
         const tools = await service.resolveTools(OWNER_CTX);
 
-        expect(tools).toHaveLength(CHAT_TOOLS.length);
+        // Feature-flagged tools are excluded: an owner's permissions are total, but
+        // a capability the platform operator has not switched on is nobody's.
+        expect(tools).toHaveLength(CHAT_TOOLS.length - FLAGGED_TOOLS.length);
         expect(db.userStorePermission.findFirst).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Web access is a platform-operator decision that costs real money per call,
+     * so it is gated separately from permissions and subscriptions. Off is the
+     * default, and off means absent from the tool list — not refused on call.
+     */
+    it('withholds the web tools when web search is disabled', async () => {
+        const { service } = makeService({ webSearchEnabled: false });
+
+        const names = (await service.resolveTools(OWNER_CTX)).map((t) => t.name);
+
+        expect(names).not.toContain('web_search');
+        expect(names).not.toContain('fetch_web_page');
+    });
+
+    it('offers the web tools once web search is enabled', async () => {
+        const { service } = makeService({ webSearchEnabled: true });
+
+        const names = (await service.resolveTools(OWNER_CTX)).map((t) => t.name);
+
+        expect(names).toContain('web_search');
+        expect(names).toContain('fetch_web_page');
+    });
+
+    it('treats a failing web-search settings lookup as disabled', async () => {
+        const { service, webSearch } = makeService({ webSearchEnabled: true });
+        webSearch.isEnabled.mockRejectedValue(new Error('settings unavailable'));
+
+        const names = (await service.resolveTools(OWNER_CTX)).map((t) => t.name);
+
+        expect(names).not.toContain('web_search');
     });
 
     /**

@@ -967,6 +967,12 @@ export interface AiChatToolCall {
   name: string;
   args: Record<string, unknown>;
   rowCount?: number;
+  /**
+   * Pages a web tool actually read. An internal lookup links to its report page,
+   * which the UI resolves from the tool name; a web claim has nowhere to link
+   * except the source itself, so those URLs travel with the trace.
+   */
+  urls?: string[];
   ms?: number;
   error?: string;
 }

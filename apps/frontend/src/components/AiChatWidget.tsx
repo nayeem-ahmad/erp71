@@ -293,6 +293,15 @@ function MessageBubble({ message, sourcesLabel }: { message: AiChatMessage; sour
     );
 }
 
+/** Domain only — a full URL does not fit the panel and reads as noise. */
+function hostOf(url: string): string {
+    try {
+        return new URL(url).hostname.replace(/^www\./, '');
+    } catch {
+        return url;
+    }
+}
+
 /**
  * The audit affordance: every answer shows exactly which lookups produced it,
  * with a link through to the real report. Collapsed by default so it does not
@@ -319,6 +328,7 @@ function Sources({ calls, label }: { calls: AiChatToolCall[]; label: string }) {
                         const route = TOOL_ROUTES[call.name];
                         const detail = [
                             call.args.from && call.args.to ? `${call.args.from} → ${call.args.to}` : null,
+                            typeof call.args.query === 'string' ? `“${call.args.query}”` : null,
                             typeof call.rowCount === 'number' ? `${call.rowCount} rows` : null,
                         ]
                             .filter(Boolean)
@@ -333,6 +343,26 @@ function Sources({ calls, label }: { calls: AiChatToolCall[]; label: string }) {
                                     <span>{call.name}</span>
                                 )}
                                 {detail ? <span className="text-gray-400"> — {detail}</span> : null}
+                                {/* Web sources get their own links: unlike an internal
+                                    lookup there is no report page to point at, and an
+                                    unattributable external claim is not auditable. */}
+                                {call.urls?.length ? (
+                                    <ul className="mt-0.5 space-y-0.5 pl-3">
+                                        {call.urls.map((url) => (
+                                            <li key={url} className="truncate">
+                                                <a
+                                                    href={url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer nofollow"
+                                                    className="text-blue-600 hover:underline"
+                                                    title={url}
+                                                >
+                                                    {hostOf(url)}
+                                                </a>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : null}
                             </li>
                         );
                     })}
