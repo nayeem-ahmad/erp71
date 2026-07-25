@@ -148,9 +148,11 @@ export const componentsMessages = {
         sendAria: 'Send',
         placeholder: 'Ask about your sales, stock, customers…',
         disclaimer: 'Answers come from your own data. Check the sources under each answer.',
+        disclaimerWeb: 'Answers come from your own data, and from the web when a question needs it. Check the sources under each answer.',
         sources: 'Sources',
         emptyHeading: 'Ask about your business',
         emptyDescription: 'I can only read your data — I cannot change anything.',
+        emptyDescriptionWeb: 'I can read your data and look things up on the web — I cannot change anything.',
         genericError: 'Something went wrong. Please try again.',
         suggestions: {
             s1: 'How much did we sell last month?',

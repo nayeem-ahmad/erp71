@@ -74,12 +74,36 @@ export default function AiChatWidget() {
     const [conversations, setConversations] = useState<AiChatConversationSummary[] | null>(null);
     const [historyBusy, setHistoryBusy] = useState(false);
     const [historyError, setHistoryError] = useState<string | null>(null);
+    const [hasWebSearch, setHasWebSearch] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
 
     useEffect(() => {
         if (open && !showHistory) inputRef.current?.focus();
     }, [open, showHistory]);
+
+    /**
+     * Which tools the backend will actually offer this user. Only the web pair
+     * changes what the panel says about itself — the assistant is data-only until
+     * the platform operator enables web search, and claiming otherwise in the
+     * footer is a promise the model cannot keep.
+     *
+     * Fetched on first open rather than on mount: the panel is closed on most
+     * page views. A failure leaves the data-only wording, which is the safe
+     * direction to be wrong in.
+     */
+    useEffect(() => {
+        if (!open) return;
+        let cancelled = false;
+        api.getAiChatTools()
+            .then(({ tools }) => {
+                if (!cancelled) setHasWebSearch(tools.includes('web_search'));
+            })
+            .catch(() => undefined);
+        return () => {
+            cancelled = true;
+        };
+    }, [open]);
 
     useEffect(() => {
         if (!showHistory) {
@@ -267,7 +291,7 @@ export default function AiChatWidget() {
                                     {messages.length === 0 ? (
                                         <EmptyState
                                             heading={m.emptyHeading}
-                                            description={m.emptyDescription}
+                                            description={hasWebSearch ? m.emptyDescriptionWeb : m.emptyDescription}
                                             suggestions={[
                                                 m.suggestions.s1,
                                                 m.suggestions.s2,
@@ -327,7 +351,9 @@ export default function AiChatWidget() {
                                             <Send className="h-4 w-4" />
                                         </button>
                                     </div>
-                                    <p className="mt-1 px-1 text-[11px] text-gray-400">{m.disclaimer}</p>
+                                    <p className="mt-1 px-1 text-[11px] text-gray-400">
+                                        {hasWebSearch ? m.disclaimerWeb : m.disclaimer}
+                                    </p>
                                 </div>
                             </>
                         )}

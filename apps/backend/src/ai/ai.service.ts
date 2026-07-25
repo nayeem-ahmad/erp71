@@ -30,6 +30,11 @@ const MODEL_RATES: Record<string, { input: number; output: number }> = {
     'anthropic/claude-opus-4.5': { input: 5.0, output: 25.0 },
     'google/gemini-2.5-flash': { input: 0.15, output: 0.6 },
     'openai/gpt-4o-mini': { input: 0.15, output: 0.6 },
+    'moonshotai/kimi-k3': { input: 3.0, output: 15.0 },
+    'qwen/qwen3.7-plus': { input: 0.32, output: 1.28 },
+    // The free router bills nothing. Without this row the fallback would charge
+    // the platform Haiku rates for traffic that cost it zero.
+    'openrouter/free': { input: 0, output: 0 },
 };
 
 type OpenRouterUsage = {
