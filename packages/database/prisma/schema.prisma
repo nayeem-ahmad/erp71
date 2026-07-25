@@ -503,8 +503,103 @@ model Tenant {
   salesSettings     SalesSettings?
   navLayout         TenantNavLayout?
   referralSignup    ReferralSignup?
+  externalSyncConnections ExternalSyncConnection[]
+  externalSyncMappings    ExternalSyncMapping[]
+  externalSyncRuns        ExternalSyncRun[]
 
   @@index([deleted_at])
+}
+
+/// Platform-admin managed link between a tenant and a third-party ERP we pull
+/// historical sales/purchase data out of. One connection per tenant+provider.
+model ExternalSyncConnection {
+  id                 String    @id @default(uuid())
+  tenant_id          String
+  /// Provider key, e.g. EXPRESS_RETAIL_PRO.
+  provider           String
+  base_url           String
+  username           String
+  /// AES-256-GCM ciphertext produced by EncryptionService — never stored plain.
+  password_encrypted String
+  /// Provider-side organization/company id, used to reject cross-org data.
+  external_org_id    String?
+  /// Store every imported sale/purchase is attributed to.
+  store_id           String
+  /// Prefix applied to imported document numbers so they cannot collide with
+  /// natively created ones (e.g. "XR-" -> "XR-2601666").
+  document_prefix    String    @default("XR-")
+  enabled            Boolean   @default(false)
+  /// Rolling window (days back from today) each scheduled run re-pulls.
+  window_days        Int       @default(90)
+  /// Earliest business date the importer will ever ask the provider for.
+  history_start_date DateTime?
+  last_run_at        DateTime?
+  last_success_at    DateTime?
+  created_by         String?
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  tenant   Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store    Store              @relation(fields: [store_id], references: [id])
+  runs     ExternalSyncRun[]
+  mappings ExternalSyncMapping[]
+
+  @@unique([tenant_id, provider])
+  @@index([enabled])
+}
+
+/// Maps a provider-side record id to the row we created for it, so re-running
+/// an import updates rather than duplicates.
+model ExternalSyncMapping {
+  id            String   @id @default(uuid())
+  tenant_id     String
+  connection_id String
+  /// PRODUCT | CUSTOMER | SUPPLIER | SALE | PURCHASE
+  entity_type   String
+  external_id   String
+  internal_id   String
+  /// Provider updated_at at the time we last wrote this row; lets a re-pull
+  /// skip records that have not changed upstream.
+  external_updated_at DateTime?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  tenant     Tenant                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  connection ExternalSyncConnection @relation(fields: [connection_id], references: [id], onDelete: Cascade)
+
+  @@unique([connection_id, entity_type, external_id])
+  @@index([tenant_id, entity_type])
+  @@index([connection_id, entity_type, internal_id])
+}
+
+/// One import attempt — manual or scheduled. Retains counts and errors so a
+/// platform admin can see what a run actually did.
+model ExternalSyncRun {
+  id            String    @id @default(uuid())
+  tenant_id     String
+  connection_id String
+  /// MANUAL | SCHEDULED
+  trigger       String    @default("MANUAL")
+  /// RUNNING | SUCCESS | PARTIAL | FAILED
+  status        String    @default("RUNNING")
+  /// Business-date window actually requested from the provider.
+  window_from   DateTime
+  window_to     DateTime
+  dry_run       Boolean   @default(false)
+  /// Per-entity {created,updated,skipped} tallies.
+  stats         Json?
+  /// Non-fatal per-record problems (unmapped product, rounded quantity, ...).
+  warnings      Json?
+  error_message String?
+  started_at    DateTime  @default(now())
+  finished_at   DateTime?
+  triggered_by  String?
+
+  tenant     Tenant                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  connection ExternalSyncConnection @relation(fields: [connection_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, started_at])
+  @@index([connection_id, started_at])
 }
 
 model PaymentMethod {
@@ -620,6 +715,7 @@ model Store {
   posCounters     PosCounter[]
   expenseEntries  ExpenseEntry[]
   loans           Loan[]
+  externalSyncConnections ExternalSyncConnection[]
 }
 
 model PosCounter {
