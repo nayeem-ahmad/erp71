@@ -7,8 +7,22 @@ import { paginate, PaginatedResult, cursorPaginate, CursorPaginatedResult } from
 import { RedisService } from '../cache/redis.service';
 import { PriceListsService } from '../price-lists/price-lists.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
+import { resolveOrderBy, SortableMap } from '../common/sort.util';
 
 const CACHE_TTL = 60; // seconds
+
+const PRODUCT_SORTABLE: SortableMap = {
+    name: (dir) => ({ name: dir }),
+    sku: (dir) => ({ sku: dir }),
+    price: (dir) => ({ price: dir }),
+    created_at: (dir) => ({ created_at: dir }),
+    group: (dir) => ({ group: { name: dir } }),
+    subgroup: (dir) => ({ subgroup: { name: dir } }),
+};
+const PRODUCT_DEFAULT_ORDER = { name: 'asc' as const };
+
+/** At or below this default-warehouse quantity a product reads as LOW rather than IN stock. */
+export const LOW_STOCK_THRESHOLD = 10;
 
 @Injectable()
 export class ProductsService {
@@ -82,7 +96,17 @@ export class ProductsService {
 
     async findAll(
         tenantId: string,
-        filters?: { groupId?: string; subgroupId?: string; uncategorized?: boolean; page?: number; limit?: number },
+        filters?: {
+            groupId?: string;
+            subgroupId?: string;
+            uncategorized?: boolean;
+            search?: string;
+            stockStatus?: string;
+            page?: number;
+            limit?: number;
+            sortBy?: string;
+            sortDir?: string;
+        },
     ): Promise<PaginatedResult<any>> {
         const page = filters?.page ?? 1;
         const limit = Math.min(filters?.limit ?? 20, 100);
@@ -95,7 +119,13 @@ export class ProductsService {
         const where = this.buildWhere(tenantId, filters);
 
         const [items, total] = await Promise.all([
-            this.db.product.findMany({ where, include: this.productInclude(), orderBy: { name: 'asc' }, skip, take: limit }),
+            this.db.product.findMany({
+                where,
+                include: this.productInclude(),
+                orderBy: resolveOrderBy(filters?.sortBy, filters?.sortDir, PRODUCT_SORTABLE, PRODUCT_DEFAULT_ORDER),
+                skip,
+                take: limit,
+            }),
             this.db.product.count({ where }),
         ]);
 
@@ -282,7 +312,16 @@ export class ProductsService {
         return { created, skipped, errors };
     }
 
-    private buildWhere(tenantId: string, filters?: { groupId?: string; subgroupId?: string; uncategorized?: boolean }) {
+    private buildWhere(
+        tenantId: string,
+        filters?: {
+            groupId?: string;
+            subgroupId?: string;
+            uncategorized?: boolean;
+            search?: string;
+            stockStatus?: string;
+        },
+    ) {
         return {
             tenant_id: tenantId,
             deleted_at: null,
@@ -292,7 +331,39 @@ export class ProductsService {
                       ...(filters?.groupId ? { group_id: filters.groupId } : {}),
                       ...(filters?.subgroupId ? { subgroup_id: filters.subgroupId } : {}),
                   }),
+            ...(filters?.search
+                ? {
+                      OR: [
+                          { name: { contains: filters.search, mode: 'insensitive' as const } },
+                          { sku: { contains: filters.search, mode: 'insensitive' as const } },
+                      ],
+                  }
+                : {}),
+            ...this.stockStatusWhere(filters?.stockStatus),
         };
+    }
+
+    /**
+     * Server-side equivalent of the products table's IN/LOW/OUT badge.
+     *
+     * The badge reads `stocks[0]`, and `productInclude()` orders stocks by
+     * `warehouse.is_default desc` — so it is the default warehouse's quantity, not the
+     * sum across warehouses. This mirrors that exactly so a filter preset and the badge
+     * next to it can never disagree. OUT deliberately uses `none` rather than
+     * `some { quantity: 0 }` so a product with no stock row at all still counts as out.
+     */
+    private stockStatusWhere(stockStatus?: string) {
+        const defaultWarehouse = { warehouse: { is_default: true } };
+        switch (stockStatus) {
+            case 'OUT':
+                return { stocks: { none: { ...defaultWarehouse, quantity: { gt: 0 } } } };
+            case 'LOW':
+                return { stocks: { some: { ...defaultWarehouse, quantity: { gt: 0, lte: LOW_STOCK_THRESHOLD } } } };
+            case 'IN':
+                return { stocks: { some: { ...defaultWarehouse, quantity: { gt: LOW_STOCK_THRESHOLD } } } };
+            default:
+                return {};
+        }
     }
 
     private async validateCategorySelection(db: any, tenantId: string, groupId?: string, subgroupId?: string) {

@@ -105,12 +105,11 @@ function CustomerPaymentsContent() {
                     from: fromDate || undefined,
                     to: toDate || undefined,
                     customerId: customerFilter || undefined,
-                    limit: 100,
                 }),
-                api.getCustomers({ limit: 200 }),
+                api.getCustomers(),
             ]);
             setPayments((Array.isArray(paymentsData) ? paymentsData : []) as CustomerCreditPayment[]);
-            setCustomers(Array.isArray(customersData) ? customersData : (customersData?.items ?? []));
+            setCustomers(customersData ?? []);
         } catch (error) {
             console.error('Failed to load customer payments', error);
             setToast({ type: 'error', message: copy.loadFailed });

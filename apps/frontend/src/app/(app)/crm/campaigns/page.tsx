@@ -77,8 +77,7 @@ export default function CrmCampaignsPage() {
     const loadCampaigns = useCallback(async () => {
         setLoading(true);
         try {
-            const data = await api.getCrmCampaigns({ limit: 50 });
-            setCampaigns(data?.items ?? data ?? []);
+            setCampaigns(await api.getCrmCampaigns());
         } finally {
             setLoading(false);
         }

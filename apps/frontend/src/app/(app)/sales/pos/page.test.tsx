@@ -56,6 +56,7 @@ jest.mock('@/lib/api', () => ({
     getInventorySettings: jest.fn(),
     createSale: jest.fn(),
     getSales: jest.fn(),
+    getSalesPage: jest.fn(),
   },
 }));
 
@@ -72,7 +73,7 @@ describe('POSPage — Story 10.2: POS Interface UI', () => {
     api.getProducts.mockResolvedValue(mockProducts);
     api.getInventorySettings.mockResolvedValue({ default_sales_warehouse_id: 'wh-sales' });
     api.createSale.mockResolvedValue({ id: 'sale-1' });
-    api.getSales.mockResolvedValue([
+    api.getSalesPage.mockResolvedValue({ items: [
       {
         id: 'sale-1',
         serial_number: 'SL-00001',
@@ -81,7 +82,7 @@ describe('POSPage — Story 10.2: POS Interface UI', () => {
         items: [{ id: 'i1' }, { id: 'i2' }],
         customer: { name: 'Walk-in Customer' },
       },
-    ]);
+    ], nextCursor: null, hasMore: false });
   });
 
   it('renders the POS Terminal heading', async () => {
@@ -286,7 +287,7 @@ describe('POSPage — Story 10.3 & 10.4: Checkout & Advanced Payments', () => {
     fireEvent.click(screen.getByRole('button', { name: /history/i }));
 
     await waitFor(() => {
-      expect(api.getSales).toHaveBeenCalledWith({ mine: true, limit: 50 });
+      expect(api.getSalesPage).toHaveBeenCalledWith({ mine: true, limit: 50 });
       expect(screen.getByText('SL-00001')).toBeInTheDocument();
       expect(screen.getByText('Walk-in Customer')).toBeInTheDocument();
     });

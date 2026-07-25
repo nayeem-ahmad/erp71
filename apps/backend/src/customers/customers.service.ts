@@ -13,6 +13,21 @@ import {
 } from './customer.dto';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { runImport, ImportResult } from '../common/import.util';
+import { resolveOrderBy, SortableMap } from '../common/sort.util';
+
+const CUSTOMER_SORTABLE: SortableMap = {
+    name: (dir) => ({ name: dir }),
+    customer_code: (dir) => ({ customer_code: dir }),
+    phone: (dir) => ({ phone: dir }),
+    owner_name: (dir) => ({ owner_name: dir }),
+    created_at: (dir) => ({ created_at: dir }),
+    customerGroup: (dir) => ({ customerGroup: { name: dir } }),
+    territory: (dir) => ({ territory: { name: dir } }),
+    segment_category: (dir) => ({ segment_category: dir }),
+    customer_type: (dir) => ({ customer_type: dir }),
+    loyalty_points: (dir) => ({ loyalty_points: dir }),
+};
+const CUSTOMER_DEFAULT_ORDER = { created_at: 'desc' as const };
 
 @Injectable()
 export class CustomersService {
@@ -218,7 +233,18 @@ export class CustomersService {
         return this.decryptCustomer(record);
     }
 
-    async findAll(tenantId: string, opts?: { page?: number; limit?: number; search?: string }): Promise<PaginatedResult<any>> {
+    async findAll(
+        tenantId: string,
+        opts?: {
+            page?: number;
+            limit?: number;
+            search?: string;
+            segment?: string;
+            customerType?: string;
+            sortBy?: string;
+            sortDir?: string;
+        },
+    ): Promise<PaginatedResult<any>> {
         const page = opts?.page ?? 1;
         const limit = Math.min(opts?.limit ?? 20, 100);
         const skip = (page - 1) * limit;
@@ -232,12 +258,14 @@ export class CustomersService {
                 { customer_code: { contains: opts.search, mode: 'insensitive' } },
             ];
         }
+        if (opts?.segment) where.segment_category = opts.segment;
+        if (opts?.customerType) where.customer_type = opts.customerType;
 
         const [items, total] = await Promise.all([
             this.db.customer.findMany({
                 where,
                 include: { customerGroup: true, territory: true },
-                orderBy: { created_at: 'desc' },
+                orderBy: resolveOrderBy(opts?.sortBy, opts?.sortDir, CUSTOMER_SORTABLE, CUSTOMER_DEFAULT_ORDER),
                 skip,
                 take: limit,
             }),

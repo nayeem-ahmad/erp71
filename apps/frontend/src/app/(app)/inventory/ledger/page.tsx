@@ -9,6 +9,7 @@ import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
+import { useServerList } from '@/hooks/useServerList';
 
 interface LedgerRow {
     id: string;
@@ -26,31 +27,27 @@ const columnHelper = createColumnHelper<LedgerRow>();
 
 export default function InventoryLedgerPage() {
     const { t } = useI18n();
-    const [rows, setRows] = useState<LedgerRow[]>([]);
     const [warehouses, setWarehouses] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
     const [warehouseId, setWarehouseId] = useState('');
     const [movementType, setMovementType] = useState('');
 
+    const {
+        items: rows,
+        loading,
+        serverPagination,
+        reload: loadLedger,
+    } = useServerList<LedgerRow>({
+        fetch: (p) => api.getInventoryLedger({
+            warehouseId: warehouseId || undefined,
+            movementType: movementType || undefined,
+            ...p,
+        }),
+        deps: [warehouseId, movementType],
+    });
+
     useEffect(() => {
-        void Promise.all([loadLedger(), loadWarehouses()]);
+        void loadWarehouses();
     }, []);
-
-    useEffect(() => {
-        void loadLedger();
-    }, [warehouseId, movementType]);
-
-    const loadLedger = async () => {
-        setLoading(true);
-        try {
-            const data = await api.getInventoryLedger({ warehouseId: warehouseId || undefined, movementType: movementType || undefined });
-            setRows(data);
-        } catch (error) {
-            console.error('Failed to load inventory ledger', error);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const loadWarehouses = async () => {
         try {
@@ -146,7 +143,8 @@ export default function InventoryLedgerPage() {
                     isLoading={loading}
                     emptyMessage={t.inventoryLedger.emptyMessage}
                     emptyIcon={<BookOpen className="w-16 h-16 text-gray-200" />}
-                    searchPlaceholder={t.inventoryLedger.searchPlaceholder}
+                    showSearch={false}
+                    serverPagination={serverPagination}
                 />
     </PageShell>
     );

@@ -10,6 +10,17 @@ import {
     UpdateWarehouseDto,
 } from './inventory.dto';
 import { assertWarehouseBelongsToTenant, ensureDefaultWarehouse } from '../database/inventory.utils';
+import { paginate } from '../common/pagination.dto';
+import { resolveOrderBy, SortableMap } from '../common/sort.util';
+
+const LEDGER_SORTABLE: SortableMap = {
+    created_at: (dir) => ({ created_at: dir }),
+    movement_type: (dir) => ({ movement_type: dir }),
+    quantity: (dir) => ({ quantity: dir }),
+    product: (dir) => ({ product: { name: dir } }),
+    warehouse: (dir) => ({ warehouse: { name: dir } }),
+};
+const LEDGER_DEFAULT_ORDER = [{ created_at: 'desc' as const }, { id: 'desc' as const }];
 import { runImport, ImportResult } from '../common/import.util';
 
 @Injectable()
@@ -219,25 +230,39 @@ export class InventoryService {
         });
     }
 
+    /**
+     * Stock movement ledger. Paginated rather than capped: it previously returned a bare
+     * `take: 200` array, so the list footer reported "of 200" no matter how many movements
+     * existed and everything older than the 200th was unreachable.
+     */
     async getLedger(tenantId: string, query: ListStockLedgerQueryDto) {
-        const limit = query.limit ?? 200;
-        return this.db.inventoryMovement.findMany({
-            where: {
-                tenant_id: tenantId,
-                ...(query.productId ? { product_id: query.productId } : {}),
-                ...(query.warehouseId ? { warehouse_id: query.warehouseId } : {}),
-                ...(query.movementType ? { movement_type: query.movementType } : {}),
-                ...buildDateWindow(query.from, query.to),
-            },
-            include: {
-                product: {
-                    include: { group: true, subgroup: true },
+        const page = Math.max(1, query.page ?? 1);
+        const limit = Math.min(query.limit ?? 50, 500);
+        const where = {
+            tenant_id: tenantId,
+            ...(query.productId ? { product_id: query.productId } : {}),
+            ...(query.warehouseId ? { warehouse_id: query.warehouseId } : {}),
+            ...(query.movementType ? { movement_type: query.movementType } : {}),
+            ...buildDateWindow(query.from, query.to),
+        };
+
+        const [items, total] = await Promise.all([
+            this.db.inventoryMovement.findMany({
+                where,
+                include: {
+                    product: {
+                        include: { group: true, subgroup: true },
+                    },
+                    warehouse: true,
                 },
-                warehouse: true,
-            },
-            orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-            take: limit,
-        });
+                orderBy: resolveOrderBy(query.sortBy, query.sortDir, LEDGER_SORTABLE, LEDGER_DEFAULT_ORDER),
+                skip: (page - 1) * limit,
+                take: limit,
+            }),
+            this.db.inventoryMovement.count({ where }),
+        ]);
+
+        return paginate(items, total, page, limit);
     }
 
     private async ensureSettings(tenantId: string) {

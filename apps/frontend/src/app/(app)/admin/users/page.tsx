@@ -47,12 +47,10 @@ export default function AdminUsersPage() {
         setIsLoading(true);
         setError('');
         try {
-            const res: { data?: PlatformAdminUser[] } = await api.getAdminUsers({
+            const users: PlatformAdminUser[] = await api.getAdminUsers({
                 search: query || undefined,
-                page: 1,
-                limit: 100,
             });
-            setUsers(res.data ?? []);
+            setUsers(users);
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : m.loadFailed);
         } finally {

@@ -98,8 +98,9 @@ export default function POSPage() {
         setHistoryLoading(true);
         setHistoryError(false);
         try {
-            const data = await api.getSales({ mine: true, limit: 50 });
-            setRecentSales(Array.isArray(data) ? data : []);
+            // Deliberately one bounded page — this panel only shows recent sales.
+            const data = await api.getSalesPage({ mine: true, limit: 50 });
+            setRecentSales(data?.items ?? []);
         } catch (error) {
             console.error('Failed to load POS sale history', error);
             setHistoryError(true);
@@ -341,9 +342,7 @@ export default function POSPage() {
             return;
         }
         try {
-            const data = await api.getCustomers({ search: query.trim(), limit: 8 });
-            const items = Array.isArray(data) ? data : (data?.items ?? []);
-            setCustomerResults(items);
+            setCustomerResults(await api.searchCustomers(query.trim()));
         } catch {
             setCustomerResults([]);
         }

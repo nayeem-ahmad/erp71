@@ -33,8 +33,7 @@ export default function CrmCustomersPage() {
     const loadCustomers = async () => {
         setLoading(true);
         try {
-            const data = await api.getCustomers({ limit: 100 });
-            setCustomers(Array.isArray(data) ? data : (data?.items ?? data));
+            setCustomers(await api.getCustomers());
         } catch (error) {
             console.error('Failed to load customers', error);
         } finally {

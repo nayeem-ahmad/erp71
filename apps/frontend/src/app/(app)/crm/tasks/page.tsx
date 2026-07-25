@@ -72,9 +72,8 @@ export default function CrmTasksPage() {
                 status: statusFilter || undefined,
                 target: targetFilter || undefined,
                 dueToday: dueTodayOnly || undefined,
-                limit: 100,
             });
-            setTasks(res?.items ?? res ?? []);
+            setTasks(res ?? []);
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : m.emptyMessage);
         } finally {

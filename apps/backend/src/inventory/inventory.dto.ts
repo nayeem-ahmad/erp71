@@ -1,3 +1,4 @@
+import { Type } from 'class-transformer';
 import { IsBoolean, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 
 export class UpdateInventorySettingsDto {
@@ -143,4 +144,18 @@ export class ListStockLedgerQueryDto {
     @Min(1)
     @Max(500)
     limit?: number;
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    page?: number;
+
+    @IsOptional()
+    @IsString()
+    sortBy?: string;
+
+    @IsOptional()
+    @IsString()
+    sortDir?: string;
 }

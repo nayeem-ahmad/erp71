@@ -142,9 +142,13 @@ export class ProductsController {
         @Query('groupId') groupId?: string,
         @Query('subgroupId') subgroupId?: string,
         @Query('uncategorized') uncategorized?: string,
+        @Query('search') search?: string,
+        @Query('stockStatus') stockStatus?: string,
         @Query('cursor') cursor?: string,
         @Query('page') page?: string,
         @Query('limit') limit?: string,
+        @Query('sortBy') sortBy?: string,
+        @Query('sortDir') sortDir?: string,
     ) {
         const parsedLimit = limit ? parseInt(limit, 10) : undefined;
         if (cursor !== undefined) {
@@ -160,8 +164,12 @@ export class ProductsController {
             groupId,
             subgroupId,
             uncategorized: uncategorized === 'true',
+            search,
+            stockStatus,
             page: page ? parseInt(page, 10) : undefined,
             limit: parsedLimit,
+            sortBy,
+            sortDir,
         });
     }
 

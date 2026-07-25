@@ -11,6 +11,7 @@ jest.mock('next/link', () => {
 jest.mock('@/lib/api', () => ({
     api: {
         getCustomers: jest.fn(),
+        getCustomersPaged: jest.fn(),
         createCustomer: jest.fn(),
         getCustomerGroups: jest.fn(),
         getTerritories: jest.fn(),
@@ -56,7 +57,7 @@ const mockCustomers = [
 describe('CustomersPage — Customer Management', () => {
     beforeEach(() => {
         const { api } = require('@/lib/api');
-        api.getCustomers.mockResolvedValue(mockCustomers);
+        api.getCustomersPaged.mockResolvedValue({ items: mockCustomers, total: mockCustomers.length, page: 1, limit: 20, pages: 1 });
         api.createCustomer.mockResolvedValue({ id: 'cust-3' });
         api.getCustomerGroups.mockResolvedValue([{ id: 'grp-1', name: 'Wholesale' }]);
         api.getTerritories.mockResolvedValue([{ id: 'ter-1', name: 'Dhaka North', parent: null }]);
@@ -208,8 +209,8 @@ describe('CustomersPage — Customer Management', () => {
         fireEvent.click(screen.getByRole('button', { name: /add customer/i }));
 
         await waitFor(() => {
-            // getCustomers is called once on mount and again after successful add
-            expect(api.getCustomers).toHaveBeenCalledTimes(2);
+            // the list is fetched once on mount and again after a successful add
+            expect(api.getCustomersPaged).toHaveBeenCalledTimes(2);
         });
     });
 
@@ -246,11 +247,11 @@ describe('CustomersPage — Customer Management', () => {
         });
     });
 
-    it('calls getCustomers once on initial load', async () => {
+    it('calls getCustomersPaged once on initial load', async () => {
         const { api } = require('@/lib/api');
         render(<CustomersPage />);
         await waitFor(() => {
-            expect(api.getCustomers).toHaveBeenCalledTimes(1);
+            expect(api.getCustomersPaged).toHaveBeenCalledTimes(1);
         });
     });
 });

@@ -88,10 +88,10 @@ export default function AttendancePage() {
                     endDate: endDate || undefined,
                     employeeId: filterEmployee || undefined,
                 }),
-                api.getEmployees({ limit: 200 }),
+                api.getEmployees(),
             ]);
-            setRecords(Array.isArray(recs) ? recs : (recs?.items ?? []));
-            setEmployees(Array.isArray(emps) ? emps : (emps?.items ?? []));
+            setRecords(recs ?? []);
+            setEmployees(emps ?? []);
         } catch (err) {
             console.error('Failed to load attendance', err);
         } finally {

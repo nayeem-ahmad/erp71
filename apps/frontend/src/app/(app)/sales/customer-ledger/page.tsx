@@ -95,8 +95,7 @@ function CustomerLedgerContent() {
     const loadCustomers = useCallback(async () => {
         setLoadingCustomers(true);
         try {
-            const data = await api.getCustomers({ limit: 200 });
-            const items: CustomerOption[] = Array.isArray(data) ? data : (data?.items ?? []);
+            const items: CustomerOption[] = await api.getCustomers();
             setCustomers(items);
             if (!preselectedId && items.length > 0) {
                 setCustomerId((prev) => prev || items[0].id);

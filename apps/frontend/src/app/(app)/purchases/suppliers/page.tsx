@@ -7,7 +7,8 @@ import { DataTable } from '@/components/data-table';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
-import { Button, Field, Alert } from '@/components/ui';
+import { Button, Field, Alert, Input } from '@/components/ui';
+import { useServerList } from '@/hooks/useServerList';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -37,8 +38,6 @@ const columnHelper = createColumnHelper<Supplier>();
 
 export default function SuppliersPage() {
     const { t, locale } = useI18n();
-    const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-    const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [editTarget, setEditTarget] = useState<Supplier | null>(null);
     const [form, setForm] = useState(emptyForm);
@@ -47,21 +46,24 @@ export default function SuppliersPage() {
     const [deleteId, setDeleteId] = useState<string | null>(null);
     const [importOpen, setImportOpen] = useState(false);
 
-    useEffect(() => {
-        void load();
-    }, []);
+    const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
 
-    const load = async () => {
-        setLoading(true);
-        try {
-            const data = await api.getSuppliers();
-            setSuppliers(data);
-        } catch (err) {
-            console.error('Failed to load suppliers', err);
-        } finally {
-            setLoading(false);
-        }
-    };
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(search), 300);
+        return () => clearTimeout(timer);
+    }, [search]);
+
+    const {
+        items: suppliers,
+        loading,
+        serverPagination,
+        reload: load,
+    } = useServerList<Supplier>({
+        fetch: (p) => api.getSuppliersPaged({ search: debouncedSearch || undefined, ...p }),
+        deps: [debouncedSearch],
+        initialSort: { id: 'name', desc: false },
+    });
 
     const openCreate = () => {
         setEditTarget(null);
@@ -220,6 +222,15 @@ export default function SuppliersPage() {
                     )}
                 />
 
+                <div className="bg-white border border-gray-100 rounded-lg p-3">
+                    <Input
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder={t.suppliers.searchPlaceholder}
+                        className="max-w-xs"
+                    />
+                </div>
+
                 <DataTable<Supplier>
                     tableId="suppliers"
                     columns={columns}
@@ -228,7 +239,8 @@ export default function SuppliersPage() {
                     isLoading={loading}
                     emptyMessage={t.suppliers.emptyMessage}
                     emptyIcon={<Truck className="w-16 h-16 text-gray-200" />}
-                    searchPlaceholder={t.suppliers.searchPlaceholder}
+                    showSearch={false}
+                    serverPagination={serverPagination}
                 />
 
             {modalOpen && (
