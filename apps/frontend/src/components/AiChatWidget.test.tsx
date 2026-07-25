@@ -2,10 +2,22 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AiChatWidget from './AiChatWidget';
 
 jest.mock('@/lib/api', () => ({
-    api: { aiChat: jest.fn() },
+    api: {
+        aiChat: jest.fn(),
+        getAiConversations: jest.fn(),
+        getAiConversation: jest.fn(),
+        deleteAiConversation: jest.fn(),
+    },
 }));
 
-const { api } = jest.requireMock('@/lib/api') as { api: { aiChat: jest.Mock } };
+const { api } = jest.requireMock('@/lib/api') as {
+    api: {
+        aiChat: jest.Mock;
+        getAiConversations: jest.Mock;
+        getAiConversation: jest.Mock;
+        deleteAiConversation: jest.Mock;
+    };
+};
 
 function openPanel() {
     render(<AiChatWidget />);
@@ -17,8 +29,15 @@ function ask(question: string) {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 }
 
+function openHistory() {
+    fireEvent.click(screen.getByRole('button', { name: 'Past conversations' }));
+}
+
 beforeEach(() => {
     api.aiChat.mockReset();
+    api.getAiConversations.mockReset().mockResolvedValue([]);
+    api.getAiConversation.mockReset();
+    api.deleteAiConversation.mockReset().mockResolvedValue({ deleted: true });
     Element.prototype.scrollTo = jest.fn();
 });
 
@@ -180,5 +199,87 @@ describe('AiChatWidget', () => {
         ask('second');
         await waitFor(() => expect(api.aiChat).toHaveBeenCalledTimes(2));
         expect(api.aiChat.mock.calls[1][0].conversationId).toBeUndefined();
+    });
+
+    describe('history', () => {
+        const SUMMARY = {
+            id: 'conv-old',
+            title: 'How much did we sell in May?',
+            created_at: '2026-06-01T09:00:00Z',
+            updated_at: '2026-06-02T09:00:00Z',
+            message_count: 4,
+        };
+
+        it('tells the user plainly when they have no past conversations', async () => {
+            openPanel();
+            openHistory();
+
+            expect(await screen.findByText('No past conversations yet.')).toBeInTheDocument();
+        });
+
+        /**
+         * The whole point of the feature: a thread survives a page reload, which
+         * drops all local state. Loading it back must restore the messages.
+         */
+        it('loads a past conversation back into the thread', async () => {
+            api.getAiConversations.mockResolvedValue([SUMMARY]);
+            api.getAiConversation.mockResolvedValue({
+                ...SUMMARY,
+                messages: [
+                    { id: 'm1', role: 'user', content: 'How much did we sell in May?', created_at: '2026-06-01T09:00:00Z' },
+                    { id: 'm2', role: 'assistant', content: 'May revenue was ৳240,000.', created_at: '2026-06-01T09:00:05Z' },
+                ],
+            });
+            openPanel();
+            openHistory();
+
+            fireEvent.click(await screen.findByText('How much did we sell in May?'));
+
+            expect(await screen.findByText('May revenue was ৳240,000.')).toBeInTheDocument();
+            // Back on the chat pane, not still in the list.
+            expect(screen.getByPlaceholderText(/Ask about your sales/i)).toBeInTheDocument();
+        });
+
+        /** Reopening a thread must continue it, not fork a new one. */
+        it('continues a reopened conversation instead of starting a fresh one', async () => {
+            api.getAiConversations.mockResolvedValue([SUMMARY]);
+            api.getAiConversation.mockResolvedValue({ ...SUMMARY, messages: [] });
+            api.aiChat.mockResolvedValue({
+                conversation_id: 'conv-old',
+                credits_used: 1,
+                truncated: false,
+                message: { id: 'm9', role: 'assistant', content: 'ok', created_at: '2026-07-21T10:00:00Z' },
+            });
+            openPanel();
+            openHistory();
+            fireEvent.click(await screen.findByText('How much did we sell in May?'));
+
+            await screen.findByPlaceholderText(/Ask about your sales/i);
+            ask('and June?');
+
+            await waitFor(() => expect(api.aiChat).toHaveBeenCalled());
+            expect(api.aiChat.mock.calls[0][0].conversationId).toBe('conv-old');
+        });
+
+        it('requires a second click before deleting a conversation', async () => {
+            api.getAiConversations.mockResolvedValue([SUMMARY]);
+            openPanel();
+            openHistory();
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Delete conversation' }));
+            expect(api.deleteAiConversation).not.toHaveBeenCalled();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }));
+            await waitFor(() => expect(api.deleteAiConversation).toHaveBeenCalledWith('conv-old'));
+            await waitFor(() => expect(screen.queryByText('How much did we sell in May?')).not.toBeInTheDocument());
+        });
+
+        it('surfaces a failed history load in the panel', async () => {
+            api.getAiConversations.mockRejectedValue(new Error('boom'));
+            openPanel();
+            openHistory();
+
+            expect(await screen.findByText('Could not load your conversations.')).toBeInTheDocument();
+        });
     });
 });
