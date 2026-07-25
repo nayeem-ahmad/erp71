@@ -97,6 +97,22 @@ function makeService(overrides: {
         fetchPage: jest.fn(),
     };
 
+    const anomalies: any = {
+        scan: jest.fn().mockResolvedValue({
+            period: { from: '2026-07-01', to: '2026-07-31' },
+            baselinePeriod: { from: '2026-04-02', to: '2026-07-31' },
+            sensitivity: 'normal',
+            thresholds: {},
+            scanned: [],
+            totalFlags: 0,
+            bySeverity: { high: 0, medium: 0, low: 0 },
+            byType: {},
+            totalImpact: 0,
+            truncatedDetectors: [],
+            anomalies: [],
+        }),
+    };
+
     const service = new ChatService(
         db,
         ai,
@@ -111,9 +127,10 @@ function makeService(overrides: {
         {} as any, // accounting
         chatData,
         webSearch,
+        anomalies,
     );
 
-    return { service, db, ai, platformSettings, planEntitlements, salesReports, chatData, webSearch };
+    return { service, db, ai, platformSettings, planEntitlements, salesReports, chatData, webSearch, anomalies };
 }
 
 const FLAGGED_TOOLS = CHAT_TOOLS.filter((tool) => tool.featureFlag);
