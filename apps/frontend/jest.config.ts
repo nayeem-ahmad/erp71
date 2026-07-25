@@ -5,6 +5,47 @@ const createJestConfig = nextJest({
   dir: './',
 });
 
+// ESM-only packages that Jest must transform rather than require() as CJS.
+// react-markdown + remark-gfm pull in the whole unified/micromark/mdast tree,
+// so these are matched by prefix rather than listed one by one.
+const esmPackages = [
+  'lucide-react',
+  'react-markdown',
+  'remark-.*',
+  'rehype-.*',
+  'unified',
+  'unist-.*',
+  'mdast-.*',
+  'micromark.*',
+  'hast-util-.*',
+  'vfile.*',
+  'character-entities.*',
+  'character-reference-invalid',
+  'decode-named-character-reference',
+  'parse-entities',
+  'stringify-entities',
+  'property-information',
+  'space-separated-tokens',
+  'comma-separated-tokens',
+  'html-url-attributes',
+  'estree-util-is-identifier-name',
+  'is-alphabetical',
+  'is-alphanumerical',
+  'is-decimal',
+  'is-hexadecimal',
+  'is-plain-obj',
+  'markdown-table',
+  'longest-streak',
+  'trim-lines',
+  'ccount',
+  'devlop',
+  'escape-string-regexp',
+  'zwitch',
+  'trough',
+  'bail',
+  '@ungap/structured-clone',
+];
+
 const config: Config = {
   coverageProvider: 'v8',
   testEnvironment: 'jsdom',
@@ -31,10 +72,18 @@ const config: Config = {
     // of the shared-types workspace package (its "main" points at dist/index.js).
     '^@erp71/shared-types(|/.*)$': '<rootDir>/../../packages/shared-types/$1',
   },
-  transformIgnorePatterns: [
-    '/node_modules/(?!(lucide-react)/)',
-  ],
   modulePathIgnorePatterns: ['<rootDir>/.next/'],
 };
 
-export default createJestConfig(config);
+// next/jest prepends its own transformIgnorePatterns and only lets a custom
+// config *append* to them — an appended rule can never re-include a package its
+// first pattern already excluded. So build the config, then replace the list
+// outright. Doing it here rather than via next.config's `transpilePackages`
+// keeps the production build from transpiling 80+ packages it handles natively.
+export default async () => {
+  const resolved = await createJestConfig(config)();
+  return {
+    ...resolved,
+    transformIgnorePatterns: [`/node_modules/(?!(${esmPackages.join('|')})/)`],
+  };
+};

@@ -437,9 +437,12 @@ export class ChatService {
             branchList,
             '',
             'FORMATTING:',
+            '- Your reply is rendered as markdown in a narrow side panel about 380px wide. Bold, italics, bullet lists, tables and inline code all render; raw HTML and images do not.',
             '- Money is Bangladeshi Taka. Write amounts as ৳1,234.56. Never use $ or any other currency symbol.',
             '- Be brief. Lead with the number the user asked for, then at most two lines of relevant context.',
-            '- Use a compact markdown table only when listing more than three rows.',
+            '- Bold the figure the user asked for so it is findable at a glance. Do not bold whole sentences.',
+            '- Use a compact markdown table only when listing more than three rows. Keep it to three columns with short headers — anything wider has to be scrolled sideways in the panel.',
+            '- Do not use a heading unless the answer has two or more distinct sections, and then use "###". A short answer needs no heading at all.',
             `- ${languageRule}`,
             '',
             tools.length

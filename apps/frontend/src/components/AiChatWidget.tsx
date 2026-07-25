@@ -1,11 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Bot, ChevronDown, Loader2, MessageSquare, Send, X } from 'lucide-react';
 import type { AiChatMessage, AiChatToolCall } from '@erp71/shared-types';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+
+/**
+ * The markdown renderer is a sizeable dependency and the chat panel is closed on
+ * most page views, so it is fetched only once an answer needs it. Until it lands
+ * the raw text shows — readable, just unstyled.
+ */
+const Markdown = lazy(() => import('@/components/ui/Markdown'));
 
 /**
  * Deep link per tool, so an answer can hand the user the real report rather than
@@ -273,10 +280,13 @@ function MessageBubble({ message, sourcesLabel }: { message: AiChatMessage; sour
 
     return (
         <div className="space-y-1">
-            {/* Rendered as text, never as HTML: the content is model output built
-                partly from tenant-controlled strings (product and customer names). */}
-            <div className="max-w-[95%] whitespace-pre-wrap rounded-lg rounded-bl-sm bg-gray-100 px-3 py-2 text-sm text-gray-900">
-                {message.content}
+            {/* Markdown, never HTML: the content is model output built partly from
+                tenant-controlled strings (product and customer names), so raw HTML
+                stays disabled in the renderer. */}
+            <div className="max-w-[95%] rounded-lg rounded-bl-sm bg-gray-100 px-3 py-2 text-sm text-gray-900">
+                <Suspense fallback={<div className="whitespace-pre-wrap">{message.content}</div>}>
+                    <Markdown content={message.content} />
+                </Suspense>
             </div>
             {message.tool_calls?.length ? <Sources calls={message.tool_calls} label={sourcesLabel} /> : null}
         </div>
