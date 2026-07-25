@@ -41,7 +41,16 @@ const MODEL_OPTIONS = [
     { value: 'anthropic/claude-opus-4.5', label: 'Claude Opus 4.5 — most capable' },
     { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash — very low cost' },
     { value: 'openai/gpt-4o-mini', label: 'GPT-4o Mini — fast OpenAI model' },
+    { value: 'moonshotai/kimi-k3', label: 'Kimi K3 — long-context agentic, Sonnet-class pricing' },
+    { value: 'qwen/qwen3.7-plus', label: 'Qwen3.7 Plus — very low cost, 1M context' },
+    { value: 'openrouter/free', label: 'Free router — $0, but rate-limited and non-deterministic' },
 ];
+
+/** Sentinel for the "type a slug" branch — never a real OpenRouter model id. */
+const CUSTOM_MODEL = '__custom__';
+
+/** provider/model, the shape every OpenRouter slug takes. */
+const MODEL_SLUG = /^[a-z0-9][\w.-]*\/[\w.:-]+$/i;
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
     return (
@@ -59,12 +68,20 @@ export default function PlatformAiSettingsPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [testing, setTesting] = useState(false);
+    // OpenRouter adds models faster than this list can be edited, so an admin can
+    // always type a slug the dropdown has never heard of.
+    const [customModel, setCustomModel] = useState(false);
+    const [modelError, setModelError] = useState<string | null>(null);
 
     const inputCls = 'w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition';
 
     useEffect(() => {
         fetchWithAuth('/admin/platform-settings/ai')
             .then((d) => {
+                // A stored slug that predates this list — or was typed by hand —
+                // must come back in the text field, not silently snap to Haiku.
+                const model = d.default_model ?? DEFAULTS.default_model;
+                setCustomModel(Boolean(model) && !MODEL_OPTIONS.some((o) => o.value === model));
                 setSettings({
                     api_key: d.api_key === '••••••••' ? '' : (d.api_key ?? ''),
                     default_model: d.default_model ?? DEFAULTS.default_model,
@@ -79,10 +96,19 @@ export default function PlatformAiSettingsPage() {
     }, []);
 
     async function handleSave() {
+        // A malformed slug fails on every AI call for every tenant, and only ever
+        // as an opaque OpenRouter 400. Catch it at the point of entry instead.
+        const model = settings.default_model.trim();
+        if (!MODEL_SLUG.test(model)) {
+            setModelError('Enter a model slug in the form provider/model — for example moonshotai/kimi-k3.');
+            return;
+        }
+        setModelError(null);
+
         setSaving(true);
         try {
             const payload: Record<string, string | null> = {
-                default_model: settings.default_model,
+                default_model: model,
                 web_search_enabled: settings.web_search_enabled,
                 web_search_engine: settings.web_search_engine,
                 web_search_max_results: settings.web_search_max_results,
@@ -160,17 +186,58 @@ export default function PlatformAiSettingsPage() {
 
                         <Field
                             label="Default model"
-                            hint="OpenRouter model slug used for report narration and message drafting. Haiku is recommended for cost efficiency."
+                            hint="OpenRouter model slug used for the AI assistant, report narration and message drafting. Haiku is recommended for cost efficiency."
                         >
                             <select
-                                value={settings.default_model}
-                                onChange={(e) => setSettings((s) => ({ ...s, default_model: e.target.value }))}
+                                value={customModel ? CUSTOM_MODEL : settings.default_model}
+                                onChange={(e) => {
+                                    const next = e.target.value;
+                                    setModelError(null);
+                                    if (next === CUSTOM_MODEL) {
+                                        // Blank the field so the admin types a slug
+                                        // rather than saving the model they left.
+                                        setCustomModel(true);
+                                        setSettings((s) => ({ ...s, default_model: '' }));
+                                        return;
+                                    }
+                                    setCustomModel(false);
+                                    setSettings((s) => ({ ...s, default_model: next }));
+                                }}
                                 className={inputCls}
                             >
                                 {MODEL_OPTIONS.map((o) => (
                                     <option key={o.value} value={o.value}>{o.label}</option>
                                 ))}
+                                <option value={CUSTOM_MODEL}>Other — enter a model slug…</option>
                             </select>
+
+                            {customModel ? (
+                                <input
+                                    type="text"
+                                    value={settings.default_model}
+                                    onChange={(e) => {
+                                        setModelError(null);
+                                        setSettings((s) => ({ ...s, default_model: e.target.value }));
+                                    }}
+                                    placeholder="provider/model — e.g. moonshotai/kimi-k3"
+                                    spellCheck={false}
+                                    autoCapitalize="none"
+                                    aria-label="Custom model slug"
+                                    aria-invalid={Boolean(modelError)}
+                                    className={`${inputCls} mt-2 font-mono`}
+                                />
+                            ) : null}
+
+                            {modelError ? <p className="mt-1 text-xs text-red-600">{modelError}</p> : null}
+
+                            {customModel ? (
+                                <p className="mt-1 text-xs text-gray-400">
+                                    Copy the slug from <a href="https://openrouter.ai/models" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">openrouter.ai/models</a>. The assistant
+                                    needs a model that supports tool calling, or every question will come back
+                                    unanswered. Cost is read from each response, so an unlisted model still bills
+                                    accurately.
+                                </p>
+                            ) : null}
                         </Field>
 
                         <div className="border-t border-gray-100 pt-5 space-y-4">
@@ -289,6 +356,9 @@ export default function PlatformAiSettingsPage() {
                             <tr><td className="py-2 font-medium">Claude Haiku 4.5</td><td className="text-right text-gray-600">~$1.00</td><td className="text-right text-gray-600">~$5.00</td></tr>
                             <tr><td className="py-2 font-medium">Claude Sonnet 4.6</td><td className="text-right text-gray-600">~$3.00</td><td className="text-right text-gray-600">~$15.00</td></tr>
                             <tr><td className="py-2 font-medium">Claude Opus 4.5</td><td className="text-right text-gray-600">~$5.00</td><td className="text-right text-gray-600">~$25.00</td></tr>
+                            <tr><td className="py-2 font-medium">Kimi K3</td><td className="text-right text-gray-600">~$3.00</td><td className="text-right text-gray-600">~$15.00</td></tr>
+                            <tr><td className="py-2 font-medium">Qwen3.7 Plus</td><td className="text-right text-gray-600">~$0.32</td><td className="text-right text-gray-600">~$1.28</td></tr>
+                            <tr><td className="py-2 font-medium">Free router</td><td className="text-right text-gray-600">$0.00</td><td className="text-right text-gray-600">$0.00</td></tr>
                         </tbody>
                     </table>
                     <p className="text-xs text-gray-400 mt-3">1 credit = 1,000 tokens. You charge tenants per credit; OpenRouter charges you per model usage.</p>

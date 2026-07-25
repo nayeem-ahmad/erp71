@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AiChatWidget from './AiChatWidget';
 
 jest.mock('@/lib/api', () => ({
@@ -7,6 +7,7 @@ jest.mock('@/lib/api', () => ({
         getAiConversations: jest.fn(),
         getAiConversation: jest.fn(),
         deleteAiConversation: jest.fn(),
+        getAiChatTools: jest.fn(),
     },
 }));
 
@@ -16,12 +17,19 @@ const { api } = jest.requireMock('@/lib/api') as {
         getAiConversations: jest.Mock;
         getAiConversation: jest.Mock;
         deleteAiConversation: jest.Mock;
+        getAiChatTools: jest.Mock;
     };
 };
 
-function openPanel() {
+/**
+ * Opening the panel kicks off the capability probe. Awaiting it here keeps that
+ * state update inside act() for every test, not just the ones that assert on it.
+ */
+async function openPanel() {
     render(<AiChatWidget />);
-    fireEvent.click(screen.getByRole('button', { name: 'Ask the business assistant' }));
+    await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Ask the business assistant' }));
+    });
 }
 
 function ask(question: string) {
@@ -38,15 +46,20 @@ beforeEach(() => {
     api.getAiConversations.mockReset().mockResolvedValue([]);
     api.getAiConversation.mockReset();
     api.deleteAiConversation.mockReset().mockResolvedValue({ deleted: true });
+    api.getAiChatTools.mockReset().mockResolvedValue({ tools: ['sales_summary'] });
     Element.prototype.scrollTo = jest.fn();
 });
 
 describe('AiChatWidget', () => {
-    it('stays closed until the header button is clicked', () => {
+    it('stays closed until the header button is clicked', async () => {
         render(<AiChatWidget />);
         expect(screen.queryByPlaceholderText(/Ask about your sales/i)).not.toBeInTheDocument();
+        // Closed means closed: no capability probe until the user opens it.
+        expect(api.getAiChatTools).not.toHaveBeenCalled();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Ask the business assistant' }));
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: 'Ask the business assistant' }));
+        });
         expect(screen.getByPlaceholderText(/Ask about your sales/i)).toBeInTheDocument();
     });
 
@@ -57,7 +70,7 @@ describe('AiChatWidget', () => {
             truncated: false,
             message: { id: 'm1', role: 'assistant', content: 'You sold ৳100.', created_at: '2026-07-21T10:00:00Z' },
         });
-        openPanel();
+        await openPanel();
 
         fireEvent.click(screen.getByText('How much did we sell last month?'));
 
@@ -76,7 +89,7 @@ describe('AiChatWidget', () => {
             truncated: false,
             message: { id: 'm1', role: 'assistant', content: 'ok', created_at: '2026-07-21T10:00:00Z' },
         });
-        openPanel();
+        await openPanel();
 
         ask('first');
         await screen.findByText('ok');
@@ -101,7 +114,7 @@ describe('AiChatWidget', () => {
                 created_at: '2026-07-21T10:00:00Z',
             },
         });
-        openPanel();
+        await openPanel();
         ask('june revenue?');
 
         const toggle = await screen.findByRole('button', { name: /Sources \(1\)/ });
@@ -138,7 +151,7 @@ describe('AiChatWidget', () => {
                 created_at: '2026-07-21T10:00:00Z',
             },
         });
-        openPanel();
+        await openPanel();
         ask('what is rice going for wholesale?');
 
         fireEvent.click(await screen.findByRole('button', { name: /Sources \(1\)/ }));
@@ -166,16 +179,47 @@ describe('AiChatWidget', () => {
                 created_at: '2026-07-21T10:00:00Z',
             },
         });
-        openPanel();
+        await openPanel();
         ask('our sales on the web?');
 
         await screen.findByText('Let me check your reports instead.');
         expect(screen.queryByRole('button', { name: /Sources/ })).not.toBeInTheDocument();
     });
 
+    /**
+     * The panel describes its own reach, and the backend decides that reach: web
+     * tools are withheld unless the platform operator enabled them. Promising web
+     * lookups the model was never given is the failure this guards.
+     */
+    describe('capability wording', () => {
+        it('says answers are data-only when web search is not offered', async () => {
+            api.getAiChatTools.mockResolvedValue({ tools: ['sales_summary', 'low_stock'] });
+            await openPanel();
+
+            expect(await screen.findByText(/Answers come from your own data\./)).toBeInTheDocument();
+            expect(screen.getByText(/I can only read your data/)).toBeInTheDocument();
+        });
+
+        it('mentions the web once the web tools are offered', async () => {
+            api.getAiChatTools.mockResolvedValue({ tools: ['sales_summary', 'web_search', 'fetch_web_page'] });
+            await openPanel();
+
+            expect(await screen.findByText(/and from the web when a question needs it/)).toBeInTheDocument();
+            expect(screen.getByText(/look things up on the web/)).toBeInTheDocument();
+        });
+
+        /** Wrong in the safe direction: no promise the model might not keep. */
+        it('falls back to the data-only wording when the tool list cannot be loaded', async () => {
+            api.getAiChatTools.mockRejectedValue(new Error('offline'));
+            await openPanel();
+
+            expect(await screen.findByText(/Answers come from your own data\./)).toBeInTheDocument();
+        });
+    });
+
     it('shows a failed request inline in the thread rather than as a toast', async () => {
         api.aiChat.mockRejectedValue(new Error('AI credit limit reached'));
-        openPanel();
+        await openPanel();
 
         ask('anything');
 
@@ -189,7 +233,7 @@ describe('AiChatWidget', () => {
             truncated: false,
             message: { id: 'm1', role: 'assistant', content: 'answer one', created_at: '2026-07-21T10:00:00Z' },
         });
-        openPanel();
+        await openPanel();
         ask('first');
         await screen.findByText('answer one');
 
@@ -211,7 +255,7 @@ describe('AiChatWidget', () => {
         };
 
         it('tells the user plainly when they have no past conversations', async () => {
-            openPanel();
+            await openPanel();
             openHistory();
 
             expect(await screen.findByText('No past conversations yet.')).toBeInTheDocument();
@@ -230,7 +274,7 @@ describe('AiChatWidget', () => {
                     { id: 'm2', role: 'assistant', content: 'May revenue was ৳240,000.', created_at: '2026-06-01T09:00:05Z' },
                 ],
             });
-            openPanel();
+            await openPanel();
             openHistory();
 
             fireEvent.click(await screen.findByText('How much did we sell in May?'));
@@ -250,7 +294,7 @@ describe('AiChatWidget', () => {
                 truncated: false,
                 message: { id: 'm9', role: 'assistant', content: 'ok', created_at: '2026-07-21T10:00:00Z' },
             });
-            openPanel();
+            await openPanel();
             openHistory();
             fireEvent.click(await screen.findByText('How much did we sell in May?'));
 
@@ -263,7 +307,7 @@ describe('AiChatWidget', () => {
 
         it('requires a second click before deleting a conversation', async () => {
             api.getAiConversations.mockResolvedValue([SUMMARY]);
-            openPanel();
+            await openPanel();
             openHistory();
 
             fireEvent.click(await screen.findByRole('button', { name: 'Delete conversation' }));
@@ -276,7 +320,7 @@ describe('AiChatWidget', () => {
 
         it('surfaces a failed history load in the panel', async () => {
             api.getAiConversations.mockRejectedValue(new Error('boom'));
-            openPanel();
+            await openPanel();
             openHistory();
 
             expect(await screen.findByText('Could not load your conversations.')).toBeInTheDocument();

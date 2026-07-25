@@ -148,9 +148,11 @@ export const componentsMessages = {
             sendAria: "Hantar",
             placeholder: "Tanya tentang jualan, stok, pelanggan…",
             disclaimer: "Jawapan datang daripada data anda sendiri. Semak sumber di bawah setiap jawapan.",
+            disclaimerWeb: "Jawapan datang daripada data anda sendiri, dan daripada web apabila soalan memerlukannya. Semak sumber di bawah setiap jawapan.",
             sources: "Sumber",
             emptyHeading: "Tanya tentang perniagaan anda",
             emptyDescription: "Saya hanya boleh membaca data anda — saya tidak boleh mengubah apa-apa.",
+            emptyDescriptionWeb: "Saya boleh membaca data anda dan mencari maklumat di web — saya tidak boleh mengubah apa-apa.",
             genericError: "Sesuatu tidak kena. Sila cuba lagi.",
             suggestions: {
                 s1: "Berapa banyak jualan bulan lepas?",
