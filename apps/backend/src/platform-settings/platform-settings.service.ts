@@ -53,6 +53,23 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
         // Per-tenant per-day ceiling on chatbot model round-trips, independent of
         // the monthly credit allowance a single bad day could otherwise exhaust.
         chat_daily_turn_cap: { isSecret: false, default: '200' },
+        // Lets the chatbot look things up outside the tenant's database. Off by
+        // default: unlike every other tool, each call bills a per-search fee to
+        // the platform on top of tokens, so it is opt-in per deployment.
+        web_search_enabled: { isSecret: false, default: 'false' },
+        // OpenRouter `web` plugin engine. 'exa' is the explicit, model-independent
+        // choice at a flat per-request price; 'native' delegates to whatever search
+        // the underlying provider ships and prices it their own way.
+        web_search_engine: { isSecret: false, default: 'exa' },
+        // Exa bills one flat request fee for the first 10 results, so anything up
+        // to 10 costs the same — 5 is the point where more results stop earning
+        // their input tokens rather than the point where they start costing money.
+        web_search_max_results: { isSecret: false, default: '5' },
+        // Blank falls back to chat_model. The search sub-call only restates results.
+        web_search_model: { isSecret: false },
+        // Per-tenant per-day ceiling on paid searches. Deliberately far tighter
+        // than chat_daily_turn_cap: a chat turn costs tokens, a search costs cash.
+        web_search_daily_cap: { isSecret: false, default: '50' },
     },
     general: {
         platform_name:    { isSecret: false, default: 'ERP71' },

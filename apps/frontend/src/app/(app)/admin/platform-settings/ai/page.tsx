@@ -13,12 +13,27 @@ import { useI18n } from '@/lib/i18n';
 type AiSettings = {
     api_key: string;
     default_model: string;
+    web_search_enabled: string;
+    web_search_engine: string;
+    web_search_max_results: string;
+    web_search_daily_cap: string;
 };
 
 const DEFAULTS: AiSettings = {
     api_key: '',
     default_model: 'anthropic/claude-haiku-4.5',
+    web_search_enabled: 'false',
+    web_search_engine: 'exa',
+    web_search_max_results: '5',
+    web_search_daily_cap: '50',
 };
+
+const SEARCH_ENGINE_OPTIONS = [
+    { value: 'exa', label: 'Exa — $0.005 per search (up to 10 results)' },
+    { value: 'parallel', label: 'Parallel — $0.001 per search (up to 10 results)' },
+    { value: 'perplexity', label: 'Perplexity — $0.005 per search' },
+    { value: 'native', label: 'Native — the answering model’s own search, priced by its provider' },
+];
 
 const MODEL_OPTIONS = [
     { value: 'anthropic/claude-haiku-4.5', label: 'Claude Haiku 4.5 — fastest, lowest cost' },
@@ -45,7 +60,7 @@ export default function PlatformAiSettingsPage() {
     const [saving, setSaving] = useState(false);
     const [testing, setTesting] = useState(false);
 
-    const inputCls = 'w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition';
+    const inputCls = 'w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition';
 
     useEffect(() => {
         fetchWithAuth('/admin/platform-settings/ai')
@@ -53,6 +68,10 @@ export default function PlatformAiSettingsPage() {
                 setSettings({
                     api_key: d.api_key === '••••••••' ? '' : (d.api_key ?? ''),
                     default_model: d.default_model ?? DEFAULTS.default_model,
+                    web_search_enabled: d.web_search_enabled ?? DEFAULTS.web_search_enabled,
+                    web_search_engine: d.web_search_engine ?? DEFAULTS.web_search_engine,
+                    web_search_max_results: d.web_search_max_results ?? DEFAULTS.web_search_max_results,
+                    web_search_daily_cap: d.web_search_daily_cap ?? DEFAULTS.web_search_daily_cap,
                 });
             })
             .catch(() => toast.error('Failed to load AI settings.'))
@@ -64,6 +83,10 @@ export default function PlatformAiSettingsPage() {
         try {
             const payload: Record<string, string | null> = {
                 default_model: settings.default_model,
+                web_search_enabled: settings.web_search_enabled,
+                web_search_engine: settings.web_search_engine,
+                web_search_max_results: settings.web_search_max_results,
+                web_search_daily_cap: settings.web_search_daily_cap,
             };
             if (settings.api_key) payload.api_key = settings.api_key;
 
@@ -150,6 +173,85 @@ export default function PlatformAiSettingsPage() {
                             </select>
                         </Field>
 
+                        <div className="border-t border-gray-100 pt-5 space-y-4">
+                            <div>
+                                <h2 className="text-sm font-semibold text-gray-900">Web search</h2>
+                                <p className="mt-1 text-xs text-gray-500">
+                                    Lets the AI assistant look up facts outside a tenant&apos;s own database — market prices, VAT
+                                    rules, brand information. It is offered to the model as a tool, so it only runs on questions
+                                    that actually need the web; questions about a tenant&apos;s own sales or stock never trigger a
+                                    search. Each search bills a per-request fee to the platform on top of tokens.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label
+                                    htmlFor="web-search-enabled"
+                                    className="flex min-h-touch cursor-pointer items-center gap-2.5 text-sm text-gray-700"
+                                >
+                                    <input
+                                        id="web-search-enabled"
+                                        type="checkbox"
+                                        checked={settings.web_search_enabled === 'true'}
+                                        onChange={(e) =>
+                                            setSettings((s) => ({ ...s, web_search_enabled: e.target.checked ? 'true' : 'false' }))
+                                        }
+                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span>Enable web search</span>
+                                </label>
+                                <p className="pl-6 text-xs text-gray-400">
+                                    When off, both web tools are withheld from the model entirely.
+                                </p>
+                            </div>
+
+                            {settings.web_search_enabled === 'true' ? (
+                                <div className="space-y-4 pl-6">
+                                    <Field
+                                        label="Search engine"
+                                        hint="Which index OpenRouter searches, and what each search costs you."
+                                    >
+                                        <select
+                                            value={settings.web_search_engine}
+                                            onChange={(e) => setSettings((s) => ({ ...s, web_search_engine: e.target.value }))}
+                                            className={inputCls}
+                                        >
+                                            {SEARCH_ENGINE_OPTIONS.map((o) => (
+                                                <option key={o.value} value={o.value}>{o.label}</option>
+                                            ))}
+                                        </select>
+                                    </Field>
+
+                                    <Field
+                                        label="Results per search"
+                                        hint="1–10. Exa and Parallel charge one flat fee for the first 10, so more results cost nothing extra — but each one is billed again as input tokens on the next model call. 5 is a good balance."
+                                    >
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            max={10}
+                                            value={settings.web_search_max_results}
+                                            onChange={(e) => setSettings((s) => ({ ...s, web_search_max_results: e.target.value }))}
+                                            className={inputCls}
+                                        />
+                                    </Field>
+
+                                    <Field
+                                        label="Daily searches per tenant"
+                                        hint="Caps what one business can spend in a day. At the Exa rate, 50 searches is about $0.25. Set 0 for no cap."
+                                    >
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            value={settings.web_search_daily_cap}
+                                            onChange={(e) => setSettings((s) => ({ ...s, web_search_daily_cap: e.target.value }))}
+                                            className={inputCls}
+                                        />
+                                    </Field>
+                                </div>
+                            ) : null}
+                        </div>
+
                         <div className="pt-2">
                             <Button onClick={handleSave} loading={saving} size="md">
                                 {saving ? 'Saving…' : 'Save settings'}
@@ -172,7 +274,7 @@ export default function PlatformAiSettingsPage() {
                     <h2 className="text-sm font-medium text-gray-500 mb-3">Pricing reference</h2>
                     <p className="text-sm text-gray-500 mb-3">
                         OpenRouter bills per model. Actual cost is recorded from each API response. See{' '}
-                        <a href="https://openrouter.ai/models" target="_blank" rel="noopener noreferrer" className="text-purple-600 underline">openrouter.ai/models</a>{' '}
+                        <a href="https://openrouter.ai/models" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">openrouter.ai/models</a>{' '}
                         for live rates.
                     </p>
                     <table className="w-full text-sm">

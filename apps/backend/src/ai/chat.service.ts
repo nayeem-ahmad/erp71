@@ -14,6 +14,7 @@ import { SalesReportsService } from '../sales-reports/sales-reports.service';
 import { SuppliersService } from '../suppliers/suppliers.service';
 import { AiService, type ChatCompletionMessage } from './ai.service';
 import { ChatDataService } from './chat-data.service';
+import { WebSearchService } from './web-search.service';
 import {
     CHAT_TOOLS,
     CHAT_TOOLS_BY_NAME,
@@ -21,6 +22,7 @@ import {
     type ChatTool,
     type ChatToolContext,
     type ChatToolDeps,
+    type ChatToolFeatureFlag,
     type ChatToolModule,
 } from './chat-tools';
 
@@ -71,6 +73,7 @@ export class ChatService {
         private readonly expenses: ExpensesService,
         private readonly accounting: AccountingService,
         private readonly chatData: ChatDataService,
+        private readonly webSearch: WebSearchService,
     ) {}
 
     private get deps(): ChatToolDeps {
@@ -83,6 +86,7 @@ export class ChatService {
             expenses: this.expenses,
             accounting: this.accounting,
             data: this.chatData,
+            web: this.webSearch,
         };
     }
 
@@ -97,22 +101,34 @@ export class ChatService {
      * so an unauthorized tool is not merely refused at call time — the model
      * never learns it exists and cannot mention it.
      *
-     * Two filters apply, and they are different in kind. Permission filtering is
-     * about *this user*; module filtering is about *this tenant's subscription*.
-     * An accounting-only tenant used to be handed inventory tools it could never
+     * Three filters apply, and they differ in kind. Permission filtering is about
+     * *this user*; module filtering is about *this tenant's subscription*; feature
+     * flags are about what the *platform operator* has switched on. An
+     * accounting-only tenant used to be handed inventory tools it could never
      * populate, so the assistant answered stock questions with an empty report
      * instead of saying the business does not track stock here.
      */
     async resolveTools(ctx: TenantContext): Promise<ChatTool[]> {
-        const modules = await this.resolveModules(ctx.tenantId);
+        const [modules, flags] = await Promise.all([
+            this.resolveModules(ctx.tenantId),
+            this.resolveFeatureFlags(),
+        ]);
         const allowed: ChatTool[] = [];
         for (const tool of CHAT_TOOLS) {
             if (tool.modules && !tool.modules.some((module) => modules.has(module))) continue;
+            if (tool.featureFlag && !flags.has(tool.featureFlag)) continue;
             if (await hasStorePermission(this.db, ctx, tool.permission)) {
                 allowed.push(tool);
             }
         }
         return allowed;
+    }
+
+    /** Platform-level capabilities that cost money per call, hence opt-in. */
+    private async resolveFeatureFlags(): Promise<Set<ChatToolFeatureFlag>> {
+        const flags = new Set<ChatToolFeatureFlag>();
+        if (await this.webSearch.isEnabled().catch(() => false)) flags.add('webSearch');
+        return flags;
     }
 
     /** The product areas this tenant's plan actually covers. */
@@ -215,6 +231,12 @@ export class ChatService {
             hasStorePermission(this.db, ctx, StorePermission.VIEW_CONSOLIDATED_REPORTS),
         ]);
 
+        // Seeded with any link the user typed: asking the assistant to read a URL
+        // you pasted is a legitimate request, and it is the one case where a
+        // fetchable URL does not have to come from a search result first.
+        const fetchableUrls = new Set(this.webSearch.extractUrls(message));
+        const toolCredits = { total: 0 };
+
         const toolContext: ChatToolContext = {
             tenantId: ctx.tenantId,
             userId: ctx.userId,
@@ -222,6 +244,8 @@ export class ChatService {
             storeId: ctx.storeId,
             stores,
             hasConsolidatedAccess,
+            fetchableUrls,
+            toolCredits,
         };
 
         const messages: ChatCompletionMessage[] = [
@@ -275,6 +299,9 @@ export class ChatService {
                 messages.push({ role: 'tool', tool_call_id: call.id, content: result });
             });
         }
+
+        // Tools that make their own model calls (web_search) bill outside the loop.
+        creditsUsed += toolCredits.total;
 
         if (!answer.trim()) {
             answer = truncated
@@ -364,11 +391,35 @@ export class ChatService {
         try {
             const output = await tool.handler(ctx, args, this.deps);
             const rowCount = Array.isArray((output as any)?.rows) ? (output as any).rows.length : undefined;
+            // Web tools return the pages they read as `sources`. Those URLs are the
+            // only grounds a web-derived claim has, so they belong in the trace the
+            // UI shows — an internal figure links to its report, and an external one
+            // has to link to the page it came from.
+            const urls: string[] | undefined = Array.isArray((output as any)?.sources)
+                ? (output as any).sources
+                      .map((s: any) => (typeof s?.url === 'string' ? s.url : null))
+                      .filter(Boolean)
+                      .slice(0, 8)
+                : undefined;
+            // A policy refusal is a legitimate outcome, not a crash — but it produced
+            // no data, so the trace marks it and the UI leaves it out of Sources.
+            const refusedReason = (output as any)?.refused === true ? String((output as any).reason ?? 'refused') : undefined;
+
             let serialized = JSON.stringify(output);
             if (serialized.length > MAX_TOOL_RESULT_CHARS) {
                 serialized = `${serialized.slice(0, MAX_TOOL_RESULT_CHARS)}… [result truncated]`;
             }
-            return { result: serialized, trace: { name, args, rowCount, ms: Date.now() - startedAt } };
+            return {
+                result: serialized,
+                trace: {
+                    name,
+                    args,
+                    rowCount,
+                    ...(urls?.length ? { urls } : {}),
+                    ms: Date.now() - startedAt,
+                    ...(refusedReason ? { error: refusedReason } : {}),
+                },
+            };
         } catch (err: unknown) {
             // A failed lookup must not fail the whole turn — hand the model a
             // readable error so it can apologise or try a different tool.
@@ -403,6 +454,7 @@ export class ChatService {
     }
 
     private buildSystemPrompt(tools: ChatTool[], stores: Array<{ id: string; name: string }>, locale?: string): string {
+        const hasWeb = tools.some((tool) => tool.featureFlag === 'webSearch');
         const today = new Date().toLocaleDateString('en-CA', { timeZone: TENANT_TIMEZONE });
         const branchList = stores.length
             ? stores.map((s) => `- ${s.name} (id: ${s.id})`).join('\n')
@@ -431,13 +483,31 @@ export class ChatService {
             '- Sales reports come from invoices; accounting statements come from posted vouchers. They can legitimately differ. Say which source a figure came from when both could apply.',
             '- Before reporting a zero or an empty list as an answer, consider calling describe_capabilities — a period with no data and a business that never recorded that data need different answers.',
             '',
+            ...(hasWeb
+                ? [
+                      'THE WEB (web_search, fetch_web_page):',
+                      '- The default is NO. This business\'s own sales, stock, customers, dues, expenses and accounts are in the report tools above and are not on the public web. Never search the web for them.',
+                      '- Search the web only for facts that exist outside this business: market or wholesale prices, VAT/NBR rules and other Bangladesh regulations, brand or product specifications, supplier and competitor background, exchange rates, industry benchmarks, current events.',
+                      '- The common good case is a comparison: get the internal figure from a report tool, get the external figure from the web, and say which is which. Never present a web figure as this business\'s own number, or the reverse.',
+                      '- Write the query the way you would type it into a search engine. Never put "my" or "our" in it — the web does not know this shop.',
+                      '- Attribute every web-derived claim to its source in your answer, with the date the source gives. Web results can be stale, wrong or contradictory; internal report figures are authoritative and web figures are not.',
+                      '- Use fetch_web_page only to follow up a search hit whose summary was not specific enough, or to read a link the user pasted. Do not fetch more than two pages for one question.',
+                      '- If the search returns nothing useful, say so. Do not fall back on your own knowledge of prices or regulations — it is out of date.',
+                      '',
+                  ]
+                : []),
             `Today is ${today} (timezone ${TENANT_TIMEZONE}). Resolve relative dates like "last month" or "this week" against that date, and pass explicit YYYY-MM-DD ranges to tools.`,
             '',
             'Branches in this business:',
             branchList,
             '',
             'FORMATTING:',
-            '- Your reply is rendered as markdown in a narrow side panel about 380px wide. Bold, italics, bullet lists, tables and inline code all render; raw HTML and images do not.',
+            '- Your reply is rendered as markdown in a narrow side panel about 380px wide. Bold, italics, bullet lists, tables, links and inline code all render; raw HTML and images do not.',
+            ...(hasWeb
+                ? [
+                      '- Cite a web source as a short inline markdown link on the domain name — "wholesale rice is ৳72/kg ([tbsnews.net](https://…))" — not as a bare URL and not as a numbered footnote list. The panel is too narrow for either.',
+                  ]
+                : []),
             '- Money is Bangladeshi Taka. Write amounts as ৳1,234.56. Never use $ or any other currency symbol.',
             '- Be brief. Lead with the number the user asked for, then at most two lines of relevant context.',
             '- Bold the figure the user asked for so it is findable at a glance. Do not bold whole sentences.',

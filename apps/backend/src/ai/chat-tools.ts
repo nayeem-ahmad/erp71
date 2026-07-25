@@ -5,6 +5,7 @@ import { OPERATIONS_TOOLS } from './tools/operations.tools';
 import { PARTY_TOOLS } from './tools/parties.tools';
 import { PURCHASING_TOOLS } from './tools/purchasing.tools';
 import { SALES_TOOLS } from './tools/sales.tools';
+import { WEB_TOOLS } from './tools/web.tools';
 import type { ChatTool } from './tools/types';
 
 /**
@@ -23,6 +24,11 @@ export const CHAT_TOOLS: ChatTool[] = [
     ...PARTY_TOOLS,
     ...FINANCE_TOOLS,
     ...OPERATIONS_TOOLS,
+    // Last on purpose. Everything above answers from the tenant's own database,
+    // which is what almost every question wants; the web is the fallback for the
+    // minority that reach outside, and reading the list in that order is the
+    // preference we want the model to have.
+    ...WEB_TOOLS,
 ];
 
 export const CHAT_TOOLS_BY_NAME: Record<string, ChatTool> = Object.fromEntries(
@@ -46,5 +52,6 @@ export {
     type ChatTool,
     type ChatToolContext,
     type ChatToolDeps,
+    type ChatToolFeatureFlag,
     type ChatToolModule,
 } from './tools/types';

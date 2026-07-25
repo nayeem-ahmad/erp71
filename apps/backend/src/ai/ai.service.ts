@@ -59,6 +59,26 @@ export type ChatToolDefinition = {
     function: { name: string; description: string; parameters: Record<string, unknown> };
 };
 
+/**
+ * A source the OpenRouter web plugin actually read, lifted out of the
+ * `annotations` array it attaches to the assistant message. These are the only
+ * grounds a web-derived claim has, so they travel back to the UI as links.
+ */
+export type WebCitation = { url: string; title: string; content: string };
+
+type OpenRouterAnnotation = {
+    type?: string;
+    url_citation?: { url?: string; title?: string; content?: string };
+};
+
+/** Wire shape of the `web` plugin. `engine` and `max_results` drive its billing. */
+export type WebSearchPlugin = {
+    id: 'web';
+    engine?: string;
+    max_results?: number;
+    search_prompt?: string;
+};
+
 /** Per-request timeout for a tool-calling completion, and transient-failure retries. */
 const CHAT_REQUEST_TIMEOUT_MS = 120_000;
 const CHAT_MAX_ATTEMPTS = 3;
@@ -106,6 +126,17 @@ export class AiService {
     async getChatModel(): Promise<string> {
         const override = (await this.platformSettings.getRawValue('ai', 'chat_model'))?.trim();
         return override ? this.normalizeModel(override) : this.getDefaultModel();
+    }
+
+    /**
+     * Model for the web-search sub-completion. Worth its own knob: this call only
+     * has to read search results and restate them, which is far easier than the
+     * chatbot's tool routing, so it can run on a cheaper model than the one
+     * answering the question. Blank falls back to the chat model.
+     */
+    async getWebSearchModel(): Promise<string> {
+        const override = (await this.platformSettings.getRawValue('ai', 'web_search_model'))?.trim();
+        return override ? this.normalizeModel(override) : this.getChatModel();
     }
 
     async testConnection(): Promise<{ success: boolean; model: string; message: string }> {
@@ -539,6 +570,66 @@ Rules:
         // and an empty array is how the loop forces a final text answer.
         if (tools.length > 0) payload.tools = tools;
 
+        return this.postChatWithRetry(apiKey, payload);
+    }
+
+    /**
+     * One search-and-summarize round-trip through OpenRouter's `web` plugin.
+     *
+     * The plugin is a *request-level* flag, not a tool the model can pick up, so
+     * attaching it to the chat agent's own calls would run — and bill — a search
+     * on every message, including the overwhelming majority that ask only about
+     * the tenant's own database. Isolating it in a separate completion is what
+     * makes web access conditional: `web_search` is an ordinary tool in the
+     * registry, and only when the model calls it do we come here and pay.
+     *
+     * The completion's text is a summary; the citations are the load-bearing
+     * part, because the caller has to be able to show where a claim came from.
+     */
+    async callOpenRouterWithWebSearch(
+        model: string,
+        query: string,
+        options: { engine?: string; maxResults?: number; systemPrompt: string },
+        maxTokens = 1200,
+    ): Promise<{ text: string; citations: WebCitation[]; usage: OpenRouterUsage }> {
+        const apiKey = await this.getApiKey();
+        if (!apiKey) {
+            throw new InternalServerErrorException('AI service is not configured. Set an OpenRouter API key.');
+        }
+
+        const plugin: WebSearchPlugin = { id: 'web' };
+        if (options.engine) plugin.engine = options.engine;
+        if (options.maxResults) plugin.max_results = options.maxResults;
+
+        const { message, usage, annotations } = await this.postChatWithRetry(apiKey, {
+            model: this.normalizeModel(model),
+            max_tokens: maxTokens,
+            messages: [
+                { role: 'system', content: options.systemPrompt },
+                { role: 'user', content: query },
+            ],
+            plugins: [plugin],
+        });
+
+        const citations: WebCitation[] = (annotations ?? [])
+            .filter((a) => a.type === 'url_citation' && a.url_citation?.url)
+            .map((a) => ({
+                url: String(a.url_citation!.url),
+                title: (a.url_citation!.title ?? '').trim() || String(a.url_citation!.url),
+                content: (a.url_citation!.content ?? '').trim(),
+            }));
+
+        return { text: message.content ?? '', citations, usage };
+    }
+
+    private async postChatWithRetry(
+        apiKey: string,
+        payload: Record<string, unknown>,
+    ): Promise<{
+        message: { content: string | null; tool_calls?: ChatToolCall[] };
+        usage: OpenRouterUsage;
+        annotations?: OpenRouterAnnotation[];
+    }> {
         let lastError = '';
         for (let attempt = 1; attempt <= CHAT_MAX_ATTEMPTS; attempt++) {
             try {
@@ -555,7 +646,11 @@ Rules:
     private async requestToolCompletion(
         apiKey: string,
         payload: Record<string, unknown>,
-    ): Promise<{ message: { content: string | null; tool_calls?: ChatToolCall[] }; usage: OpenRouterUsage }> {
+    ): Promise<{
+        message: { content: string | null; tool_calls?: ChatToolCall[] };
+        usage: OpenRouterUsage;
+        annotations?: OpenRouterAnnotation[];
+    }> {
         const referer = process.env.FRONTEND_URL ?? 'https://erp71.com';
         const title = process.env.OPENROUTER_APP_NAME ?? 'ERP71';
         const controller = new AbortController();
@@ -577,7 +672,13 @@ Rules:
             // Read the body inside the guarded scope: a mid-stream socket drop
             // throws here, and that is a retryable failure like any other.
             const body = (await response.json()) as {
-                choices?: Array<{ message?: { content?: string | null; tool_calls?: ChatToolCall[] } }>;
+                choices?: Array<{
+                    message?: {
+                        content?: string | null;
+                        tool_calls?: ChatToolCall[];
+                        annotations?: OpenRouterAnnotation[];
+                    };
+                }>;
                 usage?: OpenRouterUsage;
                 error?: { message?: string };
             };
@@ -592,6 +693,7 @@ Rules:
                     tool_calls: body.choices?.[0]?.message?.tool_calls,
                 },
                 usage: body.usage ?? { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+                annotations: body.choices?.[0]?.message?.annotations,
             };
         } finally {
             clearTimeout(timer);

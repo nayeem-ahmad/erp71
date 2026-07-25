@@ -3,6 +3,7 @@ import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
 import { ChatDataService } from './chat-data.service';
 import { ChatService } from './chat.service';
+import { WebSearchService } from './web-search.service';
 import { AccountingModule } from '../accounting/accounting.module';
 import { CustomersModule } from '../customers/customers.module';
 import { ExpensesModule } from '../expenses/expenses.module';
@@ -34,7 +35,7 @@ import { SuppliersModule } from '../suppliers/suppliers.module';
     // ChatDataService is provided here rather than imported: it is the chatbot's
     // own read-only query layer, not a shared domain service, and nothing outside
     // the assistant should be reaching for it.
-    providers: [AiService, ChatService, ChatDataService],
+    providers: [AiService, ChatService, ChatDataService, WebSearchService],
     exports: [AiService, ChatService],
 })
 export class AiModule {}

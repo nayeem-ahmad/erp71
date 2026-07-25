@@ -7,6 +7,7 @@ import type { PurchaseReportsService } from '../../purchase-reports/purchase-rep
 import type { SalesReportsService } from '../../sales-reports/sales-reports.service';
 import type { SuppliersService } from '../../suppliers/suppliers.service';
 import type { ChatDataService } from '../chat-data.service';
+import type { WebSearchService } from '../web-search.service';
 
 /**
  * Shared vocabulary for the read-only tool menu the data chatbot may call.
@@ -33,6 +34,7 @@ export interface ChatToolDeps {
     expenses: ExpensesService;
     accounting: AccountingService;
     data: ChatDataService;
+    web: WebSearchService;
 }
 
 export interface ChatToolContext {
@@ -45,6 +47,19 @@ export interface ChatToolContext {
     stores: Array<{ id: string; name: string }>;
     /** True when the caller may see figures spanning every branch at once. */
     hasConsolidatedAccess?: boolean;
+    /**
+     * URLs `fetch_web_page` is allowed to read this turn: the hits a `web_search`
+     * returned, plus any link the user typed into their own message. A model-chosen
+     * URL with nothing vouching for it is a request for the server to make an
+     * arbitrary outbound call, so the allow-list is the boundary — not a hint.
+     */
+    fetchableUrls?: Set<string>;
+    /**
+     * Credits spent *inside* a tool. Only `web_search` uses it, because it makes
+     * its own model call; the agent loop cannot see that cost, so tools add it here
+     * and the turn folds it into the total shown against the answer.
+     */
+    toolCredits?: { total: number };
 }
 
 export interface ChatTool {
@@ -59,12 +74,21 @@ export interface ChatTool {
      * question with an empty report instead of saying it has no such data.
      */
     modules?: ChatToolModule[];
+    /**
+     * A platform-level switch this tool depends on, checked per turn. Distinct from
+     * `modules`, which is about the tenant's subscription: this is about whether the
+     * operator has enabled a capability that costs the platform money per call.
+     */
+    featureFlag?: ChatToolFeatureFlag;
     parameters: Record<string, unknown>;
     handler: (ctx: ChatToolContext, args: Record<string, any>, deps: ChatToolDeps) => Promise<unknown>;
 }
 
 /** Coarse product areas, used to hide tools a tenant's subscription cannot use. */
 export type ChatToolModule = 'retail' | 'inventory' | 'accounting' | 'crm' | 'hr' | 'manufacturing';
+
+/** Platform-operator switches a tool can depend on. */
+export type ChatToolFeatureFlag = 'webSearch';
 
 export const DATE_RANGE_PROPS = {
     from: { type: 'string', description: 'Start date, inclusive, as YYYY-MM-DD.' },

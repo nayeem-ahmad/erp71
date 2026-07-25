@@ -1,5 +1,6 @@
 import { StorePermission } from '@erp71/shared-types';
 import { CHAT_TOOLS, CHAT_TOOLS_BY_NAME, MAX_TOOL_ROWS, toOpenRouterTools, type ChatToolContext, type ChatToolDeps } from './chat-tools';
+import { WebToolRefusal } from './web-search.service';
 
 const ctx: ChatToolContext = {
     tenantId: 'tenant-1',
@@ -63,6 +64,13 @@ function makeDeps(overrides: Partial<Record<keyof ChatToolDeps, any>> = {}): Cha
             getLoyaltySummary: jest.fn(),
             getDataCoverage: jest.fn(),
         },
+        web: {
+            search: jest.fn(),
+            fetchPage: jest.fn(),
+            normalizeUrl: jest.fn((url: string) => url),
+            extractUrls: jest.fn().mockReturnValue([]),
+            isEnabled: jest.fn().mockResolvedValue(true),
+        },
         ...overrides,
     } as unknown as ChatToolDeps;
 }
@@ -119,6 +127,107 @@ describe('chat tool registry', () => {
         expect(CHAT_TOOLS_BY_NAME.sales_summary.modules).toContain('retail');
         // The general-purpose lookups carry no module and stay available always.
         expect(CHAT_TOOLS_BY_NAME.resolve_entity.modules).toBeUndefined();
+    });
+
+    /**
+     * Only the tools that spend money outside the token budget may carry a feature
+     * flag. If an internal report tool ever picks one up, it would silently vanish
+     * from deployments that never enabled it.
+     */
+    it('flags exactly the tools that leave the tenant database', () => {
+        const flagged = CHAT_TOOLS.filter((tool) => tool.featureFlag).map((tool) => tool.name);
+        expect(flagged.sort()).toEqual(['fetch_web_page', 'web_search']);
+    });
+});
+
+describe('web tools', () => {
+    const searchResult = {
+        query: 'wholesale rice price Bangladesh 2026',
+        answer: 'Coarse rice was ৳58/kg in Dhaka wholesale markets in July 2026.',
+        sources: [{ url: 'https://tbsnews.net/rice', title: 'Rice prices' }],
+        excerpts: [{ url: 'https://tbsnews.net/rice', content: 'Coarse rice ৳58…' }],
+    };
+
+    function webCtx(): ChatToolContext {
+        return { ...ctx, fetchableUrls: new Set<string>(), toolCredits: { total: 0 } };
+    }
+
+    it('records what a search cost so the turn can bill it', async () => {
+        const deps = makeDeps();
+        (deps.web.search as jest.Mock).mockResolvedValue({ result: searchResult, creditsUsed: 3.5 });
+        const context = webCtx();
+
+        await CHAT_TOOLS_BY_NAME.web_search.handler(context, { query: searchResult.query }, deps);
+
+        // The search runs its own model call, invisible to the agent loop's usage
+        // accounting — unbilled here means undercharged for the whole answer.
+        expect(context.toolCredits?.total).toBe(3.5);
+    });
+
+    /**
+     * The fetch allow-list is the security boundary for outbound requests, and
+     * this is the only place a URL gets onto it.
+     */
+    it('makes a search hit fetchable and nothing else', async () => {
+        const deps = makeDeps();
+        (deps.web.search as jest.Mock).mockResolvedValue({ result: searchResult, creditsUsed: 1 });
+        const context = webCtx();
+
+        await CHAT_TOOLS_BY_NAME.web_search.handler(context, { query: searchResult.query }, deps);
+
+        expect([...(context.fetchableUrls ?? [])]).toEqual(['https://tbsnews.net/rice']);
+    });
+
+    it('refuses to fetch before anything has been searched', async () => {
+        const deps = makeDeps();
+
+        const result: any = await CHAT_TOOLS_BY_NAME.fetch_web_page.handler(
+            webCtx(),
+            { url: 'https://example.com/page' },
+            deps,
+        );
+
+        expect(result.refused).toBe(true);
+        expect(deps.web.fetchPage).not.toHaveBeenCalled();
+    });
+
+    it('turns a service refusal into guidance the model can act on', async () => {
+        const deps = makeDeps();
+        (deps.web.search as jest.Mock).mockRejectedValue(new WebToolRefusal('use the report tools instead'));
+
+        const result: any = await CHAT_TOOLS_BY_NAME.web_search.handler(webCtx(), { query: 'our sales' }, deps);
+
+        expect(result).toEqual({ refused: true, reason: 'use the report tools instead' });
+    });
+
+    it('lets a real failure surface as an error rather than as guidance', async () => {
+        const deps = makeDeps();
+        (deps.web.search as jest.Mock).mockRejectedValue(new Error('OpenRouter down'));
+
+        await expect(
+            CHAT_TOOLS_BY_NAME.web_search.handler(webCtx(), { query: 'rice price' }, deps),
+        ).rejects.toThrow('OpenRouter down');
+    });
+
+    it('passes the fetch allow-list through to the service', async () => {
+        const deps = makeDeps();
+        (deps.web.fetchPage as jest.Mock).mockResolvedValue({
+            url: 'https://nbr.gov.bd/vat',
+            title: 'VAT rates',
+            text: 'Standard rate is 15%.',
+            truncated: false,
+        });
+        const context = webCtx();
+        context.fetchableUrls?.add('https://nbr.gov.bd/vat');
+
+        const result: any = await CHAT_TOOLS_BY_NAME.fetch_web_page.handler(
+            context,
+            { url: 'https://nbr.gov.bd/vat' },
+            deps,
+        );
+
+        expect(deps.web.fetchPage).toHaveBeenCalledWith('https://nbr.gov.bd/vat', context.fetchableUrls);
+        expect(result.sources).toEqual([{ url: 'https://nbr.gov.bd/vat', title: 'VAT rates' }]);
     });
 });
 
