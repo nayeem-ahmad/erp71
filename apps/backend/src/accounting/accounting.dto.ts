@@ -16,6 +16,7 @@ import {
     Max,
 } from 'class-validator';
 import { AccountCategory, AccountType, VoucherAttribution, VoucherType } from './accounting.constants';
+import { REPORT_LEVELS } from './report-level.utils';
 
 const REPORT_SCOPES = ['branch', 'company', 'compare'] as const;
 
@@ -374,6 +375,11 @@ export class ProfitLossQueryDto {
     @Transform(({ value }) => parseBooleanQuery(value))
     @IsBoolean()
     includeCompanyBucket?: boolean;
+
+    @IsOptional()
+    @IsString()
+    @IsIn(REPORT_LEVELS)
+    level?: string;
 }
 
 export class BalanceSheetQueryDto {
@@ -398,6 +404,11 @@ export class BalanceSheetQueryDto {
     @Transform(({ value }) => parseBooleanQuery(value))
     @IsBoolean()
     includeCompanyBucket?: boolean;
+
+    @IsOptional()
+    @IsString()
+    @IsIn(REPORT_LEVELS)
+    level?: string;
 }
 
 export class CashbookQueryDto {
@@ -466,6 +477,11 @@ export class TrialBalanceQueryDto {
     @Transform(({ value }) => parseBooleanQuery(value))
     @IsBoolean()
     includeCompanyBucket?: boolean;
+
+    @IsOptional()
+    @IsString()
+    @IsIn(REPORT_LEVELS)
+    level?: string;
 }
 
 export class ArAgingQueryDto {

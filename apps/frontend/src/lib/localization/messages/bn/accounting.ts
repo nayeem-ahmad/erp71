@@ -293,6 +293,13 @@ export const accountingMessages = {
                     selectBranches: "শাখা নির্বাচন",
                     generate: "তৈরি করুন",
                 },
+                reportLevel: {
+                    detail: "বিস্তারিত",
+                    account: "হিসাব",
+                    subgroup: "উপ-গ্রুপ",
+                    group: "গ্রুপ",
+                    nettingHint: "প্রতিটি সারিতে বিপরীত ব্যালেন্স সমন্বয় হয়, তাই ডেবিট ও ক্রেডিট মোট হিসাব-স্তরের চেয়ে কম হতে পারে।",
+                },
                 fundTransfers: {
                     title: "আন্তঃ-শাখা তহবিল স্থানান্তর",
                     subtitle: "শাখার মধ্যে নগদ স্থানান্তর",

@@ -15,7 +15,9 @@ import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import {
+    getDefaultReportLevel,
     getDefaultReportScope,
+    type ReportLevelMode,
     type ReportScopeMode,
     useReportStores,
 } from '@/lib/accounting-report-scope';
@@ -25,7 +27,7 @@ function defaultToday() {
 }
 
 interface TBRow {
-    account: { id: string; name: string; code?: string | null; type: string; group: { name: string }; subgroup?: { name: string } | null };
+    account: { id: string; name: string; code?: string | null; type: string; group: { name: string }; subgroup?: { name: string } | null; is_unassigned?: boolean };
     debit_total: number;
     credit_total: number;
     closing_balance: number;
@@ -36,6 +38,7 @@ interface TBRow {
 
 interface TBData {
     scope?: string;
+    level?: ReportLevelMode;
     as_of: string;
     rows: TBRow[] | CompareTrialBalanceRow[];
     totals: { debit: number | Record<string, number>; credit: number | Record<string, number> };
@@ -66,6 +69,7 @@ export default function TrialBalancePage() {
     const { stores, canConsolidate, loading: storesLoading } = useReportStores();
     const [data, setData] = useState<TBData | null>(null);
     const [scope, setScope] = useState<ReportScopeMode>('branch');
+    const [level, setLevel] = useState<ReportLevelMode>('account');
     const [storeId, setStoreId] = useState('');
     const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
     const [includeCompanyBucket, setIncludeCompanyBucket] = useState(false);
@@ -87,6 +91,7 @@ export default function TrialBalancePage() {
         setStoreId(resolvedStoreId);
         setSelectedStoreIds(stores.map((store) => store.id));
         setScope(getDefaultReportScope(stores.length, canConsolidate));
+        setLevel(getDefaultReportLevel());
         setInitialized(true);
     }, [stores, storesLoading, canConsolidate]);
 
@@ -100,6 +105,7 @@ export default function TrialBalancePage() {
         try {
             const result = await api.getTrialBalance({
                 asOfDate: asOfDate || undefined,
+                level,
                 ...buildScopeParams(scope, storeId, selectedStoreIds, includeCompanyBucket),
             });
             setData(result);
@@ -108,7 +114,7 @@ export default function TrialBalancePage() {
         } finally {
             setLoading(false);
         }
-    }, [asOfDate, scope, storeId, selectedStoreIds, includeCompanyBucket, initialized, t.accounting.reports.loadFailed]);
+    }, [asOfDate, scope, level, storeId, selectedStoreIds, includeCompanyBucket, initialized, t.accounting.reports.loadFailed]);
 
     useEffect(() => {
         if (initialized) {
@@ -117,6 +123,9 @@ export default function TrialBalancePage() {
     }, [initialized, load]);
 
     const isCompare = data?.scope === 'compare';
+    const activeLevel = data?.level ?? 'account';
+    const isRolledUp = activeLevel !== 'account';
+    const rowLabel = t.accounting.reports.reportLevel[activeLevel];
 
     return (
         <AccountingPageShell maxWidth="full">
@@ -153,6 +162,8 @@ export default function TrialBalancePage() {
                     }}
                     onGenerate={() => void load()}
                     generating={loading}
+                    level={level}
+                    onLevelChange={setLevel}
                 />
                 {!isCompare && data ? (
                     <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${data.is_balanced ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
@@ -181,7 +192,7 @@ export default function TrialBalancePage() {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="bg-gray-50 border-b border-gray-100">
-                                    <th className={thLeftClass}>{t.accountingShared.account}</th>
+                                    <th className={thLeftClass}>{rowLabel}</th>
                                     <th className={thLeftClass}>{t.accountingShared.type}</th>
                                     <th className={thClass}>Gross Debit</th>
                                     <th className={thClass}>Gross Credit</th>
@@ -195,7 +206,9 @@ export default function TrialBalancePage() {
                                         <td className="px-3 py-2">
                                             <span className="font-medium text-gray-800">{row.account.name}</span>
                                             {row.account.code && <span className="ml-2 text-xs text-gray-400">{row.account.code}</span>}
-                                            <div className="text-xs text-gray-400">{row.account.group.name}</div>
+                                            {activeLevel !== 'group' && (
+                                                <div className="text-xs text-gray-400">{row.account.group.name}</div>
+                                            )}
                                         </td>
                                         <td className="px-3 py-2 text-xs text-gray-500">{row.account.type}</td>
                                         <td className="px-3 py-2 text-right text-gray-700">{formatBDT(row.debit_total, { locale })}</td>
@@ -213,6 +226,11 @@ export default function TrialBalancePage() {
                                 </tr>
                             </tfoot>
                         </table>
+                        {isRolledUp && (
+                            <p className="px-3 py-2 text-xs text-gray-500 border-t border-gray-100">
+                                {t.accounting.reports.reportLevel.nettingHint}
+                            </p>
+                        )}
                     </CompactSection>
                 )
             ) : null}

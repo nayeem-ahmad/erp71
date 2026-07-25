@@ -4,7 +4,33 @@ import { hasPermission } from '@/lib/permissions';
 
 export type ReportScopeMode = 'branch' | 'company' | 'compare';
 
+/**
+ * Row granularity of a COA-grained report. Orthogonal to the scope: scope decides
+ * which vouchers are counted, level decides how coarse the rows are.
+ */
+export type ReportLevelMode = 'account' | 'subgroup' | 'group';
+
+export const REPORT_LEVEL_MODES: ReportLevelMode[] = ['account', 'subgroup', 'group'];
+
 const REPORT_SCOPE_KEY = 'report_scope';
+const REPORT_LEVEL_KEY = 'report_level';
+
+export function getDefaultReportLevel(): ReportLevelMode {
+    if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem(REPORT_LEVEL_KEY);
+        if (saved === 'account' || saved === 'subgroup' || saved === 'group') {
+            return saved;
+        }
+    }
+
+    return 'account';
+}
+
+export function persistReportLevel(level: ReportLevelMode) {
+    if (typeof window !== 'undefined') {
+        localStorage.setItem(REPORT_LEVEL_KEY, level);
+    }
+}
 
 export function canViewConsolidatedReports(role: string | null | undefined, permissions?: string[]) {
     return role === 'OWNER' || hasPermission(permissions, 'VIEW_CONSOLIDATED_REPORTS');

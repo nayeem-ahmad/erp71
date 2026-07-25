@@ -175,6 +175,13 @@ export const accountingMessages = {
                 selectBranches: 'Pilih cawangan',
                 generate: 'Jana',
             },
+            reportLevel: {
+                detail: 'Perincian',
+                account: 'Akaun',
+                subgroup: 'Subkumpulan',
+                group: 'Kumpulan',
+                nettingHint: 'Baki yang bertentangan saling menolak dalam setiap baris, jadi jumlah debit dan kredit boleh lebih rendah berbanding peringkat akaun.',
+            },
             fundTransfers: {
                 title: 'Pemindahan Dana Antara Cawangan',
                 subtitle: 'Mulakan dan terima pemindahan tunai antara cawangan',
