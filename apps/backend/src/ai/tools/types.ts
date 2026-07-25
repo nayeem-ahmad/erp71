@@ -6,6 +6,7 @@ import type { InventoryReportsService } from '../../inventory-reports/inventory-
 import type { PurchaseReportsService } from '../../purchase-reports/purchase-reports.service';
 import type { SalesReportsService } from '../../sales-reports/sales-reports.service';
 import type { SuppliersService } from '../../suppliers/suppliers.service';
+import type { AnomalyDetectionService } from '../anomaly-detection.service';
 import type { ChatDataService } from '../chat-data.service';
 import type { WebSearchService } from '../web-search.service';
 
@@ -35,6 +36,7 @@ export interface ChatToolDeps {
     accounting: AccountingService;
     data: ChatDataService;
     web: WebSearchService;
+    anomalies: AnomalyDetectionService;
 }
 
 export interface ChatToolContext {

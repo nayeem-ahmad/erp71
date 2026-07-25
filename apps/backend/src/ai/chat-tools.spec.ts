@@ -64,6 +64,7 @@ function makeDeps(overrides: Partial<Record<keyof ChatToolDeps, any>> = {}): Cha
             getLoyaltySummary: jest.fn(),
             getDataCoverage: jest.fn(),
         },
+        anomalies: { scan: jest.fn() },
         web: {
             search: jest.fn(),
             fetchPage: jest.fn(),
@@ -804,5 +805,161 @@ describe('open_pipeline', () => {
 
         expect(result.totalValue).toBeNull();
         expect(result.rows[0].amount).toBeNull();
+    });
+});
+
+describe('transaction_anomalies', () => {
+    const anomaly = (overrides: Record<string, any> = {}) => ({
+        type: 'sold_below_cost',
+        severity: 'high',
+        source: 'sale',
+        document: 'INV-1042',
+        documentDate: '2026-07-14',
+        branch: 'Gulshan',
+        party: 'Karim Traders',
+        product: 'Miniket Rice 5kg',
+        observed: 250,
+        expected: 300,
+        deviationPct: -16.7,
+        baselineSamples: 40,
+        impact: 12000.456,
+        detail: 'INV-1042 sold Miniket Rice 5kg at ৳250 against a recorded cost of ৳300.',
+        enteredBy: 'Rina',
+        ...overrides,
+    });
+
+    const scanResult = (overrides: Record<string, any> = {}) => ({
+        period: { from: '2026-07-01', to: '2026-07-31' },
+        baselinePeriod: { from: '2026-04-02', to: '2026-07-31' },
+        sensitivity: 'normal',
+        thresholds: { priceDeviationPct: 40, quantityMultiple: 5, minBaselineSamples: 5, backdatedDays: 7, minImpact: 100 },
+        scanned: ['sold_below_cost'],
+        totalFlags: 1,
+        bySeverity: { high: 1, medium: 0, low: 0 },
+        byType: { sold_below_cost: 1 },
+        totalImpact: 12000.456,
+        truncatedDetectors: [],
+        anomalies: [anomaly()],
+        ...overrides,
+    });
+
+    const withScan = (result: any) => makeDeps({ anomalies: { scan: jest.fn().mockResolvedValue(result) } });
+
+    it('projects a flag down to the fields the model needs and rounds the taka', async () => {
+        const deps = withScan(scanResult());
+
+        const result: any = await run('transaction_anomalies', { from: '2026-07-01', to: '2026-07-31' }, deps);
+
+        expect(result.totalFlags).toBe(1);
+        expect(result.totalImpact).toBe(12000.46);
+        expect(result.rows[0]).toEqual({
+            type: 'sold_below_cost',
+            severity: 'high',
+            document: 'INV-1042',
+            date: '2026-07-14',
+            branch: 'Gulshan',
+            party: 'Karim Traders',
+            product: 'Miniket Rice 5kg',
+            observed: 250,
+            expected: 300,
+            deviationPct: -16.7,
+            baselineSamples: 40,
+            impact: 12000.46,
+            detail: 'INV-1042 sold Miniket Rice 5kg at ৳250 against a recorded cost of ৳300.',
+            enteredBy: 'Rina',
+        });
+    });
+
+    /**
+     * The counts are the load-bearing part when the list is capped: a model that
+     * sees 20 rows and no total will report "20 problems" for a month with 200.
+     */
+    it('keeps the full counts when the row list is capped', async () => {
+        const rows = Array.from({ length: 45 }, (_, i) => anomaly({ document: `INV-${i}` }));
+        const deps = withScan(scanResult({ totalFlags: 45, anomalies: rows, bySeverity: { high: 45, medium: 0, low: 0 } }));
+
+        const result: any = await run('transaction_anomalies', { from: '2026-07-01', to: '2026-07-31' }, deps);
+
+        expect(result.rows).toHaveLength(MAX_TOOL_ROWS);
+        expect(result.totalFlags).toBe(45);
+        expect(result.totalRows).toBe(45);
+        expect(result.hasMore).toBe(true);
+        expect(result.bySeverity.high).toBe(45);
+    });
+
+    it('pages past the cap on request', async () => {
+        const rows = Array.from({ length: 45 }, (_, i) => anomaly({ document: `INV-${i}` }));
+        const deps = withScan(scanResult({ totalFlags: 45, anomalies: rows }));
+
+        const result: any = await run('transaction_anomalies', { from: '2026-07-01', to: '2026-07-31', offset: 40 }, deps);
+
+        expect(result.rows).toHaveLength(5);
+        expect(result.rows[0].document).toBe('INV-40');
+        expect(result.hasMore).toBe(false);
+    });
+
+    /**
+     * An empty result from this tool means "nothing is wrong", which is the
+     * answer the user wanted — and the one a model is most likely to misread as
+     * a failed lookup and hedge about.
+     */
+    it('says plainly that a clean scan is a real result', async () => {
+        const deps = withScan(scanResult({ totalFlags: 0, anomalies: [], byType: {}, bySeverity: { high: 0, medium: 0, low: 0 } }));
+
+        const result: any = await run('transaction_anomalies', { from: '2026-07-01', to: '2026-07-31' }, deps);
+
+        expect(result.rows).toEqual([]);
+        expect(result.note).toContain('clean result');
+    });
+
+    it('tells the model when a detector stopped looking', async () => {
+        const deps = withScan(scanResult({ truncatedDetectors: ['sale_lines'] }));
+
+        const result: any = await run('transaction_anomalies', { from: '2026-07-01', to: '2026-07-31' }, deps);
+
+        expect(result.incompleteChecks).toEqual(['sale_lines']);
+    });
+
+    it('drops a model-invented check name rather than passing it through', async () => {
+        const deps = withScan(scanResult());
+
+        await run(
+            'transaction_anomalies',
+            { from: '2026-07-01', to: '2026-07-31', types: ['sold_below_cost', 'employee_theft'] },
+            deps,
+        );
+
+        expect((deps.anomalies.scan as jest.Mock).mock.calls[0][1].types).toEqual(['sold_below_cost']);
+    });
+
+    it('falls back to a full scan when every requested check is unrecognised', async () => {
+        const deps = withScan(scanResult());
+
+        await run('transaction_anomalies', { from: '2026-07-01', to: '2026-07-31', types: ['nonsense'] }, deps);
+
+        // Undefined means "run everything". Passing an empty array through would
+        // scan nothing and report a clean bill of health for a scan never run.
+        expect((deps.anomalies.scan as jest.Mock).mock.calls[0][1].types).toBeUndefined();
+    });
+
+    it('ignores a sensitivity the presets do not define', async () => {
+        const deps = withScan(scanResult());
+
+        await run('transaction_anomalies', { from: '2026-07-01', to: '2026-07-31', sensitivity: 'paranoid' }, deps);
+
+        expect((deps.anomalies.scan as jest.Mock).mock.calls[0][1].sensitivity).toBeUndefined();
+    });
+
+    it('drops a branch id that is not this tenant\'s and says the result is unfiltered', async () => {
+        const deps = withScan(scanResult());
+
+        const result: any = await run(
+            'transaction_anomalies',
+            { from: '2026-07-01', to: '2026-07-31', storeId: 'store-from-another-tenant' },
+            deps,
+        );
+
+        expect((deps.anomalies.scan as jest.Mock).mock.calls[0][1].storeId).toBeUndefined();
+        expect(result.note).toContain('whole business');
     });
 });
