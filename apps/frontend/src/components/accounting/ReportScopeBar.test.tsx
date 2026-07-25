@@ -64,4 +64,48 @@ describe('ReportScopeBar', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
         expect(props.onGenerate).toHaveBeenCalled();
     });
+
+    describe('detail level', () => {
+        beforeEach(() => {
+            localStorage.clear();
+        });
+
+        it('is hidden on reports that do not pass a level', () => {
+            renderBar();
+
+            expect(screen.queryByRole('radiogroup', { name: 'Detail' })).not.toBeInTheDocument();
+        });
+
+        it('offers account, subgroup and group when a level is passed', () => {
+            renderBar({ level: 'account', onLevelChange: jest.fn() });
+
+            const group = screen.getByRole('radiogroup', { name: 'Detail' });
+            expect(group).toBeInTheDocument();
+            expect(screen.getByText('Account')).toBeInTheDocument();
+            expect(screen.getByText('Subgroup')).toBeInTheDocument();
+            expect(screen.getByText('Group')).toBeInTheDocument();
+        });
+
+        it('reports and persists the selected level', () => {
+            const onLevelChange = jest.fn();
+            renderBar({ level: 'account', onLevelChange });
+
+            fireEvent.click(screen.getByRole('radio', { name: 'Subgroup' }));
+
+            expect(onLevelChange).toHaveBeenCalledWith('subgroup');
+            expect(localStorage.getItem('report_level')).toBe('subgroup');
+        });
+
+        it('keeps the level radios independent of the scope radios', () => {
+            const onScopeChange = jest.fn();
+            const onLevelChange = jest.fn();
+            renderBar({ level: 'group', onLevelChange, onScopeChange });
+
+            expect(screen.getByRole('radio', { name: 'Group' })).toBeChecked();
+            expect(screen.getByRole('radio', { name: 'This branch' })).toBeChecked();
+
+            fireEvent.click(screen.getByRole('radio', { name: 'Account' }));
+            expect(onScopeChange).not.toHaveBeenCalled();
+        });
+    });
 });

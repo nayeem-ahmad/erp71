@@ -198,6 +198,11 @@ export type ReportScopeParams = {
     includeCompanyBucket?: boolean;
 };
 
+/** Row granularity, supported by the COA-grained reports (P&L, balance sheet, trial balance). */
+export type ReportLevel = 'account' | 'subgroup' | 'group';
+
+export type ReportLevelParams = { level?: ReportLevel };
+
 export type CustomFieldDef = { key: string; label: string; order: number };
 
 export type ExternalSyncTally = { created: number; updated: number; skipped: number };
@@ -242,11 +247,12 @@ export type ExternalSyncRun = {
     finished_at: string | null;
 };
 
-function appendReportScopeParams(query: URLSearchParams, params?: ReportScopeParams) {
+function appendReportScopeParams(query: URLSearchParams, params?: ReportScopeParams & ReportLevelParams) {
     if (params?.scope) query.set('scope', params.scope);
     if (params?.storeId) query.set('storeId', params.storeId);
     if (params?.storeIds?.length) query.set('storeIds', params.storeIds.join(','));
     if (params?.includeCompanyBucket) query.set('includeCompanyBucket', 'true');
+    if (params?.level) query.set('level', params.level);
 }
 
 /**
@@ -979,14 +985,14 @@ export const api = {
     retryPostingException: (id: string) => fetchWithAuth(`/accounting/reconciliation/posting-exceptions/${id}/retry`, {
         method: 'POST',
     }),
-    getProfitLoss: (params?: { from?: string; to?: string } & ReportScopeParams) => {
+    getProfitLoss: (params?: { from?: string; to?: string } & ReportScopeParams & ReportLevelParams) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
         appendReportScopeParams(query, params);
         return fetchWithAuth(`/accounting/reports/profit-loss${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getBalanceSheet: (params?: { asOfDate?: string } & ReportScopeParams) => {
+    getBalanceSheet: (params?: { asOfDate?: string } & ReportScopeParams & ReportLevelParams) => {
         const query = new URLSearchParams();
         if (params?.asOfDate) query.set('asOfDate', params.asOfDate);
         appendReportScopeParams(query, params);
@@ -2006,7 +2012,7 @@ export const api = {
     markNotificationRead: (id: string) => fetchWithAuth(`/notifications/${id}/read`, { method: 'PATCH' }),
     markAllNotificationsRead: () => fetchWithAuth('/notifications/read-all', { method: 'PATCH' }),
     // Accounting — Mid-Size Features
-    getTrialBalance: (params?: { asOfDate?: string } & ReportScopeParams) => {
+    getTrialBalance: (params?: { asOfDate?: string } & ReportScopeParams & ReportLevelParams) => {
         const q = new URLSearchParams();
         if (params?.asOfDate) q.set('asOfDate', params.asOfDate);
         appendReportScopeParams(q, params);

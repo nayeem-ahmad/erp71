@@ -197,6 +197,13 @@ export const accountingMessages = {
                 selectBranches: 'Select branches',
                 generate: 'Generate',
             },
+            reportLevel: {
+                detail: 'Detail',
+                account: 'Account',
+                subgroup: 'Subgroup',
+                group: 'Group',
+                nettingHint: 'Offsetting balances net out within each row, so the debit and credit totals can be lower than at account level.',
+            },
             fundTransfers: {
                 title: 'Inter-branch Fund Transfers',
                 subtitle: 'Initiate and receive cash transfers between branches',

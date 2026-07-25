@@ -2,8 +2,8 @@
 
 import { compactDensity } from '@/lib/ui/compact-density';
 import { useI18n } from '@/lib/i18n';
-import type { ReportScopeMode } from '@/lib/accounting-report-scope';
-import { persistReportScope } from '@/lib/accounting-report-scope';
+import type { ReportLevelMode, ReportScopeMode } from '@/lib/accounting-report-scope';
+import { persistReportLevel, persistReportScope, REPORT_LEVEL_MODES } from '@/lib/accounting-report-scope';
 
 export type ReportStore = { id: string; name: string };
 
@@ -25,6 +25,9 @@ export type ReportScopeBarProps = {
     onDateChange: (field: 'from' | 'to' | 'asOfDate', value: string) => void;
     onGenerate: () => void;
     generating?: boolean;
+    /** Omit both to hide the detail-level control on reports that are not COA-grained. */
+    level?: ReportLevelMode;
+    onLevelChange?: (level: ReportLevelMode) => void;
 };
 
 export function ReportScopeBar({
@@ -45,13 +48,21 @@ export function ReportScopeBar({
     onDateChange,
     onGenerate,
     generating = false,
+    level,
+    onLevelChange,
 }: ReportScopeBarProps) {
     const { t } = useI18n();
     const scopeLabels = t.accounting.reports.reportScope;
+    const levelLabels = t.accounting.reports.reportLevel;
 
     const handleScopeChange = (nextScope: ReportScopeMode) => {
         persistReportScope(nextScope);
         onScopeChange(nextScope);
+    };
+
+    const handleLevelChange = (nextLevel: ReportLevelMode) => {
+        persistReportLevel(nextLevel);
+        onLevelChange?.(nextLevel);
     };
 
     const toggleStoreSelection = (id: string) => {
@@ -105,6 +116,29 @@ export function ReportScopeBar({
                         </>
                     ) : null}
                 </div>
+
+                {level && onLevelChange ? (
+                    <div className="flex flex-wrap items-center gap-3 md:ml-auto">
+                        <span className={compactDensity.formLabel}>{levelLabels.detail}</span>
+                        <div className="flex flex-wrap gap-3" role="radiogroup" aria-label={levelLabels.detail}>
+                            {REPORT_LEVEL_MODES.map((mode) => (
+                                <label
+                                    key={mode}
+                                    className="inline-flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer"
+                                >
+                                    <input
+                                        type="radio"
+                                        name="report-level"
+                                        checked={level === mode}
+                                        onChange={() => handleLevelChange(mode)}
+                                        className="text-blue-600"
+                                    />
+                                    {levelLabels[mode]}
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                ) : null}
             </div>
 
             {scope === 'branch' ? (

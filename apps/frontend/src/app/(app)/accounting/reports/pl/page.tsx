@@ -16,7 +16,9 @@ import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import {
+    getDefaultReportLevel,
     getDefaultReportScope,
+    type ReportLevelMode,
     type ReportScopeMode,
     useReportStores,
 } from '@/lib/accounting-report-scope';
@@ -35,17 +37,20 @@ interface AccountRow {
     name: string;
     code?: string | null;
     subgroup?: { name: string } | null;
+    is_unassigned?: boolean;
     balance: number;
 }
 
 interface Group {
     group: { id: string; name: string };
-    accounts: AccountRow[];
+    /** Rows at the requested detail level — empty when the level is `group`. */
+    rows: AccountRow[];
     total: number;
 }
 
 interface PLData {
     scope?: string;
+    level?: ReportLevelMode;
     filters?: { from: string; to: string };
     period?: { from: string; to: string };
     revenue: { groups: Group[]; total: number };
@@ -82,7 +87,7 @@ function AccountSection({ groups, label, colorClass, locale }: { groups: Group[]
                         <span>{g.group.name}</span>
                         <span>{formatBDT(g.total, { locale })}</span>
                     </div>
-                    {g.accounts.map((a) => (
+                    {g.rows.map((a) => (
                         <div key={a.id} className="flex justify-between items-center px-5 py-1 text-sm text-gray-600">
                             <span>{a.name}{a.code ? <span className="ml-2 text-xs text-gray-400">{a.code}</span> : null}</span>
                             <span>{formatBDT(a.balance, { locale })}</span>
@@ -99,6 +104,7 @@ export default function ProfitLossPage() {
     const { stores, canConsolidate, loading: storesLoading } = useReportStores();
     const [data, setData] = useState<PLData | null>(null);
     const [scope, setScope] = useState<ReportScopeMode>('branch');
+    const [level, setLevel] = useState<ReportLevelMode>('account');
     const [storeId, setStoreId] = useState('');
     const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
     const [includeCompanyBucket, setIncludeCompanyBucket] = useState(false);
@@ -121,6 +127,7 @@ export default function ProfitLossPage() {
         setStoreId(resolvedStoreId);
         setSelectedStoreIds(stores.map((store) => store.id));
         setScope(getDefaultReportScope(stores.length, canConsolidate));
+        setLevel(getDefaultReportLevel());
         setInitialized(true);
     }, [stores, storesLoading, canConsolidate]);
 
@@ -135,6 +142,7 @@ export default function ProfitLossPage() {
             const result = await api.getProfitLoss({
                 from: fromDate || undefined,
                 to: toDate || undefined,
+                level,
                 ...buildScopeParams(scope, storeId, selectedStoreIds, includeCompanyBucket),
             });
             setData(result);
@@ -143,7 +151,7 @@ export default function ProfitLossPage() {
         } finally {
             setLoading(false);
         }
-    }, [fromDate, toDate, scope, storeId, selectedStoreIds, includeCompanyBucket, initialized, t.accounting.reports.loadFailed]);
+    }, [fromDate, toDate, scope, level, storeId, selectedStoreIds, includeCompanyBucket, initialized, t.accounting.reports.loadFailed]);
 
     useEffect(() => {
         if (initialized) {
@@ -192,6 +200,8 @@ export default function ProfitLossPage() {
                     }}
                     onGenerate={() => void load()}
                     generating={loading}
+                    level={level}
+                    onLevelChange={setLevel}
                 />
             </AccountingToolbar>
 

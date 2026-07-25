@@ -17,6 +17,14 @@ import {
     parseStoreIdsParam,
     plBalanceForType,
 } from './report-scope.utils';
+import {
+    mergeCompareAmountsByColumn,
+    normalizeReportLevel,
+    ReportLevel,
+    rollUpByLevel,
+    type LevelBucket,
+    type LevelledAccount,
+} from './report-level.utils';
 import { assertFiscalPeriodOpen, autoPostFromRules } from './posting.utils';
 import { classifyPaymentMode } from '../sales/classify-payment-mode';
 import { AuditService } from '../audit/audit.service';
@@ -1049,11 +1057,12 @@ export class AccountingService {
     ) {
         const scopeParams = this.parseReportScopeFromQuery(query);
         assertConsolidatedScopePermission(scopeParams.scope, hasConsolidatedAccess);
+        const level = normalizeReportLevel(query.level);
 
         const range = this.resolveDateRange(query.from, query.to);
 
         if (scopeParams.scope === ReportScope.COMPARE) {
-            return this.getProfitLossCompare(tenantId, range, scopeParams);
+            return this.getProfitLossCompare(tenantId, range, scopeParams, level);
         }
 
         const voucherWhere = buildVoucherWhereForScope(tenantId, scopeParams.scope, scopeParams.storeId);
@@ -1069,6 +1078,7 @@ export class AccountingService {
         if (accounts.length === 0) {
             return {
                 scope: scopeParams.scope,
+                level,
                 filters: { from: range.from, to: range.to, storeId: scopeParams.storeId },
                 revenue: { groups: [], total: 0 },
                 expenses: { groups: [], total: 0 },
@@ -1095,31 +1105,16 @@ export class AccountingService {
             accountTotals.set(detail.account_id, existing);
         }
 
-        const buildPLGroups = (accts: typeof accounts, type: AccountType) => {
-            const groupMap = new Map<string, { group: any; accounts: any[]; total: number }>();
-            for (const account of accts) {
+        const buildPLGroups = (accts: typeof accounts, type: AccountType) => this.buildLevelledGroups(
+            accts,
+            level,
+            (account) => {
                 const totals = accountTotals.get(account.id) ?? { debit: 0, credit: 0 };
-                const balance = type === AccountType.REVENUE
+                return type === AccountType.REVENUE
                     ? this.roundAmount(totals.credit - totals.debit)
                     : this.roundAmount(totals.debit - totals.credit);
-                const gid = account.group_id;
-                const existing = groupMap.get(gid) ?? {
-                    group: { id: account.group.id, name: account.group.name },
-                    accounts: [],
-                    total: 0,
-                };
-                existing.accounts.push({
-                    id: account.id,
-                    name: account.name,
-                    code: account.code,
-                    subgroup: account.subgroup ? { id: account.subgroup.id, name: account.subgroup.name } : null,
-                    balance,
-                });
-                existing.total = this.roundAmount(existing.total + balance);
-                groupMap.set(gid, existing);
-            }
-            return Array.from(groupMap.values()).sort((a, b) => a.group.name.localeCompare(b.group.name));
-        };
+            },
+        );
 
         const revenueGroups = buildPLGroups(
             accounts.filter((a) => a.type === AccountType.REVENUE),
@@ -1135,6 +1130,7 @@ export class AccountingService {
 
         return {
             scope: scopeParams.scope,
+            level,
             filters: { from: range.from, to: range.to, storeId: scopeParams.storeId },
             revenue: { groups: revenueGroups, total: totalRevenue },
             expenses: { groups: expenseGroups, total: totalExpenses },
@@ -1149,12 +1145,13 @@ export class AccountingService {
     ) {
         const scopeParams = this.parseReportScopeFromQuery(query);
         assertConsolidatedScopePermission(scopeParams.scope, hasConsolidatedAccess);
+        const level = normalizeReportLevel(query.level);
 
         const asOfDateStr = query.asOfDate ?? this.formatDateValue(new Date());
         const asOfDate = this.toEndOfDay(asOfDateStr);
 
         if (scopeParams.scope === ReportScope.COMPARE) {
-            return this.getBalanceSheetCompare(tenantId, asOfDateStr, asOfDate, scopeParams);
+            return this.getBalanceSheetCompare(tenantId, asOfDateStr, asOfDate, scopeParams, level);
         }
 
         const voucherWhere = buildVoucherWhereForScope(tenantId, scopeParams.scope, scopeParams.storeId);
@@ -1204,29 +1201,14 @@ export class AccountingService {
         }
         const netProfit = this.roundAmount(plRevenue - plExpenses);
 
-        const buildBSGroups = (accts: typeof bsAccounts, type: AccountType) => {
-            const groupMap = new Map<string, { group: any; accounts: any[]; total: number }>();
-            for (const account of accts) {
+        const buildBSGroups = (accts: typeof bsAccounts, type: AccountType) => this.buildLevelledGroups(
+            accts,
+            level,
+            (account) => {
                 const totals = accountTotals.get(account.id) ?? { debit: 0, credit: 0 };
-                const balance = this.calculateSignedBalance(type, totals.debit, totals.credit);
-                const gid = account.group_id;
-                const existing = groupMap.get(gid) ?? {
-                    group: { id: account.group.id, name: account.group.name },
-                    accounts: [],
-                    total: 0,
-                };
-                existing.accounts.push({
-                    id: account.id,
-                    name: account.name,
-                    code: account.code,
-                    subgroup: account.subgroup ? { id: account.subgroup.id, name: account.subgroup.name } : null,
-                    balance: this.roundAmount(balance),
-                });
-                existing.total = this.roundAmount(existing.total + balance);
-                groupMap.set(gid, existing);
-            }
-            return Array.from(groupMap.values()).sort((a, b) => a.group.name.localeCompare(b.group.name));
-        };
+                return this.calculateSignedBalance(type, totals.debit, totals.credit);
+            },
+        );
 
         const assetGroups = buildBSGroups(bsAccounts.filter((a) => a.type === AccountType.ASSET), AccountType.ASSET);
         const liabilityGroups = buildBSGroups(bsAccounts.filter((a) => a.type === AccountType.LIABILITY), AccountType.LIABILITY);
@@ -1239,6 +1221,7 @@ export class AccountingService {
 
         return {
             scope: scopeParams.scope,
+            level,
             as_of: asOfDateStr,
             storeId: scopeParams.storeId,
             assets: { groups: assetGroups, total: totalAssets },
@@ -1256,12 +1239,13 @@ export class AccountingService {
     ) {
         const scopeParams = this.parseReportScopeFromQuery(query);
         assertConsolidatedScopePermission(scopeParams.scope, hasConsolidatedAccess);
+        const level = normalizeReportLevel(query.level);
 
         const asOfDateStr = query.asOfDate ?? this.formatDateValue(new Date());
         const asOfDate = this.toEndOfDay(asOfDateStr);
 
         if (scopeParams.scope === ReportScope.COMPARE) {
-            return this.getTrialBalanceCompare(tenantId, asOfDateStr, asOfDate, scopeParams);
+            return this.getTrialBalanceCompare(tenantId, asOfDateStr, asOfDate, scopeParams, level);
         }
 
         const voucherWhere = buildVoucherWhereForScope(tenantId, scopeParams.scope, scopeParams.storeId);
@@ -1274,6 +1258,7 @@ export class AccountingService {
         if (accounts.length === 0) {
             return {
                 scope: scopeParams.scope,
+                level,
                 as_of: asOfDateStr,
                 storeId: scopeParams.storeId,
                 rows: [],
@@ -1301,10 +1286,35 @@ export class AccountingService {
         let grandDebitBalance = 0;
         let grandCreditBalance = 0;
 
-        const rows = accounts.map((account) => {
-            const totals = accountTotals.get(account.id) ?? { debit: 0, credit: 0 };
-            const signedBalance = this.calculateSignedBalance(account.type as AccountType, totals.debit, totals.credit);
-            const presented = this.presentBalance(account.type as AccountType, signedBalance);
+        // Roll up signed balances and only then pick a side: summing the presented
+        // debit/credit columns instead would report gross figures for a bucket holding
+        // offsetting balances, and would no longer tie back to the account-level view.
+        const entries = rollUpByLevel(
+            accounts.map((account) => {
+                const totals = accountTotals.get(account.id) ?? { debit: 0, credit: 0 };
+                return {
+                    account,
+                    payload: {
+                        debit_total: totals.debit,
+                        credit_total: totals.credit,
+                        signed_balance: this.calculateSignedBalance(
+                            account.type as AccountType,
+                            totals.debit,
+                            totals.credit,
+                        ),
+                    },
+                };
+            }),
+            level,
+            (existing, incoming) => ({
+                debit_total: existing.debit_total + incoming.debit_total,
+                credit_total: existing.credit_total + incoming.credit_total,
+                signed_balance: this.roundAmount(existing.signed_balance + incoming.signed_balance),
+            }),
+        );
+
+        const rows = entries.map(({ bucket, payload }) => {
+            const presented = this.presentBalance(bucket.type as AccountType, payload.signed_balance);
 
             const debitBalance = presented.side === 'debit' ? presented.amount : 0;
             const creditBalance = presented.side === 'credit' ? presented.amount : 0;
@@ -1313,16 +1323,9 @@ export class AccountingService {
             grandCreditBalance = this.roundAmount(grandCreditBalance + creditBalance);
 
             return {
-                account: {
-                    id: account.id,
-                    name: account.name,
-                    code: account.code,
-                    type: account.type,
-                    group: { id: account.group.id, name: account.group.name },
-                    subgroup: account.subgroup ? { id: account.subgroup.id, name: account.subgroup.name } : null,
-                },
-                debit_total: this.roundAmount(totals.debit),
-                credit_total: this.roundAmount(totals.credit),
+                account: this.serializeLevelBucket(bucket),
+                debit_total: this.roundAmount(payload.debit_total),
+                credit_total: this.roundAmount(payload.credit_total),
                 closing_balance: presented.amount,
                 closing_balance_side: presented.side,
                 debit_balance: debitBalance,
@@ -1332,6 +1335,7 @@ export class AccountingService {
 
         return {
             scope: scopeParams.scope,
+            level,
             as_of: asOfDateStr,
             storeId: scopeParams.storeId,
             rows,
@@ -3378,6 +3382,79 @@ ${voucherMessages}
         return Math.round(value * 100) / 100;
     }
 
+    /**
+     * Shared group builder for the statement-style reports (P&L, balance sheet):
+     * rolls accounts into level buckets, then nests those buckets under their group.
+     * Group totals are identical at every level — only the row granularity changes.
+     */
+    private buildLevelledGroups<T extends LevelledAccount>(
+        accounts: T[],
+        level: ReportLevel,
+        balanceOf: (account: T) => number,
+    ) {
+        const entries = rollUpByLevel(
+            accounts.map((account) => ({ account, payload: { balance: balanceOf(account) } })),
+            level,
+            (existing, incoming) => ({ balance: this.roundAmount(existing.balance + incoming.balance) }),
+        );
+
+        type LevelRow = {
+            id: string;
+            name: string;
+            code: string | null;
+            subgroup: { id: string; name: string } | null;
+            is_unassigned: boolean;
+            balance: number;
+        };
+        const groupMap = new Map<string, {
+            group: { id: string; name: string };
+            rows: LevelRow[];
+            total: number;
+        }>();
+
+        for (const { bucket, payload } of entries) {
+            const existing = groupMap.get(bucket.group.id) ?? {
+                group: bucket.group,
+                rows: [],
+                total: 0,
+            };
+
+            // At group level the bucket *is* the group, so a row would merely repeat
+            // the group header — emit the header total only.
+            if (level !== ReportLevel.GROUP) {
+                existing.rows.push({
+                    id: bucket.id,
+                    name: bucket.name,
+                    code: bucket.code,
+                    subgroup: bucket.subgroup,
+                    is_unassigned: bucket.is_unassigned,
+                    balance: payload.balance,
+                });
+            }
+
+            existing.total = this.roundAmount(existing.total + payload.balance);
+            groupMap.set(bucket.group.id, existing);
+        }
+
+        return Array.from(groupMap.values()).sort((a, b) => a.group.name.localeCompare(b.group.name));
+    }
+
+    /**
+     * Report rows keep the `account` key at every level so existing consumers keep
+     * working; at coarser levels it carries the subgroup/group identity instead.
+     */
+    private serializeLevelBucket(bucket: LevelBucket) {
+        return {
+            id: bucket.id,
+            name: bucket.name,
+            code: bucket.code,
+            type: bucket.type,
+            group: bucket.group,
+            subgroup: bucket.subgroup,
+            is_unassigned: bucket.is_unassigned,
+        };
+    }
+
     private parseReportScopeFromQuery(query: {
         scope?: string;
         storeId?: string;
@@ -3415,6 +3492,76 @@ ${voucherMessages}
         return finalizeCompareAmounts(amounts, columnKeys);
     }
 
+    /**
+     * Compare-scope counterpart of buildLevelledGroups: rolls accounts into level
+     * buckets column by column, then nests the buckets under their group.
+     */
+    private buildLevelledCompareSection<T extends LevelledAccount>(
+        sectionName: string,
+        accounts: T[],
+        accountType: AccountType,
+        level: ReportLevel,
+        byStore: Map<string, Map<string, { debit: number; credit: number }>>,
+        columnKeys: string[],
+        balanceFn: (type: AccountType, debit: number, credit: number) => number,
+    ) {
+        const entries = rollUpByLevel(
+            accounts.map((account) => ({
+                account,
+                payload: this.buildCompareAccountAmounts(
+                    account.id,
+                    accountType,
+                    byStore,
+                    columnKeys,
+                    balanceFn,
+                ),
+            })),
+            level,
+            (existing, incoming) => mergeCompareAmountsByColumn(existing, incoming, columnKeys),
+        );
+
+        const groupMap = new Map<string, {
+            name: string;
+            rows: Array<{
+                account: { id: string; code: string | null; name: string };
+                amounts: CompareAmounts;
+            }>;
+            subtotals: CompareAmounts;
+        }>();
+
+        for (const { bucket, payload } of entries) {
+            // Empty rows are dropped after the roll-up, so a bucket stays visible when
+            // its members are individually empty but collectively are not.
+            if (payload[TOTAL_SCOPE_KEY] === 0) {
+                continue;
+            }
+
+            const existing = groupMap.get(bucket.group.id) ?? {
+                name: bucket.group.name,
+                rows: [],
+                subtotals: initCompareAmounts(columnKeys),
+            };
+
+            if (level !== ReportLevel.GROUP) {
+                existing.rows.push({
+                    account: { id: bucket.id, code: bucket.code, name: bucket.name },
+                    amounts: payload,
+                });
+            }
+
+            existing.subtotals = mergeCompareAmountsByColumn(existing.subtotals, payload, columnKeys);
+            groupMap.set(bucket.group.id, existing);
+        }
+
+        const groups = Array.from(groupMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+        return {
+            name: sectionName,
+            groups,
+            subtotals: this.sumCompareAmountsList(groups.map((group) => group.subtotals), columnKeys),
+        };
+    }
+
     private sumCompareAmountsList(amountsList: CompareAmounts[], columnKeys: string[]): CompareAmounts {
         const summed = initCompareAmounts(columnKeys);
         for (const colKey of columnKeys.filter((key) => key !== TOTAL_SCOPE_KEY)) {
@@ -3439,6 +3586,7 @@ ${voucherMessages}
         tenantId: string,
         range: { from: string; to: string; fromDate: Date; toDate: Date },
         scopeParams: ReturnType<typeof assertReportScopeQuery>,
+        level: ReportLevel = ReportLevel.ACCOUNT,
     ) {
         const { columns, columnKeys } = await this.loadCompareColumns(
             tenantId,
@@ -3478,56 +3626,16 @@ ${voucherMessages}
 
         const byStore = aggregateDetailsByStore(details);
 
-        const buildSection = (sectionName: string, sectionAccounts: typeof accounts, type: AccountType) => {
-            const groupMap = new Map<string, {
-                name: string;
-                rows: Array<{
-                    account: { id: string; code: string | null; name: string };
-                    amounts: CompareAmounts;
-                }>;
-                subtotals: CompareAmounts;
-            }>();
-
-            for (const account of sectionAccounts) {
-                const amounts = this.buildCompareAccountAmounts(
-                    account.id,
-                    type,
-                    byStore,
-                    columnKeys,
-                    plBalanceForType,
-                );
-                if (amounts[TOTAL_SCOPE_KEY] === 0) {
-                    continue;
-                }
-
-                const groupId = account.group_id;
-                const existing = groupMap.get(groupId) ?? {
-                    name: account.group.name,
-                    rows: [],
-                    subtotals: initCompareAmounts(columnKeys),
-                };
-                existing.rows.push({
-                    account: { id: account.id, code: account.code, name: account.name },
-                    amounts,
-                });
-                for (const colKey of columnKeys.filter((key) => key !== TOTAL_SCOPE_KEY)) {
-                    existing.subtotals[colKey] = this.roundAmount(
-                        (existing.subtotals[colKey] ?? 0) + (amounts[colKey] ?? 0),
-                    );
-                }
-                existing.subtotals = finalizeCompareAmounts(existing.subtotals, columnKeys);
-                groupMap.set(groupId, existing);
-            }
-
-            return {
-                name: sectionName,
-                groups: Array.from(groupMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
-                subtotals: this.sumCompareAmountsList(
-                    Array.from(groupMap.values()).map((group) => group.subtotals),
-                    columnKeys,
-                ),
-            };
-        };
+        const buildSection = (sectionName: string, sectionAccounts: typeof accounts, type: AccountType) =>
+            this.buildLevelledCompareSection(
+                sectionName,
+                sectionAccounts,
+                type,
+                level,
+                byStore,
+                columnKeys,
+                plBalanceForType,
+            );
 
         const revenueSection = buildSection(
             'Revenue',
@@ -3549,6 +3657,7 @@ ${voucherMessages}
 
         return {
             scope: ReportScope.COMPARE,
+            level,
             period: { from: range.from, to: range.to },
             columns,
             sections: [revenueSection, expenseSection],
@@ -3561,6 +3670,7 @@ ${voucherMessages}
         asOfDateStr: string,
         asOfDate: Date,
         scopeParams: ReturnType<typeof assertReportScopeQuery>,
+        level: ReportLevel = ReportLevel.ACCOUNT,
     ) {
         const { columns, columnKeys } = await this.loadCompareColumns(
             tenantId,
@@ -3622,56 +3732,16 @@ ${voucherMessages}
         }
         const finalizedNetProfit = finalizeCompareAmounts(netProfit, columnKeys);
 
-        const buildSection = (sectionName: string, sectionAccounts: typeof bsAccounts, type: AccountType) => {
-            const groupMap = new Map<string, {
-                name: string;
-                rows: Array<{
-                    account: { id: string; code: string | null; name: string };
-                    amounts: CompareAmounts;
-                }>;
-                subtotals: CompareAmounts;
-            }>();
-
-            for (const account of sectionAccounts) {
-                const amounts = this.buildCompareAccountAmounts(
-                    account.id,
-                    type,
-                    byStore,
-                    columnKeys,
-                    bsSignedBalance,
-                );
-                if (amounts[TOTAL_SCOPE_KEY] === 0) {
-                    continue;
-                }
-
-                const groupId = account.group_id;
-                const existing = groupMap.get(groupId) ?? {
-                    name: account.group.name,
-                    rows: [],
-                    subtotals: initCompareAmounts(columnKeys),
-                };
-                existing.rows.push({
-                    account: { id: account.id, code: account.code, name: account.name },
-                    amounts,
-                });
-                for (const colKey of columnKeys.filter((key) => key !== TOTAL_SCOPE_KEY)) {
-                    existing.subtotals[colKey] = this.roundAmount(
-                        (existing.subtotals[colKey] ?? 0) + (amounts[colKey] ?? 0),
-                    );
-                }
-                existing.subtotals = finalizeCompareAmounts(existing.subtotals, columnKeys);
-                groupMap.set(groupId, existing);
-            }
-
-            return {
-                name: sectionName,
-                groups: Array.from(groupMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
-                subtotals: this.sumCompareAmountsList(
-                    Array.from(groupMap.values()).map((group) => group.subtotals),
-                    columnKeys,
-                ),
-            };
-        };
+        const buildSection = (sectionName: string, sectionAccounts: typeof bsAccounts, type: AccountType) =>
+            this.buildLevelledCompareSection(
+                sectionName,
+                sectionAccounts,
+                type,
+                level,
+                byStore,
+                columnKeys,
+                bsSignedBalance,
+            );
 
         const assetsSection = buildSection(
             'Assets',
@@ -3700,6 +3770,7 @@ ${voucherMessages}
 
         return {
             scope: ReportScope.COMPARE,
+            level,
             as_of: asOfDateStr,
             columns,
             sections: [assetsSection, liabilitiesSection, equitySection],
@@ -3714,6 +3785,7 @@ ${voucherMessages}
         asOfDateStr: string,
         asOfDate: Date,
         scopeParams: ReturnType<typeof assertReportScopeQuery>,
+        level: ReportLevel = ReportLevel.ACCOUNT,
     ) {
         const { columns, columnKeys } = await this.loadCompareColumns(
             tenantId,
@@ -3749,22 +3821,36 @@ ${voucherMessages}
             : [];
 
         const byStore = aggregateDetailsByStore(details);
+        const dataColumnKeys = columnKeys.filter((key) => key !== TOTAL_SCOPE_KEY);
         const debitTotals = initCompareAmounts(columnKeys);
         const creditTotals = initCompareAmounts(columnKeys);
 
-        const rows = accounts.map((account) => {
+        // Same rule as the single-column trial balance: net the signed balance per
+        // column while rolling up, and only pick a debit/credit side afterwards.
+        const entries = rollUpByLevel(
+            accounts.map((account) => {
+                const signedAmounts = initCompareAmounts(columnKeys);
+                for (const colKey of dataColumnKeys) {
+                    const storeMap = byStore.get(colKey);
+                    const totals = storeMap?.get(account.id) ?? { debit: 0, credit: 0 };
+                    signedAmounts[colKey] = this.calculateSignedBalance(
+                        account.type as AccountType,
+                        totals.debit,
+                        totals.credit,
+                    );
+                }
+                return { account, payload: finalizeCompareAmounts(signedAmounts, columnKeys) };
+            }),
+            level,
+            (existing, incoming) => mergeCompareAmountsByColumn(existing, incoming, columnKeys),
+        );
+
+        const rows = entries.map(({ bucket, payload }) => {
             const debitAmounts = initCompareAmounts(columnKeys);
             const creditAmounts = initCompareAmounts(columnKeys);
 
-            for (const colKey of columnKeys.filter((key) => key !== TOTAL_SCOPE_KEY)) {
-                const storeMap = byStore.get(colKey);
-                const totals = storeMap?.get(account.id) ?? { debit: 0, credit: 0 };
-                const signedBalance = this.calculateSignedBalance(
-                    account.type as AccountType,
-                    totals.debit,
-                    totals.credit,
-                );
-                const presented = this.presentBalance(account.type as AccountType, signedBalance);
+            for (const colKey of dataColumnKeys) {
+                const presented = this.presentBalance(bucket.type as AccountType, payload[colKey] ?? 0);
                 if (presented.side === 'debit') {
                     debitAmounts[colKey] = presented.amount;
                 } else if (presented.side === 'credit') {
@@ -3775,20 +3861,13 @@ ${voucherMessages}
             const finalizedDebit = finalizeCompareAmounts(debitAmounts, columnKeys);
             const finalizedCredit = finalizeCompareAmounts(creditAmounts, columnKeys);
 
-            for (const colKey of columnKeys.filter((key) => key !== TOTAL_SCOPE_KEY)) {
+            for (const colKey of dataColumnKeys) {
                 debitTotals[colKey] = this.roundAmount((debitTotals[colKey] ?? 0) + (finalizedDebit[colKey] ?? 0));
                 creditTotals[colKey] = this.roundAmount((creditTotals[colKey] ?? 0) + (finalizedCredit[colKey] ?? 0));
             }
 
             return {
-                account: {
-                    id: account.id,
-                    name: account.name,
-                    code: account.code,
-                    type: account.type,
-                    group: { id: account.group.id, name: account.group.name },
-                    subgroup: account.subgroup ? { id: account.subgroup.id, name: account.subgroup.name } : null,
-                },
+                account: this.serializeLevelBucket(bucket),
                 debit_amounts: finalizedDebit,
                 credit_amounts: finalizedCredit,
             };
@@ -3798,6 +3877,7 @@ ${voucherMessages}
 
         return {
             scope: ReportScope.COMPARE,
+            level,
             as_of: asOfDateStr,
             columns,
             rows,
