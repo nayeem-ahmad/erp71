@@ -93,8 +93,15 @@ export class ChatService {
         };
     }
 
-    async assertEnabled(): Promise<void> {
-        if (!(await this.platformSettings.isFeatureEnabled('aiChat'))) {
+    /**
+     * The tenant-aware check, and it has to be: `aiChat` is a per-tenant
+     * overridable feature, so the platform switch is a *default*, not the answer.
+     * Asking `isFeatureEnabled` instead ignores the override — which is how the
+     * assistant came to render its panel (the frontend resolves features from the
+     * JWT, overrides applied) and then reject every message sent into it.
+     */
+    async assertEnabled(tenantId?: string | null): Promise<void> {
+        if (!(await this.platformSettings.isFeatureEnabledForTenant('aiChat', tenantId))) {
             throw new ServiceUnavailableException('The AI assistant is not available.');
         }
     }
@@ -209,7 +216,7 @@ export class ChatService {
     // ── The turn ─────────────────────────────────────────────────────────────
 
     async chat(ctx: TenantContext, message: string, conversationId?: string, locale?: string): Promise<ChatTurnResult> {
-        await this.assertEnabled();
+        await this.assertEnabled(ctx.tenantId);
         await this.ai.enforceCredits(ctx.tenantId);
         await this.enforceDailyTurnCap(ctx.tenantId);
 

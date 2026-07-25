@@ -67,6 +67,7 @@ function makeService(overrides: {
 
     const platformSettings: any = {
         isFeatureEnabled: jest.fn().mockResolvedValue(overrides.featureEnabled ?? true),
+        isFeatureEnabledForTenant: jest.fn().mockResolvedValue(overrides.featureEnabled ?? true),
         getRawValue: jest.fn().mockResolvedValue(null),
     };
 
@@ -237,6 +238,29 @@ describe('ChatService.chat', () => {
     it('refuses when the platform feature flag is off', async () => {
         const { service } = makeService({ featureEnabled: false });
         await expect(service.chat(OWNER_CTX, 'hello')).rejects.toBeInstanceOf(ServiceUnavailableException);
+    });
+
+    /**
+     * `aiChat` is per-tenant overridable, so the platform switch is a default and
+     * not the answer. Checking it without the tenant id let a tenant that had been
+     * explicitly switched *on* render the chat panel — the frontend resolves
+     * features from the JWT, overrides applied — and then have every message it
+     * sent rejected with "The AI assistant is not available."
+     */
+    it('resolves the feature against the caller tenant, so a per-tenant override applies', async () => {
+        const { service, platformSettings } = makeService();
+
+        await service.chat(OWNER_CTX, 'hello');
+
+        expect(platformSettings.isFeatureEnabledForTenant).toHaveBeenCalledWith('aiChat', OWNER_CTX.tenantId);
+    });
+
+    it('answers a tenant switched on by override while the platform default is off', async () => {
+        const { service, platformSettings } = makeService({ featureEnabled: false });
+        // Platform default off, this one tenant overridden on.
+        platformSettings.isFeatureEnabledForTenant.mockResolvedValue(true);
+
+        await expect(service.chat(OWNER_CTX, 'hello')).resolves.toBeDefined();
     });
 
     it('checks the credit ceiling before spending anything', async () => {

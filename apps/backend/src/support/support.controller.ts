@@ -43,15 +43,16 @@ export class SupportController {
         private readonly platformSettings: PlatformSettingsService,
     ) {}
 
-    private async assertSupportEnabled() {
-        if (!await this.platformSettings.isFeatureEnabled('support')) {
+    // Per-tenant override wins over the platform default — see ChatService.assertEnabled.
+    private async assertSupportEnabled(tenantId: string) {
+        if (!await this.platformSettings.isFeatureEnabledForTenant('support', tenantId)) {
             throw new ServiceUnavailableException('Support chat is not available');
         }
     }
 
     @Get('threads')
     async listThreads(@Tenant() tenant: TenantContext) {
-        await this.assertSupportEnabled();
+        await this.assertSupportEnabled(tenant.tenantId);
         const threads = await this.db.supportThread.findMany({
             where: { tenantId: tenant.tenantId },
             orderBy: { updatedAt: 'desc' },
@@ -78,7 +79,7 @@ export class SupportController {
 
     @Post('threads')
     async createThread(@Tenant() tenant: TenantContext, @Body() dto: CreateThreadDto) {
-        await this.assertSupportEnabled();
+        await this.assertSupportEnabled(tenant.tenantId);
         const thread = await this.db.supportThread.create({
             data: {
                 tenantId: tenant.tenantId,
@@ -97,7 +98,7 @@ export class SupportController {
 
     @Get('threads/:id/messages')
     async getMessages(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        await this.assertSupportEnabled();
+        await this.assertSupportEnabled(tenant.tenantId);
         const thread = await this.db.supportThread.findUnique({ where: { id } });
         if (!thread) throw new NotFoundException('Thread not found');
         if (thread.tenantId !== tenant.tenantId) throw new ForbiddenException();
@@ -126,7 +127,7 @@ export class SupportController {
         @Param('id') id: string,
         @Body() dto: SendMessageDto,
     ) {
-        await this.assertSupportEnabled();
+        await this.assertSupportEnabled(tenant.tenantId);
         const thread = await this.db.supportThread.findUnique({ where: { id } });
         if (!thread) throw new NotFoundException('Thread not found');
         if (thread.tenantId !== tenant.tenantId) throw new ForbiddenException();
