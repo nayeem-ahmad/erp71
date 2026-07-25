@@ -33,7 +33,13 @@ ARG NEXT_PUBLIC_API_URL
 # because Next.js compiles rewrite destinations into the routes manifest.
 ARG BACKEND_URL=http://backend:4000
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_OPTIONS="--max-old-space-size=1536"
+# The production VPS has 1.9GB RAM but ~7GB of swap. 1536 was under the heap the
+# build now needs and `next build` died with "Reached heap limit ... JavaScript
+# heap out of memory" (exit 134), leaving the repo advanced but the containers on
+# the previous image — a half-deploy that still serves traffic, so it is easy to
+# miss. This is a V8 ceiling rather than physical exhaustion, so raising it lets
+# the build spill into swap: slower, but it completes.
+ENV NODE_OPTIONS="--max-old-space-size=3072"
 ENV NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE}
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV BACKEND_URL=${BACKEND_URL}
