@@ -4,9 +4,20 @@ import { DatabaseService } from '../database/database.service';
 import { NotFoundException } from '@nestjs/common';
 
 describe('buildSaleDateWindow / buildReturnDateWindow', () => {
-    it('builds a sale_date window for sales', () => {
+    /**
+     * A bare `YYYY-MM-DD` upper bound has to mean "through the end of that day".
+     * Parsed literally it is midnight, which excluded every sale made on the
+     * last day of the range — so "sales this month" never included today.
+     */
+    it('builds a sale_date window that includes the whole final day', () => {
         expect(buildSaleDateWindow('2026-01-01', '2026-01-31')).toEqual({
-            sale_date: { gte: new Date('2026-01-01'), lte: new Date('2026-01-31') },
+            sale_date: { gte: new Date('2026-01-01'), lte: new Date('2026-01-31T23:59:59.999Z') },
+        });
+    });
+
+    it('respects an explicit timestamp bound instead of widening it', () => {
+        expect(buildSaleDateWindow('2026-01-01', '2026-01-31T12:00:00.000Z')).toEqual({
+            sale_date: { gte: new Date('2026-01-01'), lte: new Date('2026-01-31T12:00:00.000Z') },
         });
     });
 
@@ -19,6 +30,12 @@ describe('buildSaleDateWindow / buildReturnDateWindow', () => {
     it('returns an empty object when no from/to provided', () => {
         expect(buildSaleDateWindow()).toEqual({});
         expect(buildReturnDateWindow()).toEqual({});
+    });
+
+    it('drops an unparseable upper bound rather than filtering on Invalid Date', () => {
+        expect(buildSaleDateWindow('2026-01-01', 'not-a-date')).toEqual({
+            sale_date: { gte: new Date('2026-01-01') },
+        });
     });
 });
 
@@ -72,6 +89,12 @@ describe('SalesReportsService', () => {
                 delete: jest.fn(),
                 upsert: jest.fn(),
                 count: jest.fn(),
+            },
+            paymentRecord: {
+                findMany: jest.fn().mockResolvedValue([]),
+            },
+            user: {
+                findMany: jest.fn().mockResolvedValue([]),
             },
             $transaction: jest.fn().mockImplementation(async (cb: any) => cb(db)),
             $queryRaw: jest.fn(),
@@ -965,6 +988,418 @@ describe('SalesReportsService', () => {
 
             const callArgs = db.sale.findMany.mock.calls[0][0];
             expect(callArgs.where.customer_id).toBeUndefined();
+        });
+    });
+
+    // ── getSalesTrend ─────────────────────────────────────────────────────────
+
+    describe('getSalesTrend', () => {
+        const tenantId = 'tenant-1';
+
+        const sale = (date: string, amount: number) => ({
+            id: `sale-${date}`,
+            total_amount: amount,
+            sale_date: new Date(date),
+        });
+
+        beforeEach(() => {
+            db.salesReturn.findMany.mockResolvedValue([]);
+            db.saleItem.findMany.mockResolvedValue([]);
+        });
+
+        /**
+         * A month with no sales must appear as a zero bucket, not vanish.
+         * "Which month was worst" is wrong if the worst month is missing.
+         */
+        it('emits a zero bucket for every period with no activity', async () => {
+            db.sale.findMany.mockResolvedValue([sale('2026-01-15', 500)]);
+
+            const result = await service.getSalesTrend(tenantId, {
+                from: '2026-01-01',
+                to: '2026-03-31',
+                granularity: 'month',
+            });
+
+            expect(result.buckets.map((b) => b.bucket)).toEqual(['2026-01', '2026-02', '2026-03']);
+            expect(result.buckets[1].netRevenue).toBe(0);
+            expect(result.buckets[1].transactions).toBe(0);
+        });
+
+        it('folds daily rows into month buckets', async () => {
+            db.sale.findMany.mockResolvedValue([
+                sale('2026-01-05', 100),
+                sale('2026-01-20', 200),
+                sale('2026-02-10', 50),
+            ]);
+
+            const result = await service.getSalesTrend(tenantId, {
+                from: '2026-01-01',
+                to: '2026-02-28',
+                granularity: 'month',
+            });
+
+            expect(result.buckets[0].netRevenue).toBe(300);
+            expect(result.buckets[0].transactions).toBe(2);
+            expect(result.buckets[1].netRevenue).toBe(50);
+        });
+
+        it('reports the change between consecutive buckets, null for the first', async () => {
+            db.sale.findMany.mockResolvedValue([sale('2026-01-05', 100), sale('2026-02-05', 150)]);
+
+            const result = await service.getSalesTrend(tenantId, {
+                from: '2026-01-01',
+                to: '2026-02-28',
+                granularity: 'month',
+            });
+
+            expect(result.buckets[0].changeFromPreviousPct).toBeNull();
+            expect(result.buckets[1].changeFromPreviousPct).toBe(50);
+        });
+
+        it('fetches the comparison window and returns its change', async () => {
+            db.sale.findMany
+                .mockResolvedValueOnce([sale('2026-02-05', 150)])
+                .mockResolvedValueOnce([sale('2026-01-05', 100)]);
+
+            const result: any = await service.getSalesTrend(tenantId, {
+                from: '2026-02-01',
+                to: '2026-02-28',
+                granularity: 'month',
+                compareTo: 'previous_period',
+            });
+
+            expect(result.comparison.period).toEqual({ from: '2026-01-04', to: '2026-01-31' });
+            expect(result.comparison.summary.totalRevenue).toBe(100);
+            expect(result.comparison.change.netRevenuePct).toBe(50);
+        });
+
+        it('leaves comparison null when none was requested', async () => {
+            db.sale.findMany.mockResolvedValue([]);
+
+            const result = await service.getSalesTrend(tenantId, { from: '2026-01-01', to: '2026-01-31' });
+
+            expect(result.comparison).toBeNull();
+        });
+    });
+
+    // ── getSalesBreakdown ─────────────────────────────────────────────────────
+
+    describe('getSalesBreakdown', () => {
+        const tenantId = 'tenant-1';
+
+        it('groups sale lines by product and states the line-item basis', async () => {
+            db.saleItem.findMany.mockResolvedValue([
+                { sale_id: 's1', quantity: 2, price_at_sale: 100, unit_cost_at_sale: 60, product: { id: 'p1', name: 'Rice', group: null, brand: null } },
+                { sale_id: 's2', quantity: 1, price_at_sale: 100, unit_cost_at_sale: 60, product: { id: 'p1', name: 'Rice', group: null, brand: null } },
+                { sale_id: 's1', quantity: 1, price_at_sale: 50, unit_cost_at_sale: 20, product: { id: 'p2', name: 'Oil', group: null, brand: null } },
+            ]);
+
+            const result = await service.getSalesBreakdown(tenantId, {
+                from: '2026-07-01',
+                to: '2026-07-31',
+                groupBy: 'product',
+            });
+
+            expect(result.revenueBasis).toBe('sale_line_items');
+            expect(result.rows[0]).toMatchObject({ label: 'Rice', revenue: 300, units: 3, orders: 2 });
+            expect(result.rows[0].grossProfit).toBe(120);
+            expect(result.summary.totalRevenue).toBe(350);
+        });
+
+        it('groups whole invoices by branch and states the invoice basis', async () => {
+            db.sale.findMany.mockResolvedValue([
+                { id: 's1', total_amount: 100, sale_date: new Date('2026-07-01T06:00:00Z'), created_by: null, store: { id: 'st1', name: 'Gulshan' }, customer: null },
+                { id: 's2', total_amount: 300, sale_date: new Date('2026-07-02T06:00:00Z'), created_by: null, store: { id: 'st2', name: 'Dhanmondi' }, customer: null },
+            ]);
+
+            const result = await service.getSalesBreakdown(tenantId, {
+                from: '2026-07-01',
+                to: '2026-07-31',
+                groupBy: 'branch',
+            });
+
+            expect(result.revenueBasis).toBe('invoice_totals');
+            expect(result.rows.map((r) => r.label)).toEqual(['Dhanmondi', 'Gulshan']);
+            expect(result.rows[0].revenueSharePct).toBe(75);
+            // Invoice-level rows have no unit or cost figures to report.
+            expect(result.rows[0].units).toBeNull();
+            expect(result.rows[0].grossProfit).toBeNull();
+        });
+
+        /**
+         * A sale at 22:00 UTC is 04:00 the next morning in Dhaka. Bucketing on
+         * the raw UTC hour would report the shop's quietest hour as its busiest.
+         */
+        it('buckets hour_of_day in Dhaka local time and orders by the clock', async () => {
+            db.sale.findMany.mockResolvedValue([
+                { id: 's1', total_amount: 100, sale_date: new Date('2026-07-01T16:00:00Z'), created_by: null, store: { id: 'st1', name: 'A' }, customer: null },
+                { id: 's2', total_amount: 100, sale_date: new Date('2026-07-01T04:00:00Z'), created_by: null, store: { id: 'st1', name: 'A' }, customer: null },
+            ]);
+
+            const result = await service.getSalesBreakdown(tenantId, {
+                from: '2026-07-01',
+                to: '2026-07-31',
+                groupBy: 'hour_of_day',
+            });
+
+            expect(result.rows.map((r) => r.key)).toEqual(['10', '22']);
+            expect(result.rows[1].label).toBe('22:00–22:59');
+        });
+
+        it('splits by payment method from payment records, not invoice totals', async () => {
+            db.paymentRecord.findMany.mockResolvedValue([
+                { sale_id: 's1', payment_method: 'bKash', amount: 60 },
+                { sale_id: 's1', payment_method: 'Cash', amount: 40 },
+                { sale_id: 's2', payment_method: 'bKash', amount: 200 },
+            ]);
+
+            const result = await service.getSalesBreakdown(tenantId, {
+                from: '2026-07-01',
+                to: '2026-07-31',
+                groupBy: 'payment_method',
+            });
+
+            expect(result.revenueBasis).toBe('payment_records');
+            expect(result.rows[0]).toMatchObject({ label: 'bKash', revenue: 260, orders: 2 });
+            expect(result.summary.totalOrders).toBe(2);
+        });
+
+        it('names the staff member behind a sale rather than returning a raw id', async () => {
+            db.sale.findMany.mockResolvedValue([
+                { id: 's1', total_amount: 100, sale_date: new Date('2026-07-01T06:00:00Z'), created_by: 'u1', store: { id: 'st1', name: 'A' }, customer: null },
+                { id: 's2', total_amount: 50, sale_date: new Date('2026-07-01T06:00:00Z'), created_by: null, store: { id: 'st1', name: 'A' }, customer: null },
+            ]);
+            db.user.findMany.mockResolvedValue([{ id: 'u1', name: 'Rahim', email: 'r@x.com' }]);
+
+            const result = await service.getSalesBreakdown(tenantId, {
+                from: '2026-07-01',
+                to: '2026-07-31',
+                groupBy: 'staff',
+            });
+
+            expect(result.rows.map((r) => r.label)).toEqual(['Rahim', 'Not recorded']);
+        });
+
+        it('pages the ranking and reports whether more rows remain', async () => {
+            db.saleItem.findMany.mockResolvedValue(
+                Array.from({ length: 5 }, (_, i) => ({
+                    sale_id: `s${i}`,
+                    quantity: 1,
+                    price_at_sale: 100 - i,
+                    unit_cost_at_sale: null,
+                    product: { id: `p${i}`, name: `P${i}`, group: null, brand: null },
+                })),
+            );
+
+            const result = await service.getSalesBreakdown(tenantId, {
+                from: '2026-07-01',
+                to: '2026-07-31',
+                groupBy: 'product',
+                limit: 2,
+                offset: 2,
+            });
+
+            expect(result.rows.map((r) => r.label)).toEqual(['P2', 'P3']);
+            expect(result.paging).toEqual({ limit: 2, offset: 2, totalRows: 5, hasMore: true });
+        });
+
+        it('attaches each row\'s prior-period figure when compareTo is set', async () => {
+            db.saleItem.findMany
+                .mockResolvedValueOnce([
+                    { sale_id: 's1', quantity: 1, price_at_sale: 300, unit_cost_at_sale: null, product: { id: 'p1', name: 'Rice', group: null, brand: null } },
+                ])
+                .mockResolvedValueOnce([
+                    { sale_id: 's0', quantity: 1, price_at_sale: 200, unit_cost_at_sale: null, product: { id: 'p1', name: 'Rice', group: null, brand: null } },
+                ]);
+
+            const result: any = await service.getSalesBreakdown(tenantId, {
+                from: '2026-07-01',
+                to: '2026-07-31',
+                groupBy: 'product',
+                compareTo: 'previous_period',
+            });
+
+            expect(result.rows[0].previousRevenue).toBe(200);
+            expect(result.rows[0].revenueChange).toBe(100);
+            expect(result.rows[0].revenueChangePct).toBe(50);
+        });
+    });
+
+    // ── getTopMovers ──────────────────────────────────────────────────────────
+
+    describe('getTopMovers', () => {
+        const tenantId = 'tenant-1';
+
+        const line = (saleId: string, productId: string, name: string, revenue: number) => ({
+            sale_id: saleId,
+            quantity: 1,
+            price_at_sale: revenue,
+            unit_cost_at_sale: null,
+            product: { id: productId, name, group: null, brand: null },
+        });
+
+        it('separates gainers from decliners and ranks each by size of change', async () => {
+            db.saleItem.findMany
+                .mockResolvedValueOnce([line('s1', 'p1', 'Rice', 300), line('s2', 'p2', 'Oil', 100)])
+                .mockResolvedValueOnce([line('s0', 'p1', 'Rice', 100), line('s3', 'p2', 'Oil', 400)]);
+
+            const result = await service.getTopMovers(tenantId, { from: '2026-07-01', to: '2026-07-31' });
+
+            expect(result.gainers[0]).toMatchObject({ label: 'Rice', revenueChange: 200 });
+            expect(result.decliners[0]).toMatchObject({ label: 'Oil', revenueChange: -300 });
+            expect(result.totals.revenueChange).toBe(-100);
+        });
+
+        /**
+         * A product that only exists on one side of the comparison is the most
+         * interesting kind of mover, so it must not be dropped by the join.
+         */
+        it('keeps products that appear in only one of the two periods', async () => {
+            db.saleItem.findMany
+                .mockResolvedValueOnce([line('s1', 'p_new', 'New SKU', 500)])
+                .mockResolvedValueOnce([line('s0', 'p_gone', 'Discontinued', 200)]);
+
+            const result = await service.getTopMovers(tenantId, { from: '2026-07-01', to: '2026-07-31' });
+
+            expect(result.gainers[0]).toMatchObject({ label: 'New SKU', status: 'new' });
+            expect(result.decliners[0]).toMatchObject({ label: 'Discontinued', status: 'disappeared' });
+        });
+
+        it('reports null rather than Infinity when a mover grew from nothing', async () => {
+            db.saleItem.findMany
+                .mockResolvedValueOnce([line('s1', 'p1', 'New SKU', 500)])
+                .mockResolvedValueOnce([]);
+
+            const result = await service.getTopMovers(tenantId, { from: '2026-07-01', to: '2026-07-31' });
+
+            expect(result.gainers[0].revenueChangePct).toBeNull();
+        });
+    });
+
+    // ── getReturnsAnalysis ────────────────────────────────────────────────────
+
+    describe('getReturnsAnalysis', () => {
+        const tenantId = 'tenant-1';
+
+        it('expresses refunds as a rate against the revenue they came out of', async () => {
+            db.salesReturn.findMany.mockResolvedValue([
+                {
+                    id: 'r1',
+                    total_refund: 100,
+                    reason: 'Damaged',
+                    created_at: new Date('2026-07-05'),
+                    store: { id: 'st1', name: 'Gulshan' },
+                    items: [{ quantity: 2, refund_amount: 100, product: { id: 'p1', name: 'Rice' } }],
+                },
+            ]);
+            db.sale.findMany.mockResolvedValue([
+                { id: 's1', total_amount: 1000, sale_date: new Date('2026-07-01') },
+            ]);
+            db.saleItem.findMany.mockResolvedValue([]);
+
+            const result = await service.getReturnsAnalysis(tenantId, { from: '2026-07-01', to: '2026-07-31' });
+
+            expect(result.summary.totalRefund).toBe(100);
+            expect(result.summary.grossRevenue).toBe(1000);
+            expect(result.summary.returnRatePct).toBe(10);
+            expect(result.summary.unitsReturned).toBe(2);
+        });
+
+        it('labels a missing reason rather than grouping under an empty string', async () => {
+            db.salesReturn.findMany.mockResolvedValue([
+                {
+                    id: 'r1', total_refund: 50, reason: null, created_at: new Date('2026-07-05'),
+                    store: { id: 'st1', name: 'Gulshan' },
+                    items: [{ quantity: 1, refund_amount: 50, product: { id: 'p1', name: 'Rice' } }],
+                },
+                {
+                    id: 'r2', total_refund: 25, reason: '   ', created_at: new Date('2026-07-06'),
+                    store: { id: 'st1', name: 'Gulshan' },
+                    items: [{ quantity: 1, refund_amount: 25, product: { id: 'p1', name: 'Rice' } }],
+                },
+            ]);
+            db.sale.findMany.mockResolvedValue([]);
+            db.saleItem.findMany.mockResolvedValue([]);
+
+            const result = await service.getReturnsAnalysis(tenantId, { from: '2026-07-01', to: '2026-07-31' });
+
+            expect(result.byReason).toHaveLength(1);
+            expect(result.byReason[0]).toMatchObject({ label: 'Unspecified', amount: 75, sharePct: 100 });
+        });
+
+        it('avoids dividing by zero when nothing was sold', async () => {
+            db.salesReturn.findMany.mockResolvedValue([]);
+            db.sale.findMany.mockResolvedValue([]);
+            db.saleItem.findMany.mockResolvedValue([]);
+
+            const result = await service.getReturnsAnalysis(tenantId, { from: '2026-07-01', to: '2026-07-31' });
+
+            expect(result.summary.returnRatePct).toBe(0);
+            expect(result.summary.avgRefund).toBe(0);
+        });
+    });
+
+    // ── getCustomerRetention ──────────────────────────────────────────────────
+
+    describe('getCustomerRetention', () => {
+        const tenantId = 'tenant-1';
+
+        it('splits active customers into first-time and returning', async () => {
+            db.sale.findMany.mockResolvedValue([
+                { customer_id: 'c1', total_amount: 100 },
+                { customer_id: 'c2', total_amount: 300 },
+            ]);
+            db.sale.groupBy.mockResolvedValue([
+                // c1 first bought inside the window — a new customer.
+                { customer_id: 'c1', _min: { sale_date: new Date('2026-07-10') }, _max: { sale_date: new Date('2026-07-10') }, _count: { _all: 1 } },
+                // c2 has been buying since last year — returning.
+                { customer_id: 'c2', _min: { sale_date: new Date('2025-01-01') }, _max: { sale_date: new Date('2026-07-15') }, _count: { _all: 9 } },
+            ]);
+
+            const result = await service.getCustomerRetention(tenantId, { from: '2026-07-01', to: '2026-07-31' });
+
+            expect(result.summary.activeCustomers).toBe(2);
+            expect(result.summary.newCustomers).toBe(1);
+            expect(result.summary.returningCustomers).toBe(1);
+            expect(result.summary.repeatRatePct).toBe(50);
+            expect(result.summary.returningCustomerRevenue).toBe(300);
+            expect(result.summary.returningRevenueSharePct).toBe(75);
+        });
+
+        /**
+         * Walk-ins carry no customer record. Counting them as new customers
+         * would report near-100% acquisition in a shop that mostly serves
+         * walk-ins, which is most shops on this platform.
+         */
+        it('reports walk-in sales separately instead of counting them as new customers', async () => {
+            db.sale.findMany.mockResolvedValue([
+                { customer_id: null, total_amount: 500 },
+                { customer_id: null, total_amount: 250 },
+            ]);
+            db.sale.groupBy.mockResolvedValue([]);
+
+            const result = await service.getCustomerRetention(tenantId, { from: '2026-07-01', to: '2026-07-31' });
+
+            expect(result.summary.activeCustomers).toBe(0);
+            expect(result.summary.newCustomers).toBe(0);
+            expect(result.walkIn).toMatchObject({ orders: 2, revenue: 750 });
+        });
+
+        it('counts a customer as lapsed only when they are also absent from the window', async () => {
+            db.sale.findMany.mockResolvedValue([{ customer_id: 'c_active', total_amount: 100 }]);
+            db.sale.groupBy.mockResolvedValue([
+                { customer_id: 'c_active', _min: { sale_date: new Date('2025-01-01') }, _max: { sale_date: new Date('2026-07-10') }, _count: { _all: 5 } },
+                { customer_id: 'c_gone', _min: { sale_date: new Date('2024-01-01') }, _max: { sale_date: new Date('2025-01-01') }, _count: { _all: 2 } },
+            ]);
+
+            const result = await service.getCustomerRetention(tenantId, {
+                from: '2026-07-01',
+                to: '2026-07-31',
+                lapsedAfterDays: 90,
+            });
+
+            expect(result.summary.lapsedCustomers).toBe(1);
+            expect(result.lapsedCutoffDate).toBe('2026-05-02');
         });
     });
 });

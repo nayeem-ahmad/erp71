@@ -12,14 +12,44 @@ import { useI18n } from '@/lib/i18n';
  * being the only place that number exists. Keyed by backend tool name.
  */
 const TOOL_ROUTES: Record<string, string> = {
+    // Sales
     sales_summary: '/sales/reports/summary',
-    top_products: '/sales/reports/products',
+    sales_trend: '/sales/reports/summary',
+    sales_breakdown: '/sales/reports/products',
+    top_movers: '/sales/reports/products',
+    returns_analysis: '/sales/returns',
+    customer_retention: '/sales/customers/reports/due-aging',
+    // Inventory
     low_stock: '/inventory/reports/reorder',
     stock_on_hand: '/inventory/reports/valuation',
-    customer_lookup: '/sales/customers',
-    receivables_aging: '/sales/customers/reports/due-aging',
-    expense_summary: '/accounting/expenses',
+    stock_aging: '/inventory/reports/valuation',
+    stock_movements: '/inventory/ledger',
+    shrinkage_summary: '/inventory/shrinkage',
+    // Purchasing
     purchase_summary: '/purchases/reports/summary',
+    purchase_trend: '/purchases/reports/summary',
+    purchase_breakdown: '/purchases/reports/summary',
+    // Parties
+    customer_lookup: '/sales/customers',
+    customer_purchase_history: '/sales/customers',
+    customer_segments: '/sales/customers',
+    receivables_aging: '/sales/customers/reports/due-aging',
+    payables_aging: '/accounting/reports/ap-aging',
+    supplier_lookup: '/purchases/supplier-ledger',
+    // Finance
+    expense_summary: '/accounting/expenses',
+    // financial_statement covers five statements; P&L is the one users mean
+    // most often, and every other statement is one click away from it.
+    financial_statement: '/accounting/reports/pl',
+    budget_vs_actual: '/accounting/reports/budget-vs-actual',
+    vat_tax_summary: '/accounting/reports/vat-tax',
+    cash_position: '/accounting/reports/cashbook',
+    // Operations
+    open_pipeline: '/sales/orders',
+    workforce_summary: '/hr/attendance',
+    loyalty_summary: '/sales/loyalty',
+    // The general-purpose lookups have no single report page behind them, so
+    // they are deliberately absent: a link to the wrong page is worse than none.
 };
 
 export default function AiChatWidget() {

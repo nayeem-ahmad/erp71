@@ -1,7 +1,9 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
+import { ChatDataService } from './chat-data.service';
 import { ChatService } from './chat.service';
+import { AccountingModule } from '../accounting/accounting.module';
 import { CustomersModule } from '../customers/customers.module';
 import { ExpensesModule } from '../expenses/expenses.module';
 import { InventoryReportsModule } from '../inventory-reports/inventory-reports.module';
@@ -10,6 +12,7 @@ import { ProductsModule } from '../products/products.module';
 import { PurchaseReportsModule } from '../purchase-reports/purchase-reports.module';
 import { SalesReportsModule } from '../sales-reports/sales-reports.module';
 import { SubscriptionPlansModule } from '../subscription-plans/subscription-plans.module';
+import { SuppliersModule } from '../suppliers/suppliers.module';
 
 @Module({
     imports: [
@@ -23,10 +26,15 @@ import { SubscriptionPlansModule } from '../subscription-plans/subscription-plan
         InventoryReportsModule,
         PurchaseReportsModule,
         CustomersModule,
+        SuppliersModule,
         ExpensesModule,
+        AccountingModule,
     ],
     controllers: [AiController],
-    providers: [AiService, ChatService],
+    // ChatDataService is provided here rather than imported: it is the chatbot's
+    // own read-only query layer, not a shared domain service, and nothing outside
+    // the assistant should be reaching for it.
+    providers: [AiService, ChatService, ChatDataService],
     exports: [AiService, ChatService],
 })
 export class AiModule {}

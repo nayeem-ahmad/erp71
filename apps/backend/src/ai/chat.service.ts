@@ -1,23 +1,41 @@
 import { ForbiddenException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { AI_TOKENS_PER_CREDIT, type AiChatToolCall } from '@erp71/shared-types';
+import { AI_TOKENS_PER_CREDIT, StorePermission, hasPlanEntitlement, type AiChatToolCall } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { hasStorePermission } from '../auth/permission.util';
 import { TenantContext } from '../database/tenant.decorator';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
+import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
+import { AccountingService } from '../accounting/accounting.service';
 import { CustomersService } from '../customers/customers.service';
 import { ExpensesService } from '../expenses/expenses.service';
 import { InventoryReportsService } from '../inventory-reports/inventory-reports.service';
 import { PurchaseReportsService } from '../purchase-reports/purchase-reports.service';
 import { SalesReportsService } from '../sales-reports/sales-reports.service';
+import { SuppliersService } from '../suppliers/suppliers.service';
 import { AiService, type ChatCompletionMessage } from './ai.service';
-import { CHAT_TOOLS, CHAT_TOOLS_BY_NAME, toOpenRouterTools, type ChatTool, type ChatToolContext, type ChatToolDeps } from './chat-tools';
+import { ChatDataService } from './chat-data.service';
+import {
+    CHAT_TOOLS,
+    CHAT_TOOLS_BY_NAME,
+    toOpenRouterTools,
+    type ChatTool,
+    type ChatToolContext,
+    type ChatToolDeps,
+    type ChatToolModule,
+} from './chat-tools';
 
 /**
- * Model round-trips per question. Two is the common case (call tools, then
- * answer); the cap exists so a model that keeps re-querying cannot bill the
- * tenant indefinitely for one message.
+ * Model round-trips per question.
+ *
+ * Three is the common case now that entity resolution is a first-class step
+ * (resolve the name, run the report, answer). Comparison and drill-down
+ * questions legitimately need more, and the old cap of 5 turned them into
+ * "that needed more lookups than I'm allowed" rather than an answer. The cap
+ * still exists so a model that keeps re-querying cannot bill the tenant
+ * indefinitely for one message; tools within a single turn now run in
+ * parallel, so raising it costs round-trips, not wall-clock per lookup.
  */
-const MAX_TURNS = 5;
+const MAX_TURNS = 8;
 /** Prior messages replayed into a new turn. Tool results are never replayed. */
 const MAX_HISTORY_MESSAGES = 10;
 /** Hard ceiling on a serialized tool result, as a backstop to the per-tool row caps. */
@@ -44,11 +62,15 @@ export class ChatService {
         private readonly db: DatabaseService,
         private readonly ai: AiService,
         private readonly platformSettings: PlatformSettingsService,
+        private readonly planEntitlements: PlanEntitlementsService,
         private readonly salesReports: SalesReportsService,
         private readonly inventoryReports: InventoryReportsService,
         private readonly purchaseReports: PurchaseReportsService,
         private readonly customers: CustomersService,
+        private readonly suppliers: SuppliersService,
         private readonly expenses: ExpensesService,
+        private readonly accounting: AccountingService,
+        private readonly chatData: ChatDataService,
     ) {}
 
     private get deps(): ChatToolDeps {
@@ -57,7 +79,10 @@ export class ChatService {
             inventoryReports: this.inventoryReports,
             purchaseReports: this.purchaseReports,
             customers: this.customers,
+            suppliers: this.suppliers,
             expenses: this.expenses,
+            accounting: this.accounting,
+            data: this.chatData,
         };
     }
 
@@ -71,15 +96,41 @@ export class ChatService {
      * Tools this caller may use. Filtering happens before the tool list is sent,
      * so an unauthorized tool is not merely refused at call time — the model
      * never learns it exists and cannot mention it.
+     *
+     * Two filters apply, and they are different in kind. Permission filtering is
+     * about *this user*; module filtering is about *this tenant's subscription*.
+     * An accounting-only tenant used to be handed inventory tools it could never
+     * populate, so the assistant answered stock questions with an empty report
+     * instead of saying the business does not track stock here.
      */
     async resolveTools(ctx: TenantContext): Promise<ChatTool[]> {
+        const modules = await this.resolveModules(ctx.tenantId);
         const allowed: ChatTool[] = [];
         for (const tool of CHAT_TOOLS) {
+            if (tool.modules && !tool.modules.some((module) => modules.has(module))) continue;
             if (await hasStorePermission(this.db, ctx, tool.permission)) {
                 allowed.push(tool);
             }
         }
         return allowed;
+    }
+
+    /** The product areas this tenant's plan actually covers. */
+    private async resolveModules(tenantId: string): Promise<Set<ChatToolModule>> {
+        const features = await this.planEntitlements.getFeaturesForTenant(tenantId).catch(() => ({}) as Record<string, boolean | number>);
+        const modules = new Set<ChatToolModule>(['accounting']);
+
+        // Accounting-only is the one plan that genuinely has no retail side.
+        // Every other plan sells things, so retail and inventory are the default.
+        if (!hasPlanEntitlement(features, 'accountingOnly')) {
+            modules.add('retail');
+            modules.add('inventory');
+            modules.add('crm');
+            modules.add('hr');
+        }
+        if (hasPlanEntitlement(features, 'premiumManufacturing')) modules.add('manufacturing');
+
+        return modules;
     }
 
     // ── Conversations ────────────────────────────────────────────────────────
@@ -153,7 +204,7 @@ export class ChatService {
                   },
               });
 
-        const [tools, history, stores] = await Promise.all([
+        const [tools, history, stores, hasConsolidatedAccess] = await Promise.all([
             this.resolveTools(ctx),
             this.loadHistory(conversation.id),
             this.db.store.findMany({
@@ -161,6 +212,7 @@ export class ChatService {
                 select: { id: true, name: true },
                 orderBy: { name: 'asc' },
             }),
+            hasStorePermission(this.db, ctx, StorePermission.VIEW_CONSOLIDATED_REPORTS),
         ]);
 
         const toolContext: ChatToolContext = {
@@ -169,6 +221,7 @@ export class ChatService {
             userRole: ctx.userRole,
             storeId: ctx.storeId,
             stores,
+            hasConsolidatedAccess,
         };
 
         const messages: ChatCompletionMessage[] = [
@@ -204,11 +257,23 @@ export class ChatService {
 
             messages.push({ role: 'assistant', content: reply.content ?? '', tool_calls: reply.tool_calls });
 
-            for (const call of reply.tool_calls) {
-                const { result, trace } = await this.executeTool(toolContext, call.function.name, call.function.arguments);
+            // Tools in one turn are independent lookups against a read-only
+            // database, so running them sequentially only added latency: a
+            // question needing four reports took four round-trips of waiting.
+            // Results are appended in the model's original call order regardless
+            // of which finished first — the protocol pairs them by id, but an
+            // unstable order makes the stored trace impossible to read back.
+            const executed = await Promise.all(
+                reply.tool_calls.map((call) =>
+                    this.executeTool(toolContext, call.function.name, call.function.arguments),
+                ),
+            );
+
+            reply.tool_calls.forEach((call, index) => {
+                const { result, trace } = executed[index];
                 toolCalls.push(trace);
                 messages.push({ role: 'tool', tool_call_id: call.id, content: result });
-            }
+            });
         }
 
         if (!answer.trim()) {
@@ -354,8 +419,17 @@ export class ChatService {
             'GROUNDING RULES — these override everything else:',
             '- Never state a number that did not come from a tool result in this conversation. Do not estimate, extrapolate, or recall figures from earlier context that you did not look up.',
             '- If no available tool can answer the question, say plainly what you cannot see and suggest which report page to open. Do not guess.',
-            '- If a tool result says it was truncated, say so — e.g. "the top 20 of 143".',
+            '- If a tool result says it was truncated, say so — e.g. "the top 20 of 143". If it reports hasMore, you can request the next page with the offset parameter.',
+            '- Never invent an id. When a question names a specific product, customer, supplier, warehouse or account, call resolve_entity first and use the id it returns. Branch ids are listed below and need no lookup.',
             '- You are read-only. You cannot create, edit or delete anything. If asked to, explain that and point to the right page.',
+            '',
+            'CHOOSING TOOLS:',
+            '- For anything spanning more than one period, use the trend tools or the compareTo parameter. Do not call the same summary tool twice for two date ranges and subtract them yourself.',
+            '- compareTo: "previous_period" is the equally long block of days ending the day before the range, which may straddle two calendar months. Every result echoes the exact window it used — quote that window rather than calling it "last month".',
+            '- For "why did X change", use top_movers. It compares two periods and returns what moved, in both directions.',
+            '- For a slice of sales, use sales_breakdown with the right groupBy rather than looking for a dedicated tool.',
+            '- Sales reports come from invoices; accounting statements come from posted vouchers. They can legitimately differ. Say which source a figure came from when both could apply.',
+            '- Before reporting a zero or an empty list as an answer, consider calling describe_capabilities — a period with no data and a business that never recorded that data need different answers.',
             '',
             `Today is ${today} (timezone ${TENANT_TIMEZONE}). Resolve relative dates like "last month" or "this week" against that date, and pass explicit YYYY-MM-DD ranges to tools.`,
             '',
@@ -369,7 +443,7 @@ export class ChatService {
             `- ${languageRule}`,
             '',
             tools.length
-                ? `You have ${tools.length} tool(s) available. The user's permissions determine this list — if a tool is absent, that user is not allowed to see that data, so do not mention that it exists.`
+                ? `You have ${tools.length} tool(s) available. The user's permissions and this business's subscription determine this list — if a tool is absent, that data is not available to this user, so do not mention that it exists.`
                 : 'You currently have no data tools available, because this user lacks the permissions for them. Tell the user their account does not have access to business reports and suggest contacting the business owner.',
         ].join('\n');
     }

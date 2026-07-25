@@ -3034,3 +3034,66 @@ describe('api.markAllNotificationsRead', () => {
         expect(lastUrl()).toContain('/notifications/read-all');
     });
 });
+
+// ---------------------------------------------------------------------------
+// Analytics report helpers
+// ---------------------------------------------------------------------------
+
+describe('api sales analytics helpers', () => {
+    it('sends the trend granularity and comparison mode', async () => {
+        mockOk({ data: {} });
+        await api.getSalesTrend({ from: '2026-07-01', to: '2026-07-31', granularity: 'month', compareTo: 'previous_year' });
+
+        expect(lastUrl()).toContain('/sales-reports/trend?');
+        expect(lastUrl()).toContain('granularity=month');
+        expect(lastUrl()).toContain('compareTo=previous_year');
+    });
+
+    /**
+     * `offset=0` is the first page, not an absent filter. Dropping it on
+     * falsiness would make "show me the first 20" silently return the server's
+     * default window instead.
+     */
+    it('keeps a zero offset in the query string', async () => {
+        mockOk({ data: {} });
+        await api.getSalesBreakdown({ from: '2026-07-01', to: '2026-07-31', groupBy: 'product', limit: 20, offset: 0 });
+
+        expect(lastUrl()).toContain('offset=0');
+        expect(lastUrl()).toContain('groupBy=product');
+    });
+
+    it('omits filters that were not supplied', async () => {
+        mockOk({ data: {} });
+        await api.getTopMovers({ from: '2026-07-01', to: '2026-07-31' });
+
+        expect(lastUrl()).not.toContain('storeId');
+        expect(lastUrl()).not.toContain('dimension');
+    });
+
+    it('fetches returns analysis and customer retention', async () => {
+        mockOk({ data: {} });
+        await api.getReturnsAnalysis({ from: '2026-07-01', to: '2026-07-31' });
+        expect(lastUrl()).toContain('/sales-reports/returns-analysis?');
+
+        mockOk({ data: {} });
+        await api.getCustomerRetention({ from: '2026-07-01', to: '2026-07-31', lapsedAfterDays: 120 });
+        expect(lastUrl()).toContain('/sales-reports/customer-retention?');
+        expect(lastUrl()).toContain('lapsedAfterDays=120');
+    });
+
+    it('fetches stock aging with no query string when unfiltered', async () => {
+        mockOk({ data: {} });
+        await api.getStockAging();
+
+        expect(lastUrl()).toContain('/inventory-reports/stock-aging');
+        expect(lastUrl()).not.toContain('?');
+    });
+
+    it('fetches the purchase trend', async () => {
+        mockOk({ data: {} });
+        await api.getPurchaseTrend({ from: '2026-07-01', to: '2026-07-31', granularity: 'month' });
+
+        expect(lastUrl()).toContain('/purchase-reports/trend?');
+        expect(lastUrl()).toContain('granularity=month');
+    });
+});
