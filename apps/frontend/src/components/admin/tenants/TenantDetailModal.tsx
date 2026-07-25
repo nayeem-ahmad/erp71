@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Building2, Database, Download, Loader2, LogIn, RotateCcw, ShieldCheck, Trash2, UserX, Users } from 'lucide-react';
+import Link from 'next/link';
+import { Building2, Database, Download, Loader2, LogIn, PlugZap, RotateCcw, ShieldCheck, Trash2, UserX, Users } from 'lucide-react';
 import {
     BUSINESS_TYPE_LABELS,
     BUSINESS_TYPE_VALUES,
@@ -755,6 +756,22 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                         {dd.button}
                                     </button>
                                 )}
+                            </div>
+
+                            <div className="rounded-lg border border-gray-100 p-4">
+                                <p className="text-xs font-medium text-gray-500">External ERP import</p>
+                                <h3 className="mt-2 text-sm font-semibold text-gray-900">Express Retail Pro</h3>
+                                <p className="mt-1 text-xs text-gray-500">
+                                    Pull this tenant&apos;s sales and purchase history from an Express Retail Pro
+                                    account, once or on a nightly rolling window.
+                                </p>
+                                <Link
+                                    href={`/admin/tenants/${tenant.id}/external-sync`}
+                                    className="mt-3 inline-flex min-h-touch items-center gap-2 rounded-lg border border-blue-200 bg-white px-5 py-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+                                >
+                                    <PlugZap className="w-4 h-4" />
+                                    Configure import
+                                </Link>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

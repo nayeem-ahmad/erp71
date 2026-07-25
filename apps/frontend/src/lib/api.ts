@@ -200,6 +200,48 @@ export type ReportScopeParams = {
 
 export type CustomFieldDef = { key: string; label: string; order: number };
 
+export type ExternalSyncTally = { created: number; updated: number; skipped: number };
+
+export type ExternalSyncWarning = {
+    entity: string;
+    externalId: string;
+    code: string;
+    message: string;
+};
+
+export type ExternalSyncConnection = {
+    id: string;
+    tenant_id: string;
+    provider: string;
+    base_url: string;
+    username: string;
+    external_org_id: string | null;
+    store_id: string;
+    store?: { id: string; name: string };
+    document_prefix: string;
+    enabled: boolean;
+    window_days: number;
+    history_start_date: string | null;
+    last_run_at: string | null;
+    last_success_at: string | null;
+    hasPassword: boolean;
+    nextWindowFrom: string;
+};
+
+export type ExternalSyncRun = {
+    id: string;
+    trigger: 'MANUAL' | 'SCHEDULED';
+    status: 'RUNNING' | 'SUCCESS' | 'PARTIAL' | 'FAILED';
+    window_from: string;
+    window_to: string;
+    dry_run: boolean;
+    stats: Record<'products' | 'customers' | 'suppliers' | 'sales' | 'purchases', ExternalSyncTally> | null;
+    warnings: ExternalSyncWarning[] | null;
+    error_message: string | null;
+    started_at: string;
+    finished_at: string | null;
+};
+
 function appendReportScopeParams(query: URLSearchParams, params?: ReportScopeParams) {
     if (params?.scope) query.set('scope', params.scope);
     if (params?.storeId) query.set('storeId', params.storeId);
@@ -1434,6 +1476,46 @@ export const api = {
         batch_number: number;
         error?: string | null;
     } | null> => fetchWithAuth(`/admin/tenants/${tenantId}/demo-data/status`),
+    // --- External ERP sync (platform admin only) ---
+    getExternalSync: (tenantId: string): Promise<ExternalSyncConnection | null> =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/external-sync`),
+    saveExternalSync: (tenantId: string, data: {
+        baseUrl: string;
+        username: string;
+        password?: string;
+        storeId: string;
+        documentPrefix?: string;
+        enabled?: boolean;
+        windowDays?: number;
+        historyStartDate?: string;
+    }): Promise<ExternalSyncConnection> => fetchWithAuth(`/admin/tenants/${tenantId}/external-sync`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteExternalSync: (tenantId: string) =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/external-sync`, { method: 'DELETE' }),
+    testExternalSync: (tenantId: string, data: { baseUrl: string; username: string; password?: string }): Promise<{
+        ok: boolean;
+        organizationId: string;
+        user: { name: string; username: string; role: string };
+    }> => fetchWithAuth(`/admin/tenants/${tenantId}/external-sync/test`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    startExternalSyncRun: (tenantId: string, data: {
+        dateFrom?: string;
+        dateTo?: string;
+        dryRun?: boolean;
+        fullResync?: boolean;
+    }): Promise<ExternalSyncRun> => fetchWithAuth(`/admin/tenants/${tenantId}/external-sync/runs`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    listExternalSyncRuns: (tenantId: string, limit = 20): Promise<ExternalSyncRun[]> =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/external-sync/runs?limit=${limit}`),
     suspendTenant: (tenantId: string, reason?: string) => fetchWithAuth(`/admin/tenants/${tenantId}/suspend`, {
         method: 'PATCH',
         body: JSON.stringify({ reason }),

@@ -51,6 +51,7 @@ import { SalesReportsModule } from './sales-reports/sales-reports.module';
 import { PurchaseReportsModule } from './purchase-reports/purchase-reports.module';
 import { BillingModule } from './billing/billing.module';
 import { AdminTenantsModule } from './admin-tenants/admin-tenants.module';
+import { ExternalSyncModule } from './external-sync/external-sync.module';
 import { WarrantyClaimsModule } from './warranty-claims/warranty-claims.module';
 import { AccountModule } from './account/account.module';
 import { FeedbackModule } from './feedback/feedback.module';
@@ -147,6 +148,7 @@ import { DemoDataModule } from './demo-data/demo-data.module';
         PurchaseReportsModule,
         BillingModule,
         AdminTenantsModule,
+        ExternalSyncModule,
         WarrantyClaimsModule,
         AccountModule,
         FeedbackModule,
