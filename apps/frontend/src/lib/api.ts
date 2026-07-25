@@ -207,6 +207,22 @@ function appendReportScopeParams(query: URLSearchParams, params?: ReportScopePar
     if (params?.includeCompanyBucket) query.set('includeCompanyBucket', 'true');
 }
 
+/**
+ * Serialises a flat report filter object, dropping empty values.
+ *
+ * `offset: 0` and `includeX: false` are meaningful and must survive, so this
+ * tests for null/undefined/'' rather than falsiness — the shorthand would
+ * silently drop the first page of every paged report.
+ */
+function buildReportQuery(params: Record<string, string | number | boolean | undefined | null>): string {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+        if (value === undefined || value === null || value === '') continue;
+        query.set(key, String(value));
+    }
+    return query.toString();
+}
+
 export const api = {
     getProducts: (params?: { groupId?: string; subgroupId?: string; uncategorized?: boolean; page?: number; limit?: number }) => {
         const query = new URLSearchParams();
@@ -413,6 +429,61 @@ export const api = {
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
         return fetchWithAuth(`/sales-reports/by-category${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    getSalesTrend: (params: {
+        from: string;
+        to: string;
+        storeId?: string;
+        granularity?: 'day' | 'week' | 'month';
+        compareTo?: 'previous_period' | 'previous_year';
+    }) => {
+        const query = buildReportQuery(params);
+        return fetchWithAuth(`/sales-reports/trend?${query}`);
+    },
+    getSalesBreakdown: (params: {
+        from: string;
+        to: string;
+        groupBy: 'product' | 'category' | 'brand' | 'branch' | 'customer' | 'payment_method' | 'staff' | 'hour_of_day' | 'day_of_week';
+        storeId?: string;
+        compareTo?: 'previous_period' | 'previous_year';
+        limit?: number;
+        offset?: number;
+    }) => {
+        const query = buildReportQuery(params);
+        return fetchWithAuth(`/sales-reports/breakdown?${query}`);
+    },
+    getTopMovers: (params: {
+        from: string;
+        to: string;
+        dimension?: 'product' | 'category' | 'brand' | 'branch' | 'customer';
+        storeId?: string;
+        compareTo?: 'previous_period' | 'previous_year';
+        limit?: number;
+    }) => {
+        const query = buildReportQuery(params);
+        return fetchWithAuth(`/sales-reports/top-movers?${query}`);
+    },
+    getReturnsAnalysis: (params: { from: string; to: string; storeId?: string }) => {
+        const query = buildReportQuery(params);
+        return fetchWithAuth(`/sales-reports/returns-analysis?${query}`);
+    },
+    getCustomerRetention: (params: { from: string; to: string; storeId?: string; lapsedAfterDays?: number }) => {
+        const query = buildReportQuery(params);
+        return fetchWithAuth(`/sales-reports/customer-retention?${query}`);
+    },
+    getStockAging: (params?: { warehouseId?: string; groupId?: string; subgroupId?: string; slowMovingAfterDays?: number }) => {
+        const query = buildReportQuery(params ?? {});
+        return fetchWithAuth(`/inventory-reports/stock-aging${query ? `?${query}` : ''}`);
+    },
+    getPurchaseTrend: (params: {
+        from: string;
+        to: string;
+        storeId?: string;
+        granularity?: 'day' | 'week' | 'month';
+        compareTo?: 'previous_period' | 'previous_year';
+    }) => {
+        const query = buildReportQuery(params);
+        return fetchWithAuth(`/purchase-reports/trend?${query}`);
     },
     getConsolidatedReport: (params?: { from?: string; to?: string }) => {
         const query = new URLSearchParams();

@@ -9,5 +9,8 @@ import { AuditService } from '../audit/audit.service';
 @Module({
     controllers: [AccountingController],
     providers: [AccountingService, StorePermissionGuard, TenantRoleGuard, SubscriptionAccessGuard, AuditService],
+    // Exported for the AI assistant's financial_statement tool, so ledger figures
+    // it quotes come from the same code the accounting reports render.
+    exports: [AccountingService],
 })
 export class AccountingModule {}

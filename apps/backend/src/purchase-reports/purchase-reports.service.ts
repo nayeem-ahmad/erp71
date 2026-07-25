@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { GetPurchaseSummaryDto, GetPurchasesByProductDto, GetPurchasesBySupplierDto } from './purchase-reports.dto';
+import { addDays, bucketLabel, bucketStart, percentChange, resolveComparisonRange, type DateRange, type Granularity } from '../common/period.util';
+import { GetPurchaseSummaryDto, GetPurchaseTrendDto, GetPurchasesByProductDto, GetPurchasesBySupplierDto } from './purchase-reports.dto';
 
 @Injectable()
 export class PurchaseReportsService {
@@ -71,6 +72,82 @@ export class PurchaseReportsService {
                 avgOrderValue,
             },
             rows,
+        };
+    }
+
+    /**
+     * Supplier spend as a time series, optionally against a prior window.
+     *
+     * Folded from `getPurchaseSummary`'s daily rows for the same reason the
+     * sales trend is: two independent aggregations of the same period will
+     * eventually disagree, and the report beside it is the one users trust.
+     */
+    async getPurchaseTrend(tenantId: string, query: GetPurchaseTrendDto) {
+        const granularity: Granularity = query.granularity ?? 'day';
+        const range: DateRange = { from: query.from, to: query.to };
+
+        const current = await this.getPurchaseSummary(tenantId, {
+            from: range.from,
+            to: range.to,
+            storeId: query.storeId,
+        });
+
+        const buckets = new Map<string, { grossPurchases: number; returns: number; orders: number }>();
+        for (let day = range.from; day <= range.to; day = addDays(day, 1)) {
+            const start = bucketStart(day, granularity);
+            if (!buckets.has(start)) buckets.set(start, { grossPurchases: 0, returns: 0, orders: 0 });
+            if (buckets.size > 5000) break;
+        }
+        for (const row of current.rows) {
+            const start = bucketStart(row.date, granularity);
+            const entry = buckets.get(start) ?? { grossPurchases: 0, returns: 0, orders: 0 };
+            entry.grossPurchases += row.grossPurchases;
+            entry.returns += row.returns;
+            entry.orders += row.orders;
+            buckets.set(start, entry);
+        }
+
+        const ordered = Array.from(buckets.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([start, entry]) => ({
+                bucket: bucketLabel(start, granularity),
+                periodStart: start,
+                orders: entry.orders,
+                grossPurchases: entry.grossPurchases,
+                returns: entry.returns,
+                netPurchases: entry.grossPurchases - entry.returns,
+            }));
+
+        let comparison: unknown = null;
+        if (query.compareTo) {
+            const previousRange = resolveComparisonRange(range, query.compareTo);
+            if (previousRange) {
+                const previous = await this.getPurchaseSummary(tenantId, {
+                    from: previousRange.from,
+                    to: previousRange.to,
+                    storeId: query.storeId,
+                });
+                comparison = {
+                    mode: query.compareTo,
+                    period: previousRange,
+                    summary: previous.summary,
+                    change: {
+                        netPurchases: current.summary.netPurchases - previous.summary.netPurchases,
+                        netPurchasesPct: percentChange(current.summary.netPurchases, previous.summary.netPurchases),
+                        orderCount: current.summary.orderCount - previous.summary.orderCount,
+                        orderCountPct: percentChange(current.summary.orderCount, previous.summary.orderCount),
+                    },
+                };
+            }
+        }
+
+        return {
+            period: range,
+            granularity,
+            storeId: query.storeId ?? null,
+            summary: current.summary,
+            buckets: ordered,
+            comparison,
         };
     }
 
@@ -196,7 +273,10 @@ function buildDateWindow(from?: string, to?: string) {
             if (!Number.isNaN(date.getTime())) where.created_at.gte = date;
         }
         if (to) {
-            const date = new Date(to);
+            // A bare YYYY-MM-DD upper bound covers the whole day; parsed as-is it
+            // would be midnight and drop everything purchased on the last day.
+            const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(to.trim());
+            const date = new Date(dateOnly ? `${to.trim()}T23:59:59.999Z` : to);
             if (!Number.isNaN(date.getTime())) where.created_at.lte = date;
         }
     }

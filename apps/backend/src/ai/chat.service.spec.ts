@@ -7,10 +7,18 @@ import type { TenantContext } from '../database/tenant.decorator';
 const OWNER_CTX: TenantContext = { tenantId: 'tenant-1', userId: 'user-1', storeId: 'store-1', userRole: 'OWNER' };
 const STAFF_CTX: TenantContext = { tenantId: 'tenant-1', userId: 'user-2', storeId: 'store-1', userRole: 'CASHIER' };
 
+function emptySummary() {
+    return {
+        totalRevenue: 0, totalReturns: 0, netRevenue: 0, transactionCount: 0,
+        avgOrderValue: 0, totalCogs: 0, grossProfit: 0, grossMarginPct: 0,
+    };
+}
+
 function makeService(overrides: {
     grantedPermissions?: StorePermission[];
     replies?: Array<{ content: string | null; tool_calls?: any[] }>;
     featureEnabled?: boolean;
+    planFeatures?: Record<string, boolean | number>;
 } = {}) {
     const granted = new Set<string>(overrides.grantedPermissions ?? []);
     const replies = overrides.replies ?? [{ content: 'ok' }];
@@ -71,18 +79,31 @@ function makeService(overrides: {
         }),
     };
 
+    const planEntitlements: any = {
+        getFeaturesForTenant: jest.fn().mockResolvedValue(overrides.planFeatures ?? {}),
+    };
+
+    const chatData: any = {
+        getDataCoverage: jest.fn().mockResolvedValue({}),
+        resolveEntity: jest.fn().mockResolvedValue([]),
+    };
+
     const service = new ChatService(
         db,
         ai,
         platformSettings,
+        planEntitlements,
         salesReports,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
+        {} as any, // inventoryReports
+        {} as any, // purchaseReports
+        {} as any, // customers
+        {} as any, // suppliers
+        {} as any, // expenses
+        {} as any, // accounting
+        chatData,
     );
 
-    return { service, db, ai, platformSettings, salesReports };
+    return { service, db, ai, platformSettings, planEntitlements, salesReports, chatData };
 }
 
 describe('ChatService.resolveTools', () => {
@@ -104,14 +125,48 @@ describe('ChatService.resolveTools', () => {
 
         const names = (await service.resolveTools(STAFF_CTX)).map((t) => t.name);
 
-        expect(names.sort()).toEqual(['low_stock', 'stock_on_hand']);
+        expect(names).toContain('low_stock');
+        expect(names).toContain('stock_on_hand');
+        // Catalogue-permission tools only — nothing financial or customer-facing.
         expect(names).not.toContain('sales_summary');
         expect(names).not.toContain('receivables_aging');
+        expect(names).not.toContain('financial_statement');
+        expect(names).not.toContain('customer_lookup');
     });
 
     it('gives a staff user with no grants no tools at all', async () => {
         const { service } = makeService({ grantedPermissions: [] });
         expect(await service.resolveTools(STAFF_CTX)).toEqual([]);
+    });
+
+    /**
+     * The module filter is about the tenant's subscription, not the user. An
+     * accounting-only tenant has no stock to report on, and handing it inventory
+     * tools made the assistant answer stock questions with an empty report
+     * rather than saying the business does not track stock here.
+     */
+    it('withholds retail and inventory tools from an accounting-only tenant', async () => {
+        const { service } = makeService({ planFeatures: { accountingOnly: true } });
+
+        const names = (await service.resolveTools(OWNER_CTX)).map((t) => t.name);
+
+        expect(names).not.toContain('low_stock');
+        expect(names).not.toContain('stock_on_hand');
+        expect(names).not.toContain('sales_summary');
+        expect(names).toContain('financial_statement');
+        expect(names).toContain('payables_aging');
+        // The tools that carry no module tag stay available to everyone.
+        expect(names).toContain('resolve_entity');
+        expect(names).toContain('list_documents');
+    });
+
+    it('falls back to the full tool set when the plan lookup fails', async () => {
+        const { service, planEntitlements } = makeService();
+        planEntitlements.getFeaturesForTenant.mockRejectedValueOnce(new Error('billing down'));
+
+        const names = (await service.resolveTools(OWNER_CTX)).map((t) => t.name);
+
+        expect(names).toContain('sales_summary');
     });
 });
 
@@ -246,11 +301,49 @@ describe('ChatService.chat', () => {
 
         const result = await service.chat(OWNER_CTX, 'endless question');
 
-        expect(ai.callOpenRouterWithTools).toHaveBeenCalledTimes(5);
+        expect(ai.callOpenRouterWithTools).toHaveBeenCalledTimes(8);
         expect(result.truncated).toBe(true);
         expect(result.content).toMatch(/more lookups than I am allowed/);
         // The final round-trip withholds the tool list to force a text answer.
-        expect(ai.callOpenRouterWithTools.mock.calls[4][2]).toEqual([]);
+        expect(ai.callOpenRouterWithTools.mock.calls[7][2]).toEqual([]);
+    });
+
+    /**
+     * Tools in one turn are independent read-only lookups, so they run
+     * concurrently. The guarantee that matters is ordering: results must be
+     * appended in the model's call order regardless of which resolved first,
+     * or the stored trace no longer lines up with what was asked.
+     */
+    it('runs a turn\'s tool calls concurrently and keeps them in call order', async () => {
+        const { service, salesReports } = makeService({
+            replies: [
+                {
+                    content: '',
+                    tool_calls: [
+                        { id: 'c1', type: 'function', function: { name: 'sales_summary', arguments: '{"from":"2026-06-01","to":"2026-06-30"}' } },
+                        { id: 'c2', type: 'function', function: { name: 'sales_summary', arguments: '{"from":"2026-05-01","to":"2026-05-31"}' } },
+                    ],
+                },
+                { content: 'Compared.' },
+            ],
+        });
+
+        let firstResolved: (value: unknown) => void = () => {};
+        const gate = new Promise((resolve) => {
+            firstResolved = resolve;
+        });
+        // The first call finishes only after the second one has started, which
+        // cannot happen if the loop awaits them one at a time.
+        salesReports.getSalesSummary
+            .mockImplementationOnce(() => gate.then(() => ({ summary: emptySummary(), rows: [] })))
+            .mockImplementationOnce(() => {
+                firstResolved(null);
+                return Promise.resolve({ summary: emptySummary(), rows: [] });
+            });
+
+        const result = await service.chat(OWNER_CTX, 'compare may and june');
+
+        expect(result.toolCalls.map((c) => c.args.from)).toEqual(['2026-06-01', '2026-05-01']);
     });
 
     it('never replays tool results into a later question in the same thread', async () => {

@@ -7,7 +7,20 @@ import { RequireStorePermission } from '../auth/store-permission.decorator';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
-import { GetBranchReportDto, GetConsolidatedReportDto, GetMonthlySalesByCustomerDto, GetSalesByCategoryDto, GetSalesByCustomerDto, GetSalesByProductDto, GetSalesSummaryDto } from './sales-reports.dto';
+import {
+    GetBranchReportDto,
+    GetConsolidatedReportDto,
+    GetCustomerRetentionDto,
+    GetMonthlySalesByCustomerDto,
+    GetReturnsAnalysisDto,
+    GetSalesBreakdownDto,
+    GetSalesByCategoryDto,
+    GetSalesByCustomerDto,
+    GetSalesByProductDto,
+    GetSalesSummaryDto,
+    GetSalesTrendDto,
+    GetTopMoversDto,
+} from './sales-reports.dto';
 import { SalesReportsService } from './sales-reports.service';
 
 @Controller('sales-reports')
@@ -52,5 +65,33 @@ export class SalesReportsController {
     @Get('monthly-by-customer')
     getMonthlySalesByCustomer(@Tenant() tenant: TenantContext, @Query() query: GetMonthlySalesByCustomerDto) {
         return this.service.getMonthlySalesByCustomer(tenant.tenantId, query);
+    }
+
+    @Get('trend')
+    getSalesTrend(@Tenant() tenant: TenantContext, @Query() query: GetSalesTrendDto) {
+        return this.service.getSalesTrend(tenant.tenantId, query);
+    }
+
+    @Get('breakdown')
+    getSalesBreakdown(@Tenant() tenant: TenantContext, @Query() query: GetSalesBreakdownDto) {
+        return this.service.getSalesBreakdown(tenant.tenantId, query);
+    }
+
+    @Get('top-movers')
+    @RequireStorePermission(StorePermission.VIEW_FINANCIAL_REPORTS)
+    getTopMovers(@Tenant() tenant: TenantContext, @Query() query: GetTopMoversDto) {
+        return this.service.getTopMovers(tenant.tenantId, query);
+    }
+
+    @Get('returns-analysis')
+    @RequireStorePermission(StorePermission.VIEW_FINANCIAL_REPORTS)
+    getReturnsAnalysis(@Tenant() tenant: TenantContext, @Query() query: GetReturnsAnalysisDto) {
+        return this.service.getReturnsAnalysis(tenant.tenantId, query);
+    }
+
+    @Get('customer-retention')
+    @RequireStorePermission(StorePermission.VIEW_CRM_INTERACTIONS)
+    getCustomerRetention(@Tenant() tenant: TenantContext, @Query() query: GetCustomerRetentionDto) {
+        return this.service.getCustomerRetention(tenant.tenantId, query);
     }
 }
