@@ -415,9 +415,12 @@ export default function DataTable<T>({
         prefs.setColumnOrder(tableId, columnOrder);
     }, [columnOrder]);
 
+    // Persist the size actually in use, not the client-mode state — in server mode the size
+    // lives in `serverPagination` and the local `pageSize` is an unread default, so writing
+    // that here would overwrite the viewer's real choice with 10 on every mount.
     useEffect(() => {
-        prefs.setPageSize(tableId, pageSize);
-    }, [pageSize]);
+        prefs.setPageSize(tableId, effectivePageSize);
+    }, [effectivePageSize]);
 
     useEffect(() => {
         Object.entries(columnSizing).forEach(([colId, width]) => {

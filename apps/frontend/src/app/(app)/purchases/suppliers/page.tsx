@@ -60,6 +60,7 @@ export default function SuppliersPage() {
         serverPagination,
         reload: load,
     } = useServerList<Supplier>({
+        tableId: 'suppliers',
         fetch: (p) => api.getSuppliersPaged({ search: debouncedSearch || undefined, ...p }),
         deps: [debouncedSearch],
         initialSort: { id: 'name', desc: false },

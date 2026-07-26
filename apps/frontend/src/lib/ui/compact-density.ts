@@ -2,6 +2,15 @@
 
 export type UiDensity = 'comfortable' | 'compact';
 
+/**
+ * Rows per page a list starts at before the viewer picks their own size.
+ *
+ * Single source of truth: both density presets below use it, and `useServerList`
+ * falls back to it for server-paginated tables, so the two pagination modes open
+ * on the same number of rows.
+ */
+export const DEFAULT_PAGE_SIZE = 10;
+
 export const compactDensity = {
     page: 'overflow-y-auto h-full bg-canvas p-3 md:p-4 font-sans text-gray-900 text-[13px]',
     pageInner: 'space-y-4',
@@ -48,7 +57,7 @@ export const dataTableDensity = {
         emptyIcon: 'w-16 h-16',
         pagination: 'px-4 py-3',
         filterLabel: 'text-[10px] font-black uppercase tracking-widest text-gray-400',
-        defaultPageSize: 20,
+        defaultPageSize: DEFAULT_PAGE_SIZE,
     },
     compact: {
         wrapper: 'rounded-lg',
@@ -65,6 +74,6 @@ export const dataTableDensity = {
         emptyIcon: 'w-10 h-10',
         pagination: 'px-3 py-2',
         filterLabel: 'text-xs font-medium text-gray-500',
-        defaultPageSize: 25,
+        defaultPageSize: DEFAULT_PAGE_SIZE,
     },
 } as const;

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Plus, RefreshCw, Search, Eye, Trash2, ListChecks, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
+import { DEFAULT_PAGE_SIZE } from '@/lib/ui/compact-density';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
@@ -97,7 +98,7 @@ export default function LeadsPage() {
     const [bulkBusy, setBulkBusy] = useState(false);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(20);
+    const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
     const [sort, setSort] = useState<{ id: string; desc: boolean } | null>(null);
     // Guards against out-of-order responses: a filter/sort change while on page > 1 fires a
     // stale-page fetch, then the reset-to-page-1 effect fires a second fetch. Only the latest

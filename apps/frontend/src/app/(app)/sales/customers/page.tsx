@@ -92,6 +92,7 @@ export default function CustomersPage() {
         serverPagination,
         reload: loadCustomers,
     } = useServerList<Customer>({
+        tableId: 'customers',
         fetch: (p) => api.getCustomersPaged({
             search: debouncedSearch || undefined,
             segment: segment || undefined,

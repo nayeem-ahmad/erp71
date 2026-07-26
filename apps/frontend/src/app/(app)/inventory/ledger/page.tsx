@@ -37,6 +37,7 @@ export default function InventoryLedgerPage() {
         serverPagination,
         reload: loadLedger,
     } = useServerList<LedgerRow>({
+        tableId: 'inventory-ledger',
         fetch: (p) => api.getInventoryLedger({
             warehouseId: warehouseId || undefined,
             movementType: movementType || undefined,

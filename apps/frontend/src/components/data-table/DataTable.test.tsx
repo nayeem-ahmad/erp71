@@ -531,14 +531,14 @@ describe('DataTable — client-side pagination', () => {
     it('advances to the next page when the next button is clicked', async () => {
         render(<DataTable {...defaultProps} data={manyRows} />);
 
-        // Default page size is 20, so row 21 starts page 2.
+        // Default page size is 10, so row 11 starts page 2.
         expect(screen.getByText('Row 1')).toBeInTheDocument();
-        expect(screen.queryByText('Row 21')).not.toBeInTheDocument();
+        expect(screen.queryByText('Row 11')).not.toBeInTheDocument();
 
         fireEvent.click(screen.getByTestId('pagination-next'));
 
         await waitFor(() => {
-            expect(screen.getByText('Row 21')).toBeInTheDocument();
+            expect(screen.getByText('Row 11')).toBeInTheDocument();
         });
         expect(screen.queryByText('Row 1')).not.toBeInTheDocument();
     });
@@ -546,12 +546,12 @@ describe('DataTable — client-side pagination', () => {
     it('reports the range for the page actually being viewed', async () => {
         render(<DataTable {...defaultProps} data={manyRows} />);
 
-        expect(screen.getByText(/Showing 1–20 of 25/)).toBeInTheDocument();
+        expect(screen.getByText(/Showing 1–10 of 25/)).toBeInTheDocument();
 
         fireEvent.click(screen.getByTestId('pagination-next'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Showing 21–25 of 25/)).toBeInTheDocument();
+            expect(screen.getByText(/Showing 11–20 of 25/)).toBeInTheDocument();
         });
     });
 
@@ -561,7 +561,7 @@ describe('DataTable — client-side pagination', () => {
         fireEvent.click(screen.getByRole('button', { name: '2' }));
 
         await waitFor(() => {
-            expect(screen.getByText('Row 21')).toBeInTheDocument();
+            expect(screen.getByText('Row 11')).toBeInTheDocument();
         });
     });
 
@@ -569,24 +569,35 @@ describe('DataTable — client-side pagination', () => {
         render(<DataTable {...defaultProps} data={manyRows} />);
 
         fireEvent.click(screen.getByTestId('pagination-next'));
-        await waitFor(() => expect(screen.getByText('Row 21')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('Row 11')).toBeInTheDocument());
 
-        fireEvent.change(screen.getByTestId('page-size-select'), { target: { value: '10' } });
+        fireEvent.change(screen.getByTestId('page-size-select'), { target: { value: '20' } });
 
         await waitFor(() => {
-            expect(screen.getByText(/Showing 1–10 of 25/)).toBeInTheDocument();
+            expect(screen.getByText(/Showing 1–20 of 25/)).toBeInTheDocument();
         });
     });
 });
 
 describe('DataTable — page size selector', () => {
     it('displays the page size in use even when it is not one of the presets', () => {
-        // Compact density defaults to 25, which is not in PAGE_SIZE_OPTIONS. A <select>
-        // whose value matches no <option> silently renders the first one, so the control
-        // read "10" while the table was paging at 25.
-        render(<DataTable {...defaultProps} density="compact" />);
+        // A <select> whose value matches no <option> silently renders the first one, so a
+        // stored size outside PAGE_SIZE_OPTIONS used to make the control read "10" while
+        // the table paged at 25. Compact density itself defaulted to 25 until the default
+        // moved to 10; a saved preference can still be off-list.
+        jest.spyOn(require('./useTablePreferences'), 'useTablePreferences').mockReturnValue({
+            getPreferences: jest.fn().mockReturnValue({ pageSize: 25 }),
+            setColumnVisibility: jest.fn(),
+            setColumnOrder: jest.fn(),
+            setPageSize: jest.fn(),
+            setColumnWidth: jest.fn(),
+        });
+
+        render(<DataTable {...defaultProps} />);
 
         expect(screen.getByTestId('page-size-select')).toHaveValue('25');
+
+        jest.restoreAllMocks();
     });
 });
 
@@ -645,5 +656,63 @@ describe('DataTable — server-side pagination', () => {
         ).map((o) => Number(o.value));
         expect(options).not.toContain(500);
         expect(options).toContain(100);
+    });
+});
+
+// ── Default page size ─────────────────────────────────────────────
+
+describe('DataTable — default page size', () => {
+    const manyRows: Row[] = Array.from({ length: 25 }, (_, i) => ({
+        id: String(i + 1),
+        name: `Row ${i + 1}`,
+        amount: i,
+    }));
+
+    it('opens at 10 rows per page with no saved preference', () => {
+        render(<DataTable {...defaultProps} data={manyRows} />);
+
+        expect(screen.getByTestId('page-size-select')).toHaveValue('10');
+        expect(screen.getByText(/Showing 1–10 of 25/)).toBeInTheDocument();
+        expect(screen.getByText('Row 10')).toBeInTheDocument();
+        expect(screen.queryByText('Row 11')).not.toBeInTheDocument();
+    });
+
+    it('opens at 10 under compact density too', () => {
+        render(<DataTable {...defaultProps} data={manyRows} density="compact" />);
+
+        expect(screen.getByTestId('page-size-select')).toHaveValue('10');
+    });
+
+    it('persists the size actually in use in server mode, not the unread client default', () => {
+        const setPageSize = jest.fn();
+        jest.spyOn(require('./useTablePreferences'), 'useTablePreferences').mockReturnValue({
+            getPreferences: jest.fn().mockReturnValue(undefined),
+            setColumnVisibility: jest.fn(),
+            setColumnOrder: jest.fn(),
+            setPageSize,
+            setColumnWidth: jest.fn(),
+        });
+
+        render(
+            <DataTable
+                {...defaultProps}
+                showSearch={false}
+                serverPagination={{
+                    total: 4213,
+                    page: 1,
+                    pageSize: 50,
+                    onPageChange: jest.fn(),
+                    onPageSizeChange: jest.fn(),
+                    sort: null,
+                    onSortChange: jest.fn(),
+                }}
+            />,
+        );
+
+        // 50 is what the viewer chose; 10 is the local default this mode never reads.
+        expect(setPageSize).toHaveBeenCalledWith('test-table', 50);
+        expect(setPageSize).not.toHaveBeenCalledWith('test-table', 10);
+
+        jest.restoreAllMocks();
     });
 });
