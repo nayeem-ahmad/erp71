@@ -280,6 +280,8 @@ export default function DataTable<T>({
     );
     const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
     const [pageSize, setPageSize] = useState(savedPrefs?.pageSize ?? d.defaultPageSize);
+    /** Client-mode page index. In server mode the page lives in `serverPagination`. */
+    const [clientPageIndex, setClientPageIndex] = useState(0);
 
     // UI toggles
     const [showColumnSelector, setShowColumnSelector] = useState(false);
@@ -318,10 +320,20 @@ export default function DataTable<T>({
         ? [{ id: serverPagination.sort.id, desc: serverPagination.sort.desc }]
         : [];
     const effectivePageSize = serverPagination ? serverPagination.pageSize : pageSize;
-    const serverPageIndex = serverPagination ? serverPagination.page - 1 : 0;
-    const pageSizeOptions = isServer
-        ? PAGE_SIZE_OPTIONS.filter((s) => s <= SERVER_MAX_PAGE_SIZE)
-        : PAGE_SIZE_OPTIONS;
+    const effectivePageIndex = serverPagination ? serverPagination.page - 1 : clientPageIndex;
+
+    // The selector renders `effectivePageSize` as its value, so that size MUST exist as an
+    // option: a <select> whose value matches no <option> silently displays the first one.
+    // Compact density defaults to 25, which is not a preset — the control read "10" while
+    // the table paged at 25. A saved preference can be off-list the same way.
+    const pageSizeOptions = useMemo(() => {
+        const base = isServer
+            ? PAGE_SIZE_OPTIONS.filter((s) => s <= SERVER_MAX_PAGE_SIZE)
+            : PAGE_SIZE_OPTIONS;
+        return base.includes(effectivePageSize)
+            ? base
+            : [...base, effectivePageSize].sort((a, b) => a - b);
+    }, [isServer, effectivePageSize]);
 
     // Table instance
     const table = useReactTable({
@@ -335,7 +347,7 @@ export default function DataTable<T>({
             columnOrder,
             columnSizing,
             rowSelection,
-            pagination: { pageIndex: serverPageIndex, pageSize: effectivePageSize },
+            pagination: { pageIndex: effectivePageIndex, pageSize: effectivePageSize },
         },
         onSortingChange: isServer
             ? (updater) => {
@@ -353,17 +365,33 @@ export default function DataTable<T>({
         onColumnOrderChange: setColumnOrder,
         onColumnSizingChange: setColumnSizing,
         onRowSelectionChange: setRowSelection,
-        onPaginationChange: isServer
-            ? (updater) => {
-                  const prev = { pageIndex: serverPageIndex, pageSize: effectivePageSize };
-                  const next = typeof updater === 'function' ? updater(prev) : updater;
-                  if (next.pageSize !== prev.pageSize) {
-                      serverPagination!.onPageSizeChange(next.pageSize);
-                  } else if (next.pageIndex !== prev.pageIndex) {
-                      serverPagination!.onPageChange(next.pageIndex + 1);
-                  }
-              }
-            : undefined,
+        // `pagination` is supplied in `state`, which makes it fully controlled — so this
+        // handler is mandatory in BOTH modes. Client mode previously passed `undefined`,
+        // leaving the table permanently on page 1: setPageIndex/nextPage had nowhere to
+        // write. It went unnoticed while list endpoints were truncated to one page's worth
+        // of rows, and became reachable as soon as those pages loaded their full result set.
+        onPaginationChange: (updater) => {
+            const prev = { pageIndex: effectivePageIndex, pageSize: effectivePageSize };
+            const next = typeof updater === 'function' ? updater(prev) : updater;
+
+            if (isServer) {
+                if (next.pageSize !== prev.pageSize) {
+                    serverPagination!.onPageSizeChange(next.pageSize);
+                } else if (next.pageIndex !== prev.pageIndex) {
+                    serverPagination!.onPageChange(next.pageIndex + 1);
+                }
+                return;
+            }
+
+            if (next.pageSize !== prev.pageSize) {
+                // Row 40 is on a different page at 20/page than at 50/page, so holding the
+                // index across a size change lands somewhere arbitrary — or past the end.
+                setPageSize(next.pageSize);
+                setClientPageIndex(0);
+            } else {
+                setClientPageIndex(next.pageIndex);
+            }
+        },
         getRowId,
         getCoreRowModel: getCoreRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
@@ -467,8 +495,10 @@ export default function DataTable<T>({
         [],
     );
 
+    // Routed through the table so both modes take the single path in `onPaginationChange`
+    // (which also resets to page 1). Setting `pageSize` here as well would fork that logic
+    // and, in server mode, write a client page size that nothing reads.
     const handlePageSizeChange = (size: number) => {
-        setPageSize(size);
         table.setPageSize(size);
     };
 
@@ -843,6 +873,7 @@ export default function DataTable<T>({
                         <div className="flex items-center gap-1.5">
                             <span className={d.filterLabel}>{t.common.dataTable.rows}</span>
                             <select
+                                data-testid="page-size-select"
                                 value={effectivePageSize}
                                 onChange={(e) => handlePageSizeChange(Number(e.target.value))}
                                 className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300"
@@ -897,6 +928,7 @@ export default function DataTable<T>({
                         })()}
 
                         <button
+                            data-testid="pagination-next"
                             onClick={() => table.nextPage()}
                             disabled={!table.getCanNextPage()}
                             className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"

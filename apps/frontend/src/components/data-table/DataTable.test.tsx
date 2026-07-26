@@ -518,3 +518,132 @@ describe('DataTable server pagination mode', () => {
         expect(onSortChange).toHaveBeenCalledWith({ id: 'name', desc: false });
     });
 });
+
+// ── Client-side pagination ────────────────────────────────────────
+
+describe('DataTable — client-side pagination', () => {
+    const manyRows: Row[] = Array.from({ length: 25 }, (_, i) => ({
+        id: String(i + 1),
+        name: `Row ${i + 1}`,
+        amount: i,
+    }));
+
+    it('advances to the next page when the next button is clicked', async () => {
+        render(<DataTable {...defaultProps} data={manyRows} />);
+
+        // Default page size is 20, so row 21 starts page 2.
+        expect(screen.getByText('Row 1')).toBeInTheDocument();
+        expect(screen.queryByText('Row 21')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByTestId('pagination-next'));
+
+        await waitFor(() => {
+            expect(screen.getByText('Row 21')).toBeInTheDocument();
+        });
+        expect(screen.queryByText('Row 1')).not.toBeInTheDocument();
+    });
+
+    it('reports the range for the page actually being viewed', async () => {
+        render(<DataTable {...defaultProps} data={manyRows} />);
+
+        expect(screen.getByText(/Showing 1–20 of 25/)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByTestId('pagination-next'));
+
+        await waitFor(() => {
+            expect(screen.getByText(/Showing 21–25 of 25/)).toBeInTheDocument();
+        });
+    });
+
+    it('jumps to a numbered page', async () => {
+        render(<DataTable {...defaultProps} data={manyRows} />);
+
+        fireEvent.click(screen.getByRole('button', { name: '2' }));
+
+        await waitFor(() => {
+            expect(screen.getByText('Row 21')).toBeInTheDocument();
+        });
+    });
+
+    it('returns to the first page when the page size changes', async () => {
+        render(<DataTable {...defaultProps} data={manyRows} />);
+
+        fireEvent.click(screen.getByTestId('pagination-next'));
+        await waitFor(() => expect(screen.getByText('Row 21')).toBeInTheDocument());
+
+        fireEvent.change(screen.getByTestId('page-size-select'), { target: { value: '10' } });
+
+        await waitFor(() => {
+            expect(screen.getByText(/Showing 1–10 of 25/)).toBeInTheDocument();
+        });
+    });
+});
+
+describe('DataTable — page size selector', () => {
+    it('displays the page size in use even when it is not one of the presets', () => {
+        // Compact density defaults to 25, which is not in PAGE_SIZE_OPTIONS. A <select>
+        // whose value matches no <option> silently renders the first one, so the control
+        // read "10" while the table was paging at 25.
+        render(<DataTable {...defaultProps} density="compact" />);
+
+        expect(screen.getByTestId('page-size-select')).toHaveValue('25');
+    });
+});
+
+// ── Server-side pagination ────────────────────────────────────────
+
+describe('DataTable — server-side pagination', () => {
+    const serverProps = (overrides: Record<string, unknown> = {}) => ({
+        ...defaultProps,
+        showSearch: false,
+        serverPagination: {
+            total: 4213,
+            page: 1,
+            pageSize: 20,
+            onPageChange: jest.fn(),
+            onPageSizeChange: jest.fn(),
+            sort: null,
+            onSortChange: jest.fn(),
+            ...overrides,
+        },
+    });
+
+    it('reports the server total rather than the rows on this page', () => {
+        render(<DataTable {...serverProps()} />);
+        expect(screen.getByText(/Showing 1–20 of 4213/)).toBeInTheDocument();
+    });
+
+    it('asks the caller for the next page instead of paging locally', () => {
+        const onPageChange = jest.fn();
+        render(<DataTable {...serverProps({ onPageChange })} />);
+
+        fireEvent.click(screen.getByTestId('pagination-next'));
+
+        expect(onPageChange).toHaveBeenCalledWith(2);
+    });
+
+    it('reports the page size change and not a page change', () => {
+        const onPageSizeChange = jest.fn();
+        const onPageChange = jest.fn();
+        render(<DataTable {...serverProps({ onPageSizeChange, onPageChange })} />);
+
+        fireEvent.change(screen.getByTestId('page-size-select'), { target: { value: '50' } });
+
+        expect(onPageSizeChange).toHaveBeenCalledWith(50);
+        expect(onPageChange).not.toHaveBeenCalled();
+    });
+
+    it('reflects the caller-supplied page in the range', () => {
+        render(<DataTable {...serverProps({ page: 3 })} />);
+        expect(screen.getByText(/Showing 41–60 of 4213/)).toBeInTheDocument();
+    });
+
+    it('does not offer a page size above the backend cap', () => {
+        render(<DataTable {...serverProps()} />);
+        const options = Array.from(
+            screen.getByTestId('page-size-select').querySelectorAll('option'),
+        ).map((o) => Number(o.value));
+        expect(options).not.toContain(500);
+        expect(options).toContain(100);
+    });
+});
