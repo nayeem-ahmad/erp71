@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Paginated } from '@/lib/api';
+import { useTablePreferences } from '@/components/data-table/useTablePreferences';
+import { DEFAULT_PAGE_SIZE } from '@/lib/ui/compact-density';
 
 export interface ServerListParams {
     page: number;
@@ -54,12 +56,20 @@ export interface UseServerListResult<T> {
 export function useServerList<T>({
     fetch,
     deps = [],
-    initialPageSize = 20,
+    tableId,
+    initialPageSize,
     initialSort = null,
     enabled = true,
 }: {
     fetch: (params: ServerListParams) => Promise<Paginated<T>>;
     deps?: unknown[];
+    /**
+     * The `tableId` of the DataTable this drives. Supplying it makes a chosen rows-per-page
+     * survive navigation: server-paginated tables own their page size here rather than in
+     * DataTable, so without this they reopen at the default every time regardless of what
+     * the viewer picked. DataTable remains the only writer of the stored value.
+     */
+    tableId?: string;
     initialPageSize?: number;
     initialSort?: { id: string; desc: boolean } | null;
     /** Set false to hold off fetching until prerequisites (e.g. a selected account) exist. */
@@ -70,7 +80,14 @@ export function useServerList<T>({
     const [loading, setLoading] = useState(enabled);
     const [error, setError] = useState<unknown>(null);
     const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(initialPageSize);
+    // Read once on mount: DataTable persists the size as it changes, and re-reading later
+    // would fight the local state it is being written from.
+    const savedPageSize = useTablePreferences(
+        (s) => (tableId ? s.getPreferences(tableId)?.pageSize : undefined),
+    );
+    const [pageSize, setPageSize] = useState(
+        savedPageSize ?? initialPageSize ?? DEFAULT_PAGE_SIZE,
+    );
     const [sort, setSort] = useState<{ id: string; desc: boolean } | null>(initialSort);
 
     const loadSeq = useRef(0);

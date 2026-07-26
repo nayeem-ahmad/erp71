@@ -74,6 +74,7 @@ export default function InventoryPage() {
         reload: loadProducts,
         setItems: setProducts,
     } = useServerList<Product>({
+        tableId: 'products',
         fetch: (p) => api.getProductsPaged({
             groupId: showUncategorized ? undefined : selectedGroupId || undefined,
             subgroupId: showUncategorized ? undefined : selectedSubgroupId || undefined,
