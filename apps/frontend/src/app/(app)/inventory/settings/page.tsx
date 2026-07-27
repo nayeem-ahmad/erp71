@@ -16,6 +16,7 @@ const WAREHOUSE_IMPORT_FIELDS: ImportField[] = [
 export default function InventorySettingsPage() {
     const { t } = useI18n();
     const [warehouses, setWarehouses] = useState<any[]>([]);
+    const [storeDefaults, setStoreDefaults] = useState<any[]>([]);
     const [reasons, setReasons] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [form, setForm] = useState<any>({});
@@ -31,13 +32,15 @@ export default function InventorySettingsPage() {
     const loadAll = async () => {
         setLoading(true);
         try {
-            const [warehouseData, settingsData, reasonData] = await Promise.all([
+            const [warehouseData, settingsData, reasonData, storeDefaultData] = await Promise.all([
                 api.getInventoryWarehouses(),
                 api.getInventorySettings(),
                 api.getInventoryReasons(),
+                api.getInventoryStoreWarehouseDefaults().catch(() => []),
             ]);
             setWarehouses(warehouseData);
             setReasons(reasonData);
+            setStoreDefaults(Array.isArray(storeDefaultData) ? storeDefaultData : []);
             setForm({
                 defaultProductWarehouseId: settingsData.defaultProductWarehouse?.id || '',
                 defaultPurchaseWarehouseId: settingsData.defaultPurchaseWarehouse?.id || '',
@@ -112,6 +115,17 @@ export default function InventorySettingsPage() {
         }
     };
 
+    const handleStoreDefaultChange = async (storeId: string, key: string, value: string) => {
+        try {
+            const updated = await api.updateInventoryStoreWarehouseDefaults(storeId, { [key]: value });
+            setStoreDefaults(Array.isArray(updated) ? updated : []);
+            setMessage(t.inventorySettings.perStoreDefaultsUpdated);
+        } catch (error: any) {
+            setMessage(error.message || t.inventorySettings.perStoreDefaultsFailed);
+            await loadAll();
+        }
+    };
+
     const handleCreateReason = async () => {
         try {
             await api.createInventoryReason(reasonForm);
@@ -141,6 +155,13 @@ export default function InventorySettingsPage() {
         defaultTransferSourceWarehouseId: t.inventorySettings.transferSourceWarehouse,
         defaultTransferDestinationWarehouseId: t.inventorySettings.transferDestinationWarehouse,
     };
+
+    // Only sales and purchase resolve per-store today (product creation is
+    // tenant-scoped, so it stays on the tenant-level default above).
+    const perStoreDefaultColumns = [
+        { key: 'defaultSalesWarehouseId', label: t.inventorySettings.salesIssueWarehouse },
+        { key: 'defaultPurchaseWarehouseId', label: t.inventorySettings.purchaseReceiptWarehouse },
+    ];
 
     const alertRuleLabels: Record<string, string> = {
         defaultReorderLevel: t.inventorySettings.defaultReorderLevel,
@@ -193,6 +214,45 @@ export default function InventorySettingsPage() {
                         ))}
                     </div>
                 </section>
+
+                {storeDefaults.length > 1 ? (
+                    <section className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
+                        <div className="flex items-center gap-2">
+                            <Settings2 className="w-5 h-5 text-blue-600" />
+                            <div>
+                                <h2 className="font-bold text-lg">{t.inventorySettings.perStoreDefaults}</h2>
+                                <p className="text-xs text-gray-500 mt-0.5">{t.inventorySettings.perStoreDefaultsSubtitle}</p>
+                            </div>
+                        </div>
+                        <div className="space-y-4">
+                            {storeDefaults.map((row) => {
+                                const storeWarehouses = warehouses.filter((w) => w.store_id === row.storeId);
+                                return (
+                                    <div key={row.storeId} className="rounded-xl bg-gray-50 px-4 py-3 space-y-3">
+                                        <div className="text-sm font-bold text-gray-900">{row.storeName}</div>
+                                        <div className="grid md:grid-cols-2 gap-3">
+                                            {perStoreDefaultColumns.map(({ key, label }) => (
+                                                <div key={key}>
+                                                    <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1">{label}</label>
+                                                    <select
+                                                        value={row[key] || ''}
+                                                        onChange={(e) => void handleStoreDefaultChange(row.storeId, key, e.target.value)}
+                                                        className="w-full bg-white border border-gray-200 rounded-xl py-2.5 px-3 text-sm font-medium"
+                                                    >
+                                                        <option value="">{t.inventorySettings.useTenantDefault}</option>
+                                                        {storeWarehouses.map((warehouse) => (
+                                                            <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </section>
+                ) : null}
 
                 <section className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
                     <div className="flex items-center justify-between gap-2">

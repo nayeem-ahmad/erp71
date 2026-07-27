@@ -15,6 +15,8 @@ export const purchasesMessages = {
             linkOrCreateSupplier: "বিদ্যমান লিঙ্ক করুন বা নতুন তৈরি করুন",
             useExisting: "বিদ্যমান ব্যবহার করুন",
             newSupplier: "নতুন সরবরাহকারী",
+            receiptWarehouse: "গ্রহণকারী গুদাম",
+            warehouseAuto: "স্বয়ংক্রিয় (ডিফল্ট গুদাম)",
             costAdjustments: "খরচ সমন্বয়",
             freight: "পরিবহন খরচ",
             purchaseNotes: "ক্রয় নোট",

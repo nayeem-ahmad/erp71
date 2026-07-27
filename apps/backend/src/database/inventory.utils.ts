@@ -75,26 +75,40 @@ export async function resolveWarehouseId(
     }
 
     if (transactionType) {
+        const field = TRANSACTION_DEFAULT_FIELD[transactionType];
+
+        // 1) Per-store default (StoreInventoryDefaults) takes priority. Warehouses
+        //    are store-scoped, so this is the only default that works correctly for
+        //    a multi-store tenant.
+        const storeDefaults = await tx.storeInventoryDefaults.findUnique({
+            where: { tenant_id_store_id: { tenant_id: tenantId, store_id: storeId } },
+        });
+        const perStoreWarehouseId = storeDefaults?.[field];
+        if (perStoreWarehouseId) {
+            const warehouse = await tx.warehouse.findFirst({
+                where: { id: perStoreWarehouseId, tenant_id: tenantId, store_id: storeId, is_active: true },
+            });
+            if (warehouse) {
+                return warehouse.id;
+            }
+            // Configured warehouse is inactive or was reassigned to another store;
+            // fall through to the tenant-level default rather than hard-failing.
+        }
+
+        // 2) Tenant-level default (InventorySettings). Only usable when the configured
+        //    warehouse actually belongs to this store; otherwise fall through so that
+        //    secondary stores are not blocked by a default pinned to the primary store.
         const settings = await tx.inventorySettings.findUnique({
             where: { tenant_id: tenantId },
         });
-
-        const configuredWarehouseId = settings?.[TRANSACTION_DEFAULT_FIELD[transactionType]];
+        const configuredWarehouseId = settings?.[field];
         if (configuredWarehouseId) {
             const warehouse = await tx.warehouse.findFirst({
-                where: {
-                    id: configuredWarehouseId,
-                    tenant_id: tenantId,
-                    store_id: storeId,
-                    is_active: true,
-                },
+                where: { id: configuredWarehouseId, tenant_id: tenantId, store_id: storeId, is_active: true },
             });
-
-            if (!warehouse) {
-                throw new BadRequestException('Configured default warehouse is inactive or belongs to a different store.');
+            if (warehouse) {
+                return warehouse.id;
             }
-
-            return warehouse.id;
         }
     }
 

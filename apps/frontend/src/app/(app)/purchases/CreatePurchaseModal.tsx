@@ -64,6 +64,8 @@ export default function CreatePurchaseModal({
     const [productSearch, setProductSearch] = useState('');
     const [showProductDropdown, setShowProductDropdown] = useState(false);
     const [supplierId, setSupplierId] = useState('');
+    const [warehouses, setWarehouses] = useState<any[]>([]);
+    const [warehouseId, setWarehouseId] = useState('');
     const [createInlineSupplier, setCreateInlineSupplier] = useState(false);
     const [supplierForm, setSupplierForm] = useState(emptySupplierForm);
     const [taxAmount, setTaxAmount] = useState('0');
@@ -80,6 +82,9 @@ export default function CreatePurchaseModal({
 
         api.getProducts().then(setProducts).catch(() => setProducts([]));
         api.getSuppliers().then(setSuppliers).catch(() => setSuppliers([]));
+        api.getInventoryWarehouses()
+            .then((list: any) => setWarehouses(Array.isArray(list) ? list : []))
+            .catch(() => setWarehouses([]));
     }, [isOpen]);
 
     useEffect(() => {
@@ -136,6 +141,13 @@ export default function CreatePurchaseModal({
     const discount = Number(discountAmount || 0);
     const freight = Number(freightAmount || 0);
     const total = subtotal + tax + freight - discount;
+
+    // Received stock lands in the active store, so only offer that store's active
+    // warehouses. "Auto" defers to the configured (per-store, then tenant) default.
+    const activeStoreId = typeof window !== 'undefined' ? localStorage.getItem('store_id') : null;
+    const storeWarehouses = warehouses.filter(
+        (w) => w.is_active && (!activeStoreId || w.store_id === activeStoreId),
+    );
 
     if (!isOpen) {
         return null;
@@ -223,6 +235,7 @@ export default function CreatePurchaseModal({
             const storeId = typeof window !== 'undefined' ? localStorage.getItem('store_id') : null;
             await api.createPurchase({
                 storeId: storeId || '',
+                ...(warehouseId ? { warehouseId } : {}),
                 supplierId: createInlineSupplier ? undefined : supplierId || undefined,
                 newSupplier: createInlineSupplier
                     ? {
@@ -466,6 +479,25 @@ export default function CreatePurchaseModal({
                                     </div>
                                 )}
                             </div>
+
+                            {storeWarehouses.length > 0 ? (
+                                <div className="rounded-lg border border-gray-100 bg-gray-50/70 p-4 space-y-3">
+                                    <h3 className="text-sm font-bold tracking-tight">{t.purchaseShared.receiptWarehouse}</h3>
+                                    <select
+                                        value={warehouseId}
+                                        onChange={(event) => setWarehouseId(event.target.value)}
+                                        className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-primary/20 focus:border-primary/40"
+                                    >
+                                        <option value="">{t.purchaseShared.warehouseAuto}</option>
+                                        {storeWarehouses.map((warehouse) => (
+                                            <option key={warehouse.id} value={warehouse.id}>
+                                                {warehouse.name}
+                                                {warehouse.is_default ? ' • default' : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            ) : null}
 
                             <div className="rounded-lg border border-gray-100 bg-gray-50/70 p-4 space-y-3">
                                 <h3 className="text-sm font-bold tracking-tight">{t.purchaseShared.costAdjustments}</h3>

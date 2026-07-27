@@ -208,6 +208,11 @@ export const inventoryExtrasMessages = {
             reasonCreateFailed: "ইনভেন্টরি কারণ তৈরি ব্যর্থ।",
             reasonUpdated: "ইনভেন্টরি কারণ আপডেট হয়েছে।",
             reasonUpdateFailed: "ইনভেন্টরি কারণ আপডেট ব্যর্থ।",
+            perStoreDefaults: "স্টোরভিত্তিক ডিফল্ট গুদাম",
+            perStoreDefaultsSubtitle: "প্রতিটি স্টোরের জন্য উপরের ডিফল্ট ওভাররাইড করুন। একটি স্টোর কেবল তার নিজস্ব গুদাম ব্যবহার করতে পারে; উপরের সেটিংসে ফিরে যেতে ফিল্ডটি \"টেন্যান্ট ডিফল্ট\"-এ রাখুন।",
+            useTenantDefault: "টেন্যান্ট ডিফল্ট",
+            perStoreDefaultsUpdated: "স্টোরভিত্তিক ডিফল্ট গুদাম আপডেট হয়েছে।",
+            perStoreDefaultsFailed: "স্টোরভিত্তিক ডিফল্ট গুদাম আপডেট ব্যর্থ।",
         },
         inventoryReports: {
             reorder: {

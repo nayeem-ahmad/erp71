@@ -36,6 +36,8 @@ export default function NewSalePage() {
     } = useNewSaleCart();
 
     const [salesSettings, setSalesSettings] = useState<any>(null);
+    const [warehouses, setWarehouses] = useState<any[]>([]);
+    const [warehouseId, setWarehouseId] = useState<string>('');
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [savingDraft, setSavingDraft] = useState(false);
@@ -62,14 +64,26 @@ export default function NewSalePage() {
         [items, adjustments, vatRate],
     );
 
+    // The sale draws stock from the active store, so only offer that store's
+    // active warehouses. Leaving the picker on "Auto" lets the backend apply the
+    // configured (per-store, then tenant) default.
+    const storeWarehouses = useMemo(() => {
+        const activeStoreId = typeof window !== 'undefined' ? localStorage.getItem('store_id') : null;
+        return warehouses.filter(
+            (w) => w.is_active && (!activeStoreId || w.store_id === activeStoreId),
+        );
+    }, [warehouses]);
+
     const loadPageData = async () => {
         try {
-            const [settings, user] = await Promise.all([
+            const [settings, user, warehouseList] = await Promise.all([
                 api.getSalesSettings(),
                 api.getCurrentUser(),
+                api.getInventoryWarehouses().catch(() => []),
             ]);
             setSalesSettings(settings);
             setCurrentUser(user);
+            setWarehouses(Array.isArray(warehouseList) ? warehouseList : []);
             // Use default paper size from settings if available
             if (settings?.default_paper_size) {
                 setPaperSize(settings.default_paper_size as PaperSize);
@@ -184,6 +198,7 @@ export default function NewSalePage() {
         // as x-store-id on every request; the sale body needs the same id.
         // (Owners have no currentUser.store_id, so don't rely on it.)
         storeId: localStorage.getItem('store_id') || '',
+        ...(warehouseId ? { warehouseId } : {}),
         referenceNumber: refNumber || undefined,
         customerId: customer?.id,
         items: items.map((item) => ({
@@ -272,6 +287,29 @@ export default function NewSalePage() {
             onRemoveItem={removeItem}
             onAddProduct={handleAddItem}
             onVoiceResult={handleVoiceSale}
+            warehouseSelector={
+                storeWarehouses.length > 0 ? (
+                    <div className="flex items-center gap-2">
+                        <label htmlFor="sale-warehouse" className="text-xs font-medium text-gray-500 whitespace-nowrap">
+                            Warehouse
+                        </label>
+                        <select
+                            id="sale-warehouse"
+                            value={warehouseId}
+                            onChange={(e) => setWarehouseId(e.target.value)}
+                            className="border rounded px-2 py-1.5 text-sm bg-white"
+                        >
+                            <option value="">Auto (default warehouse)</option>
+                            {storeWarehouses.map((w) => (
+                                <option key={w.id} value={w.id}>
+                                    {w.name}
+                                    {w.is_default ? ' • default' : ''}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                ) : undefined
+            }
             description={description}
             setDescription={setDescription}
             totals={totals}

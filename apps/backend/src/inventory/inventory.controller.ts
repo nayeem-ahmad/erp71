@@ -9,6 +9,7 @@ import {
     ListStockLedgerQueryDto,
     UpdateInventoryReasonDto,
     UpdateInventorySettingsDto,
+    UpdateStoreWarehouseDefaultsDto,
     UpdateWarehouseDto,
 } from './inventory.dto';
 import { ImportRowsDto } from '../common/import.dto';
@@ -48,6 +49,20 @@ export class InventoryController {
     @Patch('settings')
     updateSettings(@Tenant() tenant: TenantContext, @Body() dto: UpdateInventorySettingsDto) {
         return this.service.updateSettings(tenant.tenantId, dto);
+    }
+
+    @Get('store-warehouse-defaults')
+    getStoreWarehouseDefaults(@Tenant() tenant: TenantContext) {
+        return this.service.getStoreWarehouseDefaults(tenant.tenantId);
+    }
+
+    @Patch('store-warehouse-defaults/:storeId')
+    updateStoreWarehouseDefaults(
+        @Tenant() tenant: TenantContext,
+        @Param('storeId') storeId: string,
+        @Body() dto: UpdateStoreWarehouseDefaultsDto,
+    ) {
+        return this.service.updateStoreWarehouseDefaults(tenant.tenantId, storeId, dto);
     }
 
     @Get('reasons')
