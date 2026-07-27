@@ -1,8 +1,87 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { CreateLeadConversationDto, UpdateLeadConversationDto } from './crm-lead-conversations.dto';
+import {
+    CreateLeadConversationDto,
+    LeadConversationType,
+    UpdateLeadConversationDto,
+} from './crm-lead-conversations.dto';
 import { paginate } from '../common/pagination.dto';
 import { computeLeadScore } from '../crm-leads/lead-scoring.util';
+import { resolveOrderBy, SortableMap } from '../common/sort.util';
+
+const conversationIncludes = {
+    lead: { select: { id: true, name: true, mobile: true, status: true, assigned_to: true } },
+    creator: { select: { id: true, name: true, email: true } },
+} as const;
+
+/**
+ * Sort allowlist. Keys MUST match the TanStack column ids on the conversations page —
+ * DataTable sends the column id as `sort.id` and resolveOrderBy silently falls back for
+ * anything unlisted, which reads as a dead header rather than an error. Deliberately no
+ * `summary`/`outcome` key: sorting free text alphabetically is not a useful operation, so
+ * those columns set `enableSorting: false` instead.
+ */
+const CONVERSATION_SORTABLE: SortableMap = {
+    created_at: (dir) => ({ created_at: dir }),
+    type: (dir) => ({ type: dir }),
+    direction: (dir) => ({ direction: dir }),
+    // Relation sorts go through the relation's scalar, which Prisma supports for to-one
+    // relations. `lead` is required on this model, so there are no null-ordering concerns.
+    lead: (dir) => ({ lead: { name: dir } }),
+    creator: (dir) => ({ creator: { name: dir } }),
+};
+// Module-level, so resolveOrderBy's by-reference fallback is a stable identity.
+// Not a copy of LEAD_DEFAULT_ORDER — LeadConversation has no updated_at/next_step_date.
+const CONVERSATION_DEFAULT_ORDER = { created_at: 'desc' as const };
+
+/** Parses a `YYYY-MM-DD` (or full ISO) query value into a Date, or undefined when unusable. */
+function parseBoundary(value: string | undefined): Date | undefined {
+    if (!value) return undefined;
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Turns the `dateFrom`/`dateTo` query pair into a Prisma `created_at` filter, or undefined
+ * when neither is usable. `dateTo` is inclusive of the whole day the user picked: a date-only
+ * value parses to 00:00Z, so `lte` would exclude everything logged during that day.
+ */
+function buildCreatedAtFilter(dateFrom?: string, dateTo?: string): Record<string, Date> | undefined {
+    const from = parseBoundary(dateFrom);
+    const to = parseBoundary(dateTo);
+    if (!from && !to) return undefined;
+
+    const filter: Record<string, Date> = {};
+    if (from) filter.gte = from;
+    if (to) {
+        if (DATE_ONLY.test(dateTo!)) {
+            const end = new Date(to);
+            end.setUTCDate(end.getUTCDate() + 1);
+            filter.lt = end;
+        } else {
+            filter.lte = to;
+        }
+    }
+    return filter;
+}
+
+export interface FindAllConversationsOpts {
+    leadId?: string;
+    search?: string;
+    type?: string;
+    direction?: string;
+    createdBy?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    leadStatus?: string;
+    leadAssignedTo?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortDir?: string;
+}
 
 @Injectable()
 export class CrmLeadConversationsService {
@@ -62,25 +141,51 @@ export class CrmLeadConversationsService {
         return conversation;
     }
 
-    async findAll(
-        tenantId: string,
-        opts: { leadId?: string; page?: number; limit?: number },
-    ) {
+    /**
+     * Builds the tenant-scoped `where` clause shared by findAll and getSummary, so a
+     * filtered list and its stat tiles can never disagree about what is being counted.
+     */
+    private buildWhere(tenantId: string, opts: FindAllConversationsOpts): any {
+        const where: any = { tenant_id: tenantId };
+        if (opts.leadId) where.lead_id = opts.leadId;
+        if (opts.type) where.type = opts.type;
+        if (opts.direction) where.direction = opts.direction;
+        if (opts.createdBy) where.created_by = opts.createdBy;
+
+        const createdAt = buildCreatedAtFilter(opts.dateFrom, opts.dateTo);
+        if (createdAt) where.created_at = createdAt;
+
+        // Filters on the parent lead. Nested under `lead` rather than denormalised, so
+        // reassigning a lead immediately changes which conversations match.
+        const leadWhere: any = {};
+        if (opts.leadStatus) leadWhere.status = opts.leadStatus;
+        if (opts.leadAssignedTo) leadWhere.assigned_to = opts.leadAssignedTo;
+        if (Object.keys(leadWhere).length > 0) where.lead = leadWhere;
+
+        if (opts.search) {
+            where.OR = [
+                { summary: { contains: opts.search, mode: 'insensitive' } },
+                { outcome: { contains: opts.search, mode: 'insensitive' } },
+                { lead: { name: { contains: opts.search, mode: 'insensitive' } } },
+                { lead: { mobile: { contains: opts.search, mode: 'insensitive' } } },
+            ];
+        }
+
+        return where;
+    }
+
+    async findAll(tenantId: string, opts: FindAllConversationsOpts) {
         const page = opts.page ?? 1;
         const limit = Math.min(opts.limit ?? 20, 100);
         const skip = (page - 1) * limit;
 
-        const where: any = { tenant_id: tenantId };
-        if (opts.leadId) where.lead_id = opts.leadId;
+        const where = this.buildWhere(tenantId, opts);
 
         const [items, total] = await Promise.all([
             this.db.leadConversation.findMany({
                 where,
-                include: {
-                    lead: { select: { id: true, name: true, mobile: true } },
-                    creator: { select: { id: true, name: true, email: true } },
-                },
-                orderBy: { created_at: 'desc' },
+                include: conversationIncludes,
+                orderBy: resolveOrderBy(opts.sortBy, opts.sortDir, CONVERSATION_SORTABLE, CONVERSATION_DEFAULT_ORDER),
                 skip,
                 take: limit,
             }),
@@ -88,6 +193,45 @@ export class CrmLeadConversationsService {
         ]);
 
         return paginate(items, total, page, limit);
+    }
+
+    /**
+     * Stat tiles for the conversations list. Honours the same filters as findAll, so the
+     * tiles describe the filtered set the user is actually looking at rather than the
+     * tenant as a whole.
+     */
+    async getSummary(tenantId: string, opts: FindAllConversationsOpts) {
+        const where = this.buildWhere(tenantId, opts);
+
+        const weekStart = new Date();
+        weekStart.setHours(0, 0, 0, 0);
+        weekStart.setDate(weekStart.getDate() - 6);
+
+        const [total, thisWeek, byType, leadsTouched] = await Promise.all([
+            this.db.leadConversation.count({ where }),
+            this.db.leadConversation.count({
+                where: {
+                    ...where,
+                    // Intersect rather than overwrite: an explicit date filter must still bound
+                    // this count, or "last 7 days" could exceed the total above it.
+                    AND: [...(where.AND ?? []), { created_at: { gte: weekStart } }],
+                },
+            }),
+            this.db.leadConversation.groupBy({ by: ['type'], where, _count: { _all: true } }),
+            // groupBy, not findMany+distinct: Prisma applies `distinct` in memory after
+            // fetching every matching row, so this would pull the whole conversation table
+            // to count leads. GROUP BY returns one row per lead instead.
+            this.db.leadConversation.groupBy({ by: ['lead_id'], where }),
+        ]);
+
+        const countsByType = Object.fromEntries(
+            Object.values(LeadConversationType).map((t) => [t, 0]),
+        ) as Record<string, number>;
+        for (const row of byType) {
+            countsByType[row.type] = row._count?._all ?? 0;
+        }
+
+        return { total, thisWeek, countsByType, leadsTouched: leadsTouched.length };
     }
 
     async findOne(tenantId: string, id: string) {

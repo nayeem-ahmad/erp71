@@ -1606,6 +1606,9 @@ model LeadConversation {
 
   @@index([tenant_id, lead_id])
   @@index([tenant_id, created_at])
+  // Serves the cross-lead conversations list, which filters by type across every lead.
+  // Without it a type filter degrades to a full tenant-partition scan.
+  @@index([tenant_id, type, created_at])
 }
 
 model CrmTask {

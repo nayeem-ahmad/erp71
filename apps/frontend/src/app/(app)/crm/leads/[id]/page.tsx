@@ -120,7 +120,9 @@ export default function LeadDetailPage() {
         setConversationsLoading(true);
         try {
             const data = await api.getLeadConversations({ leadId, limit: 50 });
-            setConversations(data?.items ?? data ?? []);
+            // fetchPaginated always normalises to `{ items }`, so the bare-array fallback
+            // this used to carry is unreachable.
+            setConversations(data?.items ?? []);
         } finally {
             setConversationsLoading(false);
         }
