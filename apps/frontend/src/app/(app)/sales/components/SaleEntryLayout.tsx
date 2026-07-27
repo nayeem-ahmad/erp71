@@ -82,6 +82,8 @@ interface SaleEntryLayoutProps {
     onRemoveItem: (productId: string) => void;
     onAddProduct: (product: any, options?: { quantity?: number; price?: number; availableQty?: number }) => void;
     onVoiceResult?: (result: VoiceEntryResult) => void;
+    /** Optional warehouse selector rendered above the product search (create flow only). */
+    warehouseSelector?: ReactNode;
 
     description: string;
     setDescription: (value: string) => void;
@@ -125,6 +127,7 @@ export default function SaleEntryLayout({
     onRemoveItem,
     onAddProduct,
     onVoiceResult,
+    warehouseSelector,
     description,
     setDescription,
     totals,
@@ -160,6 +163,7 @@ export default function SaleEntryLayout({
             picker={
                 readOnly ? undefined : (
                     <>
+                        {warehouseSelector}
                         {onVoiceResult ? (
                             <VoiceEntryInput entryType="sale" onResult={onVoiceResult} inline>
                                 <ProductSearch onProductSelect={onAddProduct} />

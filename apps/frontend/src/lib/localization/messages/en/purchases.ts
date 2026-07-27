@@ -15,6 +15,8 @@ export const purchasesMessages = {
         linkOrCreateSupplier: 'Link existing or create inline',
         useExisting: 'Use Existing',
         newSupplier: 'New Supplier',
+        receiptWarehouse: 'Receiving Warehouse',
+        warehouseAuto: 'Auto (default warehouse)',
         costAdjustments: 'Cost Adjustments',
         freight: 'Freight',
         purchaseNotes: 'Purchase notes',

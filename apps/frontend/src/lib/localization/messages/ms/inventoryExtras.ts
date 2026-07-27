@@ -208,6 +208,11 @@ export const inventoryExtrasMessages = {
             reasonCreateFailed: "Gagal mencipta sebab inventori.",
             reasonUpdated: "Sebab inventori dikemas kini.",
             reasonUpdateFailed: "Gagal mengemas kini sebab inventori.",
+            perStoreDefaults: "Gudang Lalai Setiap Kedai",
+            perStoreDefaultsSubtitle: "Ganti lalai di atas untuk setiap kedai. Sebuah kedai hanya boleh menggunakan gudangnya sendiri; biarkan medan pada \"Lalai penyewa\" untuk kembali kepada tetapan di atas.",
+            useTenantDefault: "Lalai penyewa",
+            perStoreDefaultsUpdated: "Gudang lalai setiap kedai dikemas kini.",
+            perStoreDefaultsFailed: "Gagal mengemas kini gudang lalai setiap kedai.",
         },
         inventoryReports: {
             reorder: {

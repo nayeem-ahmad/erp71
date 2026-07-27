@@ -473,6 +473,13 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    getInventoryStoreWarehouseDefaults: () => fetchWithAuth('/inventory/store-warehouse-defaults'),
+    updateInventoryStoreWarehouseDefaults: (storeId: string, data: any) =>
+        fetchWithAuth(`/inventory/store-warehouse-defaults/${storeId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     getInventoryReasons: (params?: { type?: string }) => {
         const query = new URLSearchParams();
         if (params?.type) query.set('type', params.type);

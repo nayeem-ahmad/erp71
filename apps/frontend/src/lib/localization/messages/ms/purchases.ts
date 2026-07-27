@@ -15,6 +15,8 @@ export const purchasesMessages = {
             linkOrCreateSupplier: 'Pautkan sedia ada atau cipta secara langsung',
             useExisting: 'Guna Sedia Ada',
             newSupplier: 'Pembekal Baharu',
+            receiptWarehouse: 'Gudang Penerimaan',
+            warehouseAuto: 'Auto (gudang lalai)',
             costAdjustments: 'Pelarasan Kos',
             freight: 'Pengangkutan',
             purchaseNotes: 'Nota pembelian',

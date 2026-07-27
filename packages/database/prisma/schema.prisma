@@ -422,6 +422,7 @@ model Tenant {
   inventoryMovements InventoryMovement[]
   inventoryReasons InventoryReason[]
   inventorySettings InventorySettings?
+  storeInventoryDefaults StoreInventoryDefaults[]
   warehouseTransfers WarehouseTransfer[]
   inventoryShrinkages InventoryShrinkage[]
   stockTakeSessions StockTakeSession[]
@@ -716,6 +717,7 @@ model Store {
   expenseEntries  ExpenseEntry[]
   loans           Loan[]
   externalSyncConnections ExternalSyncConnection[]
+  inventoryDefaults StoreInventoryDefaults[]
 }
 
 model PosCounter {
@@ -761,6 +763,12 @@ model Warehouse {
   shrinkageWarehouseDefaults InventorySettings[] @relation("ShrinkageWarehouseDefault")
   transferSourceWarehouseDefaults InventorySettings[] @relation("TransferSourceWarehouseDefault")
   transferDestinationWarehouseDefaults InventorySettings[] @relation("TransferDestinationWarehouseDefault")
+  storeProductWarehouseDefaults StoreInventoryDefaults[] @relation("StoreProductWarehouseDefault")
+  storePurchaseWarehouseDefaults StoreInventoryDefaults[] @relation("StorePurchaseWarehouseDefault")
+  storeSalesWarehouseDefaults StoreInventoryDefaults[] @relation("StoreSalesWarehouseDefault")
+  storeShrinkageWarehouseDefaults StoreInventoryDefaults[] @relation("StoreShrinkageWarehouseDefault")
+  storeTransferSourceWarehouseDefaults StoreInventoryDefaults[] @relation("StoreTransferSourceWarehouseDefault")
+  storeTransferDestinationWarehouseDefaults StoreInventoryDefaults[] @relation("StoreTransferDestinationWarehouseDefault")
 
   @@unique([tenant_id, code])
   @@index([tenant_id, store_id])
@@ -988,6 +996,43 @@ model InventorySettings {
   defaultTransferSourceWarehouse    Warehouse? @relation("TransferSourceWarehouseDefault", fields: [default_transfer_source_warehouse_id], references: [id])
   defaultTransferDestinationWarehouse Warehouse? @relation("TransferDestinationWarehouseDefault", fields: [default_transfer_destination_warehouse_id], references: [id])
 
+  @@index([default_product_warehouse_id])
+  @@index([default_purchase_warehouse_id])
+  @@index([default_sales_warehouse_id])
+  @@index([default_shrinkage_warehouse_id])
+  @@index([default_transfer_source_warehouse_id])
+  @@index([default_transfer_destination_warehouse_id])
+}
+
+/// Per-store override of the tenant-wide InventorySettings warehouse defaults.
+/// Warehouses are store-scoped, so a single tenant-level default only ever
+/// matches one store; multi-store tenants set a row here per store so each
+/// store issues/receives stock from its own warehouse. resolveWarehouseId
+/// consults this first, then falls back to the tenant-level InventorySettings.
+model StoreInventoryDefaults {
+  id                                        String   @id @default(uuid())
+  tenant_id                                 String
+  store_id                                  String
+  default_product_warehouse_id              String?
+  default_purchase_warehouse_id             String?
+  default_sales_warehouse_id                String?
+  default_shrinkage_warehouse_id            String?
+  default_transfer_source_warehouse_id      String?
+  default_transfer_destination_warehouse_id String?
+  created_at                                DateTime @default(now())
+  updated_at                                DateTime @updatedAt
+
+  tenant                              Tenant     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store                               Store      @relation(fields: [store_id], references: [id], onDelete: Cascade)
+  defaultProductWarehouse             Warehouse? @relation("StoreProductWarehouseDefault", fields: [default_product_warehouse_id], references: [id])
+  defaultPurchaseWarehouse            Warehouse? @relation("StorePurchaseWarehouseDefault", fields: [default_purchase_warehouse_id], references: [id])
+  defaultSalesWarehouse               Warehouse? @relation("StoreSalesWarehouseDefault", fields: [default_sales_warehouse_id], references: [id])
+  defaultShrinkageWarehouse           Warehouse? @relation("StoreShrinkageWarehouseDefault", fields: [default_shrinkage_warehouse_id], references: [id])
+  defaultTransferSourceWarehouse      Warehouse? @relation("StoreTransferSourceWarehouseDefault", fields: [default_transfer_source_warehouse_id], references: [id])
+  defaultTransferDestinationWarehouse Warehouse? @relation("StoreTransferDestinationWarehouseDefault", fields: [default_transfer_destination_warehouse_id], references: [id])
+
+  @@unique([tenant_id, store_id])
+  @@index([store_id])
   @@index([default_product_warehouse_id])
   @@index([default_purchase_warehouse_id])
   @@index([default_sales_warehouse_id])

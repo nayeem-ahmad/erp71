@@ -207,7 +207,12 @@ export const inventoryExtrasMessages = {
         "reasonCreated": "Inventory reason created.",
         "reasonCreateFailed": "Failed to create inventory reason.",
         "reasonUpdated": "Inventory reason updated.",
-        "reasonUpdateFailed": "Failed to update inventory reason."
+        "reasonUpdateFailed": "Failed to update inventory reason.",
+        "perStoreDefaults": "Per-Store Default Warehouses",
+        "perStoreDefaultsSubtitle": "Override the defaults above for each store. A store can only use its own warehouses; leave a field on \"Tenant default\" to fall back to the settings above.",
+        "useTenantDefault": "Tenant default",
+        "perStoreDefaultsUpdated": "Per-store default warehouses updated.",
+        "perStoreDefaultsFailed": "Failed to update per-store default warehouses."
     },
     "inventoryReports": {
         "reorder": {

@@ -47,6 +47,37 @@ export class UpdateInventorySettingsDto {
     discrepancyApprovalThreshold?: number;
 }
 
+/**
+ * Per-store overrides of the tenant-wide warehouse defaults. An empty string
+ * clears the override for that transaction type (falls back to the tenant
+ * default). The store is identified by the route param, not the body.
+ */
+export class UpdateStoreWarehouseDefaultsDto {
+    @IsOptional()
+    @IsString()
+    defaultProductWarehouseId?: string;
+
+    @IsOptional()
+    @IsString()
+    defaultPurchaseWarehouseId?: string;
+
+    @IsOptional()
+    @IsString()
+    defaultSalesWarehouseId?: string;
+
+    @IsOptional()
+    @IsString()
+    defaultShrinkageWarehouseId?: string;
+
+    @IsOptional()
+    @IsString()
+    defaultTransferSourceWarehouseId?: string;
+
+    @IsOptional()
+    @IsString()
+    defaultTransferDestinationWarehouseId?: string;
+}
+
 export class CreateInventoryReasonDto {
     @IsString()
     type: string;

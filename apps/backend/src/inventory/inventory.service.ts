@@ -7,6 +7,7 @@ import {
     ListStockLedgerQueryDto,
     UpdateInventoryReasonDto,
     UpdateInventorySettingsDto,
+    UpdateStoreWarehouseDefaultsDto,
     UpdateWarehouseDto,
 } from './inventory.dto';
 import { assertWarehouseBelongsToTenant, ensureDefaultWarehouse } from '../database/inventory.utils';
@@ -172,6 +173,70 @@ export class InventoryService {
         });
     }
 
+    /**
+     * Per-store warehouse defaults for every store in the tenant. Stores without
+     * an explicit row report null for each field (they fall back to the
+     * tenant-level InventorySettings default).
+     */
+    async getStoreWarehouseDefaults(tenantId: string) {
+        const [stores, rows] = await Promise.all([
+            this.db.store.findMany({
+                where: { tenant_id: tenantId },
+                orderBy: { created_at: 'asc' },
+                select: { id: true, name: true },
+            }),
+            this.db.storeInventoryDefaults.findMany({ where: { tenant_id: tenantId } }),
+        ]);
+
+        const byStore = new Map(rows.map((row) => [row.store_id, row]));
+        return stores.map((store) => {
+            const row = byStore.get(store.id);
+            return {
+                storeId: store.id,
+                storeName: store.name,
+                defaultProductWarehouseId: row?.default_product_warehouse_id ?? null,
+                defaultPurchaseWarehouseId: row?.default_purchase_warehouse_id ?? null,
+                defaultSalesWarehouseId: row?.default_sales_warehouse_id ?? null,
+                defaultShrinkageWarehouseId: row?.default_shrinkage_warehouse_id ?? null,
+                defaultTransferSourceWarehouseId: row?.default_transfer_source_warehouse_id ?? null,
+                defaultTransferDestinationWarehouseId: row?.default_transfer_destination_warehouse_id ?? null,
+            };
+        });
+    }
+
+    async updateStoreWarehouseDefaults(tenantId: string, storeId: string, dto: UpdateStoreWarehouseDefaultsDto) {
+        const store = await this.db.store.findFirst({ where: { id: storeId, tenant_id: tenantId } });
+        if (!store) {
+            throw new BadRequestException('Store not found for this tenant.');
+        }
+
+        // A per-store default must be a warehouse that actually belongs to that
+        // store, otherwise the resolver would ignore it (store mismatch).
+        await this.assertWarehouseInStore(tenantId, storeId, dto.defaultProductWarehouseId);
+        await this.assertWarehouseInStore(tenantId, storeId, dto.defaultPurchaseWarehouseId);
+        await this.assertWarehouseInStore(tenantId, storeId, dto.defaultSalesWarehouseId);
+        await this.assertWarehouseInStore(tenantId, storeId, dto.defaultShrinkageWarehouseId);
+        await this.assertWarehouseInStore(tenantId, storeId, dto.defaultTransferSourceWarehouseId);
+        await this.assertWarehouseInStore(tenantId, storeId, dto.defaultTransferDestinationWarehouseId);
+
+        const data = {
+            ...(dto.defaultProductWarehouseId !== undefined ? { default_product_warehouse_id: dto.defaultProductWarehouseId || null } : {}),
+            ...(dto.defaultPurchaseWarehouseId !== undefined ? { default_purchase_warehouse_id: dto.defaultPurchaseWarehouseId || null } : {}),
+            ...(dto.defaultSalesWarehouseId !== undefined ? { default_sales_warehouse_id: dto.defaultSalesWarehouseId || null } : {}),
+            ...(dto.defaultShrinkageWarehouseId !== undefined ? { default_shrinkage_warehouse_id: dto.defaultShrinkageWarehouseId || null } : {}),
+            ...(dto.defaultTransferSourceWarehouseId !== undefined ? { default_transfer_source_warehouse_id: dto.defaultTransferSourceWarehouseId || null } : {}),
+            ...(dto.defaultTransferDestinationWarehouseId !== undefined ? { default_transfer_destination_warehouse_id: dto.defaultTransferDestinationWarehouseId || null } : {}),
+        };
+
+        await this.db.storeInventoryDefaults.upsert({
+            where: { tenant_id_store_id: { tenant_id: tenantId, store_id: storeId } },
+            create: { tenant_id: tenantId, store_id: storeId, ...data },
+            update: data,
+        });
+
+        return this.getStoreWarehouseDefaults(tenantId);
+    }
+
     async listReasons(tenantId: string, query: ListInventoryReasonsQueryDto) {
         return this.db.inventoryReason.findMany({
             where: {
@@ -310,6 +375,16 @@ export class InventoryService {
         });
         if (!warehouse) {
             throw new BadRequestException('Selected warehouse does not belong to this tenant.');
+        }
+    }
+
+    private async assertWarehouseInStore(tenantId: string, storeId: string, warehouseId?: string) {
+        if (!warehouseId) return;
+        const warehouse = await this.db.warehouse.findFirst({
+            where: { id: warehouseId, tenant_id: tenantId, store_id: storeId },
+        });
+        if (!warehouse) {
+            throw new BadRequestException('Selected warehouse does not belong to this store.');
         }
     }
 

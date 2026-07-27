@@ -43,11 +43,16 @@ describe('InventoryService', () => {
             },
             store: {
                 findFirst: jest.fn(),
+                findMany: jest.fn(),
             },
             inventorySettings: {
                 findUnique: jest.fn(),
                 create: jest.fn(),
                 update: jest.fn(),
+            },
+            storeInventoryDefaults: {
+                findMany: jest.fn().mockResolvedValue([]),
+                upsert: jest.fn(),
             },
             inventoryReason: {
                 findUnique: jest.fn(),
@@ -439,6 +444,99 @@ describe('InventoryService', () => {
                     data: expect.objectContaining({ default_product_warehouse_id: null }),
                 }),
             );
+        });
+    });
+
+    // ─── store warehouse defaults ─────────────────────────────────────────────
+
+    describe('getStoreWarehouseDefaults', () => {
+        const tenantId = 'tenant-1';
+
+        it('merges per-store rows onto the store list, nulls where unconfigured', async () => {
+            db.store.findMany.mockResolvedValue([
+                { id: 'store-1', name: 'Main' },
+                { id: 'store-2', name: 'Branch' },
+            ]);
+            db.storeInventoryDefaults.findMany.mockResolvedValue([
+                { store_id: 'store-1', default_sales_warehouse_id: 'wh-a', default_purchase_warehouse_id: 'wh-b' },
+            ]);
+
+            const result = await service.getStoreWarehouseDefaults(tenantId);
+
+            expect(result).toEqual([
+                expect.objectContaining({
+                    storeId: 'store-1',
+                    storeName: 'Main',
+                    defaultSalesWarehouseId: 'wh-a',
+                    defaultPurchaseWarehouseId: 'wh-b',
+                    defaultProductWarehouseId: null,
+                }),
+                expect.objectContaining({
+                    storeId: 'store-2',
+                    storeName: 'Branch',
+                    defaultSalesWarehouseId: null,
+                    defaultPurchaseWarehouseId: null,
+                }),
+            ]);
+        });
+    });
+
+    describe('updateStoreWarehouseDefaults', () => {
+        const tenantId = 'tenant-1';
+        const storeId = 'store-1';
+
+        beforeEach(() => {
+            db.store.findFirst.mockResolvedValue({ id: storeId, tenant_id: tenantId });
+            db.store.findMany.mockResolvedValue([{ id: storeId, name: 'Main' }]);
+            db.storeInventoryDefaults.findMany.mockResolvedValue([]);
+        });
+
+        it('upserts the per-store row when the warehouse belongs to the store', async () => {
+            db.warehouse.findFirst.mockResolvedValue({ id: 'wh-a', tenant_id: tenantId, store_id: storeId });
+
+            await service.updateStoreWarehouseDefaults(tenantId, storeId, {
+                defaultSalesWarehouseId: 'wh-a',
+            } as any);
+
+            expect(db.storeInventoryDefaults.upsert).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { tenant_id_store_id: { tenant_id: tenantId, store_id: storeId } },
+                    create: expect.objectContaining({ default_sales_warehouse_id: 'wh-a' }),
+                    update: expect.objectContaining({ default_sales_warehouse_id: 'wh-a' }),
+                }),
+            );
+        });
+
+        it('rejects a warehouse that belongs to a different store', async () => {
+            db.warehouse.findFirst.mockResolvedValue(null);
+
+            const promise = service.updateStoreWarehouseDefaults(tenantId, storeId, {
+                defaultSalesWarehouseId: 'wh-other',
+            } as any);
+
+            await expect(promise).rejects.toThrow('Selected warehouse does not belong to this store.');
+            expect(db.storeInventoryDefaults.upsert).not.toHaveBeenCalled();
+        });
+
+        it('clears an override when an empty string is provided', async () => {
+            await service.updateStoreWarehouseDefaults(tenantId, storeId, {
+                defaultSalesWarehouseId: '',
+            } as any);
+
+            expect(db.warehouse.findFirst).not.toHaveBeenCalled();
+            expect(db.storeInventoryDefaults.upsert).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    update: expect.objectContaining({ default_sales_warehouse_id: null }),
+                }),
+            );
+        });
+
+        it('throws when the store does not belong to the tenant', async () => {
+            db.store.findFirst.mockResolvedValue(null);
+
+            await expect(
+                service.updateStoreWarehouseDefaults(tenantId, 'ghost', {} as any),
+            ).rejects.toThrow('Store not found for this tenant.');
         });
     });
 
