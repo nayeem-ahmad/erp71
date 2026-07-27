@@ -330,6 +330,32 @@ function buildReportQuery(params: Record<string, string | number | boolean | und
     return query.toString();
 }
 
+/** Filters shared by the conversations list and its summary tiles. */
+export type LeadConversationFilters = {
+    leadId?: string;
+    search?: string;
+    type?: string;
+    direction?: string;
+    createdBy?: string;
+    /** `true` narrows to the caller's own conversations; the server resolves the id. */
+    mine?: boolean;
+    dateFrom?: string;
+    dateTo?: string;
+    leadStatus?: string;
+    leadAssignedTo?: string;
+    sortBy?: string;
+    sortDir?: string;
+};
+
+function leadConversationQuery(
+    params?: LeadConversationFilters & { page?: number; limit?: number },
+): string {
+    if (!params) return '';
+    const { mine, ...rest } = params;
+    const query = buildReportQuery({ ...rest, mine: mine ? 'true' : undefined });
+    return query ? `?${query}` : '';
+}
+
 export const api = {
     /**
      * Every product as a flat array — for pickers, POS and id→product maps.
@@ -855,13 +881,14 @@ export const api = {
             body: JSON.stringify({ fields }),
         }),
     // CRM Lead Conversations
-    getLeadConversations: (params?: { leadId?: string; page?: number; limit?: number }) => {
-        const query = new URLSearchParams();
-        if (params?.leadId) query.set('leadId', params.leadId);
-        if (params?.page) query.set('page', String(params.page));
-        if (params?.limit) query.set('limit', String(params.limit));
-        return fetchWithAuth(`/crm/lead-conversations${query.toString() ? `?${query.toString()}` : ''}`);
-    },
+    // Every key here must be declared on QueryLeadConversationsDto: the API runs
+    // ValidationPipe with `forbidNonWhitelisted`, so an undeclared param is a 400.
+    getLeadConversations: (params?: LeadConversationFilters & { page?: number; limit?: number }) =>
+        // fetchPaginated, not fetchWithAuth — the latter unwraps `.data` and drops `meta`,
+        // which loses `total` and leaves DataTable's server-mode footer at zero rows.
+        fetchPaginated(`/crm/lead-conversations${leadConversationQuery(params)}`),
+    getLeadConversationSummary: (params?: LeadConversationFilters) =>
+        fetchWithAuth(`/crm/lead-conversations/summary${leadConversationQuery(params)}`),
     createLeadConversation: (data: any) => fetchWithAuth('/crm/lead-conversations', {
         method: 'POST',
         body: JSON.stringify(data),
