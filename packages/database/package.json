@@ -1,27 +1,28 @@
 {
-    "name": "@erp71/database",
-    "version": "0.1.0",
-    "private": true,
-    "main": "./index.js",
-    "types": "./index.ts",
-    "scripts": {
-        "generate": "prisma generate",
-        "db:push": "prisma db push",
-        "db:seed": "tsx prisma/seed.ts",
-        "db:seed:platform": "tsx prisma/seed-platform.ts",
-        "db:studio": "prisma studio",
-        "repair:vouchers": "tsx prisma/repair-fabricated-vouchers.ts",
-        "sync:accounting": "tsx prisma/sync-accounting.ts",
+  "name": "@erp71/database",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./index.js",
+  "types": "./index.ts",
+  "scripts": {
+    "generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:seed:platform": "tsx prisma/seed-platform.ts",
+    "db:studio": "prisma studio",
+    "repair:vouchers": "tsx prisma/repair-fabricated-vouchers.ts",
+    "sync:accounting": "tsx prisma/sync-accounting.ts",
     "sync:lead-taxonomy": "tsx prisma/sync-lead-taxonomy.ts",
-        "reconcile:balances": "tsx prisma/reconcile-party-balances.ts",
-        "retag:parties": "tsx prisma/retag-party-ledger.ts"
-    },
-    "dependencies": {
-        "@erp71/shared-types": "*",
-        "@prisma/client": "^5.22.0"
-    },
-    "devDependencies": {
-        "prisma": "^5.22.0",
-        "tsx": "^4.21.0"
-    }
+    "reconcile:balances": "tsx prisma/reconcile-party-balances.ts",
+    "retag:parties": "tsx prisma/retag-party-ledger.ts",
+    "sync:nav-layout": "tsx prisma/sync-nav-layout.ts"
+  },
+  "dependencies": {
+    "@erp71/shared-types": "*",
+    "@prisma/client": "^5.22.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0",
+    "tsx": "^4.21.0"
+  }
 }

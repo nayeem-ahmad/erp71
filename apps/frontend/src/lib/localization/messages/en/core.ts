@@ -262,6 +262,7 @@ export const coreMessages = {
             crmCampaigns: 'Campaigns',
             crmLeads: 'Leads',
             crmConversations: 'Conversations',
+            crmLeadTaxonomy: 'Sources & Categories',
             crmCustomFields: 'Custom Fields',
             crmCustomers: 'Customers',
             salesSettings: 'Sales Settings',

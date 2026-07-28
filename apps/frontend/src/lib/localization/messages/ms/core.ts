@@ -262,6 +262,7 @@ export const coreMessages = {
             crmCampaigns: "Kempen",
             crmLeads: "Prospek",
             crmConversations: "Perbualan",
+            crmLeadTaxonomy: "Sumber & Kategori",
             crmCustomFields: "Medan Tersuai",
             crmCustomers: "Pelanggan",
                 salesSettings: "Tetapan Jualan",
