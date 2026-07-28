@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
     Phone, Mail, MessageSquare, Plus, UserCheck, Sparkles, Loader2,
-    Pencil, ExternalLink, Calendar, Trash2, Send,
+    Pencil, ExternalLink, Calendar, Trash2, Send, ClipboardList,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
@@ -13,6 +13,7 @@ import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { PageShell, PageHeader, Button, FormFooter, StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import FollowUpPanel from '@/components/crm/FollowUpPanel';
 import {
     LeadFormFields,
     LEAD_CONVERSATION_TYPES,
@@ -513,6 +514,16 @@ export default function LeadDetailPage() {
                             ))}
                         </div>
                     )}
+                </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+                    <ClipboardList className="w-5 h-5 text-primary" />
+                    <h2 className="text-sm font-semibold text-gray-900">{t.crmFollowUps.title}</h2>
+                </div>
+                <div className="p-4">
+                    <FollowUpPanel leadId={leadId} />
                 </div>
             </div>
         </PageShell>

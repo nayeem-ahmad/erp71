@@ -277,7 +277,7 @@ export const salesMessages = {
                     storefrontOrders: { title: "অনলাইন অর্ডার", description: "স্টোরফ্রন্ট থেকে আসা অর্ডার পর্যালোচনা ও পূরণ করুন।" },
                     storefrontSettings: { title: "স্টোরফ্রন্ট সেটিংস", description: "অনলাইন দোকানের ব্র্যান্ডিং ও ক্যাটালগ কনফিগার করুন।" },
                     customers: { title: "গ্রাহক", description: "গ্রাহক প্রোফাইল ও ক্রেডিট লিমিট।" },
-                    crmTasks: { title: "টাস্ক ও ফলো-আপ", description: "গ্রাহক ফলো-আপ টাস্ক।" },
+                    crmFollowUps: { title: "ফলো-আপ", description: "গ্রাহক ফলো-আপ।" },
                     crmCampaigns: { title: "ক্যাম্পেইন", description: "বিক্রয় ক্যাম্পেইন পরিচালনা।" },
                     loyalty: { title: "লয়্যালটি পয়েন্ট", description: "রিওয়ার্ড পয়েন্ট দেখুন ও সমন্বয় করুন।" },
                     salesSummary: { title: "বিক্রয় সারাংশ", description: "আয় ও লেনদেনের প্রবণতা।" },

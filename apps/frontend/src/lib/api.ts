@@ -922,8 +922,8 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteLeadConversation: (id: string) => fetchWithAuth(`/crm/lead-conversations/${id}`, { method: 'DELETE' }),
-    // CRM Tasks
-    getCrmTasks: (params?: {
+    // CRM Follow-ups (named to leave "Task" for the Project Management module)
+    getCrmFollowUps: (params?: {
         customerId?: string;
         leadId?: string;
         target?: 'customer' | 'lead';
@@ -936,20 +936,20 @@ export const api = {
         if (params?.target) query.set('target', params.target);
         if (params?.status) query.set('status', params.status);
         if (params?.dueToday) query.set('dueToday', 'true');
-        return fetchAllPages(`/crm/tasks${query.toString() ? `?${query.toString()}` : ''}`);
+        return fetchAllPages(`/crm/follow-ups${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getCrmTaskSummary: () => fetchWithAuth('/crm/tasks/summary'),
-    createCrmTask: (data: any) => fetchWithAuth('/crm/tasks', {
+    getCrmFollowUpSummary: () => fetchWithAuth('/crm/follow-ups/summary'),
+    createCrmFollowUp: (data: any) => fetchWithAuth('/crm/follow-ups', {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    updateCrmTask: (id: string, data: any) => fetchWithAuth(`/crm/tasks/${id}`, {
+    updateCrmFollowUp: (id: string, data: any) => fetchWithAuth(`/crm/follow-ups/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    deleteCrmTask: (id: string) => fetchWithAuth(`/crm/tasks/${id}`, { method: 'DELETE' }),
+    deleteCrmFollowUp: (id: string) => fetchWithAuth(`/crm/follow-ups/${id}`, { method: 'DELETE' }),
     // CRM Campaigns
     getCrmCampaigns: () => fetchAllPages('/crm/campaigns'),
     getCrmCampaign: (id: string) => fetchWithAuth(`/crm/campaigns/${id}`),

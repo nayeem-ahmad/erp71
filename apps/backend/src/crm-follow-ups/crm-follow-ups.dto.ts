@@ -1,19 +1,24 @@
 import { IsString, IsOptional, IsEnum, IsUUID, IsDateString } from 'class-validator';
 
-export enum CrmTaskType {
-    FOLLOW_UP = 'FOLLOW_UP',
+/**
+ * GENERAL is the manual, catch-all type — named that rather than FOLLOW_UP so it
+ * doesn't collide with the container it lives in (a "follow-up" of type
+ * "follow-up" reads oddly, and the UI would have to disambiguate the two).
+ */
+export enum CrmFollowUpType {
+    GENERAL = 'GENERAL',
     COLLECTION = 'COLLECTION',
     BIRTHDAY = 'BIRTHDAY',
     REORDER_REMINDER = 'REORDER_REMINDER',
 }
 
-export enum CrmTaskStatus {
+export enum CrmFollowUpStatus {
     PENDING = 'PENDING',
     DONE = 'DONE',
     SNOOZED = 'SNOOZED',
 }
 
-export class CreateCrmTaskDto {
+export class CreateCrmFollowUpDto {
     @IsOptional()
     @IsUUID()
     customer_id?: string;
@@ -22,8 +27,8 @@ export class CreateCrmTaskDto {
     @IsUUID()
     lead_id?: string;
 
-    @IsEnum(CrmTaskType)
-    type: CrmTaskType;
+    @IsEnum(CrmFollowUpType)
+    type: CrmFollowUpType;
 
     @IsString()
     title: string;
@@ -44,10 +49,10 @@ export class CreateCrmTaskDto {
     store_id?: string;
 }
 
-export class UpdateCrmTaskDto {
+export class UpdateCrmFollowUpDto {
     @IsOptional()
-    @IsEnum(CrmTaskType)
-    type?: CrmTaskType;
+    @IsEnum(CrmFollowUpType)
+    type?: CrmFollowUpType;
 
     @IsOptional()
     @IsString()
@@ -58,8 +63,8 @@ export class UpdateCrmTaskDto {
     due_at?: string;
 
     @IsOptional()
-    @IsEnum(CrmTaskStatus)
-    status?: CrmTaskStatus;
+    @IsEnum(CrmFollowUpStatus)
+    status?: CrmFollowUpStatus;
 
     @IsOptional()
     @IsUUID()

@@ -277,7 +277,7 @@ export const salesMessages = {
                 storefrontOrders: { title: 'Online Orders', description: 'Review and fulfill orders placed on your public storefront.' },
                 storefrontSettings: { title: 'Storefront Settings', description: 'Configure your online shop branding, hero, and catalog visibility.' },
                 customers: { title: 'Customers', description: 'Manage customer profiles, contacts, and credit limits.' },
-                crmTasks: { title: 'Tasks & Follow-ups', description: 'Assign follow-up tasks linked to customers and deals.' },
+                crmFollowUps: { title: 'Follow-ups', description: 'Assign follow-ups linked to customers and deals.' },
                 crmCampaigns: { title: 'Campaigns', description: 'Plan and monitor outbound sales campaigns.' },
                 loyalty: { title: 'Loyalty Points', description: 'View and adjust customer reward point balances.' },
                 salesSummary: { title: 'Sales Summary', description: 'Revenue, returns, and transaction trends over a date range.' },

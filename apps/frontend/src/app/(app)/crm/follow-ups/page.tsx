@@ -12,7 +12,7 @@ import { DataTable } from '@/components/data-table';
 import { PageShell, PageHeader, Button, Select, StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
-interface CrmTask {
+interface CrmFollowUp {
     id: string;
     type: string;
     title: string;
@@ -24,56 +24,56 @@ interface CrmTask {
     assignee: { id: string; name: string; email: string } | null;
 }
 
-interface TaskSummary {
+interface FollowUpSummary {
     dueToday: number;
     overdue: number;
     total: number;
 }
 
-const TASK_TYPE_KEYS: Record<string, 'followUp' | 'collection' | 'birthday' | 'reorderReminder'> = {
-    FOLLOW_UP: 'followUp',
+const FOLLOW_UP_TYPE_KEYS: Record<string, 'general' | 'collection' | 'birthday' | 'reorderReminder'> = {
+    GENERAL: 'general',
     COLLECTION: 'collection',
     BIRTHDAY: 'birthday',
     REORDER_REMINDER: 'reorderReminder',
 };
 
-const taskTypeColors: Record<string, string> = {
-    FOLLOW_UP: 'bg-blue-50 text-blue-700',
+const followUpTypeColors: Record<string, string> = {
+    GENERAL: 'bg-blue-50 text-blue-700',
     COLLECTION: 'bg-amber-50 text-amber-700',
     BIRTHDAY: 'bg-primary-light text-blue-700',
     REORDER_REMINDER: 'bg-primary-light text-blue-700',
 };
 
-const taskStatusTone: Record<string, StatusBadgeTone> = {
+const followUpStatusTone: Record<string, StatusBadgeTone> = {
     PENDING: 'warning',
     DONE: 'success',
     SNOOZED: 'neutral',
 };
 
-const columnHelper = createColumnHelper<CrmTask>();
+const columnHelper = createColumnHelper<CrmFollowUp>();
 
-export default function CrmTasksPage() {
+export default function CrmFollowUpsPage() {
     const { t } = useI18n();
-    const m = t.crmTasks;
+    const m = t.crmFollowUps;
 
-    const [tasks, setTasks] = useState<CrmTask[]>([]);
-    const [summary, setSummary] = useState<TaskSummary | null>(null);
+    const [followUps, setFollowUps] = useState<CrmFollowUp[]>([]);
+    const [summary, setSummary] = useState<FollowUpSummary | null>(null);
     const [statusFilter, setStatusFilter] = useState('');
     const [targetFilter, setTargetFilter] = useState<'' | 'customer' | 'lead'>('');
     const [dueTodayOnly, setDueTodayOnly] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
 
-    const loadTasks = useCallback(async () => {
+    const loadFollowUps = useCallback(async () => {
         setIsLoading(true);
         setError('');
         try {
-            const res = await api.getCrmTasks({
+            const res = await api.getCrmFollowUps({
                 status: statusFilter || undefined,
                 target: targetFilter || undefined,
                 dueToday: dueTodayOnly || undefined,
             });
-            setTasks(res ?? []);
+            setFollowUps(res ?? []);
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : m.emptyMessage);
         } finally {
@@ -82,23 +82,23 @@ export default function CrmTasksPage() {
     }, [statusFilter, targetFilter, dueTodayOnly, m.emptyMessage]);
 
     const loadSummary = useCallback(() => {
-        api.getCrmTaskSummary().then(setSummary).catch(() => null);
+        api.getCrmFollowUpSummary().then(setSummary).catch(() => null);
     }, []);
 
-    useEffect(() => { void loadTasks(); }, [loadTasks]);
+    useEffect(() => { void loadFollowUps(); }, [loadFollowUps]);
     useEffect(() => { loadSummary(); }, [loadSummary]);
 
     const markDone = useCallback(async (id: string) => {
         try {
-            await api.updateCrmTask(id, { status: 'DONE' });
-            await loadTasks();
+            await api.updateCrmFollowUp(id, { status: 'DONE' });
+            await loadFollowUps();
             loadSummary();
         } catch {
             /* surfaced on next load */
         }
-    }, [loadTasks, loadSummary]);
+    }, [loadFollowUps, loadSummary]);
 
-    const columns: ColumnDef<CrmTask, unknown>[] = useMemo(() => [
+    const columns: ColumnDef<CrmFollowUp, unknown>[] = useMemo(() => [
         columnHelper.accessor((row) => row.customer?.name ?? row.lead?.name ?? '—', {
             id: 'target',
             header: `${m.columns.customer} / ${m.columns.lead}`,
@@ -126,8 +126,8 @@ export default function CrmTasksPage() {
             cell: (info) => {
                 const type = info.getValue();
                 return (
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${taskTypeColors[type] ?? 'bg-gray-100 text-gray-600'}`}>
-                        {m.types[TASK_TYPE_KEYS[type]] ?? type}
+                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${followUpTypeColors[type] ?? 'bg-gray-100 text-gray-600'}`}>
+                        {m.types[FOLLOW_UP_TYPE_KEYS[type]] ?? type}
                     </span>
                 );
             },
@@ -163,7 +163,7 @@ export default function CrmTasksPage() {
                 const status = info.getValue();
                 const label = status === 'DONE' ? m.done : status === 'PENDING' ? m.pending : status;
                 return (
-                    <StatusBadge tone={taskStatusTone[status] ?? 'neutral'}>{label}</StatusBadge>
+                    <StatusBadge tone={followUpStatusTone[status] ?? 'neutral'}>{label}</StatusBadge>
                 );
             },
         }),
@@ -214,7 +214,7 @@ export default function CrmTasksPage() {
                 actions={
                     <Button
                         variant="secondary"
-                        onClick={() => { void loadTasks(); loadSummary(); }}
+                        onClick={() => { void loadFollowUps(); loadSummary(); }}
                         leftIcon={<RefreshCw className="w-4 h-4" />}
                     />
                 }
@@ -261,9 +261,9 @@ export default function CrmTasksPage() {
                 <div className="rounded-xl border border-gray-100 bg-white p-8 text-sm text-gray-500">{t.common.loading}</div>
             ) : (
                 <DataTable
-                    tableId="crm-tasks"
+                    tableId="crm-follow-ups"
                     columns={columns}
-                    data={tasks}
+                    data={followUps}
                     title={m.title}
                     emptyMessage={m.emptyMessage}
                 />
@@ -272,7 +272,7 @@ export default function CrmTasksPage() {
     );
 }
 
-function StatCard({ label, value, tone }: { label: string; value: number; tone: 'ok' | 'warn' | 'bad' | 'neutral' }) {
+function StatCard({ label, value, tone }: Readonly<{ label: string; value: number; tone: 'ok' | 'warn' | 'bad' | 'neutral' }>) {
     const toneClasses: Record<string, string> = {
         ok: 'text-emerald-700',
         warn: 'text-amber-700',

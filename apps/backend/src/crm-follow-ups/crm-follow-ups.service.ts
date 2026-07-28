@@ -2,20 +2,24 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DatabaseService } from '../database/database.service';
 import { AppLogger } from '../common/app-logger.service';
-import { CreateCrmTaskDto, UpdateCrmTaskDto } from './crm-tasks.dto';
+import { NotificationsService } from '../notifications/notifications.service';
+import { CreateCrmFollowUpDto, UpdateCrmFollowUpDto } from './crm-follow-ups.dto';
 import { paginate } from '../common/pagination.dto';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 import { JOB_NAMES } from '../system-health/jobs/job-names';
 
+const REORDER_DORMANT_DAYS = 60;
+
 @Injectable()
-export class CrmTasksService {
+export class CrmFollowUpsService {
     constructor(
         private db: DatabaseService,
         private readonly logger: AppLogger,
         private readonly jobTracker: JobTrackerService,
+        private readonly notifications: NotificationsService,
     ) {}
 
-    private async validateTaskTarget(
+    private async validateFollowUpTarget(
         tenantId: string,
         customerId?: string,
         leadId?: string,
@@ -41,15 +45,15 @@ export class CrmTasksService {
         });
         if (!lead) throw new NotFoundException('Lead not found');
         if (lead.status === 'LOST' || lead.status === 'CONVERTED') {
-            throw new BadRequestException('Tasks cannot be created for lost or converted leads.');
+            throw new BadRequestException('Follow-ups cannot be created for lost or converted leads.');
         }
         return { lead_id: leadId };
     }
 
-    async create(tenantId: string, userId: string, dto: CreateCrmTaskDto) {
-        const target = await this.validateTaskTarget(tenantId, dto.customer_id, dto.lead_id);
+    async create(tenantId: string, userId: string, dto: CreateCrmFollowUpDto) {
+        const target = await this.validateFollowUpTarget(tenantId, dto.customer_id, dto.lead_id);
 
-        return this.db.crmTask.create({
+        return this.db.crmFollowUp.create({
             data: {
                 tenant_id: tenantId,
                 ...target,
@@ -102,7 +106,7 @@ export class CrmTasksService {
         }
 
         const [items, total] = await Promise.all([
-            this.db.crmTask.findMany({
+            this.db.crmFollowUp.findMany({
                 where,
                 include: {
                     customer: { select: { id: true, name: true, phone: true } },
@@ -113,14 +117,14 @@ export class CrmTasksService {
                 skip,
                 take: limit,
             }),
-            this.db.crmTask.count({ where }),
+            this.db.crmFollowUp.count({ where }),
         ]);
 
         return paginate(items, total, page, limit);
     }
 
     async findOne(tenantId: string, id: string) {
-        const task = await this.db.crmTask.findFirst({
+        const followUp = await this.db.crmFollowUp.findFirst({
             where: { id, tenant_id: tenantId },
             include: {
                 customer: { select: { id: true, name: true, phone: true } },
@@ -128,19 +132,19 @@ export class CrmTasksService {
                 assignee: { select: { id: true, name: true, email: true } },
             },
         });
-        if (!task) throw new NotFoundException('Task not found');
-        return task;
+        if (!followUp) throw new NotFoundException('Follow-up not found');
+        return followUp;
     }
 
-    async update(tenantId: string, id: string, dto: UpdateCrmTaskDto) {
-        const existing = await this.db.crmTask.findFirst({ where: { id, tenant_id: tenantId } });
-        if (!existing) throw new NotFoundException('Task not found');
+    async update(tenantId: string, id: string, dto: UpdateCrmFollowUpDto) {
+        const existing = await this.db.crmFollowUp.findFirst({ where: { id, tenant_id: tenantId } });
+        if (!existing) throw new NotFoundException('Follow-up not found');
 
         const data: any = { ...dto };
         if (dto.due_at) data.due_at = new Date(dto.due_at);
         if (dto.status === 'DONE') data.completed_at = new Date();
 
-        return this.db.crmTask.update({
+        return this.db.crmFollowUp.update({
             where: { id },
             data,
             include: {
@@ -152,9 +156,9 @@ export class CrmTasksService {
     }
 
     async remove(tenantId: string, id: string) {
-        const existing = await this.db.crmTask.findFirst({ where: { id, tenant_id: tenantId } });
-        if (!existing) throw new NotFoundException('Task not found');
-        await this.db.crmTask.delete({ where: { id } });
+        const existing = await this.db.crmFollowUp.findFirst({ where: { id, tenant_id: tenantId } });
+        if (!existing) throw new NotFoundException('Follow-up not found');
+        await this.db.crmFollowUp.delete({ where: { id } });
         return { success: true };
     }
 
@@ -165,21 +169,21 @@ export class CrmTasksService {
         tomorrow.setDate(tomorrow.getDate() + 1);
 
         const [dueToday, overdue, total] = await Promise.all([
-            this.db.crmTask.count({
+            this.db.crmFollowUp.count({
                 where: {
                     tenant_id: tenantId,
                     status: 'PENDING',
                     due_at: { gte: today, lt: tomorrow },
                 },
             }),
-            this.db.crmTask.count({
+            this.db.crmFollowUp.count({
                 where: {
                     tenant_id: tenantId,
                     status: 'PENDING',
                     due_at: { lt: today },
                 },
             }),
-            this.db.crmTask.count({
+            this.db.crmFollowUp.count({
                 where: { tenant_id: tenantId, status: 'PENDING' },
             }),
         ]);
@@ -187,29 +191,39 @@ export class CrmTasksService {
         return { dueToday, overdue, total };
     }
 
+    /**
+     * Birthday follow-ups. Was `customer.findMany({ where: { deleted_at: null } })`
+     * with the month/day match done in JavaScript — every customer on the
+     * platform, every day, forever. The month/day comparison can't be pushed into
+     * a WHERE clause portably (Prisma has no date-part filter), so it goes
+     * through $queryRaw instead: EXTRACT is one index-free scan of Customer
+     * filtered down to today's ~1/365th up front, rather than the whole table
+     * pulled into Node to be filtered there.
+     */
     @Cron(CronExpression.EVERY_DAY_AT_8AM)
-    async autoCreateBirthdayTasks() {
-        return this.jobTracker.track(JOB_NAMES.CRM_BIRTHDAY_TASKS, () => this.autoCreateBirthdayTasksImpl());
+    async autoCreateBirthdayFollowUps() {
+        return this.jobTracker.track(
+            JOB_NAMES.CRM_BIRTHDAY_FOLLOWUPS,
+            () => this.autoCreateBirthdayFollowUpsImpl(),
+        );
     }
 
-    private async autoCreateBirthdayTasksImpl() {
+    private async autoCreateBirthdayFollowUpsImpl() {
         const today = new Date();
-        const month = today.getMonth() + 1;
-        const day = today.getDate();
 
-        const customers = await this.db.customer.findMany({
-            where: { deleted_at: null },
-            select: { id: true, tenant_id: true, name: true, birthday: true },
-        });
+        const birthdayCustomers = await this.db.$queryRaw<
+            { id: string; tenant_id: string; name: string }[]
+        >`
+            SELECT id, tenant_id, name FROM "Customer"
+            WHERE deleted_at IS NULL
+              AND birthday IS NOT NULL
+              AND EXTRACT(MONTH FROM birthday) = ${today.getMonth() + 1}
+              AND EXTRACT(DAY FROM birthday) = ${today.getDate()}
+        `;
 
-        const birthdayCustomers = customers.filter(c => {
-            if (!c.birthday) return false;
-            const bd = new Date(c.birthday);
-            return bd.getMonth() + 1 === month && bd.getDate() === day;
-        });
-
+        let created = 0;
         for (const c of birthdayCustomers) {
-            const existingToday = await this.db.crmTask.findFirst({
+            const existingToday = await this.db.crmFollowUp.findFirst({
                 where: {
                     tenant_id: c.tenant_id,
                     customer_id: c.id,
@@ -219,7 +233,7 @@ export class CrmTasksService {
             });
             if (existingToday) continue;
 
-            await this.db.crmTask.create({
+            const followUp = await this.db.crmFollowUp.create({
                 data: {
                     tenant_id: c.tenant_id,
                     customer_id: c.id,
@@ -229,30 +243,49 @@ export class CrmTasksService {
                     status: 'PENDING',
                 },
             });
+            await this.notifyOwner(followUp.tenant_id, followUp.id, followUp.title);
+            created++;
         }
 
-        this.logger.debug(`Birthday tasks created: ${birthdayCustomers.length}`);
+        this.logger.debug(`Birthday follow-ups created: ${created}`);
     }
 
+    /**
+     * Reorder-reminder follow-ups, for customers who have gone quiet.
+     *
+     * Was `last_contacted_at: { lt: sixtyDaysAgo }`, which in SQL EXCLUDES NULL —
+     * so a customer nobody has ever logged contact with, the single strongest
+     * "reach out" signal there is, was invisible to this check. Reworked as
+     * `(last_contacted_at IS NULL OR last_contacted_at < cutoff)`, falling back to
+     * `created_at` for the "how long has this been true" comparison so a
+     * newly-created customer isn't immediately flagged as dormant on day one.
+     */
     @Cron(CronExpression.EVERY_DAY_AT_8AM)
     async autoCreateReorderReminders() {
-        return this.jobTracker.track(JOB_NAMES.CRM_REORDER_TASKS, () => this.autoCreateReorderRemindersImpl());
+        return this.jobTracker.track(
+            JOB_NAMES.CRM_REORDER_FOLLOWUPS,
+            () => this.autoCreateReorderRemindersImpl(),
+        );
     }
 
     private async autoCreateReorderRemindersImpl() {
-        const sixtyDaysAgo = new Date();
-        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - REORDER_DORMANT_DAYS);
 
         const atRiskCustomers = await this.db.customer.findMany({
             where: {
                 deleted_at: null,
-                last_contacted_at: { lt: sixtyDaysAgo },
+                OR: [
+                    { last_contacted_at: { lt: cutoff } },
+                    { last_contacted_at: null, created_at: { lt: cutoff } },
+                ],
             },
             select: { id: true, tenant_id: true, name: true },
         });
 
+        let created = 0;
         for (const c of atRiskCustomers) {
-            const existing = await this.db.crmTask.findFirst({
+            const existing = await this.db.crmFollowUp.findFirst({
                 where: {
                     tenant_id: c.tenant_id,
                     customer_id: c.id,
@@ -262,18 +295,48 @@ export class CrmTasksService {
             });
             if (existing) continue;
 
-            await this.db.crmTask.create({
+            const followUp = await this.db.crmFollowUp.create({
                 data: {
                     tenant_id: c.tenant_id,
                     customer_id: c.id,
                     type: 'REORDER_REMINDER',
-                    title: `Follow up with ${c.name} — no contact in 60+ days`,
+                    title: `Follow up with ${c.name} — no contact in ${REORDER_DORMANT_DAYS}+ days`,
                     due_at: new Date(),
                     status: 'PENDING',
                 },
             });
+            await this.notifyOwner(followUp.tenant_id, followUp.id, followUp.title);
+            created++;
         }
 
-        this.logger.debug(`Reorder reminders created: ${atRiskCustomers.length}`);
+        this.logger.debug(`Reorder reminders created: ${created}`);
+    }
+
+    /**
+     * A follow-up that only appears if someone happens to open the CRM hub is
+     * not much of a reminder. Auto-generated ones (created_by is null — a human
+     * creating one is already looking at the form) notify in-app: the assignee
+     * if the follow-up has one, otherwise the tenant owner, so it is never
+     * created into a void.
+     */
+    private async notifyOwner(tenantId: string, followUpId: string, title: string) {
+        const tenant = await this.db.tenant.findUnique({
+            where: { id: tenantId },
+            select: { owner_id: true },
+        });
+        if (!tenant) return;
+
+        try {
+            await this.notifications.create(
+                tenantId,
+                tenant.owner_id,
+                'CRM_FOLLOW_UP',
+                title,
+                'A follow-up was created for you in CRM.',
+                '/crm/follow-ups',
+            );
+        } catch (err) {
+            this.logger.error(`Failed to notify owner of follow-up ${followUpId}: ${err}`);
+        }
     }
 }

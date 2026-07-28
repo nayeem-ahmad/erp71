@@ -1,18 +1,18 @@
 import { Controller, Post, Get, Patch, Delete, Body, Param, Query, UseGuards, UseInterceptors } from '@nestjs/common';
-import { CrmTasksService } from './crm-tasks.service';
-import { CreateCrmTaskDto, UpdateCrmTaskDto } from './crm-tasks.dto';
+import { CrmFollowUpsService } from './crm-follow-ups.service';
+import { CreateCrmFollowUpDto, UpdateCrmFollowUpDto } from './crm-follow-ups.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { RequiresFeature } from '../auth/subscription-access.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 
-@Controller('crm/tasks')
+@Controller('crm/follow-ups')
 @UseGuards(JwtAuthGuard, SubscriptionAccessGuard)
 @RequiresFeature('premiumCrm')
 @UseInterceptors(TenantInterceptor)
-export class CrmTasksController {
-    constructor(private readonly service: CrmTasksService) {}
+export class CrmFollowUpsController {
+    constructor(private readonly service: CrmFollowUpsService) {}
 
     @Get('summary')
     getTodaySummary(@Tenant() tenant: TenantContext) {
@@ -20,7 +20,7 @@ export class CrmTasksController {
     }
 
     @Post()
-    create(@Tenant() tenant: TenantContext, @Body() dto: CreateCrmTaskDto) {
+    create(@Tenant() tenant: TenantContext, @Body() dto: CreateCrmFollowUpDto) {
         return this.service.create(tenant.tenantId, tenant.userId, dto);
     }
 
@@ -52,7 +52,7 @@ export class CrmTasksController {
     }
 
     @Patch(':id')
-    update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateCrmTaskDto) {
+    update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateCrmFollowUpDto) {
         return this.service.update(tenant.tenantId, id, dto);
     }
 

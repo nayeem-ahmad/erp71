@@ -31,7 +31,7 @@
  * Usage:
  *   npx tsx prisma/sync-nav-layout.ts --nodes=crm.lead-taxonomy --dry-run
  *   npx tsx prisma/sync-nav-layout.ts --nodes=crm.lead-taxonomy
- *   npx tsx prisma/sync-nav-layout.ts --nodes=crm.tasks,crm.campaigns
+ *   npx tsx prisma/sync-nav-layout.ts --nodes=crm.follow-ups,crm.campaigns
  */
 import { config } from 'dotenv';
 import { resolve } from 'path';

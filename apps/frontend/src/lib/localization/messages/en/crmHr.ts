@@ -14,15 +14,15 @@ export const crmHrMessages = {
                 leads: { title: 'Leads', description: 'Track prospects, log conversations, and plan next steps.' },
                 customers: { title: 'Customers', description: 'Browse customers and open their relationship profile.' },
                 crmConversations: { title: 'Conversations', description: 'Every call, visit, and message logged across all leads.' },
-                crmTasks: { title: 'Tasks & Follow-ups', description: 'Follow-up tasks linked to customers or leads.' },
+                crmFollowUps: { title: 'Follow-ups', description: 'Follow-ups linked to customers or leads.' },
                 crmCampaigns: { title: 'Campaigns', description: 'Plan and send outbound sales campaigns.' },
                 leadTaxonomy: { title: 'Lead Sources & Categories', description: 'Manage the lists your leads are classified by.' },
                 customFields: { title: 'Lead Custom Fields', description: 'Extra fields to capture on every lead.' },
             },
             dashboard: {
                 openLeads: 'Open Leads',
-                tasksDueToday: 'Tasks Due Today',
-                overdueTasks: 'Overdue Tasks',
+                followUpsDueToday: 'Follow-ups Due Today',
+                overdueFollowUps: 'Overdue Follow-ups',
                 pendingTotal: 'pending in total',
                 recentCampaigns: 'Recent Campaigns',
                 noCampaigns: 'No campaigns sent yet',
@@ -172,7 +172,7 @@ export const crmHrMessages = {
             detail: {
                 conversations: 'Conversations',
                 logConversation: 'Log Conversation',
-                createTask: 'Create Task',
+                createFollowUp: 'Create Follow-up',
                 notes: 'Notes',
                 noConversations: 'No conversations yet',
                 editLead: 'Edit Lead',
@@ -253,9 +253,9 @@ export const crmHrMessages = {
             },
         },
     },
-    "crmTasks": {
-        "title": "CRM Tasks",
-        "subtitle": "Follow-ups, collections, and customer reminders in one queue",
+    "crmFollowUps": {
+        "title": "Follow-ups",
+        "subtitle": "Collections and customer reminders in one queue",
         "dueToday": "Due Today",
         "overdue": "Overdue",
         "total": "Total",
@@ -263,8 +263,8 @@ export const crmHrMessages = {
         "done": "Done",
         "all": "All",
         "dueTodayOnly": "Due today only",
-        "emptyMessage": "No tasks found",
-        "deleteConfirm": "Delete this task?",
+        "emptyMessage": "No follow-ups found",
+        "deleteConfirm": "Delete this follow-up?",
         "markDone": "Mark Done",
         "viewCustomer": "View Customer",
         "targetFilter": {
@@ -282,10 +282,18 @@ export const crmHrMessages = {
             "status": "Status"
         },
         "types": {
-            "followUp": "Follow Up",
+            "general": "General",
             "collection": "Collection",
             "birthday": "Birthday",
             "reorderReminder": "Reorder"
+        },
+        "panel": {
+            "add": "Add Follow-up",
+            "titlePlaceholder": "What needs to happen?",
+            "notesPlaceholder": "Notes (optional)",
+            "save": "Save",
+            "noFollowUps": "No follow-ups yet",
+            "due": "Due"
         }
     },
     "crmCampaigns": {

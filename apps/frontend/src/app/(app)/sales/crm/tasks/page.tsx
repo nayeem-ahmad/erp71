@@ -7,7 +7,7 @@ import { routes } from '@/lib/routes';
 export default function LegacyCrmTasksRedirect() {
     const router = useRouter();
     useEffect(() => {
-        router.replace(routes.crm.tasks);
+        router.replace(routes.crm.followUps);
     }, [router]);
     return null;
 }

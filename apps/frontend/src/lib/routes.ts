@@ -31,7 +31,7 @@ export const routes = {
         cashierSessions: '/sales/cashier-sessions',
         loyalty: '/sales/loyalty',
         crm: {
-            tasks: '/crm/tasks',
+            followUps: '/crm/follow-ups',
             campaigns: '/crm/campaigns',
         },
         customers: '/sales/customers',
@@ -141,7 +141,7 @@ export const routes = {
         leadNew: '/crm/leads/new' as const,
         leadDetail: (id: string) => `/crm/leads/${id}` as const,
         conversations: '/crm/conversations',
-        tasks: '/crm/tasks',
+        followUps: '/crm/follow-ups',
         campaigns: '/crm/campaigns',
         customFields: '/crm/settings/custom-fields',
         leadTaxonomy: '/crm/settings/lead-taxonomy',
