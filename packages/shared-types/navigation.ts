@@ -173,6 +173,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'crm.tasks': { id: 'crm.tasks', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.crmTasks', href: '/crm/tasks', premiumOnly: true },
   'crm.campaigns': { id: 'crm.campaigns', kind: 'link', icon: 'Megaphone', labelKey: 'sidebar.items.crmCampaigns', href: '/crm/campaigns', premiumOnly: true },
   'crm.customers': { id: 'crm.customers', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.crmCustomers', href: '/crm/customers' },
+  'crm.lead-taxonomy': { id: 'crm.lead-taxonomy', kind: 'link', icon: 'Tags', labelKey: 'sidebar.items.crmLeadTaxonomy', href: '/crm/settings/lead-taxonomy', premiumOnly: true },
   'crm.custom-fields': { id: 'crm.custom-fields', kind: 'link', icon: 'Settings', labelKey: 'sidebar.items.crmCustomFields', href: '/crm/settings/custom-fields', premiumOnly: true },
 
   hr: { id: 'hr', kind: 'module', icon: 'UserCog', labelKey: 'sidebar.modules.hr', moduleKey: 'hr' },
@@ -347,7 +348,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('crm.tasks', 'crm', 3),
   layoutNode('crm.campaigns', 'crm', 4),
   layoutNode('crm.customers', 'crm', 5),
-  layoutNode('crm.custom-fields', 'crm', 6),
+  layoutNode('crm.lead-taxonomy', 'crm', 6),
+  layoutNode('crm.custom-fields', 'crm', 7),
 
   layoutNode('manufacturing', null, 7),
 
@@ -399,6 +401,72 @@ export function getDefaultNavLayout(scope: NavScope): NavLayoutNode[] {
   return scope === NavScope.PLATFORM_ADMIN
     ? DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT.map((node) => ({ ...node }))
     : DEFAULT_TENANT_NAV_LAYOUT.map((node) => ({ ...node }));
+}
+
+/**
+ * Add newly-registered nav nodes to an already-saved layout.
+ *
+ * Saved layouts are returned verbatim — `resolveTenantSidebarLayout` does not
+ * merge the registry into them — so a node added to NAV_REGISTRY after an admin
+ * customised the sidebar never appears for anyone on that saved layout. That is
+ * silent: the code looks correct and the menu item simply is not there.
+ *
+ * The merge is deliberately **explicit-list only** rather than "append anything
+ * missing". Hiding a node is `visible: false` rather than omission, so absence
+ * does normally mean "postdates this layout" — but `validateNavLayout` does not
+ * require completeness, so nothing structurally prevents a layout from dropping
+ * a node outright. Passing ids by hand keeps each addition a deliberate call.
+ *
+ * Added nodes arrive `visible: true`; an admin can hide them afterwards and this
+ * will not undo that, because a present node is skipped regardless of its flag.
+ *
+ * Idempotent, and a no-op for any id already present or whose parent is absent
+ * (no parent means that whole module is gone — adding an orphan child would fail
+ * validation and make the entire saved layout unloadable).
+ */
+export function addNavNodesToLayout(
+  layout: NavLayoutNode[],
+  nodeIds: string[],
+  registry: Record<string, NavRegistryEntry> = NAV_REGISTRY,
+  defaults: NavLayoutNode[] = DEFAULT_TENANT_NAV_LAYOUT,
+): { layout: NavLayoutNode[]; added: string[]; skipped: { id: string; reason: string }[] } {
+  const next = layout.map((node) => ({ ...node }));
+  const added: string[] = [];
+  const skipped: { id: string; reason: string }[] = [];
+
+  for (const id of nodeIds) {
+    if (next.some((node) => node.id === id)) {
+      skipped.push({ id, reason: 'already present' });
+      continue;
+    }
+    if (!registry[id]) {
+      skipped.push({ id, reason: 'not in registry' });
+      continue;
+    }
+    const fromDefaults = defaults.find((node) => node.id === id);
+    if (!fromDefaults) {
+      skipped.push({ id, reason: 'not in the default layout' });
+      continue;
+    }
+    const parentId = fromDefaults.parentId;
+    if (parentId !== null && !next.some((node) => node.id === parentId)) {
+      skipped.push({ id, reason: `parent "${parentId}" is not in this layout` });
+      continue;
+    }
+
+    // Append after the parent's existing children rather than reusing the
+    // default sortOrder, so a customised sibling ordering is left intact and the
+    // new node cannot collide with one.
+    const siblingOrders = next
+      .filter((node) => node.parentId === parentId)
+      .map((node) => node.sortOrder);
+    const sortOrder = siblingOrders.length ? Math.max(...siblingOrders) + 1 : 0;
+
+    next.push({ ...fromDefaults, sortOrder, visible: true });
+    added.push(id);
+  }
+
+  return { layout: next, added, skipped };
 }
 
 const CONTAINER_KINDS = new Set<NavNodeKind>([NavNodeKind.MODULE, NavNodeKind.SUBGROUP]);
