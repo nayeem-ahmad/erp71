@@ -277,7 +277,7 @@ export const salesMessages = {
                     storefrontOrders: { title: "Pesanan Dalam Talian", description: "Semak dan penuhi pesanan dari kedai awam anda." },
                     storefrontSettings: { title: "Tetapan Kedai", description: "Konfigurasi penjenamaan dan katalog kedai dalam talian." },
                     customers: { title: "Pelanggan", description: "Profil pelanggan dan had kredit." },
-                    crmTasks: { title: "Tugas & Susulan", description: "Tugas susulan pelanggan." },
+                    crmFollowUps: { title: "Susulan", description: "Susulan pelanggan." },
                     crmCampaigns: { title: "Kempen", description: "Urus kempen jualan." },
                     loyalty: { title: "Mata Kesetiaan", description: "Lihat dan laraskan mata ganjaran." },
                     salesSummary: { title: "Ringkasan Jualan", description: "Hasil dan trend transaksi." },

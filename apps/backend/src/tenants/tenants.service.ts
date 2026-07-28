@@ -203,7 +203,7 @@ export class TenantsService {
 
             // CRM operational (before Customer)
             await tx.lead.deleteMany({ where: { tenant_id: tenantId } }); // cascades LeadConversation
-            await tx.crmTask.deleteMany({ where: { tenant_id: tenantId } });
+            await tx.crmFollowUp.deleteMany({ where: { tenant_id: tenantId } });
             await tx.customerInteraction.deleteMany({ where: { tenant_id: tenantId } });
             await tx.crmCampaign.deleteMany({ where: { tenant_id: tenantId } }); // cascades CrmCampaignRecipient
 

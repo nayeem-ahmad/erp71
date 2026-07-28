@@ -245,8 +245,8 @@ model User {
   employee                  Employee?
   approvedLeaves            LeaveRequest[] @relation("LeaveApprover")
   createdInteractions       CustomerInteraction[] @relation("InteractionCreator")
-  assignedCrmTasks          CrmTask[]     @relation("CrmTaskAssignee")
-  createdCrmTasks           CrmTask[]     @relation("CrmTaskCreator")
+  assignedCrmFollowUps      CrmFollowUp[] @relation("CrmFollowUpAssignee")
+  createdCrmFollowUps       CrmFollowUp[] @relation("CrmFollowUpCreator")
   refereeProfile            Referee?
   assignedLeads             Lead[]        @relation("LeadAssignee")
   nextStepAssignedLeads     Lead[]        @relation("LeadNextStepAssignee")
@@ -483,7 +483,7 @@ model Tenant {
   voucherTemplates  VoucherTemplate[]
   bankReconciliations BankReconciliation[]
   customerInteractions CustomerInteraction[]
-  crmTasks            CrmTask[]
+  crmFollowUps        CrmFollowUp[]
   leads               Lead[]
   leadConversations   LeadConversation[]
   leadSourceOptions   LeadSourceOption[]
@@ -1418,7 +1418,7 @@ model Customer {
   warrantyClaims   WarrantyClaim[]
   loyaltyTransactions LoyaltyTransaction[]
   interactions       CustomerInteraction[]
-  crmTasks           CrmTask[]
+  crmFollowUps       CrmFollowUp[]
   creditTransactions CustomerCreditTransaction[]
   campaignRecipients CrmCampaignRecipient[]
   convertedFromLeads Lead[] @relation("LeadConvertedCustomer")
@@ -1568,7 +1568,7 @@ model Lead {
   sourceOption         LeadSourceOption?   @relation(fields: [source_id], references: [id], onDelete: Restrict)
   categoryOption       LeadCategoryOption? @relation(fields: [category_id], references: [id], onDelete: Restrict)
   conversations        LeadConversation[]
-  crmTasks             CrmTask[]
+  crmFollowUps         CrmFollowUp[]
 
   @@unique([tenant_id, mobile])
   @@index([tenant_id, status])
@@ -1674,13 +1674,20 @@ model LeadConversation {
   @@index([tenant_id, type, created_at])
 }
 
-model CrmTask {
+/// A dated, assignable prompt to contact a customer or a lead — "call Rahim
+/// about his overdue invoice on Thursday". Distinct from LeadConversation /
+/// CustomerInteraction, which record contact that already happened.
+///
+/// Named FollowUp rather than Task because "Task" belongs to the Project
+/// Management module. The generic manual type is GENERAL for the same reason a
+/// FOLLOW_UP type inside a FollowUp table reads badly.
+model CrmFollowUp {
   id           String    @id @default(uuid())
   tenant_id    String
   store_id     String?
   customer_id  String?
   lead_id      String?
-  type         String    // FOLLOW_UP | COLLECTION | BIRTHDAY | REORDER_REMINDER
+  type         String    // GENERAL | COLLECTION | BIRTHDAY | REORDER_REMINDER
   title        String
   due_at       DateTime
   completed_at DateTime?
@@ -1694,8 +1701,8 @@ model CrmTask {
   tenant   Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   customer Customer? @relation(fields: [customer_id], references: [id], onDelete: Cascade)
   lead     Lead?     @relation(fields: [lead_id], references: [id], onDelete: Cascade)
-  assignee User?     @relation("CrmTaskAssignee", fields: [assigned_to], references: [id])
-  creator  User?     @relation("CrmTaskCreator", fields: [created_by], references: [id])
+  assignee User?     @relation("CrmFollowUpAssignee", fields: [assigned_to], references: [id])
+  creator  User?     @relation("CrmFollowUpCreator", fields: [created_by], references: [id])
 
   @@index([tenant_id, status, due_at])
   @@index([tenant_id, customer_id])

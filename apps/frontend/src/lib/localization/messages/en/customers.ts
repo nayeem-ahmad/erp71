@@ -42,6 +42,8 @@ export const customersMessages = {
             "customerGroup": "Customer Group",
             "creditLimit": "Credit Limit",
             "discountPct": "Discount %",
+            "birthday": "Birthday",
+            "birthdayHint": "Powers an automatic birthday follow-up on the day.",
             "individual": "Individual",
             "organization": "Organization",
             "adding": "Adding...",
@@ -73,7 +75,7 @@ export const customersMessages = {
                 "history": "Purchase History",
                 "interactions": "Interactions",
                 "credit": "Credit / Due",
-                "tasks": "Tasks"
+                "followUps": "Follow-ups"
             },
             "noTransactions": "No transactions found.",
             "unknownItem": "Unknown Item",
@@ -93,10 +95,6 @@ export const customersMessages = {
             "confirmPayment": "Confirm Payment",
             "balanceAfter": "Balance After",
             "noCreditTransactions": "No credit transactions yet",
-            "addTask": "Add Task",
-            "taskTitle": "Task title *",
-            "saveTask": "Save Task",
-            "noTasks": "No tasks yet",
             "due": "Due",
             "done": "Done",
             "deleteInteractionConfirm": "Delete this interaction?",

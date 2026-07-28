@@ -258,7 +258,7 @@ export const coreMessages = {
                 allSales: "বিক্রয়",
                 newSalesEntry: "নতুন বিক্রয় এন্ট্রি",
                 dueAging: "বকেয়া বয়স",
-                crmTasks: "টাস্ক ও ফলো-আপ",
+                crmFollowUps: "ফলো-আপ",
                 crmCampaigns: "ক্যাম্পেইন",
                 crmLeads: "লিড",
                 crmConversations: "কথোপকথন",

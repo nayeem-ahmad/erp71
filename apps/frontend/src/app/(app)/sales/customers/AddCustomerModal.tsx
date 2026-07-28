@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Phone, Mail, MapPin, CreditCard, Percent, Hash, UserCog } from 'lucide-react';
+import { User, Phone, Mail, MapPin, CreditCard, Percent, Hash, UserCog, Cake } from 'lucide-react';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -14,7 +14,7 @@ interface AddCustomerModalProps {
 const emptyForm = {
     customer_code: '', name: '', owner_name: '', phone: '', email: '', address: '', profile_pic_url: '',
     customer_type: 'INDIVIDUAL', customer_group_id: '', territory_id: '',
-    credit_limit: '', default_discount_pct: '',
+    credit_limit: '', default_discount_pct: '', birthday: '',
 };
 
 export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomerModalProps) {
@@ -53,6 +53,7 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
             if (formData.territory_id) payload.territory_id = formData.territory_id;
             if (formData.credit_limit) payload.credit_limit = parseFloat(formData.credit_limit);
             if (formData.default_discount_pct) payload.default_discount_pct = parseFloat(formData.default_discount_pct);
+            if (formData.birthday) payload.birthday = formData.birthday;
 
             await onAdd(payload);
             setFormData({ ...emptyForm });
@@ -159,6 +160,15 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
                                 <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input type="number" min="0" max="100" step="0.01" value={formData.default_discount_pct} onChange={set('default_discount_pct')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" placeholder="0.00" />
                             </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.birthday} <span className="text-gray-300">({t.common.optional})</span></label>
+                            <div className="relative">
+                                <Cake className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input type="date" value={formData.birthday} onChange={set('birthday')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 pl-10 pr-4 font-bold text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm" />
+                            </div>
+                            <p className="text-xs text-gray-400">{t.customers.modal.birthdayHint}</p>
                         </div>
 
                         <div className="col-span-2 space-y-2">

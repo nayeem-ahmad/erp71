@@ -23,7 +23,7 @@ interface LeadsSummary {
     open: number;
 }
 
-interface TaskSummary {
+interface FollowUpSummary {
     dueToday: number;
     overdue: number;
     total: number;
@@ -45,7 +45,7 @@ export default function CrmHubPage() {
     const leadStatusLabels = t.crm.leads.statuses as Record<string, string>;
     const [canAccessPremiumCrm, setCanAccessPremiumCrm] = useState(false);
     const [leadsSummary, setLeadsSummary] = useState<LeadsSummary | null>(null);
-    const [taskSummary, setTaskSummary] = useState<TaskSummary | null>(null);
+    const [followUpSummary, setFollowUpSummary] = useState<FollowUpSummary | null>(null);
     const [recentCampaigns, setRecentCampaigns] = useState<CampaignSummary[]>([]);
 
     useEffect(() => {
@@ -63,7 +63,7 @@ export default function CrmHubPage() {
     }, [canAccessPremiumCrm]);
 
     useEffect(() => {
-        api.getCrmTaskSummary().then(setTaskSummary).catch(() => null);
+        api.getCrmFollowUpSummary().then(setFollowUpSummary).catch(() => null);
         api.getCrmCampaigns().then((data) => setRecentCampaigns(data.slice(0, 3))).catch(() => null);
     }, []);
 
@@ -72,7 +72,7 @@ export default function CrmHubPage() {
             ? [
                 { href: routes.crm.leads, key: 'leads', icon: UserPlus, accent: 'bg-primary-light text-blue-700 border-primary-border' },
                 { href: routes.crm.conversations, key: 'crmConversations', icon: MessageSquare, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
-                { href: routes.crm.tasks, key: 'crmTasks', icon: ListChecks, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
+                { href: routes.crm.followUps, key: 'crmFollowUps', icon: ListChecks, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
             ]
             : [];
         const result: HubSectionConfig[] = [];
@@ -120,7 +120,7 @@ export default function CrmHubPage() {
             .join(' · ')
         : '';
 
-    const hasDashboardData = canAccessPremiumCrm || taskSummary || recentCampaigns.length > 0;
+    const hasDashboardData = canAccessPremiumCrm || followUpSummary || recentCampaigns.length > 0;
 
     return (
         <ModuleHub
@@ -146,20 +146,20 @@ export default function CrmHubPage() {
                                 Icon={UserPlus}
                             />
                         )}
-                        {taskSummary && (
+                        {followUpSummary && (
                             <>
                                 <FinancialKpiTile
-                                    title={hub.dashboard.tasksDueToday}
-                                    value={String(taskSummary.dueToday)}
-                                    helper={`${taskSummary.total} ${hub.dashboard.pendingTotal}`}
-                                    tone={taskSummary.dueToday > 0 ? 'negative' : 'positive'}
+                                    title={hub.dashboard.followUpsDueToday}
+                                    value={String(followUpSummary.dueToday)}
+                                    helper={`${followUpSummary.total} ${hub.dashboard.pendingTotal}`}
+                                    tone={followUpSummary.dueToday > 0 ? 'negative' : 'positive'}
                                     Icon={ListChecks}
                                 />
                                 <FinancialKpiTile
-                                    title={hub.dashboard.overdueTasks}
-                                    value={String(taskSummary.overdue)}
+                                    title={hub.dashboard.overdueFollowUps}
+                                    value={String(followUpSummary.overdue)}
                                     helper=""
-                                    tone={taskSummary.overdue > 0 ? 'negative' : 'positive'}
+                                    tone={followUpSummary.overdue > 0 ? 'negative' : 'positive'}
                                     Icon={AlertTriangle}
                                 />
                             </>
