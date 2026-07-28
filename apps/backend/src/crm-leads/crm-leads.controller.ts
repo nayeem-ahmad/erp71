@@ -1,6 +1,6 @@
 import { Controller, Post, Get, Patch, Delete, Body, Param, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { CrmLeadsService } from './crm-leads.service';
-import { BulkLeadActionDto, CreateLeadDto, UpdateLeadDto } from './crm-leads.dto';
+import { BulkLeadActionDto, CreateLeadDto, ListLeadsDto, UpdateLeadDto } from './crm-leads.dto';
 import { ImportRowsDto } from '../common/import.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
@@ -31,33 +31,10 @@ export class CrmLeadsController {
     }
 
     @Get()
-    findAll(
-        @Tenant() tenant: TenantContext,
-        @Query('status') status?: string,
-        @Query('source') source?: string,
-        @Query('category') category?: string,
-        @Query('priority') priority?: string,
-        @Query('assignedTo') assignedTo?: string,
-        @Query('myActionsToday') myActionsToday?: string,
-        @Query('search') search?: string,
-        @Query('page') page?: string,
-        @Query('limit') limit?: string,
-        @Query('sortBy') sortBy?: string,
-        @Query('sortDir') sortDir?: string,
-    ) {
+    findAll(@Tenant() tenant: TenantContext, @Query() query: ListLeadsDto) {
         return this.service.findAll(tenant.tenantId, {
-            status,
-            source,
-            category,
-            priority,
-            assignedTo,
-            myActionsToday: myActionsToday === 'true',
+            ...query,
             userId: tenant.userId,
-            search,
-            page: page ? parseInt(page, 10) : undefined,
-            limit: limit ? parseInt(limit, 10) : undefined,
-            sortBy,
-            sortDir,
         });
     }
 

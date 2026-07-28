@@ -55,6 +55,8 @@ describe('AuthService', () => {
         tenantRole: { create: jest.fn() },
         tenantRolePermission: { createMany: jest.fn() },
         paymentMethod: { createMany: jest.fn() },
+        leadSourceOption: { createMany: jest.fn() },
+        leadCategoryOption: { createMany: jest.fn() },
         store: { create: jest.fn() },
         tenantSubscription: { create: jest.fn(), findUnique: jest.fn().mockResolvedValue(null) },
         userStoreAccess: { create: jest.fn() },
@@ -211,6 +213,32 @@ describe('AuthService', () => {
                     expect.objectContaining({ tenant_id: 'tenant-1', name: 'Nagad', type: 'Mobile Wallet', sort_order: 3 }),
                     expect.objectContaining({ tenant_id: 'tenant-1', name: 'Card', type: 'Card', sort_order: 4 }),
                     expect.objectContaining({ tenant_id: 'tenant-1', name: 'Bank', type: 'Bank', sort_order: 5 }),
+                ]),
+            }),
+        );
+
+        // Lead sources and categories are tenant-owned rows rather than enums, so
+        // a tenant provisioned without them has empty dropdowns on the lead form
+        // and no OTHER row for lead creation to fall back to. This assertion also
+        // covers the CommonJS mirror in packages/database: the seed reached here
+        // through `main: ./index.js`, so a symbol missing from that copy fails
+        // here rather than at a customer's first signup.
+        expect(db.leadSourceOption.createMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                skipDuplicates: true,
+                data: expect.arrayContaining([
+                    expect.objectContaining({ tenant_id: 'tenant-1', code: 'OTHER', score_weight: 5, is_system: true }),
+                    expect.objectContaining({ tenant_id: 'tenant-1', code: 'REFERRAL', name: 'Referral', score_weight: 25 }),
+                    expect.objectContaining({ tenant_id: 'tenant-1', code: 'WHATSAPP', name: 'WhatsApp' }),
+                ]),
+            }),
+        );
+        expect(db.leadCategoryOption.createMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                skipDuplicates: true,
+                data: expect.arrayContaining([
+                    expect.objectContaining({ tenant_id: 'tenant-1', code: 'RETAIL', name: 'Retail', is_system: true }),
+                    expect.objectContaining({ tenant_id: 'tenant-1', code: 'OTHER', name: 'Other' }),
                 ]),
             }),
         );

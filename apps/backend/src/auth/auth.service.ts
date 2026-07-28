@@ -5,7 +5,7 @@ import { JwtService } from '@nestjs/jwt';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { AssetsService } from '../assets/assets.service';
-import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate, seedDefaultPaymentMethods, seedDefaultTenantRoles } from '@erp71/database';
+import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate, seedDefaultLeadTaxonomy, seedDefaultPaymentMethods, seedDefaultTenantRoles } from '@erp71/database';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
 import { SignupDto, LoginDto, UpdateProfileDto, ChangePasswordDto } from './auth.dto';
@@ -538,6 +538,7 @@ export class AuthService {
 
         await seedDefaultTenantRoles(tx, tenant.id);
         await seedDefaultPaymentMethods(tx, tenant.id);
+        await seedDefaultLeadTaxonomy(tx, tenant.id);
 
         await tx.tenantUser.create({
             data: {

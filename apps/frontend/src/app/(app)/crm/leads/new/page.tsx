@@ -16,6 +16,7 @@ import {
     validateLeadFormErrors,
     type LeadFormErrors,
 } from '../lead-form-fields';
+import { defaultTaxonomyId, useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 
 export default function NewLeadPage() {
     const { t } = useI18n();
@@ -29,6 +30,14 @@ export default function NewLeadPage() {
     const [saveError, setSaveError] = useState<string | null>(null);
     const [teamMembers, setTeamMembers] = useState<any[]>([]);
     const [customFieldDefs, setCustomFieldDefs] = useState<{ key: string; label: string }[]>([]);
+    const { options: sourceOptions } = useLeadTaxonomy('sources');
+    const { options: categoryOptions } = useLeadTaxonomy('categories');
+
+    // Preselect the tenant's fallback source once the list arrives. Only while
+    // the field is still untouched, so it never overwrites a real choice.
+    useEffect(() => {
+        setForm((prev) => (prev.source ? prev : { ...prev, source: defaultTaxonomyId(sourceOptions) }));
+    }, [sourceOptions]);
 
     useEffect(() => {
         api.getTeamMembers().then((data) => setTeamMembers(Array.isArray(data) ? data : [])).catch(() => null);
@@ -81,7 +90,16 @@ export default function NewLeadPage() {
             />
 
             <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
-                <LeadFormFields form={form} onChange={setForm} teamMembers={teamMembers} showStatus={false} customFieldDefs={customFieldDefs} errors={errors} />
+                <LeadFormFields
+                    form={form}
+                    onChange={setForm}
+                    teamMembers={teamMembers}
+                    showStatus={false}
+                    customFieldDefs={customFieldDefs}
+                    errors={errors}
+                    sourceOptions={sourceOptions}
+                    categoryOptions={categoryOptions}
+                />
 
                 {saveError && <p role="alert" className="text-xs text-danger mt-3">{saveError}</p>}
 

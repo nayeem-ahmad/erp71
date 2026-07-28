@@ -2,10 +2,9 @@
 
 import { useI18n } from '@/lib/i18n';
 import { Field, Input, Select, Textarea } from '@/components/ui';
+import type { LeadTaxonomyOption } from '@/lib/use-lead-taxonomy';
 
 export const LEAD_STATUSES = ['NEW', 'CONTACTED', 'QUALIFIED', 'LOST', 'CONVERTED'] as const;
-export const LEAD_SOURCES = ['WALK_IN', 'PHONE', 'FACEBOOK', 'REFERRAL', 'WEBSITE', 'OTHER'] as const;
-export const LEAD_CATEGORIES = ['RETAIL', 'WHOLESALE', 'CORPORATE', 'INDIVIDUAL', 'PARTNER', 'OTHER'] as const;
 export const LEAD_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const;
 export const LEAD_CONVERSATION_TYPES = ['CALL', 'SMS', 'WHATSAPP', 'EMAIL', 'VISIT', 'ONLINE_MEETING', 'NOTE'] as const;
 
@@ -41,6 +40,12 @@ export function nextStepToPayload(state: NextStepState): Record<string, string> 
     return payload;
 }
 
+/**
+ * `category` and `source` hold a LeadSourceOption / LeadCategoryOption **id**,
+ * not an enum member — the lists are tenant-managed now. An empty `category`
+ * means "no category", which the column genuinely allows; an empty `source`
+ * means "let the backend pick the tenant's fallback".
+ */
 export type LeadFormState = {
     name: string;
     mobile: string;
@@ -65,12 +70,12 @@ export const emptyLeadForm = (): LeadFormState => ({
     name: '',
     mobile: '',
     email: '',
-    category: 'OTHER',
+    category: '',
     priority: 'MEDIUM',
     remarks: '',
     status: 'NEW',
     lost_reason: '',
-    source: 'OTHER',
+    source: '',
     linkedin_url: '',
     fb_url: '',
     x_url: '',
@@ -87,12 +92,12 @@ export function leadToFormState(lead: Record<string, unknown>): LeadFormState {
         name: String(lead.name ?? ''),
         mobile: String(lead.mobile ?? lead.phone ?? ''),
         email: String(lead.email ?? ''),
-        category: String(lead.category ?? 'OTHER'),
+        category: String(lead.category_id ?? ''),
         priority: String(lead.priority ?? 'MEDIUM'),
         remarks: String(lead.remarks ?? lead.notes ?? ''),
         status: String(lead.status ?? 'NEW'),
         lost_reason: String(lead.lost_reason ?? ''),
-        source: String(lead.source ?? 'OTHER'),
+        source: String(lead.source_id ?? ''),
         linkedin_url: String(lead.linkedin_url ?? ''),
         fb_url: String(lead.fb_url ?? ''),
         x_url: String(lead.x_url ?? ''),
@@ -142,7 +147,9 @@ export function leadFormToPayload(form: LeadFormState) {
     if (mobile) payload.mobile = mobile;
     const email = form.email.trim();
     if (email) payload.email = email;
-    if (form.category) payload.category = form.category;
+    // Sent unconditionally, unlike the other optional fields: an empty value is
+    // meaningful ("no category"), so omitting it would make clearing impossible.
+    payload.category = form.category;
     if (form.priority) payload.priority = form.priority;
     const remarks = form.remarks.trim();
     if (remarks) payload.remarks = remarks;
@@ -199,17 +206,34 @@ type LeadFormFieldsProps = {
     showStatus?: boolean;
     customFieldDefs?: { key: string; label: string }[];
     errors?: LeadFormErrors;
+    /** Active rows from CRM → Settings → Lead Sources & Categories. */
+    sourceOptions?: LeadTaxonomyOption[];
+    categoryOptions?: LeadTaxonomyOption[];
 };
 
-export function LeadFormFields({ form, onChange, teamMembers = [], showStatus = true, customFieldDefs = [], errors = {} }: LeadFormFieldsProps) {
+export function LeadFormFields({
+    form,
+    onChange,
+    teamMembers = [],
+    showStatus = true,
+    customFieldDefs = [],
+    errors = {},
+    sourceOptions = [],
+    categoryOptions = [],
+}: Readonly<LeadFormFieldsProps>) {
     const { t } = useI18n();
     const m = t.crm.leads;
     const set = (key: keyof LeadFormState, value: string) => onChange({ ...form, [key]: value });
 
     const statusLabel = (v: string) => (m.statuses as Record<string, string>)[v] ?? v;
-    const sourceLabel = (v: string) => (m.sources as Record<string, string>)[v] ?? v;
-    const categoryLabel = (v: string) => (m.categories as Record<string, string>)[v] ?? v;
     const priorityLabel = (v: string) => (m.priorities as Record<string, string>)[v] ?? v;
+
+    // A lead saved against a since-deactivated row must keep showing it, or
+    // editing anything else would silently reassign the lead.
+    const withCurrent = (options: LeadTaxonomyOption[], currentId: string) =>
+        currentId && !options.some((o) => o.id === currentId)
+            ? [...options, { id: currentId, code: '', name: currentId, sort_order: 0, is_system: false, is_active: false }]
+            : options;
 
     return (
         <div className="grid gap-3 sm:grid-cols-2">
@@ -224,7 +248,10 @@ export function LeadFormFields({ form, onChange, teamMembers = [], showStatus = 
             </Field>
             <Field label={m.fields.category}>
                 <Select value={form.category} onChange={(e) => set('category', e.target.value)}>
-                    {LEAD_CATEGORIES.map((c) => <option key={c} value={c}>{categoryLabel(c)}</option>)}
+                    <option value="">{m.noCategory}</option>
+                    {withCurrent(categoryOptions, form.category).map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
                 </Select>
             </Field>
             <Field label={m.fields.priority}>
@@ -252,7 +279,9 @@ export function LeadFormFields({ form, onChange, teamMembers = [], showStatus = 
             )}
             <Field label={m.columns.source}>
                 <Select value={form.source} onChange={(e) => set('source', e.target.value)}>
-                    {LEAD_SOURCES.map((s) => <option key={s} value={s}>{sourceLabel(s)}</option>)}
+                    {withCurrent(sourceOptions, form.source).map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
                 </Select>
             </Field>
             <Field label={m.fields.remarks} className="sm:col-span-2">

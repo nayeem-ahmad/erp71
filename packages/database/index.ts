@@ -4,3 +4,11 @@ export { seedDemoAccount, DEMO_ACCOUNT_EMAIL, DEMO_ACCOUNT_PASSWORD } from './pr
 export { seedBusinessTypeTemplate } from './prisma/templates/seed-template.js';
 export { seedDefaultTenantRoles } from './prisma/tenant-role.seed.js';
 export { seedDefaultPaymentMethods, DEFAULT_PAYMENT_METHODS } from './prisma/payment-method.seed.js';
+export {
+    seedDefaultLeadTaxonomy,
+    DEFAULT_LEAD_SOURCES,
+    DEFAULT_LEAD_CATEGORIES,
+    LEGACY_LEAD_SOURCE_CODES,
+    LEGACY_LEAD_CATEGORY_CODES,
+    FALLBACK_SOURCE_CODE,
+} from './prisma/lead-taxonomy.seed.js';

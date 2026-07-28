@@ -6,7 +6,7 @@ import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
-import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate, seedDefaultPaymentMethods, seedDefaultTenantRoles } from '@erp71/database';
+import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate, seedDefaultLeadTaxonomy, seedDefaultPaymentMethods, seedDefaultTenantRoles } from '@erp71/database';
 import {
     BUSINESS_TYPES_WITH_TEMPLATE,
     DEFAULT_MOBILE_COUNTRY_CODE,
@@ -772,6 +772,7 @@ export class AdminTenantsService {
 
             await seedDefaultTenantRoles(tx, tenant.id);
             await seedDefaultPaymentMethods(tx, tenant.id);
+            await seedDefaultLeadTaxonomy(tx, tenant.id);
 
             await tx.tenantUser.create({
                 data: { tenant_id: tenant.id, user_id: ownerId, role: 'OWNER' },

@@ -6,7 +6,7 @@ import {
     UpdateLeadConversationDto,
 } from './crm-lead-conversations.dto';
 import { paginate } from '../common/pagination.dto';
-import { computeLeadScore } from '../crm-leads/lead-scoring.util';
+import { computeLeadScore, DEFAULT_SOURCE_WEIGHT } from '../crm-leads/lead-scoring.util';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
 
 const conversationIncludes = {
@@ -90,6 +90,7 @@ export class CrmLeadConversationsService {
     async create(tenantId: string, userId: string, dto: CreateLeadConversationDto) {
         const lead = await this.db.lead.findFirst({
             where: { id: dto.lead_id, tenant_id: tenantId },
+            include: { sourceOption: { select: { score_weight: true } } },
         });
         if (!lead) throw new NotFoundException('Lead not found');
 
@@ -107,7 +108,7 @@ export class CrmLeadConversationsService {
         leadUpdate.score = computeLeadScore(
             {
                 status: lead.status,
-                source: lead.source,
+                sourceWeight: lead.sourceOption?.score_weight ?? DEFAULT_SOURCE_WEIGHT,
                 priority: lead.priority,
                 last_contacted_at: now,
                 next_step_date:

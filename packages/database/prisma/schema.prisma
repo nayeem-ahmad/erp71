@@ -486,6 +486,8 @@ model Tenant {
   crmTasks            CrmTask[]
   leads               Lead[]
   leadConversations   LeadConversation[]
+  leadSourceOptions   LeadSourceOption[]
+  leadCategoryOptions LeadCategoryOption[]
   customFieldDefinitions CustomFieldDefinition[]
   customerCreditTransactions CustomerCreditTransaction[]
   supplierCreditTransactions SupplierCreditTransaction[]
@@ -1530,10 +1532,17 @@ model Lead {
   custom_fields           Json?
   email                   String?
   address                 String?
+  // `category`/`source` are the legacy enum columns. They are kept in lockstep
+  // with `category_id`/`source_id` (dual-written on every create/update) so a
+  // rollback to the previous release still finds sane data. They are dropped in
+  // the contract release, once `sync-lead-taxonomy` reports zero unbackfilled
+  // rows — see docs/crm/lead-taxonomy-rollout.md. Do NOT read them in new code.
   category                LeadCategory?
+  category_id             String?
   priority                LeadPriority @default(MEDIUM)
   remarks                 String?
   source                  LeadSource   @default(OTHER)
+  source_id               String?
   status                  LeadStatus   @default(NEW)
   lost_reason             String?
   score                   Int          @default(0)
@@ -1556,6 +1565,8 @@ model Lead {
   nextStepAssignee     User?     @relation("LeadNextStepAssignee", fields: [next_step_assigned_to], references: [id])
   creator              User?     @relation("LeadCreator", fields: [created_by], references: [id])
   convertedCustomer    Customer? @relation("LeadConvertedCustomer", fields: [converted_customer_id], references: [id])
+  sourceOption         LeadSourceOption?   @relation(fields: [source_id], references: [id], onDelete: Restrict)
+  categoryOption       LeadCategoryOption? @relation(fields: [category_id], references: [id], onDelete: Restrict)
   conversations        LeadConversation[]
   crmTasks             CrmTask[]
 
@@ -1565,6 +1576,58 @@ model Lead {
   @@index([tenant_id, priority])
   @@index([tenant_id, assigned_to])
   @@index([tenant_id, next_step_date])
+  @@index([tenant_id, source_id])
+  @@index([tenant_id, category_id])
+}
+
+/// Tenant-editable lead sources. Replaces the `LeadSource` enum.
+///
+/// `code` is the immutable join key (seeded rows reuse the old enum members, so
+/// the backfill and CSV import can match on it); `name` is the editable label a
+/// tenant can rename freely without breaking either. Seeded rows carry
+/// `is_system` and are deactivated rather than deleted, because the idempotent
+/// tenant sync would otherwise resurrect them on the next container start.
+model LeadSourceOption {
+  id           String   @id @default(uuid())
+  tenant_id    String
+  code         String
+  name         String
+  /// 0-25 contribution to the lead score. Replaces the hardcoded SOURCE_WEIGHT
+  /// map in apps/backend/src/crm-leads/lead-scoring.util.ts.
+  score_weight Int      @default(5)
+  sort_order   Int      @default(0)
+  is_system    Boolean  @default(false)
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  leads  Lead[]
+
+  @@unique([tenant_id, code])
+  @@unique([tenant_id, name])
+  @@index([tenant_id, is_active, sort_order])
+}
+
+/// Tenant-editable lead categories. Replaces the `LeadCategory` enum.
+/// Flat by design — unlike CustomerGroup there is no parent/child nesting.
+model LeadCategoryOption {
+  id         String   @id @default(uuid())
+  tenant_id  String
+  code       String
+  name       String
+  sort_order Int      @default(0)
+  is_system  Boolean  @default(false)
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  leads  Lead[]
+
+  @@unique([tenant_id, code])
+  @@unique([tenant_id, name])
+  @@index([tenant_id, is_active, sort_order])
 }
 
 enum CustomFieldEntity {

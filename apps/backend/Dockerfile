@@ -75,4 +75,10 @@ ENV GIT_SHA=$GIT_SHA
 # runs only at tenant creation. Without it, adding a rule silently posts nothing
 # on every existing tenant. It joins the && chain deliberately: a failure here
 # means tenants would post to a stale rule set, which must be loud, not skipped.
-CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
+#
+# sync:lead-taxonomy plays the same role for CRM lead sources/categories, and
+# additionally backfills Lead.source_id / Lead.category_id from the legacy enum
+# columns. It is idempotent and additive-only, and it degrades to "seed defaults
+# only" once those columns are dropped (it checks information_schema rather than
+# assuming they exist) — so it cannot become the reason the backend stops booting.
+CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
