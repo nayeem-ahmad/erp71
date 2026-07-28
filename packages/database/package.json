@@ -12,6 +12,7 @@
         "db:studio": "prisma studio",
         "repair:vouchers": "tsx prisma/repair-fabricated-vouchers.ts",
         "sync:accounting": "tsx prisma/sync-accounting.ts",
+    "sync:lead-taxonomy": "tsx prisma/sync-lead-taxonomy.ts",
         "reconcile:balances": "tsx prisma/reconcile-party-balances.ts",
         "retag:parties": "tsx prisma/retag-party-ledger.ts"
     },

@@ -8,22 +8,37 @@ import { CustomFieldEntity } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { CustomersService } from '../customers/customers.service';
 import { CustomFieldsService } from '../custom-fields/custom-fields.service';
-import { BulkLeadActionDto, CreateLeadDto, LeadBulkAction, LeadCategory, LeadPriority, LeadSource, LeadStatus, UpdateLeadDto } from './crm-leads.dto';
+import { BulkLeadActionDto, CreateLeadDto, LeadBulkAction, LeadPriority, LeadStatus, UpdateLeadDto } from './crm-leads.dto';
 import { paginate } from '../common/pagination.dto';
-import { computeLeadScore } from './lead-scoring.util';
+import { computeLeadScore, DEFAULT_SOURCE_WEIGHT } from './lead-scoring.util';
 import { runImport, ImportResult } from '../common/import.util';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
+import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
+import { LeadTaxonomyKind } from '../crm-lead-taxonomy/lead-taxonomy.dto';
+import {
+    buildTaxonomyIndex,
+    coerceLegacyCategory,
+    coerceLegacySource,
+    resolveImportRef,
+} from '../crm-lead-taxonomy/lead-taxonomy.util';
+
+const taxonomySelect = { select: { id: true, code: true, name: true } } as const;
 
 const leadIncludes = {
     assignee: { select: { id: true, name: true, email: true } },
     nextStepAssignee: { select: { id: true, name: true, email: true } },
     creator: { select: { id: true, name: true, email: true } },
     convertedCustomer: { select: { id: true, name: true, phone: true } },
+    sourceOption: { select: { id: true, code: true, name: true, score_weight: true } },
+    categoryOption: taxonomySelect,
 } as const;
 
+// `category`/`source` sort through the relation so the list orders by the label
+// the tenant actually sees, and so these keep working once the enum columns go.
 const LEAD_SORTABLE: SortableMap = {
     name: (dir) => ({ name: dir }),
-    category: (dir) => ({ category: dir }),
+    category: (dir) => ({ categoryOption: { name: dir } }),
+    source: (dir) => ({ sourceOption: { name: dir } }),
     priority: (dir) => ({ priority: dir }),
     status: (dir) => ({ status: dir }),
     score: (dir) => ({ score: dir }),
@@ -38,10 +53,19 @@ export class CrmLeadsService {
         private db: DatabaseService,
         private customersService: CustomersService,
         private customFields: CustomFieldsService,
+        private taxonomy: CrmLeadTaxonomyService,
     ) {}
 
     private mapLeadData(dto: CreateLeadDto | UpdateLeadDto) {
-        const { custom_fields: _ignoredCustomFields, ...rest } = dto as any;
+        // `source`/`category` are stripped: they name a taxonomy row rather than
+        // holding a column value, and are resolved into source_id/category_id
+        // (plus the dual-written legacy enum) by the caller.
+        const {
+            custom_fields: _ignoredCustomFields,
+            source: _ignoredSource,
+            category: _ignoredCategory,
+            ...rest
+        } = dto as any;
         const data: Record<string, unknown> = { ...rest };
         if ('next_step_date' in dto && dto.next_step_date) {
             data.next_step_date = new Date(dto.next_step_date);
@@ -50,6 +74,59 @@ export class CrmLeadsService {
             data.next_step_date = null;
         }
         return data;
+    }
+
+    /**
+     * Resolve a client-supplied source/category reference (row id, `code`, or
+     * display name) against the tenant's own rows.
+     *
+     * Throws rather than falling back on an unknown value — silently rewriting a
+     * lead's provenance to OTHER is what the old `resolveEnum` did, and it made
+     * bad imports invisible.
+     */
+    private async resolveTaxonomy(
+        tenantId: string,
+        kind: LeadTaxonomyKind,
+        value: string | null | undefined,
+    ) {
+        if (value === undefined) return undefined;
+        if (value === null || String(value).trim() === '') return null;
+        const row = await this.taxonomy.resolveByIdOrCode(tenantId, kind, String(value));
+        if (!row) {
+            const label = kind === LeadTaxonomyKind.SOURCE ? 'source' : 'category';
+            throw new BadRequestException(`Unknown lead ${label}: "${value}".`);
+        }
+        return row;
+    }
+
+    /**
+     * Fold a patch's source/category references into the update payload.
+     *
+     * A field absent from the patch (`undefined`) is left alone; an explicitly
+     * cleared one (`null`/empty) is nulled — except source, which is NOT NULL on
+     * the legacy column and so falls back to the tenant's OTHER row instead.
+     */
+    private async applyTaxonomyPatch(
+        tenantId: string,
+        dto: UpdateLeadDto,
+        data: Record<string, unknown>,
+    ) {
+        const sourceRow = await this.resolveTaxonomy(tenantId, LeadTaxonomyKind.SOURCE, dto.source);
+        if (sourceRow !== undefined) {
+            const resolved = sourceRow ?? (await this.taxonomy.fallbackSource(tenantId));
+            data.source_id = resolved?.id ?? null;
+            data.source = coerceLegacySource(resolved?.code);
+        }
+
+        const categoryRow = await this.resolveTaxonomy(
+            tenantId,
+            LeadTaxonomyKind.CATEGORY,
+            dto.category,
+        );
+        if (categoryRow !== undefined) {
+            data.category_id = categoryRow?.id ?? null;
+            data.category = coerceLegacyCategory(categoryRow?.code);
+        }
     }
 
     async create(tenantId: string, userId: string, dto: CreateLeadDto) {
@@ -69,10 +146,28 @@ export class CrmLeadsService {
         }
 
         const priority = dto.priority ?? 'MEDIUM';
-        const source = dto.source ?? 'OTHER';
+
+        // A lead always has a source. When none is named, fall back to the
+        // tenant's OTHER row — which may itself be absent on a tenant that has
+        // not been synced yet, hence the null-tolerant handling below.
+        const sourceRow =
+            (await this.resolveTaxonomy(tenantId, LeadTaxonomyKind.SOURCE, dto.source)) ??
+            (await this.taxonomy.fallbackSource(tenantId));
+        const categoryRow = await this.resolveTaxonomy(
+            tenantId,
+            LeadTaxonomyKind.CATEGORY,
+            dto.category,
+        );
+
         const nextStepDate = dto.next_step_date ? new Date(dto.next_step_date) : null;
         const score = computeLeadScore(
-            { status, source, priority, last_contacted_at: null, next_step_date: nextStepDate },
+            {
+                status,
+                sourceWeight: sourceRow?.score_weight ?? DEFAULT_SOURCE_WEIGHT,
+                priority,
+                last_contacted_at: null,
+                next_step_date: nextStepDate,
+            },
             0,
         );
 
@@ -89,10 +184,12 @@ export class CrmLeadsService {
                 mobile: dto.mobile,
                 email: dto.email,
                 address: dto.address,
-                category: dto.category,
+                category_id: categoryRow?.id ?? null,
+                category: coerceLegacyCategory(categoryRow?.code),
                 priority,
                 remarks: dto.remarks,
-                source,
+                source_id: sourceRow?.id ?? null,
+                source: coerceLegacySource(sourceRow?.code),
                 status,
                 lost_reason: status === LeadStatus.LOST ? dto.lost_reason : undefined,
                 score,
@@ -135,8 +232,10 @@ export class CrmLeadsService {
 
         const where: any = { tenant_id: tenantId };
         if (opts.status) where.status = opts.status;
-        if (opts.source) where.source = opts.source;
-        if (opts.category) where.category = opts.category;
+        // Filters carry a taxonomy row id. A stale bookmarked filter naming a
+        // deleted row simply matches nothing, rather than erroring.
+        if (opts.source) where.source_id = opts.source;
+        if (opts.category) where.category_id = opts.category;
         if (opts.priority) where.priority = opts.priority;
         if (opts.assignedTo) where.assigned_to = opts.assignedTo;
         if (opts.myActionsToday && opts.userId) {
@@ -198,6 +297,8 @@ export class CrmLeadsService {
 
         const data = this.mapLeadData(dto);
 
+        await this.applyTaxonomyPatch(tenantId, dto, data);
+
         const customFields = await this.customFields.sanitizeValues(
             tenantId,
             CustomFieldEntity.LEAD,
@@ -218,11 +319,21 @@ export class CrmLeadsService {
             data.lost_reason = null;
         }
 
+        // Weight comes from the lead's (possibly just-changed) source row; an
+        // unbackfilled lead has no row yet and scores at the default.
+        const effectiveSourceId = (data.source_id as string | null | undefined) ?? existing.source_id;
+        const weightRow = effectiveSourceId
+            ? await this.db.leadSourceOption.findFirst({
+                where: { id: effectiveSourceId, tenant_id: tenantId },
+                select: { score_weight: true },
+            })
+            : null;
+
         const conversationCount = await this.db.leadConversation.count({ where: { lead_id: id } });
         data.score = computeLeadScore(
             {
                 status: nextStatus,
-                source: dto.source ?? existing.source,
+                sourceWeight: weightRow?.score_weight ?? DEFAULT_SOURCE_WEIGHT,
                 priority: dto.priority ?? existing.priority,
                 last_contacted_at: existing.last_contacted_at,
                 next_step_date:
@@ -315,6 +426,18 @@ export class CrmLeadsService {
             tenantId,
             CustomFieldEntity.LEAD,
         );
+
+        // Prefetched once, not per row: the importer accepts up to 5000 rows.
+        // Inactive rows are included so importing historical data onto a
+        // retired source still lands on the right row instead of failing.
+        const [sourceRows, categoryRows] = await Promise.all([
+            this.taxonomy.list(tenantId, LeadTaxonomyKind.SOURCE, true),
+            this.taxonomy.list(tenantId, LeadTaxonomyKind.CATEGORY, true),
+        ]);
+        const sourceIndex = buildTaxonomyIndex(sourceRows);
+        const categoryIndex = buildTaxonomyIndex(categoryRows);
+        const fallbackSource = await this.taxonomy.fallbackSource(tenantId);
+
         return runImport(rows, mode, tenantId, {
             requiredFields: ['name'],
             castRow: (raw) => {
@@ -330,13 +453,16 @@ export class CrmLeadsService {
                     email: raw.email ? String(raw.email).trim() || null : null,
                     address: raw.address ? String(raw.address).trim() || null : null,
                     remarks: raw.remarks ? String(raw.remarks).trim() || null : null,
-                    category: this.resolveEnum(raw.category, Object.values(LeadCategory) as string[]) ?? null,
+                    // Unknown values fail the row rather than being silently
+                    // rewritten to OTHER. runImport turns the throw into
+                    // "Row N: <message>", which tells the shop owner exactly
+                    // which cell to fix — the old behaviour corrupted the
+                    // lead's provenance and reported success.
+                    category: resolveImportRef(raw.category, categoryIndex, 'category') ?? null,
                     priority: raw.priority != null && String(raw.priority).trim() !== ''
                         ? (this.resolveEnum(raw.priority, Object.values(LeadPriority) as string[]) ?? LeadPriority.MEDIUM)
                         : undefined,
-                    source: raw.source != null && String(raw.source).trim() !== ''
-                        ? (this.resolveEnum(raw.source, Object.values(LeadSource) as string[]) ?? LeadSource.OTHER)
-                        : undefined,
+                    source: resolveImportRef(raw.source, sourceIndex, 'source'),
                     status: rawStatus,
                     linkedin_url: raw.linkedin_url ? String(raw.linkedin_url).trim() || null : null,
                     fb_url: raw.fb_url ? String(raw.fb_url).trim() || null : null,
@@ -371,10 +497,11 @@ export class CrmLeadsService {
                 return existing?.id ?? null;
             },
             create: async (row) => {
+                const source = row.source ?? fallbackSource;
                 const score = computeLeadScore(
                     {
                         status: row.status ?? LeadStatus.NEW as any,
-                        source: row.source ?? LeadSource.OTHER as any,
+                        sourceWeight: source?.score_weight ?? DEFAULT_SOURCE_WEIGHT,
                         priority: row.priority ?? LeadPriority.MEDIUM as any,
                         last_contacted_at: null,
                         next_step_date: row.next_step_date ?? null,
@@ -389,9 +516,11 @@ export class CrmLeadsService {
                         email: row.email ?? undefined,
                         address: row.address ?? undefined,
                         remarks: row.remarks ?? undefined,
-                        category: row.category ?? undefined,
+                        category_id: row.category?.id ?? null,
+                        category: coerceLegacyCategory(row.category?.code),
                         priority: row.priority ?? LeadPriority.MEDIUM,
-                        source: row.source ?? LeadSource.OTHER,
+                        source_id: source?.id ?? null,
+                        source: coerceLegacySource(source?.code),
                         status: row.status ?? LeadStatus.NEW,
                         linkedin_url: row.linkedin_url ?? undefined,
                         fb_url: row.fb_url ?? undefined,
@@ -415,9 +544,19 @@ export class CrmLeadsService {
                         ...(row.email    !== null      ? { email: row.email }       : {}),
                         ...(row.address  !== null      ? { address: row.address }   : {}),
                         ...(row.remarks  !== null      ? { remarks: row.remarks }   : {}),
-                        ...(row.category !== null      ? { category: row.category } : {}),
+                        ...(row.category !== null
+                            ? {
+                                category_id: row.category.id,
+                                category: coerceLegacyCategory(row.category.code),
+                            }
+                            : {}),
                         ...(row.priority !== undefined ? { priority: row.priority } : {}),
-                        ...(row.source   !== undefined ? { source: row.source }     : {}),
+                        ...(row.source !== undefined
+                            ? {
+                                source_id: row.source.id,
+                                source: coerceLegacySource(row.source.code),
+                            }
+                            : {}),
                         ...(row.status   !== undefined ? { status: row.status }     : {}),
                         ...(row.linkedin_url !== null ? { linkedin_url: row.linkedin_url } : {}),
                         ...(row.fb_url       !== null ? { fb_url: row.fb_url }             : {}),

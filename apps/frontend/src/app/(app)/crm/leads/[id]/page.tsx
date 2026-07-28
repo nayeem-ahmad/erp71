@@ -27,6 +27,7 @@ import {
     type LeadFormState,
     type NextStepState,
 } from '../lead-form-fields';
+import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 
 const leadStatusTone: Record<string, StatusBadgeTone> = {
     NEW: 'info',
@@ -93,6 +94,8 @@ export default function LeadDetailPage() {
     const [saveLeadError, setSaveLeadError] = useState<string | null>(null);
     const [teamMembers, setTeamMembers] = useState<any[]>([]);
     const [customFieldDefs, setCustomFieldDefs] = useState<{ key: string; label: string }[]>([]);
+    const { options: sourceOptions } = useLeadTaxonomy('sources');
+    const { options: categoryOptions } = useLeadTaxonomy('categories');
 
     useEffect(() => {
         api.getTeamMembers().then((data) => setTeamMembers(Array.isArray(data) ? data : [])).catch(() => null);
@@ -248,8 +251,10 @@ export default function LeadDetailPage() {
 
     const isConverted = lead.status === 'CONVERTED';
     const statusLabel = (m.statuses as Record<string, string>)[lead.status] ?? lead.status;
-    const sourceLabel = (m.sources as Record<string, string>)[lead.source] ?? lead.source;
-    const categoryLabel = lead.category ? ((m.categories as Record<string, string>)[lead.category] ?? lead.category) : null;
+    // Names come from the tenant's own taxonomy rows and are shown verbatim.
+    // The legacy enum value is the fallback for a lead not yet backfilled.
+    const sourceLabel = lead.sourceOption?.name ?? lead.source;
+    const categoryLabel = lead.categoryOption?.name ?? lead.category ?? null;
     const priorityLabel = (m.priorities as Record<string, string>)[lead.priority] ?? lead.priority;
 
     const socialLinks = [
@@ -376,7 +381,15 @@ export default function LeadDetailPage() {
             {showEditForm && editForm && !isConverted && (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 space-y-4">
                     <h2 className="text-sm font-semibold text-gray-900">{m.fields.editLead}</h2>
-                    <LeadFormFields form={editForm} onChange={setEditForm} teamMembers={teamMembers} customFieldDefs={customFieldDefs} errors={editFormErrors} />
+                    <LeadFormFields
+                        form={editForm}
+                        onChange={setEditForm}
+                        teamMembers={teamMembers}
+                        customFieldDefs={customFieldDefs}
+                        errors={editFormErrors}
+                        sourceOptions={sourceOptions}
+                        categoryOptions={categoryOptions}
+                    />
                     {saveLeadError && <p role="alert" className="text-xs text-danger">{saveLeadError}</p>}
                     <FormFooter className="border-t-0 pt-0">
                         <Button variant="secondary" onClick={() => { setShowEditForm(false); setEditForm(null); }}>

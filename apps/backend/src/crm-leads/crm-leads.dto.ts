@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsString, IsOptional, IsEnum, IsUUID, IsEmail, IsDateString, IsObject, IsArray, ArrayNotEmpty } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsUUID, IsEmail, IsDateString, IsObject, IsArray, ArrayNotEmpty, IsBoolean, IsInt, Min } from 'class-validator';
 
 // Define enums locally since Prisma enums aren't exported at runtime
 export enum LeadStatus {
@@ -8,24 +8,6 @@ export enum LeadStatus {
     QUALIFIED = 'QUALIFIED',
     LOST = 'LOST',
     CONVERTED = 'CONVERTED',
-}
-
-export enum LeadSource {
-    WALK_IN = 'WALK_IN',
-    PHONE = 'PHONE',
-    FACEBOOK = 'FACEBOOK',
-    REFERRAL = 'REFERRAL',
-    WEBSITE = 'WEBSITE',
-    OTHER = 'OTHER',
-}
-
-export enum LeadCategory {
-    RETAIL = 'RETAIL',
-    WHOLESALE = 'WHOLESALE',
-    CORPORATE = 'CORPORATE',
-    INDIVIDUAL = 'INDIVIDUAL',
-    PARTNER = 'PARTNER',
-    OTHER = 'OTHER',
 }
 
 export enum LeadPriority {
@@ -38,6 +20,20 @@ export enum LeadPriority {
 const emptyToUndefined = ({ value }: { value: unknown }) =>
     value === '' || value === null ? undefined : value;
 
+/**
+ * Note on `source` / `category` across the DTOs below.
+ *
+ * They are tenant-managed rows in `LeadSourceOption` / `LeadCategoryOption`, not
+ * enums, so there is no fixed set to validate against here. They accept a row
+ * id, a `code`, or a display name, and are resolved — and rejected if unknown —
+ * against the tenant's own rows in CrmLeadsService. That is stricter than the
+ * `@IsEnum` check it replaces, not looser: it also verifies tenant ownership.
+ *
+ * They deliberately do NOT carry `@Transform(emptyToUndefined)`. An empty string
+ * has to survive to the service as "clear this field", which is how a lead's
+ * category gets removed; collapsing it to undefined would mean "leave alone" and
+ * silently make the category unclearable.
+ */
 export class CreateLeadDto {
     @IsString()
     name: string;
@@ -56,8 +52,8 @@ export class CreateLeadDto {
     address?: string;
 
     @IsOptional()
-    @IsEnum(LeadCategory)
-    category?: LeadCategory;
+    @IsString()
+    category?: string;
 
     @IsOptional()
     @IsEnum(LeadPriority)
@@ -68,8 +64,8 @@ export class CreateLeadDto {
     remarks?: string;
 
     @IsOptional()
-    @IsEnum(LeadSource)
-    source?: LeadSource;
+    @IsString()
+    source?: string;
 
     @IsOptional()
     @IsEnum(LeadStatus)
@@ -143,8 +139,8 @@ export class UpdateLeadDto {
     address?: string;
 
     @IsOptional()
-    @IsEnum(LeadCategory)
-    category?: LeadCategory;
+    @IsString()
+    category?: string;
 
     @IsOptional()
     @IsEnum(LeadPriority)
@@ -155,8 +151,8 @@ export class UpdateLeadDto {
     remarks?: string;
 
     @IsOptional()
-    @IsEnum(LeadSource)
-    source?: LeadSource;
+    @IsString()
+    source?: string;
 
     @IsOptional()
     @IsEnum(LeadStatus)
@@ -204,6 +200,72 @@ export class UpdateLeadDto {
     @IsOptional()
     @IsObject()
     custom_fields?: Record<string, string>;
+}
+
+/**
+ * Query params for GET /crm/leads.
+ *
+ * `status` and `priority` are still enum-validated, which matters more than it
+ * looks: these previously arrived as raw strings and went straight into a Prisma
+ * `where`, so a stale bookmarked filter (or a renamed value) returned a 500
+ * instead of a 400. `source` and `category` are free strings because they now
+ * hold tenant-defined row ids.
+ */
+export class ListLeadsDto {
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsEnum(LeadStatus)
+    status?: LeadStatus;
+
+    @IsOptional()
+    @IsString()
+    source?: string;
+
+    @IsOptional()
+    @IsString()
+    category?: string;
+
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsEnum(LeadPriority)
+    priority?: LeadPriority;
+
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsString()
+    assignedTo?: string;
+
+    @IsOptional()
+    @Transform(({ value }) => value === true || value === 'true' || value === '1')
+    @IsBoolean()
+    myActionsToday?: boolean;
+
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsString()
+    search?: string;
+
+    @IsOptional()
+    @Transform(({ value }) => (value === '' || value == null ? undefined : Number(value)))
+    @IsInt()
+    @Min(1)
+    page?: number;
+
+    @IsOptional()
+    @Transform(({ value }) => (value === '' || value == null ? undefined : Number(value)))
+    @IsInt()
+    @Min(1)
+    limit?: number;
+
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsString()
+    sortBy?: string;
+
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsString()
+    sortDir?: string;
 }
 
 export enum LeadBulkAction {

@@ -872,6 +872,33 @@ export const api = {
             body: JSON.stringify({ rows, mode }),
             headers: { 'Content-Type': 'application/json' },
         }),
+    // CRM Lead Taxonomy (tenant-managed lead sources / categories)
+    getLeadTaxonomy: (kind: 'sources' | 'categories', includeInactive = false) =>
+        fetchWithAuth(`/crm/lead-taxonomy/${kind}${includeInactive ? '?includeInactive=true' : ''}`),
+    getLeadTaxonomyUsage: (kind: 'sources' | 'categories') =>
+        fetchWithAuth(`/crm/lead-taxonomy/${kind}/usage`),
+    createLeadTaxonomy: (
+        kind: 'sources' | 'categories',
+        data: { name: string; score_weight?: number; sort_order?: number },
+    ) => fetchWithAuth(`/crm/lead-taxonomy/${kind}`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateLeadTaxonomy: (
+        kind: 'sources' | 'categories',
+        id: string,
+        data: { name?: string; score_weight?: number; sort_order?: number; is_active?: boolean },
+    ) => fetchWithAuth(`/crm/lead-taxonomy/${kind}/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteLeadTaxonomy: (kind: 'sources' | 'categories', id: string, reassignTo?: string) =>
+        fetchWithAuth(
+            `/crm/lead-taxonomy/${kind}/${id}${reassignTo ? `?reassignTo=${encodeURIComponent(reassignTo)}` : ''}`,
+            { method: 'DELETE' },
+        ),
     // Custom Fields
     getCustomFields: (entity: string) =>
         fetchWithAuth(`/custom-fields?entity=${encodeURIComponent(entity)}`),

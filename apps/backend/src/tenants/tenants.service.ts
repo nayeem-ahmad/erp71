@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { seedDefaultLeadTaxonomy } from '@erp71/database';
 import { DatabaseService } from '../database/database.service';
 import { StorefrontSettingsDto } from '../storefront/storefront.dto';
 import { UpdateBrandingDto } from './update-branding.dto';
@@ -269,6 +270,11 @@ export class TenantsService {
                 await tx.customerGroup.deleteMany({ where: { tenant_id: tenantId } });
                 await tx.territory.deleteMany({ where: { tenant_id: tenantId } });
 
+                // CRM master data — safe here because Lead (which FKs these with
+                // onDelete: Restrict) is already deleted above.
+                await tx.leadSourceOption.deleteMany({ where: { tenant_id: tenantId } });
+                await tx.leadCategoryOption.deleteMany({ where: { tenant_id: tenantId } });
+
                 // Suppliers
                 await tx.supplier.deleteMany({ where: { tenant_id: tenantId } });
 
@@ -289,6 +295,12 @@ export class TenantsService {
 
                 // Discount codes
                 await tx.discountCode.deleteMany({ where: { tenantId } });
+
+                // Re-seed the CRM lead taxonomy. Unlike the other master data
+                // cleared above, a tenant with no lead sources cannot classify a
+                // new lead at all, so leaving these empty makes the CRM unusable
+                // until the next container restart runs sync:lead-taxonomy.
+                await seedDefaultLeadTaxonomy(tx, tenantId);
             }
         });
 

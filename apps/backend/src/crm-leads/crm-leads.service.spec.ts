@@ -4,6 +4,7 @@ import { CrmLeadsService } from './crm-leads.service';
 import { CustomersService } from '../customers/customers.service';
 import { CustomFieldsService } from '../custom-fields/custom-fields.service';
 import { DatabaseService } from '../database/database.service';
+import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
 import { LeadStatus } from './crm-leads.dto';
 
 describe('CrmLeadsService', () => {
@@ -11,6 +12,16 @@ describe('CrmLeadsService', () => {
     let db: any;
     let customersService: any;
     let customFieldsService: any;
+    let taxonomyService: any;
+
+    /** The seeded fallback row every tenant has. */
+    const OTHER_SOURCE = {
+        id: 'src-other',
+        code: 'OTHER',
+        name: 'Other',
+        score_weight: 5,
+        is_active: true,
+    };
 
     beforeEach(async () => {
         db = {
@@ -26,6 +37,9 @@ describe('CrmLeadsService', () => {
             leadConversation: {
                 count: jest.fn().mockResolvedValue(0),
             },
+            leadSourceOption: {
+                findFirst: jest.fn().mockResolvedValue(OTHER_SOURCE),
+            },
             customer: {
                 findFirst: jest.fn(),
             },
@@ -37,6 +51,11 @@ describe('CrmLeadsService', () => {
             sanitizeValues: jest.fn().mockResolvedValue(undefined),
             listDefinitions: jest.fn().mockResolvedValue([]),
         };
+        taxonomyService = {
+            resolveByIdOrCode: jest.fn().mockResolvedValue(null),
+            fallbackSource: jest.fn().mockResolvedValue(OTHER_SOURCE),
+            list: jest.fn().mockResolvedValue([]),
+        };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -44,6 +63,7 @@ describe('CrmLeadsService', () => {
                 { provide: DatabaseService, useValue: db },
                 { provide: CustomersService, useValue: customersService },
                 { provide: CustomFieldsService, useValue: customFieldsService },
+                { provide: CrmLeadTaxonomyService, useValue: taxonomyService },
             ],
         }).compile();
 
@@ -366,18 +386,56 @@ describe('CrmLeadsService', () => {
             expect(result.errors).toEqual(['Row 2: missing required field(s): name']);
         });
 
-        it('falls back to defaults for an invalid enum value instead of erroring', async () => {
+        it('falls back to MEDIUM for an unrecognised priority', async () => {
             db.lead.findUnique.mockResolvedValueOnce(null);
             db.lead.create.mockResolvedValueOnce({ id: 'lead-12' });
 
             const result = await service.importRows('tenant-1', [
-                { name: 'Dana', mobile: '01800000004', priority: 'not-a-priority', source: 'nope' },
+                { name: 'Dana', mobile: '01800000004', priority: 'not-a-priority' },
             ], 'skip');
 
             expect(result).toEqual({ created: 1, updated: 0, skipped: 0, errors: [] });
             expect(db.lead.create).toHaveBeenCalledWith(
                 expect.objectContaining({
                     data: expect.objectContaining({ priority: 'MEDIUM', source: 'OTHER' }),
+                }),
+            );
+        });
+
+        it('rejects the row for an unrecognised source rather than silently storing OTHER', async () => {
+            // Sources are tenant-defined now, so an unmatched value is a real
+            // mistake in the spreadsheet, not a value to coerce away. Coercing
+            // used to report success while destroying the lead's provenance.
+            const result = await service.importRows('tenant-1', [
+                { name: 'Dana', mobile: '01800000004', source: 'nope' },
+            ], 'skip');
+
+            expect(result.created).toBe(0);
+            expect(result.errors).toEqual([
+                'Row 2: unknown source "nope" — add it under CRM → Settings → Lead Sources, or correct the spreadsheet',
+            ]);
+            expect(db.lead.create).not.toHaveBeenCalled();
+        });
+
+        it('matches a source by its display name, not just its code', async () => {
+            db.lead.findUnique.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-13' });
+            taxonomyService.list.mockImplementation((_t: string, kind: string) =>
+                Promise.resolve(
+                    kind === 'sources'
+                        ? [{ id: 'src-walk', code: 'WALK_IN', name: 'Walk-in', score_weight: 15 }]
+                        : [],
+                ),
+            );
+
+            const result = await service.importRows('tenant-1', [
+                { name: 'Dana', mobile: '01800000004', source: 'walk-in' },
+            ], 'skip');
+
+            expect(result.created).toBe(1);
+            expect(db.lead.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ source_id: 'src-walk', source: 'WALK_IN' }),
                 }),
             );
         });

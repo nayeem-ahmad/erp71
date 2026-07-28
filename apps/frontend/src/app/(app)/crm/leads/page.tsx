@@ -15,17 +15,23 @@ import { PageShell, PageHeader, Button, Select, StatusBadge, Input, type StatusB
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { compactDensity } from '@/lib/ui/compact-density';
 import {
-    LEAD_CATEGORIES,
     LEAD_PRIORITIES,
     LEAD_STATUSES,
 } from './lead-form-fields';
+import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
+
+type TaxonomyRef = { id: string; name: string } | null;
 
 interface Lead {
     id: string;
     name: string;
     mobile: string;
     email: string | null;
+    /** Legacy enum value; `categoryOption` is authoritative once backfilled. */
     category: string | null;
+    categoryOption: TaxonomyRef;
+    source: string | null;
+    sourceOption: TaxonomyRef;
     priority: string;
     status: string;
     score: number;
@@ -88,12 +94,15 @@ export default function LeadsPage() {
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
+    const [sourceFilter, setSourceFilter] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('');
     const [myTodaysActions, setMyTodaysActions] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
     const [customFieldDefs, setCustomFieldDefs] = useState<{ key: string; label: string }[]>([]);
     const [selectedLeads, setSelectedLeads] = useState<Lead[]>([]);
     const [teamMembers, setTeamMembers] = useState<any[]>([]);
+    const { options: sourceOptions } = useLeadTaxonomy('sources');
+    const { options: categoryOptions } = useLeadTaxonomy('categories');
     const [selectionEpoch, setSelectionEpoch] = useState(0);
     const [bulkBusy, setBulkBusy] = useState(false);
     const [total, setTotal] = useState(0);
@@ -124,6 +133,7 @@ export default function LeadsPage() {
                 search: debouncedSearch || undefined,
                 status: statusFilter || undefined,
                 category: categoryFilter || undefined,
+                source: sourceFilter || undefined,
                 priority: priorityFilter || undefined,
                 myActionsToday: myTodaysActions || undefined,
                 page,
@@ -141,14 +151,14 @@ export default function LeadsPage() {
         } finally {
             if (seq === loadSeq.current) setLoading(false);
         }
-    }, [debouncedSearch, statusFilter, categoryFilter, priorityFilter, myTodaysActions, page, pageSize, sort]);
+    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, myTodaysActions, page, pageSize, sort]);
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
 
     // Any change to filters/search/sort returns to the first page.
     useEffect(() => {
         setPage(1);
-    }, [debouncedSearch, statusFilter, categoryFilter, priorityFilter, myTodaysActions, sort]);
+    }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, myTodaysActions, sort]);
 
     const deleteLead = useCallback(async (lead: Lead) => {
         if (!confirm(m.deleteConfirm)) return;
@@ -186,7 +196,6 @@ export default function LeadsPage() {
     }, [runBulkAction, selectedLeads.length, m]);
 
     const statusLabel = (status: string) => (m.statuses as Record<string, string>)[status] ?? status;
-    const categoryLabel = (category: string) => (m.categories as Record<string, string>)[category] ?? category;
     const priorityLabel = (priority: string) => (m.priorities as Record<string, string>)[priority] ?? priority;
 
     const columns: ColumnDef<Lead, any>[] = useMemo(() => [
@@ -202,9 +211,18 @@ export default function LeadsPage() {
             ),
         }),
         columnHelper.accessor('mobile', { header: m.fields.mobile, enableSorting: false }),
-        columnHelper.accessor('category', {
+        // Explicit `id`s: an accessor function has no inferable key, and the id
+        // is what DataTable emits as `sortBy` for the server-side sort.
+        columnHelper.accessor((row) => row.categoryOption?.name ?? row.category ?? '', {
+            id: 'category',
             header: m.fields.category,
-            cell: (info) => info.getValue() ? categoryLabel(info.getValue() as string) : '—',
+            cell: (info) => (info.getValue() as string) || '—',
+        }),
+        columnHelper.accessor((row) => row.sourceOption?.name ?? row.source ?? '', {
+            id: 'source',
+            header: m.columns.source,
+            cell: (info) => (info.getValue() as string) || '—',
+            meta: { hideOnMobile: true },
         }),
         columnHelper.accessor('priority', {
             header: m.fields.priority,
@@ -282,7 +300,7 @@ export default function LeadsPage() {
             enableResizing: false,
             size: 90,
         }),
-    ], [m, c, statusLabel, categoryLabel, priorityLabel, deleteLead, customFieldDefs]);
+    ], [m, c, statusLabel, priorityLabel, deleteLead, customFieldDefs]);
 
     const importFields: ImportField[] = useMemo(
         () => [
@@ -359,7 +377,11 @@ export default function LeadsPage() {
                 </Select>
                 <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allCategories}</option>
-                    {LEAD_CATEGORIES.map((cat) => <option key={cat} value={cat}>{categoryLabel(cat)}</option>)}
+                    {categoryOptions.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                </Select>
+                <Select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="w-auto max-w-[180px]">
+                    <option value="">{m.allSources}</option>
+                    {sourceOptions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </Select>
                 <Select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allPriorities}</option>

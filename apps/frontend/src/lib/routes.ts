@@ -144,6 +144,7 @@ export const routes = {
         tasks: '/crm/tasks',
         campaigns: '/crm/campaigns',
         customFields: '/crm/settings/custom-fields',
+        leadTaxonomy: '/crm/settings/lead-taxonomy',
     },
 
     hr: {
