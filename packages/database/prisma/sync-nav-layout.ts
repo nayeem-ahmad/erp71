@@ -11,10 +11,14 @@
  * looking perfectly correct in the repo. There is no error and no log line; the
  * menu item simply is not there.
  *
- * This is not hypothetical: as of 2026-07-28 the live platform layout's CRM
- * module contained only overview/leads/customers, so `crm.conversations`,
- * `crm.tasks`, `crm.campaigns` and `crm.custom-fields` had all shipped without
- * ever appearing in the sidebar.
+ * There is one escape hatch that happens to be load-bearing today:
+ * `parseNavLayoutJson` falls back to the code default when a saved layout fails
+ * `validateNavLayout`. As of 2026-07-28 the live platform `tenant_layout` is
+ * invalid — it still references `accounting.transactions*` and `admin.tenants`,
+ * which were removed from NAV_REGISTRY — so production is already serving the
+ * code default and every registry addition does appear. That is luck, not
+ * design: the moment someone saves a valid layout through the nav admin, this
+ * script becomes the only way a new entry reaches the sidebar.
  *
  * Deliberately NOT run on boot
  * ----------------------------
@@ -55,7 +59,11 @@ function parseLayout(raw: unknown): NavLayoutNode[] | null {
 }
 
 /** Apply the merge and refuse to persist anything that would not load back. */
-function merge(layout: NavLayoutNode[], nodeIds: string[], label: string) {
+function merge(
+    layout: NavLayoutNode[],
+    nodeIds: string[],
+    label: string,
+): { layout: NavLayoutNode[] } | { refused: true } | null {
     const result = addNavNodesToLayout(layout, nodeIds);
     for (const s of result.skipped) {
         console.log(`    skipped ${s.id}: ${s.reason}`);
@@ -64,14 +72,86 @@ function merge(layout: NavLayoutNode[], nodeIds: string[], label: string) {
 
     const validation = validateNavLayout(result.layout);
     if (validation.valid === false) {
-        // A layout that fails validation is dropped by the resolver, which would
-        // hide the ENTIRE sidebar — far worse than a missing menu item.
-        console.error(`    !! ${label}: merge produced an invalid layout, skipping:`);
+        // Refuse rather than persist. A layout that fails validation is silently
+        // replaced by the code default at read time, so writing one back would
+        // discard the customisation without saying so. Note the errors below may
+        // predate this run entirely — a layout can already be stale against the
+        // current registry, in which case it is inert and nothing needs adding.
+        console.error(`    !! ${label}: refusing to write — the merged layout is invalid:`);
         for (const e of validation.errors) console.error(`       ${e}`);
-        return null;
+        return { refused: true };
     }
     console.log(`    added ${result.added.join(', ')}`);
-    return result.layout;
+    return { layout: result.layout };
+}
+
+type Tally = { changed: number; refused: number };
+
+/** The layout every tenant without an override is served. */
+async function syncPlatformLayout(nodeIds: string[], dryRun: boolean): Promise<Tally> {
+    const setting = await prisma.platformSetting.findFirst({
+        where: { group: NAVIGATION_GROUP, key: TENANT_LAYOUT_KEY },
+    });
+    if (!setting) {
+        console.log('  platform tenant_layout: not set — tenants already fall back to the code default');
+        return { changed: 0, refused: 0 };
+    }
+
+    const layout = parseLayout(setting.value);
+    if (!layout) {
+        console.error('  platform tenant_layout: unparseable, leaving alone');
+        return { changed: 0, refused: 0 };
+    }
+
+    console.log('  platform tenant_layout:');
+    const merged = merge(layout, nodeIds, 'platform tenant_layout');
+    if (!merged) return { changed: 0, refused: 0 };
+    if ('refused' in merged) return { changed: 0, refused: 1 };
+
+    if (!dryRun) {
+        await prisma.platformSetting.update({
+            where: { id: setting.id },
+            data: { value: JSON.stringify(merged.layout) },
+        });
+    }
+    return { changed: 1, refused: 0 };
+}
+
+/** Per-tenant overrides. A null layout means "pinned to default" and is skipped. */
+async function syncTenantOverrides(nodeIds: string[], dryRun: boolean): Promise<Tally> {
+    const overrides = await prisma.tenantNavLayout.findMany({
+        include: { tenant: { select: { name: true } } },
+    });
+
+    const tally: Tally = { changed: 0, refused: 0 };
+    for (const override of overrides) {
+        // Note this is `null` for a JSON `null` literal too, not just SQL NULL —
+        // which is what NavigationService treats as "pinned to default".
+        if (override.layout === null) continue;
+
+        const layout = parseLayout(override.layout);
+        if (!layout) {
+            console.error(`  tenant ${override.tenant.name}: unparseable layout, leaving alone`);
+            continue;
+        }
+
+        console.log(`  tenant ${override.tenant.name}:`);
+        const merged = merge(layout, nodeIds, override.tenant.name);
+        if (!merged) continue;
+        if ('refused' in merged) {
+            tally.refused++;
+            continue;
+        }
+
+        if (!dryRun) {
+            await prisma.tenantNavLayout.update({
+                where: { tenant_id: override.tenant_id },
+                data: { layout: merged.layout as any },
+            });
+        }
+        tally.changed++;
+    }
+    return tally;
 }
 
 async function main() {
@@ -87,58 +167,27 @@ async function main() {
         `Sync nav layout (${dryRun ? 'DRY RUN' : 'LIVE'}) — adding: ${nodeIds.join(', ')}`,
     );
 
-    let changed = 0;
+    const platform = await syncPlatformLayout(nodeIds, dryRun);
+    const tenants = await syncTenantOverrides(nodeIds, dryRun);
+    const changed = platform.changed + tenants.changed;
+    const refused = platform.refused + tenants.refused;
 
-    // --- platform-level tenant layout (what every tenant without an override gets)
-    const setting = await prisma.platformSetting.findFirst({
-        where: { group: NAVIGATION_GROUP, key: TENANT_LAYOUT_KEY },
-    });
-    if (!setting) {
-        console.log('  platform tenant_layout: not set — tenants already fall back to the code default');
+    if (changed > 0) {
+        console.log(`\n${dryRun ? 'Would update' : 'Updated'} ${changed} layout(s).`);
+    } else if (refused > 0) {
+        console.log(`\nNothing written — ${refused} layout(s) refused (see errors above).`);
     } else {
-        const layout = parseLayout(setting.value);
-        if (!layout) {
-            console.error('  platform tenant_layout: unparseable, leaving alone');
-        } else {
-            console.log('  platform tenant_layout:');
-            const merged = merge(layout, nodeIds, 'platform tenant_layout');
-            if (merged && !dryRun) {
-                await prisma.platformSetting.update({
-                    where: { id: setting.id },
-                    data: { value: JSON.stringify(merged) },
-                });
-            }
-            if (merged) changed++;
-        }
+        console.log('\nNothing to do — every layout already has these nodes.');
     }
-
-    // --- per-tenant overrides (layout === null means "pinned to default", skip)
-    const overrides = await prisma.tenantNavLayout.findMany({
-        include: { tenant: { select: { name: true } } },
-    });
-    for (const override of overrides) {
-        if (override.layout === null) continue;
-        const layout = parseLayout(override.layout);
-        if (!layout) {
-            console.error(`  tenant ${override.tenant.name}: unparseable layout, leaving alone`);
-            continue;
-        }
-        console.log(`  tenant ${override.tenant.name}:`);
-        const merged = merge(layout, nodeIds, override.tenant.name);
-        if (merged && !dryRun) {
-            await prisma.tenantNavLayout.update({
-                where: { tenant_id: override.tenant_id },
-                data: { layout: merged as any },
-            });
-        }
-        if (merged) changed++;
+    if (refused > 0) {
+        // A layout that is already stale against the registry is inert: the
+        // resolver silently serves the code default instead, so the new node is
+        // already reaching users and there is nothing to fix here.
+        console.log(
+            'A layout that fails validation is replaced by the code default at read time, ' +
+            'so those tenants already see every registered nav entry.',
+        );
     }
-
-    console.log(
-        changed === 0
-            ? '\nNothing to do — every layout already has these nodes.'
-            : `\n${dryRun ? 'Would update' : 'Updated'} ${changed} layout(s).`,
-    );
     if (dryRun) console.log('DRY RUN — nothing was written.');
 }
 
