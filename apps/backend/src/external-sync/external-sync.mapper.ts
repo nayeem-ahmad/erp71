@@ -6,6 +6,7 @@ import {
     ExpressRetailPurchaseLine,
     ExpressRetailSale,
     ExpressRetailSaleLine,
+    ExpressRetailSaleReturn,
     ExpressRetailSupplier,
 } from './express-retail.client';
 
@@ -347,6 +348,66 @@ export function resolvePaymentStatus(total: number, paid: number): 'UNPAID' | 'P
 }
 
 /** Groups line rows by their parent document id. */
+export interface MappedSaleReturnItem {
+    externalProductId: string;
+    quantity: number;
+    refundAmount: number;
+}
+
+export interface MappedSaleReturn {
+    externalId: string;
+    returnNumber: string;
+    /** The provider's own transaction number, unprefixed. */
+    referenceNumber: string | null;
+    /** From the nested `sale` object — the return has no sale_id column. */
+    externalSaleId: string | null;
+    totalRefund: number;
+    reason: string | null;
+    returnDate: Date;
+    externalUpdatedAt: Date | null;
+    items: MappedSaleReturnItem[];
+}
+
+export function mapSaleReturn(
+    row: ExpressRetailSaleReturn,
+    documentPrefix: string,
+    warnings: SyncWarning[],
+): MappedSaleReturn {
+    const externalId = String(row.id);
+
+    const items: MappedSaleReturnItem[] = (row.sale_return_details ?? []).map((line) => {
+        const { quantity, rounded, originalQuantity } = resolveQuantity(line.quantity);
+        if (rounded) {
+            warnings.push({
+                entity: 'SALE_RETURN',
+                externalId,
+                code: 'QUANTITY_ROUNDED',
+                message: `Return ${row.invoice}: quantity ${originalQuantity} rounded to ${quantity} (our line quantities are whole numbers)`,
+            });
+        }
+        // The provider gives the line total directly; fall back to unit × qty
+        // only if it is missing.
+        const lineAmount = toMoney(line.amount);
+        return {
+            externalProductId: String(line.product_id),
+            quantity,
+            refundAmount: lineAmount > 0 ? lineAmount : Math.round(toMoney(line.unit_price) * quantity * 100) / 100,
+        };
+    });
+
+    return {
+        externalId,
+        returnNumber: buildDocumentNumber(documentPrefix, row.invoice),
+        referenceNumber: emptyToNull(row.invoice),
+        externalSaleId: row.sale ? String(row.sale.id) : null,
+        totalRefund: toMoney(row.amount),
+        reason: emptyToNull(row.description),
+        returnDate: parseProviderDate(row.date),
+        externalUpdatedAt: parseTimestamp(row.updated_at),
+        items,
+    };
+}
+
 /** Which way the cash moved, from our side. */
 export type PaymentDirection = 'IN' | 'OUT';
 

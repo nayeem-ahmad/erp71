@@ -129,6 +129,36 @@ export interface ExpressRetailSupplier {
     updated_at: string | null;
 }
 
+export interface ExpressRetailSaleReturnLine {
+    id: number | string;
+    sale_return_id: string;
+    product_id: string;
+    quantity: string | number | null;
+    unit_price: string | number | null;
+    amount: string | number | null;
+}
+
+/**
+ * A row from `/get-sale-return`.
+ *
+ * Unlike sales and purchases, the line items come back embedded, so there is no
+ * second details call. The parent sale is only reachable through the nested
+ * `sale` object — the return carries no `sale_id` column of its own.
+ */
+export interface ExpressRetailSaleReturn {
+    id: number | string;
+    invoice: string;
+    customer_id: string | null;
+    date: string;
+    amount: string | null;
+    description: string | null;
+    status: string;
+    organization_id: string;
+    updated_at: string | null;
+    sale: { id: number | string; invoice: string; date: string } | null;
+    sale_return_details: ExpressRetailSaleReturnLine[] | null;
+}
+
 /**
  * A row from `/get-customer-payments` or `/get-supplier-payments`.
  *
@@ -278,6 +308,15 @@ export class ExpressRetailClient {
     async fetchSuppliers(): Promise<ExpressRetailSupplier[]> {
         const data = await this.postJson('/get-supplier', {});
         return this.expectArray<ExpressRetailSupplier>(data, 'suppliers', '/get-supplier');
+    }
+
+    async fetchSaleReturns(window: DateWindow): Promise<ExpressRetailSaleReturn[]> {
+        const data = await this.postJson('/get-sale-return', {
+            searchType: '',
+            recordType: 'without',
+            ...this.windowBody(window),
+        });
+        return this.expectArray<ExpressRetailSaleReturn>(data, 'salereturns', '/get-sale-return');
     }
 
     async fetchCustomerPayments(window: DateWindow): Promise<ExpressRetailPayment[]> {

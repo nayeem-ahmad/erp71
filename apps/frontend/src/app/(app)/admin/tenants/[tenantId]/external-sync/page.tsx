@@ -403,6 +403,7 @@ export default function TenantExternalSyncPage() {
                                     <th className="py-2 pr-3 font-medium">Window</th>
                                     <th className="py-2 pr-3 font-medium">Sales</th>
                                     <th className="py-2 pr-3 font-medium">Purchases</th>
+                                    <th className="py-2 pr-3 font-medium">Returns</th>
                                     <th className="py-2 pr-3 font-medium">Payments</th>
                                     <th className="py-2 pr-3 font-medium">Masters</th>
                                     <th className="py-2 font-medium">Notes</th>
@@ -454,6 +455,7 @@ function RunRow({ run }: Readonly<{ run: ExternalSyncRun }>) {
                 </td>
                 <td className="py-2 pr-3">{formatTally(run, 'sales')}</td>
                 <td className="py-2 pr-3">{formatTally(run, 'purchases')}</td>
+                <td className="py-2 pr-3">{formatTally(run, 'saleReturns')}</td>
                 <td className="py-2 pr-3 text-gray-500">{formatPaymentTally(run)}</td>
                 <td className="py-2 pr-3 text-gray-500">
                     {run.stats
@@ -472,7 +474,7 @@ function RunRow({ run }: Readonly<{ run: ExternalSyncRun }>) {
             </tr>
             {showWarnings ? (
                 <tr>
-                    <td colSpan={8} className="py-2">
+                    <td colSpan={9} className="py-2">
                         <ul className="space-y-1 text-xs text-gray-600 bg-gray-50 rounded-md p-3">
                             {warnings.map((warning: ExternalSyncWarning, index: number) => (
                                 <li key={`${warning.entity}-${warning.externalId}-${index}`}>
@@ -521,7 +523,7 @@ function RunNote({
     return <span className="text-gray-400">—</span>;
 }
 
-function formatTally(run: ExternalSyncRun, key: 'sales' | 'purchases') {
+function formatTally(run: ExternalSyncRun, key: 'sales' | 'purchases' | 'saleReturns') {
     const tally = run.stats?.[key];
     if (!tally) return '—';
     const parts = [`${tally.created} new`, `${tally.updated} updated`];

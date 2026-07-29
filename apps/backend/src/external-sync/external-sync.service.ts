@@ -17,6 +17,7 @@ import {
     MappedPayment,
     MappedPurchase,
     MappedSale,
+    MappedSaleReturn,
     PaymentParty,
     SyncWarning,
     creditTransactionType,
@@ -26,6 +27,7 @@ import {
     mapProduct,
     mapPurchase,
     mapSale,
+    mapSaleReturn,
     mapSupplier,
     splitIntoMonthlyWindows,
     toDateString,
@@ -44,7 +46,8 @@ type EntityType =
     | 'SALE'
     | 'PURCHASE'
     | 'CUSTOMER_PAYMENT'
-    | 'SUPPLIER_PAYMENT';
+    | 'SUPPLIER_PAYMENT'
+    | 'SALE_RETURN';
 
 interface EntityTally {
     created: number;
@@ -53,7 +56,14 @@ interface EntityTally {
 }
 
 type SyncStats = Record<
-    'products' | 'customers' | 'suppliers' | 'sales' | 'purchases' | 'customerPayments' | 'supplierPayments',
+    | 'products'
+    | 'customers'
+    | 'suppliers'
+    | 'sales'
+    | 'purchases'
+    | 'customerPayments'
+    | 'supplierPayments'
+    | 'saleReturns',
     EntityTally
 >;
 
@@ -286,6 +296,7 @@ export class ExternalSyncService {
             purchases: emptyTally(),
             customerPayments: emptyTally(),
             supplierPayments: emptyTally(),
+            saleReturns: emptyTally(),
         };
         const warnings: SyncWarning[] = [];
 
@@ -324,11 +335,21 @@ export class ExternalSyncService {
             const customerMap = await this.syncCustomers(connection, client, stats, warnings, dryRun);
             const supplierMap = await this.syncSuppliers(connection, client, stats, warnings, dryRun);
 
-            for (const chunk of splitIntoMonthlyWindows(window.from, window.to)) {
+            const chunks = splitIntoMonthlyWindows(window.from, window.to);
+
+            for (const chunk of chunks) {
                 await this.syncSalesWindow(connection, client, chunk, productMap, customerMap, stats, warnings, dryRun);
                 await this.syncPurchasesWindow(connection, client, chunk, productMap, supplierMap, stats, warnings, dryRun);
                 await this.syncPaymentsWindow(connection, client, chunk, 'CUSTOMER', customerMap, stats, warnings, dryRun);
                 await this.syncPaymentsWindow(connection, client, chunk, 'SUPPLIER', supplierMap, stats, warnings, dryRun);
+            }
+
+            // Returns run only once every sale in the range exists, because a
+            // return's parent is usually months older than the return itself
+            // and may live in an earlier chunk of this same run.
+            const saleMap = await this.loadMappings(connection.id, 'SALE');
+            for (const chunk of chunks) {
+                await this.syncSaleReturnsWindow(connection, client, chunk, productMap, saleMap, stats, warnings, dryRun);
             }
 
             const status = warnings.length > 0 ? 'PARTIAL' : 'SUCCESS';
@@ -623,6 +644,159 @@ export class ExternalSyncService {
                 });
             }
         }
+    }
+
+    /**
+     * Sale returns, which unlike sales carry their line items inline.
+     *
+     * A return is meaningless without its parent: `SalesReturn.sale_id` is
+     * required and each line points at a specific `SaleItem`, not just a
+     * product. Both have to resolve or the return is skipped whole — a return
+     * whose header total no longer matches its lines would misstate refunds
+     * more quietly than a skip does.
+     *
+     * Parents routinely fall outside the window (returns here run 1–3 months
+     * behind their sale), so on a rolling window some returns will always skip
+     * until a full-history resync has imported their sale.
+     */
+    private async syncSaleReturnsWindow(
+        connection: { id: string; tenant_id: string; store_id: string; document_prefix: string },
+        client: ExpressRetailClient,
+        window: DateWindow,
+        productMap: Map<string, string>,
+        saleMap: Map<string, string>,
+        stats: SyncStats,
+        warnings: SyncWarning[],
+        dryRun: boolean,
+    ) {
+        const rows = await client.fetchSaleReturns(window);
+        const returnMap = await this.loadMappings(connection.id, 'SALE_RETURN');
+
+        for (const row of rows) {
+            const mapped = mapSaleReturn(row, connection.document_prefix, warnings);
+
+            const saleId = mapped.externalSaleId ? saleMap.get(mapped.externalSaleId) : undefined;
+            if (!saleId) {
+                stats.saleReturns.skipped++;
+                warnings.push({
+                    entity: 'SALE_RETURN',
+                    externalId: mapped.externalId,
+                    code: 'PARENT_SALE_UNRESOLVED',
+                    message:
+                        `Return ${row.invoice} belongs to sale ${mapped.externalSaleId ?? '(none)'}, which has not been imported ` +
+                        '— run a full-history resync so the parent sale exists, then re-run',
+                });
+                continue;
+            }
+
+            if (dryRun) {
+                returnMap.has(mapped.externalId) ? stats.saleReturns.updated++ : stats.saleReturns.created++;
+                continue;
+            }
+
+            try {
+                const created = await this.writeSaleReturn(connection, mapped, saleId, productMap, returnMap, warnings);
+                if (created === null) {
+                    stats.saleReturns.skipped++;
+                } else {
+                    created ? stats.saleReturns.created++ : stats.saleReturns.updated++;
+                }
+            } catch (error: any) {
+                stats.saleReturns.skipped++;
+                warnings.push({
+                    entity: 'SALE_RETURN',
+                    externalId: mapped.externalId,
+                    code: 'WRITE_FAILED',
+                    message: `Return ${row.invoice} could not be imported: ${error?.message ?? error}`,
+                });
+            }
+        }
+    }
+
+    /** Returns null when the return had to be skipped for integrity reasons. */
+    private async writeSaleReturn(
+        connection: { id: string; tenant_id: string; store_id: string },
+        mapped: MappedSaleReturn,
+        saleId: string,
+        productMap: Map<string, string>,
+        returnMap: Map<string, string>,
+        warnings: SyncWarning[],
+    ): Promise<boolean | null> {
+        // Each return line must name a line of the parent sale. Match on
+        // product, consuming each sale line once so two return lines for the
+        // same product cannot both claim it.
+        const saleItems = await this.db.saleItem.findMany({
+            where: { sale_id: saleId },
+            select: { id: true, product_id: true },
+        });
+        const availableByProduct = new Map<string, string[]>();
+        for (const item of saleItems) {
+            const list = availableByProduct.get(item.product_id) ?? [];
+            list.push(item.id);
+            availableByProduct.set(item.product_id, list);
+        }
+
+        const items: Array<{ sale_item_id: string; product_id: string; quantity: number; refund_amount: number }> = [];
+        for (const line of mapped.items) {
+            const productId = productMap.get(line.externalProductId);
+            const saleItemId = productId ? availableByProduct.get(productId)?.shift() : undefined;
+            if (!productId || !saleItemId) {
+                warnings.push({
+                    entity: 'SALE_RETURN',
+                    externalId: mapped.externalId,
+                    code: 'RETURN_LINE_UNMATCHED',
+                    message:
+                        `Return ${mapped.returnNumber}: provider product ${line.externalProductId} is not on the parent sale ` +
+                        '— the whole return was skipped rather than import a refund whose lines do not add up',
+                });
+                return null;
+            }
+            items.push({
+                sale_item_id: saleItemId,
+                product_id: productId,
+                quantity: line.quantity,
+                refund_amount: line.refundAmount,
+            });
+        }
+
+        const header = {
+            reference_number: mapped.referenceNumber,
+            total_refund: mapped.totalRefund,
+            reason: mapped.reason,
+        };
+
+        const existingId = returnMap.get(mapped.externalId);
+
+        if (existingId) {
+            await this.db.$transaction(async (tx) => {
+                await tx.salesReturn.update({ where: { id: existingId }, data: header });
+                await tx.salesReturnItem.deleteMany({ where: { return_id: existingId } });
+                if (items.length > 0) {
+                    await tx.salesReturnItem.createMany({
+                        data: items.map((item) => ({ ...item, return_id: existingId })),
+                    });
+                }
+            });
+            return false;
+        }
+
+        const created = await this.db.salesReturn.create({
+            data: {
+                tenant_id: connection.tenant_id,
+                store_id: connection.store_id,
+                sale_id: saleId,
+                return_number: mapped.returnNumber,
+                status: 'COMPLETED',
+                created_at: mapped.returnDate,
+                ...header,
+                items: { create: items },
+            },
+            select: { id: true },
+        });
+
+        await this.writeMapping(connection, 'SALE_RETURN', mapped.externalId, created.id, mapped.externalUpdatedAt);
+        returnMap.set(mapped.externalId, created.id);
+        return true;
     }
 
     /**

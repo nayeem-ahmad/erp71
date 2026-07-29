@@ -8,6 +8,7 @@ import {
     mapProduct,
     mapPurchase,
     mapSale,
+    mapSaleReturn,
     mapSupplier,
     parseProviderDate,
     resolvePaymentDirection,
@@ -307,6 +308,72 @@ describe('external-sync mapper', () => {
 
             expect(iso.externalUpdatedAt?.toISOString()).toBe('2026-07-23T12:31:15.000Z');
             expect(plain.externalUpdatedAt?.toISOString()).toBe('2025-07-24T16:01:53.000Z');
+        });
+    });
+
+    describe('sale returns', () => {
+        // Shaped from a real /get-sale-return row.
+        const returnRow = {
+            id: 7124,
+            invoice: '2601342',
+            customer_id: '64321',
+            date: '2026-07-06',
+            amount: '5270.000',
+            description: null,
+            status: 'a',
+            organization_id: '262',
+            updated_at: null,
+            sale: { id: 538034, invoice: '2601342', date: '2026-05-12' },
+            sale_return_details: [
+                { id: '11014', sale_return_id: '7124', product_id: '98817', quantity: '2.00', unit_price: '220.00', amount: '440.000' },
+            ],
+        } as any;
+
+        it('maps a return, its embedded lines and its parent sale', () => {
+            const warnings: SyncWarning[] = [];
+            const mapped = mapSaleReturn(returnRow, 'XR-', warnings);
+
+            expect(mapped.returnNumber).toBe('XR-2601342');
+            expect(mapped.referenceNumber).toBe('2601342');
+            // The parent is only reachable through the nested sale object.
+            expect(mapped.externalSaleId).toBe('538034');
+            expect(mapped.totalRefund).toBe(5270);
+            expect(mapped.returnDate.toISOString()).toBe('2026-07-06T00:00:00.000Z');
+            expect(mapped.items).toEqual([
+                { externalProductId: '98817', quantity: 2, refundAmount: 440 },
+            ]);
+            expect(warnings).toHaveLength(0);
+        });
+
+        it('records no parent when the nested sale is absent, so the caller can skip it', () => {
+            const mapped = mapSaleReturn({ ...returnRow, sale: null }, 'XR-', []);
+            expect(mapped.externalSaleId).toBeNull();
+        });
+
+        it('falls back to unit price x quantity when the line total is missing', () => {
+            const row = {
+                ...returnRow,
+                sale_return_details: [{ ...returnRow.sale_return_details[0], amount: null }],
+            };
+            expect(mapSaleReturn(row, 'XR-', []).items[0].refundAmount).toBe(440);
+        });
+
+        it('rounds fractional return quantities and warns, as our line quantities are whole', () => {
+            const warnings: SyncWarning[] = [];
+            const row = {
+                ...returnRow,
+                sale_return_details: [{ ...returnRow.sale_return_details[0], quantity: '2.60' }],
+            };
+            const mapped = mapSaleReturn(row, 'XR-', warnings);
+
+            expect(mapped.items[0].quantity).toBe(3);
+            expect(warnings[0].code).toBe('QUANTITY_ROUNDED');
+            expect(warnings[0].entity).toBe('SALE_RETURN');
+        });
+
+        it('tolerates a return with no line details', () => {
+            const mapped = mapSaleReturn({ ...returnRow, sale_return_details: null }, 'XR-', []);
+            expect(mapped.items).toEqual([]);
         });
     });
 

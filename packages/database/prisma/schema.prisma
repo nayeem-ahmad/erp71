@@ -2041,6 +2041,9 @@ model SalesReturn {
   store_id       String
   sale_id        String
   return_number  String
+  /// The source system's own document number. Not unique — an imported
+  /// reference can repeat, matching Purchase.reference_number.
+  reference_number String?
   total_refund   Decimal  @db.Decimal(12, 2)
   reason         String?
   status         String   @default("COMPLETED")
@@ -2054,6 +2057,7 @@ model SalesReturn {
   items          SalesReturnItem[]
 
   @@unique([tenant_id, return_number])
+  @@index([tenant_id, reference_number])
 }
 
 model SalesReturnItem {

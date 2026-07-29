@@ -300,7 +300,14 @@ export type ExternalSyncRun = {
     window_to: string;
     dry_run: boolean;
     stats: Record<
-        'products' | 'customers' | 'suppliers' | 'sales' | 'purchases' | 'customerPayments' | 'supplierPayments',
+        | 'products'
+        | 'customers'
+        | 'suppliers'
+        | 'sales'
+        | 'purchases'
+        | 'customerPayments'
+        | 'supplierPayments'
+        | 'saleReturns',
         ExternalSyncTally
     > | null;
     warnings: ExternalSyncWarning[] | null;
