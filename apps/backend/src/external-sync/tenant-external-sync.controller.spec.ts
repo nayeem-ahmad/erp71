@@ -13,7 +13,7 @@ describe('TenantExternalSyncController', () => {
     function build(featureEnabled: boolean) {
         const service = {
             getConnection: jest.fn(async () => null),
-            upsertConnection: jest.fn(async () => ({})),
+            upsertConnection: jest.fn(async () => ({})) as jest.Mock,
             startRun: jest.fn(async () => ({})),
             listRuns: jest.fn(async () => []),
             cancelRun: jest.fn(async () => ({ cancelling: true })),
@@ -67,7 +67,7 @@ describe('TenantExternalSyncController', () => {
             postImpacts: true,
         } as any);
 
-        const [, dto] = service.upsertConnection.mock.calls[0];
+        const [, dto] = (service.upsertConnection as jest.Mock).mock.calls[0];
         // Posting a replayed history into stock and the ledger double-counts a
         // workspace that already has opening balances.
         expect(dto).not.toHaveProperty('postImpacts');
