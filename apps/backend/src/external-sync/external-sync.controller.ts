@@ -52,4 +52,10 @@ export class ExternalSyncController {
     listRuns(@Param('tenantId') tenantId: string, @Query() query: ListExternalSyncRunsQueryDto) {
         return this.externalSyncService.listRuns(tenantId, query);
     }
+
+    /** Asks a running import to stop; it halts at the next chunk boundary. */
+    @Post('runs/:runId/cancel')
+    cancelRun(@Param('tenantId') tenantId: string, @Param('runId') runId: string) {
+        return this.externalSyncService.cancelRun(tenantId, runId);
+    }
 }

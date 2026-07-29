@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsDateString, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class UpsertExternalSyncConnectionDto {
     @IsString()
@@ -70,6 +70,15 @@ export class RunExternalSyncDto {
     @IsOptional()
     @IsBoolean()
     fullResync?: boolean;
+
+    /**
+     * Which parts of the import to run. Omit for all of them; naming a subset
+     * lets a big migration be walked one step at a time.
+     */
+    @IsOptional()
+    @IsArray()
+    @IsString({ each: true })
+    steps?: string[];
 }
 
 export class ListExternalSyncRunsQueryDto {

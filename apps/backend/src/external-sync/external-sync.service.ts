@@ -78,6 +78,38 @@ type SyncStats = Record<
 const MAX_STORED_WARNINGS = 500;
 
 /**
+ * The import is divided into steps so it can be run a piece at a time — a
+ * failed sales pull can be retried without re-fetching 1,200 products, and a
+ * first migration can be walked through one step at a time instead of being one
+ * opaque operation.
+ *
+ * Steps are independent because every cross-reference is resolved through the
+ * mapping table rather than through whatever the current run happened to
+ * import: running SALES alone still resolves products and customers imported by
+ * an earlier MASTERS run.
+ */
+export const SYNC_STEPS = [
+    'MASTERS',
+    'SALES',
+    'PURCHASES',
+    'CUSTOMER_PAYMENTS',
+    'SUPPLIER_PAYMENTS',
+    'SALE_RETURNS',
+] as const;
+
+export type SyncStep = (typeof SYNC_STEPS)[number];
+
+/** How often the run row is rewritten while working, in chunks. */
+const PROGRESS_EVERY_CHUNK = 1;
+
+/** Thrown to unwind a run that the operator stopped; not a failure. */
+class RunCancelledError extends Error {
+    constructor() {
+        super('Run cancelled');
+    }
+}
+
+/**
  * Platform-admin driven import of sales/purchase history from a third-party
  * ERP into one of our tenants.
  *
@@ -245,6 +277,7 @@ export class ExternalSyncService {
         }
 
         const { from, to } = this.resolveWindow(connection, dto);
+        const steps = this.resolveSteps(dto.steps);
 
         const run = await this.db.externalSyncRun.create({
             data: {
@@ -252,6 +285,8 @@ export class ExternalSyncService {
                 connection_id: connection.id,
                 trigger,
                 status: 'RUNNING',
+                phase: 'Starting',
+                steps: steps as any,
                 window_from: from,
                 window_to: to,
                 dry_run: dto.dryRun ?? false,
@@ -260,11 +295,24 @@ export class ExternalSyncService {
         });
 
         // Intentionally not awaited — the run row is the progress channel.
-        void this.executeRun(run.id, connection.id, { from, to }, dto.dryRun ?? false).catch((error) => {
+        void this.executeRun(run.id, connection.id, { from, to }, dto.dryRun ?? false, steps).catch((error) => {
             this.logger.error(`External sync run ${run.id} crashed: ${error?.message ?? error}`, error?.stack);
         });
 
         return run;
+    }
+
+    /** Defaults to the whole import; rejects anything not a known step. */
+    private resolveSteps(requested?: string[]): SyncStep[] {
+        if (!requested?.length) return [...SYNC_STEPS];
+
+        const unknown = requested.filter((step) => !SYNC_STEPS.includes(step as SyncStep));
+        if (unknown.length) {
+            throw new BadRequestException(`Unknown import step(s): ${unknown.join(', ')}`);
+        }
+        // Keep canonical order regardless of how they were listed — returns
+        // must still run after sales.
+        return SYNC_STEPS.filter((step) => requested.includes(step));
     }
 
     private resolveWindow(
@@ -296,7 +344,13 @@ export class ExternalSyncService {
 
     // ------------------------------------------------------------- execution
 
-    private async executeRun(runId: string, connectionId: string, window: { from: Date; to: Date }, dryRun: boolean) {
+    private async executeRun(
+        runId: string,
+        connectionId: string,
+        window: { from: Date; to: Date },
+        dryRun: boolean,
+        steps: SyncStep[],
+    ) {
         const stats: SyncStats = {
             products: emptyTally(),
             customers: emptyTally(),
@@ -340,25 +394,67 @@ export class ExternalSyncService {
                 });
             }
 
-            const productMap = await this.syncProducts(connection, client, stats, warnings, dryRun);
-            const customerMap = await this.syncCustomers(connection, client, stats, warnings, dryRun);
-            const supplierMap = await this.syncSuppliers(connection, client, stats, warnings, dryRun);
-
             const chunks = splitIntoMonthlyWindows(window.from, window.to);
+            const windowedSteps = steps.filter((step) => step !== 'MASTERS');
+            // One unit of work per master step plus one per chunk of each
+            // windowed step, so the progress fraction means something.
+            const totalUnits = (steps.includes('MASTERS') ? 1 : 0) + windowedSteps.length * chunks.length;
+            let doneUnits = 0;
+
+            const tick = async (phase: string) => {
+                doneUnits += PROGRESS_EVERY_CHUNK;
+                await this.writeProgress(runId, phase, stats, warnings, doneUnits, totalUnits);
+            };
+
+            if (steps.includes('MASTERS')) {
+                await this.writeProgress(runId, 'Products, customers and suppliers', stats, warnings, doneUnits, totalUnits);
+                await this.syncProducts(connection, client, stats, warnings, dryRun);
+                await this.syncCustomers(connection, client, stats, warnings, dryRun);
+                await this.syncSuppliers(connection, client, stats, warnings, dryRun);
+                await tick('Products, customers and suppliers');
+            }
+
+            // Cross-references come from the mapping table, not from this run,
+            // so a step works whether or not MASTERS ran alongside it.
+            const productMap = await this.loadMappings(connection.id, 'PRODUCT');
+            const customerMap = await this.loadMappings(connection.id, 'CUSTOMER');
+            const supplierMap = await this.loadMappings(connection.id, 'SUPPLIER');
 
             for (const chunk of chunks) {
-                await this.syncSalesWindow(connection, client, chunk, productMap, customerMap, stats, warnings, dryRun);
-                await this.syncPurchasesWindow(connection, client, chunk, productMap, supplierMap, stats, warnings, dryRun);
-                await this.syncPaymentsWindow(connection, client, chunk, 'CUSTOMER', customerMap, stats, warnings, dryRun);
-                await this.syncPaymentsWindow(connection, client, chunk, 'SUPPLIER', supplierMap, stats, warnings, dryRun);
+                const label = `${chunk.from.slice(0, 7)}`;
+
+                if (steps.includes('SALES')) {
+                    await this.assertNotCancelled(runId);
+                    await this.syncSalesWindow(connection, client, chunk, productMap, customerMap, stats, warnings, dryRun);
+                    await tick(`Sales ${label}`);
+                }
+                if (steps.includes('PURCHASES')) {
+                    await this.assertNotCancelled(runId);
+                    await this.syncPurchasesWindow(connection, client, chunk, productMap, supplierMap, stats, warnings, dryRun);
+                    await tick(`Purchases ${label}`);
+                }
+                if (steps.includes('CUSTOMER_PAYMENTS')) {
+                    await this.assertNotCancelled(runId);
+                    await this.syncPaymentsWindow(connection, client, chunk, 'CUSTOMER', customerMap, stats, warnings, dryRun);
+                    await tick(`Customer payments ${label}`);
+                }
+                if (steps.includes('SUPPLIER_PAYMENTS')) {
+                    await this.assertNotCancelled(runId);
+                    await this.syncPaymentsWindow(connection, client, chunk, 'SUPPLIER', supplierMap, stats, warnings, dryRun);
+                    await tick(`Supplier payments ${label}`);
+                }
             }
 
             // Returns run only once every sale in the range exists, because a
             // return's parent is usually months older than the return itself
             // and may live in an earlier chunk of this same run.
-            const saleMap = await this.loadMappings(connection.id, 'SALE');
-            for (const chunk of chunks) {
-                await this.syncSaleReturnsWindow(connection, client, chunk, productMap, saleMap, stats, warnings, dryRun);
+            if (steps.includes('SALE_RETURNS')) {
+                const saleMap = await this.loadMappings(connection.id, 'SALE');
+                for (const chunk of chunks) {
+                    await this.assertNotCancelled(runId);
+                    await this.syncSaleReturnsWindow(connection, client, chunk, productMap, saleMap, stats, warnings, dryRun);
+                    await tick(`Sale returns ${chunk.from.slice(0, 7)}`);
+                }
             }
 
             const status = warnings.length > 0 ? 'PARTIAL' : 'SUCCESS';
@@ -366,6 +462,7 @@ export class ExternalSyncService {
                 where: { id: runId },
                 data: {
                     status,
+                    phase: null,
                     stats: stats as any,
                     warnings: warnings.slice(0, MAX_STORED_WARNINGS) as any,
                     finished_at: new Date(),
@@ -378,17 +475,71 @@ export class ExternalSyncService {
                 });
             }
         } catch (error: any) {
+            const cancelled = error instanceof RunCancelledError;
             await this.db.externalSyncRun.update({
                 where: { id: runId },
                 data: {
-                    status: 'FAILED',
+                    status: cancelled ? 'CANCELLED' : 'FAILED',
+                    phase: null,
+                    // Whatever completed before the stop is real and worth
+                    // keeping — the mapping table already holds those rows.
                     stats: stats as any,
                     warnings: warnings.slice(0, MAX_STORED_WARNINGS) as any,
-                    error_message: String(error?.message ?? error).slice(0, 2000),
+                    ...(cancelled ? {} : { error_message: String(error?.message ?? error).slice(0, 2000) }),
                     finished_at: new Date(),
                 },
             });
         }
+    }
+
+    /**
+     * Rewrites the run row mid-flight. The admin page polls this row, so
+     * without it a multi-minute import shows nothing until it ends — and a
+     * crash would take its counters with it.
+     */
+    private async writeProgress(
+        runId: string,
+        phase: string,
+        stats: SyncStats,
+        warnings: SyncWarning[],
+        done: number,
+        total: number,
+    ) {
+        await this.db.externalSyncRun.update({
+            where: { id: runId },
+            data: {
+                phase,
+                progress: { done, total, warnings: warnings.length } as any,
+                stats: stats as any,
+                warnings: warnings.slice(0, MAX_STORED_WARNINGS) as any,
+            },
+        });
+    }
+
+    /** Checked between chunks so a long run can be stopped without a restart. */
+    private async assertNotCancelled(runId: string) {
+        const run = await this.db.externalSyncRun.findUnique({
+            where: { id: runId },
+            select: { cancel_requested: true },
+        });
+        if (run?.cancel_requested) throw new RunCancelledError();
+    }
+
+    async cancelRun(tenantId: string, runId: string) {
+        const run = await this.db.externalSyncRun.findFirst({
+            where: { id: runId, tenant_id: tenantId },
+            select: { id: true, status: true },
+        });
+        if (!run) throw new NotFoundException('Run not found');
+        if (run.status !== 'RUNNING') {
+            throw new BadRequestException(`Run is already ${run.status.toLowerCase()}`);
+        }
+
+        await this.db.externalSyncRun.update({
+            where: { id: runId },
+            data: { cancel_requested: true },
+        });
+        return { cancelling: true };
     }
 
     // --------------------------------------------------------- master data

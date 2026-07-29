@@ -587,8 +587,17 @@ model ExternalSyncRun {
   connection_id String
   /// MANUAL | SCHEDULED
   trigger       String    @default("MANUAL")
-  /// RUNNING | SUCCESS | PARTIAL | FAILED
+  /// RUNNING | SUCCESS | PARTIAL | FAILED | CANCELLED
   status        String    @default("RUNNING")
+  /// What the run is doing right now, e.g. "Sales 2026-05". Null once finished.
+  phase         String?
+  /// Step/chunk counters, rewritten as the run proceeds so a long import is
+  /// observable while it happens rather than only once it ends.
+  progress      Json?
+  /// Which steps this run was asked to perform; null means all of them.
+  steps         Json?
+  /// Set by the cancel endpoint; the run checks it between chunks and stops.
+  cancel_requested Boolean @default(false)
   /// Business-date window actually requested from the provider.
   window_from   DateTime
   window_to     DateTime
