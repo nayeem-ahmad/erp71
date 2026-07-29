@@ -1190,6 +1190,10 @@ model Purchase {
   store_id        String
   supplier_id     String?
   purchase_number String
+  /// The supplier's or source system's own document number. Not unique: an
+  /// imported reference can legitimately repeat, and two suppliers can reuse
+  /// the same bill number.
+  reference_number String?
   subtotal_amount Decimal  @default(0) @db.Decimal(12, 2)
   tax_amount      Decimal  @default(0) @db.Decimal(12, 2)
   discount_amount Decimal  @default(0) @db.Decimal(12, 2)
@@ -1212,6 +1216,7 @@ model Purchase {
   @@index([tenant_id, created_at])
   @@index([tenant_id, store_id])
   @@index([tenant_id, payment_status])
+  @@index([tenant_id, reference_number])
 }
 
 model PurchaseItem {

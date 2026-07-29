@@ -24,6 +24,7 @@ interface InvoiceData {
     purchase: {
         id: string;
         purchase_number: string;
+        reference_number: string | null;
         created_at: string;
         notes: string | null;
         subtotal_amount: string;
@@ -235,6 +236,12 @@ export default function PurchaseInvoicePage() {
                                 <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide">{t.common.branch}</div>
                                 <div className="font-bold text-gray-800 mt-0.5">{purchase.store?.name ?? '—'}</div>
                             </div>
+                            {purchase.reference_number && (
+                                <div>
+                                    <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide">{t.purchases.invoice.referenceNo}</div>
+                                    <div className="font-bold text-gray-800 mt-0.5">{purchase.reference_number}</div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Line Items */}

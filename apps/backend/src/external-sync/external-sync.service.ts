@@ -630,6 +630,12 @@ export class ExternalSyncService {
         }));
 
         const existingId = saleMap.get(mapped.externalId);
+        const referenceNumber = await this.resolveSaleReference(
+            connection.tenant_id,
+            mapped,
+            existingId ?? null,
+            warnings,
+        );
 
         if (existingId) {
             await this.db.$transaction(async (tx) => {
@@ -641,6 +647,7 @@ export class ExternalSyncService {
                         sale_date: mapped.saleDate,
                         note: mapped.note,
                         customer_id: customerId,
+                        reference_number: referenceNumber,
                     },
                 });
 
@@ -671,6 +678,7 @@ export class ExternalSyncService {
                 tenant_id: connection.tenant_id,
                 store_id: connection.store_id,
                 serial_number: mapped.serialNumber,
+                reference_number: referenceNumber,
                 total_amount: mapped.totalAmount,
                 amount_paid: mapped.amountPaid,
                 status: 'COMPLETED',
@@ -685,6 +693,45 @@ export class ExternalSyncService {
         await this.writeMapping(connection, 'SALE', mapped.externalId, sale.id, mapped.externalUpdatedAt);
         saleMap.set(mapped.externalId, sale.id);
         return true;
+    }
+
+    /**
+     * The provider's transaction number goes into `reference_number` so the
+     * original number stays searchable, while `serial_number` keeps its import
+     * prefix and can never collide with our own numbering.
+     *
+     * `Sale.reference_number` is unique per tenant though, and the provider's
+     * number can already be in use by a natively entered sale. That must not
+     * fail the run, so a clash drops the reference and warns instead. (The
+     * check is not race-proof against a sale created in the same instant, but
+     * only one import runs per connection at a time and these are historical
+     * documents.)
+     */
+    private async resolveSaleReference(
+        tenantId: string,
+        mapped: MappedSale,
+        existingSaleId: string | null,
+        warnings: SyncWarning[],
+    ): Promise<string | null> {
+        if (!mapped.referenceNumber) return null;
+
+        const clash = await this.db.sale.findFirst({
+            where: {
+                tenant_id: tenantId,
+                reference_number: mapped.referenceNumber,
+                ...(existingSaleId ? { id: { not: existingSaleId } } : {}),
+            },
+            select: { id: true },
+        });
+        if (!clash) return mapped.referenceNumber;
+
+        warnings.push({
+            entity: 'SALE',
+            externalId: mapped.externalId,
+            code: 'REFERENCE_TAKEN',
+            message: `Sale ${mapped.serialNumber}: reference ${mapped.referenceNumber} is already used by another sale — imported without a reference`,
+        });
+        return null;
     }
 
     private async syncPurchasesWindow(
@@ -761,6 +808,7 @@ export class ExternalSyncService {
         }));
 
         const header = {
+            reference_number: mapped.referenceNumber,
             subtotal_amount: mapped.subtotalAmount,
             tax_amount: mapped.taxAmount,
             discount_amount: mapped.discountAmount,

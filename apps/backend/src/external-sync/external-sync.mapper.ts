@@ -213,6 +213,8 @@ export interface MappedSaleItem {
 export interface MappedSale {
     externalId: string;
     serialNumber: string;
+    /** The provider's own transaction number, unprefixed, for `reference_number`. */
+    referenceNumber: string | null;
     externalCustomerId: string | null;
     totalAmount: number;
     amountPaid: number;
@@ -251,6 +253,7 @@ export function mapSale(
     return {
         externalId,
         serialNumber: buildDocumentNumber(documentPrefix, row.invoice),
+        referenceNumber: emptyToNull(row.invoice),
         externalCustomerId: emptyToNull(row.customer_id),
         totalAmount: toMoney(row.total),
         amountPaid: toMoney(row.paid),
@@ -271,6 +274,8 @@ export interface MappedPurchaseItem {
 export interface MappedPurchase {
     externalId: string;
     purchaseNumber: string;
+    /** The provider's own transaction number, unprefixed, for `reference_number`. */
+    referenceNumber: string | null;
     externalSupplierId: string | null;
     subtotalAmount: number;
     taxAmount: number;
@@ -317,6 +322,7 @@ export function mapPurchase(
     return {
         externalId,
         purchaseNumber: buildDocumentNumber(documentPrefix, row.invoice),
+        referenceNumber: emptyToNull(row.invoice),
         externalSupplierId: emptyToNull(row.supplier_id),
         subtotalAmount: toMoney(row.subtotal),
         taxAmount: toMoney(row.vatAmount),

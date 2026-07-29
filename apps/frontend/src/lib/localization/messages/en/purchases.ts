@@ -122,6 +122,7 @@ export const purchasesMessages = {
             tin: 'TIN',
             buyer: 'Buyer',
             purchaseNo: 'Purchase No.',
+            referenceNo: 'Reference No.',
             description: 'Description',
             unknownProduct: 'Unknown Product',
             notePrefix: 'Note:',

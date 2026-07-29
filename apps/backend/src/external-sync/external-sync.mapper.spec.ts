@@ -153,6 +153,8 @@ describe('external-sync mapper', () => {
             );
 
             expect(mapped.serialNumber).toBe('XR-2601666');
+            // The provider's own number is kept unprefixed for reference_number.
+            expect(mapped.referenceNumber).toBe('2601666');
             expect(mapped.totalAmount).toBe(2200);
             expect(mapped.amountPaid).toBe(2200);
             expect(mapped.saleDate.toISOString()).toBe('2026-07-23T00:00:00.000Z');
@@ -228,6 +230,7 @@ describe('external-sync mapper', () => {
             );
 
             expect(mapped.purchaseNumber).toBe('XR-2601096');
+            expect(mapped.referenceNumber).toBe('2601096');
             expect(mapped.paymentStatus).toBe('PAID');
             expect(mapped.items).toEqual([
                 { externalProductId: '99189', quantity: 102, unitCost: 620, lineTotal: 63240 },
