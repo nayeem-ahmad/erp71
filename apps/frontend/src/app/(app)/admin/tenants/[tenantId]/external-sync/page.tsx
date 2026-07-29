@@ -24,8 +24,8 @@ const RUN_POLL_MS = 5000;
 /** Order matches the backend's SYNC_STEPS — returns must follow sales. */
 const STEPS: Array<{ key: ExternalSyncStep; label: string; hint: string }> = [
     { key: 'MASTERS', label: 'Products, customers, suppliers', hint: 'Everything else references these' },
-    { key: 'SALES', label: 'Sales', hint: 'Needs products and customers' },
-    { key: 'PURCHASES', label: 'Purchases', hint: 'Needs products and suppliers' },
+    { key: 'PURCHASES', label: 'Purchases', hint: 'Stock must exist before it is sold' },
+    { key: 'SALES', label: 'Sales', hint: 'Needs products, customers and their stock' },
     { key: 'CUSTOMER_PAYMENTS', label: 'Customer payments', hint: 'Needs customers' },
     { key: 'SUPPLIER_PAYMENTS', label: 'Supplier payments', hint: 'Needs suppliers' },
     { key: 'SALE_RETURNS', label: 'Sale returns', hint: 'Needs the parent sales already imported' },

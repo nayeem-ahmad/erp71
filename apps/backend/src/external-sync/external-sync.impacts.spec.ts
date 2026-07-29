@@ -1,4 +1,5 @@
 import {
+    applyOpeningBalance,
     applyPaymentImpacts,
     applyPurchaseImpacts,
     applySaleImpacts,
@@ -111,6 +112,84 @@ describe('external-sync impacts', () => {
 
             expect(tx.customerCreditTransaction.create).not.toHaveBeenCalled();
             expect(tx.customer.update).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('replaying history onto empty stock', () => {
+        it('lets an imported sale drive stock negative instead of being dropped', async () => {
+            await applySaleImpacts({
+                tx: makeTx(),
+                tenantId: 't1',
+                storeId: 's1',
+                saleId: 'sale-1',
+                serialNumber: 'XR-1',
+                customerId: null,
+                totalAmount: 100,
+                amountPaid: 100,
+                paymentMode: 'cash',
+                saleDate: SALE_DATE,
+                items: [{ product_id: 'p1', quantity: 3 }],
+            });
+
+            // Refusing here is what dropped 943 sales while their payments
+            // still landed, leaving customer balances negative.
+            const [, params] = applyInventoryMovement.mock.calls[0];
+            expect(params.allowNegative).toBe(true);
+        });
+
+        it('does not weaken the guard for a purchase, which only ever adds stock', async () => {
+            await applyPurchaseImpacts({
+                tx: makeTx(),
+                tenantId: 't1',
+                storeId: 's1',
+                purchaseId: 'pur-1',
+                purchaseNumber: 'XR-2',
+                supplierId: null,
+                totalAmount: 100,
+                paidAmount: 100,
+                purchaseDate: SALE_DATE,
+                items: [{ product_id: 'p1', quantity: 5, unit_cost: 20 }],
+            });
+
+            const [, params] = applyInventoryMovement.mock.calls[0];
+            expect(params.allowNegative).toBeUndefined();
+        });
+    });
+
+    describe('opening balances', () => {
+        it('records what a customer already owed before the provider history', async () => {
+            const tx = makeTx();
+            await applyOpeningBalance({
+                tx,
+                tenantId: 't1',
+                party: 'CUSTOMER',
+                partyId: 'cust-1',
+                amount: 8685,
+                asOf: SALE_DATE,
+                label: 'EXPRESS_RETAIL_PRO',
+            });
+
+            const row = tx.customerCreditTransaction.create.mock.calls[0][0].data;
+            expect(row.type).toBe('ADJUSTMENT');
+            expect(row.amount).toBe(8685);
+            expect(row.created_at).toBe(SALE_DATE);
+            expect(tx.customer.update).toHaveBeenCalledWith({
+                where: { id: 'cust-1' },
+                data: { due_balance: 8685 },
+            });
+            // An opening position is not our economic event, so it must not post.
+            expect(autoPostFromRules).not.toHaveBeenCalled();
+        });
+
+        it('writes nothing when the party opened at zero', async () => {
+            const tx = makeTx();
+            await applyOpeningBalance({
+                tx, tenantId: 't1', party: 'SUPPLIER', partyId: 's-1',
+                amount: 0, asOf: SALE_DATE, label: 'X',
+            });
+
+            expect(tx.supplierCreditTransaction.create).not.toHaveBeenCalled();
+            expect(tx.supplier.update).not.toHaveBeenCalled();
         });
     });
 

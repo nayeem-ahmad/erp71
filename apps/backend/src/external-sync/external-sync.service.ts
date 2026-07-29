@@ -37,6 +37,7 @@ import {
     applyPurchaseImpacts,
     applySaleImpacts,
     applySaleReturnImpacts,
+    applyOpeningBalance,
     isAlreadyPosted,
 } from './external-sync.impacts';
 import {
@@ -90,8 +91,10 @@ const MAX_STORED_WARNINGS = 500;
  */
 export const SYNC_STEPS = [
     'MASTERS',
-    'SALES',
+    // Purchases precede sales: a replay starts from no stock, so a sale
+    // processed first would be short of the receipt that supplies it.
     'PURCHASES',
+    'SALES',
     'CUSTOMER_PAYMENTS',
     'SUPPLIER_PAYMENTS',
     'SALE_RETURNS',
@@ -409,8 +412,10 @@ export class ExternalSyncService {
             if (steps.includes('MASTERS')) {
                 await this.writeProgress(runId, 'Products, customers and suppliers', stats, warnings, doneUnits, totalUnits);
                 await this.syncProducts(connection, client, stats, warnings, dryRun);
-                await this.syncCustomers(connection, client, stats, warnings, dryRun);
-                await this.syncSuppliers(connection, client, stats, warnings, dryRun);
+                // Opening balances are stamped at the start of the imported
+                // range so they sit before every document that follows.
+                await this.syncCustomers(connection, client, stats, warnings, dryRun, window.from);
+                await this.syncSuppliers(connection, client, stats, warnings, dryRun, window.from);
                 await tick('Products, customers and suppliers');
             }
 
@@ -423,15 +428,19 @@ export class ExternalSyncService {
             for (const chunk of chunks) {
                 const label = `${chunk.from.slice(0, 7)}`;
 
-                if (steps.includes('SALES')) {
-                    await this.assertNotCancelled(runId);
-                    await this.syncSalesWindow(connection, client, chunk, productMap, customerMap, stats, warnings, dryRun);
-                    await tick(`Sales ${label}`);
-                }
+                // Purchases before sales, every chunk: a replay starts from no
+                // stock, so selling a product before its receipt is imported
+                // would leave the sale short. (Posting made that fatal — the
+                // document was dropped while its payments still landed.)
                 if (steps.includes('PURCHASES')) {
                     await this.assertNotCancelled(runId);
                     await this.syncPurchasesWindow(connection, client, chunk, productMap, supplierMap, stats, warnings, dryRun);
                     await tick(`Purchases ${label}`);
+                }
+                if (steps.includes('SALES')) {
+                    await this.assertNotCancelled(runId);
+                    await this.syncSalesWindow(connection, client, chunk, productMap, customerMap, stats, warnings, dryRun);
+                    await tick(`Sales ${label}`);
                 }
                 if (steps.includes('CUSTOMER_PAYMENTS')) {
                     await this.assertNotCancelled(runId);
@@ -635,11 +644,12 @@ export class ExternalSyncService {
     }
 
     private async syncCustomers(
-        connection: { id: string; tenant_id: string },
+        connection: { id: string; tenant_id: string; post_impacts: boolean },
         client: ExpressRetailClient,
         stats: SyncStats,
         warnings: SyncWarning[],
         dryRun: boolean,
+        openingAsOf: Date,
     ): Promise<Map<string, string>> {
         const rows = await client.fetchCustomers();
         const claimedCodes = new Set<string>();
@@ -705,6 +715,22 @@ export class ExternalSyncService {
                         })
                     ).id;
 
+                // Only on a party we created: adopting an existing customer
+                // means the tenant already has their balance.
+                if (!adopted && connection.post_impacts && mapped.previousDue !== 0) {
+                    await this.db.$transaction((tx) =>
+                        applyOpeningBalance({
+                            tx,
+                            tenantId: connection.tenant_id,
+                            party: 'CUSTOMER',
+                            partyId: customerId,
+                            amount: mapped.previousDue,
+                            asOf: openingAsOf,
+                            label: EXPRESS_RETAIL_PROVIDER,
+                        }),
+                    );
+                }
+
                 if (adopted) {
                     warnings.push({
                         entity: 'CUSTOMER',
@@ -734,11 +760,12 @@ export class ExternalSyncService {
     }
 
     private async syncSuppliers(
-        connection: { id: string; tenant_id: string },
+        connection: { id: string; tenant_id: string; post_impacts: boolean },
         client: ExpressRetailClient,
         stats: SyncStats,
         warnings: SyncWarning[],
         dryRun: boolean,
+        openingAsOf: Date,
     ): Promise<Map<string, string>> {
         const rows = await client.fetchSuppliers();
         const claimedNames = new Set<string>();
@@ -787,6 +814,20 @@ export class ExternalSyncService {
                             select: { id: true },
                         })
                     ).id;
+
+                if (!adopted && connection.post_impacts && mapped.previousDue !== 0) {
+                    await this.db.$transaction((tx) =>
+                        applyOpeningBalance({
+                            tx,
+                            tenantId: connection.tenant_id,
+                            party: 'SUPPLIER',
+                            partyId: supplierId,
+                            amount: mapped.previousDue,
+                            asOf: openingAsOf,
+                            label: EXPRESS_RETAIL_PROVIDER,
+                        }),
+                    );
+                }
 
                 if (adopted) {
                     warnings.push({

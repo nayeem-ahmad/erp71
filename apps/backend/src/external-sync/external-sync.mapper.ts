@@ -159,6 +159,8 @@ export interface MappedCustomer {
     email: string | null;
     address: string | null;
     creditLimit: number | null;
+    /** Opening balance from the provider; zero for most parties. */
+    previousDue: number;
     externalUpdatedAt: Date | null;
 }
 
@@ -176,6 +178,7 @@ export function mapCustomer(row: ExpressRetailCustomer, claimedCodes: Set<string
         address: emptyToNull(row.address),
         // The provider uses 1000000000 as "no limit"; that is noise, not a limit.
         creditLimit: creditLimit > 0 && creditLimit < 1_000_000_000 ? creditLimit : null,
+        previousDue: toMoney(row.previous_due),
         externalUpdatedAt: parseTimestamp(row.updated_at),
     };
 }
@@ -186,6 +189,8 @@ export interface MappedSupplier {
     phone: string | null;
     email: string | null;
     address: string | null;
+    /** Opening balance from the provider; zero for most parties. */
+    previousDue: number;
     externalUpdatedAt: Date | null;
 }
 
@@ -198,6 +203,7 @@ export function mapSupplier(row: ExpressRetailSupplier, claimedNames: Set<string
     return {
         externalId,
         name,
+        previousDue: toMoney(row.previous_due),
         phone: emptyToNull(row.phone),
         email: emptyToNull(row.email),
         address: emptyToNull(row.address),
