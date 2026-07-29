@@ -46,6 +46,12 @@ export class UpdateAdminTenantLocalizationDto {
  * Per-feature tri-state: `true`/`false` pin the feature for this tenant, `null`
  * clears the override so the tenant inherits the platform default again. Keys
  * left out of the payload are untouched.
+ *
+ * Every key in `PLATFORM_FEATURE_KEYS` must appear here. The global pipe runs
+ * with `forbidNonWhitelisted`, so a key the UI sends but this class does not
+ * declare rejects the whole request — the save appears to do nothing and every
+ * other feature silently reverts too. admin-tenants.dto.spec.ts pins the two
+ * lists together.
  */
 export class UpdateAdminTenantFeaturesDto {
     @IsOptional() @IsBoolean() feedback?: boolean | null;
@@ -54,6 +60,7 @@ export class UpdateAdminTenantFeaturesDto {
     @IsOptional() @IsBoolean() voice?: boolean | null;
     @IsOptional() @IsBoolean() manufacturing?: boolean | null;
     @IsOptional() @IsBoolean() aiChat?: boolean | null;
+    @IsOptional() @IsBoolean() externalImport?: boolean | null;
 }
 
 export class SuspendTenantDto {
