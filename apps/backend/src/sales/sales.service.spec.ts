@@ -95,6 +95,7 @@ describe('SalesService', () => {
         findMany: jest.fn(),
         findFirst: jest.fn(),
         update: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
       },
       voucher: {
         findMany: jest.fn(),
@@ -583,8 +584,9 @@ describe('SalesService', () => {
   });
 
   describe('findAll()', () => {
-    it('should return cursor-paginated sales for a tenant', async () => {
+    it('should return a page of sales with the server total', async () => {
       db.sale.findMany.mockResolvedValue([{ id: 's1' }, { id: 's2' }]);
+      db.sale.count.mockResolvedValue(2238);
       db.voucher.findMany.mockResolvedValue([]);
 
       const result = await service.findAll('tenant-1');
@@ -593,12 +595,15 @@ describe('SalesService', () => {
         expect.objectContaining({ where: { tenant_id: 'tenant-1' } }),
       );
       expect(result.items).toHaveLength(2);
-      expect(result).toHaveProperty('nextCursor');
-      expect(result).toHaveProperty('hasMore');
+      // The count is the whole result set, not the page — the footer and the
+      // page control depend on it.
+      expect(result.total).toBe(2238);
+      expect(result.pages).toBe(112);
     });
 
     it('should filter sales to the requesting user when createdBy is set', async () => {
       db.sale.findMany.mockResolvedValue([{ id: 's1' }]);
+      db.sale.count.mockResolvedValue(1);
       db.voucher.findMany.mockResolvedValue([]);
 
       await service.findAll('tenant-1', { createdBy: 'user-42' });
@@ -607,6 +612,58 @@ describe('SalesService', () => {
         expect.objectContaining({
           where: { tenant_id: 'tenant-1', created_by: 'user-42' },
         }),
+      );
+    });
+
+    it('should page with skip/take rather than pulling the whole history', async () => {
+      db.sale.findMany.mockResolvedValue([]);
+      db.sale.count.mockResolvedValue(2238);
+      db.voucher.findMany.mockResolvedValue([]);
+
+      await service.findAll('tenant-1', { page: 3, limit: 50 });
+
+      expect(db.sale.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 100, take: 50 }),
+      );
+    });
+
+    it('should search serial, reference, status and customer name', async () => {
+      db.sale.findMany.mockResolvedValue([]);
+      db.sale.count.mockResolvedValue(0);
+      db.voucher.findMany.mockResolvedValue([]);
+
+      await service.findAll('tenant-1', { search: 'XR-26' });
+
+      const { where } = db.sale.findMany.mock.calls[0][0];
+      expect(where.OR).toEqual([
+        { serial_number: { contains: 'XR-26', mode: 'insensitive' } },
+        { reference_number: { contains: 'XR-26', mode: 'insensitive' } },
+        { status: { contains: 'XR-26', mode: 'insensitive' } },
+        { customer: { name: { contains: 'XR-26', mode: 'insensitive' } } },
+      ]);
+    });
+
+    it('should ignore a sort field that is not on the allowlist', async () => {
+      db.sale.findMany.mockResolvedValue([]);
+      db.sale.count.mockResolvedValue(0);
+      db.voucher.findMany.mockResolvedValue([]);
+
+      await service.findAll('tenant-1', { sortBy: 'tenant_id', sortDir: 'asc' });
+
+      expect(db.sale.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { created_at: 'desc' } }),
+      );
+    });
+
+    it('should sort on an allowed column', async () => {
+      db.sale.findMany.mockResolvedValue([]);
+      db.sale.count.mockResolvedValue(0);
+      db.voucher.findMany.mockResolvedValue([]);
+
+      await service.findAll('tenant-1', { sortBy: 'total_amount', sortDir: 'asc' });
+
+      expect(db.sale.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { total_amount: 'asc' } }),
       );
     });
   });

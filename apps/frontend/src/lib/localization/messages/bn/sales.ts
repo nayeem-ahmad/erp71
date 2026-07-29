@@ -313,6 +313,7 @@ export const salesMessages = {
                 title: "বিক্রয়",
                 emptyMessage: "কোনো sales পাওয়া যায়নি",
                 searchPlaceholder: "খুঁজুন by serial, customer, status...",
+                allStatuses: "সব স্ট্যাটাস",
             },
             detail: {
                 edit: "সম্পাদনা",

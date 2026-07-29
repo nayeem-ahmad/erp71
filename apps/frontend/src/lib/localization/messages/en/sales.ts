@@ -313,6 +313,7 @@ export const salesMessages = {
             title: 'Sales',
             emptyMessage: 'No sales found',
             searchPlaceholder: 'Search by serial, customer, status...',
+            allStatuses: 'All statuses',
         },
         detail: {
             edit: 'Edit',

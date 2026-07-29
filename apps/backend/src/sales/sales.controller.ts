@@ -19,15 +19,23 @@ export class SalesController {
     @Get()
     async findAll(
         @Tenant() tenant: TenantContext,
-        @Query('cursor') cursor?: string,
+        @Query('page') page?: string,
         @Query('limit') limit?: string,
         @Query('mine') mine?: string,
+        @Query('search') search?: string,
+        @Query('status') status?: string,
+        @Query('sortBy') sortBy?: string,
+        @Query('sortDir') sortDir?: string,
     ) {
         const mineOnly = mine === 'true' || mine === '1';
         return this.salesService.findAll(tenant.tenantId, {
-            cursor: cursor || undefined,
+            page: page ? parseInt(page, 10) : undefined,
             limit: limit ? parseInt(limit, 10) : undefined,
             createdBy: mineOnly ? tenant.userId : undefined,
+            search: search || undefined,
+            status: status || undefined,
+            sortBy: sortBy || undefined,
+            sortDir: sortDir || undefined,
         });
     }
 
