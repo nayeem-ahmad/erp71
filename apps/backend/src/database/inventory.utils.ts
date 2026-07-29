@@ -136,9 +136,20 @@ export async function applyInventoryMovement(
          * six-month history so the stock ledger agrees with backdated sales.
          */
         occurredAt?: Date;
+        /**
+         * Lets a decrement take the balance below zero instead of refusing.
+         *
+         * Only for replaying history that already happened elsewhere: a
+         * migrated sale is a fact, and the purchase that stocked its product
+         * may predate the imported window entirely. Refusing the movement there
+         * drops the whole document, which is how an import came to leave 943
+         * sales out of the ledger while their payments still landed. Live entry
+         * must never pass this — a shortfall there is a real error.
+         */
+        allowNegative?: boolean;
     },
 ) {
-    const { tenantId, productId, warehouseId, quantityDelta, movementType, referenceType, referenceId, unitCost, note, occurredAt } = params;
+    const { tenantId, productId, warehouseId, quantityDelta, movementType, referenceType, referenceId, unitCost, note, occurredAt, allowNegative } = params;
 
     if (quantityDelta === 0) {
         throw new BadRequestException('Inventory movement delta cannot be zero.');
@@ -184,7 +195,9 @@ export async function applyInventoryMovement(
                 tenant_id: tenantId,
                 product_id: productId,
                 warehouse_id: warehouseId,
-                quantity: { gte: decrementBy },
+                // The guard is the `gte` here, so dropping it is what permits a
+                // negative balance for a replay.
+                ...(allowNegative ? {} : { quantity: { gte: decrementBy } }),
             },
             data: {
                 quantity: { decrement: decrementBy },
@@ -192,7 +205,20 @@ export async function applyInventoryMovement(
         });
 
         if (updateResult.count === 0) {
-            throw new BadRequestException(`Insufficient stock for product ${productId}`);
+            if (!allowNegative) {
+                throw new BadRequestException(`Insufficient stock for product ${productId}`);
+            }
+            // No stock row exists yet — the product has never been received
+            // here. Create it already negative so the ledger still balances
+            // against the movement written below.
+            await tx.productStock.create({
+                data: {
+                    tenant_id: tenantId,
+                    product_id: productId,
+                    warehouse_id: warehouseId,
+                    quantity: -decrementBy,
+                },
+            });
         }
 
         const stock = await tx.productStock.findUnique({

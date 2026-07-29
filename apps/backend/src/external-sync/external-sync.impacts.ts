@@ -54,6 +54,10 @@ export async function applySaleImpacts(input: SaleImpactInput): Promise<void> {
             referenceType: 'SALE',
             referenceId: saleId,
             occurredAt: saleDate,
+            // A replayed sale is a fact that already happened; its stocking
+            // purchase may predate the window. Let the balance go negative
+            // rather than drop the document and its revenue.
+            allowNegative: true,
         });
     }
 
@@ -352,4 +356,50 @@ export async function isAlreadyPosted(
         select: { status: true },
     });
     return event?.status === 'posted';
+}
+
+export interface OpeningBalanceInput {
+    tx: Tx;
+    tenantId: string;
+    party: PaymentParty;
+    partyId: string;
+    amount: number;
+    /** Dated at the start of the imported range, before any document. */
+    asOf: Date;
+    label: string;
+}
+
+/**
+ * Records what a party already owed before the provider's own history starts.
+ *
+ * Without it the balances cannot reconcile: the provider carries a
+ * `previous_due` per party, and payments settling that older debt do get
+ * imported, so the balance is reduced by money whose matching sale was never
+ * in the source data at all.
+ *
+ * Written as an ADJUSTMENT rather than a posting: it is an opening position,
+ * not an economic event of ours, and posting it would credit revenue that
+ * belongs to the previous system.
+ */
+export async function applyOpeningBalance(input: OpeningBalanceInput): Promise<void> {
+    const { tx, tenantId, partyId, amount, asOf } = input;
+    if (Math.abs(amount) < EPSILON) return;
+
+    const isCustomer = input.party === 'CUSTOMER';
+    const data = {
+        tenant_id: tenantId,
+        type: 'ADJUSTMENT',
+        amount,
+        balance_after: amount,
+        notes: `Opening balance imported from ${input.label}`,
+        created_at: asOf,
+    };
+
+    if (isCustomer) {
+        await tx.customerCreditTransaction.create({ data: { ...data, customer_id: partyId } });
+        await tx.customer.update({ where: { id: partyId }, data: { due_balance: amount } });
+    } else {
+        await tx.supplierCreditTransaction.create({ data: { ...data, supplier_id: partyId } });
+        await tx.supplier.update({ where: { id: partyId }, data: { due_balance: amount } });
+    }
 }

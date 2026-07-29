@@ -118,6 +118,8 @@ export interface ExpressRetailCustomer {
     email: string | null;
     address: string | null;
     credit_limit: string | null;
+    /** What the party already owed before the provider's own history begins. */
+    previous_due: string | null;
     organization_id: string;
     updated_at: string | null;
 }
@@ -129,6 +131,7 @@ export interface ExpressRetailSupplier {
     phone: string | null;
     email: string | null;
     address: string | null;
+    previous_due: string | null;
     organization_id: string;
     updated_at: string | null;
 }
