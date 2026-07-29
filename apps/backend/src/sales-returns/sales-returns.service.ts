@@ -15,13 +15,18 @@ export class SalesReturnsService {
 
     async create(tenantId: string, userId: string, dto: CreateSalesReturnDto) {
         return this.db.$transaction(async (tx) => {
-            // 1. Fetch original sale and its items
-            const sale = await tx.sale.findUnique({
-                where: { id: dto.saleId, tenant_id: tenantId },
-                include: { items: { include: { returns: true } }, payments: { orderBy: { created_at: 'asc' } } }
-            });
+            // 1. The sale is optional. Goods can come back that were sold
+            //    before the business moved onto this system, and refusing those
+            //    leaves them unrecordable. When a sale IS named it is fetched
+            //    and every line checked against it.
+            const sale = dto.saleId
+                ? await tx.sale.findUnique({
+                      where: { id: dto.saleId, tenant_id: tenantId },
+                      include: { items: { include: { returns: true } }, payments: { orderBy: { created_at: 'asc' } } },
+                  })
+                : null;
 
-            if (!sale) throw new BadRequestException('Sale not found');
+            if (dto.saleId && !sale) throw new BadRequestException('Sale not found');
 
             const returnNumber = `RET-${Date.now()}`;
             let totalRefund = 0;
@@ -30,6 +35,37 @@ export class SalesReturnsService {
 
             // 2. Validate items and calculate total refund
             for (const returnItem of dto.items) {
+                if (returnItem.quantity <= 0) {
+                    throw new BadRequestException('Return quantity must be greater than zero.');
+                }
+
+                if (!sale) {
+                    // No parent to price or bound the line, so the caller must
+                    // say what came back and what it is worth.
+                    if (!returnItem.productId) {
+                        throw new BadRequestException('productId is required on each line when no sale is given.');
+                    }
+                    if (returnItem.unitPrice == null || returnItem.unitPrice < 0) {
+                        throw new BadRequestException('unitPrice is required on each line when no sale is given.');
+                    }
+
+                    const product = await tx.product.findFirst({
+                        where: { id: returnItem.productId, tenant_id: tenantId },
+                        select: { id: true },
+                    });
+                    if (!product) throw new BadRequestException(`Product ${returnItem.productId} not found.`);
+
+                    const refundAmount = returnItem.unitPrice * returnItem.quantity;
+                    totalRefund += refundAmount;
+                    returnItemData.push({
+                        sale_item_id: null,
+                        product_id: product.id,
+                        quantity: returnItem.quantity,
+                        refund_amount: refundAmount,
+                    });
+                    continue;
+                }
+
                 const originalItem = sale.items.find((i: any) => i.id === returnItem.saleItemId);
                 if (!originalItem) {
                     throw new BadRequestException(`Item ${returnItem.saleItemId} not found in this sale.`);
@@ -43,6 +79,8 @@ export class SalesReturnsService {
                     throw new BadRequestException(`Cannot return ${returnItem.quantity}. Only ${availableToReturn} available to return.`);
                 }
 
+                // Priced from the sale, so a return can never refund more per
+                // unit than was charged — which is why unitPrice is ignored here.
                 const refundAmount = Number(originalItem.price_at_sale) * returnItem.quantity;
                 totalRefund += refundAmount;
 
@@ -60,7 +98,7 @@ export class SalesReturnsService {
                 data: {
                     tenant_id: tenantId,
                     store_id: dto.storeId,
-                    sale_id: sale.id,
+                    sale_id: sale?.id ?? null,
                     return_number: returnNumber,
                     total_refund: totalRefund,
                     reason: dto.reason,
@@ -87,16 +125,22 @@ export class SalesReturnsService {
 
             // Refund the way the customer paid. An unpaid balance was a receivable,
             // so its return credits AR rather than handing back cash.
-            const balanceDue = creditDueAmount(Number(sale.total_amount), Number(sale.amount_paid));
-            const returnPaymentMode = balanceDue > 0.005
-                ? 'credit'
-                : classifyPaymentMode(sale.payments?.[0]?.payment_method ?? 'cash');
+            //
+            // With no sale there is nothing to mirror: no customer, no payment
+            // history, no receivable. Such a return settles in cash, which is
+            // the only defensible default when the original tender is unknown.
+            const balanceDue = sale ? creditDueAmount(Number(sale.total_amount), Number(sale.amount_paid)) : 0;
+            const returnPaymentMode = !sale
+                ? 'cash'
+                : balanceDue > 0.005
+                    ? 'credit'
+                    : classifyPaymentMode(sale.payments?.[0]?.payment_method ?? 'cash');
 
             // 5. If the sale had a customer, keep their balances consistent:
             //    reduce total_spent, and — for a credit sale — reduce what they
             //    still owe and record a matching credit-ledger entry, so a
             //    returned credit sale no longer leaves them owing for the goods.
-            if (sale.customer_id) {
+            if (sale?.customer_id) {
                 await tx.customer.update({
                     where: { id: sale.customer_id },
                     data: { total_spent: { decrement: totalRefund } },
@@ -144,11 +188,11 @@ export class SalesReturnsService {
                 amount: Number(salesReturn.total_refund),
                 description: `Auto-posted sales return ${salesReturn.return_number}`,
                 referenceNumber: salesReturn.return_number,
-                storeId: sale.store_id,
+                storeId: sale?.store_id ?? dto.storeId,
                 // Only the credit return touches AR; a cash return's legs are not
                 // control accounts, so this tags nothing and is a safe no-op there.
                 partyType: 'CUSTOMER',
-                partyId: sale.customer_id ?? undefined,
+                partyId: sale?.customer_id ?? undefined,
             });
 
             return {
@@ -225,7 +269,8 @@ export class SalesReturnsService {
 
             // If items are provided, recalculate everything
             if (dto.items && dto.items.length > 0) {
-                const warehouseId = await resolveWarehouseId(tx, tenantId, existing.sale.store_id);
+                // A parentless return has no sale to take the store from.
+                const warehouseId = await resolveWarehouseId(tx, tenantId, existing.sale?.store_id ?? existing.store_id);
                 // 1. Reverse old stock increments
                 for (const oldItem of existing.items) {
                     await applyInventoryMovement(tx, {
@@ -240,7 +285,7 @@ export class SalesReturnsService {
                 }
 
                 // 2. Reverse old customer total_spent decrement
-                if (existing.sale.customer_id) {
+                if (existing.sale?.customer_id) {
                     await tx.customer.update({
                         where: { id: existing.sale.customer_id },
                         data: { total_spent: { increment: Number(existing.total_refund) } },
@@ -253,6 +298,28 @@ export class SalesReturnsService {
 
                 for (const newItem of dto.items) {
                     if (newItem.quantity <= 0) continue;
+
+                    // A return recorded without a sale keeps its lines
+                    // self-describing on update too: nothing bounds or prices
+                    // them, so the caller supplies product and value.
+                    if (!existing.sale) {
+                        if (!newItem.productId) {
+                            throw new BadRequestException('productId is required on each line when the return has no sale.');
+                        }
+                        const unitPrice = (newItem as any).unitPrice;
+                        if (unitPrice == null || unitPrice < 0) {
+                            throw new BadRequestException('unitPrice is required on each line when the return has no sale.');
+                        }
+                        const refundAmount = unitPrice * newItem.quantity;
+                        newTotalRefund += refundAmount;
+                        newItemData.push({
+                            sale_item_id: null,
+                            product_id: newItem.productId,
+                            quantity: newItem.quantity,
+                            refund_amount: refundAmount,
+                        });
+                        continue;
+                    }
 
                     const originalSaleItem = existing.sale.items.find(
                         (si: any) => si.id === newItem.saleItemId,
@@ -312,7 +379,7 @@ export class SalesReturnsService {
                 });
 
                 // 6. Re-apply customer total_spent decrement
-                if (existing.sale.customer_id) {
+                if (existing.sale?.customer_id) {
                     await tx.customer.update({
                         where: { id: existing.sale.customer_id },
                         data: { total_spent: { decrement: newTotalRefund } },
