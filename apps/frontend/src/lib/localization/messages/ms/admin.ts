@@ -581,6 +581,10 @@ export const adminMessages = {
                     label: "Pembantu AI",
                     hint: "Chatbot data perniagaan di pengepala. Memerlukan pelan Premium dan menggunakan kredit AI. Dimatikan secara lalai.",
                 },
+                externalImport: {
+                    label: "Import ERP luaran",
+                    hint: "Membenarkan pemilik penyewa ini mengimport sejarah dari ERP lain melalui Tetapan › Pengurusan Data. Dimatikan secara lalai.",
+                },
                 saved: 'Tetapan ciri penyewa disimpan.',
             },
             sms: {

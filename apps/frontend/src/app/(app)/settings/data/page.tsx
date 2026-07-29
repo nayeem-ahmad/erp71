@@ -1,12 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Database, Trash2, PackageOpen } from 'lucide-react';
+import { Database, Trash2, PackageOpen, PlugZap } from 'lucide-react';
+import Link from 'next/link';
 import { api, fetchWithAuth } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { isOwner } from '@/lib/permissions';
+import { usePlatformFeatures } from '@/contexts/PlatformFeaturesContext';
 import { toast } from '@/lib/toast';
 import { Alert, Button, ConfirmDialog, PageShell } from '@/components/ui';
 
@@ -39,6 +41,9 @@ export default function DataManagementPage() {
     const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const owner = isOwner(role);
+    // Per-tenant switch: the import only appears for workspaces we have
+    // enabled it for, and only for the owner.
+    const { externalImport } = usePlatformFeatures();
     const running = demoBatch?.status === 'RUNNING' || demoBatch?.status === 'PENDING' || demoStarting;
     // "N previous loads": the latest completed batch number, or one less if a
     // load is currently in flight.
@@ -143,6 +148,30 @@ export default function DataManagementPage() {
                     <Alert tone="warning">{dm.ownerOnly}</Alert>
                 ) : (
                     <div className="space-y-4">
+                        {externalImport ? (
+                            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 space-y-4">
+                                <div className="flex items-start gap-3">
+                                    <div className="p-2 rounded-md bg-blue-50 mt-0.5">
+                                        <PlugZap className="w-5 h-5 text-blue-600" />
+                                    </div>
+                                    <div className="flex-1 space-y-1">
+                                        <h2 className="text-base font-bold text-gray-900">Import from another ERP</h2>
+                                        <p className="text-sm text-gray-500">
+                                            Bring your sales and purchase history across from Express Retail Pro. You
+                                            can preview an import before anything is written.
+                                        </p>
+                                    </div>
+                                </div>
+                                <Link
+                                    href="/settings/data/external-import"
+                                    className="inline-flex min-h-touch items-center gap-2 rounded-lg border border-blue-200 bg-white px-5 py-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+                                >
+                                    <PlugZap className="w-4 h-4" />
+                                    Set up import
+                                </Link>
+                            </div>
+                        ) : null}
+
                         {/* Load Demo Data */}
                         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 space-y-4">
                             <div className="flex items-start gap-3">

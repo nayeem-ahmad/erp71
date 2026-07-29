@@ -1722,6 +1722,51 @@ export const api = {
         fetchWithAuth(`/admin/tenants/${tenantId}/external-sync/runs?limit=${limit}`),
     cancelExternalSyncRun: (tenantId: string, runId: string): Promise<{ cancelling: boolean }> =>
         fetchWithAuth(`/admin/tenants/${tenantId}/external-sync/runs/${runId}/cancel`, { method: 'POST' }),
+    // --- External ERP import, tenant-facing (Settings > Data Management).
+    // Same shapes as the admin calls above; the tenant route resolves the
+    // workspace from the session instead of taking a tenant id, and refuses
+    // anything but the owner of a feature-enabled workspace.
+    getMyExternalSync: (): Promise<ExternalSyncConnection | null> =>
+        fetchWithAuth('/tenants/external-sync'),
+    saveMyExternalSync: (data: {
+        baseUrl: string;
+        username: string;
+        password?: string;
+        storeId: string;
+        documentPrefix?: string;
+        enabled?: boolean;
+        windowDays?: number;
+        historyStartDate?: string;
+    }): Promise<ExternalSyncConnection> => fetchWithAuth('/tenants/external-sync', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteMyExternalSync: () => fetchWithAuth('/tenants/external-sync', { method: 'DELETE' }),
+    testMyExternalSync: (data: { baseUrl: string; username: string; password?: string }): Promise<{
+        ok: boolean;
+        organizationId: string;
+        user: { name: string; username: string; role: string };
+    }> => fetchWithAuth('/tenants/external-sync/test', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    startMyExternalSyncRun: (data: {
+        dateFrom?: string;
+        dateTo?: string;
+        dryRun?: boolean;
+        fullResync?: boolean;
+        steps?: ExternalSyncStep[];
+    }): Promise<ExternalSyncRun> => fetchWithAuth('/tenants/external-sync/runs', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    listMyExternalSyncRuns: (limit = 20): Promise<ExternalSyncRun[]> =>
+        fetchWithAuth(`/tenants/external-sync/runs?limit=${limit}`),
+    cancelMyExternalSyncRun: (runId: string): Promise<{ cancelling: boolean }> =>
+        fetchWithAuth(`/tenants/external-sync/runs/${runId}/cancel`, { method: 'POST' }),
     suspendTenant: (tenantId: string, reason?: string) => fetchWithAuth(`/admin/tenants/${tenantId}/suspend`, {
         method: 'PATCH',
         body: JSON.stringify({ reason }),
