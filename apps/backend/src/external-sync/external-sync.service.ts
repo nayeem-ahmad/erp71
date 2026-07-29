@@ -557,60 +557,78 @@ export class ExternalSyncService {
 
         for (const row of rows) {
             const mapped = mapProduct(row, claimedSkus);
-            const existingId = map.get(mapped.externalId);
+            // One unimportable row must not abandon the rest of the batch;
+            // the document loops already behave this way.
+            try {
+                const existingId = map.get(mapped.externalId);
 
-            if (dryRun) {
-                existingId ? stats.products.updated++ : stats.products.created++;
-                continue;
-            }
+                if (dryRun) {
+                    existingId ? stats.products.updated++ : stats.products.created++;
+                    continue;
+                }
 
-            if (existingId) {
-                await this.db.product.update({
-                    where: { id: existingId },
-                    data: { name: mapped.name, price: mapped.price, vat_rate: mapped.vatRate, reorder_level: mapped.reorderLevel },
+                if (existingId) {
+                    // updateMany, not update: it returns a count instead of
+                    // throwing when the mapped row has since been deleted, and it
+                    // scopes the write to this tenant.
+                    const { count } = await this.db.product.updateMany({
+                        where: { id: existingId, tenant_id: connection.tenant_id },
+                        data: { name: mapped.name, price: mapped.price, vat_rate: mapped.vatRate, reorder_level: mapped.reorderLevel },
+                    });
+                    if (count > 0) {
+                        stats.products.updated++;
+                        continue;
+                    }
+                    await this.forgetStaleMapping(connection.id, 'PRODUCT', mapped.externalId, map, warnings, `Product ${mapped.sku}`);
+                }
+
+                // Adopt a product the tenant already has under the same SKU rather
+                // than colliding with the [tenant_id, sku] unique index.
+                const adopted = await this.db.product.findFirst({
+                    where: { tenant_id: connection.tenant_id, sku: mapped.sku },
+                    select: { id: true },
                 });
-                stats.products.updated++;
-                continue;
-            }
 
-            // Adopt a product the tenant already has under the same SKU rather
-            // than colliding with the [tenant_id, sku] unique index.
-            const adopted = await this.db.product.findFirst({
-                where: { tenant_id: connection.tenant_id, sku: mapped.sku },
-                select: { id: true },
-            });
+                const productId =
+                    adopted?.id ??
+                    (
+                        await this.db.product.create({
+                            data: {
+                                tenant_id: connection.tenant_id,
+                                name: mapped.name,
+                                sku: mapped.sku,
+                                type: mapped.isService ? 'SERVICE' : 'GOODS',
+                                price: mapped.price,
+                                vat_rate: mapped.vatRate,
+                                reorder_level: mapped.reorderLevel,
+                            },
+                            select: { id: true },
+                        })
+                    ).id;
 
-            const productId =
-                adopted?.id ??
-                (
-                    await this.db.product.create({
-                        data: {
-                            tenant_id: connection.tenant_id,
-                            name: mapped.name,
-                            sku: mapped.sku,
-                            type: mapped.isService ? 'SERVICE' : 'GOODS',
-                            price: mapped.price,
-                            vat_rate: mapped.vatRate,
-                            reorder_level: mapped.reorderLevel,
-                        },
-                        select: { id: true },
-                    })
-                ).id;
+                if (adopted) {
+                    warnings.push({
+                        entity: 'PRODUCT',
+                        externalId: mapped.externalId,
+                        code: 'ADOPTED_EXISTING',
+                        message: `Linked provider product ${mapped.sku} to the tenant's existing product with the same SKU instead of creating a duplicate`,
+                    });
+                    stats.products.skipped++;
+                } else {
+                    stats.products.created++;
+                }
 
-            if (adopted) {
+                await this.writeMapping(connection, 'PRODUCT', mapped.externalId, productId, mapped.externalUpdatedAt);
+                map.set(mapped.externalId, productId);
+            } catch (error: any) {
+                stats.products.skipped++;
                 warnings.push({
                     entity: 'PRODUCT',
                     externalId: mapped.externalId,
-                    code: 'ADOPTED_EXISTING',
-                    message: `Linked provider product ${mapped.sku} to the tenant's existing product with the same SKU instead of creating a duplicate`,
+                    code: 'WRITE_FAILED',
+                    message: `Product ${mapped.sku} could not be imported: ${error?.message ?? error}`,
                 });
-                stats.products.skipped++;
-            } else {
-                stats.products.created++;
             }
-
-            await this.writeMapping(connection, 'PRODUCT', mapped.externalId, productId, mapped.externalUpdatedAt);
-            map.set(mapped.externalId, productId);
         }
 
         return map;
@@ -629,72 +647,87 @@ export class ExternalSyncService {
 
         for (const row of rows) {
             const mapped = mapCustomer(row, claimedCodes);
-            const existingId = map.get(mapped.externalId);
+            // One unimportable row must not abandon the rest of the batch;
+            // the document loops already behave this way.
+            try {
+                const existingId = map.get(mapped.externalId);
 
-            if (dryRun) {
-                existingId ? stats.customers.updated++ : stats.customers.created++;
-                continue;
-            }
+                if (dryRun) {
+                    existingId ? stats.customers.updated++ : stats.customers.created++;
+                    continue;
+                }
 
-            if (existingId) {
-                await this.db.customer.update({
-                    where: { id: existingId },
-                    data: {
-                        name: mapped.name,
-                        owner_name: mapped.ownerName,
-                        email: mapped.email,
-                        address: mapped.address,
-                        credit_limit: mapped.creditLimit,
-                    },
-                });
-                stats.customers.updated++;
-                continue;
-            }
-
-            // [tenant_id, phone] and [tenant_id, customer_code] are both unique.
-            const adopted = await this.db.customer.findFirst({
-                where: {
-                    tenant_id: connection.tenant_id,
-                    OR: [
-                        ...(mapped.phone ? [{ phone: mapped.phone }] : []),
-                        { customer_code: mapped.customerCode },
-                    ],
-                },
-                select: { id: true },
-            });
-
-            const customerId =
-                adopted?.id ??
-                (
-                    await this.db.customer.create({
+                if (existingId) {
+                    const { count } = await this.db.customer.updateMany({
+                        where: { id: existingId, tenant_id: connection.tenant_id },
                         data: {
-                            tenant_id: connection.tenant_id,
-                            customer_code: mapped.customerCode,
                             name: mapped.name,
                             owner_name: mapped.ownerName,
-                            phone: mapped.phone,
                             email: mapped.email,
                             address: mapped.address,
                             credit_limit: mapped.creditLimit,
                         },
-                        select: { id: true },
-                    })
-                ).id;
+                    });
+                    if (count > 0) {
+                        stats.customers.updated++;
+                        continue;
+                    }
+                    await this.forgetStaleMapping(connection.id, 'CUSTOMER', mapped.externalId, map, warnings, `Customer ${mapped.customerCode}`);
+                }
 
-            if (adopted) {
+                // [tenant_id, phone] and [tenant_id, customer_code] are both unique.
+                const adopted = await this.db.customer.findFirst({
+                    where: {
+                        tenant_id: connection.tenant_id,
+                        OR: [
+                            ...(mapped.phone ? [{ phone: mapped.phone }] : []),
+                            { customer_code: mapped.customerCode },
+                        ],
+                    },
+                    select: { id: true },
+                });
+
+                const customerId =
+                    adopted?.id ??
+                    (
+                        await this.db.customer.create({
+                            data: {
+                                tenant_id: connection.tenant_id,
+                                customer_code: mapped.customerCode,
+                                name: mapped.name,
+                                owner_name: mapped.ownerName,
+                                phone: mapped.phone,
+                                email: mapped.email,
+                                address: mapped.address,
+                                credit_limit: mapped.creditLimit,
+                            },
+                            select: { id: true },
+                        })
+                    ).id;
+
+                if (adopted) {
+                    warnings.push({
+                        entity: 'CUSTOMER',
+                        externalId: mapped.externalId,
+                        code: 'ADOPTED_EXISTING',
+                        message: `Linked provider customer ${mapped.customerCode} to an existing tenant customer with the same phone or code`,
+                    });
+                    stats.customers.skipped++;
+                } else {
+                    stats.customers.created++;
+                }
+
+                await this.writeMapping(connection, 'CUSTOMER', mapped.externalId, customerId, mapped.externalUpdatedAt);
+                map.set(mapped.externalId, customerId);
+            } catch (error: any) {
+                stats.customers.skipped++;
                 warnings.push({
                     entity: 'CUSTOMER',
                     externalId: mapped.externalId,
-                    code: 'ADOPTED_EXISTING',
-                    message: `Linked provider customer ${mapped.customerCode} to an existing tenant customer with the same phone or code`,
+                    code: 'WRITE_FAILED',
+                    message: `Customer ${mapped.customerCode} could not be imported: ${error?.message ?? error}`,
                 });
-                stats.customers.skipped++;
-            } else {
-                stats.customers.created++;
             }
-
-            await this.writeMapping(connection, 'CUSTOMER', mapped.externalId, customerId, mapped.externalUpdatedAt);
-            map.set(mapped.externalId, customerId);
         }
 
         return map;
@@ -713,56 +746,71 @@ export class ExternalSyncService {
 
         for (const row of rows) {
             const mapped = mapSupplier(row, claimedNames);
-            const existingId = map.get(mapped.externalId);
+            // One unimportable row must not abandon the rest of the batch;
+            // the document loops already behave this way.
+            try {
+                const existingId = map.get(mapped.externalId);
 
-            if (dryRun) {
-                existingId ? stats.suppliers.updated++ : stats.suppliers.created++;
-                continue;
-            }
+                if (dryRun) {
+                    existingId ? stats.suppliers.updated++ : stats.suppliers.created++;
+                    continue;
+                }
 
-            if (existingId) {
-                await this.db.supplier.update({
-                    where: { id: existingId },
-                    data: { phone: mapped.phone, email: mapped.email, address: mapped.address },
+                if (existingId) {
+                    const { count } = await this.db.supplier.updateMany({
+                        where: { id: existingId, tenant_id: connection.tenant_id },
+                        data: { phone: mapped.phone, email: mapped.email, address: mapped.address },
+                    });
+                    if (count > 0) {
+                        stats.suppliers.updated++;
+                        continue;
+                    }
+                    await this.forgetStaleMapping(connection.id, 'SUPPLIER', mapped.externalId, map, warnings, `Supplier ${mapped.name}`);
+                }
+
+                const adopted = await this.db.supplier.findFirst({
+                    where: { tenant_id: connection.tenant_id, name: mapped.name },
+                    select: { id: true },
                 });
-                stats.suppliers.updated++;
-                continue;
-            }
 
-            const adopted = await this.db.supplier.findFirst({
-                where: { tenant_id: connection.tenant_id, name: mapped.name },
-                select: { id: true },
-            });
+                const supplierId =
+                    adopted?.id ??
+                    (
+                        await this.db.supplier.create({
+                            data: {
+                                tenant_id: connection.tenant_id,
+                                name: mapped.name,
+                                phone: mapped.phone,
+                                email: mapped.email,
+                                address: mapped.address,
+                            },
+                            select: { id: true },
+                        })
+                    ).id;
 
-            const supplierId =
-                adopted?.id ??
-                (
-                    await this.db.supplier.create({
-                        data: {
-                            tenant_id: connection.tenant_id,
-                            name: mapped.name,
-                            phone: mapped.phone,
-                            email: mapped.email,
-                            address: mapped.address,
-                        },
-                        select: { id: true },
-                    })
-                ).id;
+                if (adopted) {
+                    warnings.push({
+                        entity: 'SUPPLIER',
+                        externalId: mapped.externalId,
+                        code: 'ADOPTED_EXISTING',
+                        message: `Linked provider supplier "${mapped.name}" to the tenant's existing supplier of the same name`,
+                    });
+                    stats.suppliers.skipped++;
+                } else {
+                    stats.suppliers.created++;
+                }
 
-            if (adopted) {
+                await this.writeMapping(connection, 'SUPPLIER', mapped.externalId, supplierId, mapped.externalUpdatedAt);
+                map.set(mapped.externalId, supplierId);
+            } catch (error: any) {
+                stats.suppliers.skipped++;
                 warnings.push({
                     entity: 'SUPPLIER',
                     externalId: mapped.externalId,
-                    code: 'ADOPTED_EXISTING',
-                    message: `Linked provider supplier "${mapped.name}" to the tenant's existing supplier of the same name`,
+                    code: 'WRITE_FAILED',
+                    message: `Supplier ${mapped.name} could not be imported: ${error?.message ?? error}`,
                 });
-                stats.suppliers.skipped++;
-            } else {
-                stats.suppliers.created++;
             }
-
-            await this.writeMapping(connection, 'SUPPLIER', mapped.externalId, supplierId, mapped.externalUpdatedAt);
-            map.set(mapped.externalId, supplierId);
         }
 
         return map;
@@ -931,6 +979,11 @@ export class ExternalSyncService {
 
         const existingId = returnMap.get(mapped.externalId);
 
+        if (existingId && !(await this.mappedRowExists(this.db.salesReturn, connection.tenant_id, existingId))) {
+            await this.forgetStaleMapping(connection.id, 'SALE_RETURN', mapped.externalId, returnMap, warnings, `Return ${mapped.returnNumber}`);
+            return this.writeSaleReturn(connection, mapped, saleId, productMap, returnMap, warnings);
+        }
+
         if (existingId) {
             if (await this.isImmutablyPosted(connection, 'sale_return', existingId)) {
                 warnings.push({
@@ -1094,6 +1147,12 @@ export class ExternalSyncService {
 
         const existingId = paymentMap.get(mapped.externalId);
         const eventType = isCustomer ? 'customer_payment' : 'supplier_payment';
+        const creditTable: any = isCustomer ? this.db.customerCreditTransaction : this.db.supplierCreditTransaction;
+
+        if (existingId && !(await this.mappedRowExists(creditTable, connection.tenant_id, existingId))) {
+            await this.forgetStaleMapping(connection.id, entity, mapped.externalId, paymentMap, warnings, `Payment ${mapped.paymentNumber}`);
+            return this.writePayment(connection, party, mapped, partyId, paymentMap, warnings);
+        }
 
         if (existingId) {
             if (await this.isImmutablyPosted(connection, eventType, existingId)) {
@@ -1186,6 +1245,11 @@ export class ExternalSyncService {
             existingId ?? null,
             warnings,
         );
+
+        if (existingId && !(await this.mappedRowExists(this.db.sale, connection.tenant_id, existingId))) {
+            await this.forgetStaleMapping(connection.id, 'SALE', mapped.externalId, saleMap, warnings, `Sale ${mapped.serialNumber}`);
+            return this.writeSale(connection, mapped, productMap, customerMap, saleMap, warnings);
+        }
 
         if (existingId) {
             if (await this.isImmutablyPosted(connection, 'sale', existingId)) {
@@ -1408,6 +1472,11 @@ export class ExternalSyncService {
 
         const existingId = purchaseMap.get(mapped.externalId);
 
+        if (existingId && !(await this.mappedRowExists(this.db.purchase, connection.tenant_id, existingId))) {
+            await this.forgetStaleMapping(connection.id, 'PURCHASE', mapped.externalId, purchaseMap, warnings, `Purchase ${mapped.purchaseNumber}`);
+            return this.writePurchase(connection, mapped, productMap, supplierMap, purchaseMap, warnings);
+        }
+
         if (existingId) {
             if (await this.isImmutablyPosted(connection, 'purchase', existingId)) {
                 warnings.push({
@@ -1531,6 +1600,41 @@ export class ExternalSyncService {
     ): Promise<boolean> {
         if (!connection.post_impacts) return false;
         return isAlreadyPosted(this.db, connection.tenant_id, eventType, sourceId);
+    }
+
+    /**
+     * `ExternalSyncMapping.internal_id` carries no foreign key — it names rows
+     * in five different tables — so nothing stops a mapping from outliving the
+     * row it points at. A purged product or a deleted sale leaves a mapping
+     * that makes the next run die on "Record to update not found".
+     *
+     * Rather than fail, drop the dangling link so the caller can import the
+     * record again as if it were new.
+     */
+    private async forgetStaleMapping(
+        connectionId: string,
+        entityType: EntityType,
+        externalId: string,
+        map: Map<string, string>,
+        warnings: SyncWarning[],
+        label: string,
+    ) {
+        await this.db.externalSyncMapping.deleteMany({
+            where: { connection_id: connectionId, entity_type: entityType, external_id: externalId },
+        });
+        map.delete(externalId);
+        warnings.push({
+            entity: entityType,
+            externalId,
+            code: 'STALE_MAPPING_REPAIRED',
+            message: `${label} was linked to a record that no longer exists — the link was dropped and the record re-imported`,
+        });
+    }
+
+    /** Tenant-scoped, so a mapping can never reach across tenants either. */
+    private async mappedRowExists(model: any, tenantId: string, id: string): Promise<boolean> {
+        const row = await model.findFirst({ where: { id, tenant_id: tenantId }, select: { id: true } });
+        return Boolean(row);
     }
 
     private async loadMappings(connectionId: string, entityType: EntityType): Promise<Map<string, string>> {
