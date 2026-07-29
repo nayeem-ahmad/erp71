@@ -284,6 +284,7 @@ export type ExternalSyncConnection = {
     store?: { id: string; name: string };
     document_prefix: string;
     enabled: boolean;
+    post_impacts: boolean;
     window_days: number;
     history_start_date: string | null;
     last_run_at: string | null;
@@ -1675,6 +1676,7 @@ export const api = {
         storeId: string;
         documentPrefix?: string;
         enabled?: boolean;
+        postImpacts?: boolean;
         windowDays?: number;
         historyStartDate?: string;
     }): Promise<ExternalSyncConnection> => fetchWithAuth(`/admin/tenants/${tenantId}/external-sync`, {

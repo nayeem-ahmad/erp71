@@ -33,6 +33,11 @@ export class UpsertExternalSyncConnectionDto {
     @IsBoolean()
     enabled?: boolean;
 
+    /** Make imported documents post to stock, party balances and the ledger. */
+    @IsOptional()
+    @IsBoolean()
+    postImpacts?: boolean;
+
     @IsOptional()
     @Type(() => Number)
     @IsInt()

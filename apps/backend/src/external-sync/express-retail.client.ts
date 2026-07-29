@@ -43,6 +43,10 @@ export interface ExpressRetailSale {
     transport_cost: string;
     total: string;
     paid: string;
+    /** Split of `paid`; lets an imported sale post to the right cash/bank account. */
+    cashPaid: string | null;
+    bankPaid: string | null;
+    bank_account_id: string | null;
     due: string;
     returnAmount: string;
     description: string | null;

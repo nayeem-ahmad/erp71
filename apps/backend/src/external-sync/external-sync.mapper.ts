@@ -220,6 +220,12 @@ export interface MappedSale {
     externalCustomerId: string | null;
     totalAmount: number;
     amountPaid: number;
+    /**
+     * Which account the money actually landed in. The provider splits `paid`
+     * into cashPaid/bankPaid, so a posted import can debit the right side
+     * instead of assuming cash.
+     */
+    paymentMode: 'cash' | 'bank';
     saleDate: Date;
     note: string | null;
     externalUpdatedAt: Date | null;
@@ -259,6 +265,9 @@ export function mapSale(
         externalCustomerId: emptyToNull(row.customer_id),
         totalAmount: toMoney(row.total),
         amountPaid: toMoney(row.paid),
+        // Mixed cash+bank settlements are rare; the larger side wins, since a
+        // posting has to pick one debit account.
+        paymentMode: toMoney(row.bankPaid) > toMoney(row.cashPaid) ? 'bank' : 'cash',
         saleDate: parseProviderDate(row.date),
         note: emptyToNull(row.description),
         externalUpdatedAt: parseTimestamp(row.updated_at),

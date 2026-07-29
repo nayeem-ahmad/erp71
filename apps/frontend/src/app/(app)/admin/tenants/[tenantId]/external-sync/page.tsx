@@ -40,6 +40,7 @@ export default function TenantExternalSyncPage() {
         windowDays: 90,
         historyStartDate: '',
         enabled: false,
+        postImpacts: false,
     });
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [isSaving, setIsSaving] = useState(false);
@@ -84,6 +85,7 @@ export default function TenantExternalSyncPage() {
                     windowDays: existing.window_days,
                     historyStartDate: existing.history_start_date?.slice(0, 10) ?? '',
                     enabled: existing.enabled,
+                    postImpacts: existing.post_impacts,
                 });
             } else if (tenant?.stores?.length === 1) {
                 setForm((prev) => ({ ...prev, storeId: tenant.stores[0].id }));
@@ -131,6 +133,7 @@ export default function TenantExternalSyncPage() {
                 storeId: form.storeId,
                 documentPrefix: form.documentPrefix,
                 enabled: form.enabled,
+                postImpacts: form.postImpacts,
                 windowDays: Number(form.windowDays),
                 ...(form.historyStartDate ? { historyStartDate: form.historyStartDate } : {}),
             });
@@ -303,7 +306,30 @@ export default function TenantExternalSyncPage() {
                             Run nightly (02:00) on the rolling window
                         </label>
                     </div>
+                    <div className="flex items-end">
+                        <label className="flex items-start gap-2 text-xs text-gray-700 max-md:min-h-touch">
+                            <Checkbox
+                                checked={form.postImpacts}
+                                onChange={(e) => setForm({ ...form, postImpacts: e.target.checked })}
+                            />
+                            <span>
+                                Post imported documents
+                                <span className="block text-gray-500">
+                                    Stock, party balances and dated ledger vouchers, as if entered here
+                                </span>
+                            </span>
+                        </label>
+                    </div>
                 </div>
+
+                {form.postImpacts ? (
+                    <Alert tone="warning" className="mt-3">
+                        Imported documents will move stock, customer and supplier balances, and post dated
+                        vouchers. Only enable this if the tenant has no opening balances covering the imported
+                        period — otherwise every imported document is counted twice. Posted documents also stop
+                        being updated by later re-pulls.
+                    </Alert>
+                ) : null}
 
                 {connection?.external_org_id ? (
                     <p className="text-xs text-gray-500 mt-3">

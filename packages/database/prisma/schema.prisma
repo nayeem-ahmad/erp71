@@ -531,6 +531,11 @@ model ExternalSyncConnection {
   /// natively created ones (e.g. "XR-" -> "XR-2601666").
   document_prefix    String    @default("XR-")
   enabled            Boolean   @default(false)
+  /// When true an imported document produces the same effects a natively
+  /// entered one would: stock movements, party due balances and dated ledger
+  /// postings. Off by default — turning it on double-counts unless the tenant
+  /// has no opening balances covering the imported period.
+  post_impacts       Boolean   @default(false)
   /// Rolling window (days back from today) each scheduled run re-pulls.
   window_days        Int       @default(90)
   /// Earliest business date the importer will ever ask the provider for.
