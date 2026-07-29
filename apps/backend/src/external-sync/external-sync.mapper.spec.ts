@@ -1,19 +1,43 @@
 import {
     buildDocumentNumber,
+    creditTransactionType,
     dedupeCode,
     groupBy,
     mapCustomer,
+    mapPayment,
     mapProduct,
     mapPurchase,
     mapSale,
+    mapSaleReturn,
     mapSupplier,
     parseProviderDate,
+    resolvePaymentDirection,
     resolvePaymentStatus,
     resolveQuantity,
     splitIntoMonthlyWindows,
     toMoney,
     type SyncWarning,
 } from './external-sync.mapper';
+
+/** Shaped from a real `/get-customer-payments` row. */
+function paymentRow(overrides: Record<string, unknown> = {}) {
+    return {
+        id: 130607,
+        invoice: 'TR02071',
+        date: '2026-07-28',
+        customer_id: '61787',
+        type: 'CR',
+        method: 'cash',
+        bank_account_id: null,
+        amount: '7060.000',
+        previous_due: '7060.000',
+        note: null,
+        status: 'a',
+        organization_id: '262',
+        updated_at: null,
+        ...overrides,
+    } as any;
+}
 
 describe('external-sync mapper', () => {
     describe('splitIntoMonthlyWindows', () => {
@@ -153,6 +177,8 @@ describe('external-sync mapper', () => {
             );
 
             expect(mapped.serialNumber).toBe('XR-2601666');
+            // The provider's own number is kept unprefixed for reference_number.
+            expect(mapped.referenceNumber).toBe('2601666');
             expect(mapped.totalAmount).toBe(2200);
             expect(mapped.amountPaid).toBe(2200);
             expect(mapped.saleDate.toISOString()).toBe('2026-07-23T00:00:00.000Z');
@@ -228,6 +254,7 @@ describe('external-sync mapper', () => {
             );
 
             expect(mapped.purchaseNumber).toBe('XR-2601096');
+            expect(mapped.referenceNumber).toBe('2601096');
             expect(mapped.paymentStatus).toBe('PAID');
             expect(mapped.items).toEqual([
                 { externalProductId: '99189', quantity: 102, unitCost: 620, lineTotal: 63240 },
@@ -281,6 +308,139 @@ describe('external-sync mapper', () => {
 
             expect(iso.externalUpdatedAt?.toISOString()).toBe('2026-07-23T12:31:15.000Z');
             expect(plain.externalUpdatedAt?.toISOString()).toBe('2025-07-24T16:01:53.000Z');
+        });
+    });
+
+    describe('sale returns', () => {
+        // Shaped from a real /get-sale-return row.
+        const returnRow = {
+            id: 7124,
+            invoice: '2601342',
+            customer_id: '64321',
+            date: '2026-07-06',
+            amount: '5270.000',
+            description: null,
+            status: 'a',
+            organization_id: '262',
+            updated_at: null,
+            sale: { id: 538034, invoice: '2601342', date: '2026-05-12' },
+            sale_return_details: [
+                { id: '11014', sale_return_id: '7124', product_id: '98817', quantity: '2.00', unit_price: '220.00', amount: '440.000' },
+            ],
+        } as any;
+
+        it('maps a return, its embedded lines and its parent sale', () => {
+            const warnings: SyncWarning[] = [];
+            const mapped = mapSaleReturn(returnRow, 'XR-', warnings);
+
+            expect(mapped.returnNumber).toBe('XR-2601342');
+            expect(mapped.referenceNumber).toBe('2601342');
+            // The parent is only reachable through the nested sale object.
+            expect(mapped.externalSaleId).toBe('538034');
+            expect(mapped.totalRefund).toBe(5270);
+            expect(mapped.returnDate.toISOString()).toBe('2026-07-06T00:00:00.000Z');
+            expect(mapped.items).toEqual([
+                { externalProductId: '98817', quantity: 2, refundAmount: 440 },
+            ]);
+            expect(warnings).toHaveLength(0);
+        });
+
+        it('records no parent when the nested sale is absent, so the caller can skip it', () => {
+            const mapped = mapSaleReturn({ ...returnRow, sale: null }, 'XR-', []);
+            expect(mapped.externalSaleId).toBeNull();
+        });
+
+        it('falls back to unit price x quantity when the line total is missing', () => {
+            const row = {
+                ...returnRow,
+                sale_return_details: [{ ...returnRow.sale_return_details[0], amount: null }],
+            };
+            expect(mapSaleReturn(row, 'XR-', []).items[0].refundAmount).toBe(440);
+        });
+
+        it('rounds fractional return quantities and warns, as our line quantities are whole', () => {
+            const warnings: SyncWarning[] = [];
+            const row = {
+                ...returnRow,
+                sale_return_details: [{ ...returnRow.sale_return_details[0], quantity: '2.60' }],
+            };
+            const mapped = mapSaleReturn(row, 'XR-', warnings);
+
+            expect(mapped.items[0].quantity).toBe(3);
+            expect(warnings[0].code).toBe('QUANTITY_ROUNDED');
+            expect(warnings[0].entity).toBe('SALE_RETURN');
+        });
+
+        it('tolerates a return with no line details', () => {
+            const mapped = mapSaleReturn({ ...returnRow, sale_return_details: null }, 'XR-', []);
+            expect(mapped.items).toEqual([]);
+        });
+    });
+
+    describe('payments', () => {
+        it('reads direction from the type code, not the always-positive amount', () => {
+            expect(resolvePaymentDirection('CR')).toBe('IN');
+            expect(resolvePaymentDirection('CP')).toBe('OUT');
+            expect(resolvePaymentDirection('cr')).toBe('IN');
+            expect(resolvePaymentDirection(' CP ')).toBe('OUT');
+        });
+
+        it('refuses to guess an unrecognised type', () => {
+            expect(resolvePaymentDirection('XX')).toBeNull();
+            expect(resolvePaymentDirection('')).toBeNull();
+            expect(resolvePaymentDirection(null)).toBeNull();
+        });
+
+        it('maps the same cash direction to opposite sides for customer and supplier', () => {
+            // Money in from a customer settles their due; money in from a
+            // supplier is a refund that raises what we owe them.
+            expect(creditTransactionType('CUSTOMER', 'IN')).toBe('PAYMENT');
+            expect(creditTransactionType('CUSTOMER', 'OUT')).toBe('PAYOUT');
+            expect(creditTransactionType('SUPPLIER', 'OUT')).toBe('PAYMENT');
+            expect(creditTransactionType('SUPPLIER', 'IN')).toBe('PAYOUT');
+        });
+
+        it('maps a customer receipt', () => {
+            const warnings: SyncWarning[] = [];
+            const mapped = mapPayment(paymentRow(), 'CUSTOMER', 'XR-', warnings)!;
+
+            expect(mapped.paymentNumber).toBe('XR-TR02071');
+            expect(mapped.referenceNumber).toBe('TR02071');
+            expect(mapped.externalPartyId).toBe('61787');
+            expect(mapped.direction).toBe('IN');
+            expect(mapped.amount).toBe(7060);
+            expect(mapped.previousDue).toBe(7060);
+            expect(mapped.date.toISOString()).toBe('2026-07-28T00:00:00.000Z');
+            expect(warnings).toHaveLength(0);
+        });
+
+        it('keeps the provider payment method in the note, since our model has no column for it', () => {
+            const mapped = mapPayment(paymentRow({ method: 'bank', note: 'cheque 4471' }), 'CUSTOMER', 'XR-', [])!;
+            expect(mapped.method).toBe('bank');
+            expect(mapped.note).toBe('cheque 4471 — via bank');
+        });
+
+        it('reads the supplier id on the supplier side', () => {
+            const row = paymentRow({ customer_id: null, supplier_id: '5658', type: 'CP', previous_due: undefined });
+            const mapped = mapPayment(row, 'SUPPLIER', 'XR-', [])!;
+
+            expect(mapped.externalPartyId).toBe('5658');
+            expect(mapped.direction).toBe('OUT');
+            // Supplier rows carry no previous_due, so there is no balance to carry.
+            expect(mapped.previousDue).toBeNull();
+        });
+
+        it('skips and warns on an unknown type rather than guessing a direction', () => {
+            const warnings: SyncWarning[] = [];
+            expect(mapPayment(paymentRow({ type: 'ZZ' }), 'CUSTOMER', 'XR-', warnings)).toBeNull();
+            expect(warnings).toHaveLength(1);
+            expect(warnings[0].code).toBe('PAYMENT_TYPE_UNKNOWN');
+        });
+
+        it('skips a non-positive amount', () => {
+            const warnings: SyncWarning[] = [];
+            expect(mapPayment(paymentRow({ amount: '0.000' }), 'CUSTOMER', 'XR-', warnings)).toBeNull();
+            expect(warnings[0].code).toBe('PAYMENT_AMOUNT_INVALID');
         });
     });
 });

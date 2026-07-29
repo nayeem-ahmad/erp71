@@ -1,10 +1,12 @@
 import {
     ExpressRetailCustomer,
+    ExpressRetailPayment,
     ExpressRetailProduct,
     ExpressRetailPurchase,
     ExpressRetailPurchaseLine,
     ExpressRetailSale,
     ExpressRetailSaleLine,
+    ExpressRetailSaleReturn,
     ExpressRetailSupplier,
 } from './express-retail.client';
 
@@ -213,9 +215,17 @@ export interface MappedSaleItem {
 export interface MappedSale {
     externalId: string;
     serialNumber: string;
+    /** The provider's own transaction number, unprefixed, for `reference_number`. */
+    referenceNumber: string | null;
     externalCustomerId: string | null;
     totalAmount: number;
     amountPaid: number;
+    /**
+     * Which account the money actually landed in. The provider splits `paid`
+     * into cashPaid/bankPaid, so a posted import can debit the right side
+     * instead of assuming cash.
+     */
+    paymentMode: 'cash' | 'bank';
     saleDate: Date;
     note: string | null;
     externalUpdatedAt: Date | null;
@@ -251,9 +261,13 @@ export function mapSale(
     return {
         externalId,
         serialNumber: buildDocumentNumber(documentPrefix, row.invoice),
+        referenceNumber: emptyToNull(row.invoice),
         externalCustomerId: emptyToNull(row.customer_id),
         totalAmount: toMoney(row.total),
         amountPaid: toMoney(row.paid),
+        // Mixed cash+bank settlements are rare; the larger side wins, since a
+        // posting has to pick one debit account.
+        paymentMode: toMoney(row.bankPaid) > toMoney(row.cashPaid) ? 'bank' : 'cash',
         saleDate: parseProviderDate(row.date),
         note: emptyToNull(row.description),
         externalUpdatedAt: parseTimestamp(row.updated_at),
@@ -271,6 +285,8 @@ export interface MappedPurchaseItem {
 export interface MappedPurchase {
     externalId: string;
     purchaseNumber: string;
+    /** The provider's own transaction number, unprefixed, for `reference_number`. */
+    referenceNumber: string | null;
     externalSupplierId: string | null;
     subtotalAmount: number;
     taxAmount: number;
@@ -317,6 +333,7 @@ export function mapPurchase(
     return {
         externalId,
         purchaseNumber: buildDocumentNumber(documentPrefix, row.invoice),
+        referenceNumber: emptyToNull(row.invoice),
         externalSupplierId: emptyToNull(row.supplier_id),
         subtotalAmount: toMoney(row.subtotal),
         taxAmount: toMoney(row.vatAmount),
@@ -340,6 +357,181 @@ export function resolvePaymentStatus(total: number, paid: number): 'UNPAID' | 'P
 }
 
 /** Groups line rows by their parent document id. */
+export interface MappedSaleReturnItem {
+    externalProductId: string;
+    quantity: number;
+    refundAmount: number;
+}
+
+export interface MappedSaleReturn {
+    externalId: string;
+    returnNumber: string;
+    /** The provider's own transaction number, unprefixed. */
+    referenceNumber: string | null;
+    /** From the nested `sale` object — the return has no sale_id column. */
+    externalSaleId: string | null;
+    totalRefund: number;
+    reason: string | null;
+    returnDate: Date;
+    externalUpdatedAt: Date | null;
+    items: MappedSaleReturnItem[];
+}
+
+export function mapSaleReturn(
+    row: ExpressRetailSaleReturn,
+    documentPrefix: string,
+    warnings: SyncWarning[],
+): MappedSaleReturn {
+    const externalId = String(row.id);
+
+    const items: MappedSaleReturnItem[] = (row.sale_return_details ?? []).map((line) => {
+        const { quantity, rounded, originalQuantity } = resolveQuantity(line.quantity);
+        if (rounded) {
+            warnings.push({
+                entity: 'SALE_RETURN',
+                externalId,
+                code: 'QUANTITY_ROUNDED',
+                message: `Return ${row.invoice}: quantity ${originalQuantity} rounded to ${quantity} (our line quantities are whole numbers)`,
+            });
+        }
+        // The provider gives the line total directly; fall back to unit × qty
+        // only if it is missing.
+        const lineAmount = toMoney(line.amount);
+        return {
+            externalProductId: String(line.product_id),
+            quantity,
+            refundAmount: lineAmount > 0 ? lineAmount : Math.round(toMoney(line.unit_price) * quantity * 100) / 100,
+        };
+    });
+
+    return {
+        externalId,
+        returnNumber: buildDocumentNumber(documentPrefix, row.invoice),
+        referenceNumber: emptyToNull(row.invoice),
+        externalSaleId: row.sale ? String(row.sale.id) : null,
+        totalRefund: toMoney(row.amount),
+        reason: emptyToNull(row.description),
+        returnDate: parseProviderDate(row.date),
+        externalUpdatedAt: parseTimestamp(row.updated_at),
+        items,
+    };
+}
+
+/** Which way the cash moved, from our side. */
+export type PaymentDirection = 'IN' | 'OUT';
+
+export type PaymentParty = 'CUSTOMER' | 'SUPPLIER';
+
+export interface MappedPayment {
+    externalId: string;
+    /** Prefixed, so an imported payment cannot collide with our own numbering. */
+    paymentNumber: string;
+    /** The provider's own transaction number, unprefixed. */
+    referenceNumber: string | null;
+    externalPartyId: string | null;
+    direction: PaymentDirection;
+    amount: number;
+    date: Date;
+    method: string | null;
+    /** The provider's due for this party before the payment; customer rows only. */
+    previousDue: number | null;
+    note: string | null;
+    externalUpdatedAt: Date | null;
+}
+
+/**
+ * The provider's `type` is a cash direction, not a party role: CR is cash
+ * received, CP is cash paid. Both values appear in both lists, because a
+ * customer can be refunded and a supplier can refund us.
+ *
+ * This is deliberately strict — an unrecognised code returns null so the caller
+ * can skip the row rather than guess a direction. Every sampled `amount` was
+ * positive, so a wrong guess would move a balance the wrong way rather than
+ * fail loudly.
+ */
+export function resolvePaymentDirection(type: string | null | undefined): PaymentDirection | null {
+    switch ((type ?? '').trim().toUpperCase()) {
+        case 'CR':
+            return 'IN';
+        case 'CP':
+            return 'OUT';
+        default:
+            return null;
+    }
+}
+
+/**
+ * Returns null when the row cannot be mapped safely; a warning is pushed so the
+ * run row explains what was dropped and why.
+ */
+export function mapPayment(
+    row: ExpressRetailPayment,
+    party: PaymentParty,
+    documentPrefix: string,
+    warnings: SyncWarning[],
+): MappedPayment | null {
+    const externalId = String(row.id);
+    const entity = party === 'CUSTOMER' ? 'CUSTOMER_PAYMENT' : 'SUPPLIER_PAYMENT';
+
+    const direction = resolvePaymentDirection(row.type);
+    if (!direction) {
+        warnings.push({
+            entity,
+            externalId,
+            code: 'PAYMENT_TYPE_UNKNOWN',
+            message: `Payment ${row.invoice}: unrecognised type "${row.type}" — skipped rather than guess whether it was money in or out`,
+        });
+        return null;
+    }
+
+    const amount = toMoney(row.amount);
+    if (amount <= 0) {
+        warnings.push({
+            entity,
+            externalId,
+            code: 'PAYMENT_AMOUNT_INVALID',
+            message: `Payment ${row.invoice}: amount ${row.amount ?? 'null'} is not a positive number — skipped`,
+        });
+        return null;
+    }
+
+    const externalPartyId = party === 'CUSTOMER'
+        ? emptyToNull(row.customer_id ?? null)
+        : emptyToNull(row.supplier_id ?? null);
+
+    const previousDue = row.previous_due != null ? toMoney(row.previous_due) : null;
+
+    // The credit-transaction models have no payment-method column, so keep the
+    // provider's method in the note rather than lose it.
+    const method = emptyToNull(row.method);
+    const noteParts = [emptyToNull(row.note), method ? `via ${method}` : null].filter(Boolean);
+
+    return {
+        externalId,
+        paymentNumber: buildDocumentNumber(documentPrefix, row.invoice),
+        referenceNumber: emptyToNull(row.invoice),
+        externalPartyId,
+        direction,
+        amount,
+        date: parseProviderDate(row.date),
+        method,
+        previousDue,
+        note: noteParts.length ? noteParts.join(' — ') : null,
+        externalUpdatedAt: parseTimestamp(row.updated_at),
+    };
+}
+
+/**
+ * Our credit models express direction as PAYMENT/PAYOUT relative to the party,
+ * so the same cash direction means opposite things on the two sides: money in
+ * from a customer settles their due, whereas money in from a supplier is a
+ * refund that increases what we owe them.
+ */
+export function creditTransactionType(party: PaymentParty, direction: PaymentDirection): 'PAYMENT' | 'PAYOUT' {
+    if (party === 'CUSTOMER') return direction === 'IN' ? 'PAYMENT' : 'PAYOUT';
+    return direction === 'OUT' ? 'PAYMENT' : 'PAYOUT';
+}
+
 export function groupBy<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
     const grouped = new Map<string, T[]>();
     for (const row of rows) {

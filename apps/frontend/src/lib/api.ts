@@ -284,6 +284,7 @@ export type ExternalSyncConnection = {
     store?: { id: string; name: string };
     document_prefix: string;
     enabled: boolean;
+    post_impacts: boolean;
     window_days: number;
     history_start_date: string | null;
     last_run_at: string | null;
@@ -292,14 +293,36 @@ export type ExternalSyncConnection = {
     nextWindowFrom: string;
 };
 
+export type ExternalSyncStep =
+    | 'MASTERS'
+    | 'SALES'
+    | 'PURCHASES'
+    | 'CUSTOMER_PAYMENTS'
+    | 'SUPPLIER_PAYMENTS'
+    | 'SALE_RETURNS';
+
 export type ExternalSyncRun = {
     id: string;
     trigger: 'MANUAL' | 'SCHEDULED';
-    status: 'RUNNING' | 'SUCCESS' | 'PARTIAL' | 'FAILED';
+    status: 'RUNNING' | 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'CANCELLED';
+    /** What the run is doing right now; null once finished. */
+    phase: string | null;
+    progress: { done: number; total: number; warnings: number } | null;
+    steps: ExternalSyncStep[] | null;
     window_from: string;
     window_to: string;
     dry_run: boolean;
-    stats: Record<'products' | 'customers' | 'suppliers' | 'sales' | 'purchases', ExternalSyncTally> | null;
+    stats: Record<
+        | 'products'
+        | 'customers'
+        | 'suppliers'
+        | 'sales'
+        | 'purchases'
+        | 'customerPayments'
+        | 'supplierPayments'
+        | 'saleReturns',
+        ExternalSyncTally
+    > | null;
     warnings: ExternalSyncWarning[] | null;
     error_message: string | null;
     started_at: string;
@@ -1665,6 +1688,7 @@ export const api = {
         storeId: string;
         documentPrefix?: string;
         enabled?: boolean;
+        postImpacts?: boolean;
         windowDays?: number;
         historyStartDate?: string;
     }): Promise<ExternalSyncConnection> => fetchWithAuth(`/admin/tenants/${tenantId}/external-sync`, {
@@ -1688,6 +1712,7 @@ export const api = {
         dateTo?: string;
         dryRun?: boolean;
         fullResync?: boolean;
+        steps?: ExternalSyncStep[];
     }): Promise<ExternalSyncRun> => fetchWithAuth(`/admin/tenants/${tenantId}/external-sync/runs`, {
         method: 'POST',
         body: JSON.stringify(data),
@@ -1695,6 +1720,8 @@ export const api = {
     }),
     listExternalSyncRuns: (tenantId: string, limit = 20): Promise<ExternalSyncRun[]> =>
         fetchWithAuth(`/admin/tenants/${tenantId}/external-sync/runs?limit=${limit}`),
+    cancelExternalSyncRun: (tenantId: string, runId: string): Promise<{ cancelling: boolean }> =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/external-sync/runs/${runId}/cancel`, { method: 'POST' }),
     suspendTenant: (tenantId: string, reason?: string) => fetchWithAuth(`/admin/tenants/${tenantId}/suspend`, {
         method: 'PATCH',
         body: JSON.stringify({ reason }),

@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsDateString, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class UpsertExternalSyncConnectionDto {
     @IsString()
@@ -33,6 +33,11 @@ export class UpsertExternalSyncConnectionDto {
     @IsBoolean()
     enabled?: boolean;
 
+    /** Make imported documents post to stock, party balances and the ledger. */
+    @IsOptional()
+    @IsBoolean()
+    postImpacts?: boolean;
+
     @IsOptional()
     @Type(() => Number)
     @IsInt()
@@ -65,6 +70,15 @@ export class RunExternalSyncDto {
     @IsOptional()
     @IsBoolean()
     fullResync?: boolean;
+
+    /**
+     * Which parts of the import to run. Omit for all of them; naming a subset
+     * lets a big migration be walked one step at a time.
+     */
+    @IsOptional()
+    @IsArray()
+    @IsString({ each: true })
+    steps?: string[];
 }
 
 export class ListExternalSyncRunsQueryDto {

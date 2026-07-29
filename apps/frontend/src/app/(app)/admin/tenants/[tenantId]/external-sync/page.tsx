@@ -6,7 +6,13 @@ import { AlertTriangle, CheckCircle2, Loader2, Play, PlugZap, RefreshCw, Trash2 
 import PageHeader from '@/components/ui/compact/PageHeader';
 import CompactSection from '@/components/ui/compact/CompactSection';
 import { PageShell, Button, Field, Input, Select, Checkbox, Alert, StatusBadge, ConfirmDialog } from '@/components/ui';
-import { api, type ExternalSyncConnection, type ExternalSyncRun, type ExternalSyncWarning } from '@/lib/api';
+import {
+    api,
+    type ExternalSyncConnection,
+    type ExternalSyncRun,
+    type ExternalSyncStep,
+    type ExternalSyncWarning,
+} from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { formatDate } from '@/lib/format';
 import { buildBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -14,6 +20,16 @@ import { buildBreadcrumbs } from '@/lib/page-breadcrumbs';
 type StoreOption = { id: string; name: string };
 
 const RUN_POLL_MS = 5000;
+
+/** Order matches the backend's SYNC_STEPS — returns must follow sales. */
+const STEPS: Array<{ key: ExternalSyncStep; label: string; hint: string }> = [
+    { key: 'MASTERS', label: 'Products, customers, suppliers', hint: 'Everything else references these' },
+    { key: 'SALES', label: 'Sales', hint: 'Needs products and customers' },
+    { key: 'PURCHASES', label: 'Purchases', hint: 'Needs products and suppliers' },
+    { key: 'CUSTOMER_PAYMENTS', label: 'Customer payments', hint: 'Needs customers' },
+    { key: 'SUPPLIER_PAYMENTS', label: 'Supplier payments', hint: 'Needs suppliers' },
+    { key: 'SALE_RETURNS', label: 'Sale returns', hint: 'Needs the parent sales already imported' },
+];
 
 /**
  * Platform-admin console for pulling a tenant's sales and purchase history out
@@ -40,6 +56,7 @@ export default function TenantExternalSyncPage() {
         windowDays: 90,
         historyStartDate: '',
         enabled: false,
+        postImpacts: false,
     });
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [isSaving, setIsSaving] = useState(false);
@@ -48,6 +65,8 @@ export default function TenantExternalSyncPage() {
     const [confirmDelete, setConfirmDelete] = useState(false);
 
     const [runForm, setRunForm] = useState({ dateFrom: '', dateTo: '', dryRun: true, fullResync: false });
+    const [selectedSteps, setSelectedSteps] = useState<ExternalSyncStep[]>(STEPS.map((s) => s.key));
+    const [isCancelling, setIsCancelling] = useState(false);
 
     const activeRun = useMemo(() => runs.find((run) => run.status === 'RUNNING') ?? null, [runs]);
 
@@ -84,6 +103,7 @@ export default function TenantExternalSyncPage() {
                     windowDays: existing.window_days,
                     historyStartDate: existing.history_start_date?.slice(0, 10) ?? '',
                     enabled: existing.enabled,
+                    postImpacts: existing.post_impacts,
                 });
             } else if (tenant?.stores?.length === 1) {
                 setForm((prev) => ({ ...prev, storeId: tenant.stores[0].id }));
@@ -131,6 +151,7 @@ export default function TenantExternalSyncPage() {
                 storeId: form.storeId,
                 documentPrefix: form.documentPrefix,
                 enabled: form.enabled,
+                postImpacts: form.postImpacts,
                 windowDays: Number(form.windowDays),
                 ...(form.historyStartDate ? { historyStartDate: form.historyStartDate } : {}),
             });
@@ -172,6 +193,7 @@ export default function TenantExternalSyncPage() {
                 ...(runForm.dateTo ? { dateTo: runForm.dateTo } : {}),
                 dryRun: runForm.dryRun,
                 fullResync: runForm.fullResync,
+                steps: selectedSteps,
             });
             toast.success(runForm.dryRun ? 'Dry run started' : 'Import started');
             await loadRuns();
@@ -179,6 +201,20 @@ export default function TenantExternalSyncPage() {
             toast.error(err instanceof Error ? err.message : 'Could not start the import');
         } finally {
             setIsStarting(false);
+        }
+    }
+
+    async function handleCancel() {
+        if (!activeRun) return;
+        setIsCancelling(true);
+        try {
+            await api.cancelExternalSyncRun(tenantId, activeRun.id);
+            toast.success('Stopping after the current step');
+            await loadRuns();
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Could not cancel the run');
+        } finally {
+            setIsCancelling(false);
         }
     }
 
@@ -303,7 +339,30 @@ export default function TenantExternalSyncPage() {
                             Run nightly (02:00) on the rolling window
                         </label>
                     </div>
+                    <div className="flex items-end">
+                        <label className="flex items-start gap-2 text-xs text-gray-700 max-md:min-h-touch">
+                            <Checkbox
+                                checked={form.postImpacts}
+                                onChange={(e) => setForm({ ...form, postImpacts: e.target.checked })}
+                            />
+                            <span>
+                                Post imported documents
+                                <span className="block text-gray-500">
+                                    Stock, party balances and dated ledger vouchers, as if entered here
+                                </span>
+                            </span>
+                        </label>
+                    </div>
                 </div>
+
+                {form.postImpacts ? (
+                    <Alert tone="warning" className="mt-3">
+                        Imported documents will move stock, customer and supplier balances, and post dated
+                        vouchers. Only enable this if the tenant has no opening balances covering the imported
+                        period — otherwise every imported document is counted twice. Posted documents also stop
+                        being updated by later re-pulls.
+                    </Alert>
+                ) : null}
 
                 {connection?.external_org_id ? (
                     <p className="text-xs text-gray-500 mt-3">
@@ -373,22 +432,71 @@ export default function TenantExternalSyncPage() {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2 mt-4">
+                    <div className="mt-4">
+                        <div className="flex items-center justify-between">
+                            <p className="text-xs font-medium text-gray-700">Steps to run</p>
+                            <div className="flex gap-3 text-xs">
+                                <button
+                                    type="button"
+                                    className="text-blue-600 hover:underline"
+                                    onClick={() => setSelectedSteps(STEPS.map((step) => step.key))}
+                                >
+                                    All
+                                </button>
+                                <button
+                                    type="button"
+                                    className="text-blue-600 hover:underline"
+                                    onClick={() => setSelectedSteps([])}
+                                >
+                                    None
+                                </button>
+                            </div>
+                        </div>
+                        <div className="grid gap-2 md:grid-cols-2 mt-2">
+                            {STEPS.map((step) => (
+                                <label
+                                    key={step.key}
+                                    className="flex items-start gap-2 text-xs text-gray-700 max-md:min-h-touch"
+                                >
+                                    <Checkbox
+                                        checked={selectedSteps.includes(step.key)}
+                                        onChange={(e) =>
+                                            setSelectedSteps((prev) =>
+                                                e.target.checked
+                                                    ? [...prev, step.key]
+                                                    : prev.filter((key) => key !== step.key),
+                                            )
+                                        }
+                                    />
+                                    <span>
+                                        {step.label}
+                                        <span className="block text-gray-500">{step.hint}</span>
+                                    </span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 mt-4">
                         <Button
                             icon={<Play className="w-3.5 h-3.5" />}
                             onClick={() => void handleRun()}
                             loading={isStarting}
-                            disabled={Boolean(activeRun)}
+                            disabled={Boolean(activeRun) || selectedSteps.length === 0}
                         >
                             {runForm.dryRun ? 'Start dry run' : 'Start import'}
                         </Button>
+                        {selectedSteps.length === 0 ? (
+                            <span className="text-xs text-gray-500">Pick at least one step</span>
+                        ) : null}
                         {activeRun ? (
-                            <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                An import is already running
-                            </span>
+                            <Button variant="secondary" onClick={() => void handleCancel()} loading={isCancelling}>
+                                Stop after current step
+                            </Button>
                         ) : null}
                     </div>
+
+                    {activeRun ? <RunProgress run={activeRun} /> : null}
                 </CompactSection>
             ) : null}
 
@@ -403,6 +511,8 @@ export default function TenantExternalSyncPage() {
                                     <th className="py-2 pr-3 font-medium">Window</th>
                                     <th className="py-2 pr-3 font-medium">Sales</th>
                                     <th className="py-2 pr-3 font-medium">Purchases</th>
+                                    <th className="py-2 pr-3 font-medium">Returns</th>
+                                    <th className="py-2 pr-3 font-medium">Payments</th>
                                     <th className="py-2 pr-3 font-medium">Masters</th>
                                     <th className="py-2 font-medium">Notes</th>
                                 </tr>
@@ -453,6 +563,8 @@ function RunRow({ run }: Readonly<{ run: ExternalSyncRun }>) {
                 </td>
                 <td className="py-2 pr-3">{formatTally(run, 'sales')}</td>
                 <td className="py-2 pr-3">{formatTally(run, 'purchases')}</td>
+                <td className="py-2 pr-3">{formatTally(run, 'saleReturns')}</td>
+                <td className="py-2 pr-3 text-gray-500">{formatPaymentTally(run)}</td>
                 <td className="py-2 pr-3 text-gray-500">
                     {run.stats
                         ? `${run.stats.products.created + run.stats.products.updated}p / ${
@@ -470,7 +582,7 @@ function RunRow({ run }: Readonly<{ run: ExternalSyncRun }>) {
             </tr>
             {showWarnings ? (
                 <tr>
-                    <td colSpan={7} className="py-2">
+                    <td colSpan={9} className="py-2">
                         <ul className="space-y-1 text-xs text-gray-600 bg-gray-50 rounded-md p-3">
                             {warnings.map((warning: ExternalSyncWarning, index: number) => (
                                 <li key={`${warning.entity}-${warning.externalId}-${index}`}>
@@ -519,7 +631,64 @@ function RunNote({
     return <span className="text-gray-400">—</span>;
 }
 
-function formatTally(run: ExternalSyncRun, key: 'sales' | 'purchases') {
+/**
+ * Live view of the run in flight. The run row is the only progress channel, so
+ * everything here comes from the poll.
+ */
+function RunProgress({ run }: { run: ExternalSyncRun }) {
+    const done = run.progress?.done ?? 0;
+    const total = run.progress?.total ?? 0;
+    const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+
+    return (
+        <div className="mt-4 rounded-lg border border-gray-100 p-3">
+            <div className="flex items-center justify-between text-xs">
+                <span className="inline-flex items-center gap-1.5 font-medium text-gray-700">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    {run.phase ?? 'Working'}
+                </span>
+                <span className="text-gray-500">
+                    {total > 0 ? `${done} / ${total} steps` : 'Starting'}
+                    {run.progress?.warnings ? ` · ${run.progress.warnings} warnings` : ''}
+                </span>
+            </div>
+
+            <div className="mt-2 h-1.5 w-full rounded-full bg-gray-100">
+                <div className="h-1.5 rounded-full bg-blue-600 transition-all" style={{ width: `${pct}%` }} />
+            </div>
+
+            {run.stats ? (
+                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600 md:grid-cols-4">
+                    {(
+                        [
+                            ['Products', 'products'],
+                            ['Customers', 'customers'],
+                            ['Suppliers', 'suppliers'],
+                            ['Sales', 'sales'],
+                            ['Purchases', 'purchases'],
+                            ['Returns', 'saleReturns'],
+                            ['Cust. payments', 'customerPayments'],
+                            ['Supp. payments', 'supplierPayments'],
+                        ] as const
+                    ).map(([label, key]) => {
+                        const tally = run.stats?.[key];
+                        if (!tally) return null;
+                        const touched = tally.created + tally.updated;
+                        if (touched === 0 && tally.skipped === 0) return null;
+                        return (
+                            <span key={key}>
+                                {label}: <span className="font-medium text-gray-800">{touched}</span>
+                                {tally.skipped > 0 ? ` (${tally.skipped} skipped)` : ''}
+                            </span>
+                        );
+                    })}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+function formatTally(run: ExternalSyncRun, key: 'sales' | 'purchases' | 'saleReturns') {
     const tally = run.stats?.[key];
     if (!tally) return '—';
     const parts = [`${tally.created} new`, `${tally.updated} updated`];
@@ -527,9 +696,24 @@ function formatTally(run: ExternalSyncRun, key: 'sales' | 'purchases') {
     return parts.join(', ');
 }
 
+/** Customer and supplier payments share a column: "12 in / 3 out". */
+function formatPaymentTally(run: ExternalSyncRun) {
+    const customer = run.stats?.customerPayments;
+    const supplier = run.stats?.supplierPayments;
+    if (!customer && !supplier) return '—';
+
+    const total = (tally?: { created: number; updated: number }) =>
+        tally ? tally.created + tally.updated : 0;
+    const skipped = (customer?.skipped ?? 0) + (supplier?.skipped ?? 0);
+
+    const label = `${total(customer)} in / ${total(supplier)} out`;
+    return skipped > 0 ? `${label} (${skipped} skipped)` : label;
+}
+
 function toneForStatus(status: ExternalSyncRun['status']) {
     if (status === 'SUCCESS') return 'success' as const;
     if (status === 'FAILED') return 'danger' as const;
     if (status === 'PARTIAL') return 'warning' as const;
+    if (status === 'CANCELLED') return 'warning' as const;
     return 'neutral' as const;
 }

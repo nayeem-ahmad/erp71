@@ -14,18 +14,31 @@ import {
 } from './express-retail.client';
 import {
     DateWindow,
+    MappedPayment,
     MappedPurchase,
     MappedSale,
+    MappedSaleReturn,
+    PaymentParty,
     SyncWarning,
+    creditTransactionType,
     groupBy,
     mapCustomer,
+    mapPayment,
     mapProduct,
     mapPurchase,
     mapSale,
+    mapSaleReturn,
     mapSupplier,
     splitIntoMonthlyWindows,
     toDateString,
 } from './external-sync.mapper';
+import {
+    applyPaymentImpacts,
+    applyPurchaseImpacts,
+    applySaleImpacts,
+    applySaleReturnImpacts,
+    isAlreadyPosted,
+} from './external-sync.impacts';
 import {
     ListExternalSyncRunsQueryDto,
     RunExternalSyncDto,
@@ -33,7 +46,15 @@ import {
     UpsertExternalSyncConnectionDto,
 } from './external-sync.dto';
 
-type EntityType = 'PRODUCT' | 'CUSTOMER' | 'SUPPLIER' | 'SALE' | 'PURCHASE';
+type EntityType =
+    | 'PRODUCT'
+    | 'CUSTOMER'
+    | 'SUPPLIER'
+    | 'SALE'
+    | 'PURCHASE'
+    | 'CUSTOMER_PAYMENT'
+    | 'SUPPLIER_PAYMENT'
+    | 'SALE_RETURN';
 
 interface EntityTally {
     created: number;
@@ -41,25 +62,78 @@ interface EntityTally {
     skipped: number;
 }
 
-type SyncStats = Record<'products' | 'customers' | 'suppliers' | 'sales' | 'purchases', EntityTally>;
+type SyncStats = Record<
+    | 'products'
+    | 'customers'
+    | 'suppliers'
+    | 'sales'
+    | 'purchases'
+    | 'customerPayments'
+    | 'supplierPayments'
+    | 'saleReturns',
+    EntityTally
+>;
 
 /** Warnings are stored on the run row; cap them so one bad import cannot bloat it. */
 const MAX_STORED_WARNINGS = 500;
 
 /**
+ * The import is divided into steps so it can be run a piece at a time — a
+ * failed sales pull can be retried without re-fetching 1,200 products, and a
+ * first migration can be walked through one step at a time instead of being one
+ * opaque operation.
+ *
+ * Steps are independent because every cross-reference is resolved through the
+ * mapping table rather than through whatever the current run happened to
+ * import: running SALES alone still resolves products and customers imported by
+ * an earlier MASTERS run.
+ */
+export const SYNC_STEPS = [
+    'MASTERS',
+    'SALES',
+    'PURCHASES',
+    'CUSTOMER_PAYMENTS',
+    'SUPPLIER_PAYMENTS',
+    'SALE_RETURNS',
+] as const;
+
+export type SyncStep = (typeof SYNC_STEPS)[number];
+
+/** How often the run row is rewritten while working, in chunks. */
+const PROGRESS_EVERY_CHUNK = 1;
+
+/** Thrown to unwind a run that the operator stopped; not a failure. */
+class RunCancelledError extends Error {
+    constructor() {
+        super('Run cancelled');
+    }
+}
+
+/**
  * Platform-admin driven import of sales/purchase history from a third-party
  * ERP into one of our tenants.
  *
- * Deliberate scope limits — an import writes documents and master data only:
+ * What an import *does* depends on the connection's `post_impacts` flag, and
+ * the two modes are each internally consistent.
  *
- *  - No inventory movements or stock adjustments. Replaying historical sales
- *    as stock movements would fight whatever opening stock the tenant sets up,
- *    and there is no way to reconcile the two automatically. Stock is a
- *    separate opening-balance exercise.
- *  - No accounting journal entries and no PaymentRecord rows. Purchases and
- *    sales carry their paid amounts, but posting them to the ledger would
- *    double-count against the tenant's own opening balances.
- *  - No customer/supplier due-balance recomputation, for the same reason.
+ * Off (the default) it writes documents and master data only. No stock
+ * movements, no ledger postings, no due-balance changes — for any document
+ * type. That is a coherent position rather than an unfinished one: the tenant's
+ * own opening balances carry the money, and imported documents are history you
+ * can look up. It is also why imported payments must not move `due_balance`
+ * either — imported sales never raised it, so letting payments lower it would
+ * drive every party negative by its own payment history.
+ *
+ * On, every imported document produces what a natively entered one would:
+ * stock movements, party due balances and dated ledger vouchers, all stamped
+ * with the document's own date so a replayed history lands in the right
+ * periods. See external-sync.impacts.ts.
+ *
+ * Turning it on double-counts unless the tenant has no opening balances
+ * covering the imported range, so it is a deliberate per-connection decision.
+ * It also makes posted documents immutable: a later re-pull will not rewrite a
+ * document whose voucher and stock movement have already landed, and says so
+ * in the run warnings instead.
  */
 @Injectable()
 export class ExternalSyncService {
@@ -107,6 +181,7 @@ export class ExternalSyncService {
             store_id: dto.storeId,
             document_prefix: dto.documentPrefix ?? existing?.document_prefix ?? 'XR-',
             enabled: dto.enabled ?? existing?.enabled ?? false,
+            post_impacts: dto.postImpacts ?? existing?.post_impacts ?? false,
             window_days: dto.windowDays ?? existing?.window_days ?? 90,
             history_start_date: dto.historyStartDate
                 ? new Date(dto.historyStartDate)
@@ -202,6 +277,7 @@ export class ExternalSyncService {
         }
 
         const { from, to } = this.resolveWindow(connection, dto);
+        const steps = this.resolveSteps(dto.steps);
 
         const run = await this.db.externalSyncRun.create({
             data: {
@@ -209,6 +285,8 @@ export class ExternalSyncService {
                 connection_id: connection.id,
                 trigger,
                 status: 'RUNNING',
+                phase: 'Starting',
+                steps: steps as any,
                 window_from: from,
                 window_to: to,
                 dry_run: dto.dryRun ?? false,
@@ -217,11 +295,24 @@ export class ExternalSyncService {
         });
 
         // Intentionally not awaited — the run row is the progress channel.
-        void this.executeRun(run.id, connection.id, { from, to }, dto.dryRun ?? false).catch((error) => {
+        void this.executeRun(run.id, connection.id, { from, to }, dto.dryRun ?? false, steps).catch((error) => {
             this.logger.error(`External sync run ${run.id} crashed: ${error?.message ?? error}`, error?.stack);
         });
 
         return run;
+    }
+
+    /** Defaults to the whole import; rejects anything not a known step. */
+    private resolveSteps(requested?: string[]): SyncStep[] {
+        if (!requested?.length) return [...SYNC_STEPS];
+
+        const unknown = requested.filter((step) => !SYNC_STEPS.includes(step as SyncStep));
+        if (unknown.length) {
+            throw new BadRequestException(`Unknown import step(s): ${unknown.join(', ')}`);
+        }
+        // Keep canonical order regardless of how they were listed — returns
+        // must still run after sales.
+        return SYNC_STEPS.filter((step) => requested.includes(step));
     }
 
     private resolveWindow(
@@ -253,13 +344,22 @@ export class ExternalSyncService {
 
     // ------------------------------------------------------------- execution
 
-    private async executeRun(runId: string, connectionId: string, window: { from: Date; to: Date }, dryRun: boolean) {
+    private async executeRun(
+        runId: string,
+        connectionId: string,
+        window: { from: Date; to: Date },
+        dryRun: boolean,
+        steps: SyncStep[],
+    ) {
         const stats: SyncStats = {
             products: emptyTally(),
             customers: emptyTally(),
             suppliers: emptyTally(),
             sales: emptyTally(),
             purchases: emptyTally(),
+            customerPayments: emptyTally(),
+            supplierPayments: emptyTally(),
+            saleReturns: emptyTally(),
         };
         const warnings: SyncWarning[] = [];
 
@@ -294,13 +394,67 @@ export class ExternalSyncService {
                 });
             }
 
-            const productMap = await this.syncProducts(connection, client, stats, warnings, dryRun);
-            const customerMap = await this.syncCustomers(connection, client, stats, warnings, dryRun);
-            const supplierMap = await this.syncSuppliers(connection, client, stats, warnings, dryRun);
+            const chunks = splitIntoMonthlyWindows(window.from, window.to);
+            const windowedSteps = steps.filter((step) => step !== 'MASTERS');
+            // One unit of work per master step plus one per chunk of each
+            // windowed step, so the progress fraction means something.
+            const totalUnits = (steps.includes('MASTERS') ? 1 : 0) + windowedSteps.length * chunks.length;
+            let doneUnits = 0;
 
-            for (const chunk of splitIntoMonthlyWindows(window.from, window.to)) {
-                await this.syncSalesWindow(connection, client, chunk, productMap, customerMap, stats, warnings, dryRun);
-                await this.syncPurchasesWindow(connection, client, chunk, productMap, supplierMap, stats, warnings, dryRun);
+            const tick = async (phase: string) => {
+                doneUnits += PROGRESS_EVERY_CHUNK;
+                await this.writeProgress(runId, phase, stats, warnings, doneUnits, totalUnits);
+            };
+
+            if (steps.includes('MASTERS')) {
+                await this.writeProgress(runId, 'Products, customers and suppliers', stats, warnings, doneUnits, totalUnits);
+                await this.syncProducts(connection, client, stats, warnings, dryRun);
+                await this.syncCustomers(connection, client, stats, warnings, dryRun);
+                await this.syncSuppliers(connection, client, stats, warnings, dryRun);
+                await tick('Products, customers and suppliers');
+            }
+
+            // Cross-references come from the mapping table, not from this run,
+            // so a step works whether or not MASTERS ran alongside it.
+            const productMap = await this.loadMappings(connection.id, 'PRODUCT');
+            const customerMap = await this.loadMappings(connection.id, 'CUSTOMER');
+            const supplierMap = await this.loadMappings(connection.id, 'SUPPLIER');
+
+            for (const chunk of chunks) {
+                const label = `${chunk.from.slice(0, 7)}`;
+
+                if (steps.includes('SALES')) {
+                    await this.assertNotCancelled(runId);
+                    await this.syncSalesWindow(connection, client, chunk, productMap, customerMap, stats, warnings, dryRun);
+                    await tick(`Sales ${label}`);
+                }
+                if (steps.includes('PURCHASES')) {
+                    await this.assertNotCancelled(runId);
+                    await this.syncPurchasesWindow(connection, client, chunk, productMap, supplierMap, stats, warnings, dryRun);
+                    await tick(`Purchases ${label}`);
+                }
+                if (steps.includes('CUSTOMER_PAYMENTS')) {
+                    await this.assertNotCancelled(runId);
+                    await this.syncPaymentsWindow(connection, client, chunk, 'CUSTOMER', customerMap, stats, warnings, dryRun);
+                    await tick(`Customer payments ${label}`);
+                }
+                if (steps.includes('SUPPLIER_PAYMENTS')) {
+                    await this.assertNotCancelled(runId);
+                    await this.syncPaymentsWindow(connection, client, chunk, 'SUPPLIER', supplierMap, stats, warnings, dryRun);
+                    await tick(`Supplier payments ${label}`);
+                }
+            }
+
+            // Returns run only once every sale in the range exists, because a
+            // return's parent is usually months older than the return itself
+            // and may live in an earlier chunk of this same run.
+            if (steps.includes('SALE_RETURNS')) {
+                const saleMap = await this.loadMappings(connection.id, 'SALE');
+                for (const chunk of chunks) {
+                    await this.assertNotCancelled(runId);
+                    await this.syncSaleReturnsWindow(connection, client, chunk, productMap, saleMap, stats, warnings, dryRun);
+                    await tick(`Sale returns ${chunk.from.slice(0, 7)}`);
+                }
             }
 
             const status = warnings.length > 0 ? 'PARTIAL' : 'SUCCESS';
@@ -308,6 +462,7 @@ export class ExternalSyncService {
                 where: { id: runId },
                 data: {
                     status,
+                    phase: null,
                     stats: stats as any,
                     warnings: warnings.slice(0, MAX_STORED_WARNINGS) as any,
                     finished_at: new Date(),
@@ -320,17 +475,71 @@ export class ExternalSyncService {
                 });
             }
         } catch (error: any) {
+            const cancelled = error instanceof RunCancelledError;
             await this.db.externalSyncRun.update({
                 where: { id: runId },
                 data: {
-                    status: 'FAILED',
+                    status: cancelled ? 'CANCELLED' : 'FAILED',
+                    phase: null,
+                    // Whatever completed before the stop is real and worth
+                    // keeping — the mapping table already holds those rows.
                     stats: stats as any,
                     warnings: warnings.slice(0, MAX_STORED_WARNINGS) as any,
-                    error_message: String(error?.message ?? error).slice(0, 2000),
+                    ...(cancelled ? {} : { error_message: String(error?.message ?? error).slice(0, 2000) }),
                     finished_at: new Date(),
                 },
             });
         }
+    }
+
+    /**
+     * Rewrites the run row mid-flight. The admin page polls this row, so
+     * without it a multi-minute import shows nothing until it ends — and a
+     * crash would take its counters with it.
+     */
+    private async writeProgress(
+        runId: string,
+        phase: string,
+        stats: SyncStats,
+        warnings: SyncWarning[],
+        done: number,
+        total: number,
+    ) {
+        await this.db.externalSyncRun.update({
+            where: { id: runId },
+            data: {
+                phase,
+                progress: { done, total, warnings: warnings.length } as any,
+                stats: stats as any,
+                warnings: warnings.slice(0, MAX_STORED_WARNINGS) as any,
+            },
+        });
+    }
+
+    /** Checked between chunks so a long run can be stopped without a restart. */
+    private async assertNotCancelled(runId: string) {
+        const run = await this.db.externalSyncRun.findUnique({
+            where: { id: runId },
+            select: { cancel_requested: true },
+        });
+        if (run?.cancel_requested) throw new RunCancelledError();
+    }
+
+    async cancelRun(tenantId: string, runId: string) {
+        const run = await this.db.externalSyncRun.findFirst({
+            where: { id: runId, tenant_id: tenantId },
+            select: { id: true, status: true },
+        });
+        if (!run) throw new NotFoundException('Run not found');
+        if (run.status !== 'RUNNING') {
+            throw new BadRequestException(`Run is already ${run.status.toLowerCase()}`);
+        }
+
+        await this.db.externalSyncRun.update({
+            where: { id: runId },
+            data: { cancel_requested: true },
+        });
+        return { cancelling: true };
     }
 
     // --------------------------------------------------------- master data
@@ -562,7 +771,7 @@ export class ExternalSyncService {
     // ------------------------------------------------------------ documents
 
     private async syncSalesWindow(
-        connection: { id: string; tenant_id: string; store_id: string; document_prefix: string },
+        connection: { id: string; tenant_id: string; store_id: string; document_prefix: string; post_impacts: boolean },
         client: ExpressRetailClient,
         window: DateWindow,
         productMap: Map<string, string>,
@@ -584,7 +793,11 @@ export class ExternalSyncService {
 
             try {
                 const created = await this.writeSale(connection, mapped, productMap, customerMap, saleMap, warnings);
-                created ? stats.sales.created++ : stats.sales.updated++;
+                if (created === null) {
+                    stats.sales.skipped++;
+                } else {
+                    created ? stats.sales.created++ : stats.sales.updated++;
+                }
             } catch (error: any) {
                 stats.sales.skipped++;
                 warnings.push({
@@ -597,14 +810,351 @@ export class ExternalSyncService {
         }
     }
 
+    /**
+     * Sale returns, which unlike sales carry their line items inline.
+     *
+     * A return is meaningless without its parent: `SalesReturn.sale_id` is
+     * required and each line points at a specific `SaleItem`, not just a
+     * product. Both have to resolve or the return is skipped whole — a return
+     * whose header total no longer matches its lines would misstate refunds
+     * more quietly than a skip does.
+     *
+     * Parents routinely fall outside the window (returns here run 1–3 months
+     * behind their sale), so on a rolling window some returns will always skip
+     * until a full-history resync has imported their sale.
+     */
+    private async syncSaleReturnsWindow(
+        connection: { id: string; tenant_id: string; store_id: string; document_prefix: string; post_impacts: boolean },
+        client: ExpressRetailClient,
+        window: DateWindow,
+        productMap: Map<string, string>,
+        saleMap: Map<string, string>,
+        stats: SyncStats,
+        warnings: SyncWarning[],
+        dryRun: boolean,
+    ) {
+        const rows = await client.fetchSaleReturns(window);
+        const returnMap = await this.loadMappings(connection.id, 'SALE_RETURN');
+
+        for (const row of rows) {
+            const mapped = mapSaleReturn(row, connection.document_prefix, warnings);
+
+            const saleId = mapped.externalSaleId ? saleMap.get(mapped.externalSaleId) : undefined;
+            if (!saleId) {
+                stats.saleReturns.skipped++;
+                warnings.push({
+                    entity: 'SALE_RETURN',
+                    externalId: mapped.externalId,
+                    code: 'PARENT_SALE_UNRESOLVED',
+                    message:
+                        `Return ${row.invoice} belongs to sale ${mapped.externalSaleId ?? '(none)'}, which has not been imported ` +
+                        '— run a full-history resync so the parent sale exists, then re-run',
+                });
+                continue;
+            }
+
+            if (dryRun) {
+                returnMap.has(mapped.externalId) ? stats.saleReturns.updated++ : stats.saleReturns.created++;
+                continue;
+            }
+
+            try {
+                const created = await this.writeSaleReturn(connection, mapped, saleId, productMap, returnMap, warnings);
+                if (created === null) {
+                    stats.saleReturns.skipped++;
+                } else {
+                    created ? stats.saleReturns.created++ : stats.saleReturns.updated++;
+                }
+            } catch (error: any) {
+                stats.saleReturns.skipped++;
+                warnings.push({
+                    entity: 'SALE_RETURN',
+                    externalId: mapped.externalId,
+                    code: 'WRITE_FAILED',
+                    message: `Return ${row.invoice} could not be imported: ${error?.message ?? error}`,
+                });
+            }
+        }
+    }
+
+    /** Returns null when the return had to be skipped for integrity reasons. */
+    private async writeSaleReturn(
+        connection: { id: string; tenant_id: string; store_id: string; post_impacts: boolean },
+        mapped: MappedSaleReturn,
+        saleId: string,
+        productMap: Map<string, string>,
+        returnMap: Map<string, string>,
+        warnings: SyncWarning[],
+    ): Promise<boolean | null> {
+        // Each return line must name a line of the parent sale. Match on
+        // product, consuming each sale line once so two return lines for the
+        // same product cannot both claim it.
+        const saleItems = await this.db.saleItem.findMany({
+            where: { sale_id: saleId },
+            select: { id: true, product_id: true },
+        });
+        const availableByProduct = new Map<string, string[]>();
+        for (const item of saleItems) {
+            const list = availableByProduct.get(item.product_id) ?? [];
+            list.push(item.id);
+            availableByProduct.set(item.product_id, list);
+        }
+
+        const items: Array<{ sale_item_id: string; product_id: string; quantity: number; refund_amount: number }> = [];
+        for (const line of mapped.items) {
+            const productId = productMap.get(line.externalProductId);
+            const saleItemId = productId ? availableByProduct.get(productId)?.shift() : undefined;
+            if (!productId || !saleItemId) {
+                warnings.push({
+                    entity: 'SALE_RETURN',
+                    externalId: mapped.externalId,
+                    code: 'RETURN_LINE_UNMATCHED',
+                    message:
+                        `Return ${mapped.returnNumber}: provider product ${line.externalProductId} is not on the parent sale ` +
+                        '— the whole return was skipped rather than import a refund whose lines do not add up',
+                });
+                return null;
+            }
+            items.push({
+                sale_item_id: saleItemId,
+                product_id: productId,
+                quantity: line.quantity,
+                refund_amount: line.refundAmount,
+            });
+        }
+
+        const header = {
+            reference_number: mapped.referenceNumber,
+            total_refund: mapped.totalRefund,
+            reason: mapped.reason,
+        };
+
+        const existingId = returnMap.get(mapped.externalId);
+
+        if (existingId) {
+            if (await this.isImmutablyPosted(connection, 'sale_return', existingId)) {
+                warnings.push({
+                    entity: 'SALE_RETURN',
+                    externalId: mapped.externalId,
+                    code: 'POSTED_IMMUTABLE',
+                    message:
+                        `Return ${mapped.returnNumber} has already posted to the ledger — upstream changes were not applied. ` +
+                        'Rewriting a posted return would leave its voucher and restock movement describing different figures.',
+                });
+                return null;
+            }
+
+            await this.db.$transaction(async (tx) => {
+                await tx.salesReturn.update({ where: { id: existingId }, data: header });
+                await tx.salesReturnItem.deleteMany({ where: { return_id: existingId } });
+                if (items.length > 0) {
+                    await tx.salesReturnItem.createMany({
+                        data: items.map((item) => ({ ...item, return_id: existingId })),
+                    });
+                }
+            });
+            return false;
+        }
+
+        const created = await this.db.$transaction(async (tx) => {
+            const row = await tx.salesReturn.create({
+                data: {
+                    tenant_id: connection.tenant_id,
+                    store_id: connection.store_id,
+                    sale_id: saleId,
+                    return_number: mapped.returnNumber,
+                    status: 'COMPLETED',
+                    created_at: mapped.returnDate,
+                    ...header,
+                    items: { create: items },
+                },
+                select: { id: true },
+            });
+
+            if (connection.post_impacts) {
+                await applySaleReturnImpacts({
+                    tx,
+                    tenantId: connection.tenant_id,
+                    storeId: connection.store_id,
+                    returnId: row.id,
+                    returnNumber: mapped.returnNumber,
+                    totalRefund: mapped.totalRefund,
+                    returnDate: mapped.returnDate,
+                    items,
+                });
+            }
+
+            return row;
+        });
+
+        await this.writeMapping(connection, 'SALE_RETURN', mapped.externalId, created.id, mapped.externalUpdatedAt);
+        returnMap.set(mapped.externalId, created.id);
+        return true;
+    }
+
+    /**
+     * Customer and supplier payments share one path — the two provider
+     * endpoints, our two credit-transaction models and the party lookups differ
+     * only by which side we are on.
+     */
+    private async syncPaymentsWindow(
+        connection: { id: string; tenant_id: string; document_prefix: string; post_impacts: boolean },
+        client: ExpressRetailClient,
+        window: DateWindow,
+        party: PaymentParty,
+        partyMap: Map<string, string>,
+        stats: SyncStats,
+        warnings: SyncWarning[],
+        dryRun: boolean,
+    ) {
+        const isCustomer = party === 'CUSTOMER';
+        const entity: EntityType = isCustomer ? 'CUSTOMER_PAYMENT' : 'SUPPLIER_PAYMENT';
+        const tally = isCustomer ? stats.customerPayments : stats.supplierPayments;
+
+        const rows = isCustomer
+            ? await client.fetchCustomerPayments(window)
+            : await client.fetchSupplierPayments(window);
+        const paymentMap = await this.loadMappings(connection.id, entity);
+
+        for (const row of rows) {
+            const mapped = mapPayment(row, party, connection.document_prefix, warnings);
+            if (!mapped) {
+                tally.skipped++;
+                continue;
+            }
+
+            // A credit transaction cannot exist without its party, so an
+            // unresolved id is a skip rather than a partial write.
+            const partyId = mapped.externalPartyId ? partyMap.get(mapped.externalPartyId) : undefined;
+            if (!partyId) {
+                tally.skipped++;
+                warnings.push({
+                    entity,
+                    externalId: mapped.externalId,
+                    code: 'PARTY_UNRESOLVED',
+                    message: `Payment ${row.invoice} references ${party.toLowerCase()} ${mapped.externalPartyId ?? '(none)'}, which is not in the imported list — skipped`,
+                });
+                continue;
+            }
+
+            if (dryRun) {
+                paymentMap.has(mapped.externalId) ? tally.updated++ : tally.created++;
+                continue;
+            }
+
+            try {
+                const created = await this.writePayment(connection, party, mapped, partyId, paymentMap, warnings);
+                if (created === null) {
+                    tally.skipped++;
+                } else {
+                    created ? tally.created++ : tally.updated++;
+                }
+            } catch (error: any) {
+                tally.skipped++;
+                warnings.push({
+                    entity,
+                    externalId: mapped.externalId,
+                    code: 'WRITE_FAILED',
+                    message: `Payment ${row.invoice} could not be imported: ${error?.message ?? error}`,
+                });
+            }
+        }
+    }
+
+    private async writePayment(
+        connection: { id: string; tenant_id: string; post_impacts: boolean },
+        party: PaymentParty,
+        mapped: MappedPayment,
+        partyId: string,
+        paymentMap: Map<string, string>,
+        warnings: SyncWarning[],
+    ): Promise<boolean | null> {
+        const isCustomer = party === 'CUSTOMER';
+        const entity: EntityType = isCustomer ? 'CUSTOMER_PAYMENT' : 'SUPPLIER_PAYMENT';
+        const type = creditTransactionType(party, mapped.direction);
+
+        // `balance_after` is required, but this importer does not maintain
+        // due_balance (see the scope limits on the class), so there is no running
+        // balance of ours to record. Where the provider tells us the party's due
+        // before the payment we carry its own figure forward; otherwise — every
+        // supplier row, which has no previous_due — we store 0 rather than invent
+        // a number. Either way it is the source system's view, not ours.
+        const balanceAfter = mapped.previousDue != null
+            ? (type === 'PAYMENT' ? mapped.previousDue - mapped.amount : mapped.previousDue + mapped.amount)
+            : 0;
+
+        const data = {
+            type,
+            amount: mapped.amount,
+            balance_after: balanceAfter,
+            payment_number: mapped.paymentNumber,
+            notes: mapped.note,
+            created_at: mapped.date,
+        };
+
+        const existingId = paymentMap.get(mapped.externalId);
+        const eventType = isCustomer ? 'customer_payment' : 'supplier_payment';
+
+        if (existingId) {
+            if (await this.isImmutablyPosted(connection, eventType, existingId)) {
+                warnings.push({
+                    entity,
+                    externalId: mapped.externalId,
+                    code: 'POSTED_IMMUTABLE',
+                    message:
+                        `Payment ${mapped.paymentNumber} has already posted to the ledger — upstream changes were not applied. ` +
+                        'Rewriting it would leave the voucher and the party balance describing different figures.',
+                });
+                return null;
+            }
+
+            const table: any = isCustomer ? this.db.customerCreditTransaction : this.db.supplierCreditTransaction;
+            await table.update({ where: { id: existingId }, data });
+            return false;
+        }
+
+        const created = await this.db.$transaction(async (tx) => {
+            const table: any = isCustomer ? tx.customerCreditTransaction : tx.supplierCreditTransaction;
+            const row = await table.create({
+                data: {
+                    ...data,
+                    tenant_id: connection.tenant_id,
+                    ...(isCustomer ? { customer_id: partyId } : { supplier_id: partyId }),
+                },
+                select: { id: true },
+            });
+
+            if (connection.post_impacts) {
+                await applyPaymentImpacts({
+                    tx,
+                    tenantId: connection.tenant_id,
+                    party,
+                    partyId,
+                    transactionId: row.id,
+                    paymentNumber: mapped.paymentNumber,
+                    type,
+                    amount: mapped.amount,
+                    method: mapped.method ?? 'cash',
+                    date: mapped.date,
+                });
+            }
+
+            return row;
+        });
+
+        await this.writeMapping(connection, entity, mapped.externalId, created.id, mapped.externalUpdatedAt);
+        paymentMap.set(mapped.externalId, created.id);
+        return true;
+    }
+
     private async writeSale(
-        connection: { id: string; tenant_id: string; store_id: string },
+        connection: { id: string; tenant_id: string; store_id: string; post_impacts: boolean },
         mapped: MappedSale,
         productMap: Map<string, string>,
         customerMap: Map<string, string>,
         saleMap: Map<string, string>,
         warnings: SyncWarning[],
-    ): Promise<boolean> {
+    ): Promise<boolean | null> {
         const customerId = mapped.externalCustomerId ? customerMap.get(mapped.externalCustomerId) ?? null : null;
         if (mapped.externalCustomerId && !customerId) {
             warnings.push({
@@ -630,8 +1180,26 @@ export class ExternalSyncService {
         }));
 
         const existingId = saleMap.get(mapped.externalId);
+        const referenceNumber = await this.resolveSaleReference(
+            connection.tenant_id,
+            mapped,
+            existingId ?? null,
+            warnings,
+        );
 
         if (existingId) {
+            if (await this.isImmutablyPosted(connection, 'sale', existingId)) {
+                warnings.push({
+                    entity: 'SALE',
+                    externalId: mapped.externalId,
+                    code: 'POSTED_IMMUTABLE',
+                    message:
+                        `Sale ${mapped.serialNumber} has already posted to the ledger — upstream changes were not applied. ` +
+                        'Rewriting a posted document would leave its voucher and stock movement describing different figures.',
+                });
+                return null;
+            }
+
             await this.db.$transaction(async (tx) => {
                 await tx.sale.update({
                     where: { id: existingId },
@@ -641,6 +1209,7 @@ export class ExternalSyncService {
                         sale_date: mapped.saleDate,
                         note: mapped.note,
                         customer_id: customerId,
+                        reference_number: referenceNumber,
                     },
                 });
 
@@ -666,20 +1235,41 @@ export class ExternalSyncService {
             return false;
         }
 
-        const sale = await this.db.sale.create({
-            data: {
-                tenant_id: connection.tenant_id,
-                store_id: connection.store_id,
-                serial_number: mapped.serialNumber,
-                total_amount: mapped.totalAmount,
-                amount_paid: mapped.amountPaid,
-                status: 'COMPLETED',
-                sale_date: mapped.saleDate,
-                note: mapped.note,
-                customer_id: customerId,
-                items: { create: items },
-            },
-            select: { id: true },
+        const sale = await this.db.$transaction(async (tx) => {
+            const created = await tx.sale.create({
+                data: {
+                    tenant_id: connection.tenant_id,
+                    store_id: connection.store_id,
+                    serial_number: mapped.serialNumber,
+                    reference_number: referenceNumber,
+                    total_amount: mapped.totalAmount,
+                    amount_paid: mapped.amountPaid,
+                    status: 'COMPLETED',
+                    sale_date: mapped.saleDate,
+                    note: mapped.note,
+                    customer_id: customerId,
+                    items: { create: items },
+                },
+                select: { id: true },
+            });
+
+            if (connection.post_impacts) {
+                await applySaleImpacts({
+                    tx,
+                    tenantId: connection.tenant_id,
+                    storeId: connection.store_id,
+                    saleId: created.id,
+                    serialNumber: mapped.serialNumber,
+                    customerId,
+                    totalAmount: mapped.totalAmount,
+                    amountPaid: mapped.amountPaid,
+                    paymentMode: mapped.paymentMode,
+                    saleDate: mapped.saleDate,
+                    items,
+                });
+            }
+
+            return created;
         });
 
         await this.writeMapping(connection, 'SALE', mapped.externalId, sale.id, mapped.externalUpdatedAt);
@@ -687,8 +1277,47 @@ export class ExternalSyncService {
         return true;
     }
 
+    /**
+     * The provider's transaction number goes into `reference_number` so the
+     * original number stays searchable, while `serial_number` keeps its import
+     * prefix and can never collide with our own numbering.
+     *
+     * `Sale.reference_number` is unique per tenant though, and the provider's
+     * number can already be in use by a natively entered sale. That must not
+     * fail the run, so a clash drops the reference and warns instead. (The
+     * check is not race-proof against a sale created in the same instant, but
+     * only one import runs per connection at a time and these are historical
+     * documents.)
+     */
+    private async resolveSaleReference(
+        tenantId: string,
+        mapped: MappedSale,
+        existingSaleId: string | null,
+        warnings: SyncWarning[],
+    ): Promise<string | null> {
+        if (!mapped.referenceNumber) return null;
+
+        const clash = await this.db.sale.findFirst({
+            where: {
+                tenant_id: tenantId,
+                reference_number: mapped.referenceNumber,
+                ...(existingSaleId ? { id: { not: existingSaleId } } : {}),
+            },
+            select: { id: true },
+        });
+        if (!clash) return mapped.referenceNumber;
+
+        warnings.push({
+            entity: 'SALE',
+            externalId: mapped.externalId,
+            code: 'REFERENCE_TAKEN',
+            message: `Sale ${mapped.serialNumber}: reference ${mapped.referenceNumber} is already used by another sale — imported without a reference`,
+        });
+        return null;
+    }
+
     private async syncPurchasesWindow(
-        connection: { id: string; tenant_id: string; store_id: string; document_prefix: string },
+        connection: { id: string; tenant_id: string; store_id: string; document_prefix: string; post_impacts: boolean },
         client: ExpressRetailClient,
         window: DateWindow,
         productMap: Map<string, string>,
@@ -715,7 +1344,11 @@ export class ExternalSyncService {
 
             try {
                 const created = await this.writePurchase(connection, mapped, productMap, supplierMap, purchaseMap, warnings);
-                created ? stats.purchases.created++ : stats.purchases.updated++;
+                if (created === null) {
+                    stats.purchases.skipped++;
+                } else {
+                    created ? stats.purchases.created++ : stats.purchases.updated++;
+                }
             } catch (error: any) {
                 stats.purchases.skipped++;
                 warnings.push({
@@ -729,13 +1362,13 @@ export class ExternalSyncService {
     }
 
     private async writePurchase(
-        connection: { id: string; tenant_id: string; store_id: string },
+        connection: { id: string; tenant_id: string; store_id: string; post_impacts: boolean },
         mapped: MappedPurchase,
         productMap: Map<string, string>,
         supplierMap: Map<string, string>,
         purchaseMap: Map<string, string>,
         warnings: SyncWarning[],
-    ): Promise<boolean> {
+    ): Promise<boolean | null> {
         const supplierId = mapped.externalSupplierId ? supplierMap.get(mapped.externalSupplierId) ?? null : null;
         if (mapped.externalSupplierId && !supplierId) {
             warnings.push({
@@ -761,6 +1394,7 @@ export class ExternalSyncService {
         }));
 
         const header = {
+            reference_number: mapped.referenceNumber,
             subtotal_amount: mapped.subtotalAmount,
             tax_amount: mapped.taxAmount,
             discount_amount: mapped.discountAmount,
@@ -775,6 +1409,18 @@ export class ExternalSyncService {
         const existingId = purchaseMap.get(mapped.externalId);
 
         if (existingId) {
+            if (await this.isImmutablyPosted(connection, 'purchase', existingId)) {
+                warnings.push({
+                    entity: 'PURCHASE',
+                    externalId: mapped.externalId,
+                    code: 'POSTED_IMMUTABLE',
+                    message:
+                        `Purchase ${mapped.purchaseNumber} has already posted to the ledger — upstream changes were not applied. ` +
+                        'Rewriting a posted document would leave its voucher and stock movement describing different figures.',
+                });
+                return null;
+            }
+
             await this.db.$transaction(async (tx) => {
                 await tx.purchase.update({ where: { id: existingId }, data: header });
 
@@ -801,16 +1447,35 @@ export class ExternalSyncService {
             return false;
         }
 
-        const purchase = await this.db.purchase.create({
-            data: {
-                tenant_id: connection.tenant_id,
-                store_id: connection.store_id,
-                purchase_number: mapped.purchaseNumber,
-                created_at: mapped.purchaseDate,
-                ...header,
-                items: { create: items },
-            },
-            select: { id: true },
+        const purchase = await this.db.$transaction(async (tx) => {
+            const created = await tx.purchase.create({
+                data: {
+                    tenant_id: connection.tenant_id,
+                    store_id: connection.store_id,
+                    purchase_number: mapped.purchaseNumber,
+                    created_at: mapped.purchaseDate,
+                    ...header,
+                    items: { create: items },
+                },
+                select: { id: true },
+            });
+
+            if (connection.post_impacts) {
+                await applyPurchaseImpacts({
+                    tx,
+                    tenantId: connection.tenant_id,
+                    storeId: connection.store_id,
+                    purchaseId: created.id,
+                    purchaseNumber: mapped.purchaseNumber,
+                    supplierId,
+                    totalAmount: mapped.totalAmount,
+                    paidAmount: mapped.paidAmount,
+                    purchaseDate: mapped.purchaseDate,
+                    items,
+                });
+            }
+
+            return created;
         });
 
         await this.writeMapping(connection, 'PURCHASE', mapped.externalId, purchase.id, mapped.externalUpdatedAt);
@@ -853,6 +1518,20 @@ export class ExternalSyncService {
     }
 
     // ------------------------------------------------------------- mappings
+
+    /**
+     * Posted documents are immutable to the importer. Only meaningful when the
+     * connection posts at all — an inert import has nothing to protect, so the
+     * lookup is skipped entirely rather than run per document.
+     */
+    private async isImmutablyPosted(
+        connection: { tenant_id: string; post_impacts: boolean },
+        eventType: string,
+        sourceId: string,
+    ): Promise<boolean> {
+        if (!connection.post_impacts) return false;
+        return isAlreadyPosted(this.db, connection.tenant_id, eventType, sourceId);
+    }
 
     private async loadMappings(connectionId: string, entityType: EntityType): Promise<Map<string, string>> {
         const rows = await this.db.externalSyncMapping.findMany({

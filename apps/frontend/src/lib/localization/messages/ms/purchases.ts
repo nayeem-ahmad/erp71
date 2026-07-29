@@ -122,6 +122,7 @@ export const purchasesMessages = {
                 tin: 'TIN',
                 buyer: 'Pembeli',
                 purchaseNo: 'No. Pembelian',
+                referenceNo: 'No. Rujukan',
                 description: 'Penerangan',
                 unknownProduct: 'Produk Tidak Diketahui',
                 notePrefix: 'Nota:',

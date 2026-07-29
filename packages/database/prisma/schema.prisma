@@ -531,6 +531,11 @@ model ExternalSyncConnection {
   /// natively created ones (e.g. "XR-" -> "XR-2601666").
   document_prefix    String    @default("XR-")
   enabled            Boolean   @default(false)
+  /// When true an imported document produces the same effects a natively
+  /// entered one would: stock movements, party due balances and dated ledger
+  /// postings. Off by default — turning it on double-counts unless the tenant
+  /// has no opening balances covering the imported period.
+  post_impacts       Boolean   @default(false)
   /// Rolling window (days back from today) each scheduled run re-pulls.
   window_days        Int       @default(90)
   /// Earliest business date the importer will ever ask the provider for.
@@ -582,8 +587,17 @@ model ExternalSyncRun {
   connection_id String
   /// MANUAL | SCHEDULED
   trigger       String    @default("MANUAL")
-  /// RUNNING | SUCCESS | PARTIAL | FAILED
+  /// RUNNING | SUCCESS | PARTIAL | FAILED | CANCELLED
   status        String    @default("RUNNING")
+  /// What the run is doing right now, e.g. "Sales 2026-05". Null once finished.
+  phase         String?
+  /// Step/chunk counters, rewritten as the run proceeds so a long import is
+  /// observable while it happens rather than only once it ends.
+  progress      Json?
+  /// Which steps this run was asked to perform; null means all of them.
+  steps         Json?
+  /// Set by the cancel endpoint; the run checks it between chunks and stops.
+  cancel_requested Boolean @default(false)
   /// Business-date window actually requested from the provider.
   window_from   DateTime
   window_to     DateTime
@@ -1190,6 +1204,10 @@ model Purchase {
   store_id        String
   supplier_id     String?
   purchase_number String
+  /// The supplier's or source system's own document number. Not unique: an
+  /// imported reference can legitimately repeat, and two suppliers can reuse
+  /// the same bill number.
+  reference_number String?
   subtotal_amount Decimal  @default(0) @db.Decimal(12, 2)
   tax_amount      Decimal  @default(0) @db.Decimal(12, 2)
   discount_amount Decimal  @default(0) @db.Decimal(12, 2)
@@ -1212,6 +1230,7 @@ model Purchase {
   @@index([tenant_id, created_at])
   @@index([tenant_id, store_id])
   @@index([tenant_id, payment_status])
+  @@index([tenant_id, reference_number])
 }
 
 model PurchaseItem {
@@ -2036,6 +2055,9 @@ model SalesReturn {
   store_id       String
   sale_id        String
   return_number  String
+  /// The source system's own document number. Not unique — an imported
+  /// reference can repeat, matching Purchase.reference_number.
+  reference_number String?
   total_refund   Decimal  @db.Decimal(12, 2)
   reason         String?
   status         String   @default("COMPLETED")
@@ -2049,6 +2071,7 @@ model SalesReturn {
   items          SalesReturnItem[]
 
   @@unique([tenant_id, return_number])
+  @@index([tenant_id, reference_number])
 }
 
 model SalesReturnItem {
