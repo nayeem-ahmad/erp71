@@ -28,7 +28,7 @@ jest.mock('@/lib/api', () => ({
         getMe: jest.fn(),
         setupTenant: jest.fn(),
         createProduct: jest.fn(),
-        getSales: jest.fn(),
+        getSalesList: jest.fn(),
     },
 }));
 
@@ -45,7 +45,7 @@ describe('OnboardingPage', () => {
                 stores: [{ id: 'store-1', name: 'Gulshan Branch' }],
             }],
         });
-        api.getSales.mockResolvedValue([]);
+        api.getSalesList.mockResolvedValue({ items: [], total: 0, page: 1, limit: 1, pages: 0 });
         api.createProduct.mockResolvedValue({ id: 'product-1' });
         api.setupTenant.mockResolvedValue({
             tenant: { id: 'tenant-2' },
@@ -100,7 +100,8 @@ describe('OnboardingPage', () => {
 
     it('shows sale detected when sales exist', async () => {
         const { api } = require('@/lib/api');
-        api.getSales.mockResolvedValue([{ id: 'sale-1' }]);
+        // Only the server total decides this, not the rows returned.
+        api.getSalesList.mockResolvedValue({ items: [{ id: 'sale-1' }], total: 1, page: 1, limit: 1, pages: 1 });
 
         render(<OnboardingPage />);
         await goToPosStep();

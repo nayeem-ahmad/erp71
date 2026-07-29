@@ -657,11 +657,19 @@ export class SalesService {
         const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 100);
         const page = Math.max(opts?.page ?? 1, 1);
         const search = opts?.search?.trim();
+        const statuses = (opts?.status ?? '')
+            .split(',')
+            .map((value) => value.trim())
+            .filter(Boolean);
 
         const where: any = {
             tenant_id: tenantId,
             ...(opts?.createdBy ? { created_by: opts.createdBy } : {}),
-            ...(opts?.status ? { status: opts.status } : {}),
+            // Accepts one status or a comma-separated set, so a caller can ask
+            // for a count across several (the dashboard's delivery-pending tile)
+            // without a request per status.
+            ...(statuses.length === 1 ? { status: statuses[0] } : {}),
+            ...(statuses.length > 1 ? { status: { in: statuses } } : {}),
             // Mirrors the list page's placeholder: serial, customer, status.
             // The imported reference is included too, since that is the number
             // the business knows a migrated sale by.

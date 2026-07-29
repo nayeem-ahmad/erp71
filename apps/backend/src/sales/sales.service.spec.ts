@@ -643,6 +643,28 @@ describe('SalesService', () => {
       ]);
     });
 
+    it('should accept a comma-separated status set, so one call can count several', async () => {
+      db.sale.findMany.mockResolvedValue([]);
+      db.sale.count.mockResolvedValue(0);
+      db.voucher.findMany.mockResolvedValue([]);
+
+      await service.findAll('tenant-1', { status: 'DELIVERY_PENDING, AWAITING_DELIVERY' });
+
+      const { where } = db.sale.findMany.mock.calls[0][0];
+      expect(where.status).toEqual({ in: ['DELIVERY_PENDING', 'AWAITING_DELIVERY'] });
+    });
+
+    it('should match a single status exactly rather than as a set', async () => {
+      db.sale.findMany.mockResolvedValue([]);
+      db.sale.count.mockResolvedValue(0);
+      db.voucher.findMany.mockResolvedValue([]);
+
+      await service.findAll('tenant-1', { status: 'COMPLETED' });
+
+      const { where } = db.sale.findMany.mock.calls[0][0];
+      expect(where.status).toBe('COMPLETED');
+    });
+
     it('should ignore a sort field that is not on the allowlist', async () => {
       db.sale.findMany.mockResolvedValue([]);
       db.sale.count.mockResolvedValue(0);
