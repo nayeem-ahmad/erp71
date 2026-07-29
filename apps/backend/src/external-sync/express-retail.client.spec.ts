@@ -215,4 +215,68 @@ describe('ExpressRetailClient', () => {
         // line-level mode; guard against that regressing to ''.
         expect(JSON.parse(calls[2].init.body).searchType).toBe('quantity');
     });
+
+    describe('payment endpoints', () => {
+        function page(rows: number[], lastPage: number, currentPage: number) {
+            return {
+                body: {
+                    status: true,
+                    message: 'Customer Payment List',
+                    data: {
+                        current_page: currentPage,
+                        last_page: lastPage,
+                        per_page: '200',
+                        total: 0,
+                        data: rows.map((id) => ({ id, invoice: `TR${id}`, type: 'CR', amount: '10.000' })),
+                    },
+                },
+            };
+        }
+
+        it('walks every page of the paginator and concatenates the rows', async () => {
+            const calls = stubFetch([LOGIN_OK, LOGIN_OK, page([1, 2], 3, 1), page([3, 4], 3, 2), page([5], 3, 3)]);
+            const client = new ExpressRetailClient(credentials);
+            await client.login();
+
+            const rows = await client.fetchCustomerPayments({ from: '2026-07-01', to: '2026-07-31' });
+
+            expect(rows.map((r) => r.id)).toEqual([1, 2, 3, 4, 5]);
+            const paymentCalls = calls.filter((c) => c.url.includes('/get-customer-payments'));
+            expect(paymentCalls).toHaveLength(3);
+            expect(paymentCalls[0].url).toContain('page=1');
+            expect(paymentCalls[2].url).toContain('page=3');
+        });
+
+        it('sends the window as dateFrom/dateTo, which is what the provider actually filters on', async () => {
+            const calls = stubFetch([LOGIN_OK, LOGIN_OK, page([1], 1, 1)]);
+            const client = new ExpressRetailClient(credentials);
+            await client.login();
+
+            await client.fetchSupplierPayments({ from: '2026-07-01', to: '2026-07-31' });
+
+            const url = calls.find((c) => c.url.includes('/get-supplier-payments'))!.url;
+            // `from`/`to` are silently ignored upstream and return everything,
+            // so the exact parameter names matter.
+            expect(url).toContain('dateFrom=2026-07-01');
+            expect(url).toContain('dateTo=2026-07-31');
+        });
+
+        it('stops on an empty page even when last_page overreports', async () => {
+            stubFetch([LOGIN_OK, LOGIN_OK, page([1], 99, 1), page([], 99, 2)]);
+            const client = new ExpressRetailClient(credentials);
+            await client.login();
+
+            const rows = await client.fetchCustomerPayments({ from: '2026-07-01', to: '2026-07-31' });
+            expect(rows).toHaveLength(1);
+        });
+
+        it('rejects a response that is not a paginator', async () => {
+            stubFetch([LOGIN_OK, LOGIN_OK, { body: { status: true, data: { customers: [] } } }]);
+            const client = new ExpressRetailClient(credentials);
+            await client.login();
+
+            await expect(client.fetchCustomerPayments({ from: '2026-07-01', to: '2026-07-31' }))
+                .rejects.toThrow(BadGatewayException);
+        });
+    });
 });

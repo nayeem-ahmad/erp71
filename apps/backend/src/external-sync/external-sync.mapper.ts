@@ -1,5 +1,6 @@
 import {
     ExpressRetailCustomer,
+    ExpressRetailPayment,
     ExpressRetailProduct,
     ExpressRetailPurchase,
     ExpressRetailPurchaseLine,
@@ -346,6 +347,121 @@ export function resolvePaymentStatus(total: number, paid: number): 'UNPAID' | 'P
 }
 
 /** Groups line rows by their parent document id. */
+/** Which way the cash moved, from our side. */
+export type PaymentDirection = 'IN' | 'OUT';
+
+export type PaymentParty = 'CUSTOMER' | 'SUPPLIER';
+
+export interface MappedPayment {
+    externalId: string;
+    /** Prefixed, so an imported payment cannot collide with our own numbering. */
+    paymentNumber: string;
+    /** The provider's own transaction number, unprefixed. */
+    referenceNumber: string | null;
+    externalPartyId: string | null;
+    direction: PaymentDirection;
+    amount: number;
+    date: Date;
+    method: string | null;
+    /** The provider's due for this party before the payment; customer rows only. */
+    previousDue: number | null;
+    note: string | null;
+    externalUpdatedAt: Date | null;
+}
+
+/**
+ * The provider's `type` is a cash direction, not a party role: CR is cash
+ * received, CP is cash paid. Both values appear in both lists, because a
+ * customer can be refunded and a supplier can refund us.
+ *
+ * This is deliberately strict — an unrecognised code returns null so the caller
+ * can skip the row rather than guess a direction. Every sampled `amount` was
+ * positive, so a wrong guess would move a balance the wrong way rather than
+ * fail loudly.
+ */
+export function resolvePaymentDirection(type: string | null | undefined): PaymentDirection | null {
+    switch ((type ?? '').trim().toUpperCase()) {
+        case 'CR':
+            return 'IN';
+        case 'CP':
+            return 'OUT';
+        default:
+            return null;
+    }
+}
+
+/**
+ * Returns null when the row cannot be mapped safely; a warning is pushed so the
+ * run row explains what was dropped and why.
+ */
+export function mapPayment(
+    row: ExpressRetailPayment,
+    party: PaymentParty,
+    documentPrefix: string,
+    warnings: SyncWarning[],
+): MappedPayment | null {
+    const externalId = String(row.id);
+    const entity = party === 'CUSTOMER' ? 'CUSTOMER_PAYMENT' : 'SUPPLIER_PAYMENT';
+
+    const direction = resolvePaymentDirection(row.type);
+    if (!direction) {
+        warnings.push({
+            entity,
+            externalId,
+            code: 'PAYMENT_TYPE_UNKNOWN',
+            message: `Payment ${row.invoice}: unrecognised type "${row.type}" — skipped rather than guess whether it was money in or out`,
+        });
+        return null;
+    }
+
+    const amount = toMoney(row.amount);
+    if (amount <= 0) {
+        warnings.push({
+            entity,
+            externalId,
+            code: 'PAYMENT_AMOUNT_INVALID',
+            message: `Payment ${row.invoice}: amount ${row.amount ?? 'null'} is not a positive number — skipped`,
+        });
+        return null;
+    }
+
+    const externalPartyId = party === 'CUSTOMER'
+        ? emptyToNull(row.customer_id ?? null)
+        : emptyToNull(row.supplier_id ?? null);
+
+    const previousDue = row.previous_due != null ? toMoney(row.previous_due) : null;
+
+    // The credit-transaction models have no payment-method column, so keep the
+    // provider's method in the note rather than lose it.
+    const method = emptyToNull(row.method);
+    const noteParts = [emptyToNull(row.note), method ? `via ${method}` : null].filter(Boolean);
+
+    return {
+        externalId,
+        paymentNumber: buildDocumentNumber(documentPrefix, row.invoice),
+        referenceNumber: emptyToNull(row.invoice),
+        externalPartyId,
+        direction,
+        amount,
+        date: parseProviderDate(row.date),
+        method,
+        previousDue,
+        note: noteParts.length ? noteParts.join(' — ') : null,
+        externalUpdatedAt: parseTimestamp(row.updated_at),
+    };
+}
+
+/**
+ * Our credit models express direction as PAYMENT/PAYOUT relative to the party,
+ * so the same cash direction means opposite things on the two sides: money in
+ * from a customer settles their due, whereas money in from a supplier is a
+ * refund that increases what we owe them.
+ */
+export function creditTransactionType(party: PaymentParty, direction: PaymentDirection): 'PAYMENT' | 'PAYOUT' {
+    if (party === 'CUSTOMER') return direction === 'IN' ? 'PAYMENT' : 'PAYOUT';
+    return direction === 'OUT' ? 'PAYMENT' : 'PAYOUT';
+}
+
 export function groupBy<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
     const grouped = new Map<string, T[]>();
     for (const row of rows) {

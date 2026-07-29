@@ -129,6 +129,32 @@ export interface ExpressRetailSupplier {
     updated_at: string | null;
 }
 
+/**
+ * A row from `/get-customer-payments` or `/get-supplier-payments`.
+ *
+ * `type` is the provider's cash direction — CR is cash received, CP is cash
+ * paid — and both lists contain both values, because either party can be
+ * refunded. Direction therefore comes from `type`, never from the sign of
+ * `amount`, which is always positive.
+ */
+export interface ExpressRetailPayment {
+    id: number | string;
+    invoice: string;
+    date: string;
+    customer_id?: string | null;
+    supplier_id?: string | null;
+    type: string;
+    method: string | null;
+    bank_account_id: string | null;
+    amount: string | null;
+    /** Customer rows only — the party's due before this payment landed. */
+    previous_due?: string | null;
+    note: string | null;
+    status: string;
+    organization_id: string;
+    updated_at: string | null;
+}
+
 export interface ExpressRetailCredentials {
     baseUrl: string;
     username: string;
@@ -149,6 +175,12 @@ interface DateWindow {
 }
 
 const REQUEST_TIMEOUT_MS = 120_000;
+
+/** Page size for the paginated payment endpoints. */
+const PAYMENT_PAGE_SIZE = 200;
+
+/** Backstop so a misreported `last_page` cannot spin forever. */
+const MAX_PAYMENT_PAGES = 500;
 
 export class ExpressRetailClient {
     private readonly logger = new Logger(ExpressRetailClient.name);
@@ -246,6 +278,59 @@ export class ExpressRetailClient {
     async fetchSuppliers(): Promise<ExpressRetailSupplier[]> {
         const data = await this.postJson('/get-supplier', {});
         return this.expectArray<ExpressRetailSupplier>(data, 'suppliers', '/get-supplier');
+    }
+
+    async fetchCustomerPayments(window: DateWindow): Promise<ExpressRetailPayment[]> {
+        return this.fetchPaginated('/get-customer-payments', window);
+    }
+
+    async fetchSupplierPayments(window: DateWindow): Promise<ExpressRetailPayment[]> {
+        return this.fetchPaginated('/get-supplier-payments', window);
+    }
+
+    /**
+     * The payment endpoints are the only ones that paginate: they return a
+     * Laravel paginator (`data.data` plus `data.last_page`) rather than the
+     * plain `data.<key>` array every other endpoint returns, so they have to be
+     * walked page by page.
+     *
+     * They honour the same `dateFrom`/`dateTo` window as the sale and purchase
+     * endpoints. Note the provider silently ignores unknown filter names and
+     * returns *everything*, so the window params must be spelled exactly.
+     */
+    private async fetchPaginated(path: string, window: DateWindow): Promise<ExpressRetailPayment[]> {
+        const rows: ExpressRetailPayment[] = [];
+        let page = 1;
+        let lastPage = 1;
+
+        do {
+            const query = new URLSearchParams({
+                page: String(page),
+                per_page: String(PAYMENT_PAGE_SIZE),
+                name: '',
+                dateFrom: window.from,
+                dateTo: window.to,
+            });
+            const data = await this.getJson(`${path}?${query.toString()}`);
+
+            const pageRows = data?.data;
+            if (!Array.isArray(pageRows)) {
+                throw new BadGatewayException(
+                    `Express Retail Pro ${path} returned no "data.data" array — the upstream response shape changed`,
+                );
+            }
+            rows.push(...(pageRows as ExpressRetailPayment[]));
+
+            const reported = Number(data?.last_page);
+            lastPage = Number.isFinite(reported) && reported > 0 ? reported : 1;
+
+            // An empty page means the walk is done even if last_page disagrees,
+            // and the hard cap stops a misreported paginator looping forever.
+            if (pageRows.length === 0) break;
+            page += 1;
+        } while (page <= lastPage && page <= MAX_PAYMENT_PAGES);
+
+        return rows;
     }
 
     private windowBody(window: DateWindow) {

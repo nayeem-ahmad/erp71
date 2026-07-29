@@ -1,19 +1,42 @@
 import {
     buildDocumentNumber,
+    creditTransactionType,
     dedupeCode,
     groupBy,
     mapCustomer,
+    mapPayment,
     mapProduct,
     mapPurchase,
     mapSale,
     mapSupplier,
     parseProviderDate,
+    resolvePaymentDirection,
     resolvePaymentStatus,
     resolveQuantity,
     splitIntoMonthlyWindows,
     toMoney,
     type SyncWarning,
 } from './external-sync.mapper';
+
+/** Shaped from a real `/get-customer-payments` row. */
+function paymentRow(overrides: Record<string, unknown> = {}) {
+    return {
+        id: 130607,
+        invoice: 'TR02071',
+        date: '2026-07-28',
+        customer_id: '61787',
+        type: 'CR',
+        method: 'cash',
+        bank_account_id: null,
+        amount: '7060.000',
+        previous_due: '7060.000',
+        note: null,
+        status: 'a',
+        organization_id: '262',
+        updated_at: null,
+        ...overrides,
+    } as any;
+}
 
 describe('external-sync mapper', () => {
     describe('splitIntoMonthlyWindows', () => {
@@ -284,6 +307,73 @@ describe('external-sync mapper', () => {
 
             expect(iso.externalUpdatedAt?.toISOString()).toBe('2026-07-23T12:31:15.000Z');
             expect(plain.externalUpdatedAt?.toISOString()).toBe('2025-07-24T16:01:53.000Z');
+        });
+    });
+
+    describe('payments', () => {
+        it('reads direction from the type code, not the always-positive amount', () => {
+            expect(resolvePaymentDirection('CR')).toBe('IN');
+            expect(resolvePaymentDirection('CP')).toBe('OUT');
+            expect(resolvePaymentDirection('cr')).toBe('IN');
+            expect(resolvePaymentDirection(' CP ')).toBe('OUT');
+        });
+
+        it('refuses to guess an unrecognised type', () => {
+            expect(resolvePaymentDirection('XX')).toBeNull();
+            expect(resolvePaymentDirection('')).toBeNull();
+            expect(resolvePaymentDirection(null)).toBeNull();
+        });
+
+        it('maps the same cash direction to opposite sides for customer and supplier', () => {
+            // Money in from a customer settles their due; money in from a
+            // supplier is a refund that raises what we owe them.
+            expect(creditTransactionType('CUSTOMER', 'IN')).toBe('PAYMENT');
+            expect(creditTransactionType('CUSTOMER', 'OUT')).toBe('PAYOUT');
+            expect(creditTransactionType('SUPPLIER', 'OUT')).toBe('PAYMENT');
+            expect(creditTransactionType('SUPPLIER', 'IN')).toBe('PAYOUT');
+        });
+
+        it('maps a customer receipt', () => {
+            const warnings: SyncWarning[] = [];
+            const mapped = mapPayment(paymentRow(), 'CUSTOMER', 'XR-', warnings)!;
+
+            expect(mapped.paymentNumber).toBe('XR-TR02071');
+            expect(mapped.referenceNumber).toBe('TR02071');
+            expect(mapped.externalPartyId).toBe('61787');
+            expect(mapped.direction).toBe('IN');
+            expect(mapped.amount).toBe(7060);
+            expect(mapped.previousDue).toBe(7060);
+            expect(mapped.date.toISOString()).toBe('2026-07-28T00:00:00.000Z');
+            expect(warnings).toHaveLength(0);
+        });
+
+        it('keeps the provider payment method in the note, since our model has no column for it', () => {
+            const mapped = mapPayment(paymentRow({ method: 'bank', note: 'cheque 4471' }), 'CUSTOMER', 'XR-', [])!;
+            expect(mapped.method).toBe('bank');
+            expect(mapped.note).toBe('cheque 4471 — via bank');
+        });
+
+        it('reads the supplier id on the supplier side', () => {
+            const row = paymentRow({ customer_id: null, supplier_id: '5658', type: 'CP', previous_due: undefined });
+            const mapped = mapPayment(row, 'SUPPLIER', 'XR-', [])!;
+
+            expect(mapped.externalPartyId).toBe('5658');
+            expect(mapped.direction).toBe('OUT');
+            // Supplier rows carry no previous_due, so there is no balance to carry.
+            expect(mapped.previousDue).toBeNull();
+        });
+
+        it('skips and warns on an unknown type rather than guessing a direction', () => {
+            const warnings: SyncWarning[] = [];
+            expect(mapPayment(paymentRow({ type: 'ZZ' }), 'CUSTOMER', 'XR-', warnings)).toBeNull();
+            expect(warnings).toHaveLength(1);
+            expect(warnings[0].code).toBe('PAYMENT_TYPE_UNKNOWN');
+        });
+
+        it('skips a non-positive amount', () => {
+            const warnings: SyncWarning[] = [];
+            expect(mapPayment(paymentRow({ amount: '0.000' }), 'CUSTOMER', 'XR-', warnings)).toBeNull();
+            expect(warnings[0].code).toBe('PAYMENT_AMOUNT_INVALID');
         });
     });
 });

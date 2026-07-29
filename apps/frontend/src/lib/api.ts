@@ -299,7 +299,10 @@ export type ExternalSyncRun = {
     window_from: string;
     window_to: string;
     dry_run: boolean;
-    stats: Record<'products' | 'customers' | 'suppliers' | 'sales' | 'purchases', ExternalSyncTally> | null;
+    stats: Record<
+        'products' | 'customers' | 'suppliers' | 'sales' | 'purchases' | 'customerPayments' | 'supplierPayments',
+        ExternalSyncTally
+    > | null;
     warnings: ExternalSyncWarning[] | null;
     error_message: string | null;
     started_at: string;

@@ -14,11 +14,15 @@ import {
 } from './express-retail.client';
 import {
     DateWindow,
+    MappedPayment,
     MappedPurchase,
     MappedSale,
+    PaymentParty,
     SyncWarning,
+    creditTransactionType,
     groupBy,
     mapCustomer,
+    mapPayment,
     mapProduct,
     mapPurchase,
     mapSale,
@@ -33,7 +37,14 @@ import {
     UpsertExternalSyncConnectionDto,
 } from './external-sync.dto';
 
-type EntityType = 'PRODUCT' | 'CUSTOMER' | 'SUPPLIER' | 'SALE' | 'PURCHASE';
+type EntityType =
+    | 'PRODUCT'
+    | 'CUSTOMER'
+    | 'SUPPLIER'
+    | 'SALE'
+    | 'PURCHASE'
+    | 'CUSTOMER_PAYMENT'
+    | 'SUPPLIER_PAYMENT';
 
 interface EntityTally {
     created: number;
@@ -41,7 +52,10 @@ interface EntityTally {
     skipped: number;
 }
 
-type SyncStats = Record<'products' | 'customers' | 'suppliers' | 'sales' | 'purchases', EntityTally>;
+type SyncStats = Record<
+    'products' | 'customers' | 'suppliers' | 'sales' | 'purchases' | 'customerPayments' | 'supplierPayments',
+    EntityTally
+>;
 
 /** Warnings are stored on the run row; cap them so one bad import cannot bloat it. */
 const MAX_STORED_WARNINGS = 500;
@@ -60,6 +74,16 @@ const MAX_STORED_WARNINGS = 500;
  *    sales carry their paid amounts, but posting them to the ledger would
  *    double-count against the tenant's own opening balances.
  *  - No customer/supplier due-balance recomputation, for the same reason.
+ *
+ * Customer and supplier payments are imported as CustomerCreditTransaction /
+ * SupplierCreditTransaction rows under those same limits: they record what the
+ * source system says happened, but they do not move `due_balance` and they do
+ * not post. That is not an oversight — imported sales and purchases never
+ * raised those balances, so letting imported payments lower them would drive
+ * every party's due negative by the value of its own payment history.
+ * Balances only become meaningful once the whole import posts (see the
+ * migration-model decision in TODO.md); until then all five document types are
+ * consistently inert.
  */
 @Injectable()
 export class ExternalSyncService {
@@ -260,6 +284,8 @@ export class ExternalSyncService {
             suppliers: emptyTally(),
             sales: emptyTally(),
             purchases: emptyTally(),
+            customerPayments: emptyTally(),
+            supplierPayments: emptyTally(),
         };
         const warnings: SyncWarning[] = [];
 
@@ -301,6 +327,8 @@ export class ExternalSyncService {
             for (const chunk of splitIntoMonthlyWindows(window.from, window.to)) {
                 await this.syncSalesWindow(connection, client, chunk, productMap, customerMap, stats, warnings, dryRun);
                 await this.syncPurchasesWindow(connection, client, chunk, productMap, supplierMap, stats, warnings, dryRun);
+                await this.syncPaymentsWindow(connection, client, chunk, 'CUSTOMER', customerMap, stats, warnings, dryRun);
+                await this.syncPaymentsWindow(connection, client, chunk, 'SUPPLIER', supplierMap, stats, warnings, dryRun);
             }
 
             const status = warnings.length > 0 ? 'PARTIAL' : 'SUCCESS';
@@ -595,6 +623,123 @@ export class ExternalSyncService {
                 });
             }
         }
+    }
+
+    /**
+     * Customer and supplier payments share one path — the two provider
+     * endpoints, our two credit-transaction models and the party lookups differ
+     * only by which side we are on.
+     */
+    private async syncPaymentsWindow(
+        connection: { id: string; tenant_id: string; document_prefix: string },
+        client: ExpressRetailClient,
+        window: DateWindow,
+        party: PaymentParty,
+        partyMap: Map<string, string>,
+        stats: SyncStats,
+        warnings: SyncWarning[],
+        dryRun: boolean,
+    ) {
+        const isCustomer = party === 'CUSTOMER';
+        const entity: EntityType = isCustomer ? 'CUSTOMER_PAYMENT' : 'SUPPLIER_PAYMENT';
+        const tally = isCustomer ? stats.customerPayments : stats.supplierPayments;
+
+        const rows = isCustomer
+            ? await client.fetchCustomerPayments(window)
+            : await client.fetchSupplierPayments(window);
+        const paymentMap = await this.loadMappings(connection.id, entity);
+
+        for (const row of rows) {
+            const mapped = mapPayment(row, party, connection.document_prefix, warnings);
+            if (!mapped) {
+                tally.skipped++;
+                continue;
+            }
+
+            // A credit transaction cannot exist without its party, so an
+            // unresolved id is a skip rather than a partial write.
+            const partyId = mapped.externalPartyId ? partyMap.get(mapped.externalPartyId) : undefined;
+            if (!partyId) {
+                tally.skipped++;
+                warnings.push({
+                    entity,
+                    externalId: mapped.externalId,
+                    code: 'PARTY_UNRESOLVED',
+                    message: `Payment ${row.invoice} references ${party.toLowerCase()} ${mapped.externalPartyId ?? '(none)'}, which is not in the imported list — skipped`,
+                });
+                continue;
+            }
+
+            if (dryRun) {
+                paymentMap.has(mapped.externalId) ? tally.updated++ : tally.created++;
+                continue;
+            }
+
+            try {
+                const created = await this.writePayment(connection, party, mapped, partyId, paymentMap);
+                created ? tally.created++ : tally.updated++;
+            } catch (error: any) {
+                tally.skipped++;
+                warnings.push({
+                    entity,
+                    externalId: mapped.externalId,
+                    code: 'WRITE_FAILED',
+                    message: `Payment ${row.invoice} could not be imported: ${error?.message ?? error}`,
+                });
+            }
+        }
+    }
+
+    private async writePayment(
+        connection: { id: string; tenant_id: string },
+        party: PaymentParty,
+        mapped: MappedPayment,
+        partyId: string,
+        paymentMap: Map<string, string>,
+    ): Promise<boolean> {
+        const isCustomer = party === 'CUSTOMER';
+        const entity: EntityType = isCustomer ? 'CUSTOMER_PAYMENT' : 'SUPPLIER_PAYMENT';
+        const type = creditTransactionType(party, mapped.direction);
+
+        // `balance_after` is required, but this importer does not maintain
+        // due_balance (see the scope limits on the class), so there is no running
+        // balance of ours to record. Where the provider tells us the party's due
+        // before the payment we carry its own figure forward; otherwise — every
+        // supplier row, which has no previous_due — we store 0 rather than invent
+        // a number. Either way it is the source system's view, not ours.
+        const balanceAfter = mapped.previousDue != null
+            ? (type === 'PAYMENT' ? mapped.previousDue - mapped.amount : mapped.previousDue + mapped.amount)
+            : 0;
+
+        const data = {
+            type,
+            amount: mapped.amount,
+            balance_after: balanceAfter,
+            payment_number: mapped.paymentNumber,
+            notes: mapped.note,
+            created_at: mapped.date,
+        };
+
+        const existingId = paymentMap.get(mapped.externalId);
+        const table: any = isCustomer ? this.db.customerCreditTransaction : this.db.supplierCreditTransaction;
+
+        if (existingId) {
+            await table.update({ where: { id: existingId }, data });
+            return false;
+        }
+
+        const created = await table.create({
+            data: {
+                ...data,
+                tenant_id: connection.tenant_id,
+                ...(isCustomer ? { customer_id: partyId } : { supplier_id: partyId }),
+            },
+            select: { id: true },
+        });
+
+        await this.writeMapping(connection, entity, mapped.externalId, created.id, mapped.externalUpdatedAt);
+        paymentMap.set(mapped.externalId, created.id);
+        return true;
     }
 
     private async writeSale(

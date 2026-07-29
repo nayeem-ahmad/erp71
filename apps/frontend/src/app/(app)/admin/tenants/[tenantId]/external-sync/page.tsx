@@ -403,6 +403,7 @@ export default function TenantExternalSyncPage() {
                                     <th className="py-2 pr-3 font-medium">Window</th>
                                     <th className="py-2 pr-3 font-medium">Sales</th>
                                     <th className="py-2 pr-3 font-medium">Purchases</th>
+                                    <th className="py-2 pr-3 font-medium">Payments</th>
                                     <th className="py-2 pr-3 font-medium">Masters</th>
                                     <th className="py-2 font-medium">Notes</th>
                                 </tr>
@@ -453,6 +454,7 @@ function RunRow({ run }: Readonly<{ run: ExternalSyncRun }>) {
                 </td>
                 <td className="py-2 pr-3">{formatTally(run, 'sales')}</td>
                 <td className="py-2 pr-3">{formatTally(run, 'purchases')}</td>
+                <td className="py-2 pr-3 text-gray-500">{formatPaymentTally(run)}</td>
                 <td className="py-2 pr-3 text-gray-500">
                     {run.stats
                         ? `${run.stats.products.created + run.stats.products.updated}p / ${
@@ -470,7 +472,7 @@ function RunRow({ run }: Readonly<{ run: ExternalSyncRun }>) {
             </tr>
             {showWarnings ? (
                 <tr>
-                    <td colSpan={7} className="py-2">
+                    <td colSpan={8} className="py-2">
                         <ul className="space-y-1 text-xs text-gray-600 bg-gray-50 rounded-md p-3">
                             {warnings.map((warning: ExternalSyncWarning, index: number) => (
                                 <li key={`${warning.entity}-${warning.externalId}-${index}`}>
@@ -525,6 +527,20 @@ function formatTally(run: ExternalSyncRun, key: 'sales' | 'purchases') {
     const parts = [`${tally.created} new`, `${tally.updated} updated`];
     if (tally.skipped > 0) parts.push(`${tally.skipped} skipped`);
     return parts.join(', ');
+}
+
+/** Customer and supplier payments share a column: "12 in / 3 out". */
+function formatPaymentTally(run: ExternalSyncRun) {
+    const customer = run.stats?.customerPayments;
+    const supplier = run.stats?.supplierPayments;
+    if (!customer && !supplier) return '—';
+
+    const total = (tally?: { created: number; updated: number }) =>
+        tally ? tally.created + tally.updated : 0;
+    const skipped = (customer?.skipped ?? 0) + (supplier?.skipped ?? 0);
+
+    const label = `${total(customer)} in / ${total(supplier)} out`;
+    return skipped > 0 ? `${label} (${skipped} skipped)` : label;
 }
 
 function toneForStatus(status: ExternalSyncRun['status']) {
