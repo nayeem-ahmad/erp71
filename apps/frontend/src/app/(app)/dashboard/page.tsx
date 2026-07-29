@@ -121,6 +121,8 @@ export default function DashboardPage() {
     const [productReport, setProductReport] = useState<ProductReportRow[]>([]);
     const [customerReport, setCustomerReport] = useState<CustomerReportRow[]>([]);
     const [sales, setSales] = useState<SaleRow[]>([]);
+    // Counted by the server across every sale, not just the five loaded above.
+    const [deliveryPendingCount, setDeliveryPendingCount] = useState(0);
     const [lowStockCount, setLowStockCount] = useState(0);
 
     const [isFinancialLoading, setIsFinancialLoading] = useState(true);
@@ -158,12 +160,17 @@ export default function DashboardPage() {
             const win = rangeToWindow(range);
             const prevWin = previousWindow(win);
 
-            const [kpisRes, prevKpisRes, trendRes, productsRes, salesRes, categoryRes, productRepRes, customerRepRes] = await Promise.allSettled([
+            const [kpisRes, prevKpisRes, trendRes, productsRes, salesRes, deliveryRes, categoryRes, productRepRes, customerRepRes] = await Promise.allSettled([
                 api.getFinancialKpis(win),
                 api.getFinancialKpis(prevWin),
                 api.getFinancialTrends(win),
                 includeRetailPanels ? api.getProducts() : Promise.resolve([]),
-                includeRetailPanels ? api.getSales() : Promise.resolve([]),
+                // Two bounded calls instead of the whole history: five rows for
+                // the activity panel, and a count-only probe for the tile below.
+                includeRetailPanels ? api.getSalesList({ limit: 5 }) : Promise.resolve(null),
+                includeRetailPanels
+                    ? api.getSalesList({ status: [...DELIVERY_PENDING_STATUSES].join(','), limit: 1 })
+                    : Promise.resolve(null),
                 includeRetailPanels ? api.getSalesByCategory(win) : Promise.resolve(null),
                 includeRetailPanels ? api.getSalesByProduct(win) : Promise.resolve({ rows: [] }),
                 includeRetailPanels ? api.getSalesByCustomer(win) : Promise.resolve({ rows: [] }),
@@ -196,7 +203,10 @@ export default function DashboardPage() {
                 setLowStockCount(0);
             }
 
-            setSales(salesRes.status === 'fulfilled' ? (salesRes.value ?? []) : []);
+            setSales(salesRes.status === 'fulfilled' ? (salesRes.value?.items ?? []) : []);
+            setDeliveryPendingCount(
+                deliveryRes.status === 'fulfilled' ? (deliveryRes.value?.total ?? 0) : 0,
+            );
             setCategoryData(categoryRes.status === 'fulfilled' ? categoryRes.value : null);
             setProductReport(productRepRes.status === 'fulfilled' ? (productRepRes.value?.rows ?? []) : []);
             setCustomerReport(customerRepRes.status === 'fulfilled' ? (customerRepRes.value?.rows ?? []) : []);
@@ -238,7 +248,6 @@ export default function DashboardPage() {
     const cashSeries = financialTrends.map((point) => point.net_cash_movement);
 
     const receivable = financialKpis.accounts_receivable;
-    const deliveryPendingCount = sales.filter((sale) => DELIVERY_PENDING_STATUSES.has(String(sale.status ?? '').toUpperCase())).length;
     const renewalDays = renewalEnd ? Math.ceil((new Date(renewalEnd).getTime() - Date.now()) / 86_400_000) : null;
 
     const attentionItems: AttentionItem[] = [];

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Receipt, Eye, Edit2, FileText, Trash2 } from 'lucide-react';
+import { Receipt, Eye, Edit2, FileText, Search, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import Link from 'next/link';
@@ -12,7 +12,8 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
-import { PageShell } from '@/components/ui';
+import { PageShell, Input, Select } from '@/components/ui';
+import { useServerList } from '@/hooks/useServerList';
 import { toast } from '@/lib/toast';
 
 interface Sale {
@@ -42,24 +43,38 @@ const columnHelper = createColumnHelper<Sale>();
 
 export default function SalesPage() {
     const { t, locale } = useI18n();
-    const [sales, setSales] = useState<Sale[]>([]);
-    const [loading, setLoading] = useState(true);
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
-    useEffect(() => {
-        loadSales();
-    }, []);
+    const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState('');
 
-    const loadSales = async () => {
-        try {
-            const data = await api.getSales();
-            setSales(data);
-        } catch (error) {
-            console.error('Failed to load sales', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+    // Typing must not fire a request per keystroke against a table this large.
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+        return () => clearTimeout(timer);
+    }, [search]);
+
+    // Pages against the server. This list used to pull the tenant's entire
+    // sales history and render 20 rows from it, which fell over once an
+    // imported tenant had thousands.
+    const {
+        items: sales,
+        loading,
+        serverPagination,
+        reload,
+        setItems: setSales,
+    } = useServerList<Sale>({
+        tableId: 'sales',
+        initialSort: { id: 'created_at', desc: true },
+        deps: [debouncedSearch, statusFilter],
+        fetch: (params) =>
+            api.getSalesList({
+                ...params,
+                search: debouncedSearch || undefined,
+                status: statusFilter || undefined,
+            }),
+    });
 
     const handleDelete = useCallback(async (sale: Sale) => {
         if (!window.confirm(t.shared.confirm.deleteSale)) return;
@@ -68,6 +83,7 @@ export default function SalesPage() {
         try {
             await api.deleteSale(sale.id);
             setSales((prev) => prev.filter((s) => s.id !== sale.id));
+            void reload();
             toast.success(t.sales.detail.deleted);
         } catch (error: any) {
             console.error('Failed to delete sale', error);
@@ -234,12 +250,15 @@ export default function SalesPage() {
         [t, locale, handleDelete, deletingId],
     );
 
-    const filterPresets = useMemo(
+    // Was a client-side preset over the whole downloaded set; with server
+    // paging the filter has to reach the query or it would only ever narrow the
+    // current page.
+    const statusOptions = useMemo(
         () => [
-            { label: t.sales.filterPresets.draft, filters: [{ id: 'status', value: 'DRAFT' }] },
-            { label: t.sales.filterPresets.completed, filters: [{ id: 'status', value: 'COMPLETED' }] },
-            { label: t.sales.filterPresets.refunded, filters: [{ id: 'status', value: 'REFUNDED' }] },
-            { label: t.sales.filterPresets.partialRefund, filters: [{ id: 'status', value: 'PARTIAL_REFUND' }] },
+            { value: 'DRAFT', label: t.sales.filterPresets.draft },
+            { value: 'COMPLETED', label: t.sales.filterPresets.completed },
+            { value: 'REFUNDED', label: t.sales.filterPresets.refunded },
+            { value: 'PARTIAL_REFUND', label: t.sales.filterPresets.partialRefund },
         ],
         [t],
     );
@@ -266,6 +285,30 @@ export default function SalesPage() {
                     }
                 />
 
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <div className="relative flex-1 min-w-[220px]">
+                        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <Input
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder={t.sales.dataTable.searchPlaceholder}
+                            className="pl-9"
+                        />
+                    </div>
+                    <Select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="w-auto max-w-[180px]"
+                    >
+                        <option value="">{t.sales.dataTable.allStatuses}</option>
+                        {statusOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </Select>
+                </div>
+
                 <DataTable<Sale>
                     tableId="sales"
                     columns={columns}
@@ -274,8 +317,8 @@ export default function SalesPage() {
                     isLoading={loading}
                     emptyMessage={t.sales.dataTable.emptyMessage}
                     emptyIcon={<Receipt className="w-16 h-16 text-gray-200" />}
-                    searchPlaceholder={t.sales.dataTable.searchPlaceholder}
-                    filterPresets={filterPresets}
+                    showSearch={false}
+                    serverPagination={serverPagination}
                 />
             
         </PageShell>

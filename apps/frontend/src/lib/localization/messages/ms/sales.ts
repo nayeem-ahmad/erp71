@@ -313,6 +313,7 @@ export const salesMessages = {
                 title: "Jualan",
                 emptyMessage: "Tiada sales dijumpai",
                 searchPlaceholder: "Cari by serial, customer, status...",
+                allStatuses: "Semua status",
             },
             detail: {
                 edit: "Edit",

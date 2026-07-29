@@ -26,7 +26,7 @@ jest.mock('next/link', () => {
 
 jest.mock('@/lib/api', () => ({
     api: {
-        getSales: jest.fn(),
+        getSalesList: jest.fn(),
         getSalesSettings: jest.fn().mockResolvedValue({ pos_enabled: true }),
     },
 }));
@@ -60,7 +60,15 @@ const mockSales = [
 describe('SalesListPage — Sales Transaction List', () => {
     beforeEach(() => {
         const { api } = require('@/lib/api');
-        api.getSales.mockResolvedValue(mockSales);
+        // The list pages against the server, so the mock returns one page plus
+        // the real total rather than a bare array.
+        api.getSalesList.mockResolvedValue({
+            items: mockSales,
+            total: mockSales.length,
+            page: 1,
+            limit: 20,
+            pages: 1,
+        });
     });
 
     afterEach(() => {
@@ -144,7 +152,7 @@ describe('SalesListPage — Sales Transaction List', () => {
 
     it('shows empty state when no sales exist', async () => {
         const { api } = require('@/lib/api');
-        api.getSales.mockResolvedValue([]);
+        api.getSalesList.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 0 });
 
         render(<SalesListPage />);
         await waitFor(() => {
@@ -152,11 +160,11 @@ describe('SalesListPage — Sales Transaction List', () => {
         });
     });
 
-    it('calls getSales on mount', async () => {
+    it('requests a page from the server on mount', async () => {
         const { api } = require('@/lib/api');
         render(<SalesListPage />);
         await waitFor(() => {
-            expect(api.getSales).toHaveBeenCalledTimes(1);
+            expect(api.getSalesList).toHaveBeenCalledTimes(1);
         });
     });
 

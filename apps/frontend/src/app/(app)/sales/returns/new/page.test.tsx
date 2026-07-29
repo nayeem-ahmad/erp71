@@ -16,7 +16,7 @@ jest.mock('next/navigation', () => ({
 jest.mock('@/lib/api', () => ({
     api: {
         getCurrentUser: jest.fn(),
-        getSales: jest.fn(),
+        getSalesList: jest.fn(),
         getSale: jest.fn(),
         createReturn: jest.fn(),
     },
@@ -57,7 +57,10 @@ describe('NewSalesReturnPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
-        (api.getSales as jest.Mock).mockResolvedValue([{ id: 'sale-1', serial_number: 'S-00001' }]);
+        (api.getSalesList as jest.Mock).mockResolvedValue({
+            items: [{ id: 'sale-1', serial_number: 'S-00001' }],
+            total: 1, page: 1, limit: 20, pages: 1,
+        });
         (api.getSale as jest.Mock).mockResolvedValue(SALE);
         (api.createReturn as jest.Mock).mockResolvedValue({ id: 'return-1' });
     });
@@ -107,7 +110,7 @@ describe('NewSalesReturnPage', () => {
     });
 
     it('reports a serial that matches no sale', async () => {
-        (api.getSales as jest.Mock).mockResolvedValue([]);
+        (api.getSalesList as jest.Mock).mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 0 });
         await act(async () => { render(<NewSalesReturnPage />); });
         await findSale('S-99999');
 

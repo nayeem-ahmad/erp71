@@ -7,7 +7,8 @@ import { classifyPaymentMode } from './classify-payment-mode';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
 import { resolvePaymentMethodAccountId } from '../accounting/payment-account.util';
 import { previewSaleLoyaltyRedemption, recordSaleLoyalty } from '../loyalty/loyalty-sale.utils';
-import { cursorPaginate, CursorPaginatedResult } from '../common/pagination.dto';
+import { paginate, PaginatedResult } from '../common/pagination.dto';
+import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
 import { CrmCampaignsService } from '../crm-campaigns/crm-campaigns.service';
@@ -15,6 +16,21 @@ import {
     assertCustomerCreditForSale,
     creditDueAmount,
 } from '../customers/customer-credit.utils';
+
+/**
+ * Columns the sales list may sort on. An allowlist rather than passing the
+ * client's string through, so a sort parameter cannot reach an arbitrary field.
+ */
+const SALE_SORTABLE: SortableMap = {
+    serial_number: (dir) => ({ serial_number: dir }),
+    reference_number: (dir) => ({ reference_number: dir }),
+    created_at: (dir) => ({ created_at: dir }),
+    sale_date: (dir) => ({ sale_date: dir }),
+    total_amount: (dir) => ({ total_amount: dir }),
+    amount_paid: (dir) => ({ amount_paid: dir }),
+    status: (dir) => ({ status: dir }),
+    customer: (dir) => ({ customer: { name: dir } }),
+};
 
 @Injectable()
 export class SalesService {
@@ -628,24 +644,61 @@ export class SalesService {
 
     async findAll(
         tenantId: string,
-        opts?: { cursor?: string; limit?: number; createdBy?: string },
-    ): Promise<CursorPaginatedResult<any>> {
-        const limit = Math.min(opts?.limit ?? 20, 100);
+        opts?: {
+            page?: number;
+            limit?: number;
+            createdBy?: string;
+            search?: string;
+            status?: string;
+            sortBy?: string;
+            sortDir?: string;
+        },
+    ): Promise<PaginatedResult<any>> {
+        const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 100);
+        const page = Math.max(opts?.page ?? 1, 1);
+        const search = opts?.search?.trim();
+        const statuses = (opts?.status ?? '')
+            .split(',')
+            .map((value) => value.trim())
+            .filter(Boolean);
 
-        const sales = await this.db.sale.findMany({
-            where: {
-                tenant_id: tenantId,
-                ...(opts?.createdBy ? { created_by: opts.createdBy } : {}),
-            },
-            include: {
-                items: { include: { product: true } },
-                payments: true,
-                customer: true,
-            },
-            orderBy: { created_at: 'desc' },
-            take: limit + 1,
-            ...(opts?.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
-        });
+        const where: any = {
+            tenant_id: tenantId,
+            ...(opts?.createdBy ? { created_by: opts.createdBy } : {}),
+            // Accepts one status or a comma-separated set, so a caller can ask
+            // for a count across several (the dashboard's delivery-pending tile)
+            // without a request per status.
+            ...(statuses.length === 1 ? { status: statuses[0] } : {}),
+            ...(statuses.length > 1 ? { status: { in: statuses } } : {}),
+            // Mirrors the list page's placeholder: serial, customer, status.
+            // The imported reference is included too, since that is the number
+            // the business knows a migrated sale by.
+            ...(search
+                ? {
+                      OR: [
+                          { serial_number: { contains: search, mode: 'insensitive' } },
+                          { reference_number: { contains: search, mode: 'insensitive' } },
+                          { status: { contains: search, mode: 'insensitive' } },
+                          { customer: { name: { contains: search, mode: 'insensitive' } } },
+                      ],
+                  }
+                : {}),
+        };
+
+        const [sales, total] = await Promise.all([
+            this.db.sale.findMany({
+                where,
+                include: {
+                    items: { include: { product: true } },
+                    payments: true,
+                    customer: true,
+                },
+                orderBy: resolveOrderBy(opts?.sortBy, opts?.sortDir, SALE_SORTABLE, { created_at: 'desc' }),
+                skip: (page - 1) * limit,
+                take: limit,
+            }),
+            this.db.sale.count({ where }),
+        ]);
 
         const summaries = await loadPostingSummaries(
             this.db,
@@ -660,7 +713,7 @@ export class SalesService {
             ...(summaries.get(sale.id) ?? NO_POSTING_EVENT),
         }));
 
-        return cursorPaginate(enriched, limit);
+        return paginate(enriched, total, page, limit);
     }
 
     async findOne(tenantId: string, id: string) {

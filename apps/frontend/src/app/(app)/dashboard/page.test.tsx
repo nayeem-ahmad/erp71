@@ -39,7 +39,7 @@ jest.mock('@/lib/api', () => ({
     api: {
         getMe: jest.fn(),
         getProducts: jest.fn(),
-        getSales: jest.fn(),
+        getSalesList: jest.fn(),
         getFinancialKpis: jest.fn(),
         getFinancialTrends: jest.fn(),
         getSalesByCategory: jest.fn(),
@@ -62,9 +62,14 @@ describe('DashboardPage — Business Monitor v2', () => {
         (api.getProducts as jest.Mock).mockResolvedValue([
             { id: 'product-1', name: 'Coffee Beans', price: 15.5, stock_quantity: 2, reorder_level: 5, stocks: [{ quantity: 2 }] },
         ]);
-        (api.getSales as jest.Mock).mockResolvedValue([
-            { id: 'sale-1', serial_number: 'S-001', total_amount: 125, amount_paid: 0, status: 'COMPLETED', created_at: '2026-03-21T09:00:00.000Z' },
-        ]);
+        // The dashboard makes two bounded calls: recent rows for the activity
+        // panel, then a count-only probe for the delivery tile.
+        (api.getSalesList as jest.Mock).mockResolvedValue({
+            items: [
+                { id: 'sale-1', serial_number: 'S-001', total_amount: 125, amount_paid: 0, status: 'COMPLETED', created_at: '2026-03-21T09:00:00.000Z' },
+            ],
+            total: 1, page: 1, limit: 5, pages: 1,
+        });
         (api.getSalesByCategory as jest.Mock).mockResolvedValue(EMPTY_CATEGORY);
         (api.getSalesByProduct as jest.Mock).mockResolvedValue(EMPTY_PRODUCT_REPORT);
         (api.getSalesByCustomer as jest.Mock).mockResolvedValue(EMPTY_CUSTOMER_REPORT);
@@ -241,7 +246,7 @@ describe('DashboardPage — Business Monitor v2', () => {
         expect(screen.queryByText('Top selling products')).not.toBeInTheDocument();
         expect(screen.queryByText('Top customers')).not.toBeInTheDocument();
         expect(api.getProducts).not.toHaveBeenCalled();
-        expect(api.getSales).not.toHaveBeenCalled();
+        expect(api.getSalesList).not.toHaveBeenCalled();
         expect(api.getSalesByCategory).not.toHaveBeenCalled();
         expect(api.getSalesByProduct).not.toHaveBeenCalled();
         expect(api.getSalesByCustomer).not.toHaveBeenCalled();

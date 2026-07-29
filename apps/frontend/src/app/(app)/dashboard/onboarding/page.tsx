@@ -336,8 +336,10 @@ function PosStep({ onNext }: { onNext: () => void }) {
     const checkForSales = useCallback(async () => {
         setChecking(true);
         try {
-            const sales = await api.getSales();
-            if (Array.isArray(sales) && sales.length > 0) {
+            // Only "has the tenant made a sale yet?" — one row is enough, and
+            // the server's total answers it without downloading any history.
+            const page = await api.getSalesList({ limit: 1 });
+            if ((page?.total ?? 0) > 0) {
                 setSaleDetected(true);
             }
         } catch {

@@ -712,16 +712,45 @@ export const api = {
      * request returned 20 rows and the list footer reported "of 20" regardless of how many
      * sales existed; this walks the cursor to the end.
      */
+    /**
+     * Every sale, flattened. For callers that genuinely need the whole set
+     * (dashboard aggregates, the return picker). NOT for tables — the sales
+     * list pages against the server via `getSalesList`, because a migrated
+     * tenant can have thousands of sales and pulling them all to render 20
+     * rows is what made the list appear empty.
+     */
     getSales: (params?: { mine?: boolean }) =>
-        fetchAllCursorPages(`/sales${params?.mine ? '?mine=true' : ''}`),
-    /** One cursor page of sales — for callers that only need the most recent few. */
-    getSalesPage: (params?: { cursor?: string; limit?: number; mine?: boolean }) => {
+        fetchAllPages(`/sales${params?.mine ? '?mine=true' : ''}`),
+    /** One server-paginated page, for `useServerList`. */
+    getSalesList: (params: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        status?: string;
+        sortBy?: string;
+        sortDir?: 'asc' | 'desc';
+        mine?: boolean;
+    }) => {
         const query = new URLSearchParams();
-        if (params?.cursor) query.set('cursor', params.cursor);
+        if (params.page) query.set('page', String(params.page));
+        if (params.limit) query.set('limit', String(params.limit));
+        if (params.search) query.set('search', params.search);
+        if (params.status) query.set('status', params.status);
+        if (params.sortBy) query.set('sortBy', params.sortBy);
+        if (params.sortDir) query.set('sortDir', params.sortDir);
+        if (params.mine) query.set('mine', 'true');
+        return fetchPaginated(`/sales?${query.toString()}`);
+    },
+    /** The most recent few sales — callers that do not need the whole history. */
+    getSalesPage: (params?: { page?: number; limit?: number; mine?: boolean }) => {
+        const query = new URLSearchParams();
+        if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
         if (params?.mine) query.set('mine', 'true');
         const qs = query.toString();
-        return fetchWithAuth(`/sales${qs ? `?${qs}` : ''}`);
+        // fetchPaginated, not fetchWithAuth: the interceptor moves `items` up to
+        // `data`, so unwrapping would hand callers a bare array and drop the total.
+        return fetchPaginated(`/sales${qs ? `?${qs}` : ''}`);
     },
     /** Every customer as a flat array — for pickers and id→customer maps. */
     getCustomers: (params?: { search?: string }) => {

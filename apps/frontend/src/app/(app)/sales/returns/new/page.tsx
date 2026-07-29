@@ -70,10 +70,11 @@ export default function NewSalesReturnPage() {
 
         setSearching(true);
         try {
-            // TODO: needs a lookup-by-serial endpoint — this pulls the whole
-            // sales list to match one row (carried over from IssueReturnModal).
-            const allSales = await api.getSales();
-            const found = allSales.find((entry: any) => entry.serial_number === serial);
+            // Server-side search, bounded: the serial is matched exactly below,
+            // but `search` also matches reference numbers and customer names, so
+            // take a small page rather than assume the first row is the one.
+            const page = await api.getSalesList({ search: serial, limit: 20 });
+            const found = (page.items ?? []).find((entry: any) => entry.serial_number === serial);
             if (!found) {
                 toast.error(`No sale found with serial ${serial}`);
                 return;
