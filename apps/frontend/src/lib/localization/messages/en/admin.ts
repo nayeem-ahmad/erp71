@@ -588,6 +588,10 @@ export const adminMessages = {
                 label: 'AI Assistant',
                 hint: 'Business data chatbot in the header. Requires a Premium plan and consumes AI credits. Off by default.',
             },
+            externalImport: {
+                label: 'External ERP import',
+                hint: 'Lets this tenant\u2019s owner import their history from another ERP via Settings \u203a Data Management. Off by default.',
+            },
             saved: 'Tenant feature settings saved.',
         },
         sms: {

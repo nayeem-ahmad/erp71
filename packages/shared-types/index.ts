@@ -816,6 +816,8 @@ export interface PlatformFeatures {
   voice: boolean;
   manufacturing: boolean;
   aiChat: boolean;
+  /** Lets a tenant admin run the external-ERP import from Data Management. */
+  externalImport: boolean;
 }
 
 export const DEFAULT_PLATFORM_FEATURES: PlatformFeatures = {
@@ -825,6 +827,7 @@ export const DEFAULT_PLATFORM_FEATURES: PlatformFeatures = {
   voice: false,
   manufacturing: false,
   aiChat: false,
+  externalImport: false,
 };
 
 export type PlatformFeatureKey = keyof PlatformFeatures;
@@ -836,6 +839,7 @@ export const PLATFORM_FEATURE_KEYS: PlatformFeatureKey[] = [
   'voice',
   'manufacturing',
   'aiChat',
+  'externalImport',
 ];
 
 /**
@@ -872,6 +876,7 @@ const PLATFORM_FEATURE_SETTING_KEYS: Record<keyof PlatformFeatures, string> = {
   voice: 'voice_enabled',
   manufacturing: 'manufacturing_enabled',
   aiChat: 'ai_chat_enabled',
+  externalImport: 'external_import_enabled',
 };
 
 /** Parses general-group platform settings into feature booleans (`'true'` only). */
@@ -885,6 +890,7 @@ export function parsePlatformFeatures(
     voice: settings[PLATFORM_FEATURE_SETTING_KEYS.voice] === 'true',
     manufacturing: settings[PLATFORM_FEATURE_SETTING_KEYS.manufacturing] === 'true',
     aiChat: settings[PLATFORM_FEATURE_SETTING_KEYS.aiChat] === 'true',
+    externalImport: settings[PLATFORM_FEATURE_SETTING_KEYS.externalImport] === 'true',
   };
 }
 
