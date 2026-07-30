@@ -585,6 +585,10 @@ export const adminMessages = {
                     label: "Import ERP luaran",
                     hint: "Membenarkan pemilik penyewa ini mengimport sejarah dari ERP lain melalui Tetapan › Pengurusan Data. Dimatikan secara lalai.",
                 },
+                projects: {
+                    label: "Pengurusan Projek",
+                    hint: "Projek, tugasan, log masa, kanban dan sprint. Dimatikan secara lalai.",
+                },
                 saved: 'Tetapan ciri penyewa disimpan.',
             },
             sms: {

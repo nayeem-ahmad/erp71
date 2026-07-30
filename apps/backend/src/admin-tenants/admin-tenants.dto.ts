@@ -61,6 +61,7 @@ export class UpdateAdminTenantFeaturesDto {
     @IsOptional() @IsBoolean() manufacturing?: boolean | null;
     @IsOptional() @IsBoolean() aiChat?: boolean | null;
     @IsOptional() @IsBoolean() externalImport?: boolean | null;
+    @IsOptional() @IsBoolean() projects?: boolean | null;
 }
 
 export class SuspendTenantDto {

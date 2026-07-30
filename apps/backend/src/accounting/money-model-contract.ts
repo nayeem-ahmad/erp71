@@ -117,4 +117,15 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     { model: 'RefereePayment', exempt: 'Referral payout at the platform level, not the tenant GL.' },
     { model: 'ReferralSignup', exempt: 'Referral analytics/attribution.' },
     { model: 'CrmCampaign', exempt: 'Attributed-revenue analytics, not a ledger entry.' },
+
+    // ── Exempt: project management (Phase 1 carries no costing) ──────────────
+    // Four of these five hold hours, not money — Decimal is the right column
+    // type for 1.25h and that is all it means here. Project.budget_amount is a
+    // plan figure with nothing rolling up into it until Phase 2 costing lands,
+    // at which point these entries need revisiting rather than extending.
+    { model: 'Project', exempt: 'budget_amount is a planning figure; no costing rolls up into it in Phase 1.' },
+    { model: 'ProjectTask', exempt: 'estimate_hours/remaining_hours are hours, not money.' },
+    { model: 'ProjectTaskRemainingLog', exempt: 'Audit trail of remaining hours; no monetary amount.' },
+    { model: 'ProjectTimeEntry', exempt: 'Logged hours; costing them against payroll is Phase 2.' },
+    { model: 'SprintSnapshot', exempt: 'Daily burndown totals in hours.' },
 ];

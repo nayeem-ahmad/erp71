@@ -592,6 +592,10 @@ export const adminMessages = {
                 label: 'External ERP import',
                 hint: 'Lets this tenant\u2019s owner import their history from another ERP via Settings \u203a Data Management. Off by default.',
             },
+            projects: {
+                label: 'Project Management',
+                hint: 'Projects, tasks, time logging, kanban and sprints. Off by default.',
+            },
             saved: 'Tenant feature settings saved.',
         },
         sms: {
