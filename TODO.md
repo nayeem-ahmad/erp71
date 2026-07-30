@@ -69,6 +69,20 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 ## HIGH PRIORITY — Ship within first 2 weeks of launch
 
+### Project Management module — Phase 1 scoped 2026-07-30, not started
+Job-costing spine for tenants who sell work as well as goods (interiors, installation/servicing, integrators, printing). Full scope in `docs/projects/project-management-phase-1.md`. Claims `/projects` and the `ProjectTask` name, both freed by the CRM Follow-ups rename. Three design decisions are load-bearing and written up there: `remaining_hours` is an independent re-estimate rather than `estimate − logged` (otherwise burndown always reaches zero and tells you nothing); burndown needs nightly `SprintSnapshot` rows because history cannot be reconstructed from current task state; and the ideal line must skip the Fri/Sat Bangladesh weekend.
+- [ ] Prisma models + one migration: `Project`, `ProjectType`, `ProjectMember`, `ProjectMilestone`, `ProjectTaskStatus`, `ProjectTask`, `ProjectTaskChecklistItem`, `ProjectTimeEntry`, `Sprint`, `SprintSnapshot`, `ProjectComment`, `ProjectAttachment`
+- [ ] `apps/backend/src/projects/` — project CRUD with server-side pagination (`PROJECT_SORTABLE` allowlist), members, milestones, tasks incl. subtasks/checklist/board move, time entries, sprints, and the two master-data sets
+- [ ] Nightly `SprintSnapshot` writer — registered in `JOB_NAMES`, wrapped by `JobTrackerService`, idempotent on a same-day re-run
+- [ ] `GET /sprints/:id/burndown` — ideal (working days only), actual remaining, and committed-scope series
+- [ ] Frontend `(app)/projects/`: list, create, detail, backlog/sprint planning, and one board component in two modes (kanban = all tasks by column, scrum = active sprint + burndown)
+- [ ] Project types and task statuses/columns as tenant-managed master data, following the `crm-lead-taxonomy` pattern
+- [ ] `projects.*` permissions in `packages/shared-types/index.ts` + a `projects` platform feature, per-tenant overridable, off by default
+- [ ] Nav registry entry, default layout node, nav icon, en/bn/ms strings
+- [ ] Tests: remaining-hours suggestion + override, one-active-sprint rule, board move/reorder, mid-sprint scope change, snapshot idempotency, Fri/Sat working-day maths, percent-complete rollup, tenant scoping
+- [ ] Confirm the chart library against what the dashboard already uses before building the burndown — not assumed
+- [ ] Open questions to settle: task statuses tenant-wide vs per project type; whether `VIEWER` sees hours; burndown hours-only vs hours + task count; and whether `ProductionJob` eventually becomes a project type or stays a separate job-costing engine (decides whether Phase 2 builds a second costing path)
+
 ### Express Retail Pro import — LANDED (2026-07-25), provider contract verified 2026-07-29
 Platform-admin-only importer that pulls a tenant's sales/purchase history out of an Express Retail Pro account: `apps/backend/src/external-sync/` (client, mapper, service, nightly scheduler, controller, DTOs), the admin page `apps/frontend/src/app/(app)/admin/tenants/[tenantId]/external-sync/`, `api.ts` helpers, three Prisma models, and migration `20260725120000_add_external_sync`. Credentials are AES-256-GCM encrypted; an id-mapping table makes a re-pull update in place instead of duplicating. Backend tests (39) and both typechecks pass, but nothing below has been exercised against a real database or a real provider.
 - [ ] Apply migration `20260725120000_add_external_sync` to a database — it has only ever been `prisma generate`d, never run
