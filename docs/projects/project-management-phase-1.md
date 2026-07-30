@@ -21,13 +21,25 @@ produces a burndown that always reaches zero on schedule and therefore tells you
 nothing. Remaining defaults to the estimate at creation, is suggested as
 `max(0, estimate − logged)` when time is logged, and is always overridable.
 
-**2. Burndown requires daily snapshots.** Sprint history cannot be reconstructed
-from current task state — once remaining hours change, yesterday's number is
-gone. A nightly job writes one `SprintSnapshot` row per active sprint per day.
-The alternative (an audit trail of every remaining-hours change, replayed) is
-strictly more work for the same chart.
+**2. Every change to `remaining_hours` is logged with a timestamp and a reason.**
+`ProjectTaskRemainingLog` records previous value, new value, delta, who, when,
+and *why* — whether the number moved because work was logged against it or
+because someone re-estimated it upward. That distinction is the entire
+scope-creep signal, and it is invisible if only the current value is kept.
 
-**3. The Bangladesh working week is Sunday–Thursday.** The ideal burndown line
+The column and the log are written together in one transaction through a single
+service method; nothing else is permitted to touch `remaining_hours`. Log rows
+are immutable and survive task soft-delete.
+
+**3. Burndown snapshots are a cache, not the source of truth.** A nightly job
+still writes one `SprintSnapshot` row per active sprint per day, because the
+chart should be an indexed read rather than a replay. But with the remaining-log
+in place those rows are *derivable*, which is a real improvement: a missed cron
+night, a snapshot bug, or a sprint created retroactively can all be repaired by
+recomputing from history. Without the log a missed night is a permanent hole in
+the chart.
+
+**4. The Bangladesh working week is Sunday–Thursday.** The ideal burndown line
 must skip Friday and Saturday or every sprint looks behind schedule for two days
 a week. Weekend days are a tenant setting, defaulting to Fri/Sat.
 
@@ -72,6 +84,29 @@ subtask), `title`, `description?`, `status_id`, `priority`, `assignee_id?`,
 position), `completed_at?`, `created_by`, timestamps, `deleted_at`.
 
 `logged_hours` is derived from time entries, never stored on the task.
+
+### `ProjectTaskRemainingLog`
+The history of every change to a task's `remaining_hours`.
+
+`tenant_id`, `task_id`, `project_id` and `sprint_id?` (both denormalised **as at
+the moment of the change** — if a task later moves sprint, the history must still
+say where the hours burned), `previous_hours?` (null on the first row),
+`new_hours`, `delta`, `source`, `time_entry_id?`, `note?`, `changed_by`,
+`changed_at`. Indexed on `(tenant_id, sprint_id, changed_at)` for burndown
+reconstruction and `(task_id, changed_at)` for the task view.
+
+`source` is `TASK_CREATED | TIME_LOGGED | RE_ESTIMATED | TASK_COMPLETED |
+TASK_REOPENED | TIME_ENTRY_DELETED`. It is what makes the log worth keeping
+rather than a number with a date on it: burn-down from doing the work and
+burn-*up* from re-estimation are different events that a bare value cannot tell
+apart.
+
+`delta` is redundant against previous/new, and stored anyway so a burndown query
+is a `SUM` over a date range rather than a window function over every row.
+
+Rules: task creation writes the opening row (`null → estimate`); completing a
+task writes a row to zero; deleting a time entry writes a row if it changed the
+remaining figure. Rows are never updated or deleted.
 
 ### `ProjectTaskChecklistItem`
 `task_id`, `text`, `is_done`, `sort_order`.
@@ -121,11 +156,22 @@ pattern.
   drag-and-drop, `PATCH /tasks/:id/move` taking `{statusId, sortOrder, sprintId?}`
 - `project-time.*` — log/edit/delete a time entry; logging suggests a new
   `remaining_hours` but never forces it
+- `remaining-hours.service.ts` — **the only writer of `remaining_hours`.** Takes
+  `(taskId, newHours, source, actor, timeEntryId?)`, writes the column and the
+  `ProjectTaskRemainingLog` row in one transaction, and is called by task
+  create/update, time logging, completion and reopen. Enforced by a test that
+  greps the module for any other assignment to the column
+- `GET /tasks/:id/remaining-history` — the audit view behind the task detail
+  panel, and the data behind "why did the line go up on Tuesday"
 - `sprints.*` — CRUD, start/complete a sprint, backlog↔sprint assignment,
   `GET /sprints/:id/burndown` returning ideal + actual + scope series
 - `project-task-statuses.*` and `project-types.*` — the two master-data sets
 - `projects.scheduler.ts` — nightly `SprintSnapshot` writer, registered in
   `JOB_NAMES` and wrapped by `JobTrackerService` like every other cron
+- `sprint-snapshot.service.ts` — computes a snapshot for a given
+  `(sprint, date)`, used by both the cron and a `rebuildSnapshots(sprintId)`
+  path that replays `ProjectTaskRemainingLog` to fill gaps. The cron becomes
+  repairable rather than one-shot
 
 All queries scoped by `tenantId` through `TenantInterceptor`. Sort-order writes
 use integer rebalancing within a column rather than fractional keys.
@@ -172,6 +218,12 @@ use — to be confirmed before building, not assumed.
   one-active-sprint rule, board move/reorder, sprint scope changes, snapshot
   idempotency for a same-day re-run, working-day maths across a Fri/Sat weekend,
   percent-complete rollup, and tenant scoping on every query
+- Remaining-log tests specifically: an opening row on task creation, correct
+  `source` per path, `sprint_id` frozen at write time so a later sprint move does
+  not rewrite history, a log row on time-entry deletion, no row when a write
+  leaves the value unchanged, and `rebuildSnapshots` reproducing a
+  cron-written snapshot exactly from the log alone — the test that proves the
+  cache really is derivable
 - Frontend tests for the board in both modes and the burndown series builder
 
 ---
@@ -195,3 +247,12 @@ running timers, and multi-project sprints.
 4. Is `ProductionJob` (manufacturing) eventually a project type, or does it stay
    a separate job-costing engine? Not a Phase 1 blocker, but it decides whether
    Phase 2 builds a second costing path.
+5. `ProjectTaskRemainingLog` is deliberately scoped to one field. Two adjacent
+   histories would make a sprint *fully* reconstructable rather than only its
+   hours — when a task entered or left the sprint, and when it crossed into a
+   `DONE` status. Both are needed to replay `task_count`/`done_task_count` and
+   the committed-scope line; today those two series still depend on the nightly
+   cron having run. The options are a second narrow log, or widening this into a
+   general field-level `ProjectTaskHistory` that would also power the task
+   activity feed for free. Proposed: ship the single-field log now as asked, and
+   decide the widening once the board is real — the table is additive either way.
