@@ -2720,4 +2720,203 @@ export const api = {
         return fetchWithAuth(`/products/search/by-quantity?${q}`);
     },
     getCurrentUser: () => fetchWithAuth('/auth/me'),
+
+    // ── Projects ───────────────────────────────────────────────────────────
+
+    /** One server-paginated page of projects, for `useServerList`. */
+    getProjects: (params: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        status?: string;
+        projectTypeId?: string;
+        managerId?: string;
+        customerId?: string;
+        sortBy?: string;
+        sortDir?: 'asc' | 'desc';
+    }) => {
+        const query = new URLSearchParams();
+        for (const [key, value] of Object.entries(params)) {
+            if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
+        }
+        return fetchWithAuth(`/projects?${query}`);
+    },
+    getProject: (id: string) => fetchWithAuth(`/projects/${id}`),
+    createProject: (data: Record<string, unknown>) =>
+        fetchWithAuth('/projects', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateProject: (id: string, data: Record<string, unknown>) =>
+        fetchWithAuth(`/projects/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteProject: (id: string) => fetchWithAuth(`/projects/${id}`, { method: 'DELETE' }),
+    getProjectTimeSummary: (id: string) => fetchWithAuth(`/projects/${id}/time-summary`),
+
+    addProjectMember: (projectId: string, data: { userId: string; role?: string }) =>
+        fetchWithAuth(`/projects/${projectId}/members`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    removeProjectMember: (projectId: string, userId: string) =>
+        fetchWithAuth(`/projects/${projectId}/members/${userId}`, { method: 'DELETE' }),
+
+    createProjectMilestone: (projectId: string, data: Record<string, unknown>) =>
+        fetchWithAuth(`/projects/${projectId}/milestones`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateProjectMilestone: (milestoneId: string, data: Record<string, unknown>) =>
+        fetchWithAuth(`/projects/milestones/${milestoneId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteProjectMilestone: (milestoneId: string) =>
+        fetchWithAuth(`/projects/milestones/${milestoneId}`, { method: 'DELETE' }),
+
+    getProjectTypes: (includeInactive = false) =>
+        fetchWithAuth(`/projects/types${includeInactive ? '?includeInactive=true' : ''}`),
+    createProjectType: (data: { name: string; sortOrder?: number }) =>
+        fetchWithAuth('/projects/types', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateProjectType: (id: string, data: Record<string, unknown>) =>
+        fetchWithAuth(`/projects/types/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteProjectType: (id: string) => fetchWithAuth(`/projects/types/${id}`, { method: 'DELETE' }),
+
+    getProjectTaskStatuses: (includeInactive = false) =>
+        fetchWithAuth(`/projects/task-statuses${includeInactive ? '?includeInactive=true' : ''}`),
+    createProjectTaskStatus: (data: { name: string; category: string; sortOrder?: number }) =>
+        fetchWithAuth('/projects/task-statuses', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateProjectTaskStatus: (id: string, data: Record<string, unknown>) =>
+        fetchWithAuth(`/projects/task-statuses/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteProjectTaskStatus: (id: string) =>
+        fetchWithAuth(`/projects/task-statuses/${id}`, { method: 'DELETE' }),
+
+    getProjectTasks: (params: Record<string, string | number | undefined>) => {
+        const query = new URLSearchParams();
+        for (const [key, value] of Object.entries(params)) {
+            if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
+        }
+        return fetchWithAuth(`/project-tasks?${query}`);
+    },
+    /** Kanban passes no sprintId; scrum passes the active sprint's. */
+    getProjectBoard: (projectId: string, sprintId?: string) =>
+        fetchWithAuth(`/project-tasks/board/${projectId}${sprintId ? `?sprintId=${sprintId}` : ''}`),
+    getProjectTask: (id: string) => fetchWithAuth(`/project-tasks/${id}`),
+    getTaskRemainingHistory: (id: string) =>
+        fetchWithAuth(`/project-tasks/${id}/remaining-history`),
+    createProjectTask: (data: Record<string, unknown>) =>
+        fetchWithAuth('/project-tasks', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateProjectTask: (id: string, data: Record<string, unknown>) =>
+        fetchWithAuth(`/project-tasks/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    moveProjectTask: (
+        id: string,
+        data: { statusId: string; sortOrder: number; sprintId?: string; clearSprint?: boolean },
+    ) =>
+        fetchWithAuth(`/project-tasks/${id}/move`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteProjectTask: (id: string) => fetchWithAuth(`/project-tasks/${id}`, { method: 'DELETE' }),
+    addTaskChecklistItem: (taskId: string, data: { text: string }) =>
+        fetchWithAuth(`/project-tasks/${taskId}/checklist`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateTaskChecklistItem: (itemId: string, data: Record<string, unknown>) =>
+        fetchWithAuth(`/project-tasks/checklist/${itemId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteTaskChecklistItem: (itemId: string) =>
+        fetchWithAuth(`/project-tasks/checklist/${itemId}`, { method: 'DELETE' }),
+
+    getProjectTimeEntries: (params: Record<string, string | number | undefined>) => {
+        const query = new URLSearchParams();
+        for (const [key, value] of Object.entries(params)) {
+            if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
+        }
+        return fetchWithAuth(`/project-time?${query}`);
+    },
+    logProjectTime: (data: {
+        taskId: string;
+        workDate: string;
+        hours: number;
+        note?: string;
+        remainingHours?: number;
+    }) =>
+        fetchWithAuth('/project-time', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteProjectTimeEntry: (id: string) => fetchWithAuth(`/project-time/${id}`, { method: 'DELETE' }),
+
+    getSprints: (projectId: string) => fetchWithAuth(`/sprints?projectId=${projectId}`),
+    getSprint: (id: string) => fetchWithAuth(`/sprints/${id}`),
+    getSprintBurndown: (id: string) => fetchWithAuth(`/sprints/${id}/burndown`),
+    rebuildSprintSnapshots: (id: string, overwrite = false) =>
+        fetchWithAuth(`/sprints/${id}/rebuild-snapshots${overwrite ? '?overwrite=true' : ''}`, {
+            method: 'POST',
+        }),
+    createSprint: (data: Record<string, unknown>) =>
+        fetchWithAuth('/sprints', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateSprint: (id: string, data: Record<string, unknown>) =>
+        fetchWithAuth(`/sprints/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    startSprint: (id: string) => fetchWithAuth(`/sprints/${id}/start`, { method: 'POST' }),
+    completeSprint: (id: string) => fetchWithAuth(`/sprints/${id}/complete`, { method: 'POST' }),
+    assignTasksToSprint: (id: string, taskIds: string[]) =>
+        fetchWithAuth(`/sprints/${id}/tasks`, {
+            method: 'POST',
+            body: JSON.stringify({ taskIds }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    removeTasksFromSprint: (id: string, taskIds: string[]) =>
+        fetchWithAuth(`/sprints/${id}/tasks`, {
+            method: 'DELETE',
+            body: JSON.stringify({ taskIds }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteSprint: (id: string) => fetchWithAuth(`/sprints/${id}`, { method: 'DELETE' }),
 };

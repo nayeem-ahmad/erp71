@@ -38,6 +38,7 @@ describe('PlatformSettingsService', () => {
                 manufacturing: true,
                 aiChat: false,
                 externalImport: false,
+                projects: false,
             });
         });
 
@@ -58,6 +59,7 @@ describe('PlatformSettingsService', () => {
                 manufacturing: false,
                 aiChat: false,
                 externalImport: false,
+                projects: false,
             });
         });
     });

@@ -170,7 +170,7 @@ describe('AdminTenantsPage', () => {
 
         // The unset features show what Inherit currently resolves to, from the platform defaults.
         expect(screen.getAllByText('Inheriting: On')).toHaveLength(1);   // manufacturing
-        expect(screen.getAllByText('Inheriting: Off')).toHaveLength(5);  // feedback/support/help/voice/externalImport
+        expect(screen.getAllByText('Inheriting: Off')).toHaveLength(6);  // feedback/support/help/voice/externalImport/projects
         expect(screen.getAllByText('Overridden for this tenant.')).toHaveLength(1); // aiChat
 
         // Pin Voice on for this tenant; every other feature keeps its current state.
@@ -187,6 +187,7 @@ describe('AdminTenantsPage', () => {
                 manufacturing: null,
                 aiChat: true,
                 externalImport: null,
+                projects: null,
             });
         });
     });

@@ -6,7 +6,7 @@ import ChartOfAccountsPage from './page';
 
 function renderPage() {
     return render(
-        <PlatformFeaturesProvider features={{ feedback: false, support: false, help: true, voice: false, manufacturing: true, aiChat: false, externalImport: false }}>
+        <PlatformFeaturesProvider features={{ feedback: false, support: false, help: true, voice: false, manufacturing: true, aiChat: false, externalImport: false, projects: false }}>
             <ChartOfAccountsPage />
         </PlatformFeaturesProvider>,
     );

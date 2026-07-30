@@ -150,6 +150,16 @@ export const routes = {
         leadTaxonomy: '/crm/settings/lead-taxonomy',
     },
 
+    projects: {
+        root: '/projects',
+        new: '/projects/new' as const,
+        detail: (id: string) => `/projects/${id}` as const,
+        board: (id: string) => `/projects/${id}/board` as const,
+        backlog: (id: string) => `/projects/${id}/backlog` as const,
+        myTasks: '/projects/my-tasks',
+        settings: '/projects/settings',
+    },
+
     hr: {
         root: '/hr',
         employees: '/hr/employees',

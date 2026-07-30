@@ -23,6 +23,7 @@ export const JOB_NAMES = {
     HEALTH_ALERTS: 'system-health.evaluate-alerts',
     ACCOUNTING_RECURRING_VOUCHERS: 'accounting.post-due-recurring-vouchers',
     FEEDBACK_PLAN_BATCH: 'feedback-automation.batch-propose-plans',
+    PROJECTS_SPRINT_SNAPSHOTS: 'projects.sprint-snapshots',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -60,4 +61,5 @@ export const JOB_REGISTRY: JobDefinition[] = [
     { name: JOB_NAMES.HEALTH_ALERTS, label: 'System health: evaluate alerts', schedule: '*/5 * * * *', maxIntervalMs: 15 * 60 * 1000 },
     { name: JOB_NAMES.ACCOUNTING_RECURRING_VOUCHERS, label: 'Accounting: post due recurring vouchers', schedule: '0 6 * * *', maxIntervalMs: DAY + 2 * HOUR },
     { name: JOB_NAMES.FEEDBACK_PLAN_BATCH, label: 'Feedback automation: batch propose plans', schedule: '0 * * * *', maxIntervalMs: 2 * HOUR },
+    { name: JOB_NAMES.PROJECTS_SPRINT_SNAPSHOTS, label: 'Projects: capture sprint burndown snapshots', schedule: '50 17 * * *', maxIntervalMs: DAY + 2 * HOUR },
 ];
