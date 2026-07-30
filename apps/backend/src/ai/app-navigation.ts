@@ -31,6 +31,7 @@ export interface AppPage {
 const APP_PAGES: AppPage[] = [
     // Everywhere
     { path: '/dashboard', label: 'Dashboard', description: 'business overview and key figures at a glance' },
+    { path: '/help', label: 'Help Center', description: 'how-to guides and FAQ for using the app' },
 
     // Sales — retail
     { path: '/sales/new', label: 'New Sale', description: 'record a new sale / invoice', modules: ['retail'] },

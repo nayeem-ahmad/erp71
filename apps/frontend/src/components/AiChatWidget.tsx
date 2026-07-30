@@ -57,6 +57,8 @@ const TOOL_ROUTES: Record<string, string> = {
     open_pipeline: '/sales/orders',
     workforce_summary: '/hr/attendance',
     loyalty_summary: '/sales/loyalty',
+    // Help answers come from the Help Center, so that is the right page to cite.
+    search_help: '/help',
     // The general-purpose lookups have no single report page behind them, so
     // they are deliberately absent: a link to the wrong page is worse than none.
 };
@@ -297,6 +299,7 @@ export default function AiChatWidget() {
                                                 m.suggestions.s2,
                                                 m.suggestions.s3,
                                                 m.suggestions.s4,
+                                                m.suggestions.s5,
                                             ]}
                                             onPick={send}
                                         />
