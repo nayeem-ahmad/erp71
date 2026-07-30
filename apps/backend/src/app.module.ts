@@ -76,6 +76,7 @@ import { AttendanceModule } from './attendance/attendance.module';
 import { BrandsModule } from './brands/brands.module';
 import { CrmInteractionsModule } from './crm-interactions/crm-interactions.module';
 import { CrmFollowUpsModule } from './crm-follow-ups/crm-follow-ups.module';
+import { ProjectsModule } from './projects/projects.module';
 import { CrmCampaignsModule } from './crm-campaigns/crm-campaigns.module';
 import { CrmLeadsModule } from './crm-leads/crm-leads.module';
 import { CrmLeadConversationsModule } from './crm-lead-conversations/crm-lead-conversations.module';
@@ -169,6 +170,7 @@ import { DemoDataModule } from './demo-data/demo-data.module';
         BrandsModule,
         CrmInteractionsModule,
         CrmFollowUpsModule,
+        ProjectsModule,
         CrmCampaignsModule,
         CrmLeadsModule,
         CrmLeadConversationsModule,

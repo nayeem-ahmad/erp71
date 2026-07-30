@@ -137,6 +137,14 @@ enum StorePermission {
   // Loans
   VIEW_LOANS
   MANAGE_LOANS
+
+  // Projects
+  VIEW_PROJECTS
+  MANAGE_PROJECTS
+  MANAGE_PROJECT_TASKS
+  LOG_PROJECT_TIME
+  MANAGE_SPRINTS
+  MANAGE_PROJECT_SETTINGS
 }
 
 enum EmployeeStatus {
@@ -255,6 +263,14 @@ model User {
   createdCreditTransactions CustomerCreditTransaction[] @relation("CreditTransactionCreator")
   createdSupplierCreditTransactions SupplierCreditTransaction[] @relation("SupplierCreditTransactionCreator")
   createdCampaigns          CrmCampaign[]              @relation("CampaignCreator")
+  managedProjects           Project[]                  @relation("ProjectManager")
+  createdProjects           Project[]                  @relation("ProjectCreator")
+  projectMemberships        ProjectMember[]            @relation("ProjectMemberUser")
+  assignedProjectTasks      ProjectTask[]              @relation("ProjectTaskAssignee")
+  createdProjectTasks       ProjectTask[]              @relation("ProjectTaskCreator")
+  projectTimeEntries        ProjectTimeEntry[]         @relation("ProjectTimeEntryUser")
+  projectRemainingLogs      ProjectTaskRemainingLog[]  @relation("RemainingLogUser")
+  projectComments           ProjectComment[]           @relation("ProjectCommentUser")
 }
 
 model PasswordResetToken {
@@ -508,6 +524,19 @@ model Tenant {
   externalSyncConnections ExternalSyncConnection[]
   externalSyncMappings    ExternalSyncMapping[]
   externalSyncRuns        ExternalSyncRun[]
+  projects                Project[]
+  projectTypes            ProjectType[]
+  projectMembers          ProjectMember[]
+  projectMilestones       ProjectMilestone[]
+  projectTaskStatuses     ProjectTaskStatus[]
+  projectTasks            ProjectTask[]
+  projectTaskRemainingLogs ProjectTaskRemainingLog[]
+  projectTaskChecklistItems ProjectTaskChecklistItem[]
+  projectTimeEntries      ProjectTimeEntry[]
+  sprints                 Sprint[]
+  sprintSnapshots         SprintSnapshot[]
+  projectComments         ProjectComment[]
+  projectAttachments      ProjectAttachment[]
 
   @@index([deleted_at])
 }
@@ -732,6 +761,7 @@ model Store {
   expenseEntries  ExpenseEntry[]
   loans           Loan[]
   externalSyncConnections ExternalSyncConnection[]
+  projects        Project[]
 }
 
 model PosCounter {
@@ -1265,7 +1295,7 @@ model PurchaseReturn {
 
   tenant           Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   store            Store     @relation(fields: [store_id], references: [id])
-  purchase         Purchase  @relation(fields: [purchase_id], references: [id])
+  purchase         Purchase? @relation(fields: [purchase_id], references: [id])
   supplier         Supplier? @relation(fields: [supplier_id], references: [id])
   items            PurchaseReturnItem[]
 
@@ -1443,6 +1473,7 @@ model Customer {
   creditTransactions CustomerCreditTransaction[]
   campaignRecipients CrmCampaignRecipient[]
   convertedFromLeads Lead[] @relation("LeadConvertedCustomer")
+  projects           Project[]
 
   @@unique([tenant_id, phone])
   @@unique([tenant_id, customer_code])
@@ -1592,6 +1623,8 @@ model Lead {
   crmFollowUps         CrmFollowUp[]
 
   @@unique([tenant_id, mobile])
+  projects Project[]
+
   @@index([tenant_id, status])
   @@index([tenant_id, category])
   @@index([tenant_id, priority])
@@ -2073,7 +2106,7 @@ model SalesReturn {
   // Relations
   tenant         Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   store          Store    @relation(fields: [store_id], references: [id])
-  sale           Sale     @relation(fields: [sale_id], references: [id])
+  sale           Sale?    @relation(fields: [sale_id], references: [id])
   items          SalesReturnItem[]
 
   @@unique([tenant_id, return_number])
@@ -2813,6 +2846,7 @@ model Employee {
   leaveRequests     LeaveRequest[]
   salaryPayments    SalaryPayment[]
   salaryAccruals    SalaryAccrual[]
+  projectTimeEntries ProjectTimeEntry[]
 
   @@unique([tenant_id, employee_code])
   @@unique([tenant_id, phone])
@@ -3423,4 +3457,388 @@ model RefereePayment {
   commissions ReferralSignup[]
 
   @@index([referee_id])
+}
+
+// ---------------------------------------------------------------------------
+// Project management (Phase 1)
+// Scope: docs/projects/project-management-phase-1.md
+// ---------------------------------------------------------------------------
+
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum ProjectPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ProjectMemberRole {
+  MANAGER
+  MEMBER
+  VIEWER
+}
+
+/// What a board column means, independent of what the tenant named it. Burndown
+/// and percent-complete both need to know which columns count as finished, and
+/// must not depend on a column literally being called "Done".
+enum ProjectTaskStatusCategory {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+}
+
+/// Why a task's remaining hours changed. Burning down through logged work and
+/// burning up through re-estimation are opposite events; a bare value cannot
+/// tell them apart, and that distinction is the whole scope-creep signal.
+enum RemainingHoursSource {
+  TASK_CREATED
+  TIME_LOGGED
+  RE_ESTIMATED
+  TASK_COMPLETED
+  TASK_REOPENED
+  TIME_ENTRY_DELETED
+}
+
+model Project {
+  id              String          @id @default(uuid())
+  tenant_id       String
+  store_id        String?
+  code            String
+  name            String
+  description     String?
+  customer_id     String?
+  lead_id         String?
+  project_type_id String?
+  status          ProjectStatus   @default(DRAFT)
+  priority        ProjectPriority @default(MEDIUM)
+  manager_id      String?
+  start_date      DateTime?       @db.Date
+  target_end_date DateTime?       @db.Date
+  actual_end_date DateTime?       @db.Date
+  /// Plain number in Phase 1 — nothing rolls up into it until costing lands.
+  budget_amount   Decimal?        @db.Decimal(14, 2)
+  created_by      String?
+  created_at      DateTime        @default(now())
+  updated_at      DateTime        @updatedAt
+  deleted_at      DateTime?
+
+  tenant      Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store       Store?       @relation(fields: [store_id], references: [id])
+  customer    Customer?    @relation(fields: [customer_id], references: [id])
+  lead        Lead?        @relation(fields: [lead_id], references: [id])
+  projectType ProjectType? @relation(fields: [project_type_id], references: [id])
+  manager     User?        @relation("ProjectManager", fields: [manager_id], references: [id])
+  creator     User?        @relation("ProjectCreator", fields: [created_by], references: [id])
+
+  members     ProjectMember[]
+  milestones  ProjectMilestone[]
+  tasks       ProjectTask[]
+  timeEntries ProjectTimeEntry[]
+  sprints     Sprint[]
+  comments    ProjectComment[]
+  attachments ProjectAttachment[]
+  remainingLogs ProjectTaskRemainingLog[]
+
+  @@unique([tenant_id, code])
+  @@index([tenant_id, status, deleted_at])
+  @@index([tenant_id, customer_id])
+  @@index([tenant_id, manager_id])
+  @@map("projects")
+}
+
+model ProjectType {
+  id         String   @id @default(uuid())
+  tenant_id  String
+  name       String
+  is_active  Boolean  @default(true)
+  sort_order Int      @default(0)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  projects Project[]
+
+  @@unique([tenant_id, name])
+  @@index([tenant_id, is_active])
+  @@map("project_types")
+}
+
+model ProjectMember {
+  id         String            @id @default(uuid())
+  tenant_id  String
+  project_id String
+  user_id    String
+  role       ProjectMemberRole @default(MEMBER)
+  created_at DateTime          @default(now())
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  user    User    @relation("ProjectMemberUser", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([project_id, user_id])
+  @@index([tenant_id, user_id])
+  @@map("project_members")
+}
+
+model ProjectMilestone {
+  id           String    @id @default(uuid())
+  tenant_id    String
+  project_id   String
+  name         String
+  target_date  DateTime? @db.Date
+  completed_at DateTime?
+  sort_order   Int       @default(0)
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  tenant  Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  project Project       @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  tasks   ProjectTask[]
+
+  @@index([tenant_id, project_id])
+  @@map("project_milestones")
+}
+
+/// Tenant-managed board columns. Ordering here is the ordering on the board.
+model ProjectTaskStatus {
+  id         String                    @id @default(uuid())
+  tenant_id  String
+  name       String
+  category   ProjectTaskStatusCategory @default(TODO)
+  sort_order Int                       @default(0)
+  is_active  Boolean                   @default(true)
+  is_default Boolean                   @default(false)
+  created_at DateTime                  @default(now())
+  updated_at DateTime                  @updatedAt
+
+  tenant Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  tasks  ProjectTask[]
+
+  @@unique([tenant_id, name])
+  @@index([tenant_id, is_active, sort_order])
+  @@map("project_task_statuses")
+}
+
+model ProjectTask {
+  id              String          @id @default(uuid())
+  tenant_id       String
+  project_id      String
+  milestone_id    String?
+  sprint_id       String?
+  parent_task_id  String?
+  title           String
+  description     String?
+  status_id       String
+  priority        ProjectPriority @default(MEDIUM)
+  assignee_id     String?
+  due_date        DateTime?       @db.Date
+  estimate_hours  Decimal?        @db.Decimal(8, 2)
+  /// An independent re-estimate, never derived from estimate minus logged.
+  /// Written only by RemainingHoursService, always alongside a log row.
+  remaining_hours Decimal?        @db.Decimal(8, 2)
+  sort_order      Int             @default(0)
+  completed_at    DateTime?
+  created_by      String?
+  created_at      DateTime        @default(now())
+  updated_at      DateTime        @updatedAt
+  deleted_at      DateTime?
+
+  tenant     Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  project    Project            @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  milestone  ProjectMilestone?  @relation(fields: [milestone_id], references: [id])
+  sprint     Sprint?            @relation(fields: [sprint_id], references: [id])
+  parentTask ProjectTask?       @relation("ProjectTaskSubtask", fields: [parent_task_id], references: [id])
+  subtasks   ProjectTask[]      @relation("ProjectTaskSubtask")
+  status     ProjectTaskStatus  @relation(fields: [status_id], references: [id])
+  assignee   User?              @relation("ProjectTaskAssignee", fields: [assignee_id], references: [id])
+  creator    User?              @relation("ProjectTaskCreator", fields: [created_by], references: [id])
+
+  checklistItems ProjectTaskChecklistItem[]
+  timeEntries    ProjectTimeEntry[]
+  remainingLogs  ProjectTaskRemainingLog[]
+  comments       ProjectComment[]
+  attachments    ProjectAttachment[]
+
+  @@index([tenant_id, project_id, deleted_at])
+  @@index([tenant_id, sprint_id])
+  @@index([tenant_id, assignee_id])
+  @@index([project_id, status_id, sort_order])
+  @@map("project_tasks")
+}
+
+/// The history of every change to a task's remaining hours.
+///
+/// `sprint_id` is denormalised at write time on purpose: moving a task to
+/// another sprint later must not rewrite where its hours actually burned.
+/// `delta` is redundant against previous/new and stored anyway so a burndown
+/// query is a SUM over a date range rather than a window function over rows.
+/// Rows are immutable and survive task soft-delete.
+model ProjectTaskRemainingLog {
+  id              String               @id @default(uuid())
+  tenant_id       String
+  task_id         String
+  project_id      String
+  sprint_id       String?
+  previous_hours  Decimal?             @db.Decimal(8, 2)
+  new_hours       Decimal              @db.Decimal(8, 2)
+  delta           Decimal              @db.Decimal(8, 2)
+  source          RemainingHoursSource
+  time_entry_id   String?
+  note            String?
+  changed_by      String?
+  changed_at      DateTime             @default(now())
+
+  tenant  Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  task    ProjectTask @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  project Project     @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  sprint  Sprint?     @relation(fields: [sprint_id], references: [id])
+  user    User?       @relation("RemainingLogUser", fields: [changed_by], references: [id])
+
+  @@index([tenant_id, sprint_id, changed_at])
+  @@index([task_id, changed_at])
+  @@map("project_task_remaining_logs")
+}
+
+model ProjectTaskChecklistItem {
+  id         String   @id @default(uuid())
+  tenant_id  String
+  task_id    String
+  text       String
+  is_done    Boolean  @default(false)
+  sort_order Int      @default(0)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  task   ProjectTask @relation(fields: [task_id], references: [id], onDelete: Cascade)
+
+  @@index([task_id, sort_order])
+  @@map("project_task_checklist_items")
+}
+
+model ProjectTimeEntry {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  task_id     String
+  /// Denormalised for per-project reporting without joining through tasks.
+  project_id  String
+  user_id     String?
+  /// Unused in Phase 1 — the hook Phase 2 needs to cost hours against payroll.
+  employee_id String?
+  work_date   DateTime @db.Date
+  hours       Decimal  @db.Decimal(8, 2)
+  note        String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  tenant   Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  task     ProjectTask @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  project  Project     @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  user     User?       @relation("ProjectTimeEntryUser", fields: [user_id], references: [id])
+  employee Employee?   @relation(fields: [employee_id], references: [id])
+
+  @@index([tenant_id, project_id, work_date])
+  @@index([task_id, work_date])
+  @@map("project_time_entries")
+}
+
+model Sprint {
+  id         String       @id @default(uuid())
+  tenant_id  String
+  project_id String
+  name       String
+  goal       String?
+  start_date DateTime     @db.Date
+  end_date   DateTime     @db.Date
+  status     SprintStatus @default(PLANNED)
+  created_at DateTime     @default(now())
+  updated_at DateTime     @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  tasks         ProjectTask[]
+  snapshots     SprintSnapshot[]
+  remainingLogs ProjectTaskRemainingLog[]
+
+  @@index([tenant_id, project_id, status])
+  @@map("sprints")
+}
+
+/// One burndown point per sprint per day. A cache, not the source of truth —
+/// derivable from ProjectTaskRemainingLog, so a missed cron night can be
+/// rebuilt instead of leaving a permanent hole in the chart.
+model SprintSnapshot {
+  id              String   @id @default(uuid())
+  tenant_id       String
+  sprint_id       String
+  snapshot_date   DateTime @db.Date
+  remaining_hours Decimal  @db.Decimal(10, 2)
+  committed_hours Decimal  @db.Decimal(10, 2)
+  completed_hours Decimal  @db.Decimal(10, 2)
+  task_count      Int
+  done_task_count Int
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  sprint Sprint @relation(fields: [sprint_id], references: [id], onDelete: Cascade)
+
+  @@unique([sprint_id, snapshot_date])
+  @@index([tenant_id, sprint_id, snapshot_date])
+  @@map("sprint_snapshots")
+}
+
+model ProjectComment {
+  id         String   @id @default(uuid())
+  tenant_id  String
+  project_id String?
+  task_id    String?
+  user_id    String?
+  body       String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant  Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  project Project?     @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  task    ProjectTask? @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  user    User?        @relation("ProjectCommentUser", fields: [user_id], references: [id])
+
+  @@index([tenant_id, project_id, created_at])
+  @@index([tenant_id, task_id, created_at])
+  @@map("project_comments")
+}
+
+model ProjectAttachment {
+  id         String   @id @default(uuid())
+  tenant_id  String
+  project_id String?
+  task_id    String?
+  file_url   String
+  file_name  String
+  mime_type  String?
+  file_size  Int?
+  created_by String?
+  created_at DateTime @default(now())
+
+  tenant  Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  project Project?     @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  task    ProjectTask? @relation(fields: [task_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, project_id])
+  @@index([tenant_id, task_id])
+  @@map("project_attachments")
 }
