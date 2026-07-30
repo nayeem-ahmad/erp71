@@ -1,6 +1,7 @@
 'use client';
 
-import type { ElementType, JSX } from 'react';
+import { useMemo, type ElementType, type JSX } from 'react';
+import Link from 'next/link';
 import ReactMarkdown, { type Components, type ExtraProps } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -31,7 +32,17 @@ function styled<T extends keyof JSX.IntrinsicElements>(tag: T, className: string
 
 const HEADING = 'mt-3 text-sm font-semibold text-gray-900 first:mt-0';
 
-const components: Components = {
+/**
+ * A same-origin app route the assistant asked to link to. react-markdown has
+ * already stripped unsafe protocols by the time a component sees the href, so a
+ * single leading "/" is enough to tell an in-app path from an external URL; the
+ * "//" guard rejects a protocol-relative "//host" that would leave the app.
+ */
+function isInternalPath(href: string | undefined): href is string {
+    return !!href && href.startsWith('/') && !href.startsWith('//');
+}
+
+const baseComponents: Components = {
     // One visual size for every level: the panel is too narrow for a hierarchy,
     // and the model's heading depth is not something to render faithfully.
     h1: styled('h3', HEADING),
@@ -77,13 +88,32 @@ const components: Components = {
         );
     },
     pre: styled('pre', 'mt-2 overflow-x-auto rounded-md bg-gray-900 p-2 text-gray-100 first:mt-0'),
-
-    a: ({ node: _node, ...props }) => (
-        <a target="_blank" rel="noopener noreferrer nofollow" className="text-blue-600 hover:underline" {...props} />
-    ),
 };
 
-export default function Markdown({ content }: { content: string }) {
+/**
+ * `onNavigate` fires when the user follows an in-app link — the caller closes the
+ * chat panel so the page they navigated to is visible (on mobile the panel is a
+ * full-screen sheet that would otherwise cover it).
+ */
+export default function Markdown({ content, onNavigate }: { content: string; onNavigate?: () => void }) {
+    const components = useMemo<Components>(
+        () => ({
+            ...baseComponents,
+            a: ({ node: _node, href, ...props }) =>
+                isInternalPath(href) ? (
+                    // In-app deep link the assistant produced: client-side navigation,
+                    // same tab. Only paths on the backend's allow-list reach here as
+                    // links, so this points at a real route, not an arbitrary one.
+                    <Link href={href} onClick={onNavigate} className="font-medium text-blue-600 hover:underline" {...props} />
+                ) : (
+                    // External (web citation) or a protocol the renderer neutralised:
+                    // open in a new tab and never send the referrer.
+                    <a href={href} target="_blank" rel="noopener noreferrer nofollow" className="text-blue-600 hover:underline" {...props} />
+                ),
+        }),
+        [onNavigate],
+    );
+
     return (
         <ReactMarkdown
             remarkPlugins={[remarkGfm]}

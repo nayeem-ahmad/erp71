@@ -139,7 +139,7 @@ const FLAGGED_TOOLS = CHAT_TOOLS.filter((tool) => tool.featureFlag);
 describe('ChatService.resolveTools', () => {
     it('gives an OWNER every unflagged tool without consulting per-store grants', async () => {
         const { service, db } = makeService();
-        const tools = await service.resolveTools(OWNER_CTX);
+        const { tools } = await service.resolveTools(OWNER_CTX);
 
         // Feature-flagged tools are excluded: an owner's permissions are total, but
         // a capability the platform operator has not switched on is nobody's.
@@ -155,7 +155,7 @@ describe('ChatService.resolveTools', () => {
     it('withholds the web tools when web search is disabled', async () => {
         const { service } = makeService({ webSearchEnabled: false });
 
-        const names = (await service.resolveTools(OWNER_CTX)).map((t) => t.name);
+        const names = (await service.resolveTools(OWNER_CTX)).tools.map((t) => t.name);
 
         expect(names).not.toContain('web_search');
         expect(names).not.toContain('fetch_web_page');
@@ -164,7 +164,7 @@ describe('ChatService.resolveTools', () => {
     it('offers the web tools once web search is enabled', async () => {
         const { service } = makeService({ webSearchEnabled: true });
 
-        const names = (await service.resolveTools(OWNER_CTX)).map((t) => t.name);
+        const names = (await service.resolveTools(OWNER_CTX)).tools.map((t) => t.name);
 
         expect(names).toContain('web_search');
         expect(names).toContain('fetch_web_page');
@@ -174,7 +174,7 @@ describe('ChatService.resolveTools', () => {
         const { service, webSearch } = makeService({ webSearchEnabled: true });
         webSearch.isEnabled.mockRejectedValue(new Error('settings unavailable'));
 
-        const names = (await service.resolveTools(OWNER_CTX)).map((t) => t.name);
+        const names = (await service.resolveTools(OWNER_CTX)).tools.map((t) => t.name);
 
         expect(names).not.toContain('web_search');
     });
@@ -187,7 +187,7 @@ describe('ChatService.resolveTools', () => {
     it('withholds tools the caller lacks permission for', async () => {
         const { service } = makeService({ grantedPermissions: [StorePermission.VIEW_PRODUCT_CATALOG] });
 
-        const names = (await service.resolveTools(STAFF_CTX)).map((t) => t.name);
+        const names = (await service.resolveTools(STAFF_CTX)).tools.map((t) => t.name);
 
         expect(names).toContain('low_stock');
         expect(names).toContain('stock_on_hand');
@@ -200,7 +200,7 @@ describe('ChatService.resolveTools', () => {
 
     it('gives a staff user with no grants no tools at all', async () => {
         const { service } = makeService({ grantedPermissions: [] });
-        expect(await service.resolveTools(STAFF_CTX)).toEqual([]);
+        expect((await service.resolveTools(STAFF_CTX)).tools).toEqual([]);
     });
 
     /**
@@ -212,7 +212,7 @@ describe('ChatService.resolveTools', () => {
     it('withholds retail and inventory tools from an accounting-only tenant', async () => {
         const { service } = makeService({ planFeatures: { accountingOnly: true } });
 
-        const names = (await service.resolveTools(OWNER_CTX)).map((t) => t.name);
+        const names = (await service.resolveTools(OWNER_CTX)).tools.map((t) => t.name);
 
         expect(names).not.toContain('low_stock');
         expect(names).not.toContain('stock_on_hand');
@@ -228,7 +228,7 @@ describe('ChatService.resolveTools', () => {
         const { service, planEntitlements } = makeService();
         planEntitlements.getFeaturesForTenant.mockRejectedValueOnce(new Error('billing down'));
 
-        const names = (await service.resolveTools(OWNER_CTX)).map((t) => t.name);
+        const names = (await service.resolveTools(OWNER_CTX)).tools.map((t) => t.name);
 
         expect(names).toContain('sales_summary');
     });
@@ -458,5 +458,39 @@ describe('ChatService.chat', () => {
         expect(systemPrompt).toMatch(/Today is \d{4}-\d{2}-\d{2}/);
         expect(systemPrompt).toContain('Gulshan (id: store-1)');
         expect(systemPrompt).toContain('Never state a number that did not come from a tool result');
+    });
+
+    /**
+     * The model can only deep-link to a page whose exact path it was given, so
+     * the catalog has to reach the prompt. Without it the "point to the right
+     * page" rules degrade back to naming pages in prose.
+     */
+    it('lists the pages the assistant may link to in the system prompt', async () => {
+        const { service, ai } = makeService();
+
+        await service.chat(OWNER_CTX, 'where do I record a sale?');
+
+        const systemPrompt = ai.callOpenRouterWithTools.mock.calls[0][1][0].content;
+        expect(systemPrompt).toContain('Pages you can link to:');
+        expect(systemPrompt).toContain('/sales/reports/summary');
+        expect(systemPrompt).toContain('/sales/new');
+    });
+
+    /**
+     * The page list is gated the same way the tools are: an accounting-only
+     * tenant has no inventory pages, so linking one would send the user to a
+     * feature its plan does not include.
+     */
+    it('withholds retail and inventory pages from an accounting-only tenant', async () => {
+        const { service, ai } = makeService({ planFeatures: { accountingOnly: true } });
+
+        await service.chat(OWNER_CTX, 'where are the reports?');
+
+        const systemPrompt = ai.callOpenRouterWithTools.mock.calls[0][1][0].content;
+        // Accounting pages every plan has stay listed…
+        expect(systemPrompt).toContain('/accounting/reports/pl');
+        // …but the retail and inventory ones are gone.
+        expect(systemPrompt).not.toContain('/inventory/products');
+        expect(systemPrompt).not.toContain('/sales/new');
     });
 });
