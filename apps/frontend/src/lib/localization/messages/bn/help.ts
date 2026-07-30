@@ -1,160 +1,292 @@
 export const helpMessages = {
-        title: "সহায়তা কেন্দ্র",
-        description: "প্রায়শই জিজ্ঞাসিত প্রশ্ন ও গাইড",
-        quickLinks: {
-            emailSupport: {
-                title: "ইমেইল সহায়তা",
-                subtitle: "support@erp71.com",
-            },
-            contact: {
-                title: "যোগাযোগ করুন",
-                subtitle: "বার্তা পাঠান",
-            },
-            status: {
-                title: "সিস্টেম স্ট্যাটাস",
-                subtitle: "প্ল্যাটফর্ম অ্যাডমিন — লাইভ হেলথ ড্যাশবোর্ড",
-            },
+    title: 'হেল্প সেন্টার',
+    description: 'সচরাচর জিজ্ঞাসিত প্রশ্ন ও গাইড',
+    quickLinks: {
+        emailSupport: {
+            title: 'ইমেইল সাপোর্ট',
+            subtitle: 'support@erp71.com',
         },
-        footerPrefix: "যা খুঁজছেন তা পাচ্ছেন না?",
-        footerLink: "আমাদের সহায়তা দলের সাথে যোগাযোগ করুন",
-        sections: {
-            gettingStarted: {
-                title: "শুরু করা",
-                icon: "🚀",
-                faqs: [
-                    {
-                        q: "How do I add my first product?",
-                        a: "Go to Inventory → Products and click \"Add Product\". Fill in the name, SKU, price, and stock quantity. You can also bulk import products using a CSV file via the \"Import CSV\" button.",
-                    },
-                    {
-                        q: "How do I create a store and start selling?",
-                        a: "Go to Setup → Stores and create your store. Then navigate to POS (Point of Sale) to start ringing up sales. Select products, enter payment, and complete the transaction.",
-                    },
-                    {
-                        q: "How do I invite staff members?",
-                        a: "Go to Settings → Users and click \"Invite\". Enter the staff member's email and assign a role (Cashier, Manager, etc.). They'll receive an invitation email to join your account.",
-                    },
-                    {
-                        q: "What subscription plans are available?",
-                        a: "We offer BASIC, ACCOUNTING, and STANDARD paid plans today. Premium is coming soon. Visit /pricing to compare features. You can upgrade anytime from the Billing section in your dashboard.",
-                    },
-                ],
-            },
-            pos: {
-                title: "পয়েন্ট অফ সেল (POS)",
-                icon: "🛒",
-                faqs: [
-                    {
-                        q: "How does the offline POS work?",
-                        a: "The POS works offline automatically. When your internet connection drops, a yellow banner appears and sales are saved locally. When you reconnect, sales sync automatically to the server.",
-                    },
-                    {
-                        q: "Can I accept multiple payment methods in one sale?",
-                        a: "Yes! You can split payments across Cash, Card, bKash, Nagad, and other methods in a single transaction by adding multiple payment rows in the POS checkout screen.",
-                    },
-                    {
-                        q: "How do I apply a discount to a sale?",
-                        a: "In the POS checkout screen, there is a discount field where you can enter a percentage or fixed amount discount before completing the sale.",
-                    },
-                    {
-                        q: "How do I print a receipt?",
-                        a: "After completing a sale, a receipt preview appears with a Print button. Make sure your printer is configured and connected. Receipts include your business name, BIN (if set), VAT breakdown, and sale details.",
-                    },
-                ],
-            },
-            inventory: {
-                title: "Inventory Management",
-                icon: "📦",
-                faqs: [
-                    {
-                        q: "How do I track stock across multiple warehouses?",
-                        a: "Go to Inventory → Warehouses to set up your warehouses. Stock is tracked per warehouse. Use Inventory → Transfers to move stock between warehouses.",
-                    },
-                    {
-                        q: "How do I set up low-stock alerts?",
-                        a: "On each product, set the \"Reorder Level\". When stock falls to or below this level, the system sends a daily low-stock alert email to your registered email address.",
-                    },
-                    {
-                        q: "How do I import products in bulk?",
-                        a: "Go to Inventory → Products and click \"Import CSV\". Download the template, fill it in with your products (name, SKU, price, stock), and upload. Products with matching SKUs are updated; new SKUs are created.",
-                    },
-                    {
-                        q: "What is a stock take?",
-                        a: "A stock take (stocktake) is a physical count of your inventory. Go to Inventory → Stock Takes to start a session. Count each item and the system will show variances between your count and recorded stock.",
-                    },
-                ],
-            },
-            accounting: {
-                title: "Accounting",
-                icon: "📊",
-                faqs: [
-                    {
-                        q: "How does double-entry accounting work in this system?",
-                        a: "The system uses double-entry bookkeeping automatically. Sales create debit entries in Cash/Receivables and credit entries in Revenue. Purchases create debit entries in Inventory/Expense and credit entries in Payables.",
-                    },
-                    {
-                        q: "How do I export to Tally or QuickBooks?",
-                        a: "Go to Accounting → Overview and click \"Export\". Choose your format (Tally XML or QuickBooks IIF) and date range. The file downloads immediately and can be imported into your accounting software.",
-                    },
-                    {
-                        q: "What is the Chart of Accounts?",
-                        a: "The Chart of Accounts (COA) is a list of all accounts used in your business: assets, liabilities, equity, revenue, and expenses. Go to Accounting → Chart of Accounts to view and manage accounts.",
-                    },
-                ],
-            },
-            billing: {
-                title: "Billing & Subscription",
-                icon: "💳",
-                faqs: [
-                    {
-                        q: "How do I upgrade my plan?",
-                        a: "Go to Billing in the sidebar and click \"Upgrade\". Select your plan and billing cycle (monthly or yearly — yearly saves 20%). Pay via SSL Wireless using your preferred method (card, bKash, Nagad).",
-                    },
-                    {
-                        q: "Can I cancel my subscription?",
-                        a: "Yes. Go to Billing and click \"Cancel Subscription\". Your access continues until the end of the current billing period. See our Refund Policy at /refund for details.",
-                    },
-                    {
-                        q: "What happens if my subscription expires?",
-                        a: "You'll receive warning emails 7 days and 1 day before expiry. After expiry, your account is locked to read-only mode until you renew. Your data is never deleted.",
-                    },
-                ],
-            },
-            storefront: {
-                title: "E-commerce Storefront",
-                icon: "🌐",
-                faqs: [
-                    {
-                        q: "How do I enable my online store?",
-                        a: "Go to Storefront → Settings, enable the toggle, set a URL slug (e.g. \"my-shop\"), and optionally add a banner message. Your public store will be at /store/your-slug.",
-                    },
-                    {
-                        q: "How do customers place orders?",
-                        a: "Customers visit your store URL, browse in-stock products, add to cart, and fill in their name, email, and phone. Orders appear in Storefront → Orders where you can confirm or cancel them.",
-                    },
-                    {
-                        q: "Are storefront orders automatically added to inventory?",
-                        a: "Currently, storefront orders need to be manually confirmed and fulfilled. Inventory deduction for storefront orders is on our roadmap for a future release.",
-                    },
-                ],
-            },
-            security: {
-                title: "Security & Account",
-                icon: "🔒",
-                faqs: [
-                    {
-                        q: "How do I enable two-factor authentication (2FA)?",
-                        a: "Go to Settings → Account → 2FA tab. Click \"Set Up 2FA\", scan the QR code with Google Authenticator or Authy, enter the 6-digit code to verify, and save. From then on, logins require your phone.",
-                    },
-                    {
-                        q: "What happens if I forget my password?",
-                        a: "Click \"Forgot Password\" on the login page. Enter your email and you'll receive a password reset link valid for 1 hour. If you don't receive it, check your spam folder.",
-                    },
-                    {
-                        q: "How do I download my data (GDPR/export)?",
-                        a: "Go to Settings → Account and find \"Export My Data\". This generates a JSON file with all your account data. For data deletion requests, use the \"Request Data Deletion\" option.",
-                    },
-                ],
-            },
+        contact: {
+            title: 'যোগাযোগ করুন',
+            subtitle: 'একটি বার্তা পাঠান',
         },
-    } as const;
+        status: {
+            title: 'সিস্টেম স্ট্যাটাস',
+            subtitle: 'প্ল্যাটফর্ম অ্যাডমিন — লাইভ হেলথ ড্যাশবোর্ড',
+        },
+    },
+    footerPrefix: 'যা খুঁজছেন তা পাচ্ছেন না?',
+    footerLink: 'আমাদের সাপোর্ট টিমের সাথে যোগাযোগ করুন',
+    sections: {
+        gettingStarted: {
+            title: 'শুরু করা',
+            icon: '🚀',
+            faqs: [
+                {
+                    q: 'আমার প্রথম পণ্য কীভাবে যোগ করব?',
+                    a: 'Inventory → Products-এ যান এবং "New Product"-এ ক্লিক করুন। শুধু একটি নাম আর বিক্রয়মূল্য দিলেই হয়; SKU, ক্যাটাগরি, ব্র্যান্ড, রিঅর্ডার লেভেল এবং ওপেনিং স্টক ঐচ্ছিক। একসাথে অনেক পণ্য লোড করতে "Import CSV" ব্যবহার করুন — টেমপ্লেটের কলামগুলো হলো name, sku, barcode, selling_price, cost_price, stock_quantity, reorder_point, unit। যেসব সারির SKU আগে থেকেই আছে সেগুলো বাদ পড়ে যায়, তাই ইমপোর্ট বিদ্যমান পণ্য আপডেট না করে নতুন পণ্য যোগ করে।',
+                },
+                {
+                    q: 'বিক্রি কীভাবে শুরু করব?',
+                    a: 'Sales → Point of Sale খুলুন, কার্ট তৈরি করতে পণ্যে ট্যাপ করুন, চাইলে একজন কাস্টমার যুক্ত করুন, পেমেন্ট নিন (Cash, bKash বা Card — তিনটির মধ্যে ভাগ করেও নিতে পারেন), এবং নিশ্চিত করুন। প্রথমে Settings ও Inventory-তে গিয়ে আপনার স্টোর ও ওয়্যারহাউস সেটআপ করে নিন, যাতে স্টক সঠিক জায়গায় ট্র্যাক হয়।',
+                },
+                {
+                    q: 'কর্মী কীভাবে আমন্ত্রণ জানাব এবং তারা কী করতে পারবে তা নিয়ন্ত্রণ করব?',
+                    a: 'Team-এ (Settings → Team) যান এবং ইমেইল দিয়ে একজন সদস্যকে আমন্ত্রণ জানান; তারা একটি ইনভাইটেশন লিংকের মাধ্যমে যোগ দেয়। কোন কোন মডিউল ও কাজ তারা ব্যবহার করতে পারবে তা নিয়ন্ত্রণ করতে একটি রোল দিন — OWNER, MANAGER, CASHIER বা ACCOUNTANT, অথবা আপনার তৈরি কাস্টম রোল। সদস্য আমন্ত্রণ জানাতে ওনার অ্যাকাউন্ট বা "Manage Users" পারমিশন লাগে।',
+                },
+                {
+                    q: 'কোন কোন সাবস্ক্রিপশন প্ল্যান আছে?',
+                    a: 'সেলফ-সার্ভ পেইড প্ল্যানগুলো হলো BASIC, ACCOUNTING এবং STANDARD; PREMIUM — যা CRM, Manufacturing এবং AI অ্যাসিস্ট্যান্ট আনলক করে — "coming soon" হিসেবে দেখানো হয়। পুরনো Free প্ল্যান নতুন সাইন-আপের জন্য আর দেওয়া হয় না। Billing-এ যেকোনো সময় প্ল্যান তুলনা করে পরিবর্তন করতে পারেন।',
+                },
+            ],
+        },
+        pos: {
+            title: 'পয়েন্ট অফ সেল (POS)',
+            icon: '🛒',
+            faqs: [
+                {
+                    q: 'অফলাইন POS কীভাবে কাজ করে?',
+                    a: 'ইন্টারনেট চলে গেলেও Point of Sale কাজ করতে থাকে। একটি হলুদ ব্যানার দেখায়, আগে থেকে লোড করা পণ্যগুলো ব্রাউজ করা যায়, এবং প্রতিটি বিক্রি সার্ভারের বদলে আপনার ডিভাইসে সেভ হয়। আবার সংযোগ ফিরে এলে "Sync Now"-তে চাপুন (বা শুধু অপেক্ষা করুন), অপেক্ষমাণ বিক্রিগুলো স্বয়ংক্রিয়ভাবে আপলোড হয়ে যাবে।',
+                },
+                {
+                    q: 'একটি বিক্রিতে কি একাধিক পেমেন্ট পদ্ধতি নিতে পারি?',
+                    a: 'হ্যাঁ। চেকআউট ডায়ালগে আলাদা আলাদা Cash, bKash এবং Credit Card ফিল্ড আছে এবং সেগুলো যোগ করে দেখায়, তাই একটি বিক্রি তিনটির মধ্যে ভাগ করা যায়। (Nagad এবং ব্যাংক ট্রান্সফার অ্যাকাউন্টিং ইঞ্জিন চিনতে পারে, তবে POS স্ক্রিনে সেগুলোর জন্য আলাদা টেন্ডার বাটন নেই।)',
+                },
+                {
+                    q: 'কাউন্টারে ডিসকাউন্ট কীভাবে কাজ করে?',
+                    a: 'POS দুইভাবে ডিসকাউন্ট প্রয়োগ করে: একটি বৈধ Discount Code দিন এবং Apply চাপুন, অথবা কাস্টমারের লয়ালটি পয়েন্ট মোট বিলের বিপরীতে রিডিম করুন। POS-এ সরাসরি কোনো ফ্রি-ফর্ম শতাংশ বা নির্দিষ্ট-পরিমাণের বক্স নেই — কোড সেটআপ করুন Settings → Discount Codes-এ।',
+                },
+                {
+                    q: 'রসিদে কী কী ছাপা হয়?',
+                    a: 'বিক্রির পর আপনি একটি 80mm থার্মাল রসিদ প্রিন্ট করতে পারেন যেখানে থাকে আপনার স্টোরের নাম, ইনভয়েস নম্বর, তারিখ, পণ্যের লাইন, সাবটোটাল, ট্যাক্স, মোট, নেওয়া পেমেন্ট, কোনো ফেরত বা বকেয়া, এবং ইনভয়েস যাচাইয়ের জন্য একটি QR কোড। খেয়াল রাখবেন POS রসিদে এখন BIN বা VAT ব্রেকডাউন ছাপা হয় না।',
+                },
+            ],
+        },
+        sales: {
+            title: 'বিক্রয়, রিটার্ন ও কাস্টমার',
+            icon: '🧾',
+            faqs: [
+                {
+                    q: 'পুরনো বিক্রি কোথায় দেখব ও খুঁজব?',
+                    a: 'পূর্ণ তালিকার জন্য Sales → Sales-এ যান। এটি সার্ভারের বিপরীতে পেজ করে, তাই হাজার হাজার ইনভয়েস থাকলেও দ্রুত থাকে। সিরিয়াল নম্বর, কাস্টমার বা রেফারেন্স দিয়ে খুঁজুন, স্ট্যাটাস দিয়ে ফিল্টার করুন (Draft, Completed, Refunded, Partial refund), এবং যেকোনো সারি খুলে দেখুন, এডিট করুন বা মুছুন।',
+                },
+                {
+                    q: 'কাস্টমার রিটার্ন বা রিফান্ড কীভাবে রেকর্ড করব?',
+                    a: 'Sales → Sales Returns → "Process Return" খুলুন, মূল বিক্রির সিরিয়াল টাইপ করুন (যেমন S-00001) এবং Find চাপুন, তারপর কোন পণ্য ও কতটা ফেরত হবে বেছে নিন। রিফান্ডের মূল্য মূল বিক্রি থেকে ধরা হয় এবং যা বিক্রি হয়েছে তার বেশি হতে পারে না, ফেরত আসা স্টক আবার ইনভেন্টরিতে যোগ হয়, এবং রিফান্ড কাস্টমার যেভাবে পেমেন্ট করেছিল সেভাবে হয় — পরিশোধিত বিক্রিতে নগদ ফেরত, বা বাকিতে বিক্রি হলে বকেয়া কমিয়ে দেওয়া হয়।',
+                },
+                {
+                    q: 'বাকিতে কীভাবে বিক্রি করব এবং কাস্টমারের বকেয়া ট্র্যাক করব?',
+                    a: 'Sales → Customers-এ কাস্টমার যোগ করুন। বাকিতে বিক্রি করতে হলে কাস্টমারের একটি Credit Limit সেট থাকা লাগবে — নইলে বিক্রি আটকে যায়, এবং যে বাকি বিক্রি লিমিট ছাড়িয়ে যাবে সেটিও প্রত্যাখ্যান হয়। প্রতিটি কাস্টমারের বিস্তারিত পেজে তাদের বকেয়া এবং একটি ক্রেডিট লেজার দেখায় যেখানে আপনি পেমেন্ট রেকর্ড করতে পারেন।',
+                },
+                {
+                    q: 'কাস্টমার পেমেন্ট ও বকেয়া কোথায় ম্যানেজ করব?',
+                    a: 'বকেয়ার বিপরীতে টাকা প্রাপ্তি রেকর্ড করতে Sales → Customer Payments ব্যবহার করুন, প্রতি কাস্টমারের চলমান বিবরণীর জন্য Sales → Customer Ledger, এবং কে কত ও কতদিন ধরে বকেয়া রেখেছে তা দেখতে Due Aging রিপোর্ট (Sales → Customers-এর অধীনে) ব্যবহার করুন।',
+                },
+            ],
+        },
+        inventory: {
+            title: 'ইনভেন্টরি ব্যবস্থাপনা',
+            icon: '📦',
+            faqs: [
+                {
+                    q: 'একাধিক ওয়্যারহাউসে স্টক কীভাবে ট্র্যাক করব?',
+                    a: 'Inventory সেটআপে ওয়্যারহাউস তৈরি করুন এবং Inventory → Inventory Settings-এ প্রতিটি ফ্লোর জন্য ডিফল্ট বেছে নিন। স্টক ওয়্যারহাউস অনুযায়ী রাখা হয়; সেটি সরান Inventory → Transfers দিয়ে, এটি দুই ধাপের পাঠানো-তারপর-গ্রহণ প্রক্রিয়া যেখানে পাঠালে উৎস কমে, গ্রহণ করলে গন্তব্য বাড়ে, এবং আংশিক গ্রহণ অনুমোদিত।',
+                },
+                {
+                    q: 'কম-স্টক অ্যালার্ট কীভাবে কাজ করে?',
+                    a: 'প্রতিটি পণ্যে একটি Reorder Level সেট করুন (অথবা Inventory Settings-এ একটি ডিফল্ট)। প্রতিদিন সকাল 07:00-এ সিস্টেম হাতে থাকা পরিমাণ পরীক্ষা করে এবং যেসব পণ্য তাদের রিঅর্ডার লেভেলে বা তার নিচে আছে, সেগুলোর জন্য অ্যাকাউন্ট ওনারকে ইমেইল পাঠায়, একটি ইন-অ্যাপ নোটিফিকেশন তোলে, এবং — যদি কম-স্টক SMS চালু থাকে — ওনারকে টেক্সট করে। Inventory → Reorder Report চাইলে লেভেলের নিচে থাকা সবকিছুর তালিকা দেখায়।',
+                },
+                {
+                    q: 'একসাথে অনেক পণ্য কীভাবে ইমপোর্ট করব?',
+                    a: 'Inventory → Products → "Import CSV"-এ যান এবং টেমপ্লেট আপলোড করুন (কলাম: name, sku, barcode, selling_price, cost_price, stock_quantity, reorder_point, unit)। প্রতিটি সারিতে বিক্রয়মূল্য আবশ্যক, একটি ওপেনিং স্টক পরিমাণ প্রাথমিক-স্টক মুভমেন্ট তৈরি করে, এবং যেসব সারির SKU আগে থেকেই আছে সেগুলো বাদ পড়ে — তাই ইমপোর্ট ব্যবহার করুন নতুন পণ্য যোগ করতে, বিদ্যমান পণ্য আপডেট করতে নয়।',
+                },
+                {
+                    q: 'স্টক টেক কী, এবং কখন এর অনুমোদন লাগে?',
+                    a: 'স্টক টেক (Inventory → Stock Takes) সিস্টেমের বিপরীতে ফিজিক্যাল স্টক গণনা করে। একটি সেশন শুরু করলে নির্বাচিত ওয়্যারহাউসের প্রতিটি পণ্যের প্রত্যাশিত পরিমাণের স্ন্যাপশট নেওয়া হয়; আপনি গণনাকৃত পরিমাণ দেন এবং প্রতিটি পার্থক্য হিসাব করা হয়। সবচেয়ে বড় পার্থক্য যদি ডিসক্রিপেন্সি থ্রেশহোল্ড (ডিফল্ট 25, Inventory Settings-এ সেট) ছাড়িয়ে যায় তবে সেশনটি পোস্ট করার আগে রিভিউ করতে হয়, এবং পোস্ট করলে স্টক সমন্বয় হয় ও একটি অ্যাকাউন্টিং ভাউচার রেকর্ড হয়।',
+                },
+            ],
+        },
+        purchases: {
+            title: 'ক্রয় ও সরবরাহকারী',
+            icon: '🚚',
+            faqs: [
+                {
+                    q: 'সরবরাহকারীর কাছ থেকে ক্রয় কীভাবে রেকর্ড করব?',
+                    a: 'Purchase → Purchases-এ যান এবং একটি তৈরি করুন: স্টোর/ওয়্যারহাউস ও সরবরাহকারী বেছে নিন (বা ইনলাইনে একটি যোগ করুন) এবং পরিমাণ ও ইউনিট খরচসহ পণ্যের লাইন যোগ করুন, সাথে ঐচ্ছিক ট্যাক্স, ডিসকাউন্ট ও ফ্রেইট। ক্রয় সেভ করলে পণ্য সাথে সাথে গ্রহণ হয় (স্টক বাড়ে) এবং পুরো পরিমাণ পেয়েবল হিসেবে বুক হয় — কোনো ক্যাশ ফিল্ড নেই, তাই যেকোনো পেমেন্ট আলাদাভাবে Supplier Payment হিসেবে রেকর্ড করুন।',
+                },
+                {
+                    q: 'Purchase Order আর Purchase-এর মধ্যে পার্থক্য কী?',
+                    a: 'একটি Purchase Order (Purchase → Purchase Orders) একটি অঙ্গীকার যা স্টক নাড়ায় না। যখন আপনি এটিকে Received হিসেবে চিহ্নিত করেন তখন এটি স্টক বাড়ায় এবং পেয়েবল পোস্ট করে, ঠিক সরাসরি ক্রয়ের মতো। ডেলিভারির আগে অর্ডার দিলে PO ব্যবহার করুন, আর পণ্য একই সময়ে এলে সরাসরি Purchase।',
+                },
+                {
+                    q: 'সরবরাহকারীর কাছে পণ্য কীভাবে ফেরত দেব?',
+                    a: 'Purchase → Purchase Returns ব্যবহার করুন। একটি রিটার্ন কোনো ক্রয়ের সাথে যুক্ত হতে পারে বা আলাদা থাকতে পারে; এটি স্টক কমায়, সরবরাহকারীর বকেয়া কমায় (আপনি বর্তমানে যত বকেয়া তত পর্যন্ত সীমিত), এবং সংশ্লিষ্ট অ্যাকাউন্টিং ভাউচার পোস্ট করে।',
+                },
+                {
+                    q: 'সরবরাহকারীদের কীভাবে টাকা দেব এবং কত বকেয়া তা দেখব?',
+                    a: 'Purchase → Supplier Payment-এ পেমেন্ট রেকর্ড করুন — আপনি দিতে বা নিতে পারেন, নির্দিষ্ট বিলের বিপরীতে একটি পেমেন্ট বরাদ্দ করতে পারেন, এবং বাকি অংশ পরে বরাদ্দের জন্য অগ্রিম হিসেবে রেখে দিতে পারেন। Purchase → Supplier Ledger প্রতিটি সরবরাহকারীর চলমান ব্যালেন্স দেখায়, এবং প্রতিটি সরবরাহকারীর একটি বিলিং সারসংক্ষেপ ও ক্রেডিট লেজারও থাকে।',
+                },
+            ],
+        },
+        accounting: {
+            title: 'অ্যাকাউন্টিং',
+            icon: '📊',
+            faqs: [
+                {
+                    q: 'জার্নাল এন্ট্রি কি আমাকে নিজে পোস্ট করতে হয়?',
+                    a: 'না — সিস্টেম স্বয়ংক্রিয়ভাবে ডাবল-এন্ট্রি হিসাব রাখে। Posting Rules (Accounting → Posting Rules) প্রতিটি অপারেশনাল ঘটনাকে (বিক্রয়, ক্রয়, রিটার্ন, ট্রান্সফার, বেতন, সমন্বয়) কোন অ্যাকাউন্টে ডেবিট ও ক্রেডিট হবে তার সাথে ম্যাপ করে, এবং সেই ঘটনাগুলো ঘটার সাথে সাথে ভাউচার তৈরি হয়। শুধু যেসব বিষয় রুলে কভার হয় না তার জন্য আপনি ম্যানুয়াল এন্ট্রি করেন।',
+                },
+                {
+                    q: 'Chart of Accounts কী?',
+                    a: 'Chart of Accounts (Accounting → Chart of Accounts) হলো আপনার লেজার অ্যাকাউন্টগুলোর মাস্টার তালিকা — সম্পদ, দায়, ইকুইটি, রাজস্ব এবং খরচ — যা গ্রুপ ও সাবগ্রুপে সাজানো। প্রতিটি ভাউচার লাইন এই অ্যাকাউন্টগুলোর একটিতে পোস্ট হয়, তাই এটি আপনার সব রিপোর্টের ভিত্তি।',
+                },
+                {
+                    q: 'আমি কি ম্যানুয়াল এন্ট্রি করতে পারি, এবং কী কী রিপোর্ট আছে?',
+                    a: 'হ্যাঁ — Accounting → Voucher Entry হাতে করে ক্যাশ, ব্যাংক, ট্রান্সফার এবং জার্নাল ভাউচার রেকর্ড করে, এবং Vouchers, Journal ও Ledger স্ক্রিন সেগুলো পর্যালোচনা করতে দেয়। রিপোর্টের মধ্যে আছে Trial Balance, Profit & Loss, Balance Sheet, Cashbook, Bankbook, AR/AP Aging এবং একটি VAT/Tax রিপোর্ট; Fiscal Periods বন্ধ মাস লক করে ব্যাক-ডেটেড এন্ট্রি ঠেকাতে পারে।',
+                },
+                {
+                    q: 'Tally বা QuickBooks-এ কীভাবে এক্সপোর্ট করব?',
+                    a: 'Accounting ওভারভিউ পেজে "Export"-এ ক্লিক করুন, Tally XML বা QuickBooks IIF বেছে নিন, একটি তারিখ পরিসর নির্বাচন করুন, এবং ডাউনলোড করুন। ফাইলটি সরাসরি সেই অ্যাকাউন্টিং প্যাকেজে ইমপোর্ট হয়।',
+                },
+            ],
+        },
+        crm: {
+            title: 'CRM ও লিড',
+            icon: '🤝',
+            faqs: [
+                {
+                    q: 'CRM মডিউলে কী কী থাকে, এবং কে ব্যবহার করতে পারে?',
+                    a: 'CRM-এ থাকে Leads, Conversations, Follow-ups, Campaigns এবং Customers, সাথে Lead Sources & Categories এবং Custom Fields-এর সেটিংস, যা সবই CRM ওভারভিউ হাব থেকে পাওয়া যায়। এর বেশিরভাগ একটি Premium-প্ল্যান ফিচার — অন্য প্ল্যানে আপনি এখনও Customers পান, তবে পাইপলাইন টুলগুলো লুকানো থাকে।',
+                },
+                {
+                    q: 'একটি লিড কীভাবে তৈরি করব ও কাজ করব?',
+                    a: 'CRM → Leads → "New Lead"-এ যান এবং অন্তত একটি নাম দিন (মোবাইল, ইমেইল, সোর্স, ক্যাটাগরি, প্রায়োরিটি, সোশ্যাল লিংক এবং পরবর্তী ধাপ ঐচ্ছিক)। একটি লিড নির্দিষ্ট ধাপের মধ্য দিয়ে যায় — New, Contacted, Qualified, Lost, Converted — এবং আপনি "Next Step Assigned To" ব্যক্তির সাথে এটি অ্যাসাইন করেন; তালিকাটি বাল্ক অ্যাসাইন ও স্ট্যাটাস পরিবর্তনও সমর্থন করে। প্রস্তুত হলে, "Convert to Customer" Sales-এ কাস্টমারকে তৈরি বা যুক্ত করে।',
+                },
+                {
+                    q: 'Source ও Category তালিকা কোথা থেকে আসে?',
+                    a: 'এগুলো আপনার নিজের মাস্টার ডেটা — CRM → Sources & Categories-এ ম্যানেজ করুন। প্রতিটি Source-এর একটি স্কোর ওজনও (0–25) থাকে যা স্বয়ংক্রিয় লিড স্কোরে যোগ হয়। আপনি মান যোগ, এডিট, লুকানো বা মুছতে পারেন; ব্যবহৃত কোনো মান মুছলে সেই লিডগুলো একটি বিকল্পে সরাতে বলা হয়, এবং বিল্ট-ইন মানগুলো মুছে না ফেলে লুকানো হয়।',
+                },
+                {
+                    q: 'Follow-ups ও Conversations কীভাবে কাজ করে?',
+                    a: 'Follow-ups (CRM → Follow-ups) হলো রিমাইন্ডারের একটি একক সারি — General, Collection, Birthday বা Reorder — যা কাস্টমার বা লিডের বিস্তারিত পেজ থেকে তৈরি হয়, আর Birthday ও Reorder রিমাইন্ডার স্বয়ংক্রিয়ভাবেও তৈরি হয়। Conversations (CRM → Conversations) হলো আপনার পুরো টিম জুড়ে লিডের বিপরীতে রেকর্ড করা প্রতিটি টাচপয়েন্টের (কল, SMS, WhatsApp, ভিজিট, ইত্যাদি) একটি রিড-অনলি, ফিল্টারযোগ্য লগ; আপনি লিডের বিস্তারিত পেজ থেকে নতুন একটি লগ করেন।',
+                },
+            ],
+        },
+        manufacturing: {
+            title: 'ম্যানুফ্যাকচারিং',
+            icon: '🏭',
+            faqs: [
+                {
+                    q: 'একটি পণ্যের রেসিপি (BOM) কীভাবে সেটআপ করব?',
+                    a: 'Manufacturing পেজে Bill of Materials ট্যাব খুলুন এবং "New BOM"-এ ক্লিক করুন। একটি রেসিপি একটি আউটপুট পণ্য, এক রানে কতগুলো ইউনিট তৈরি হয়, এবং পরিমাণসহ এর উপাদান পণ্যগুলোর নাম দেয়। উপাদানগুলো পণ্য ID দিয়ে দেওয়া হয়, এবং একবার তৈরি হয়ে গেলে একটি রেসিপির আউটপুট পণ্য পরিবর্তন করা যায় না। Manufacturing একটি Premium/অ্যাড-অন ফিচার।',
+                },
+                {
+                    q: 'একটি প্রোডাকশন জব স্টকে কীভাবে প্রভাব ফেলে?',
+                    a: 'Production Jobs ট্যাবে একটি BOM ও একটি রান পরিমাণ থেকে একটি জব তৈরি করুন; এটি একটি ড্রাফট হিসেবে শুরু হয়। এটি শুরু করলে উপাদানগুলো স্টকে আছে কিনা তা আবার পরীক্ষা করা হয়, এবং সম্পূর্ণ করলে উপাদান স্টক খরচ হয় (সাথে আপনার দেওয়া যেকোনো অপচয়) এবং তৈরি পণ্য ইনভেন্টরিতে যোগ হয়। Manufacturing শুধু ইনভেন্টরি নাড়ায় — এটি জেনারেল লেজারে পোস্ট করে না।',
+                },
+                {
+                    q: 'জবের খরচ ও বিক্রয়মূল্য কীভাবে হিসাব হয়?',
+                    a: 'সম্পূর্ণ হওয়ার সময়, প্রতিটি উপাদানের সর্বশেষ খরচ থেকে ম্যাটেরিয়াল খরচের স্ন্যাপশট নেওয়া হয়, এবং আপনি আরও খরচ লাইন যোগ করতে পারেন (শ্রম, প্রিন্টিং, পরিবহন, ওভারহেড ইত্যাদি), চাইলে একটি সার্ভিস পারচেজ বিল থেকে টানা। জবটি তখন একটি মোট খরচ ও প্রতি ইউনিট খরচ দেখায়, এবং সম্পূর্ণ জবের জন্য একটি Pricing প্যানেল একটি কস্ট-প্লাস বিক্রয়মূল্যের পরামর্শ দেয় যা আপনি পণ্যে প্রয়োগ করতে পারেন।',
+                },
+            ],
+        },
+        hr: {
+            title: 'HR ও পেরোল',
+            icon: '👥',
+            faqs: [
+                {
+                    q: 'কর্মচারী কীভাবে যোগ করব?',
+                    a: 'HR → Employees → "New Employee"-এ যান এবং অন্তত একটি নাম ও ফোন দিন (ইমেইল, যোগদানের তারিখ, জাতীয় পরিচয়পত্র, বিভাগ, পদবি এবং মূল বেতন ঐচ্ছিক), অথবা Import ডায়ালগ দিয়ে একসাথে অনেকজন যোগ করুন। একটি কর্মচারী কোড স্বয়ংক্রিয়ভাবে তৈরি হয়, এবং আপনি একজন কর্মচারীকে একটি সিস্টেম লগইনের সাথে যুক্ত করতে পারেন যাতে তারা সাইন ইন করতে পারে।',
+                },
+                {
+                    q: 'উপস্থিতি ও ছুটি কীভাবে পরিচালনা হয়?',
+                    a: 'HR → Attendance প্রতি কর্মচারীর প্রতিদিন একটি এন্ট্রি রেকর্ড করে — Present, Absent, Half-day বা Holiday, সাথে ঐচ্ছিক ক্লক-ইন/আউট সময় — হাতে দেওয়া হয়, কারণ কোনো ক্লক ডিভাইস নেই। HR → Leaves-এ দুটি ট্যাব: Requests (জমা দিন, তারপর অনুমোদন বা প্রত্যাখ্যান) এবং Types (একটি ছুটির ধরন ও বছরে এর দিনসংখ্যা নির্ধারণ করুন)।',
+                },
+                {
+                    q: 'বেতন কীভাবে দেব?',
+                    a: 'HR → Salary Payments → "Pay Salary" ব্যবহার করুন, কর্মচারী ও বেতনকাল বেছে নিন, এবং পরিমাণ (তাদের মূল বেতন থেকে আগে থেকে পূরণ করা) ও পদ্ধতি রেকর্ড করুন। প্রতিটি পেমেন্ট একটি অ্যাকাউন্টিং ভাউচার পোস্ট করে (Salary Payable ডেবিট, পেমেন্ট অ্যাকাউন্ট ক্রেডিট)। পেমেন্টগুলো একক ফ্ল্যাট পরিমাণ — এখনও কোনো পেস্লিপ বা ভাতা/কর্তনের ব্রেকডাউন নেই।',
+                },
+            ],
+        },
+        aiAssistant: {
+            title: 'AI অ্যাসিস্ট্যান্ট',
+            icon: '🤖',
+            faqs: [
+                {
+                    q: 'AI বিজনেস অ্যাসিস্ট্যান্ট কী এবং কীভাবে খুলব?',
+                    a: 'এটি একটি চ্যাট প্যানেল — "Ask the business assistant" রোবট আইকন — যা আপনার নিজের ডেটা নিয়ে প্রশ্নের উত্তর দেয়: বিক্রয়, স্টক, কাস্টমার, প্রাপ্য এবং আরও অনেক কিছু। এটি কঠোরভাবে রিড-অনলি: এটি জিনিস খুঁজে দেখতে ও ব্যাখ্যা করতে পারে, কিন্তু কিছু পরিবর্তন করতে পারে না। অ্যাসিস্ট্যান্টটি একটি Premium-প্ল্যান ফিচার, তাই আইকনটি তখনই দেখায় যখন আপনার প্ল্যানে এটি অন্তর্ভুক্ত থাকে।',
+                },
+                {
+                    q: 'এটি আসলে কী দেখতে পারে, এবং উত্তরগুলো কি বিশ্বাস করা যায়?',
+                    a: '"what can you do?" জিজ্ঞাসা করুন এবং এটি আপনার শাখাগুলো, আপনার রেকর্ড কতদূর পেছনের, এবং কোন কোন টুল ব্যবহার করতে পারে তা জানায় — তাই একটি খালি উত্তরের মানে একটি খালি সময়কাল, ভাঙা কোয়েরি নয়। প্রতিটি উত্তর তার Sources (যে রিপোর্ট ও তারিখ পরিসর ব্যবহার করেছে) তালিকাভুক্ত করে যাতে আপনি যাচাই করতে পারেন। আপনি এটিকে অস্বাভাবিক লেনদেন খুঁজতেও বলতে পারেন — খরচের নিচে বিক্রি, ডুপ্লিকেট ইনভয়েস, বড় মূল্য বিচ্যুতি — এবং কোনো পরীক্ষা সম্পূর্ণ না হলে এটি আপনাকে জানাবে, সব ঠিক আছে এমন ইঙ্গিত না দিয়ে।',
+                },
+                {
+                    q: 'AI ক্রেডিট কী এবং আরও কীভাবে পাব?',
+                    a: 'AI ক্রেডিট হলো আপনার প্ল্যানের সাথে অন্তর্ভুক্ত একটি মাসিক বরাদ্দ (1 ক্রেডিট = 1,000 টোকেন), যা অ্যাসিস্ট্যান্ট ও অন্যান্য AI ফিচার ব্যবহার করে; AI Credits-এ এগুলো দেখুন। এগুলো প্রতি বিলিং সময়কালে রিসেট হয় এবং আলাদাভাবে কেনা যায় না — আপগ্রেড করে আপনি বড় বরাদ্দ পান (BASIC-এ মাসে 100, STANDARD-এ 500 অন্তর্ভুক্ত)। এগুলো SMS ক্রেডিট থেকে আলাদা, যা প্রিপেইড ও কেনা যায়।',
+                },
+            ],
+        },
+        billing: {
+            title: 'বিলিং ও সাবস্ক্রিপশন',
+            icon: '💳',
+            faqs: [
+                {
+                    q: 'আমার প্ল্যান কীভাবে আপগ্রেড করব?',
+                    a: 'Billing-এ যান, একটি প্ল্যান কার্ড ও Monthly বা Yearly বেছে নিন, এবং SSL Wireless চেকআউটে এগিয়ে যান (যা কার্ড, bKash এবং Nagad গ্রহণ করে)। বছরে পরিশোধ করলে দশ মাসের সমান খরচ পড়ে — কার্যত দুই মাস ফ্রি, প্রায় 17% ছাড়। শুধু ওনার বা একটি বিলিং-সক্ষম রোল সাবস্ক্রিপশন পরিবর্তন করতে পারে।',
+                },
+                {
+                    q: 'আমি কি আমার সাবস্ক্রিপশন বাতিল করতে পারি?',
+                    a: 'হ্যাঁ — Billing-এ "Cancel at Period End" বেছে নিন। বর্তমান পরিশোধিত সময়কাল শেষ হওয়া পর্যন্ত আপনার অ্যাক্সেস চলতে থাকে, এবং কিছুই মুছে ফেলা হয় না। বিস্তারিত জানতে /refund-এ Refund Policy দেখুন।',
+                },
+                {
+                    q: 'আমার পেমেন্ট ব্যর্থ হলে বা প্ল্যানের মেয়াদ শেষ হলে কী হয়?',
+                    a: 'সাবস্ক্রিপশন প্রথমে Past Due হয় এবং একটি সংক্ষিপ্ত গ্রেস পিরিয়ডে (প্রায় 7 দিন) আপনি রিমাইন্ডার ইমেইল পান। তারপরও অপরিশোধিত থাকলে, অ্যাকাউন্টটি মুছে না ফেলে Free প্ল্যানে ডাউনগ্রেড করা হয় — আপনার ডেটা সবসময় রাখা হয়, এবং আবার পরিশোধ করলে সম্পূর্ণ ফিচার ফিরে আসে।',
+                },
+                {
+                    q: 'AI ক্রেডিট আর SMS ক্রেডিটের মধ্যে পার্থক্য কী?',
+                    a: 'AI ক্রেডিট হলো AI ফিচারের জন্য একটি মাসিক প্ল্যান বরাদ্দ এবং প্রতি সময়কালে রিসেট হয়। SMS ক্রেডিট হলো একটি প্রিপেইড ব্যালেন্স যা আপনি SMS Credits-এ টপ আপ করেন: সিস্টেম যখন টেক্সট পাঠায় (বিক্রয় রসিদ, কম-স্টক অ্যালার্ট, CRM ক্যাম্পেইন) তখন এগুলো খরচ হয়, প্রতি প্রাপকের প্রতি মেসেজ সেগমেন্টে এক ক্রেডিট, এবং ব্যালেন্স কম হলে পাঠানো ব্যর্থ হওয়ার আগে আপনাকে সতর্ক করে।',
+                },
+            ],
+        },
+        storefront: {
+            title: 'ই-কমার্স স্টোরফ্রন্ট',
+            icon: '🌐',
+            faqs: [
+                {
+                    q: 'আমার অনলাইন স্টোর কীভাবে চালু করব?',
+                    a: 'Storefront → Storefront (সেটিংস)-এ যান, এটি চালু করুন, এবং একটি URL স্লাগ সেট করুন (ছোট হাতের অক্ষর, সংখ্যা ও হাইফেন)। তখন আপনার পাবলিক শপ /store/your-slug-এ থাকে, এবং আপনি একটি ব্যানার, হিরো শিরোনাম ও ছবি যোগ করতে পারেন।',
+                },
+                {
+                    q: 'কাস্টমাররা কীভাবে অর্ডার দেয়?',
+                    a: 'কাস্টমাররা আপনার স্টোর URL খোলে, স্টকে থাকা পণ্য ব্রাউজ করে, এবং তাদের যোগাযোগের তথ্য দিয়ে একটি অর্ডার দেয়। অর্ডারগুলো Storefront → Online Orders-এ Pending হিসেবে আসে, যেখানে আপনি সেগুলোকে Confirmed বা Cancelled হিসেবে চিহ্নিত করতে পারেন।',
+                },
+                {
+                    q: 'স্টোরফ্রন্ট অর্ডার কি স্বয়ংক্রিয়ভাবে আমার স্টক কমায়?',
+                    a: 'এখনও নয়। একটি স্টোরফ্রন্ট অর্ডার স্টক আছে কিনা পরীক্ষা করে কিন্তু তা কমায় না, এবং একটি অর্ডার নিশ্চিত করলে শুধু এর স্ট্যাটাস পরিবর্তন হয় — আপনি নিজেই পণ্য পূরণ ও ইনভেন্টরি সমন্বয় করেন। অনলাইন অর্ডারের জন্য স্বয়ংক্রিয় ইনভেন্টরি কর্তন ভবিষ্যতের একটি রিলিজে আমাদের রোডম্যাপে আছে।',
+                },
+            ],
+        },
+        security: {
+            title: 'নিরাপত্তা ও অ্যাকাউন্ট',
+            icon: '🔒',
+            faqs: [
+                {
+                    q: 'টু-ফ্যাক্টর অথেন্টিকেশন (2FA) কীভাবে চালু করব?',
+                    a: 'অ্যাকাউন্ট মেনু থেকে আপনার Profile খুলুন এবং 2FA ট্যাবে যান। Generate QR-এ ক্লিক করুন, একটি অথেন্টিকেটর অ্যাপ দিয়ে (Google Authenticator, Authy ইত্যাদি) এটি স্ক্যান করুন, 6-সংখ্যার কোড দিন, এবং Enable করুন। এরপর লগইনে আপনার ফোন থেকে একটি কোড চাওয়া হয়।',
+                },
+                {
+                    q: 'আমার পাসওয়ার্ড ভুলে গেলে কী করব?',
+                    a: 'লগইন পেজে "Forgot Password"-এ ক্লিক করুন এবং একটি রিসেট লিংক পেতে আপনার ইমেইল দিন। আপনি Profile → Password থেকেও যেকোনো সময় আপনার পাসওয়ার্ড পরিবর্তন করতে পারেন (নতুন পাসওয়ার্ড কমপক্ষে 8 characters হতে হবে)।',
+                },
+                {
+                    q: 'আমার ডেটা কীভাবে এক্সপোর্ট বা ডিলিট করব?',
+                    a: 'Profile → Data & Privacy-এ যান। "Download My Data" আপনার অ্যাকাউন্টের একটি JSON এক্সপোর্ট তৈরি করে, এবং "Request Data Deletion" একটি ডিলিশন অনুরোধ শুরু করে যা 30 days-এর মধ্যে প্রক্রিয়া করা হয়।',
+                },
+                {
+                    q: 'রোল ও টিম অ্যাক্সেস কীভাবে কাজ করে?',
+                    a: 'Team-এ মানুষ পরিচালনা করুন। বিল্ট-ইন রোলগুলো হলো OWNER, MANAGER, CASHIER এবং ACCOUNTANT, এবং আপনি কাস্টম রোল তৈরি করতে পারেন; প্রতিটি রোল একটি নির্দিষ্ট সেট মডিউল ও অ্যাকশন পারমিশন দেয়। শুধু ওনার বা "Manage Users" আছে এমন ব্যবহারকারী সদস্য আমন্ত্রণ বা রোল পরিবর্তন করতে পারে।',
+                },
+            ],
+        },
+    },
+} as const;
