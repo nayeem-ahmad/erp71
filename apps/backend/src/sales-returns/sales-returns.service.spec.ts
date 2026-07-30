@@ -47,6 +47,9 @@ describe('SalesReturnsService', () => {
       },
       customerCreditTransaction: {
           create: jest.fn()
+      },
+      product: {
+          findFirst: jest.fn().mockResolvedValue({ id: 'p-9' })
       }
     };
 
@@ -192,6 +195,79 @@ describe('SalesReturnsService', () => {
     const res = await service.findOne('tenant-1', 'ret-1');
     expect(db.salesReturn.findFirst).toHaveBeenCalled();
     expect(res.id).toEqual('ret-1');
+  });
+});
+
+describe('SalesReturnsService — returns without a sale', () => {
+  let service: SalesReturnsService;
+  let db: any;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    db = {
+      $transaction: jest.fn().mockImplementation(async (cb) => cb(db)),
+      sale: { findUnique: jest.fn() },
+      product: { findFirst: jest.fn().mockResolvedValue({ id: 'p-9' }) },
+      salesReturn: { create: jest.fn().mockResolvedValue({ id: 'ret-1', return_number: 'RET-1', total_refund: 250, items: [] }) },
+      customer: { update: jest.fn(), findUnique: jest.fn() },
+      customerCreditTransaction: { create: jest.fn() },
+      voucher: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
+      postingEvent: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [SalesReturnsService, { provide: DatabaseService, useValue: db }],
+    }).compile();
+    service = module.get<SalesReturnsService>(SalesReturnsService);
+    (resolveWarehouseId as jest.Mock).mockResolvedValue('wh-1');
+    (applyInventoryMovement as jest.Mock).mockResolvedValue(0);
+    (autoPostFromRules as jest.Mock).mockResolvedValue({ postingStatus: 'posted' });
+  });
+
+  const line = { productId: 'p-9', quantity: 5, unitPrice: 50 };
+
+  it('records a return with no sale, pricing it from the line', async () => {
+    await service.create('t1', 'u1', { storeId: 's1', items: [line] } as any);
+
+    // No sale was named, so none should be looked up.
+    expect(db.sale.findUnique).not.toHaveBeenCalled();
+
+    const data = db.salesReturn.create.mock.calls[0][0].data;
+    expect(data.sale_id).toBeNull();
+    expect(data.total_refund).toBe(250);
+    expect(data.items.create[0]).toMatchObject({ sale_item_id: null, product_id: 'p-9', quantity: 5, refund_amount: 250 });
+  });
+
+  it('restocks the goods even without a parent sale', async () => {
+    await service.create('t1', 'u1', { storeId: 's1', items: [line] } as any);
+
+    expect(applyInventoryMovement).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ productId: 'p-9', quantityDelta: 5, movementType: 'SALES_RETURN' }),
+    );
+  });
+
+  it('settles in cash, the only defensible default when the tender is unknown', async () => {
+    await service.create('t1', 'u1', { storeId: 's1', items: [line] } as any);
+
+    expect((autoPostFromRules as jest.Mock).mock.calls[0][0].conditionValue).toBe('cash');
+  });
+
+  it('requires a product and a price on each line', async () => {
+    await expect(
+      service.create('t1', 'u1', { storeId: 's1', items: [{ quantity: 1, unitPrice: 5 }] } as any),
+    ).rejects.toThrow(/productId is required/);
+
+    await expect(
+      service.create('t1', 'u1', { storeId: 's1', items: [{ productId: 'p-9', quantity: 1 }] } as any),
+    ).rejects.toThrow(/unitPrice is required/);
+  });
+
+  it('still rejects a sale id that does not exist', async () => {
+    db.sale.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.create('t1', 'u1', { storeId: 's1', saleId: 'missing', items: [line] } as any),
+    ).rejects.toThrow('Sale not found');
   });
 });
 

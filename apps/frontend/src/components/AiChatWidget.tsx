@@ -57,6 +57,8 @@ const TOOL_ROUTES: Record<string, string> = {
     open_pipeline: '/sales/orders',
     workforce_summary: '/hr/attendance',
     loyalty_summary: '/sales/loyalty',
+    // Help answers come from the Help Center, so that is the right page to cite.
+    search_help: '/help',
     // The general-purpose lookups have no single report page behind them, so
     // they are deliberately absent: a link to the wrong page is worse than none.
 };
@@ -297,6 +299,7 @@ export default function AiChatWidget() {
                                                 m.suggestions.s2,
                                                 m.suggestions.s3,
                                                 m.suggestions.s4,
+                                                m.suggestions.s5,
                                             ]}
                                             onPick={send}
                                         />
@@ -309,6 +312,7 @@ export default function AiChatWidget() {
                                             key={`${index}-${message.id}`}
                                             message={message}
                                             sourcesLabel={m.sources}
+                                            onNavigate={() => setOpen(false)}
                                         />
                                     ))}
 
@@ -519,7 +523,15 @@ function EmptyState({
     );
 }
 
-function MessageBubble({ message, sourcesLabel }: { message: AiChatMessage; sourcesLabel: string }) {
+function MessageBubble({
+    message,
+    sourcesLabel,
+    onNavigate,
+}: {
+    message: AiChatMessage;
+    sourcesLabel: string;
+    onNavigate: () => void;
+}) {
     if (message.role === 'user') {
         return (
             <div className="flex justify-end">
@@ -537,7 +549,7 @@ function MessageBubble({ message, sourcesLabel }: { message: AiChatMessage; sour
                 stays disabled in the renderer. */}
             <div className="max-w-[95%] rounded-lg rounded-bl-sm bg-gray-100 px-3 py-2 text-sm text-gray-900">
                 <Suspense fallback={<div className="whitespace-pre-wrap">{message.content}</div>}>
-                    <Markdown content={message.content} />
+                    <Markdown content={message.content} onNavigate={onNavigate} />
                 </Suspense>
             </div>
             {message.tool_calls?.length ? <Sources calls={message.tool_calls} label={sourcesLabel} /> : null}

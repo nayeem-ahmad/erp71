@@ -14,6 +14,7 @@ import { SalesReportsService } from '../sales-reports/sales-reports.service';
 import { SuppliersService } from '../suppliers/suppliers.service';
 import { AiService, type ChatCompletionMessage } from './ai.service';
 import { AnomalyDetectionService } from './anomaly-detection.service';
+import { buildNavigationSection } from './app-navigation';
 import { ChatDataService } from './chat-data.service';
 import { WebSearchService } from './web-search.service';
 import {
@@ -118,7 +119,7 @@ export class ChatService {
      * populate, so the assistant answered stock questions with an empty report
      * instead of saying the business does not track stock here.
      */
-    async resolveTools(ctx: TenantContext): Promise<ChatTool[]> {
+    async resolveTools(ctx: TenantContext): Promise<{ tools: ChatTool[]; modules: Set<ChatToolModule> }> {
         const [modules, flags] = await Promise.all([
             this.resolveModules(ctx.tenantId),
             this.resolveFeatureFlags(),
@@ -131,7 +132,7 @@ export class ChatService {
                 allowed.push(tool);
             }
         }
-        return allowed;
+        return { tools: allowed, modules };
     }
 
     /** Platform-level capabilities that cost money per call, hence opt-in. */
@@ -230,7 +231,7 @@ export class ChatService {
                   },
               });
 
-        const [tools, history, stores, hasConsolidatedAccess] = await Promise.all([
+        const [{ tools, modules }, history, stores, hasConsolidatedAccess] = await Promise.all([
             this.resolveTools(ctx),
             this.loadHistory(conversation.id),
             this.db.store.findMany({
@@ -259,7 +260,7 @@ export class ChatService {
         };
 
         const messages: ChatCompletionMessage[] = [
-            { role: 'system', content: this.buildSystemPrompt(tools, stores, locale) },
+            { role: 'system', content: this.buildSystemPrompt(tools, modules, stores, locale) },
             ...history,
             { role: 'user', content: message },
         ];
@@ -463,8 +464,15 @@ export class ChatService {
         }
     }
 
-    private buildSystemPrompt(tools: ChatTool[], stores: Array<{ id: string; name: string }>, locale?: string): string {
+    private buildSystemPrompt(
+        tools: ChatTool[],
+        modules: Set<ChatToolModule>,
+        stores: Array<{ id: string; name: string }>,
+        locale?: string,
+    ): string {
         const hasWeb = tools.some((tool) => tool.featureFlag === 'webSearch');
+        const hasHelp = tools.some((tool) => tool.name === 'search_help');
+        const navigation = buildNavigationSection(modules);
         const today = new Date().toLocaleDateString('en-CA', { timeZone: TENANT_TIMEZONE });
         const branchList = stores.length
             ? stores.map((s) => `- ${s.name} (id: ${s.id})`).join('\n')
@@ -476,15 +484,27 @@ export class ChatService {
 
         return [
             'You are the ERP71 business assistant for a small or medium retailer in Bangladesh.',
-            'You answer questions about this business\'s own data by calling the tools available to you.',
+            hasHelp
+                ? 'You answer two kinds of question by calling the tools available to you: questions about this business\'s own data (sales, stock, customers, money), and questions about how the ERP71 app itself works (how to do something, where a feature is, what it does).'
+                : 'You answer questions about this business\'s own data by calling the tools available to you.',
             '',
             'GROUNDING RULES — these override everything else:',
             '- Never state a number that did not come from a tool result in this conversation. Do not estimate, extrapolate, or recall figures from earlier context that you did not look up.',
-            '- If no available tool can answer the question, say plainly what you cannot see and suggest which report page to open. Do not guess.',
+            '- If no available tool can answer the question, say plainly what you cannot see and link to the report page to open (see "Pages you can link to" below). Do not guess.',
             '- If a tool result says it was truncated, say so — e.g. "the top 20 of 143". If it reports hasMore, you can request the next page with the offset parameter.',
             '- Never invent an id. When a question names a specific product, customer, supplier, warehouse or account, call resolve_entity first and use the id it returns. Branch ids are listed below and need no lookup.',
-            '- You are read-only. You cannot create, edit or delete anything. If asked to, explain that and point to the right page.',
+            '- You are read-only. You cannot create, edit or delete anything. If asked to, explain that and link to the page where the user can do it (see "Pages you can link to" below).',
             '',
+            ...(hasHelp
+                ? [
+                      'ANSWERING "HOW DO I…" AND FEATURE QUESTIONS:',
+                      '- These are about the app itself, not the data: "how do I add a product", "where do I record a return", "does the POS work offline", "what plans are there", "how do I turn on 2FA". Call search_help and answer from what it returns.',
+                      '- Do not answer app how-to from your own memory. The product changes and search_help is the current documentation; if it and your assumptions disagree, it wins.',
+                      '- Keep the exact page names it gives, and link to that page from the list below when there is one so the user can go straight there.',
+                      '- If search_help finds nothing, say the feature is not documented and point to the Help Center or support@erp71.com rather than guessing how it behaves.',
+                      '',
+                  ]
+                : []),
             'CHOOSING TOOLS:',
             '- For anything spanning more than one period, use the trend tools or the compareTo parameter. Do not call the same summary tool twice for two date ranges and subtract them yourself.',
             '- compareTo: "previous_period" is the equally long block of days ending the day before the range, which may straddle two calendar months. Every result echoes the exact window it used — quote that window rather than calling it "last month".',
@@ -519,6 +539,7 @@ export class ChatService {
             'Branches in this business:',
             branchList,
             '',
+            ...(navigation.length ? [...navigation, ''] : []),
             'FORMATTING:',
             '- Your reply is rendered as markdown in a narrow side panel about 380px wide. Bold, italics, bullet lists, tables, links and inline code all render; raw HTML and images do not.',
             ...(hasWeb

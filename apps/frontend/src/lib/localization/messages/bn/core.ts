@@ -261,6 +261,7 @@ export const coreMessages = {
                 crmFollowUps: "ফলো-আপ",
                 crmCampaigns: "ক্যাম্পেইন",
                 crmLeads: "লিড",
+                crmContacts: "কন্টাক্ট",
                 crmConversations: "কথোপকথন",
                 crmLeadTaxonomy: "উৎস ও ক্যাটাগরি",
                 crmCustomFields: "কাস্টম ফিল্ড",

@@ -22,7 +22,7 @@ export class PurchaseReturnsService {
             }
 
             const purchase = await tx.purchase.findFirst({
-                where: { id: dto.purchaseId, tenant_id: tenantId },
+                where: { id: dto.purchaseId ?? '', tenant_id: tenantId },
                 include: {
                     items: {
                         include: {
@@ -33,19 +33,21 @@ export class PurchaseReturnsService {
                 },
             });
 
-            if (!purchase) {
+            if (dto.purchaseId && !purchase) {
                 throw new NotFoundException('Purchase not found');
             }
 
-            if (purchase.store_id !== dto.storeId) {
+            if (purchase && purchase.store_id !== dto.storeId) {
                 throw new BadRequestException('Purchase does not belong to the provided store.');
             }
 
-            const returnItemData = this.buildReturnItemData(purchase.items, dto.items);
+            const returnItemData = purchase
+                ? this.buildReturnItemData(purchase.items, dto.items)
+                : await this.buildStandaloneReturnItemData(tx, tenantId, dto.items);
             const totalAmount = returnItemData.reduce((sum, item) => sum + item.line_total, 0);
             const count = await tx.purchaseReturn.count({ where: { tenant_id: tenantId } });
             const returnNumber = `PRET-${String(count + 1).padStart(5, '0')}`;
-            const warehouseId = await resolveWarehouseId(tx, tenantId, purchase.store_id);
+            const warehouseId = await resolveWarehouseId(tx, tenantId, purchase?.store_id ?? dto.storeId);
 
             // Create the return row first, so movements can reference its id
             // (every other caller passes the id, not the PRET- string).
@@ -53,8 +55,8 @@ export class PurchaseReturnsService {
                 data: {
                     tenant_id: tenantId,
                     store_id: dto.storeId,
-                    purchase_id: purchase.id,
-                    supplier_id: purchase.supplier_id,
+                    purchase_id: purchase?.id ?? null,
+                    supplier_id: purchase?.supplier_id ?? null,
                     return_number: returnNumber,
                     reference_number: dto.referenceNumber,
                     total_amount: totalAmount,
@@ -86,7 +88,7 @@ export class PurchaseReturnsService {
             // Returning purchased goods reduces what we owe the supplier. Record
             // the credit-ledger entry and adjust the running balance to match, so
             // a purchase return no longer leaves the payable overstated.
-            if (purchase.supplier_id) {
+            if (purchase?.supplier_id) {
                 const currentDue = Number(purchase.supplier?.due_balance ?? 0);
                 const creditReduction = Math.min(totalAmount, currentDue);
                 if (creditReduction > 0.005) {
@@ -123,9 +125,9 @@ export class PurchaseReturnsService {
                 amount: Number(purchaseReturn.total_amount),
                 description: `Auto-posted purchase return ${purchaseReturn.return_number}`,
                 referenceNumber: purchaseReturn.return_number,
-                storeId: purchase.store_id,
+                storeId: purchase?.store_id ?? dto.storeId,
                 partyType: 'SUPPLIER',
-                partyId: purchase.supplier_id ?? undefined,
+                partyId: purchase?.supplier_id ?? undefined,
             });
 
             const purchaseReturnWithDetails = await tx.purchaseReturn.findFirst({
@@ -223,7 +225,12 @@ export class PurchaseReturnsService {
             }
 
             if (dto.items) {
-                const warehouseId = await resolveWarehouseId(tx, tenantId, existingReturn.purchase.store_id);
+                // A parentless return has no purchase to take the store from.
+                const warehouseId = await resolveWarehouseId(
+                    tx,
+                    tenantId,
+                    existingReturn.purchase?.store_id ?? existingReturn.store_id,
+                );
                 for (const oldItem of existingReturn.items) {
                     await applyInventoryMovement(tx, {
                         tenantId,
@@ -236,7 +243,9 @@ export class PurchaseReturnsService {
                     });
                 }
 
-                const newItems = this.buildReturnItemData(existingReturn.purchase.items, dto.items, id);
+                const newItems = existingReturn.purchase
+                    ? this.buildReturnItemData(existingReturn.purchase.items, dto.items, id)
+                    : await this.buildStandaloneReturnItemData(tx, tenantId, dto.items);
 
                 updateData.total_amount = newItems.reduce((sum, item) => sum + item.line_total, 0);
 
@@ -305,6 +314,50 @@ export class PurchaseReturnsService {
         });
     }
 
+    /**
+     * Lines for a return with no parent purchase. Nothing bounds or prices them,
+     * so the caller has to name the product and its cost; the checks that a
+     * parent would provide (line belongs to it, quantity still returnable) have
+     * no equivalent here.
+     */
+    private async buildStandaloneReturnItemData(
+        tx: any,
+        tenantId: string,
+        items: Array<{ productId?: string; quantity: number; unitCost?: number }>,
+    ) {
+        const seen = new Set<string>();
+        const rows = [];
+
+        for (const item of items) {
+            if (!item.productId) {
+                throw new BadRequestException('productId is required on each line when no purchase is given.');
+            }
+            if (item.unitCost == null || item.unitCost < 0) {
+                throw new BadRequestException('unitCost is required on each line when no purchase is given.');
+            }
+            if (seen.has(item.productId)) {
+                throw new BadRequestException(`Duplicate product ${item.productId} in return payload.`);
+            }
+            seen.add(item.productId);
+
+            const product = await tx.product.findFirst({
+                where: { id: item.productId, tenant_id: tenantId },
+                select: { id: true },
+            });
+            if (!product) throw new BadRequestException(`Product ${item.productId} not found.`);
+
+            rows.push({
+                purchase_item_id: null,
+                product_id: product.id,
+                quantity: item.quantity,
+                unit_cost: item.unitCost,
+                line_total: item.unitCost * item.quantity,
+            });
+        }
+
+        return rows;
+    }
+
     private buildReturnItemData(
         purchaseItems: Array<{
             id: string;
@@ -313,12 +366,15 @@ export class PurchaseReturnsService {
             unit_cost: unknown;
             returnItems?: Array<{ quantity: number; return_id: string }>;
         }>,
-        items: Array<{ purchaseItemId: string; quantity: number }>,
+        items: Array<{ purchaseItemId?: string; quantity: number }>,
         currentReturnId?: string,
     ) {
         const seen = new Set<string>();
 
         return items.map((item) => {
+            if (!item.purchaseItemId) {
+                throw new BadRequestException('purchaseItemId is required on each line when a purchase is given.');
+            }
             if (seen.has(item.purchaseItemId)) {
                 throw new BadRequestException(`Duplicate purchase item ${item.purchaseItemId} in return payload.`);
             }

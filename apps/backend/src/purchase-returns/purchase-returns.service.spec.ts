@@ -48,6 +48,9 @@ describe('PurchaseReturnsService', () => {
             supplier: {
                 update: jest.fn(),
             },
+            product: {
+                findFirst: jest.fn().mockResolvedValue({ id: 'p-9' }),
+            },
         };
 
         db = {
@@ -302,4 +305,69 @@ describe('PurchaseReturnsService', () => {
         await expect(service.findOne('tenant-1', 'missing')).rejects.toThrow(NotFoundException);
     });
 
+});
+
+describe('PurchaseReturnsService — returns without a purchase', () => {
+    let service: PurchaseReturnsService;
+    let tx: any;
+
+    beforeEach(async () => {
+        jest.clearAllMocks();
+        tx = {
+            store: { findFirst: jest.fn().mockResolvedValue({ id: 's1' }) },
+            purchase: { findFirst: jest.fn().mockResolvedValue(null) },
+            product: { findFirst: jest.fn().mockResolvedValue({ id: 'p-9' }) },
+            purchaseReturn: {
+                count: jest.fn().mockResolvedValue(0),
+                create: jest.fn().mockResolvedValue({ id: 'pret-1', return_number: 'PRET-00001', total_amount: 300, items: [] }),
+                findFirst: jest.fn().mockResolvedValue({ id: 'pret-1', return_number: 'PRET-00001', total_amount: 300, items: [] }),
+            },
+            purchaseReturnItem: { createMany: jest.fn(), deleteMany: jest.fn() },
+            supplierCreditTransaction: { create: jest.fn() },
+            supplier: { update: jest.fn() },
+        };
+        const db: any = {
+            $transaction: jest.fn().mockImplementation(async (cb: any) => cb(tx)),
+            voucher: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
+            postingEvent: { findMany: jest.fn().mockResolvedValue([]) },
+        };
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [PurchaseReturnsService, { provide: DatabaseService, useValue: db }],
+        }).compile();
+        service = module.get<PurchaseReturnsService>(PurchaseReturnsService);
+        (resolveWarehouseId as jest.Mock).mockResolvedValue('wh-1');
+        (applyInventoryMovement as jest.Mock).mockResolvedValue(0);
+        (autoPostFromRules as jest.Mock).mockResolvedValue({ postingStatus: 'posted' });
+    });
+
+    const line = { productId: 'p-9', quantity: 3, unitCost: 100 };
+
+    it('records a return with no purchase, pricing it from the line', async () => {
+        await service.create('t1', 'u1', { storeId: 's1', items: [line] } as any);
+
+        const data = tx.purchaseReturn.create.mock.calls[0][0].data;
+        expect(data.purchase_id).toBeNull();
+        expect(data.supplier_id).toBeNull();
+        expect(data.total_amount).toBe(300);
+
+        // Lines are written separately here, and carry no parent line.
+        const rows = tx.purchaseReturnItem.createMany.mock.calls[0][0].data;
+        expect(rows[0]).toMatchObject({ purchase_item_id: null, product_id: 'p-9', quantity: 3, line_total: 300 });
+    });
+
+    it('requires a product and a cost on each line', async () => {
+        await expect(
+            service.create('t1', 'u1', { storeId: 's1', items: [{ quantity: 1, unitCost: 5 }] } as any),
+        ).rejects.toThrow(/productId is required/);
+
+        await expect(
+            service.create('t1', 'u1', { storeId: 's1', items: [{ productId: 'p-9', quantity: 1 }] } as any),
+        ).rejects.toThrow(/unitCost is required/);
+    });
+
+    it('still rejects a purchase id that does not exist', async () => {
+        await expect(
+            service.create('t1', 'u1', { storeId: 's1', purchaseId: 'missing', items: [line] } as any),
+        ).rejects.toThrow('Purchase not found');
+    });
 });

@@ -928,18 +928,20 @@ export class ExternalSyncService {
         for (const row of rows) {
             const mapped = mapSaleReturn(row, connection.document_prefix, warnings);
 
-            const saleId = mapped.externalSaleId ? saleMap.get(mapped.externalSaleId) : undefined;
+            // A missing parent no longer costs us the return: SalesReturn.sale_id
+            // is optional, so it imports standalone and still restocks and
+            // refunds. Recorded as a warning because a return that cannot be
+            // tied back to its sale is worth an operator's eye.
+            const saleId = mapped.externalSaleId ? saleMap.get(mapped.externalSaleId) ?? null : null;
             if (!saleId) {
-                stats.saleReturns.skipped++;
                 warnings.push({
                     entity: 'SALE_RETURN',
                     externalId: mapped.externalId,
                     code: 'PARENT_SALE_UNRESOLVED',
                     message:
-                        `Return ${row.invoice} belongs to sale ${mapped.externalSaleId ?? '(none)'}, which has not been imported ` +
-                        '— run a full-history resync so the parent sale exists, then re-run',
+                        `Return ${row.invoice} belongs to sale ${mapped.externalSaleId ?? '(none)'}, which is not in the ` +
+                        'imported range — imported without a linked sale',
                 });
-                continue;
             }
 
             if (dryRun) {
@@ -970,18 +972,20 @@ export class ExternalSyncService {
     private async writeSaleReturn(
         connection: { id: string; tenant_id: string; store_id: string; post_impacts: boolean },
         mapped: MappedSaleReturn,
-        saleId: string,
+        saleId: string | null,
         productMap: Map<string, string>,
         returnMap: Map<string, string>,
         warnings: SyncWarning[],
     ): Promise<boolean | null> {
-        // Each return line must name a line of the parent sale. Match on
-        // product, consuming each sale line once so two return lines for the
-        // same product cannot both claim it.
-        const saleItems = await this.db.saleItem.findMany({
-            where: { sale_id: saleId },
-            select: { id: true, product_id: true },
-        });
+        // Each return line names a line of the parent sale where there is one.
+        // Match on product, consuming each sale line once so two return lines
+        // for the same product cannot both claim it.
+        const saleItems = saleId
+            ? await this.db.saleItem.findMany({
+                  where: { sale_id: saleId },
+                  select: { id: true, product_id: true },
+              })
+            : [];
         const availableByProduct = new Map<string, string[]>();
         for (const item of saleItems) {
             const list = availableByProduct.get(item.product_id) ?? [];
@@ -989,11 +993,23 @@ export class ExternalSyncService {
             availableByProduct.set(item.product_id, list);
         }
 
-        const items: Array<{ sale_item_id: string; product_id: string; quantity: number; refund_amount: number }> = [];
+        const items: Array<{ sale_item_id: string | null; product_id: string; quantity: number; refund_amount: number }> = [];
         for (const line of mapped.items) {
             const productId = productMap.get(line.externalProductId);
-            const saleItemId = productId ? availableByProduct.get(productId)?.shift() : undefined;
-            if (!productId || !saleItemId) {
+            if (!productId) {
+                warnings.push({
+                    entity: 'SALE_RETURN',
+                    externalId: mapped.externalId,
+                    code: 'RETURN_LINE_UNMATCHED',
+                    message:
+                        `Return ${mapped.returnNumber}: provider product ${line.externalProductId} has not been imported ` +
+                        '— the whole return was skipped rather than import a refund whose lines do not add up',
+                });
+                return null;
+            }
+
+            const saleItemId = saleId ? availableByProduct.get(productId)?.shift() ?? null : null;
+            if (saleId && !saleItemId) {
                 warnings.push({
                     entity: 'SALE_RETURN',
                     externalId: mapped.externalId,
@@ -1004,6 +1020,7 @@ export class ExternalSyncService {
                 });
                 return null;
             }
+
             items.push({
                 sale_item_id: saleItemId,
                 product_id: productId,

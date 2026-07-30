@@ -50,7 +50,7 @@ describe('HelpPage', () => {
     it('renders Getting Started section open by default with FAQ questions', () => {
         render(<HelpPage />);
         expect(screen.getByText('How do I add my first product?')).toBeInTheDocument();
-        expect(screen.getByText('How do I create a store and start selling?')).toBeInTheDocument();
+        expect(screen.getByText('How do I start selling?')).toBeInTheDocument();
     });
 
     it('does not show POS FAQs initially (section is closed)', () => {
@@ -63,7 +63,7 @@ describe('HelpPage', () => {
         const posButton = screen.getByText('Point of Sale (POS)').closest('button')!;
         fireEvent.click(posButton);
         expect(screen.getByText('How does the offline POS work?')).toBeInTheDocument();
-        expect(screen.getByText('Can I accept multiple payment methods in one sale?')).toBeInTheDocument();
+        expect(screen.getByText('Can I take more than one payment method in a single sale?')).toBeInTheDocument();
     });
 
     it('clicking an open section collapses it', () => {
@@ -97,11 +97,11 @@ describe('HelpPage', () => {
     it('can expand multiple FAQs in the same section', () => {
         render(<HelpPage />);
         const faq1 = screen.getByText('How do I add my first product?').closest('button')!;
-        const faq2 = screen.getByText('How do I invite staff members?').closest('button')!;
+        const faq2 = screen.getByText('How do I invite staff and control what they can do?').closest('button')!;
         fireEvent.click(faq1);
         fireEvent.click(faq2);
         expect(screen.getByText(/Go to Inventory → Products and click/)).toBeInTheDocument();
-        expect(screen.getByText(/Go to Settings → Users and click/)).toBeInTheDocument();
+        expect(screen.getByText(/Go to Team \(Settings → Team\)/)).toBeInTheDocument();
     });
 
     it('can open multiple sections simultaneously', () => {
@@ -111,7 +111,7 @@ describe('HelpPage', () => {
         fireEvent.click(posButton);
         fireEvent.click(accountingButton);
         expect(screen.getByText('How does the offline POS work?')).toBeInTheDocument();
-        expect(screen.getByText('How does double-entry accounting work in this system?')).toBeInTheDocument();
+        expect(screen.getByText('Do I have to post journal entries myself?')).toBeInTheDocument();
     });
 
     it('shows FAQ count badges', () => {
@@ -133,15 +133,15 @@ describe('HelpPage', () => {
         expect(screen.getByText('How do I track stock across multiple warehouses?')).toBeInTheDocument();
         const faqBtn = screen.getByText('How do I track stock across multiple warehouses?').closest('button')!;
         fireEvent.click(faqBtn);
-        expect(screen.getByText(/Go to Inventory → Warehouses to set up/)).toBeInTheDocument();
+        expect(screen.getByText(/Create warehouses in the Inventory setup/)).toBeInTheDocument();
     });
 
     it('opens Security & Account section and expands 2FA FAQ', () => {
         render(<HelpPage />);
         const secButton = screen.getByText('Security & Account').closest('button')!;
         fireEvent.click(secButton);
-        const faqBtn = screen.getByText('How do I enable two-factor authentication (2FA)?').closest('button')!;
+        const faqBtn = screen.getByText('How do I turn on two-factor authentication (2FA)?').closest('button')!;
         fireEvent.click(faqBtn);
-        expect(screen.getByText(/Go to Settings → Account → 2FA tab/)).toBeInTheDocument();
+        expect(screen.getByText(/Open your Profile from the account menu/)).toBeInTheDocument();
     });
 });
