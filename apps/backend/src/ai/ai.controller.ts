@@ -100,7 +100,7 @@ export class AiController {
     @UseInterceptors(TenantInterceptor)
     async chatTools(@Tenant() tenant: TenantContext) {
         await this.chatService.assertEnabled(tenant.tenantId);
-        const tools = await this.chatService.resolveTools(tenant);
+        const { tools } = await this.chatService.resolveTools(tenant);
         return { tools: tools.map((t) => t.name) };
     }
 
