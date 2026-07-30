@@ -1,5 +1,16 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import Markdown from './Markdown';
+
+// next/link needs the App Router runtime to navigate; a plain anchor keeps the
+// test focused on Markdown's internal-vs-external routing decision.
+jest.mock('next/link', () => ({
+    __esModule: true,
+    default: ({ href, children, ...props }: { href: string; children: unknown; [key: string]: unknown }) => (
+        <a href={href} {...props}>
+            {children as never}
+        </a>
+    ),
+}));
 
 describe('Markdown', () => {
     it('renders headings, emphasis and lists as elements rather than literal syntax', () => {
@@ -72,6 +83,29 @@ describe('Markdown', () => {
         const link = screen.getByRole('link', { name: 'the report' });
         expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
         expect(link).toHaveAttribute('target', '_blank');
+    });
+
+    /**
+     * A path the assistant links to is an in-app route, so it must navigate in
+     * the same tab (a client-side link), not open a new one like a web citation.
+     */
+    it('renders an in-app path as a same-tab link and fires onNavigate on click', () => {
+        const onNavigate = jest.fn();
+        render(<Markdown content={'See [the sales summary](/sales/reports/summary).'} onNavigate={onNavigate} />);
+
+        const link = screen.getByRole('link', { name: 'the sales summary' });
+        expect(link).toHaveAttribute('href', '/sales/reports/summary');
+        expect(link).not.toHaveAttribute('target', '_blank');
+
+        fireEvent.click(link);
+        expect(onNavigate).toHaveBeenCalledTimes(1);
+    });
+
+    /** A protocol-relative "//host" leaves the app, so it is treated as external. */
+    it('treats a protocol-relative link as external, not in-app', () => {
+        render(<Markdown content={'[off site](//evil.example/x)'} />);
+
+        expect(screen.getByRole('link', { name: 'off site' })).toHaveAttribute('target', '_blank');
     });
 
     it('neutralises a javascript: link', () => {
