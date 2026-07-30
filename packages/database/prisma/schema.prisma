@@ -251,6 +251,8 @@ model User {
   assignedLeads             Lead[]        @relation("LeadAssignee")
   nextStepAssignedLeads     Lead[]        @relation("LeadNextStepAssignee")
   createdLeads              Lead[]        @relation("LeadCreator")
+  assignedCrmContacts       CrmContact[]  @relation("CrmContactAssignee")
+  createdCrmContacts        CrmContact[]  @relation("CrmContactCreator")
   createdLeadConversations  LeadConversation[] @relation("LeadConversationCreator")
   createdCreditTransactions CustomerCreditTransaction[] @relation("CreditTransactionCreator")
   createdSupplierCreditTransactions SupplierCreditTransaction[] @relation("SupplierCreditTransactionCreator")
@@ -488,6 +490,7 @@ model Tenant {
   leadConversations   LeadConversation[]
   leadSourceOptions   LeadSourceOption[]
   leadCategoryOptions LeadCategoryOption[]
+  crmContacts         CrmContact[]
   customFieldDefinitions CustomFieldDefinition[]
   customerCreditTransactions CustomerCreditTransaction[]
   supplierCreditTransactions SupplierCreditTransaction[]
@@ -1265,7 +1268,7 @@ model PurchaseReturn {
 
   tenant           Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   store            Store     @relation(fields: [store_id], references: [id])
-  purchase         Purchase  @relation(fields: [purchase_id], references: [id])
+  purchase         Purchase? @relation(fields: [purchase_id], references: [id])
   supplier         Supplier? @relation(fields: [supplier_id], references: [id])
   items            PurchaseReturnItem[]
 
@@ -1649,6 +1652,54 @@ model LeadCategoryOption {
   @@unique([tenant_id, code])
   @@unique([tenant_id, name])
   @@index([tenant_id, is_active, sort_order])
+}
+
+/// How a contact row first entered the system. `BUSINESS_CARD` marks rows whose
+/// fields were extracted from a photographed card, which is worth keeping: those
+/// values came out of an OCR pass and are the ones most worth re-checking.
+enum CrmContactCaptureSource {
+  MANUAL
+  BUSINESS_CARD
+  IMPORT
+}
+
+/// A person the tenant knows — deliberately thinner than `Lead`.
+///
+/// A lead carries a pipeline (status, score, next step, source/category
+/// taxonomy) because it is being worked. A contact is just an address-book row:
+/// who they are, where they work, how to reach them. Keeping them separate is
+/// what lets the business-card scanner drop a card into the system in one step
+/// without inventing a pipeline stage for someone met at a trade fair.
+model CrmContact {
+  id             String   @id @default(uuid())
+  tenant_id      String
+  name           String
+  company        String?
+  designation    String?
+  mobile         String?
+  phone          String?
+  email          String?
+  address        String?
+  website_url    String?
+  linkedin_url   String?
+  notes          String?
+  capture_source CrmContactCaptureSource @default(MANUAL)
+  assigned_to    String?
+  created_by     String?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  tenant   Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  assignee User?  @relation("CrmContactAssignee", fields: [assigned_to], references: [id])
+  creator  User?  @relation("CrmContactCreator", fields: [created_by], references: [id])
+
+  // Mobile is the dedupe key, as it is on Lead. Postgres treats NULLs as
+  // distinct, so any number of contacts may have no mobile at all.
+  @@unique([tenant_id, mobile])
+  @@index([tenant_id, name])
+  @@index([tenant_id, company])
+  @@index([tenant_id, assigned_to])
+  @@index([tenant_id, created_at])
 }
 
 enum CustomFieldEntity {
@@ -2073,7 +2124,7 @@ model SalesReturn {
   // Relations
   tenant         Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   store          Store    @relation(fields: [store_id], references: [id])
-  sale           Sale     @relation(fields: [sale_id], references: [id])
+  sale           Sale?    @relation(fields: [sale_id], references: [id])
   items          SalesReturnItem[]
 
   @@unique([tenant_id, return_number])

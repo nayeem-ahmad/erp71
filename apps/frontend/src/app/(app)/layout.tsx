@@ -349,7 +349,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         // /crm/conversations is a sibling of /crm/leads, not a child, so it needs listing
         // explicitly. The API 403s either way, but without this the page shell still
         // renders for a non-premium tenant.
-        const premiumCrmPaths = [routes.crm.leads, routes.crm.conversations];
+        const premiumCrmPaths = [routes.crm.leads, routes.crm.contacts, routes.crm.conversations];
         if (!hasPremiumCrm && premiumCrmPaths.some((p) => pathname.startsWith(p))) {
             router.replace(routes.crm.root);
         }

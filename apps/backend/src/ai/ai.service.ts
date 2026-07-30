@@ -15,6 +15,18 @@ const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL ?? 'https://openrout
 const DEFAULT_MODEL = 'anthropic/claude-haiku-4.5';
 const WHISPER_MODEL = 'openai/whisper-large-v3';
 const MAX_AUDIO_BASE64_LENGTH = 4 * 1024 * 1024;
+/** ~6 MB of base64 ≈ a 4.5 MB photo. Above that the request is slower than a retake. */
+const MAX_IMAGE_BASE64_LENGTH = 6 * 1024 * 1024;
+const IMAGE_MIME_TYPES = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+    // iPhones hand out HEIC by default; the browser converts on canvas re-encode,
+    // but a straight file pick can still arrive in the original format.
+    'image/heic',
+    'image/heif',
+];
 
 /** Legacy Anthropic direct model IDs stored before OpenRouter migration */
 const MODEL_ALIASES: Record<string, string> = {
@@ -94,6 +106,28 @@ type OpenRouterChatResponse = {
     error?: { message?: string };
 };
 
+/**
+ * The fields a business card can yield. Every one is optional — cards routinely
+ * omit a mobile, a company, or an address, and a missing field has to come back
+ * as absent rather than as an invented value the user then has to notice.
+ */
+export type BusinessCardFields = {
+    name?: string;
+    company?: string;
+    designation?: string;
+    mobile?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+    website_url?: string;
+    linkedin_url?: string;
+};
+
+export type BusinessCardScanResult = BusinessCardFields & {
+    /** Everything legible on the card, for the fields the schema has no slot for. */
+    raw_text?: string;
+};
+
 type ParsedVoiceSaleItem = {
     productName: string;
     quantity: number;
@@ -130,6 +164,18 @@ export class AiService {
     /** Model for the data chatbot — its own override, falling back to the platform default. */
     async getChatModel(): Promise<string> {
         const override = (await this.platformSettings.getRawValue('ai', 'chat_model'))?.trim();
+        return override ? this.normalizeModel(override) : this.getDefaultModel();
+    }
+
+    /**
+     * Model for image-reading calls (today: the business-card scanner). Its own
+     * knob because OCR-shaped extraction and the chatbot's tool routing have
+     * nothing in common — a tenant may well want a cheap vision model here while
+     * the assistant stays on something stronger. Blank falls back to the
+     * platform default, which must itself be vision-capable.
+     */
+    async getVisionModel(): Promise<string> {
+        const override = (await this.platformSettings.getRawValue('ai', 'vision_model'))?.trim();
         return override ? this.normalizeModel(override) : this.getDefaultModel();
     }
 
@@ -360,6 +406,143 @@ Rules:
 - productName should be the product as spoken (e.g. "চাল", "rice", "সয়াবিন তেল")
 - ignore payment method, greetings, receipt numbers, and filler words
 - if nothing can be parsed, return {"items": []}`;
+    }
+
+    /**
+     * Read a photographed business card and return the contact fields on it.
+     *
+     * Extraction only — this never writes a contact. A card photo is a lossy
+     * source (glare, a phone number split across two lines, a Bangla company
+     * name transliterated three different ways), so the caller shows the result
+     * in an editable form and a human presses save. Anything the model is not
+     * sure about is expected to come back missing rather than guessed, which is
+     * why every field is optional and blanks are dropped below.
+     */
+    async scanBusinessCard(
+        tenantId: string,
+        input: { imageBase64: string; mimeType?: string },
+    ): Promise<BusinessCardScanResult> {
+        await this.enforceCredits(tenantId);
+
+        const { data, mimeType } = this.parseImagePayload(input.imageBase64, input.mimeType);
+
+        const model = await this.getVisionModel();
+        const systemPrompt = `You extract contact details from a photograph of a business card.
+Respond with ONLY valid JSON — no markdown, no explanation.
+
+Schema:
+{
+  "name": "person's full name",
+  "company": "organisation name",
+  "designation": "job title",
+  "mobile": "mobile/cell number",
+  "phone": "landline/office number",
+  "email": "email address",
+  "address": "postal address on one line",
+  "website_url": "website",
+  "linkedin_url": "LinkedIn profile URL",
+  "raw_text": "every line of text you can read on the card"
+}
+
+Rules:
+- Omit any key you cannot read from the card. Never invent or complete a value.
+- Cards are often Bangladeshi: keep Bangla text as Bangla, do not translate names.
+- Bangladeshi mobile numbers start 01 (or +8801). Put the mobile in "mobile" and a
+  landline/office/fax number in "phone". If only one number is present and it looks
+  like a mobile, use "mobile".
+- Strip labels ("Mob:", "E-mail:") and keep only the value.
+- If the image is not a business card, return {"raw_text": "<what you can read>"}.`;
+
+        const { message, usage } = await this.postChatWithRetry(await this.requireApiKey(), {
+            model,
+            max_tokens: 1024,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                {
+                    role: 'user',
+                    content: [
+                        { type: 'text', text: 'Extract the contact details from this business card.' },
+                        { type: 'image_url', image_url: { url: `data:${mimeType};base64,${data}` } },
+                    ],
+                },
+            ],
+        });
+
+        await this.logUsage(tenantId, 'business_card_scan', model, usage);
+
+        const parsed = this.extractJson<Record<string, unknown>>(message.content ?? '');
+        return this.normalizeBusinessCard(parsed);
+    }
+
+    /**
+     * Accepts either a bare base64 string or a full `data:` URL — the browser's
+     * `FileReader.readAsDataURL` produces the latter, and making every caller
+     * strip the prefix by hand is how one of them eventually forgets.
+     */
+    private parseImagePayload(
+        imageBase64: string,
+        mimeType?: string,
+    ): { data: string; mimeType: string } {
+        const raw = (imageBase64 ?? '').trim();
+        if (!raw) {
+            throw new BadRequestException('No image was provided.');
+        }
+
+        let data = raw;
+        let resolvedMime = (mimeType ?? '').trim().toLowerCase();
+
+        const dataUrl = raw.match(/^data:([^;,]+);base64,(.*)$/s);
+        if (dataUrl) {
+            resolvedMime = dataUrl[1].toLowerCase();
+            data = dataUrl[2];
+        }
+
+        if (!resolvedMime) resolvedMime = 'image/jpeg';
+        if (!IMAGE_MIME_TYPES.includes(resolvedMime)) {
+            throw new BadRequestException('Unsupported image type. Use a JPEG, PNG, or WebP photo.');
+        }
+        if (data.length > MAX_IMAGE_BASE64_LENGTH) {
+            throw new BadRequestException('Image is too large. Take the photo again at a lower resolution.');
+        }
+
+        return { data, mimeType: resolvedMime };
+    }
+
+    /**
+     * Keep only non-empty strings for keys the schema actually has. The model is
+     * asked to omit unknown fields, but an empty string and a stray extra key
+     * both turn up often enough that trusting the shape is not worth it.
+     */
+    private normalizeBusinessCard(parsed: Record<string, unknown>): BusinessCardScanResult {
+        const keys: Array<keyof BusinessCardScanResult> = [
+            'name',
+            'company',
+            'designation',
+            'mobile',
+            'phone',
+            'email',
+            'address',
+            'website_url',
+            'linkedin_url',
+            'raw_text',
+        ];
+
+        const result: BusinessCardScanResult = {};
+        for (const key of keys) {
+            const value = parsed[key];
+            if (typeof value !== 'string') continue;
+            const trimmed = value.trim();
+            if (trimmed) result[key] = trimmed.slice(0, 1000);
+        }
+        return result;
+    }
+
+    private async requireApiKey(): Promise<string> {
+        const apiKey = await this.getApiKey();
+        if (!apiKey) {
+            throw new InternalServerErrorException('AI service is not configured. Set an OpenRouter API key.');
+        }
+        return apiKey;
     }
 
     async draftMessage(tenantId: string, dto: DraftMessageDto): Promise<{ draft: string }> {
