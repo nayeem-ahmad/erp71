@@ -151,14 +151,15 @@ export const componentsMessages = {
             disclaimerWeb: "Jawapan datang daripada data anda sendiri, dan daripada web apabila soalan memerlukannya. Semak sumber di bawah setiap jawapan.",
             sources: "Sumber",
             emptyHeading: "Tanya tentang perniagaan anda",
-            emptyDescription: "Saya hanya boleh membaca data anda — saya tidak boleh mengubah apa-apa.",
-            emptyDescriptionWeb: "Saya boleh membaca data anda dan mencari maklumat di web — saya tidak boleh mengubah apa-apa.",
+            emptyDescription: "Saya boleh mencari data anda dan menerangkan cara menggunakan apl — saya tidak boleh mengubah apa-apa.",
+            emptyDescriptionWeb: "Saya boleh mencari data anda, menerangkan cara menggunakan apl, dan mencari di web — saya tidak boleh mengubah apa-apa.",
             genericError: "Sesuatu tidak kena. Sila cuba lagi.",
             suggestions: {
                 s1: "Berapa banyak jualan bulan lepas?",
                 s2: "Apa yang perlu distok semula?",
                 s3: "Siapa berhutang paling banyak?",
                 s4: "Apakah 5 produk terbaik bulan ini?",
+                s5: "Bagaimana saya merekod pemulangan pelanggan?",
             },
         },
 } as const;

@@ -1,5 +1,6 @@
 import { AUDIT_TOOLS } from './tools/audit.tools';
 import { FINANCE_TOOLS } from './tools/finance.tools';
+import { HELP_TOOLS } from './tools/help.tools';
 import { INVENTORY_TOOLS } from './tools/inventory.tools';
 import { META_TOOLS } from './tools/meta.tools';
 import { OPERATIONS_TOOLS } from './tools/operations.tools';
@@ -19,6 +20,9 @@ import type { ChatTool } from './tools/types';
  */
 export const CHAT_TOOLS: ChatTool[] = [
     ...META_TOOLS,
+    // How-to / product questions are common and orthogonal to the data tools, so
+    // the help lookup sits near the front where the model reads it early.
+    ...HELP_TOOLS,
     ...SALES_TOOLS,
     ...INVENTORY_TOOLS,
     ...PURCHASING_TOOLS,

@@ -197,7 +197,9 @@ describe('AiChatWidget', () => {
             await openPanel();
 
             expect(await screen.findByText(/Answers come from your own data\./)).toBeInTheDocument();
-            expect(screen.getByText(/I can only read your data/)).toBeInTheDocument();
+            // Data + how-to, but no web mention when the web tools are not offered.
+            expect(screen.getByText(/explain how to use the app/)).toBeInTheDocument();
+            expect(screen.queryByText(/search the web/)).not.toBeInTheDocument();
         });
 
         it('mentions the web once the web tools are offered', async () => {
@@ -205,7 +207,7 @@ describe('AiChatWidget', () => {
             await openPanel();
 
             expect(await screen.findByText(/and from the web when a question needs it/)).toBeInTheDocument();
-            expect(screen.getByText(/look things up on the web/)).toBeInTheDocument();
+            expect(screen.getByText(/search the web/)).toBeInTheDocument();
         });
 
         /** Wrong in the safe direction: no promise the model might not keep. */

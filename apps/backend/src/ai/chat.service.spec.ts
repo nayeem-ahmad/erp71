@@ -493,4 +493,42 @@ describe('ChatService.chat', () => {
         expect(systemPrompt).not.toContain('/inventory/products');
         expect(systemPrompt).not.toContain('/sales/new');
     });
+
+    /**
+     * Enhancement (a): the assistant now answers product how-to questions, which
+     * only works if the prompt tells it to reach for search_help rather than its
+     * own memory.
+     */
+    it('tells the model to use search_help for how-to and feature questions', async () => {
+        const { service, ai } = makeService();
+
+        await service.chat(OWNER_CTX, 'how do I record a return?');
+
+        const systemPrompt = ai.callOpenRouterWithTools.mock.calls[0][1][0].content;
+        expect(systemPrompt).toContain('ANSWERING "HOW DO I');
+        expect(systemPrompt).toContain('search_help');
+        expect(systemPrompt).toContain('how the ERP71 app itself works');
+    });
+
+    it('runs search_help and answers a how-to question from its result', async () => {
+        const { service, ai } = makeService({
+            replies: [
+                {
+                    content: '',
+                    tool_calls: [
+                        { id: 'h1', type: 'function', function: { name: 'search_help', arguments: '{"query":"record a customer return"}' } },
+                    ],
+                },
+                { content: 'Open Sales → Sales Returns → "Process Return".' },
+            ],
+        });
+
+        const result = await service.chat(OWNER_CTX, 'how do I record a return?');
+
+        expect(result.content).toContain('Process Return');
+        expect(result.toolCalls[0]).toMatchObject({ name: 'search_help' });
+        // The tool result the model saw carries the FAQ answer, not tenant data.
+        const toolMessage = ai.callOpenRouterWithTools.mock.calls[1][1].find((m: any) => m.role === 'tool');
+        expect(toolMessage.content).toContain('Process Return');
+    });
 });

@@ -151,14 +151,15 @@ export const componentsMessages = {
         disclaimerWeb: 'Answers come from your own data, and from the web when a question needs it. Check the sources under each answer.',
         sources: 'Sources',
         emptyHeading: 'Ask about your business',
-        emptyDescription: 'I can only read your data — I cannot change anything.',
-        emptyDescriptionWeb: 'I can read your data and look things up on the web — I cannot change anything.',
+        emptyDescription: 'I can look up your data and explain how to use the app — I cannot change anything.',
+        emptyDescriptionWeb: 'I can look up your data, explain how to use the app, and search the web — I cannot change anything.',
         genericError: 'Something went wrong. Please try again.',
         suggestions: {
             s1: 'How much did we sell last month?',
             s2: 'What needs restocking?',
             s3: 'Who owes us the most money?',
             s4: 'What were our top 5 products this month?',
+            s5: 'How do I record a customer return?',
         },
     },
 } as const;

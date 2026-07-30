@@ -265,6 +265,7 @@ export const coreMessages = {
             projectsSetup: "Tetapan Projek",
             crmCampaigns: "Kempen",
             crmLeads: "Prospek",
+            crmContacts: "Kenalan",
             crmConversations: "Perbualan",
             crmLeadTaxonomy: "Sumber & Kategori",
             crmCustomFields: "Medan Tersuai",

@@ -265,6 +265,7 @@ export const coreMessages = {
             projectsSetup: 'Project Setup',
             crmCampaigns: 'Campaigns',
             crmLeads: 'Leads',
+            crmContacts: 'Contacts',
             crmConversations: 'Conversations',
             crmLeadTaxonomy: 'Sources & Categories',
             crmCustomFields: 'Custom Fields',

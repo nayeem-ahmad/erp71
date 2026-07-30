@@ -924,6 +924,50 @@ export const api = {
             body: JSON.stringify({ rows, mode }),
             headers: { 'Content-Type': 'application/json' },
         }),
+    // CRM Contacts
+    getContacts: (params?: { search?: string; company?: string; assignedTo?: string; captureSource?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.search) query.set('search', params.search);
+        if (params?.company) query.set('company', params.company);
+        if (params?.assignedTo) query.set('assignedTo', params.assignedTo);
+        if (params?.captureSource) query.set('captureSource', params.captureSource);
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.limit) query.set('limit', String(params.limit));
+        if (params?.sortBy) query.set('sortBy', params.sortBy);
+        if (params?.sortDir) query.set('sortDir', params.sortDir);
+        return fetchPaginated(`/crm/contacts${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    getContact: (id: string) => fetchWithAuth(`/crm/contacts/${id}`),
+    createContact: (data: any) => fetchWithAuth('/crm/contacts', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateContact: (id: string, data: any) => fetchWithAuth(`/crm/contacts/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteContact: (id: string) => fetchWithAuth(`/crm/contacts/${id}`, { method: 'DELETE' }),
+    bulkContactAction: (ids: string[], action: 'delete' | 'assign', value?: string) =>
+        fetchWithAuth('/crm/contacts/bulk-actions', {
+            method: 'POST',
+            body: JSON.stringify({ ids, action, ...(value !== undefined ? { value } : {}) }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    importContacts: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert') =>
+        fetchWithAuth('/crm/contacts/import', {
+            method: 'POST',
+            body: JSON.stringify({ rows, mode }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** Reads a business-card photo and returns the fields on it — nothing is saved. */
+    scanBusinessCard: (imageBase64: string, mimeType?: string) =>
+        fetchWithAuth('/crm/contacts/scan-card', {
+            method: 'POST',
+            body: JSON.stringify({ imageBase64, ...(mimeType ? { mimeType } : {}) }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     // CRM Lead Taxonomy (tenant-managed lead sources / categories)
     getLeadTaxonomy: (kind: 'sources' | 'categories', includeInactive = false) =>
         fetchWithAuth(`/crm/lead-taxonomy/${kind}${includeInactive ? '?includeInactive=true' : ''}`),
