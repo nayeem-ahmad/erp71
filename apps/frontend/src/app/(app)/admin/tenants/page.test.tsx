@@ -31,6 +31,14 @@ jest.mock('@/lib/api', () => ({
         createAdminTenant: jest.fn(),
         lookupAdminUser: jest.fn(),
         resetAdminTenantNavLayout: jest.fn(),
+        getAdminAddonModules: jest.fn(),
+        getAdminTenantAddons: jest.fn(),
+        grantAdminTenantAddon: jest.fn(),
+        revokeAdminTenantAddon: jest.fn(),
+        getAdminTenantDemoDataStatus: jest.fn(),
+        loadAdminTenantDemoData: jest.fn(),
+        importAdminTenantCatalog: jest.fn(),
+        setAdminTenantBusinessType: jest.fn(),
     },
 }));
 
@@ -87,6 +95,11 @@ describe('AdminTenantsPage', () => {
             access_token: 'fake-token',
             impersonated_user: { email: 'owner@acme.com' },
         });
+        api.getAdminAddonModules.mockResolvedValue([]);
+        api.getAdminTenantAddons.mockResolvedValue([]);
+        api.grantAdminTenantAddon.mockResolvedValue([]);
+        api.revokeAdminTenantAddon.mockResolvedValue([]);
+        api.getAdminTenantDemoDataStatus.mockResolvedValue({ has_demo_data: false });
     });
 
     it('renders the tenants list heading', async () => {
