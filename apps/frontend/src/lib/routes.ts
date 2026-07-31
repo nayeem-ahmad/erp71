@@ -85,6 +85,7 @@ export const routes = {
         reconciliation: '/accounting/reconciliation',
         reconciliationBank: '/accounting/reconciliation/bank',
         coa: '/accounting/coa',
+        accountGroups: '/accounting/account-groups',
         postingRules: '/accounting/posting-rules',
         costCenters: '/accounting/cost-centers',
         fiscalPeriods: '/accounting/fiscal-periods',

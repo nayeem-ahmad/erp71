@@ -18,6 +18,9 @@ import {
     CreateAccountDto,
     CreateAccountGroupDto,
     CreateAccountSubgroupDto,
+    UpdateAccountDto,
+    UpdateAccountGroupDto,
+    UpdateAccountSubgroupDto,
     ExportLedgerQueryDto,
     FinancialKpiQueryDto,
     FinancialTrendQueryDto,
@@ -118,6 +121,20 @@ export class AccountingController {
         return this.accountingService.createAccountGroup(tenant.tenantId, dto);
     }
 
+    @Patch('account-groups/:id')
+    updateAccountGroup(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: UpdateAccountGroupDto,
+    ) {
+        return this.accountingService.updateAccountGroup(tenant.tenantId, id, dto);
+    }
+
+    @Delete('account-groups/:id')
+    deleteAccountGroup(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.accountingService.deleteAccountGroup(tenant.tenantId, id);
+    }
+
     @Get('account-subgroups')
     findAccountSubgroups(
         @Tenant() tenant: TenantContext,
@@ -131,6 +148,20 @@ export class AccountingController {
         return this.accountingService.createAccountSubgroup(tenant.tenantId, dto);
     }
 
+    @Patch('account-subgroups/:id')
+    updateAccountSubgroup(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: UpdateAccountSubgroupDto,
+    ) {
+        return this.accountingService.updateAccountSubgroup(tenant.tenantId, id, dto);
+    }
+
+    @Delete('account-subgroups/:id')
+    deleteAccountSubgroup(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.accountingService.deleteAccountSubgroup(tenant.tenantId, id);
+    }
+
     @Get('accounts')
     findAccounts(@Tenant() tenant: TenantContext, @Query() query: ListAccountsQueryDto) {
         return this.accountingService.findAccounts(tenant.tenantId, query);
@@ -139,6 +170,20 @@ export class AccountingController {
     @Post('accounts')
     createAccount(@Tenant() tenant: TenantContext, @Body() dto: CreateAccountDto) {
         return this.accountingService.createAccount(tenant.tenantId, dto);
+    }
+
+    @Patch('accounts/:id')
+    updateAccount(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: UpdateAccountDto,
+    ) {
+        return this.accountingService.updateAccount(tenant.tenantId, id, dto);
+    }
+
+    @Delete('accounts/:id')
+    deleteAccount(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.accountingService.deleteAccount(tenant.tenantId, id);
     }
 
     @Get('vouchers')
