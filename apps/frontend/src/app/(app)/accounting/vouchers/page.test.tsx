@@ -12,10 +12,28 @@ jest.mock('next/link', () => {
 });
 
 jest.mock('@/components/data-table', () => ({
-    DataTable: ({ data }: { data: Array<{ voucher_number: string }> }) => (
+    DataTable: ({ columns, data }: {
+        columns: Array<{ id?: string; accessorKey?: string; header: unknown; cell: (info: unknown) => React.ReactNode }>;
+        data: Array<Record<string, unknown>>;
+    }) => (
         <div>
+            <div>
+                {columns.map((column, index) => (
+                    <span key={column.id ?? column.accessorKey ?? index}>
+                        {typeof column.header === 'string' ? column.header : null}
+                    </span>
+                ))}
+            </div>
             {data.map((row) => (
-                <div key={row.voucher_number}>{row.voucher_number}</div>
+                <div key={String(row.voucher_number)}>
+                    {columns
+                        .filter((column) => column.accessorKey)
+                        .map((column, index) => (
+                            <span key={column.accessorKey ?? index}>
+                                {column.cell({ getValue: () => row[column.accessorKey as string] })}
+                            </span>
+                        ))}
+                </div>
             ))}
         </div>
     ),
@@ -59,6 +77,7 @@ describe('AccountingVouchersListPage', () => {
                     voucher_type: 'cash_payment',
                     reference_number: 'CP-REF-01',
                     date: '2026-03-21T00:00:00.000Z',
+                    description: 'Office rent for March',
                     total_amount: 125,
                 },
             ],
@@ -70,6 +89,9 @@ describe('AccountingVouchersListPage', () => {
         await waitFor(() => {
             expect(screen.getByText('CP-00001')).toBeInTheDocument();
         });
+
+        expect(screen.getByText('Narration')).toBeInTheDocument();
+        expect(screen.getByText('Office rent for March')).toBeInTheDocument();
 
         fireEvent.change(screen.getByLabelText('Journal voucher type'), {
             target: { value: 'cash_payment' },
