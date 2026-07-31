@@ -422,6 +422,7 @@ export const accountingMessages = {
                 category: "শ্রেণি",
                 group: "গ্রুপ",
                 subgroup: "উপগ্রুপ",
+                balance: "ব্যালেন্স",
             },
             unassigned: "নির্ধারিত নয়",
             noCode: "কোড নেই",

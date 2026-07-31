@@ -42,6 +42,7 @@ describe('AccountingService — Story 30.2', () => {
         voucherDetail: {
             aggregate: jest.fn(),
             findMany: jest.fn(),
+            groupBy: jest.fn(),
         },
         voucherAttachment: {
             deleteMany: jest.fn(),
@@ -183,7 +184,8 @@ describe('AccountingService — Story 30.2', () => {
     });
 
     it('filters accounts by tenant, group, type, category, and search', async () => {
-        db.account.findMany.mockResolvedValue([{ id: 'account-1', name: 'Cash in Hand' }]);
+        db.account.findMany.mockResolvedValue([{ id: 'account-1', name: 'Cash in Hand', type: 'asset' }]);
+        db.voucherDetail.groupBy.mockResolvedValue([]);
 
         await service.findAccounts('tenant-1', {
             search: 'cash',
@@ -209,6 +211,43 @@ describe('AccountingService — Story 30.2', () => {
             },
             orderBy: [{ type: 'asc' }, { name: 'asc' }],
         });
+    });
+
+    it('returns the current balance per account, on the side it sits on', async () => {
+        db.account.findMany.mockResolvedValue([
+            { id: 'account-1', name: 'Cash in Hand', type: 'asset' },
+            { id: 'account-2', name: 'Accounts Payable', type: 'liability' },
+            { id: 'account-3', name: 'Bank Loan', type: 'liability' },
+        ]);
+        db.voucherDetail.groupBy.mockResolvedValue([
+            { account_id: 'account-1', _sum: { debit_amount: 5000, credit_amount: 1200 } },
+            // A liability overdrawn into debit reports on the opposite side.
+            { account_id: 'account-2', _sum: { debit_amount: 900, credit_amount: 400 } },
+        ]);
+
+        const result = await service.findAccounts('tenant-1', {});
+
+        expect(db.voucherDetail.groupBy).toHaveBeenCalledWith({
+            by: ['account_id'],
+            where: {
+                account_id: { in: ['account-1', 'account-2', 'account-3'] },
+                voucher: { tenant_id: 'tenant-1' },
+            },
+            _sum: { debit_amount: true, credit_amount: true },
+        });
+        expect(result).toEqual([
+            expect.objectContaining({ id: 'account-1', balance: 3800, balance_side: 'debit' }),
+            expect.objectContaining({ id: 'account-2', balance: 500, balance_side: 'debit' }),
+            // No voucher lines at all — a flat zero with no side.
+            expect.objectContaining({ id: 'account-3', balance: 0, balance_side: 'neutral' }),
+        ]);
+    });
+
+    it('skips the balance query when no account matches the filters', async () => {
+        db.account.findMany.mockResolvedValue([]);
+
+        await expect(service.findAccounts('tenant-1', {})).resolves.toEqual([]);
+        expect(db.voucherDetail.groupBy).not.toHaveBeenCalled();
     });
 
     it('previews voucher numbers without consuming the sequence', async () => {

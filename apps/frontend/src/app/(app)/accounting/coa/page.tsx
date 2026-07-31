@@ -26,6 +26,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { COA_FIELD_HELP, COA_HELP } from '@/lib/help/contextual-help';
 import { api } from '@/lib/api';
+import { formatBDT } from '@/lib/format';
 import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
 import { useI18n, formatMessage } from '@/lib/i18n';
@@ -41,6 +42,25 @@ function AccountNameCell({ account, noCode }: { readonly account: Account; reado
             <span className="block font-mono text-xs text-gray-400 sm:hidden">
                 {account.code || noCode}
             </span>
+        </div>
+    );
+}
+
+function AccountBalanceCell({
+    account,
+    locale,
+    debitLabel,
+    creditLabel,
+}: Readonly<{ account: Account; locale: string; debitLabel: string; creditLabel: string }>) {
+    const sideLabels: Record<string, string> = { debit: debitLabel, credit: creditLabel };
+    const sideLabel = sideLabels[account.balance_side ?? 'neutral'] ?? null;
+
+    return (
+        <div className="text-right">
+            <span className="block text-sm font-semibold tabular-nums text-gray-900">
+                {formatBDT(account.balance ?? 0, { locale })}
+            </span>
+            {sideLabel ? <span className="block text-xs text-gray-500">{sideLabel}</span> : null}
         </div>
     );
 }
@@ -75,6 +95,7 @@ function ActionsCell({
 
 function buildColumns(
     t: MessageDictionary,
+    locale: string,
     onEdit: (account: Account) => void,
     onDelete: (account: Account) => void,
 ): ColumnDef<Account, any>[] {
@@ -125,6 +146,19 @@ function buildColumns(
             size: 170,
             meta: { hideOnMobile: true },
         }),
+        columnHelper.accessor((row) => row.balance ?? 0, {
+            id: 'balance',
+            header: t.coa.columns.balance,
+            cell: (info) => (
+                <AccountBalanceCell
+                    account={info.row.original}
+                    locale={locale}
+                    debitLabel={t.accountingShared.debit}
+                    creditLabel={t.accountingShared.credit}
+                />
+            ),
+            size: 130,
+        }),
         columnHelper.display({
             id: 'actions',
             header: t.common.actions,
@@ -142,7 +176,7 @@ function buildColumns(
 }
 
 export default function ChartOfAccountsPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const [groups, setGroups] = useState<AccountGroup[]>([]);
     const [subgroups, setSubgroups] = useState<AccountSubgroup[]>([]);
     const [accounts, setAccounts] = useState<Account[]>([]);
@@ -240,13 +274,14 @@ export default function ChartOfAccountsPage() {
         () =>
             buildColumns(
                 t,
+                locale,
                 (account) => {
                     setEditing(account);
                     setFormOpen(true);
                 },
                 (account) => setPendingDelete(account),
             ),
-        [t],
+        [t, locale],
     );
 
     return (

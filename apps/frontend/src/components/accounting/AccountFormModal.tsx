@@ -36,6 +36,9 @@ export interface Account {
     category: AccountCategory;
     group?: AccountGroup | null;
     subgroup?: AccountSubgroup | null;
+    /** All-time closing balance, presented as a positive amount plus the side it sits on. */
+    balance?: number;
+    balance_side?: 'debit' | 'credit' | 'neutral';
 }
 
 /** Subgroups arrive either embedded (`group.id`) or flat (`group_id`). */
