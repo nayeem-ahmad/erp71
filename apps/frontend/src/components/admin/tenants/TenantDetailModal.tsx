@@ -10,7 +10,7 @@ import {
     PLATFORM_FEATURE_KEYS,
     type PlatformFeatureKey,
 } from '@erp71/shared-types';
-import { api, type AdminTenantFeatures } from '@/lib/api';
+import { api, type AdminTenantFeatures, type AdminTenantAddonSubscription } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import type { DiscountType, PlanCode, SecondaryLocale, TenantRecord } from './types';
@@ -36,6 +36,8 @@ type DemoBatch = {
 type FeatureChoice = 'inherit' | 'on' | 'off';
 
 type FeatureDraft = Record<PlatformFeatureKey, FeatureChoice>;
+
+type AddonCatalogEntry = { id: string; code: string; name: string; is_active: boolean };
 
 function toFeatureDraft(features: AdminTenantFeatures | null): FeatureDraft {
     const draft = {} as FeatureDraft;
@@ -96,6 +98,7 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
     const nc = m.navLayoutControls;
     const bt = m.businessTypeControls;
     const fc = m.featureControls;
+    const ac = m.addonControls;
     const dd = m.demoData;
     const featureLabels = t.admin.platformSettings.tenantFeatures;
 
@@ -112,6 +115,12 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
     const [features, setFeatures] = useState<AdminTenantFeatures | null>(null);
     const [featureDraft, setFeatureDraft] = useState<FeatureDraft>(() => toFeatureDraft(null));
     const [isSavingFeatures, setIsSavingFeatures] = useState(false);
+    const [addonCatalog, setAddonCatalog] = useState<AddonCatalogEntry[]>([]);
+    const [tenantAddons, setTenantAddons] = useState<AdminTenantAddonSubscription[]>([]);
+    const [selectedAddonCode, setSelectedAddonCode] = useState('');
+    const [addonDurationDays, setAddonDurationDays] = useState('365');
+    const [isGrantingAddon, setIsGrantingAddon] = useState(false);
+    const [revokingAddonCode, setRevokingAddonCode] = useState<string | null>(null);
     const [businessTypeDraft, setBusinessTypeDraft] = useState('');
     const [isSavingBusinessType, setIsSavingBusinessType] = useState(false);
     const [isImportingCatalog, setIsImportingCatalog] = useState(false);
@@ -163,15 +172,17 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
         setLoading(true);
         setError('');
         try {
-            const [detail, navOverride, tenantFeatures] = await Promise.all([
+            const [detail, navOverride, tenantFeatures, addons] = await Promise.all([
                 api.getAdminTenant(id),
                 api.getAdminTenantNavOverride(id).catch(() => null),
                 api.getAdminTenantFeatures(id).catch(() => null),
+                api.getAdminTenantAddons(id).catch(() => []),
             ]);
             setTenant(detail);
             setTenantNavKind(navOverride?.kind ?? 'none');
             setFeatures(tenantFeatures);
             setFeatureDraft(toFeatureDraft(tenantFeatures));
+            setTenantAddons(addons);
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : m.loadDetailFailed);
             setTenant(null);
@@ -205,6 +216,13 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
         }
         void loadTenant(tenantId);
     }, [tenantId]);
+
+    // The add-on catalog is tenant-independent — load it once, not on every tenant switch.
+    useEffect(() => {
+        api.getAdminAddonModules()
+            .then((rows: AddonCatalogEntry[]) => setAddonCatalog(rows.filter((row) => row.is_active)))
+            .catch(() => setAddonCatalog([]));
+    }, []);
 
     // Resume demo-data progress polling when the modal opens (e.g. a load kicked
     // off earlier is still running); always clear the timer on close/unmount.
@@ -299,6 +317,39 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
             setError(err instanceof Error ? err.message : fc.saveFailed);
         } finally {
             setIsSavingFeatures(false);
+        }
+    };
+
+    const grantAddon = async () => {
+        if (!tenant || !selectedAddonCode) return;
+        setIsGrantingAddon(true);
+        setError('');
+        try {
+            const durationDays = Number(addonDurationDays) || 365;
+            const updated = await api.grantAdminTenantAddon(tenant.id, { addonCode: selectedAddonCode, durationDays });
+            setTenantAddons(updated);
+            setSelectedAddonCode('');
+            onToast(ac.granted);
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : ac.grantFailed);
+        } finally {
+            setIsGrantingAddon(false);
+        }
+    };
+
+    const revokeAddon = async (addonCode: string, addonName: string) => {
+        if (!tenant) return;
+        if (!window.confirm(formatMessage(ac.revokeConfirm, { name: addonName, tenant: tenant.name }))) return;
+        setRevokingAddonCode(addonCode);
+        setError('');
+        try {
+            const updated = await api.revokeAdminTenantAddon(tenant.id, addonCode);
+            setTenantAddons(updated);
+            onToast(ac.revoked);
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : ac.revokeFailed);
+        } finally {
+            setRevokingAddonCode(null);
         }
     };
 
@@ -648,6 +699,75 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                 >
                                     {isSavingFeatures ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                                     {fc.save}
+                                </button>
+                            </div>
+
+                            <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-5 space-y-4">
+                                <div>
+                                    <p className="text-[10px] font-medium text-blue-400">{ac.badge}</p>
+                                    <h3 className="mt-2 text-lg font-bold tracking-tight text-blue-900">{ac.title}</h3>
+                                    <p className="mt-1 text-xs text-blue-700/80">{ac.description}</p>
+                                </div>
+                                <div className="space-y-2">
+                                    {tenantAddons.length === 0 ? (
+                                        <p className="text-sm text-blue-700/70">{ac.noneActive}</p>
+                                    ) : (
+                                        tenantAddons.map((sub) => (
+                                            <div
+                                                key={sub.addon.id}
+                                                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-100 bg-white px-4 py-3"
+                                            >
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-semibold text-gray-800">{sub.addon.name}</p>
+                                                    <p className="mt-0.5 text-xs text-gray-500">
+                                                        {formatMessage(ac.activeUntil, { date: formatDate(sub.current_period_end) })}
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void revokeAddon(sub.addon.code, sub.addon.name)}
+                                                    disabled={revokingAddonCode === sub.addon.code}
+                                                    className="inline-flex min-h-touch items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100 disabled:opacity-60"
+                                                >
+                                                    {revokingAddonCode === sub.addon.code ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                                    {ac.revoke}
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <select
+                                        value={selectedAddonCode}
+                                        onChange={(event) => setSelectedAddonCode(event.target.value)}
+                                        aria-label={ac.addonLabel}
+                                        className="rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm font-medium outline-none md:col-span-2"
+                                    >
+                                        <option value="">{ac.addonPlaceholder}</option>
+                                        {addonCatalog
+                                            .filter((addon) => !tenantAddons.some((sub) => sub.addon.code === addon.code))
+                                            .map((addon) => (
+                                                <option key={addon.id} value={addon.code}>{addon.name}</option>
+                                            ))}
+                                    </select>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={addonDurationDays}
+                                        onChange={(event) => setAddonDurationDays(event.target.value)}
+                                        aria-label={ac.durationLabel}
+                                        placeholder={ac.durationLabel}
+                                        className="rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm outline-none"
+                                    />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => void grantAddon()}
+                                    disabled={isGrantingAddon || !selectedAddonCode}
+                                    className="inline-flex min-h-touch items-center rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
+                                >
+                                    {isGrantingAddon ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                                    {ac.grant}
                                 </button>
                             </div>
 

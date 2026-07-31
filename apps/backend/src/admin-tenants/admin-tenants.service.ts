@@ -27,6 +27,7 @@ import { getPlatformAdminEmails, isPlatformAdminEmail } from '../auth/platform-a
 import { NotificationsService } from '../notifications/notifications.service';
 import { SmsCreditService } from '../sms/sms-credit.service';
 import { DemoDataService } from '../demo-data/demo-data.service';
+import { AddonModulesService } from '../addon-modules/addon-modules.service';
 import { ledgerEventDelta } from './ledger-balance.util';
 import { REMINDER_EVENT_TYPES } from './reminder-event-types';
 import { applySubscriptionDiscount } from '../billing/discount.util';
@@ -46,6 +47,7 @@ import {
     AdminResetPlatformUserPasswordDto,
     AdminSellSmsCreditsDto,
     AdminSellAiCreditsDto,
+    AdminGrantTenantAddonDto,
     SetAdminTenantBusinessTypeDto,
 } from './admin-tenants.dto';
 
@@ -64,6 +66,7 @@ export class AdminTenantsService {
         private readonly smsCreditService: SmsCreditService,
         private readonly demoDataService: DemoDataService,
         private readonly platformSettings: PlatformSettingsService,
+        private readonly addonModules: AddonModulesService,
     ) {}
 
     private resolveMobileFields(
@@ -1416,6 +1419,65 @@ export class AdminTenantsService {
             ai_credits_bonus: updated.ai_credits_bonus,
             payment_event_id: paymentEvent?.id ?? null,
         };
+    }
+
+    async listAddons(tenantId: string) {
+        const tenant = await this.db.tenant.findFirst({
+            where: { id: tenantId, ...ACTIVE_TENANT_FILTER },
+            select: { id: true },
+        });
+        if (!tenant) throw new NotFoundException('Tenant not found');
+
+        return this.addonModules.getActiveForTenant(tenantId);
+    }
+
+    /** Comps a tenant an add-on (e.g. AI Assistant) outside of billing/checkout — a platform-admin override independent of the tenant's plan. */
+    async grantAddon(tenantId: string, dto: AdminGrantTenantAddonDto, adminUserId: string) {
+        const tenant = await this.db.tenant.findFirst({
+            where: { id: tenantId, ...ACTIVE_TENANT_FILTER },
+            select: { id: true },
+        });
+        if (!tenant) throw new NotFoundException('Tenant not found');
+
+        const addon = await this.addonModules.findActiveByCodeOrThrow(dto.addonCode);
+        const durationDays = dto.durationDays ?? 365;
+        const periodStart = new Date();
+        const periodEnd = new Date(periodStart.getTime() + durationDays * 24 * 60 * 60 * 1000);
+
+        await this.addonModules.grantOrRenewSubscription({
+            tenantId,
+            addonId: addon.id,
+            status: 'ACTIVE',
+            periodStart,
+            periodEnd,
+            providerName: 'manual',
+            providerSubscriptionRef: `admin_grant_${tenantId}`,
+        });
+
+        await this.auditService.log('tenant.addon.grant', 'Tenant', { userId: adminUserId }, tenantId, {
+            addonCode: addon.code,
+            durationDays,
+            notes: dto.notes ?? null,
+            periodEnd,
+        });
+
+        return this.addonModules.getActiveForTenant(tenantId);
+    }
+
+    async revokeAddon(tenantId: string, addonCode: string, adminUserId: string) {
+        const tenant = await this.db.tenant.findFirst({
+            where: { id: tenantId, ...ACTIVE_TENANT_FILTER },
+            select: { id: true },
+        });
+        if (!tenant) throw new NotFoundException('Tenant not found');
+
+        await this.addonModules.revokeSubscriptionNow(tenantId, addonCode);
+
+        await this.auditService.log('tenant.addon.revoke', 'Tenant', { userId: adminUserId }, tenantId, {
+            addonCode,
+        });
+
+        return this.addonModules.getActiveForTenant(tenantId);
     }
 
     private mapTenant(

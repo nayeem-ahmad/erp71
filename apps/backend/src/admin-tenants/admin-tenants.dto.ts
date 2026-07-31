@@ -158,6 +158,12 @@ export class AdminSellAiCreditsDto {
     @IsOptional() @IsString() notes?: string;
 }
 
+export class AdminGrantTenantAddonDto {
+    @IsString() addonCode: string;
+    @IsOptional() @IsInt() @Min(1) @Max(3650) durationDays?: number;
+    @IsOptional() @IsString() notes?: string;
+}
+
 export class CreatePlatformAdminUserDto {
     @IsEmail()
     email: string;

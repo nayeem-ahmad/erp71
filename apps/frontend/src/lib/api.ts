@@ -14,6 +14,20 @@ export type AdminTenantFeatures = {
     effective: PlatformFeatures;
 };
 
+/** A tenant's active/trialing add-on subscription, as shown to a platform admin. */
+export type AdminTenantAddonSubscription = {
+    addon: {
+        id: string;
+        code: string;
+        name: string;
+        features_json: Record<string, boolean | number>;
+    };
+    status: 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'TRIALING';
+    current_period_start: string;
+    current_period_end: string;
+    cancel_at_period_end: boolean;
+};
+
 const DEFAULT_PROD_API_BASE = 'https://erp71-backend.onrender.com';
 // In dev (remote container) use a relative path so browser calls go to the
 // Next.js dev server which proxies them to the backend via next.config rewrites.
@@ -1924,6 +1938,20 @@ export const api = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
+        }),
+    getAdminTenantAddons: (tenantId: string): Promise<AdminTenantAddonSubscription[]> =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/addons`),
+    grantAdminTenantAddon: (
+        tenantId: string,
+        data: { addonCode: string; durationDays?: number; notes?: string },
+    ): Promise<AdminTenantAddonSubscription[]> => fetchWithAuth(`/admin/tenants/${tenantId}/addons`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    }),
+    revokeAdminTenantAddon: (tenantId: string, addonCode: string): Promise<AdminTenantAddonSubscription[]> =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/addons/${encodeURIComponent(addonCode)}`, {
+            method: 'DELETE',
         }),
     lookupAdminUser: (email: string) =>
         fetchWithAuth(`/admin/users/lookup?email=${encodeURIComponent(email)}`),

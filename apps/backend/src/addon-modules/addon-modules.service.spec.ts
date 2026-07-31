@@ -153,4 +153,26 @@ describe('AddonModulesService', () => {
             }),
         );
     });
+
+    it('revokes a subscription immediately, unlike cancelAddonAtPeriodEnd', async () => {
+        db.addonModule.findUnique.mockResolvedValue(baseAddon);
+        db.tenantAddonSubscription.findUnique.mockResolvedValue({ status: 'ACTIVE' });
+        db.tenantAddonSubscription.update.mockResolvedValue({ status: 'CANCELLED' });
+
+        await service.revokeSubscriptionNow('tenant-1', 'manufacturing');
+
+        expect(db.tenantAddonSubscription.update).toHaveBeenCalledWith({
+            where: { tenant_id_addon_id: { tenant_id: 'tenant-1', addon_id: 'addon-1' } },
+            data: { status: 'CANCELLED', cancel_at_period_end: false },
+        });
+    });
+
+    it('throws NotFoundException revoking a subscription the tenant never had', async () => {
+        db.addonModule.findUnique.mockResolvedValue(baseAddon);
+        db.tenantAddonSubscription.findUnique.mockResolvedValue(null);
+
+        await expect(service.revokeSubscriptionNow('tenant-1', 'MANUFACTURING')).rejects.toBeInstanceOf(
+            NotFoundException,
+        );
+    });
 });
