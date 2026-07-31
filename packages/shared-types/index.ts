@@ -83,6 +83,14 @@ export const StorePermission = {
   // Loans
   VIEW_LOANS: "VIEW_LOANS",
   MANAGE_LOANS: "MANAGE_LOANS",
+
+  // Projects
+  VIEW_PROJECTS: "VIEW_PROJECTS",
+  MANAGE_PROJECTS: "MANAGE_PROJECTS",
+  MANAGE_PROJECT_TASKS: "MANAGE_PROJECT_TASKS",
+  LOG_PROJECT_TIME: "LOG_PROJECT_TIME",
+  MANAGE_SPRINTS: "MANAGE_SPRINTS",
+  MANAGE_PROJECT_SETTINGS: "MANAGE_PROJECT_SETTINGS",
 } as const;
 export type StorePermission = (typeof StorePermission)[keyof typeof StorePermission];
 
@@ -121,6 +129,12 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.MANAGE_CRM_SETTINGS,
     StorePermission.VIEW_LOANS,
     StorePermission.MANAGE_LOANS,
+    StorePermission.VIEW_PROJECTS,
+    StorePermission.MANAGE_PROJECTS,
+    StorePermission.MANAGE_PROJECT_TASKS,
+    StorePermission.LOG_PROJECT_TIME,
+    StorePermission.MANAGE_SPRINTS,
+    StorePermission.MANAGE_PROJECT_SETTINGS,
   ],
   [UserRole.CASHIER]: [
     StorePermission.VIEW_PRODUCT_CATALOG,
@@ -199,6 +213,12 @@ export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.MANAGE_CRM_SETTINGS]: "Manage CRM custom fields & settings",
   [StorePermission.VIEW_LOANS]: "View loans",
   [StorePermission.MANAGE_LOANS]: "Manage loans",
+  [StorePermission.VIEW_PROJECTS]: "View projects",
+  [StorePermission.MANAGE_PROJECTS]: "Create & edit projects",
+  [StorePermission.MANAGE_PROJECT_TASKS]: "Manage project tasks",
+  [StorePermission.LOG_PROJECT_TIME]: "Log time on tasks",
+  [StorePermission.MANAGE_SPRINTS]: "Plan & run sprints",
+  [StorePermission.MANAGE_PROJECT_SETTINGS]: "Manage project types & board columns",
 };
 
 /** Store permissions grouped by feature area — drives the per-branch permission matrix UI. */
@@ -264,6 +284,17 @@ export const STORE_PERMISSION_GROUPS: { label: string; permissions: StorePermiss
       StorePermission.VIEW_LEAD_CONVERSATIONS,
       StorePermission.CREATE_LEAD_CONVERSATIONS,
       StorePermission.MANAGE_CRM_SETTINGS,
+    ],
+  },
+  {
+    label: "Projects",
+    permissions: [
+      StorePermission.VIEW_PROJECTS,
+      StorePermission.MANAGE_PROJECTS,
+      StorePermission.MANAGE_PROJECT_TASKS,
+      StorePermission.LOG_PROJECT_TIME,
+      StorePermission.MANAGE_SPRINTS,
+      StorePermission.MANAGE_PROJECT_SETTINGS,
     ],
   },
   {
@@ -818,6 +849,8 @@ export interface PlatformFeatures {
   aiChat: boolean;
   /** Lets a tenant admin run the external-ERP import from Data Management. */
   externalImport: boolean;
+  /** Project management: projects, tasks, time logging, kanban and sprints. */
+  projects: boolean;
 }
 
 export const DEFAULT_PLATFORM_FEATURES: PlatformFeatures = {
@@ -828,6 +861,7 @@ export const DEFAULT_PLATFORM_FEATURES: PlatformFeatures = {
   manufacturing: false,
   aiChat: false,
   externalImport: false,
+  projects: false,
 };
 
 export type PlatformFeatureKey = keyof PlatformFeatures;
@@ -840,6 +874,7 @@ export const PLATFORM_FEATURE_KEYS: PlatformFeatureKey[] = [
   'manufacturing',
   'aiChat',
   'externalImport',
+  'projects',
 ];
 
 /**
@@ -877,6 +912,7 @@ const PLATFORM_FEATURE_SETTING_KEYS: Record<keyof PlatformFeatures, string> = {
   manufacturing: 'manufacturing_enabled',
   aiChat: 'ai_chat_enabled',
   externalImport: 'external_import_enabled',
+  projects: 'projects_enabled',
 };
 
 /** Parses general-group platform settings into feature booleans (`'true'` only). */
@@ -891,6 +927,7 @@ export function parsePlatformFeatures(
     manufacturing: settings[PLATFORM_FEATURE_SETTING_KEYS.manufacturing] === 'true',
     aiChat: settings[PLATFORM_FEATURE_SETTING_KEYS.aiChat] === 'true',
     externalImport: settings[PLATFORM_FEATURE_SETTING_KEYS.externalImport] === 'true',
+    projects: settings[PLATFORM_FEATURE_SETTING_KEYS.projects] === 'true',
   };
 }
 

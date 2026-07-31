@@ -31,6 +31,14 @@ jest.mock('@/lib/api', () => ({
         createAdminTenant: jest.fn(),
         lookupAdminUser: jest.fn(),
         resetAdminTenantNavLayout: jest.fn(),
+        getAdminAddonModules: jest.fn(),
+        getAdminTenantAddons: jest.fn(),
+        grantAdminTenantAddon: jest.fn(),
+        revokeAdminTenantAddon: jest.fn(),
+        getAdminTenantDemoDataStatus: jest.fn(),
+        loadAdminTenantDemoData: jest.fn(),
+        importAdminTenantCatalog: jest.fn(),
+        setAdminTenantBusinessType: jest.fn(),
     },
 }));
 
@@ -87,6 +95,11 @@ describe('AdminTenantsPage', () => {
             access_token: 'fake-token',
             impersonated_user: { email: 'owner@acme.com' },
         });
+        api.getAdminAddonModules.mockResolvedValue([]);
+        api.getAdminTenantAddons.mockResolvedValue([]);
+        api.grantAdminTenantAddon.mockResolvedValue([]);
+        api.revokeAdminTenantAddon.mockResolvedValue([]);
+        api.getAdminTenantDemoDataStatus.mockResolvedValue({ has_demo_data: false });
     });
 
     it('renders the tenants list heading', async () => {
@@ -170,7 +183,7 @@ describe('AdminTenantsPage', () => {
 
         // The unset features show what Inherit currently resolves to, from the platform defaults.
         expect(screen.getAllByText('Inheriting: On')).toHaveLength(1);   // manufacturing
-        expect(screen.getAllByText('Inheriting: Off')).toHaveLength(5);  // feedback/support/help/voice/externalImport
+        expect(screen.getAllByText('Inheriting: Off')).toHaveLength(6);  // feedback/support/help/voice/externalImport/projects
         expect(screen.getAllByText('Overridden for this tenant.')).toHaveLength(1); // aiChat
 
         // Pin Voice on for this tenant; every other feature keeps its current state.
@@ -187,6 +200,7 @@ describe('AdminTenantsPage', () => {
                 manufacturing: null,
                 aiChat: true,
                 externalImport: null,
+                projects: null,
             });
         });
     });

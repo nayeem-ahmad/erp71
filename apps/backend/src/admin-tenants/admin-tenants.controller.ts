@@ -15,6 +15,7 @@ import {
     RecordTenantRefundDto,
     AdminSellSmsCreditsDto,
     AdminSellAiCreditsDto,
+    AdminGrantTenantAddonDto,
     SetAdminTenantBusinessTypeDto,
 } from './admin-tenants.dto';
 
@@ -178,5 +179,28 @@ export class AdminTenantsController {
         @Request() req: any,
     ) {
         return this.adminTenantsService.sellAiCredits(tenantId, dto, req.user.userId);
+    }
+
+    @Get(':tenantId/addons')
+    listAddons(@Param('tenantId') tenantId: string) {
+        return this.adminTenantsService.listAddons(tenantId);
+    }
+
+    @Post(':tenantId/addons')
+    grantAddon(
+        @Param('tenantId') tenantId: string,
+        @Body() dto: AdminGrantTenantAddonDto,
+        @Request() req: any,
+    ) {
+        return this.adminTenantsService.grantAddon(tenantId, dto, req.user.userId);
+    }
+
+    @Delete(':tenantId/addons/:addonCode')
+    revokeAddon(
+        @Param('tenantId') tenantId: string,
+        @Param('addonCode') addonCode: string,
+        @Request() req: any,
+    ) {
+        return this.adminTenantsService.revokeAddon(tenantId, addonCode, req.user.userId);
     }
 }

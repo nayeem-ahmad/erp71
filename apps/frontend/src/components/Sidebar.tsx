@@ -135,6 +135,7 @@ export default function Sidebar({
     canAccessAccountingAdvanced = false,
     canAccessPremiumCrm = false,
     canAccessManufacturing = false,
+    canAccessProjects = false,
     canAccessAdmin = false,
     canManageBilling = false,
     canManageTeam = false,
@@ -155,6 +156,7 @@ export default function Sidebar({
     canAccessAccountingAdvanced?: boolean;
     canAccessPremiumCrm?: boolean;
     canAccessManufacturing?: boolean;
+    canAccessProjects?: boolean;
     canAccessAdmin?: boolean;
     canManageBilling?: boolean;
     canManageTeam?: boolean;
@@ -225,6 +227,7 @@ export default function Sidebar({
                 if (module.key === 'help') return helpEnabled;
                 if (module.key === 'support') return supportEnabled;
                 if (module.key === 'manufacturing') return canAccessManufacturing;
+                if (module.key === 'projects') return canAccessProjects;
                 return true;
             })
             .map((module) => {

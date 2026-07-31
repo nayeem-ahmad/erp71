@@ -130,7 +130,8 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'accounting.reports.cash-flow': { id: 'accounting.reports.cash-flow', kind: 'link', icon: 'Waves', labelKey: 'accounting.links.cashFlow.title', href: '/accounting/reports/cash-flow', advancedOnly: true },
   'accounting.reports.financial-ratios': { id: 'accounting.reports.financial-ratios', kind: 'link', icon: 'Calculator', labelKey: 'accounting.links.financialRatios.title', href: '/accounting/reports/financial-ratios', advancedOnly: true },
   'accounting.setup': { id: 'accounting.setup', kind: 'subgroup', icon: 'Layers', labelKey: 'sidebar.sections.accountingSetup' },
-  'accounting.setup.coa': { id: 'accounting.setup.coa', kind: 'link', icon: 'FolderTree', labelKey: 'accounting.links.coa.title', href: '/accounting/coa' },
+  'accounting.setup.coa': { id: 'accounting.setup.coa', kind: 'link', icon: 'BookOpen', labelKey: 'accounting.links.coa.title', href: '/accounting/coa' },
+  'accounting.setup.account-groups': { id: 'accounting.setup.account-groups', kind: 'link', icon: 'FolderTree', labelKey: 'accounting.links.accountGroups.title', href: '/accounting/account-groups' },
   'accounting.setup.posting-rules': { id: 'accounting.setup.posting-rules', kind: 'link', icon: 'Settings', labelKey: 'accounting.links.postingRules.title', href: '/accounting/posting-rules' },
   'accounting.setup.fiscal-periods': { id: 'accounting.setup.fiscal-periods', kind: 'link', icon: 'Lock', labelKey: 'accounting.links.fiscalPeriods.title', href: '/accounting/fiscal-periods' },
   'accounting.setup.opening-balances': { id: 'accounting.setup.opening-balances', kind: 'link', icon: 'Upload', labelKey: 'accounting.links.openingBalances.title', href: '/accounting/opening-balances' },
@@ -166,6 +167,10 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
 
   manufacturing: { id: 'manufacturing', kind: 'module', icon: 'Factory', labelKey: 'sidebar.modules.manufacturing', href: '/manufacturing', moduleKey: 'manufacturing' },
 
+  projects: { id: 'projects', kind: 'module', icon: 'FolderKanban', labelKey: 'sidebar.modules.projects', moduleKey: 'projects' },
+  'projects.list': { id: 'projects.list', kind: 'link', icon: 'FolderKanban', labelKey: 'sidebar.items.projectsList', href: '/projects', exact: true },
+  'projects.my-tasks': { id: 'projects.my-tasks', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.projectsMyTasks', href: '/projects/my-tasks' },
+  'projects.setup': { id: 'projects.setup', kind: 'link', icon: 'Settings', labelKey: 'sidebar.items.projectsSetup', href: '/projects/settings' },
   crm: { id: 'crm', kind: 'module', icon: 'Users', labelKey: 'sidebar.modules.crm', moduleKey: 'crm' },
   'crm.overview': { id: 'crm.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/crm', exact: true },
   'crm.leads': { id: 'crm.leads', kind: 'link', icon: 'UserPlus', labelKey: 'sidebar.items.crmLeads', href: '/crm/leads', premiumOnly: true },
@@ -311,14 +316,15 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('accounting.reports.financial-ratios', 'accounting.reports', 11),
   layoutNode('accounting.setup', 'accounting', 9),
   layoutNode('accounting.setup.coa', 'accounting.setup', 0),
-  layoutNode('accounting.setup.posting-rules', 'accounting.setup', 1),
-  layoutNode('accounting.setup.fiscal-periods', 'accounting.setup', 2),
-  layoutNode('accounting.setup.opening-balances', 'accounting.setup', 3),
-  layoutNode('accounting.setup.cost-centers', 'accounting.setup', 4),
-  layoutNode('accounting.setup.fixed-assets', 'accounting.setup', 5),
-  layoutNode('accounting.setup.recurring-journals', 'accounting.setup', 6),
-  layoutNode('accounting.setup.recurring-vouchers', 'accounting.setup', 7),
-  layoutNode('accounting.setup.voucher-templates', 'accounting.setup', 8),
+  layoutNode('accounting.setup.account-groups', 'accounting.setup', 1),
+  layoutNode('accounting.setup.posting-rules', 'accounting.setup', 2),
+  layoutNode('accounting.setup.fiscal-periods', 'accounting.setup', 3),
+  layoutNode('accounting.setup.opening-balances', 'accounting.setup', 4),
+  layoutNode('accounting.setup.cost-centers', 'accounting.setup', 5),
+  layoutNode('accounting.setup.fixed-assets', 'accounting.setup', 6),
+  layoutNode('accounting.setup.recurring-journals', 'accounting.setup', 7),
+  layoutNode('accounting.setup.recurring-vouchers', 'accounting.setup', 8),
+  layoutNode('accounting.setup.voucher-templates', 'accounting.setup', 9),
 
   layoutNode('expenses', null, 4),
   layoutNode('expenses.list', 'expenses', 0),
@@ -353,9 +359,14 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('crm.lead-taxonomy', 'crm', 7),
   layoutNode('crm.custom-fields', 'crm', 8),
 
-  layoutNode('manufacturing', null, 7),
+  layoutNode('projects', null, 7),
+  layoutNode('projects.list', 'projects', 0),
+  layoutNode('projects.my-tasks', 'projects', 1),
+  layoutNode('projects.setup', 'projects', 2),
 
-  layoutNode('hr', null, 8),
+  layoutNode('manufacturing', null, 8),
+
+  layoutNode('hr', null, 9),
   layoutNode('hr.overview', 'hr', 0),
   layoutNode('hr.employees', 'hr', 1),
   layoutNode('hr.organization.departments', 'hr', 2),
@@ -364,14 +375,14 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('hr.operations.leaves', 'hr', 5),
   layoutNode('hr.operations.salary-payments', 'hr', 6),
 
-  layoutNode('account-settings', null, 9),
+  layoutNode('account-settings', null, 10),
   layoutNode('account-settings.overview', 'account-settings', 0),
   layoutNode('account-settings.profile', 'account-settings', 1),
   layoutNode('account-settings.team', 'account-settings', 2),
   layoutNode('account-settings.billing', 'account-settings', 3),
 
-  layoutNode('support', null, 10),
-  layoutNode('admin', null, 11),
+  layoutNode('support', null, 11),
+  layoutNode('admin', null, 12),
   layoutNode('admin.overview', 'admin', 0),
   layoutNode('admin.tenant-management', 'admin', 1),
   layoutNode('admin.tenant-management.tenants', 'admin.tenant-management', 0),
@@ -380,7 +391,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.users', 'admin', 2),
   layoutNode('admin.feedback', 'admin', 3),
   layoutNode('admin.support', 'admin', 4),
-  layoutNode('help', null, 12),
+  layoutNode('help', null, 13),
 ];
 
 /** Platform-admin console sidebar (admin module only). */

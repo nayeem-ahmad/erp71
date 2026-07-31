@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { BookOpen, FolderTree, Landmark, Plus } from 'lucide-react';
+import Link from 'next/link';
+import { BookOpen, FolderTree, Pencil, Plus, Trash2 } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
 import { ContextualHelpPanel } from '@/components/ContextualHelpPanel';
@@ -11,54 +12,151 @@ import {
     AccountingToolbar,
     CompactSection,
 } from '@/components/accounting/compact';
+import AccountFormModal, {
+    ACCOUNT_CATEGORIES,
+    ACCOUNT_TYPES,
+    subgroupGroupId,
+    type Account,
+    type AccountGroup,
+    type AccountSubgroup,
+} from '@/components/accounting/AccountFormModal';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { StatusBadge } from '@/components/ui/StatusBadge';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { COA_FIELD_HELP, COA_HELP } from '@/lib/help/contextual-help';
 import { api } from '@/lib/api';
+import { routes } from '@/lib/routes';
+import { toast } from '@/lib/toast';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import type { MessageDictionary } from '@/lib/localization/messages/types';
 import { compactDensity } from '@/lib/ui/compact-density';
 
-type AccountType = 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
-type AccountCategory = 'cash' | 'bank' | 'general';
-
-interface AccountGroup {
-    id: string;
-    name: string;
-    type: AccountType;
-    _count?: { subgroups?: number; accounts?: number };
-}
-
-interface AccountSubgroup {
-    id: string;
-    name: string;
-    group_id?: string;
-    group?: AccountGroup;
-    _count?: { accounts?: number };
-}
-
-interface Account {
-    id: string;
-    name: string;
-    code?: string | null;
-    type: AccountType;
-    category: AccountCategory;
-    group?: AccountGroup;
-    subgroup?: AccountSubgroup | null;
-}
-
-const ACCOUNT_TYPES: AccountType[] = ['asset', 'liability', 'equity', 'revenue', 'expense'];
-const ACCOUNT_CATEGORIES: AccountCategory[] = ['cash', 'bank', 'general'];
 const columnHelper = createColumnHelper<Account>();
 
+function AccountNameCell({ account, noCode }: { readonly account: Account; readonly noCode: string }) {
+    return (
+        <div className="min-w-0">
+            <span className="block truncate text-sm font-semibold text-gray-900">{account.name}</span>
+            <span className="block font-mono text-xs text-gray-400 sm:hidden">
+                {account.code || noCode}
+            </span>
+        </div>
+    );
+}
+
+function ActionsCell({
+    onEdit,
+    onDelete,
+    editLabel,
+    deleteLabel,
+}: Readonly<{ onEdit: () => void; onDelete: () => void; editLabel: string; deleteLabel: string }>) {
+    return (
+        <div className="flex items-center justify-end gap-1">
+            <button
+                type="button"
+                onClick={onEdit}
+                aria-label={editLabel}
+                className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100"
+            >
+                <Pencil className="h-4 w-4" />
+            </button>
+            <button
+                type="button"
+                onClick={onDelete}
+                aria-label={deleteLabel}
+                className="rounded-lg p-1.5 text-red-500 hover:bg-red-50"
+            >
+                <Trash2 className="h-4 w-4" />
+            </button>
+        </div>
+    );
+}
+
+function buildColumns(
+    t: MessageDictionary,
+    onEdit: (account: Account) => void,
+    onDelete: (account: Account) => void,
+): ColumnDef<Account, any>[] {
+    return [
+        columnHelper.accessor((row) => row.code ?? '', {
+            id: 'code',
+            header: t.coa.columns.code,
+            cell: (info) => (
+                <span className="font-mono text-xs text-gray-500">{info.getValue() || '—'}</span>
+            ),
+            size: 90,
+            meta: { hideOnMobile: true },
+        }),
+        columnHelper.accessor('name', {
+            header: t.coa.columns.account,
+            cell: (info) => <AccountNameCell account={info.row.original} noCode={t.coa.noCode} />,
+            size: 240,
+        }),
+        columnHelper.accessor('type', {
+            header: t.coa.columns.type,
+            cell: (info) => (
+                <StatusBadge tone="info">
+                    {t.accountingShared.accountTypes[info.getValue()]}
+                </StatusBadge>
+            ),
+            size: 110,
+        }),
+        columnHelper.accessor('category', {
+            header: t.coa.columns.category,
+            cell: (info) => (
+                <StatusBadge tone="neutral">
+                    {t.accountingShared.accountCategories[info.getValue()]}
+                </StatusBadge>
+            ),
+            size: 110,
+            meta: { hideOnMobile: true },
+        }),
+        columnHelper.accessor((row) => row.group?.name ?? '—', {
+            id: 'group',
+            header: t.coa.columns.group,
+            cell: (info) => <span className="text-sm text-gray-700">{info.getValue()}</span>,
+            size: 170,
+        }),
+        columnHelper.accessor((row) => row.subgroup?.name ?? t.coa.unassigned, {
+            id: 'subgroup',
+            header: t.coa.columns.subgroup,
+            cell: (info) => <span className="text-sm text-gray-500">{info.getValue()}</span>,
+            size: 170,
+            meta: { hideOnMobile: true },
+        }),
+        columnHelper.display({
+            id: 'actions',
+            header: t.common.actions,
+            cell: (info) => (
+                <ActionsCell
+                    onEdit={() => onEdit(info.row.original)}
+                    onDelete={() => onDelete(info.row.original)}
+                    editLabel={t.common.edit}
+                    deleteLabel={t.common.delete}
+                />
+            ),
+            size: 90,
+        }),
+    ];
+}
+
 export default function ChartOfAccountsPage() {
-    const { t, locale } = useI18n();
+    const { t } = useI18n();
     const [groups, setGroups] = useState<AccountGroup[]>([]);
     const [subgroups, setSubgroups] = useState<AccountSubgroup[]>([]);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [loading, setLoading] = useState(true);
+
     const [groupFilter, setGroupFilter] = useState('');
+    const [subgroupFilter, setSubgroupFilter] = useState('');
     const [typeFilter, setTypeFilter] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
+
+    const [formOpen, setFormOpen] = useState(false);
+    const [editing, setEditing] = useState<Account | null>(null);
+    const [pendingDelete, setPendingDelete] = useState<Account | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
         void loadReferenceData();
@@ -67,6 +165,17 @@ export default function ChartOfAccountsPage() {
     useEffect(() => {
         void loadAccounts();
     }, [groupFilter, typeFilter, categoryFilter]);
+
+    // The subgroup filter is client-side: the accounts endpoint has no subgroupId param.
+    useEffect(() => {
+        setSubgroupFilter((current) => {
+            if (!current) return current;
+            const stillValid = subgroups.some(
+                (subgroup) => subgroup.id === current && (!groupFilter || subgroupGroupId(subgroup) === groupFilter),
+            );
+            return stillValid ? current : '';
+        });
+    }, [groupFilter, subgroups]);
 
     const loadReferenceData = async () => {
         try {
@@ -77,7 +186,7 @@ export default function ChartOfAccountsPage() {
             setGroups(groupData);
             setSubgroups(subgroupData);
         } catch (error) {
-            console.error('Failed to load chart-of-accounts reference data', error);
+            console.error(t.coa.loadReferenceFailed, error);
         }
     };
 
@@ -90,7 +199,7 @@ export default function ChartOfAccountsPage() {
             });
             setAccounts(accountData);
         } catch (error) {
-            console.error('Failed to load accounts', error);
+            console.error(t.coa.loadAccountsFailed, error);
         } finally {
             setLoading(false);
         }
@@ -102,41 +211,41 @@ export default function ChartOfAccountsPage() {
         setLoading(false);
     };
 
-    const columns: ColumnDef<Account, any>[] = useMemo(
-        () => [
-            columnHelper.accessor('name', {
-                header: t.accountingShared.account,
-                cell: (info) => (
-                    <div>
-                        <span className="block text-sm font-bold text-gray-900">{info.row.original.name}</span>
-                        <span className="block text-xs text-gray-400">{info.row.original.code || t.accountingShared.noCode}</span>
-                    </div>
-                ),
-                size: 240,
-            }),
-            columnHelper.accessor('type', {
-                header: t.accountingShared.type,
-                cell: (info) => <Badge>{info.getValue()}</Badge>,
-                size: 120,
-            }),
-            columnHelper.accessor('category', {
-                header: t.accountingShared.category,
-                cell: (info) => <Badge tone="secondary">{info.getValue()}</Badge>,
-                size: 120,
-            }),
-            columnHelper.accessor((row) => row.group?.name || '-', {
-                id: 'group',
-                header: t.accountingShared.group,
-                cell: (info) => <span className="text-sm font-bold text-gray-700">{info.getValue()}</span>,
-                size: 180,
-            }),
-            columnHelper.accessor((row) => row.subgroup?.name || t.coa.unassigned, {
-                id: 'subgroup',
-                header: t.accountingShared.subgroup,
-                cell: (info) => <span className="text-sm text-gray-500">{info.getValue()}</span>,
-                size: 180,
-            }),
-        ],
+    const handleDelete = async () => {
+        if (!pendingDelete) return;
+        setDeleting(true);
+        try {
+            await api.deleteAccount(pendingDelete.id);
+            toast.success(t.coa.accountDeleted);
+            setPendingDelete(null);
+            await refreshAll();
+        } catch (error: any) {
+            toast.error(error?.message || t.coa.deleteAccountFailed);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    const filterSubgroups = useMemo(
+        () => subgroups.filter((subgroup) => !groupFilter || subgroupGroupId(subgroup) === groupFilter),
+        [subgroups, groupFilter],
+    );
+
+    const visibleAccounts = useMemo(
+        () => (subgroupFilter ? accounts.filter((account) => account.subgroup?.id === subgroupFilter) : accounts),
+        [accounts, subgroupFilter],
+    );
+
+    const columns = useMemo(
+        () =>
+            buildColumns(
+                t,
+                (account) => {
+                    setEditing(account);
+                    setFormOpen(true);
+                },
+                (account) => setPendingDelete(account),
+            ),
         [t],
     );
 
@@ -152,9 +261,25 @@ export default function ChartOfAccountsPage() {
                     'accounting',
                 )}
                 actions={(
-                    <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-1.5 text-right">
-                        <p className="text-[10px] font-medium text-amber-600">{t.coa.bootstrapActive}</p>
-                        <p className="text-xs font-semibold text-amber-900">{t.coa.bootstrapHint}</p>
+                    <div className="flex flex-wrap gap-2">
+                        <Link
+                            href={routes.accounting.accountGroups}
+                            className={`${compactDensity.btnSecondary} min-h-touch`}
+                        >
+                            <FolderTree className="h-4 w-4" />
+                            {t.coa.manageGroups}
+                        </Link>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setEditing(null);
+                                setFormOpen(true);
+                            }}
+                            className={`${compactDensity.btnPrimary} min-h-touch bg-blue-600 text-white hover:bg-blue-700`}
+                        >
+                            <Plus className="h-4 w-4" />
+                            {t.coa.newAccount}
+                        </button>
                     </div>
                 )}
             />
@@ -162,313 +287,127 @@ export default function ChartOfAccountsPage() {
 
             <ContextualHelpPanel {...COA_HELP} />
 
-            <div className="grid gap-3 xl:grid-cols-3">
-                    <InlineFormCard icon={<FolderTree className="w-5 h-5" />} title={t.coa.newGroup} subtitle={t.coa.createGroupHint} helpText={COA_FIELD_HELP.group}>
-                        <AccountGroupForm onSuccess={refreshAll} />
-                    </InlineFormCard>
-
-                    <InlineFormCard icon={<BookOpen className="w-5 h-5" />} title={t.coa.newSubgroup} subtitle={t.coa.createSubgroupHint} helpText={COA_FIELD_HELP.subgroup}>
-                        <AccountSubgroupForm groups={groups} onSuccess={refreshAll} />
-                    </InlineFormCard>
-
-                    <InlineFormCard icon={<Landmark className="w-5 h-5" />} title={t.coa.newAccount} subtitle={t.coa.createAccountHint} helpText={COA_FIELD_HELP.account}>
-                        <AccountForm groups={groups} subgroups={subgroups} onSuccess={refreshAll} />
-                    </InlineFormCard>
+            <CompactSection>
+                <div className={`${compactDensity.filterBar} mb-3`}>
+                    <FilterSelect
+                        label={t.coa.filterByGroup}
+                        value={groupFilter}
+                        onChange={setGroupFilter}
+                        allLabel={t.common.all}
+                        options={groups.map((group) => ({ value: group.id, label: group.name }))}
+                    />
+                    <FilterSelect
+                        label={t.coa.filterBySubgroup}
+                        value={subgroupFilter}
+                        onChange={setSubgroupFilter}
+                        allLabel={t.common.all}
+                        options={filterSubgroups.map((subgroup) => ({
+                            value: subgroup.id,
+                            label: subgroup.name,
+                        }))}
+                    />
+                    <FilterSelect
+                        label={t.coa.filterByType}
+                        value={typeFilter}
+                        onChange={setTypeFilter}
+                        allLabel={t.common.all}
+                        options={ACCOUNT_TYPES.map((type) => ({
+                            value: type,
+                            label: t.accountingShared.accountTypes[type],
+                        }))}
+                        helpText={COA_FIELD_HELP.accountType}
+                    />
+                    <FilterSelect
+                        label={t.coa.filterByCategory}
+                        value={categoryFilter}
+                        onChange={setCategoryFilter}
+                        allLabel={t.common.all}
+                        options={ACCOUNT_CATEGORIES.map((category) => ({
+                            value: category,
+                            label: t.accountingShared.accountCategories[category],
+                        }))}
+                        helpText={COA_FIELD_HELP.accountCategory}
+                    />
                 </div>
 
-                <div className="grid gap-3 lg:grid-cols-[1.2fr,1fr]">
-                    <CompactSection title={t.coa.accountDirectory}>
-                        <div className={`${compactDensity.filterBar} mb-3`}>
-                            <FilterSelect label={t.coa.filterByGroup} value={groupFilter} onChange={setGroupFilter} options={groups.map((group) => ({ value: group.id, label: group.name }))} />
-                            <FilterSelect label={t.coa.filterByType} value={typeFilter} onChange={setTypeFilter} options={ACCOUNT_TYPES.map((type) => ({ value: type, label: type }))} helpText={COA_FIELD_HELP.accountType} />
-                            <FilterSelect label={t.coa.filterByCategory} value={categoryFilter} onChange={setCategoryFilter} options={ACCOUNT_CATEGORIES.map((category) => ({ value: category, label: category }))} helpText={COA_FIELD_HELP.accountCategory} />
-                        </div>
+                <DataTable<Account>
+                    tableId="accounting-coa-accounts"
+                    columns={columns}
+                    data={visibleAccounts}
+                    title={t.coa.title}
+                    isLoading={loading}
+                    emptyMessage={t.coa.emptyMessage}
+                    emptyIcon={<BookOpen className="h-10 w-10 text-gray-200" />}
+                    searchPlaceholder={t.coa.searchPlaceholder}
+                />
+            </CompactSection>
 
-                        <DataTable<Account>
-                            tableId="accounting-coa-accounts"
-                            columns={columns}
-                            data={accounts}
-                            title={t.coa.title}
-                            isLoading={loading}
-                            emptyMessage={t.coa.emptyMessage}
-                            emptyIcon={<BookOpen className="w-10 h-10 text-gray-200" />}
-                            searchPlaceholder={t.coa.searchPlaceholder}
-                        />
-                    </CompactSection>
+            {formOpen ? (
+                <AccountFormModal
+                    account={editing}
+                    groups={groups}
+                    subgroups={subgroups}
+                    onClose={() => {
+                        setEditing(null);
+                        setFormOpen(false);
+                    }}
+                    onSaved={async () => {
+                        setEditing(null);
+                        setFormOpen(false);
+                        await refreshAll();
+                    }}
+                />
+            ) : null}
 
-                    <section className="space-y-4">
-                        <HierarchySummaryCard
-                            title={t.coa.groups}
-                            subtitle={t.coa.groupsSubtitle}
-                            items={groups.map((group) => ({
-                                id: group.id,
-                                title: group.name,
-                                meta: `${group.type} • ${group._count?.subgroups ?? 0} subgroups • ${group._count?.accounts ?? 0} accounts`,
-                            }))}
-                            icon={<FolderTree className="w-5 h-5" />}
-                        />
-                        <HierarchySummaryCard
-                            title={t.coa.subgroups}
-                            subtitle={t.coa.subgroupsSubtitle}
-                            items={subgroups.map((subgroup) => ({
-                                id: subgroup.id,
-                                title: subgroup.name,
-                                meta: `${subgroup.group?.name || t.coa.unknownGroup} • ${subgroup._count?.accounts ?? 0} accounts`,
-                            }))}
-                            icon={<BookOpen className="w-5 h-5" />}
-                        />
-                    </section>
-                </div>
+            <ConfirmDialog
+                open={pendingDelete !== null}
+                title={t.common.delete}
+                prompt={formatMessage(t.coa.deleteAccountConfirm, { name: pendingDelete?.name ?? '' })}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                loading={deleting}
+                danger
+                onConfirm={() => void handleDelete()}
+                onCancel={() => setPendingDelete(null)}
+            />
         </AccountingPageShell>
     );
 }
 
-function InlineFormCard({ icon, title, subtitle, helpText, children }: { icon: React.ReactNode; title: string; subtitle: string; helpText?: string; children: React.ReactNode }) {
-    return (
-        <CompactSection>
-            <div className="flex items-start gap-2 mb-3">
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-2 text-gray-700">{icon}</div>
-                <div>
-                    <p className={`${compactDensity.sectionLabel} inline-flex items-center gap-1.5`}>
-                        {title}
-                        {helpText ? <HelpTooltip text={helpText} side="right" /> : null}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>
-                </div>
-            </div>
-            {children}
-        </CompactSection>
-    );
-}
-
-function FilterSelect({ label, value, onChange, options, helpText }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[]; helpText?: string }) {
+function FilterSelect({
+    label,
+    value,
+    onChange,
+    options,
+    allLabel,
+    helpText,
+}: Readonly<{
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+    options: { value: string; label: string }[];
+    allLabel: string;
+    helpText?: string;
+}>) {
     return (
         <div className="space-y-1">
             <span className={`${compactDensity.formLabel} inline-flex items-center gap-1.5`}>
                 {label}
                 {helpText ? <HelpTooltip text={helpText} side="top" /> : null}
             </span>
-            <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} className={`${compactDensity.formField} min-w-[160px]`}>
-                <option value="">All</option>
+            <select
+                aria-label={label}
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                className={`${compactDensity.formField} min-w-[160px]`}
+            >
+                <option value="">{allLabel}</option>
                 {options.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
+                    <option key={option.value} value={option.value}>
+                        {option.label}
+                    </option>
                 ))}
             </select>
         </div>
-    );
-}
-
-function HierarchySummaryCard({ title, subtitle, items, icon }: { title: string; subtitle: string; items: { id: string; title: string; meta: string }[]; icon: React.ReactNode }) {
-    return (
-        <CompactSection title={title}>
-            <div className="flex items-start gap-2 mb-2">
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-2 text-gray-700">{icon}</div>
-                <p className="text-xs text-gray-500">{subtitle}</p>
-            </div>
-            <div className="space-y-2 max-h-[280px] overflow-auto pr-1">
-                {items.length === 0 ? (
-                    <p className="text-xs text-gray-400">Nothing created yet.</p>
-                ) : (
-                    items.map((item) => (
-                        <div key={item.id} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-                            <p className="text-sm font-semibold text-gray-900">{item.title}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">{item.meta}</p>
-                        </div>
-                    ))
-                )}
-            </div>
-        </CompactSection>
-    );
-}
-
-function Badge({ children, tone = 'primary' }: { children: React.ReactNode; tone?: 'primary' | 'secondary' }) {
-    const classes = tone === 'secondary'
-        ? 'border-sky-200 bg-sky-50 text-sky-700'
-        : 'border-amber-200 bg-amber-50 text-amber-700';
-
-    return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold ${classes}`}>{children}</span>;
-}
-
-function AccountGroupForm({ onSuccess }: { onSuccess: () => Promise<void> }) {
-    const { t } = useI18n();
-    const [name, setName] = useState('');
-    const [type, setType] = useState<AccountType>('asset');
-    const [saving, setSaving] = useState(false);
-    const [error, setError] = useState('');
-
-    const handleSubmit = async (event: React.FormEvent) => {
-        event.preventDefault();
-        setSaving(true);
-        setError('');
-        try {
-            await api.createAccountGroup({ name, type });
-            setName('');
-            setType('asset');
-            await onSuccess();
-        } catch (submitError: any) {
-            setError(submitError.message || t.coa.createGroupFailed);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    return (
-        <form className={compactDensity.formStack} onSubmit={handleSubmit}>
-            {error ? <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div> : null}
-            <label className="block">
-                <span className={`${compactDensity.formLabel} block mb-1`}>{t.coa.groupName}</span>
-                <input aria-label={t.coa.groupName} value={name} onChange={(event) => setName(event.target.value)} required className={compactDensity.formField} placeholder={t.coa.currentAssets} />
-            </label>
-            <label className="block">
-                <span className={`${compactDensity.formLabel} block mb-1`}>{t.coa.groupType}</span>
-                <select aria-label={t.coa.groupType} value={type} onChange={(event) => setType(event.target.value as AccountType)} className={compactDensity.formField}>
-                    {ACCOUNT_TYPES.map((option) => <option key={option} value={option}>{t.accountingShared.accountTypes[option]}</option>)}
-                </select>
-            </label>
-            <button type="submit" disabled={saving} className={`${compactDensity.btnPrimary} bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60`}>
-                <Plus className="w-3.5 h-3.5" />
-                {saving ? t.coa.creating : t.coa.createGroup}
-            </button>
-        </form>
-    );
-}
-
-function AccountSubgroupForm({ groups, onSuccess }: { groups: AccountGroup[]; onSuccess: () => Promise<void> }) {
-    const { t } = useI18n();
-    const [groupId, setGroupId] = useState('');
-    const [name, setName] = useState('');
-    const [saving, setSaving] = useState(false);
-    const [error, setError] = useState('');
-
-    const handleSubmit = async (event: React.FormEvent) => {
-        event.preventDefault();
-        setSaving(true);
-        setError('');
-        try {
-            await api.createAccountSubgroup({ groupId, name });
-            setName('');
-            setGroupId('');
-            await onSuccess();
-        } catch (submitError: any) {
-            setError(submitError.message || t.coa.createSubgroupFailed);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    return (
-        <form className={compactDensity.formStack} onSubmit={handleSubmit}>
-            {error ? <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div> : null}
-            <label className="block">
-                <span className={`${compactDensity.formLabel} block mb-1`}>{t.coa.parentGroup}</span>
-                <select value={groupId} onChange={(event) => setGroupId(event.target.value)} required className={compactDensity.formField}>
-                    <option value="">{t.coa.selectGroup}</option>
-                    {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-                </select>
-            </label>
-            <label className="block">
-                <span className={`${compactDensity.formLabel} block mb-1`}>{t.coa.subgroupName}</span>
-                <input value={name} onChange={(event) => setName(event.target.value)} required className={compactDensity.formField} placeholder={t.coa.cashAndBank} />
-            </label>
-            <button type="submit" disabled={saving} className={`${compactDensity.btnPrimary} bg-primary text-white hover:bg-primary-hover disabled:opacity-60`}>
-                <Plus className="w-3.5 h-3.5" />
-                {saving ? t.coa.creating : t.coa.createSubgroup}
-            </button>
-        </form>
-    );
-}
-
-function AccountForm({ groups, subgroups, onSuccess }: { groups: AccountGroup[]; subgroups: AccountSubgroup[]; onSuccess: () => Promise<void> }) {
-    const { t } = useI18n();
-    const [groupId, setGroupId] = useState('');
-    const [subgroupId, setSubgroupId] = useState('');
-    const [name, setName] = useState('');
-    const [code, setCode] = useState('');
-    const [type, setType] = useState<AccountType>('asset');
-    const [category, setCategory] = useState<AccountCategory>('general');
-    const [saving, setSaving] = useState(false);
-    const [error, setError] = useState('');
-
-    useEffect(() => {
-        const selectedGroup = groups.find((group) => group.id === groupId);
-        if (selectedGroup) {
-            setType(selectedGroup.type);
-        }
-        setSubgroupId('');
-    }, [groupId, groups]);
-
-    const filteredSubgroups = subgroups.filter((subgroup) => !groupId || subgroup.group?.id === groupId || subgroup.group_id === groupId);
-
-    const handleSubmit = async (event: React.FormEvent) => {
-        event.preventDefault();
-        setSaving(true);
-        setError('');
-        try {
-            await api.createAccount({
-                groupId,
-                subgroupId: subgroupId || undefined,
-                name,
-                code: code || undefined,
-                type,
-                category,
-            });
-            setName('');
-            setCode('');
-            setGroupId('');
-            setSubgroupId('');
-            setType('asset');
-            setCategory('general');
-            await onSuccess();
-        } catch (submitError: any) {
-            setError(submitError.message || t.coa.createAccountFailed);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    return (
-        <form className={compactDensity.formStack} onSubmit={handleSubmit}>
-            {error ? <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div> : null}
-            <label className="block">
-                <span className={`${compactDensity.formLabel} block mb-1`}>{t.coa.accountGroup}</span>
-                <select value={groupId} onChange={(event) => setGroupId(event.target.value)} required className={compactDensity.formField}>
-                    <option value="">{t.coa.selectGroup}</option>
-                    {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-                </select>
-            </label>
-            <label className="block">
-                <span className={`${compactDensity.formLabel} block mb-1`}>{t.coa.accountSubgroup}</span>
-                <select value={subgroupId} onChange={(event) => setSubgroupId(event.target.value)} className={compactDensity.formField}>
-                    <option value="">{t.accountingShared.optional}</option>
-                    {filteredSubgroups.map((subgroup) => <option key={subgroup.id} value={subgroup.id}>{subgroup.name}</option>)}
-                </select>
-            </label>
-            <label className="block">
-                <span className={`${compactDensity.formLabel} block mb-1`}>{t.coa.accountName}</span>
-                <input value={name} onChange={(event) => setName(event.target.value)} required className={compactDensity.formField} placeholder={t.coa.cashInHand} />
-            </label>
-            <label className="block">
-                <span className={`${compactDensity.formLabel} block mb-1`}>{t.coa.accountCode}</span>
-                <input value={code} onChange={(event) => setCode(event.target.value)} className={compactDensity.formField} placeholder="1010" />
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-                <label className="block">
-                    <span className={`${compactDensity.formLabel} block mb-1`}>{t.coa.accountType}</span>
-                    <select value={type} onChange={(event) => setType(event.target.value as AccountType)} className={compactDensity.formField}>
-                        {ACCOUNT_TYPES.map((option) => <option key={option} value={option}>{t.accountingShared.accountTypes[option]}</option>)}
-                    </select>
-                </label>
-                <label className="block">
-                    <span className={`${compactDensity.formLabel} block mb-1`}>{t.accountingShared.category}</span>
-                    <select value={category} onChange={(event) => setCategory(event.target.value as AccountCategory)} className={compactDensity.formField}>
-                        {ACCOUNT_CATEGORIES.map((option) => <option key={option} value={option}>{t.accountingShared.accountCategories[option]}</option>)}
-                    </select>
-                </label>
-            </div>
-            <button type="submit" disabled={saving} className={`${compactDensity.btnPrimary} bg-primary text-white hover:bg-primary-hover disabled:opacity-60`}>
-                <Plus className="w-3.5 h-3.5" />
-                {saving ? t.coa.creating : t.coa.createAccount}
-            </button>
-        </form>
     );
 }

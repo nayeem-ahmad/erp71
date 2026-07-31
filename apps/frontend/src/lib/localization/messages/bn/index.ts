@@ -12,6 +12,7 @@ import { settingsExtrasMessages } from './settingsExtras';
 import { reportsMessages } from './reports';
 import { componentsMessages } from './components';
 import { helpMessages } from './help';
+import { projectsMessages } from './projects';
 
 export const bnMessages = {
     ...coreMessages,
@@ -28,4 +29,5 @@ export const bnMessages = {
     reports: reportsMessages,
     components: componentsMessages,
     help: helpMessages,
+    projects: projectsMessages,
 } as const;

@@ -28,6 +28,7 @@ import { routes } from '@/lib/routes';
 
 export type AccountingLinkKey =
     | 'coa'
+    | 'accountGroups'
     | 'vouchersList'
     | 'vouchers'
     | 'journal'
@@ -117,7 +118,8 @@ export const ACCOUNTING_INTER_BRANCH_LINKS: AccountingNavItem[] = [
 ];
 
 export const ACCOUNTING_SETUP_LINKS: AccountingNavItem[] = [
-    { key: 'coa', href: routes.accounting.coa, icon: FolderTree, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
+    { key: 'coa', href: routes.accounting.coa, icon: BookOpen, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
+    { key: 'accountGroups', href: routes.accounting.accountGroups, icon: FolderTree, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
     { key: 'postingRules', href: routes.accounting.postingRules, icon: Settings, accent: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
     { key: 'fiscalPeriods', href: routes.accounting.fiscalPeriods, icon: Lock, accent: 'bg-slate-50 text-slate-700 border-slate-100' },
     { key: 'openingBalances', href: routes.accounting.openingBalances, icon: Upload, accent: 'bg-teal-50 text-teal-700 border-teal-100' },

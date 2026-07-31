@@ -61,6 +61,7 @@ export class UpdateAdminTenantFeaturesDto {
     @IsOptional() @IsBoolean() manufacturing?: boolean | null;
     @IsOptional() @IsBoolean() aiChat?: boolean | null;
     @IsOptional() @IsBoolean() externalImport?: boolean | null;
+    @IsOptional() @IsBoolean() projects?: boolean | null;
 }
 
 export class SuspendTenantDto {
@@ -154,6 +155,12 @@ export class AdminSellSmsCreditsDto {
 export class AdminSellAiCreditsDto {
     @IsInt() @Min(1) credits: number;
     @IsOptional() @IsNumber() @IsPositive() amount?: number;
+    @IsOptional() @IsString() notes?: string;
+}
+
+export class AdminGrantTenantAddonDto {
+    @IsString() addonCode: string;
+    @IsOptional() @IsInt() @Min(1) @Max(3650) durationDays?: number;
     @IsOptional() @IsString() notes?: string;
 }
 

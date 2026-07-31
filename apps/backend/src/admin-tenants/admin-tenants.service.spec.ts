@@ -27,6 +27,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { SmsCreditService } from '../sms/sms-credit.service';
 import { DemoDataService } from '../demo-data/demo-data.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
+import { AddonModulesService } from '../addon-modules/addon-modules.service';
 
 describe('AdminTenantsService', () => {
   let service: AdminTenantsService;
@@ -40,6 +41,7 @@ describe('AdminTenantsService', () => {
   let smsCreditService: any;
   let demoDataService: any;
   let platformSettingsService: any;
+  let addonModulesService: any;
 
   const makeTenant = (overrides: any = {}) => ({
     id: 't-1',
@@ -154,6 +156,12 @@ describe('AdminTenantsService', () => {
         aiChat: false,
       }),
     };
+    addonModulesService = {
+      getActiveForTenant: jest.fn().mockResolvedValue([]),
+      findActiveByCodeOrThrow: jest.fn(),
+      grantOrRenewSubscription: jest.fn().mockResolvedValue(undefined),
+      revokeSubscriptionNow: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -168,6 +176,7 @@ describe('AdminTenantsService', () => {
         { provide: SmsCreditService, useValue: smsCreditService },
         { provide: DemoDataService, useValue: demoDataService },
         { provide: PlatformSettingsService, useValue: platformSettingsService },
+        { provide: AddonModulesService, useValue: addonModulesService },
       ],
     }).compile();
 
@@ -1250,5 +1259,51 @@ describe('AdminTenantsService', () => {
           await expect(service.importCatalog('t1', 'admin1')).rejects.toBeInstanceOf(BadRequestException);
           expect(seedBusinessTypeTemplate).not.toHaveBeenCalled();
       });
+  });
+
+  /* ------------------------------------------------------------------ */
+  /*  grantAddon / revokeAddon / listAddons                               */
+  /* ------------------------------------------------------------------ */
+
+  describe('grantAddon', () => {
+    it('grants the add-on for the requested duration and audits it', async () => {
+      db.tenant.findFirst.mockResolvedValue(makeTenant({ id: 't1' }));
+      addonModulesService.findActiveByCodeOrThrow.mockResolvedValue({ id: 'addon-1', code: 'AI_ASSISTANT', name: 'AI Assistant' });
+      addonModulesService.getActiveForTenant.mockResolvedValue([{ addon: { id: 'addon-1', code: 'AI_ASSISTANT' } }]);
+
+      const result = await service.grantAddon('t1', { addonCode: 'AI_ASSISTANT', durationDays: 30 }, 'admin1');
+
+      expect(addonModulesService.grantOrRenewSubscription).toHaveBeenCalledWith(
+        expect.objectContaining({ tenantId: 't1', addonId: 'addon-1', status: 'ACTIVE', providerName: 'manual' }),
+      );
+      expect(auditService.log).toHaveBeenCalledWith(
+        'tenant.addon.grant', 'Tenant', { userId: 'admin1' }, 't1',
+        expect.objectContaining({ addonCode: 'AI_ASSISTANT', durationDays: 30 }),
+      );
+      expect(result).toEqual([{ addon: { id: 'addon-1', code: 'AI_ASSISTANT' } }]);
+    });
+
+    it('throws NotFoundException for an unknown or deleted tenant', async () => {
+      db.tenant.findFirst.mockResolvedValue(null);
+
+      await expect(service.grantAddon('nope', { addonCode: 'AI_ASSISTANT' }, 'admin1')).rejects.toBeInstanceOf(NotFoundException);
+      expect(addonModulesService.grantOrRenewSubscription).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('revokeAddon', () => {
+    it('revokes the subscription immediately and audits it', async () => {
+      db.tenant.findFirst.mockResolvedValue(makeTenant({ id: 't1' }));
+      addonModulesService.getActiveForTenant.mockResolvedValue([]);
+
+      const result = await service.revokeAddon('t1', 'AI_ASSISTANT', 'admin1');
+
+      expect(addonModulesService.revokeSubscriptionNow).toHaveBeenCalledWith('t1', 'AI_ASSISTANT');
+      expect(auditService.log).toHaveBeenCalledWith(
+        'tenant.addon.revoke', 'Tenant', { userId: 'admin1' }, 't1',
+        expect.objectContaining({ addonCode: 'AI_ASSISTANT' }),
+      );
+      expect(result).toEqual([]);
+    });
   });
 });

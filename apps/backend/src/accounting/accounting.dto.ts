@@ -8,6 +8,7 @@ import {
     IsInt,
     IsOptional,
     IsString,
+    ValidateIf,
     ValidateNested,
     IsBoolean,
     IsUUID,
@@ -46,11 +47,23 @@ export class CreateAccountGroupDto {
     type: AccountType;
 }
 
+export class UpdateAccountGroupDto {
+    @IsString()
+    @IsNotEmpty()
+    name: string;
+}
+
 export class CreateAccountSubgroupDto {
     @IsString()
     @IsNotEmpty()
     groupId: string;
 
+    @IsString()
+    @IsNotEmpty()
+    name: string;
+}
+
+export class UpdateAccountSubgroupDto {
     @IsString()
     @IsNotEmpty()
     name: string;
@@ -76,6 +89,34 @@ export class CreateAccountDto {
     @IsString()
     @IsIn(Object.values(AccountType))
     type: AccountType;
+
+    @IsString()
+    @IsIn(Object.values(AccountCategory))
+    category: AccountCategory;
+}
+
+/**
+ * `type` is intentionally absent: it is derived from the target group so an
+ * account can never drift out of sync with the group it reports under.
+ */
+export class UpdateAccountDto {
+    @IsString()
+    @IsNotEmpty()
+    groupId: string;
+
+    /** Empty string or null detaches the account from its subgroup. */
+    @IsOptional()
+    @ValidateIf((_object, value) => value !== null && value !== '')
+    @IsString()
+    subgroupId?: string | null;
+
+    @IsString()
+    @IsNotEmpty()
+    name: string;
+
+    @IsOptional()
+    @IsString()
+    code?: string;
 
     @IsString()
     @IsIn(Object.values(AccountCategory))

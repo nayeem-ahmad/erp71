@@ -131,6 +131,26 @@ export class AddonModulesService {
         }));
     }
 
+    /** Immediately revokes a tenant's add-on (e.g. undoing an admin grant) — unlike cancelAddonAtPeriodEnd, which only stops renewal. */
+    async revokeSubscriptionNow(tenantId: string, addonCode: string) {
+        const addon = await this.db.addonModule.findUnique({ where: { code: addonCode.trim().toUpperCase() } });
+        if (!addon) {
+            throw new NotFoundException(`Add-on "${addonCode}" was not found.`);
+        }
+
+        const existing = await this.db.tenantAddonSubscription.findUnique({
+            where: { tenant_id_addon_id: { tenant_id: tenantId, addon_id: addon.id } },
+        });
+        if (!existing) {
+            throw new NotFoundException(`No "${addon.name}" add-on subscription was found for this tenant.`);
+        }
+
+        return this.db.tenantAddonSubscription.update({
+            where: { tenant_id_addon_id: { tenant_id: tenantId, addon_id: addon.id } },
+            data: { status: 'CANCELLED', cancel_at_period_end: false },
+        });
+    }
+
     async cancelAddonAtPeriodEnd(tenantId: string, addonCode: string) {
         const addon = await this.findActiveByCodeOrThrow(addonCode);
         const existing = await this.db.tenantAddonSubscription.findUnique({

@@ -85,6 +85,7 @@ export const routes = {
         reconciliation: '/accounting/reconciliation',
         reconciliationBank: '/accounting/reconciliation/bank',
         coa: '/accounting/coa',
+        accountGroups: '/accounting/account-groups',
         postingRules: '/accounting/posting-rules',
         costCenters: '/accounting/cost-centers',
         fiscalPeriods: '/accounting/fiscal-periods',
@@ -148,6 +149,16 @@ export const routes = {
         campaigns: '/crm/campaigns',
         customFields: '/crm/settings/custom-fields',
         leadTaxonomy: '/crm/settings/lead-taxonomy',
+    },
+
+    projects: {
+        root: '/projects',
+        new: '/projects/new' as const,
+        detail: (id: string) => `/projects/${id}` as const,
+        board: (id: string) => `/projects/${id}/board` as const,
+        backlog: (id: string) => `/projects/${id}/backlog` as const,
+        myTasks: '/projects/my-tasks',
+        settings: '/projects/settings',
     },
 
     hr: {

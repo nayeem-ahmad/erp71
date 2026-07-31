@@ -239,6 +239,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const hasPremiumCrm = Boolean(planFeatures.premiumCrm);
     const canAccessManufacturing =
         platformFeatures.manufacturing && hasPlanEntitlement(planFeatures, 'premiumManufacturing');
+    // Off by default platform-wide; a tenant override switches it on for one
+    // workspace without exposing it to everyone else.
+    const canAccessProjects = Boolean(platformFeatures.projects);
     const accountingOnlyMode = Boolean(planFeatures.accountingOnly);
     const isPlatformAdmin = inPlatformAdminMode;
     const perms = activeTenant?.permissions ?? [];
@@ -396,6 +399,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 canAccessAccountingAdvanced={canAccessAccountingAdvanced}
                 canAccessPremiumCrm={hasPremiumCrm}
                 canAccessManufacturing={canAccessManufacturing}
+                canAccessProjects={canAccessProjects}
                 canAccessAdmin={isPlatformAdmin}
                 canManageBilling={canManageBilling}
                 canManageTeam={canManageTeam}

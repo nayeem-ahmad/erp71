@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
@@ -42,6 +42,9 @@ import {
     ListAccountSubgroupsQueryDto,
     ListVouchersQueryDto,
     ListPostingRulesQueryDto,
+    UpdateAccountDto,
+    UpdateAccountGroupDto,
+    UpdateAccountSubgroupDto,
     UpdatePostingRuleDto,
     ListPostingExceptionsQueryDto,
     ProfitLossQueryDto,
@@ -303,6 +306,222 @@ export class AccountingService {
             },
             orderBy: [{ type: 'asc' }, { name: 'asc' }],
         });
+    }
+
+    /**
+     * A group's `type` is deliberately not editable: every account under it is
+     * constrained to match, so flipping the type would silently reclassify each
+     * one between the P&L and the balance sheet.
+     */
+    async updateAccountGroup(tenantId: string, id: string, dto: UpdateAccountGroupDto) {
+        const group = await this.db.accountGroup.findFirst({
+            where: { id, tenant_id: tenantId },
+        });
+
+        if (!group) {
+            throw new NotFoundException('Account group not found.');
+        }
+
+        const clash = await this.db.accountGroup.findUnique({
+            where: { tenant_id_name: { tenant_id: tenantId, name: dto.name } },
+            select: { id: true },
+        });
+
+        if (clash && clash.id !== id) {
+            throw new BadRequestException('An account group with this name already exists.');
+        }
+
+        return this.db.accountGroup.update({
+            where: { id },
+            data: { name: dto.name },
+            include: { _count: { select: { subgroups: true, accounts: true } } },
+        });
+    }
+
+    async deleteAccountGroup(tenantId: string, id: string) {
+        const group = await this.db.accountGroup.findFirst({
+            where: { id, tenant_id: tenantId },
+            include: { _count: { select: { subgroups: true, accounts: true } } },
+        });
+
+        if (!group) {
+            throw new NotFoundException('Account group not found.');
+        }
+
+        if (group._count.accounts > 0) {
+            throw new ConflictException(
+                `This group still holds ${group._count.accounts} account(s). Move or delete them first.`,
+            );
+        }
+
+        if (group._count.subgroups > 0) {
+            throw new ConflictException(
+                `This group still holds ${group._count.subgroups} subgroup(s). Delete them first.`,
+            );
+        }
+
+        await this.db.accountGroup.delete({ where: { id } });
+        return { id };
+    }
+
+    /**
+     * Rename only. Re-parenting a subgroup would leave its accounts pointing at a
+     * group that no longer owns the subgroup, which `createAccount` forbids.
+     */
+    async updateAccountSubgroup(tenantId: string, id: string, dto: UpdateAccountSubgroupDto) {
+        const subgroup = await this.db.accountSubgroup.findFirst({
+            where: { id, tenant_id: tenantId },
+        });
+
+        if (!subgroup) {
+            throw new NotFoundException('Account subgroup not found.');
+        }
+
+        const clash = await this.db.accountSubgroup.findUnique({
+            where: { group_id_name: { group_id: subgroup.group_id, name: dto.name } },
+            select: { id: true },
+        });
+
+        if (clash && clash.id !== id) {
+            throw new BadRequestException(
+                'An account subgroup with this name already exists in the selected group.',
+            );
+        }
+
+        return this.db.accountSubgroup.update({
+            where: { id },
+            data: { name: dto.name },
+            include: { group: true, _count: { select: { accounts: true } } },
+        });
+    }
+
+    async deleteAccountSubgroup(tenantId: string, id: string) {
+        const subgroup = await this.db.accountSubgroup.findFirst({
+            where: { id, tenant_id: tenantId },
+            include: { _count: { select: { accounts: true } } },
+        });
+
+        if (!subgroup) {
+            throw new NotFoundException('Account subgroup not found.');
+        }
+
+        if (subgroup._count.accounts > 0) {
+            throw new ConflictException(
+                `This subgroup still holds ${subgroup._count.accounts} account(s). Move or delete them first.`,
+            );
+        }
+
+        await this.db.accountSubgroup.delete({ where: { id } });
+        return { id };
+    }
+
+    async updateAccount(tenantId: string, id: string, dto: UpdateAccountDto) {
+        const account = await this.db.account.findFirst({
+            where: { id, tenant_id: tenantId },
+        });
+
+        if (!account) {
+            throw new NotFoundException('Account not found.');
+        }
+
+        const group = await this.db.accountGroup.findFirst({
+            where: { id: dto.groupId, tenant_id: tenantId },
+        });
+
+        if (!group) {
+            throw new BadRequestException('Account group not found for this tenant.');
+        }
+
+        // Moving to a group of a different type re-signs every posting already made
+        // against this account, so it is only allowed while the account is unused.
+        if (group.type !== account.type) {
+            const postings = await this.db.voucherDetail.count({ where: { account_id: id } });
+            if (postings > 0) {
+                throw new ConflictException(
+                    `This account has ${postings} posting(s) and cannot be moved to a ${group.type} group.`,
+                );
+            }
+        }
+
+        let subgroupId: string | null = null;
+        if (dto.subgroupId) {
+            const subgroup = await this.db.accountSubgroup.findFirst({
+                where: { id: dto.subgroupId, tenant_id: tenantId, group_id: dto.groupId },
+            });
+
+            if (!subgroup) {
+                throw new BadRequestException('Account subgroup not found for this tenant and group.');
+            }
+
+            subgroupId = subgroup.id;
+        }
+
+        const clash = await this.db.account.findUnique({
+            where: { tenant_id_name: { tenant_id: tenantId, name: dto.name } },
+            select: { id: true },
+        });
+
+        if (clash && clash.id !== id) {
+            throw new BadRequestException('An account with this name already exists.');
+        }
+
+        return this.db.account.update({
+            where: { id },
+            data: {
+                group_id: dto.groupId,
+                subgroup_id: subgroupId,
+                name: dto.name,
+                code: dto.code ?? null,
+                type: group.type,
+                category: dto.category,
+            },
+            include: { group: true, subgroup: true },
+        });
+    }
+
+    async deleteAccount(tenantId: string, id: string) {
+        const account = await this.db.account.findFirst({
+            where: { id, tenant_id: tenantId },
+            select: { id: true },
+        });
+
+        if (!account) {
+            throw new NotFoundException('Account not found.');
+        }
+
+        // Every relation that would either be orphaned or silently null-ed out.
+        // PaymentRecord.account_id is `onDelete: SetNull`, so the database would
+        // accept the delete and quietly drop the payment's accounting link.
+        const [postings, rules, budgets, recurringJournalLines, recurringVoucherLines, templateLines, payments] =
+            await Promise.all([
+                this.db.voucherDetail.count({ where: { account_id: id } }),
+                this.db.postingRule.count({
+                    where: { OR: [{ debit_account_id: id }, { credit_account_id: id }] },
+                }),
+                this.db.accountBudget.count({ where: { account_id: id } }),
+                this.db.recurringJournalLine.count({ where: { account_id: id } }),
+                this.db.recurringVoucherLine.count({ where: { account_id: id } }),
+                this.db.voucherTemplateLine.count({ where: { account_id: id } }),
+                this.db.paymentRecord.count({ where: { account_id: id } }),
+            ]);
+
+        const blockers: string[] = [];
+        if (postings > 0) blockers.push(`${postings} journal posting(s)`);
+        if (rules > 0) blockers.push(`${rules} posting rule(s)`);
+        if (budgets > 0) blockers.push(`${budgets} budget line(s)`);
+        if (recurringJournalLines > 0) blockers.push(`${recurringJournalLines} recurring journal line(s)`);
+        if (recurringVoucherLines > 0) blockers.push(`${recurringVoucherLines} recurring voucher line(s)`);
+        if (templateLines > 0) blockers.push(`${templateLines} voucher template line(s)`);
+        if (payments > 0) blockers.push(`${payments} payment record(s)`);
+
+        if (blockers.length > 0) {
+            throw new ConflictException(
+                `This account is used by ${blockers.join(', ')} and cannot be deleted.`,
+            );
+        }
+
+        await this.db.account.delete({ where: { id } });
+        return { id };
     }
 
     async getVoucherNumberPreview(tenantId: string, voucherType: VoucherType) {
