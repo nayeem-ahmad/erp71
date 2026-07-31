@@ -590,7 +590,7 @@ export class AccountingService {
                                 },
                             },
                         },
-                        orderBy: { created_at: 'asc' },
+                        orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
                     },
                 },
                 orderBy: [{ date: 'desc' }, { created_at: 'desc' }],
@@ -2254,7 +2254,7 @@ export class AccountingService {
                 include: {
                     details: {
                         include: { account: { include: { group: true, subgroup: true } } },
-                        orderBy: { created_at: 'asc' },
+                        orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
                     },
                 },
             });
@@ -3166,7 +3166,7 @@ export class AccountingService {
                     include: {
                         account: true,
                     },
-                    orderBy: { created_at: 'asc' },
+                    orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
                 },
             },
             orderBy: [{ date: 'asc' }, { created_at: 'asc' }],
@@ -4118,7 +4118,10 @@ ${voucherMessages}
                         },
                     },
                 },
-                orderBy: { created_at: 'asc' as const },
+                // Every line of a voucher is inserted in one transaction, so they
+                // share a created_at: without the id tiebreak Postgres is free to
+                // return them in a different order on every read.
+                orderBy: [{ created_at: 'asc' as const }, { id: 'asc' as const }],
             },
             attachments: {
                 orderBy: { created_at: 'asc' as const },

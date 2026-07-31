@@ -59,10 +59,10 @@ const voucherTypeOptions = [
 ];
 
 const voucherTypeHelpers: Record<VoucherType, string> = {
-    [VoucherType.CASH_PAYMENT]: 'Use the first row for the cash account being paid out. Counter rows can target expense, liability, or other ledger accounts.',
-    [VoucherType.CASH_RECEIVE]: 'Use the first row for the cash account receiving funds. Counter rows can target revenue, receivables, or other ledgers.',
-    [VoucherType.BANK_PAYMENT]: 'Use the first row for the bank or wallet account being paid out. Counter rows can target expenses or liabilities.',
-    [VoucherType.BANK_RECEIVE]: 'Use the first row for the bank or wallet account receiving funds. Counter rows can target revenue or receivables.',
+    [VoucherType.CASH_PAYMENT]: 'At least one row must be the cash account being paid out. Other rows can target expense, liability, or other ledger accounts.',
+    [VoucherType.CASH_RECEIVE]: 'At least one row must be the cash account receiving funds. Other rows can target revenue, receivables, or other ledgers.',
+    [VoucherType.BANK_PAYMENT]: 'At least one row must be the bank or wallet account being paid out. Other rows can target expenses or liabilities.',
+    [VoucherType.BANK_RECEIVE]: 'At least one row must be the bank or wallet account receiving funds. Other rows can target revenue or receivables.',
     [VoucherType.FUND_TRANSFER]: 'All rows are limited to cash and bank accounts so internal transfers remain isolated from other ledgers.',
     [VoucherType.JOURNAL]: 'Journal vouchers stay flexible and can mix any tenant-owned accounts as long as the entry balances.',
 };
@@ -117,6 +117,7 @@ function AccountingVouchersPageContent() {
     const [submitError, setSubmitError] = useState('');
     const [createdVoucher, setCreatedVoucher] = useState<VoucherSummary | null>(null);
     const [attachments, setAttachments] = useState<VoucherAttachmentItem[]>([]);
+    const [editScope, setEditScope] = useState<{ storeId: string | null; attribution: string | null } | null>(null);
 
     const editVoucherId = searchParams.get('edit');
     const isEditMode = Boolean(editVoucherId);
@@ -160,6 +161,10 @@ function AccountingVouchersPageContent() {
                     })),
                 );
                 setAttachments(mapApiAttachments(voucher.attachments));
+                setEditScope({
+                    storeId: voucher.store_id ?? null,
+                    attribution: voucher.attribution ?? null,
+                });
             } catch (error) {
                 if (!active) {
                     return;
@@ -261,6 +266,12 @@ function AccountingVouchersPageContent() {
                     return;
                 }
                 setStores(data);
+
+                if (editVoucherId) {
+                    // An edited voucher keeps the branch it was posted against.
+                    return;
+                }
+
                 const savedStoreId = localStorage.getItem('store_id');
                 const resolvedStoreId = data.some((store: VoucherStore) => store.id === savedStoreId)
                     ? (savedStoreId as string)
@@ -294,7 +305,27 @@ function AccountingVouchersPageContent() {
         return () => {
             active = false;
         };
-    }, []);
+    }, [editVoucherId]);
+
+    // The store list and the edited voucher load in parallel, so the branch the
+    // voucher was posted against can only be restored once both have arrived.
+    useEffect(() => {
+        if (!editScope) {
+            return;
+        }
+
+        if (editScope.attribution === 'COMPANY') {
+            setBranchSelection('company');
+            return;
+        }
+
+        setBranchSelection('branch');
+        setVoucherStoreId(
+            editScope.storeId && stores.some((store) => store.id === editScope.storeId)
+                ? editScope.storeId
+                : stores[0]?.id ?? '',
+        );
+    }, [editScope, stores]);
 
     useEffect(() => {
         if (isEditMode) {
@@ -335,10 +366,32 @@ function AccountingVouchersPageContent() {
         };
     }, [voucherType, isEditMode]);
 
-    useEffect(() => {
-        setRows((currentRows) => currentRows.map((row, index) => {
-            const nextOptions = getAccountOptionsForRow(accounts, voucherType, index);
-            if (row.accountId && !nextOptions.some((account) => account.id === row.accountId)) {
+    const debitTotal = rows.reduce((sum, row) => sum + parseAmount(row.debitAmount), 0);
+    const creditTotal = rows.reduce((sum, row) => sum + parseAmount(row.creditAmount), 0);
+    const isBalanced = Math.abs(debitTotal - creditTotal) < 0.0001 && debitTotal > 0;
+    const hasNarration = description.trim().length > 0;
+    const rowErrors = rows.map((row) => getRowError(row, accounts, voucherType));
+    const hasRowErrors = rowErrors.some(Boolean);
+    const voucherTypeError = getVoucherTypeError(rows, accounts, voucherType);
+    const canSubmit = !isLoadingPreview
+        && !isLoadingAccounts
+        && !isSubmitting
+        && !hasRowErrors
+        && !voucherTypeError
+        && isBalanced
+        && hasNarration;
+
+    /**
+     * Only a deliberate type switch may drop a row's account. Reconciling from an
+     * effect used to wipe every account the moment the account list or the type
+     * changed — which fired while accounts were still loading and blanked the rows
+     * an edit had just hydrated.
+     */
+    const handleVoucherTypeChange = (nextType: VoucherType) => {
+        setVoucherType(nextType);
+        setRows((currentRows) => currentRows.map((row) => {
+            const nextOptions = getAccountOptionsForType(accounts, nextType);
+            if (row.accountId && accounts.length > 0 && !nextOptions.some((account) => account.id === row.accountId)) {
                 return {
                     ...row,
                     accountId: '',
@@ -347,18 +400,6 @@ function AccountingVouchersPageContent() {
 
             return row;
         }));
-    }, [accounts, voucherType]);
-
-    const debitTotal = rows.reduce((sum, row) => sum + parseAmount(row.debitAmount), 0);
-    const creditTotal = rows.reduce((sum, row) => sum + parseAmount(row.creditAmount), 0);
-    const isBalanced = Math.abs(debitTotal - creditTotal) < 0.0001 && debitTotal > 0;
-    const hasNarration = description.trim().length > 0;
-    const rowErrors = rows.map((row, index) => getRowError(row, accounts, voucherType, index));
-    const hasRowErrors = rowErrors.some(Boolean);
-    const canSubmit = !isLoadingPreview && !isLoadingAccounts && !isSubmitting && !hasRowErrors && isBalanced && hasNarration;
-
-    const handleVoucherTypeChange = (nextType: VoucherType) => {
-        setVoucherType(nextType);
         setCreatedVoucher(null);
         setSubmitError('');
     };
@@ -618,7 +659,7 @@ function AccountingVouchersPageContent() {
                                 </thead>
                                 <tbody>
                                     {rows.map((row, index) => {
-                                        const options = getAccountOptionsForRow(accounts, voucherType, index);
+                                        const options = getAccountOptionsForType(accounts, voucherType);
                                         const error = rowErrors[index];
                                         return (
                                             <tr key={row.id} className={`border-b last:border-b-0 ${error ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
@@ -629,7 +670,7 @@ function AccountingVouchersPageContent() {
                                                         value={row.accountId}
                                                         onChange={(event) => updateRow(row.id, 'accountId', event.target.value)}
                                                         className={`w-full ${inputClass}`}
-                                                        title={getRowHint(voucherType, index)}
+                                                        title={getRowHint(voucherType)}
                                                     >
                                                         <option value="">{getRowLabel(voucherType, index)}…</option>
                                                         {options.map((account) => (
@@ -731,6 +772,9 @@ function AccountingVouchersPageContent() {
                                         : 'Voucher must balance before it can be saved.'}
                             </p>
                         </div>
+                        {voucherTypeError ? (
+                            <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-600">{voucherTypeError}</div>
+                        ) : null}
                         {submitError ? (
                             <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-600">{submitError}</div>
                         ) : null}
@@ -762,37 +806,36 @@ function parseAmount(value: string) {
     return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function getAllowedCategories(voucherType: VoucherType, rowIndex: number): AccountCategory[] | null {
+/**
+ * Category rules are voucher-wide, never row-positional — the API stores no line
+ * order, so a saved voucher can come back with its cash leg on any row.
+ */
+function getAllowedCategories(voucherType: VoucherType): AccountCategory[] | null {
     if (voucherType === VoucherType.FUND_TRANSFER) {
         return [AccountCategory.CASH, AccountCategory.BANK];
-    }
-
-    if ((voucherType === VoucherType.CASH_PAYMENT || voucherType === VoucherType.CASH_RECEIVE) && rowIndex === 0) {
-        return [AccountCategory.CASH];
-    }
-
-    if ((voucherType === VoucherType.BANK_PAYMENT || voucherType === VoucherType.BANK_RECEIVE) && rowIndex === 0) {
-        return [AccountCategory.BANK];
     }
 
     return null;
 }
 
-function getAccountOptionsForRow(accounts: VoucherAccount[], voucherType: VoucherType, rowIndex: number) {
-    const allowedCategories = getAllowedCategories(voucherType, rowIndex);
+function getRequiredCategory(voucherType: VoucherType): AccountCategory | null {
+    if (voucherType === VoucherType.CASH_PAYMENT || voucherType === VoucherType.CASH_RECEIVE) {
+        return AccountCategory.CASH;
+    }
+
+    if (voucherType === VoucherType.BANK_PAYMENT || voucherType === VoucherType.BANK_RECEIVE) {
+        return AccountCategory.BANK;
+    }
+
+    return null;
+}
+
+function getAccountOptionsForType(accounts: VoucherAccount[], voucherType: VoucherType) {
+    const allowedCategories = getAllowedCategories(voucherType);
     return allowedCategories ? accounts.filter((account) => allowedCategories.includes(account.category)) : accounts;
 }
 
 function getRowLabel(voucherType: VoucherType, rowIndex: number) {
-    if (rowIndex === 0) {
-        if (voucherType === VoucherType.CASH_PAYMENT || voucherType === VoucherType.CASH_RECEIVE) {
-            return 'Cash account row';
-        }
-        if (voucherType === VoucherType.BANK_PAYMENT || voucherType === VoucherType.BANK_RECEIVE) {
-            return 'Bank account row';
-        }
-    }
-
     if (voucherType === VoucherType.FUND_TRANSFER) {
         return 'Transfer leg';
     }
@@ -800,8 +843,8 @@ function getRowLabel(voucherType: VoucherType, rowIndex: number) {
     return `Voucher row ${rowIndex + 1}`;
 }
 
-function getRowHint(voucherType: VoucherType, rowIndex: number) {
-    const allowedCategories = getAllowedCategories(voucherType, rowIndex);
+function getRowHint(voucherType: VoucherType) {
+    const allowedCategories = getAllowedCategories(voucherType);
     if (!allowedCategories) {
         return 'Any tenant-owned account can be used in this row.';
     }
@@ -809,12 +852,36 @@ function getRowHint(voucherType: VoucherType, rowIndex: number) {
     return `Allowed categories: ${allowedCategories.join(', ')}.`;
 }
 
-function getRowError(row: VoucherRow, accounts: VoucherAccount[], voucherType: VoucherType, rowIndex: number) {
+/** Mirrors the API's voucher-type rules so a valid voucher never fails only in the UI. */
+function getVoucherTypeError(rows: VoucherRow[], accounts: VoucherAccount[], voucherType: VoucherType) {
+    if (accounts.length === 0) {
+        return '';
+    }
+
+    const requiredCategory = getRequiredCategory(voucherType);
+    if (!requiredCategory) {
+        return '';
+    }
+
+    const selected = rows
+        .map((row) => accounts.find((account) => account.id === row.accountId))
+        .filter(Boolean) as VoucherAccount[];
+
+    if (selected.some((account) => account.category === requiredCategory)) {
+        return '';
+    }
+
+    return requiredCategory === AccountCategory.CASH
+        ? 'Cash vouchers require at least one cash account line.'
+        : 'Bank vouchers require at least one bank account line.';
+}
+
+function getRowError(row: VoucherRow, accounts: VoucherAccount[], voucherType: VoucherType) {
     if (!row.accountId) {
         return 'Select an account for this row.';
     }
 
-    const options = getAccountOptionsForRow(accounts, voucherType, rowIndex);
+    const options = getAccountOptionsForType(accounts, voucherType);
     if (options.length > 0 && !options.some((account) => account.id === row.accountId)) {
         return 'The selected account does not match the current voucher-type rules.';
     }
