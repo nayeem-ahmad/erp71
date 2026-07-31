@@ -23,6 +23,7 @@ type VoucherRow = {
     voucher_number: string;
     voucher_type: VoucherType;
     reference_number?: string | null;
+    description?: string | null;
     date: string;
     total_amount: number;
     source?: { module: string | null; type: string | null; id: string | null };
@@ -184,6 +185,19 @@ function AccountingVouchersListPageContent() {
                 header: t.accountingShared.reference,
                 cell: (info) => <span className="text-sm text-gray-600">{info.getValue() || '—'}</span>,
                 size: 120,
+            }),
+            columnHelper.accessor('description', {
+                header: t.accountingShared.narration,
+                cell: (info) => {
+                    const narration = info.getValue();
+                    return (
+                        <span className="block max-w-[22rem] truncate text-sm text-gray-600" title={narration || undefined}>
+                            {narration || '—'}
+                        </span>
+                    );
+                },
+                size: 220,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('total_amount', {
                 header: t.accountingShared.amount,
