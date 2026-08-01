@@ -1,4 +1,6 @@
 import { formatBDT } from './format';
+import { openPrintWindow, renderHeaderHtml } from './print';
+import type { DeepPartial, PaperSize, PrintHeaderConfig } from './print';
 
 export interface VoucherPrintLine {
     accountName: string;
@@ -10,6 +12,8 @@ export interface VoucherPrintLine {
 
 export interface VoucherPrintData {
     businessName?: string;
+    /** Tenant header design; falls back to the built-in default when omitted. */
+    headerConfig?: DeepPartial<PrintHeaderConfig>;
     voucherNumber: string;
     voucherType: string;
     date: string;
@@ -32,6 +36,20 @@ export interface VoucherPrintData {
     };
 }
 
+const VOUCHER_STYLES = `
+    body { font-family: Arial, sans-serif; font-size: 12px; color: #111; }
+    .meta { width: 100%; margin-bottom: 16px; }
+    .meta td { padding: 3px 0; vertical-align: top; }
+    .meta .label { color: #666; width: 110px; }
+    table.lines { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    table.lines th, table.lines td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+    table.lines th { background: #f5f5f5; font-size: 11px; text-transform: uppercase; }
+    .num { text-align: right; white-space: nowrap; }
+    .muted { color: #666; font-size: 10px; }
+    .total { margin-top: 12px; text-align: right; font-weight: bold; }
+    .footer { margin-top: 24px; text-align: center; color: #666; font-size: 10px; }
+`;
+
 function escHtml(value: string) {
     return value
         .replaceAll('&', '&amp;')
@@ -40,7 +58,7 @@ function escHtml(value: string) {
         .replaceAll('"', '&quot;');
 }
 
-export function printVoucher(data: VoucherPrintData): void {
+export function printVoucher(data: VoucherPrintData, paperSize: PaperSize = 'A4'): void {
     const linesHtml = data.lines.map((line) => `
         <tr>
             <td>${escHtml(line.accountName)}${line.accountCode ? ` <span class="muted">(${escHtml(line.accountCode)})</span>` : ''}</td>
@@ -49,31 +67,16 @@ export function printVoucher(data: VoucherPrintData): void {
         </tr>
     `).join('');
 
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>${escHtml(data.labels.title)} ${escHtml(data.voucherNumber)}</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: Arial, sans-serif; font-size: 12px; color: #111; padding: 24px; }
-        .business { text-align: center; font-size: 18px; font-weight: bold; margin-bottom: 4px; }
-        .title { text-align: center; font-size: 14px; font-weight: bold; text-transform: uppercase; margin-bottom: 16px; }
-        .meta { width: 100%; margin-bottom: 16px; }
-        .meta td { padding: 3px 0; vertical-align: top; }
-        .meta .label { color: #666; width: 110px; }
-        table.lines { width: 100%; border-collapse: collapse; margin-top: 8px; }
-        table.lines th, table.lines td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
-        table.lines th { background: #f5f5f5; font-size: 11px; text-transform: uppercase; }
-        .num { text-align: right; white-space: nowrap; }
-        .muted { color: #666; font-size: 10px; }
-        .total { margin-top: 12px; text-align: right; font-weight: bold; }
-        .footer { margin-top: 24px; text-align: center; color: #666; font-size: 10px; }
-    </style>
-</head>
-<body>
-    ${data.businessName ? `<div class="business">${escHtml(data.businessName)}</div>` : ''}
-    <div class="title">${escHtml(data.labels.title)}</div>
+    const headerHtml = renderHeaderHtml(
+        data.headerConfig,
+        {
+            docTitle: data.labels.title,
+            companyName: data.businessName,
+        },
+        paperSize,
+    );
+
+    const bodyHtml = `
     <table class="meta">
         <tr><td class="label">${escHtml(data.labels.voucherNumber)}</td><td>${escHtml(data.voucherNumber)}</td></tr>
         <tr><td class="label">${escHtml(data.labels.date)}</td><td>${escHtml(data.date)}</td></tr>
@@ -91,14 +94,16 @@ export function printVoucher(data: VoucherPrintData): void {
         </thead>
         <tbody>${linesHtml}</tbody>
     </table>
-    <div class="total">${escHtml(data.labels.total)}: ${escHtml(formatBDT(data.totalAmount))}</div>
-    <div class="footer">${escHtml(data.labels.footer)}</div>
-</body>
-</html>`;
+    <div class="total">${escHtml(data.labels.total)}: ${escHtml(formatBDT(data.totalAmount))}</div>`;
 
-    const win = window.open('', '_blank', 'width=800,height=900');
-    if (!win) return;
-    win.document.write(html);
-    win.document.close();
-    win.onload = () => win.print();
+    openPrintWindow({
+        title: `${data.labels.title} ${data.voucherNumber}`,
+        paperSize,
+        headerConfig: data.headerConfig,
+        headerHtml,
+        bodyHtml,
+        footerHtml: `<div class="footer">${escHtml(data.labels.footer)}</div>`,
+        styles: VOUCHER_STYLES,
+        repeatHeader: true,
+    });
 }

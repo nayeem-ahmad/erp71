@@ -51,6 +51,8 @@ jest.mock('next/link', () => {
 
 // Mock the API
 jest.mock('@/lib/api', () => ({
+    // The print-header hook resolves the tenant's print template on mount.
+    fetchWithAuth: jest.fn().mockResolvedValue(null),
   api: {
     getProducts: jest.fn(),
     getInventorySettings: jest.fn(),

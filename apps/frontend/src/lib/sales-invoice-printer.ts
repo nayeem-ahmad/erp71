@@ -1,8 +1,9 @@
 import { formatBDT } from './format';
+import { openPrintWindow, renderHeaderHtml } from './print';
+import type { DeepPartial, PaperSize, PrintHeaderConfig } from './print';
 
-export type PaperSize = 'A4' | 'A5' | 'Letter' | 'Thermal80' | 'Thermal58';
-
-export const PAPER_SIZES: PaperSize[] = ['A4', 'A5', 'Letter', 'Thermal80', 'Thermal58'];
+export { PAPER_SIZES } from './print';
+export type { PaperSize } from './print';
 
 export interface InvoiceItem {
     name: string;
@@ -23,6 +24,8 @@ export interface InvoiceData {
     companyName?: string;
     companyAddress?: string;
     companyPhone?: string;
+    /** Tenant header design; falls back to the built-in default when omitted. */
+    headerConfig?: DeepPartial<PrintHeaderConfig>;
     customerName?: string;
     customerPhone?: string;
     customerAddress?: string;
@@ -39,20 +42,12 @@ export interface InvoiceData {
     note?: string;
 }
 
-const PAGE_CSS: Record<PaperSize, string> = {
-    A4:        '@page { size: A4 portrait; margin: 15mm; }',
-    A5:        '@page { size: A5 portrait; margin: 10mm; }',
-    Letter:    '@page { size: letter portrait; margin: 15mm; }',
-    Thermal80: '@page { size: 80mm auto; margin: 4mm; }',
-    Thermal58: '@page { size: 58mm auto; margin: 3mm; }',
-};
-
 function esc(str: string): string {
     return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;');
 }
 
 function paymentLabel(method: string): string {
@@ -68,49 +63,9 @@ function paymentLabel(method: string): string {
     return map[method] ?? method;
 }
 
-function buildHtml(data: InvoiceData, paperSize: PaperSize): string {
-    const isThermal = paperSize === 'Thermal80' || paperSize === 'Thermal58';
-
-    const itemRows = data.items.map((item) => {
-        const lineTotal = item.quantity * item.unitPrice - (item.discount ?? 0);
-        return `<tr>
-            <td class="item-name">${esc(item.name)}${item.sku ? `<br><span class="sku">${esc(item.sku)}</span>` : ''}</td>
-            <td class="item-qty">${item.quantity}</td>
-            <td class="item-price">${formatBDT(item.unitPrice)}</td>
-            <td class="item-disc">${item.discount ? formatBDT(item.discount) : '—'}</td>
-            <td class="item-total">${formatBDT(lineTotal)}</td>
-        </tr>`;
-    }).join('');
-
-    const paymentRows = data.payments.map((p) =>
-        `<tr><td class="pay-label">${esc(paymentLabel(p.method))}</td><td class="pay-amount">${formatBDT(p.amount)}</td></tr>`
-    ).join('');
-
-    return `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Invoice ${esc(data.referenceNumber)}</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: ${isThermal ? "'Courier New', Courier, monospace" : 'Arial, Helvetica, sans-serif'};
-            font-size: ${isThermal ? '11px' : '13px'};
-            color: #111;
-            background: #fff;
-        }
-        .wrap { padding: ${isThermal ? '6px' : '0'}; max-width: ${isThermal ? '100%' : '780px'}; margin: 0 auto; }
-
-        /* Header */
-        .inv-header {
-            ${isThermal
-                ? 'text-align: center; margin-bottom: 6px;'
-                : 'display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #1d4ed8; padding-bottom:16px; margin-bottom:20px;'}
-        }
-        .company-name { font-size:${isThermal ? '15px' : '22px'}; font-weight:bold; ${isThermal ? '' : 'color:#1d4ed8;'} margin-bottom:3px; }
-        .company-sub  { font-size:${isThermal ? '10px' : '12px'}; color:#555; }
-        .inv-title    { font-size:${isThermal ? '13px' : '28px'}; font-weight:bold; ${isThermal ? 'margin:3px 0;' : 'color:#1d4ed8; text-align:right; letter-spacing:2px;'} }
-        .inv-ref      { font-size:${isThermal ? '10px' : '13px'}; color:#555; ${isThermal ? 'text-align:center;' : 'text-align:right; margin-top:3px;'} }
+function buildStyles(isThermal: boolean): string {
+    return `
+        body { font-family: ${isThermal ? "'Courier New', Courier, monospace" : 'Arial, Helvetica, sans-serif'}; }
 
         /* Meta grid */
         .meta-grid { ${isThermal ? 'margin:4px 0;' : 'display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;'} }
@@ -171,34 +126,26 @@ function buildHtml(data: InvoiceData, paperSize: PaperSize): string {
         }
 
         .footer { text-align:center; font-size:${isThermal ? '10px' : '12px'}; color:#888; margin-top:${isThermal ? '10px' : '24px'}; ${isThermal ? '' : 'border-top:1px solid #e5e7eb; padding-top:14px;'} }
+    `;
+}
 
-        ${PAGE_CSS[paperSize]}
-        @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
-    </style>
-</head>
-<body>
-<div class="wrap">
+function buildBody(data: InvoiceData, isThermal: boolean): string {
+    const itemRows = data.items.map((item) => {
+        const lineTotal = item.quantity * item.unitPrice - (item.discount ?? 0);
+        return `<tr>
+            <td class="item-name">${esc(item.name)}${item.sku ? `<br><span class="sku">${esc(item.sku)}</span>` : ''}</td>
+            <td class="item-qty">${item.quantity}</td>
+            <td class="item-price">${formatBDT(item.unitPrice)}</td>
+            <td class="item-disc">${item.discount ? formatBDT(item.discount) : '—'}</td>
+            <td class="item-total">${formatBDT(lineTotal)}</td>
+        </tr>`;
+    }).join('');
 
-    <div class="inv-header">
-        <div>
-            <div class="company-name">${esc(data.companyName || 'RETAIL STORE')}</div>
-            ${data.companyAddress ? `<div class="company-sub">${esc(data.companyAddress)}</div>` : ''}
-            ${data.companyPhone ? `<div class="company-sub">Tel: ${esc(data.companyPhone)}</div>` : ''}
-        </div>
-        ${isThermal
-            ? `<div class="inv-title">INVOICE</div>
-               <div class="inv-ref"># ${esc(data.referenceNumber)}</div>
-               <div class="inv-ref">${esc(data.date)}</div>`
-            : `<div>
-                 <div class="inv-title">INVOICE</div>
-                 <div class="inv-ref"># ${esc(data.referenceNumber)}</div>
-                 <div class="inv-ref">Date: ${esc(data.date)}</div>
-               </div>`
-        }
-    </div>
+    const paymentRows = data.payments.map((p) =>
+        `<tr><td class="pay-label">${esc(paymentLabel(p.method))}</td><td class="pay-amount">${formatBDT(p.amount)}</td></tr>`
+    ).join('');
 
-    ${isThermal ? '<hr class="divider">' : ''}
-
+    return `
     <div class="meta-grid">
         ${data.customerName ? `
         <div class="meta-block">
@@ -251,25 +198,34 @@ function buildHtml(data: InvoiceData, paperSize: PaperSize): string {
         <table class="payments-table">${paymentRows}</table>
     </div>
 
-    ${data.note ? `<div class="note-box"><strong>Note:</strong> ${esc(data.note)}</div>` : ''}
-
-    <div class="footer">Thank you for your business!</div>
-</div>
-<script>window.onload = function() { window.print(); };</script>
-</body>
-</html>`;
+    ${data.note ? `<div class="note-box"><strong>Note:</strong> ${esc(data.note)}</div>` : ''}`;
 }
 
 export function printSalesInvoice(data: InvoiceData, paperSize: PaperSize = 'A4'): void {
     const isThermal = paperSize === 'Thermal80' || paperSize === 'Thermal58';
-    const width = isThermal
-        ? (paperSize === 'Thermal58' ? '320' : '420')
-        : paperSize === 'A5' ? '670' : '950';
-    const height = isThermal ? '700' : paperSize === 'A5' ? '600' : '850';
 
-    const html = buildHtml(data, paperSize);
-    const win = window.open('', '_blank', `width=${width},height=${height}`);
-    if (!win) return;
-    win.document.write(html);
-    win.document.close();
+    const headerHtml = renderHeaderHtml(
+        data.headerConfig,
+        {
+            docTitle: 'Invoice',
+            docNumber: data.referenceNumber,
+            docDate: data.date,
+            companyName: data.companyName || 'RETAIL STORE',
+            address: data.companyAddress,
+            phone: data.companyPhone,
+        },
+        paperSize,
+    );
+
+    openPrintWindow({
+        title: `Invoice ${data.referenceNumber}`,
+        paperSize,
+        headerConfig: data.headerConfig,
+        headerHtml,
+        bodyHtml: buildBody(data, isThermal),
+        footerHtml: '<div class="footer">Thank you for your business!</div>',
+        styles: buildStyles(isThermal),
+        // Long item lists spill onto page 2 — keep the letterhead on every page.
+        repeatHeader: !isThermal,
+    });
 }

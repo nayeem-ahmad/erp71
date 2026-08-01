@@ -4,11 +4,13 @@ import { useEffect, useState, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Pencil, Printer, Receipt, Save, Trash2, Undo2, X } from 'lucide-react';
 import { api } from '@/lib/api';
-import { formatBDT } from '@/lib/format';
+import { formatBDT, formatDate } from '@/lib/format';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
+import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
+import { usePrintHeader } from '@/lib/print/use-print-header';
 import { useI18n, formatMessage } from '@/lib/i18n';
 
 interface EditItem {
@@ -22,6 +24,7 @@ interface EditItem {
 
 function PurchaseReturnDetailPageContent() {
     const { t, locale } = useI18n();
+    const printHeader = usePrintHeader('PURCHASE_RETURN');
     const params = useParams();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -168,16 +171,11 @@ function PurchaseReturnDetailPageContent() {
             return;
         }
 
-        const printWindow = window.open('', '_blank');
-        if (!printWindow) {
-            return;
-        }
-
         const itemRows = (purchaseReturn.items || [])
             .map(
                 (item: any) => `
                     <tr>
-                        <td>${item.product?.name || 'Unknown item'}</td>
+                        <td>${item.product?.name || t.shared.unknown}</td>
                         <td class="text-center">${item.quantity}</td>
                         <td class="text-right">${formatBDT(Number(item.unit_cost || 0), { locale })}</td>
                         <td class="text-right">${formatBDT(Number(item.line_total || 0), { locale })}</td>
@@ -186,68 +184,62 @@ function PurchaseReturnDetailPageContent() {
             )
             .join('');
 
-        printWindow.document.write(`
-            <html>
-            <head>
-                <title>${purchaseReturn.return_number}</title>
-                <style>
-                    body { font-family: Arial, sans-serif; padding: 20px; color: #111; }
-                    h1 { font-size: 24px; margin-bottom: 4px; }
-                    .subtitle { color: #666; font-size: 12px; margin-bottom: 20px; }
-                    .meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
-                    .meta-box { padding: 12px; background: #f9f9f9; border-radius: 8px; }
-                    .meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #999; display: block; margin-bottom: 4px; }
-                    table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-                    th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #eee; }
-                    th { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #999; }
-                    .text-right { text-align: right; }
-                    .text-center { text-align: center; }
-                    .total-row { font-weight: bold; border-top: 2px solid #333; }
-                    .note-section { margin-top: 20px; padding: 12px; background: #f9f9f9; border-radius: 8px; }
-                    .footer { margin-top: 40px; text-align: center; color: #999; font-size: 11px; }
-                </style>
-            </head>
-            <body>
+        openPrintWindow({
+            title: purchaseReturn.return_number,
+            paperSize: 'A4',
+            headerConfig: printHeader.headerConfig,
+            headerHtml: renderHeaderHtml(
+                printHeader.headerConfig,
+                {
+                    docTitle: t.purchaseReturns.detail.printFooter,
+                    docNumber: purchaseReturn.return_number,
+                    docDate: formatDate(purchaseReturn.created_at, locale),
+                    companyName: printHeader.companyName,
+                },
+                'A4',
+            ),
+            styles: `${SIMPLE_DOC_STYLES}
+                .meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
+                .meta-box { padding: 12px; background: #f9f9f9; border-radius: 8px; }
+                .meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #999; display: block; margin-bottom: 4px; }
+                .text-right { text-align: right; }
+                .text-center { text-align: center; }`,
+            repeatHeader: true,
+            bodyHtml: `
                 <h1>${purchaseReturn.return_number}</h1>
                 <div class="subtitle">
-                    Date: ${new Date(purchaseReturn.created_at).toLocaleString()} | Source Purchase: ${purchaseReturn.purchase?.purchase_number || '-'}
+                    ${t.purchaseReturns.detail.created}: ${new Date(purchaseReturn.created_at).toLocaleString()} | ${t.purchaseReturns.detail.sourcePurchase}: ${purchaseReturn.purchase?.purchase_number || '-'}
                 </div>
                 <div class="meta-grid">
                     <div class="meta-box">
-                        <span class="meta-label">Supplier</span>
-                        <span>${purchaseReturn.supplier?.name || 'Unlinked supplier'}</span>
+                        <span class="meta-label">${t.purchaseReturns.detail.supplier}</span>
+                        <span>${purchaseReturn.supplier?.name || t.purchaseShared.unlinkedSupplier}</span>
                     </div>
                     <div class="meta-box">
-                        <span class="meta-label">Reference</span>
-                        <span>${purchaseReturn.reference_number || 'No reference number provided'}</span>
+                        <span class="meta-label">${t.purchaseReturns.detail.reference}</span>
+                        <span>${purchaseReturn.reference_number || '-'}</span>
                     </div>
                 </div>
                 <table>
                     <thead>
                         <tr>
-                            <th>{t.common.product}</th>
-                            <th class="text-center">{t.purchaseShared.qty}</th>
-                            <th class="text-right">{t.purchaseShared.unitCost}</th>
-                            <th class="text-right">{t.purchaseShared.lineTotal}</th>
+                            <th>${t.purchaseReturns.detail.product}</th>
+                            <th class="text-center">${t.purchaseReturns.detail.qty}</th>
+                            <th class="text-right">${t.purchaseReturns.detail.unitCost}</th>
+                            <th class="text-right">${t.purchaseReturns.detail.lineTotal}</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${itemRows}
                         <tr class="total-row">
-                            <td colspan="3">Total</td>
+                            <td colspan="3">${t.purchaseReturns.detail.total}</td>
                             <td class="text-right">${formatBDT(Number(purchaseReturn.total_amount || 0), { locale })}</td>
                         </tr>
                     </tbody>
                 </table>
-                <div class="note-section">
-                    <strong>Notes:</strong> ${purchaseReturn.notes || 'No notes added for this return.'}
-                </div>
-                <div class="footer">{t.purchaseReturns.detail.printFooter}</div>
-            </body>
-            </html>
-        `);
-        printWindow.document.close();
-        printWindow.print();
+                ${purchaseReturn.notes ? `<div class="note-section"><strong>${t.purchaseReturns.detail.notes}</strong> ${purchaseReturn.notes}</div>` : ''}`,
+            footerHtml: `<div class="footer">${t.purchaseReturns.detail.printFooter}</div>`,
+        });
     };
 
     if (loading) {

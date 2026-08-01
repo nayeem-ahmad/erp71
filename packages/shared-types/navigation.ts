@@ -206,6 +206,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'account-settings.report-emails': { id: 'account-settings.report-emails', kind: 'link', icon: 'BarChart3', labelKey: 'sidebar.items.reportEmails', href: '/settings/reports' },
   'account-settings.counters': { id: 'account-settings.counters', kind: 'link', icon: 'Monitor', labelKey: 'sidebar.items.posCounters', href: '/settings/counters' },
   'account-settings.sales': { id: 'account-settings.sales', kind: 'link', icon: 'ShoppingBag', labelKey: 'sidebar.items.salesSettings', href: '/settings/sales' },
+  'account-settings.print-templates': { id: 'account-settings.print-templates', kind: 'link', icon: 'Printer', labelKey: 'sidebar.items.printTemplates', href: '/settings/print-templates' },
   'account-settings.payment-methods': { id: 'account-settings.payment-methods', kind: 'link', icon: 'CreditCard', labelKey: 'sidebar.items.paymentMethods', href: '/settings/payment-methods' },
   'account-settings.discount-codes': { id: 'account-settings.discount-codes', kind: 'link', icon: 'Tag', labelKey: 'sidebar.items.discountCodes', href: '/settings/discount-codes' },
   'account-settings.data': { id: 'account-settings.data', kind: 'link', icon: 'Database', labelKey: 'sidebar.items.dataManagement', href: '/settings/data' },

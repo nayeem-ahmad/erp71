@@ -1,4 +1,6 @@
 import type { Table } from '@tanstack/react-table';
+import { SIMPLE_DOC_STYLES, openPrintWindow } from '@/lib/print';
+import type { DeepPartial, PrintHeaderConfig } from '@/lib/print';
 
 /* --------------------------------------------------------------- */
 /*  CSV Export                                                      */
@@ -96,7 +98,13 @@ export async function exportToPDF<T>(table: Table<T>, filename: string) {
 /* --------------------------------------------------------------- */
 /*  Print                                                           */
 /* --------------------------------------------------------------- */
-export function printTable<T>(table: Table<T>, title: string) {
+export interface PrintTableHeader {
+    /** Markup from `renderHeaderHtml` — the tenant's letterhead. */
+    html: string;
+    config?: DeepPartial<PrintHeaderConfig>;
+}
+
+export function printTable<T>(table: Table<T>, title: string, header?: PrintTableHeader) {
     const headers = table
         .getVisibleLeafColumns()
         .filter((c) => c.id !== 'actions' && c.id !== 'select')
@@ -112,28 +120,22 @@ export function printTable<T>(table: Table<T>, title: string) {
             }),
     );
 
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-
-    printWindow.document.write(`<!DOCTYPE html><html><head><title>${title}</title>
-<style>
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; color: #111; }
-  h1 { font-size: 20px; margin-bottom: 16px; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 12px; }
-  th { background: #f9fafb; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; font-size: 10px; }
-  tr:nth-child(even) { background: #f9fafb; }
-  .footer { margin-top: 32px; text-align: center; color: #9ca3af; font-size: 11px; }
-</style></head><body>
+    openPrintWindow({
+        title,
+        paperSize: 'A4',
+        headerConfig: header?.config,
+        headerHtml: header?.html,
+        styles: SIMPLE_DOC_STYLES,
+        // Reports run long — repeat the letterhead on every page.
+        repeatHeader: true,
+        bodyHtml: `
 <h1>${title}</h1>
 <table>
   <thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead>
   <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>
-</table>
-<div class="footer">Printed on ${new Date().toLocaleString()}</div>
-</body></html>`);
-    printWindow.document.close();
-    printWindow.print();
+</table>`,
+        footerHtml: `<div class="footer">Printed on ${new Date().toLocaleString()}</div>`,
+    });
 }
 
 /* --------------------------------------------------------------- */

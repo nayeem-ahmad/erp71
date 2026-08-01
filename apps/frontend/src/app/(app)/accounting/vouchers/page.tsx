@@ -13,6 +13,7 @@ import { VoucherType } from '@erp71/shared-types';
 import { DataTable } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { useBranding } from '@/lib/branding';
+import { usePrintHeader } from '@/lib/print/use-print-header';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { printVoucher } from '@/lib/voucher-printer';
@@ -62,6 +63,7 @@ export default function AccountingVouchersListPage() {
 function AccountingVouchersListPageContent() {
     const { t, locale } = useI18n();
     const { businessName } = useBranding();
+    const printHeader = usePrintHeader('VOUCHER');
     const router = useRouter();
     const searchParams = useSearchParams();
     const [response, setResponse] = useState<VoucherListResponse>({
@@ -111,6 +113,7 @@ function AccountingVouchersListPageContent() {
             const detail = await api.getVoucher(voucher.id);
             printVoucher({
                 businessName,
+                headerConfig: printHeader.headerConfig,
                 voucherNumber: detail.voucher_number,
                 voucherType: detail.voucher_type,
                 date: formatDate(detail.date, locale),
@@ -141,7 +144,7 @@ function AccountingVouchersListPageContent() {
         } catch {
             toast.error(t.vouchers.list.printFailed);
         }
-    }, [businessName, locale, t]);
+    }, [businessName, printHeader, locale, t]);
 
     const handleDelete = useCallback(async (voucher: VoucherRow) => {
         if (voucher.source?.module) {

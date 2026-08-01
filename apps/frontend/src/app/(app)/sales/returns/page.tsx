@@ -10,6 +10,8 @@ import { compactDensity } from '@/lib/ui/compact-density';
 import { routes } from '@/lib/routes';
 import { PostingBadge } from '@/components/PostingBadge';
 import { formatBDT, formatDate } from '@/lib/format';
+import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
+import { usePrintHeader } from '@/lib/print/use-print-header';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -38,6 +40,7 @@ const columnHelper = createColumnHelper<SalesReturn>();
 
 export default function ReturnsPage() {
     const { t, locale } = useI18n();
+    const printHeader = usePrintHeader('SALES_RETURN');
     const [returns, setReturns] = useState<SalesReturn[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -67,24 +70,23 @@ export default function ReturnsPage() {
     };
 
     const handlePrint = (ret: SalesReturn) => {
-        const printWindow = window.open('', '_blank');
-        if (!printWindow) return;
-        printWindow.document.write(`
-            <html>
-            <head>
-                <title>${ret.return_number}</title>
-                <style>
-                    body { font-family: Arial, sans-serif; padding: 20px; color: #111; }
-                    h1 { font-size: 24px; margin-bottom: 4px; }
-                    .subtitle { color: #666; font-size: 12px; margin-bottom: 20px; }
-                    table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-                    th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #eee; }
-                    th { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #999; }
-                    .total-row { font-weight: bold; border-top: 2px solid #333; }
-                    .footer { margin-top: 40px; text-align: center; color: #999; font-size: 11px; }
-                </style>
-            </head>
-            <body>
+        openPrintWindow({
+            title: ret.return_number,
+            paperSize: 'A4',
+            headerConfig: printHeader.headerConfig,
+            headerHtml: renderHeaderHtml(
+                printHeader.headerConfig,
+                {
+                    docTitle: t.shared.print.returnProcessed,
+                    docNumber: ret.return_number,
+                    docDate: formatDate(ret.created_at, locale),
+                    companyName: printHeader.companyName,
+                },
+                'A4',
+            ),
+            styles: SIMPLE_DOC_STYLES,
+            repeatHeader: true,
+            bodyHtml: `
                 <h1>${ret.return_number}</h1>
                 <div class="subtitle">${formatMessage(t.shared.print.originalReceipt, {
                     date: new Date(ret.created_at).toLocaleString(),
@@ -97,13 +99,9 @@ export default function ReturnsPage() {
                         <tr class="total-row"><td colspan="2">${t.shared.print.totalRefund}</td><td>${formatBDT(Number(ret.total_refund), { locale })}</td></tr>
                     </tbody>
                 </table>
-                ${ret.reason ? `<p><strong>${t.shared.columns.reason}:</strong> ${ret.reason}</p>` : ''}
-                <div class="footer">${t.shared.print.returnProcessed}</div>
-            </body>
-            </html>
-        `);
-        printWindow.document.close();
-        printWindow.print();
+                ${ret.reason ? `<p><strong>${t.shared.columns.reason}:</strong> ${ret.reason}</p>` : ''}`,
+            footerHtml: `<div class="footer">${t.shared.print.returnProcessed}</div>`,
+        });
     };
 
     const columns: ColumnDef<SalesReturn, any>[] = useMemo(

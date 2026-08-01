@@ -6,6 +6,7 @@ import { ShoppingCart, Search, Package, Trash2, Plus, Minus, CreditCard, Chevron
 import { HelpTooltip } from '@/components/HelpTooltip';
 import { api } from '@/lib/api';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
+import { usePrintHeader } from '@/lib/print/use-print-header';
 import { formatBDT } from '@/lib/format';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { savePendingSale, cacheProducts, getCachedProducts } from '@/lib/pos-db';
@@ -60,6 +61,7 @@ function generateId(): string {
 
 export default function POSPage() {
     const { t } = useI18n();
+    const printHeader = usePrintHeader('POS_RECEIPT');
     const [products, setProducts] = useState<any[]>([]);
     const [salesWarehouseId, setSalesWarehouseId] = useState<string | null>(null);
     const [cart, setCart] = useState<any[]>([]);
@@ -513,6 +515,8 @@ export default function POSPage() {
         await printPOSReceipt({
             invoiceId: sale?.id || '',
             serialNumber: sale?.serial_number || '',
+            storeName: printHeader.companyName,
+            headerConfig: printHeader.headerConfig,
             date: sale?.created_at ? new Date(sale.created_at).toLocaleString() : new Date().toLocaleString(),
             items: saleCart.map((item: any) => ({
                 name: item.name,

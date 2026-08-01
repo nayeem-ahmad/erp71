@@ -12,6 +12,8 @@ import { routes } from '@/lib/routes';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
+import { usePrintHeader } from '@/lib/print/use-print-header';
 import { PageShell } from '@/components/ui';
 
 interface Quotation {
@@ -41,6 +43,7 @@ const columnHelper = createColumnHelper<Quotation>();
 
 export default function QuotesPage() {
     const { t, locale } = useI18n();
+    const printHeader = usePrintHeader('QUOTE');
     const [quotes, setQuotes] = useState<Quotation[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -70,25 +73,23 @@ export default function QuotesPage() {
     };
 
     const handlePrint = (quote: Quotation) => {
-        const printWindow = window.open('', '_blank');
-        if (!printWindow) return;
-
-        printWindow.document.write(`
-            <html>
-            <head>
-                <title>${quote.quote_number}</title>
-                <style>
-                    body { font-family: Arial, sans-serif; padding: 20px; color: #111; }
-                    h1 { font-size: 24px; margin-bottom: 4px; }
-                    .subtitle { color: #666; font-size: 12px; margin-bottom: 20px; }
-                    table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-                    th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #eee; }
-                    th { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #999; }
-                    .total-row { font-weight: bold; border-top: 2px solid #333; }
-                    .footer { margin-top: 40px; text-align: center; color: #999; font-size: 11px; }
-                </style>
-            </head>
-            <body>
+        openPrintWindow({
+            title: quote.quote_number,
+            paperSize: 'A4',
+            headerConfig: printHeader.headerConfig,
+            headerHtml: renderHeaderHtml(
+                printHeader.headerConfig,
+                {
+                    docTitle: t.shared.print.salesQuotation,
+                    docNumber: quote.quote_number,
+                    docDate: formatDate(quote.created_at, locale),
+                    companyName: printHeader.companyName,
+                },
+                'A4',
+            ),
+            styles: SIMPLE_DOC_STYLES,
+            repeatHeader: true,
+            bodyHtml: `
                 <h1>${quote.quote_number} (${formatMessage(t.shared.version, { version: quote.version })})</h1>
                 <div class="subtitle">${formatMessage(t.shared.print.createdMeta, {
                     date: new Date(quote.created_at).toLocaleString(),
@@ -103,13 +104,9 @@ export default function QuotesPage() {
                         <tr class="total-row"><td colspan="3">${t.shared.print.total}</td><td>${formatBDT(Number(quote.total_amount), { locale })}</td></tr>
                     </tbody>
                 </table>
-                ${quote.notes ? `<p><strong>${t.shared.print.notes}</strong> ${quote.notes}</p>` : ''}
-                <div class="footer">${t.shared.print.salesQuotation}</div>
-            </body>
-            </html>
-        `);
-        printWindow.document.close();
-        printWindow.print();
+                ${quote.notes ? `<p><strong>${t.shared.print.notes}</strong> ${quote.notes}</p>` : ''}`,
+            footerHtml: `<div class="footer">${t.shared.print.salesQuotation}</div>`,
+        });
     };
 
     const columns: ColumnDef<Quotation, any>[] = useMemo(

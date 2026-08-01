@@ -522,6 +522,7 @@ model Tenant {
   aiConversations   AiConversation[]
   paymentMethods    PaymentMethod[]
   salesSettings     SalesSettings?
+  printTemplates    PrintTemplate[]
   navLayout         TenantNavLayout?
   referralSignup    ReferralSignup?
   externalSyncConnections ExternalSyncConnection[]
@@ -666,6 +667,26 @@ model PaymentMethod {
 
   @@unique([tenant_id, name])
   @@index([tenant_id, type, is_active])
+}
+
+/// Tenant-designed print header (letterhead) applied to printed documents.
+/// `config` holds a versioned PrintHeaderConfig JSON — see packages/shared-types.
+model PrintTemplate {
+  id         String   @id @default(uuid())
+  tenant_id  String
+  name       String
+  /// Used for any document type without a more specific template.
+  is_default Boolean  @default(false)
+  /// PrintDocType values; empty means the template applies to every type.
+  doc_types  String[] @default([])
+  config     Json
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant     Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@map("print_templates")
 }
 
 model SalesSettings {
