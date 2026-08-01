@@ -18,6 +18,7 @@ import {
     plBalanceForType,
 } from './report-scope.utils';
 import {
+    compareByCodeThenName,
     mergeCompareAmountsByColumn,
     normalizeReportLevel,
     ReportLevel,
@@ -3881,12 +3882,12 @@ ${voucherMessages}
             id: string;
             name: string;
             code: string | null;
-            subgroup: { id: string; name: string } | null;
+            subgroup: { id: string; name: string; code: string | null } | null;
             is_unassigned: boolean;
             balance: number;
         };
         const groupMap = new Map<string, {
-            group: { id: string; name: string };
+            group: { id: string; name: string; code: string | null };
             rows: LevelRow[];
             total: number;
         }>();
@@ -3915,7 +3916,11 @@ ${voucherMessages}
             groupMap.set(bucket.group.id, existing);
         }
 
-        return Array.from(groupMap.values()).sort((a, b) => a.group.name.localeCompare(b.group.name));
+        // Rows arrive already in chart-of-accounts order from rollUpByLevel, which
+        // also knows to sink the synthetic unassigned bucket — so only the groups
+        // themselves need ordering here.
+        return Array.from(groupMap.values())
+            .sort((a, b) => compareByCodeThenName(a.group, b.group));
     }
 
     /**
@@ -4001,6 +4006,7 @@ ${voucherMessages}
 
         const groupMap = new Map<string, {
             name: string;
+            code: string | null;
             rows: Array<{
                 account: { id: string; code: string | null; name: string };
                 amounts: CompareAmounts;
@@ -4017,6 +4023,7 @@ ${voucherMessages}
 
             const existing = groupMap.get(bucket.group.id) ?? {
                 name: bucket.group.name,
+                code: bucket.group.code,
                 rows: [],
                 subtotals: initCompareAmounts(columnKeys),
             };
@@ -4032,7 +4039,7 @@ ${voucherMessages}
             groupMap.set(bucket.group.id, existing);
         }
 
-        const groups = Array.from(groupMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+        const groups = Array.from(groupMap.values()).sort(compareByCodeThenName);
 
         return {
             name: sectionName,

@@ -35,14 +35,9 @@ import { compactDensity } from '@/lib/ui/compact-density';
 
 const columnHelper = createColumnHelper<Account>();
 
-function AccountNameCell({ account, noCode }: { readonly account: Account; readonly noCode: string }) {
+function AccountNameCell({ account }: { readonly account: Account }) {
     return (
-        <div className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-gray-900">{account.name}</span>
-            <span className="block font-mono text-xs text-gray-400 sm:hidden">
-                {account.code || noCode}
-            </span>
-        </div>
+        <span className="block truncate text-sm font-semibold text-gray-900">{account.name}</span>
     );
 }
 
@@ -103,28 +98,14 @@ function buildColumns(
         columnHelper.accessor((row) => row.code ?? '', {
             id: 'code',
             header: t.coa.columns.code,
-            cell: (info) => {
-                const { legacy_code: legacyCode } = info.row.original;
-                return (
-                    <div className="min-w-0">
-                        <span className="block font-mono text-xs text-gray-500">
-                            {info.getValue() || '—'}
-                        </span>
-                        {/* The pre-migration number, still on the tenant's paperwork. */}
-                        {legacyCode ? (
-                            <span className="block font-mono text-xs text-gray-400">
-                                {formatMessage(t.coa.legacyCode, { code: legacyCode })}
-                            </span>
-                        ) : null}
-                    </div>
-                );
-            },
+            cell: (info) => (
+                <span className="font-mono text-xs text-gray-500">{info.getValue() || '—'}</span>
+            ),
             size: 90,
-            meta: { hideOnMobile: true },
         }),
         columnHelper.accessor('name', {
             header: t.coa.columns.account,
-            cell: (info) => <AccountNameCell account={info.row.original} noCode={t.coa.noCode} />,
+            cell: (info) => <AccountNameCell account={info.row.original} />,
             size: 240,
         }),
         columnHelper.accessor('type', {

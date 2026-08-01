@@ -14,6 +14,25 @@ export const REPORT_LEVEL_MODES: ReportLevelMode[] = ['account', 'subgroup', 'gr
 
 const REPORT_SCOPE_KEY = 'report_scope';
 const REPORT_LEVEL_KEY = 'report_level';
+const REPORT_HIDE_ZERO_KEY = 'report_hide_zero';
+
+/**
+ * Whether rows with no balance are suppressed. Purely presentational — totals are
+ * still the server's, so hiding a row never changes what a statement adds up to.
+ */
+export function getDefaultHideZero(): boolean {
+    if (typeof window !== 'undefined') {
+        return localStorage.getItem(REPORT_HIDE_ZERO_KEY) === 'true';
+    }
+
+    return false;
+}
+
+export function persistHideZero(hideZero: boolean) {
+    if (typeof window !== 'undefined') {
+        localStorage.setItem(REPORT_HIDE_ZERO_KEY, String(hideZero));
+    }
+}
 
 export function getDefaultReportLevel(): ReportLevelMode {
     if (typeof window !== 'undefined') {

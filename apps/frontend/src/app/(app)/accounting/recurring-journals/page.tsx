@@ -11,6 +11,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import AccountSelect from '@/components/accounting/AccountSelect';
 import { compactDensity } from '@/lib/ui/compact-density';
 
 interface RJLine { accountId: string; debitAmount: string; creditAmount: string; comment: string; }
@@ -161,11 +162,13 @@ export default function RecurringJournalsPage() {
                                 {lines.map((l, i) => (
                                     <tr key={i} className="border-t border-gray-100">
                                         <td className="px-3 py-1.5">
-                                            <select value={l.accountId} onChange={(e) => setLine(i, 'accountId', e.target.value)}
-                                                className={compactDensity.formField}>
-                                                <option value="">Select…</option>
-                                                {accounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)}
-                                            </select>
+                                            <AccountSelect
+                                                accounts={accounts}
+                                                value={l.accountId}
+                                                onChange={(accountId) => setLine(i, 'accountId', accountId)}
+                                                ariaLabel={`Account line ${i + 1}`}
+                                                className={compactDensity.formField}
+                                            />
                                         </td>
                                         <td className="px-3 py-1.5">
                                             <input type="number" min="0" step="0.01" value={l.debitAmount}

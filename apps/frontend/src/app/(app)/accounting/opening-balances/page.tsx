@@ -11,6 +11,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import AccountSelect from '@/components/accounting/AccountSelect';
 import { compactDensity } from '@/lib/ui/compact-density';
 
 interface Account { id: string; name: string; code?: string | null; type: string; }
@@ -123,13 +124,13 @@ export default function OpeningBalancesPage() {
                             {rows.map((row, i) => (
                                 <tr key={i} className="border-b border-gray-50">
                                     <td className="px-4 py-2">
-                                        <select value={row.accountId} onChange={(e) => setRow(i, 'accountId', e.target.value)}
-                                            className={compactDensity.formField}>
-                                            <option value="">Select account…</option>
-                                            {accounts.map((a) => (
-                                                <option key={a.id} value={a.id}>{a.name}{a.code ? ` (${a.code})` : ''}</option>
-                                            ))}
-                                        </select>
+                                        <AccountSelect
+                                            accounts={accounts}
+                                            value={row.accountId}
+                                            onChange={(accountId) => setRow(i, 'accountId', accountId)}
+                                            ariaLabel={`Account row ${i + 1}`}
+                                            className={compactDensity.formField}
+                                        />
                                     </td>
                                     <td className="px-4 py-2">
                                         <input type="number" min="0" step="0.01" placeholder="0.00"
