@@ -1,5 +1,7 @@
 import * as QRCode from 'qrcode';
 import { formatBDT } from './format';
+import { openPrintWindow, renderHeaderHtml } from './print';
+import type { DeepPartial, PaperSize, PrintHeaderConfig } from './print';
 
 export interface ReceiptItem {
     name: string;
@@ -18,6 +20,8 @@ export interface ReceiptData {
     serialNumber: string;
     date: string;
     storeName?: string;
+    /** Tenant header design; falls back to the built-in default when omitted. */
+    headerConfig?: DeepPartial<PrintHeaderConfig>;
     customerName?: string;
     items: ReceiptItem[];
     payments: ReceiptPayment[];
@@ -29,7 +33,60 @@ export interface ReceiptData {
     note?: string;
 }
 
-export async function printPOSReceipt(data: ReceiptData): Promise<void> {
+const RECEIPT_STYLES = `
+    body {
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 12px;
+        color: #000;
+    }
+
+    .divider { border: none; border-top: 1px dashed #000; margin: 6px 0; }
+
+    .invoice-info { margin: 6px 0; }
+    .invoice-info tr td:first-child { font-weight: bold; padding-right: 8px; white-space: nowrap; }
+
+    .items-table { width: 100%; border-collapse: collapse; margin: 6px 0; }
+    .items-table thead tr td {
+        font-weight: bold;
+        font-size: 10px;
+        text-transform: uppercase;
+        border-bottom: 1px solid #000;
+        padding-bottom: 3px;
+        letter-spacing: 0.5px;
+    }
+    .item-name { width: 45%; }
+    .item-qty  { width: 10%; text-align: center; }
+    .item-price { width: 22%; text-align: right; }
+    .item-total { width: 23%; text-align: right; }
+    .items-table tbody tr td { padding: 3px 0; vertical-align: top; }
+    .sku { font-size: 9px; color: #666; }
+
+    .totals-table { width: 100%; border-collapse: collapse; margin: 4px 0; }
+    .totals-table td { padding: 2px 0; }
+    .totals-table td:first-child { color: #444; }
+    .totals-table td:last-child { text-align: right; font-weight: bold; }
+    .grand-total td { font-size: 14px; font-weight: bold; border-top: 1px solid #000; padding-top: 4px; }
+
+    .payments-table { width: 100%; border-collapse: collapse; margin: 4px 0; }
+    .pay-method { color: #444; }
+    .pay-amount { text-align: right; font-weight: bold; }
+    .change-row { font-weight: bold; }
+    .change-row td { padding-top: 3px; }
+
+    .note-box { border: 1px dashed #aaa; padding: 5px 6px; margin: 6px 0; font-size: 11px; color: #333; }
+
+    .qr-section { text-align: center; margin: 10px 0 4px; }
+    .qr-section img { display: block; margin: 0 auto 4px; }
+    .qr-label { font-size: 9px; color: #666; letter-spacing: 0.5px; text-transform: uppercase; }
+    .qr-id { font-size: 8px; color: #888; word-break: break-all; margin-top: 2px; }
+
+    .footer { text-align: center; font-size: 11px; margin-top: 10px; letter-spacing: 0.5px; }
+`;
+
+export async function printPOSReceipt(
+    data: ReceiptData,
+    paperSize: PaperSize = 'Thermal80',
+): Promise<void> {
     const qrDataUrl = await QRCode.toDataURL(data.invoiceId, {
         width: 140,
         margin: 1,
@@ -52,169 +109,17 @@ export async function printPOSReceipt(data: ReceiptData): Promise<void> {
         </tr>
     `).join('');
 
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Receipt ${escHtml(data.serialNumber)}</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+    const headerHtml = renderHeaderHtml(
+        data.headerConfig,
+        {
+            docTitle: 'Sales Invoice',
+            companyName: data.storeName || 'RETAIL STORE',
+            storeName: data.storeName,
+        },
+        paperSize,
+    );
 
-        body {
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 12px;
-            color: #000;
-            background: #fff;
-            padding: 8px;
-            width: 300px;
-        }
-
-        .store-name {
-            text-align: center;
-            font-size: 16px;
-            font-weight: bold;
-            letter-spacing: 1px;
-            margin-bottom: 2px;
-        }
-
-        .header-sub {
-            text-align: center;
-            font-size: 10px;
-            color: #555;
-            margin-bottom: 8px;
-        }
-
-        .divider {
-            border: none;
-            border-top: 1px dashed #000;
-            margin: 6px 0;
-        }
-
-        .invoice-info {
-            margin: 6px 0;
-        }
-
-        .invoice-info tr td:first-child {
-            font-weight: bold;
-            padding-right: 8px;
-            white-space: nowrap;
-        }
-
-        .items-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 6px 0;
-        }
-
-        .items-table thead tr td {
-            font-weight: bold;
-            font-size: 10px;
-            text-transform: uppercase;
-            border-bottom: 1px solid #000;
-            padding-bottom: 3px;
-            letter-spacing: 0.5px;
-        }
-
-        .item-name { width: 45%; }
-        .item-qty  { width: 10%; text-align: center; }
-        .item-price { width: 22%; text-align: right; }
-        .item-total { width: 23%; text-align: right; }
-
-        .items-table tbody tr td {
-            padding: 3px 0;
-            vertical-align: top;
-        }
-
-        .sku {
-            font-size: 9px;
-            color: #666;
-        }
-
-        .totals-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 4px 0;
-        }
-
-        .totals-table td:first-child {
-            color: #444;
-        }
-
-        .totals-table td:last-child {
-            text-align: right;
-            font-weight: bold;
-        }
-
-        .totals-table td { padding: 2px 0; }
-
-        .grand-total td {
-            font-size: 14px;
-            font-weight: bold;
-            border-top: 1px solid #000;
-            padding-top: 4px;
-        }
-
-        .payments-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 4px 0;
-        }
-
-        .pay-method { color: #444; }
-        .pay-amount { text-align: right; font-weight: bold; }
-
-        .change-row { font-weight: bold; }
-        .change-row td { padding-top: 3px; }
-
-        .note-box {
-            border: 1px dashed #aaa;
-            padding: 5px 6px;
-            margin: 6px 0;
-            font-size: 11px;
-            color: #333;
-        }
-
-        .qr-section {
-            text-align: center;
-            margin: 10px 0 4px;
-        }
-
-        .qr-section img {
-            display: block;
-            margin: 0 auto 4px;
-        }
-
-        .qr-label {
-            font-size: 9px;
-            color: #666;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-        }
-
-        .qr-id {
-            font-size: 8px;
-            color: #888;
-            word-break: break-all;
-            margin-top: 2px;
-        }
-
-        .footer {
-            text-align: center;
-            font-size: 11px;
-            margin-top: 10px;
-            letter-spacing: 0.5px;
-        }
-
-        @media print {
-            body { width: 100%; padding: 0; }
-            @page { margin: 4mm; size: 80mm auto; }
-        }
-    </style>
-</head>
-<body>
-    <div class="store-name">${escHtml(data.storeName || 'RETAIL STORE')}</div>
-    <div class="header-sub">Sales Invoice</div>
-
+    const bodyHtml = `
     <hr class="divider">
 
     <table class="invoice-info">
@@ -267,25 +172,25 @@ export async function printPOSReceipt(data: ReceiptData): Promise<void> {
         <div class="qr-id">${escHtml(data.invoiceId)}</div>
     </div>
 
-    <hr class="divider">
+    <hr class="divider">`;
 
-    <div class="footer">*** Thank you for your purchase! ***</div>
-</body>
-</html>`;
-
-    const win = window.open('', '_blank', 'width=400,height=700');
-    if (!win) return;
-    win.document.write(html);
-    win.document.close();
-    win.onload = () => win.print();
+    openPrintWindow({
+        title: `Receipt ${data.serialNumber}`,
+        paperSize,
+        headerConfig: data.headerConfig,
+        headerHtml,
+        bodyHtml,
+        footerHtml: '<div class="footer">*** Thank you for your purchase! ***</div>',
+        styles: RECEIPT_STYLES,
+    });
 }
 
 function escHtml(str: string): string {
     return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;');
 }
 
 function formatPaymentMethod(method: string): string {

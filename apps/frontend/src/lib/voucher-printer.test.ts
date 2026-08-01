@@ -52,7 +52,7 @@ describe('printVoucher', () => {
             },
         });
 
-        expect(open).toHaveBeenCalledWith('', '_blank', 'width=800,height=900');
+        expect(open).toHaveBeenCalledWith('', '_blank', 'width=950,height=850');
         expect(write).toHaveBeenCalledTimes(1);
         expect(write.mock.calls[0][0]).toContain('CP-00001');
         expect(write.mock.calls[0][0]).toContain('Demo Store');

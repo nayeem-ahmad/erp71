@@ -7,6 +7,7 @@ import { Eye, Link2, Loader2, Pencil, Plus, Printer, Trash2 } from 'lucide-react
 import { DataTable } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { useBranding } from '@/lib/branding';
+import { usePrintHeader } from '@/lib/print/use-print-header';
 import { printSupplierPaymentReceipt } from '@/lib/supplier-payment-receipt';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { formatBDT } from '@/lib/format';
@@ -83,6 +84,7 @@ function SupplierPaymentsContent() {
     const { t, locale } = useI18n();
     const copy = t.supplierPayments;
     const { businessName } = useBranding();
+    const printHeader = usePrintHeader('MONEY_RECEIPT');
     const searchParams = useSearchParams();
     const preselectedSupplierId = searchParams.get('supplierId');
 
@@ -310,6 +312,7 @@ function SupplierPaymentsContent() {
         const direction = directionFromType(payment.type);
         printSupplierPaymentReceipt({
             businessName: businessName ?? undefined,
+            headerConfig: printHeader.headerConfig,
             paymentNumber: payment.payment_number ?? payment.id,
             date: formatDateTime(payment.created_at, locale),
             direction,
@@ -334,7 +337,7 @@ function SupplierPaymentsContent() {
                 footer: copy.print.footer,
             },
         });
-    }, [businessName, copy, locale]);
+    }, [businessName, printHeader, copy, locale]);
 
     const columns: ColumnDef<SupplierCreditPayment, unknown>[] = useMemo(
         () => [

@@ -21,6 +21,8 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import SaleDetailPage from './page';
 
 jest.mock('@/lib/api', () => ({
+    // The print-header hook resolves the tenant's print template on mount.
+    fetchWithAuth: jest.fn().mockResolvedValue(null),
     api: {
         getSale: jest.fn(),
         updateSale: jest.fn(),
