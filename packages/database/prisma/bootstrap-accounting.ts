@@ -444,7 +444,7 @@ async function upsertTemplateGroup(
     });
 
     const code =
-        existing?.code ??
+        existing?.code ||
         resolveTemplateCode(
             preferredCode,
             null,
@@ -477,7 +477,7 @@ async function upsertTemplateSubgroup(
     });
 
     const code =
-        existing?.code ??
+        existing?.code ||
         resolveTemplateCode(
             preferredCode,
             group.code,
@@ -515,7 +515,7 @@ async function resolveTemplateAccountCode(
         select: { code: true },
     });
 
-    if (existing && existing.code.startsWith(subgroup.code)) {
+    if (existing?.code && existing.code.startsWith(subgroup.code)) {
         return existing.code;
     }
 

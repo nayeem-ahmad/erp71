@@ -35,8 +35,12 @@ export interface AccountSubgroup {
 export interface Account {
     id: string;
     name: string;
-    /** Always starts with its subgroup's code (or `<group>00` when it has none). */
-    code: string;
+    /**
+     * Always starts with its subgroup's code (or `<group>00` when it has none).
+     * Nullable only until the phase-B tightening — the boot-time backfill fills
+     * every row before the API serves, so in practice this is always set.
+     */
+    code?: string | null;
     /** The flat 4-digit code this account had before hierarchical codes. */
     legacy_code?: string | null;
     type: AccountType;
@@ -150,7 +154,7 @@ export default function AccountFormModal({
     // Compared against the ORIGINAL code, not the field: moving the account
     // re-fills the field with a suggestion, so the field alone would never look
     // changed and the warning would never fire.
-    const willBeRecoded = Boolean(account) && Boolean(code) && code !== account?.code;
+    const willBeRecoded = Boolean(account) && Boolean(code) && code !== (account?.code ?? '');
 
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();

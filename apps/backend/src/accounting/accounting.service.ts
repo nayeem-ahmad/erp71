@@ -199,7 +199,9 @@ export class AccountingService {
             where: { tenant_id: tenantId },
             select: { code: true },
         });
-        return rows.map((row) => row.code);
+        // Nullable until the phase-B tightening; an un-backfilled row occupies
+        // no slot, so it must not be handed to the allocator as one.
+        return rows.map((row) => row.code).filter((code): code is string => Boolean(code));
     }
 
     async createAccountGroup(tenantId: string, dto: CreateAccountGroupDto) {
@@ -712,12 +714,12 @@ export class AccountingService {
             (existing) => existing !== account.code,
         );
 
-        const keepsCurrentCode = !dto.code?.trim() && account.code.startsWith(prefix);
-        const code = keepsCurrentCode
-            ? account.code
-            : this.resolveCode(dto.code, 'account', prefix, taken, () =>
-                  nextAccountCode(group.code, subgroupCode, taken),
-              );
+        const code =
+            !dto.code?.trim() && account.code?.startsWith(prefix)
+                ? account.code
+                : this.resolveCode(dto.code, 'account', prefix, taken, () =>
+                      nextAccountCode(group.code, subgroupCode, taken),
+                  );
 
         try {
             return await this.db.account.update({

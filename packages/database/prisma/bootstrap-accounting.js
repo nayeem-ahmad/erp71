@@ -344,7 +344,7 @@ async function upsertTemplateGroup(db, tenantId, name, type, preferredCode) {
 	});
 
 	const code =
-		existing?.code ??
+		existing?.code ||
 		resolveTemplateCode(
 			preferredCode,
 			null,
@@ -371,7 +371,7 @@ async function upsertTemplateSubgroup(db, tenantId, group, name, preferredCode) 
 	});
 
 	const code =
-		existing?.code ??
+		existing?.code ||
 		resolveTemplateCode(
 			preferredCode,
 			group.code,
@@ -401,7 +401,7 @@ async function resolveTemplateAccountCode(db, tenantId, name, group, subgroup, p
 		select: { code: true },
 	});
 
-	if (existing && existing.code.startsWith(subgroup.code)) {
+	if (existing?.code && existing.code.startsWith(subgroup.code)) {
 		return existing.code;
 	}
 

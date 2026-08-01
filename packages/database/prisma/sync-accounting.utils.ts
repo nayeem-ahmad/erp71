@@ -5,6 +5,7 @@
  */
 import { Prisma, PrismaClient } from '@prisma/client';
 import { bootstrapDefaultAccountingForTenant } from './bootstrap-accounting';
+import { backfillAccountCodesForTenant } from './backfill-account-codes';
 
 export type SyncClient = PrismaClient | Prisma.TransactionClient;
 
@@ -52,6 +53,13 @@ export const added = (before: Snapshot, after: Snapshot): Delta => ({
  * this, so the two cannot disagree about what a sync does.
  */
 export async function applySync(client: SyncClient, tenantId: string): Promise<void> {
+    // MUST precede the bootstrap: a tenant that predates hierarchical codes has
+    // groups with an empty code, and the bootstrap hangs new subgroup and
+    // account codes off its parent's. Production reaches this through the
+    // backend's boot chain, which is the only place the backfill runs there --
+    // `prisma db push` cannot carry it. See backfill-account-codes.ts.
+    await backfillAccountCodesForTenant(client, tenantId);
+
     // customer_payment and loan rules are now plain DEFAULT_POSTING_RULES entries
     // (they used to be provisioned lazily by ensure* helpers), so the bootstrap
     // alone brings a tenant fully up to date.
