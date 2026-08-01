@@ -231,11 +231,16 @@ describe('DataTable', () => {
         expect(exportToPDF).toHaveBeenCalledWith(expect.anything(), 'Test Table');
     });
 
-    it('calls printTable when Print button is clicked', () => {
+    it('calls printTable with the resolved header when Print is clicked', async () => {
         const { printTable } = require('./export-utils');
         render(<DataTable {...defaultProps} />);
         fireEvent.click(screen.getByRole('button', { name: /print/i }));
-        expect(printTable).toHaveBeenCalledWith(expect.anything(), 'Test Table');
+
+        // The header template resolves on click, so the call lands a tick later.
+        await waitFor(() => expect(printTable).toHaveBeenCalled());
+        const [, title, header] = (printTable as jest.Mock).mock.calls[0];
+        expect(title).toBe('Test Table');
+        expect(header.html).toContain('Test Table');
     });
 
     it('renders custom toolbar actions', () => {

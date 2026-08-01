@@ -14,6 +14,7 @@ import SaleEntryLayout, {
 } from '../components/SaleEntryLayout';
 import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
 import { printSalesInvoice, PAPER_SIZES, type PaperSize } from '@/lib/sales-invoice-printer';
+import { usePrintHeader } from '@/lib/print/use-print-header';
 import { toast } from '@/lib/toast';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { canKeepDue, creditDueAmount } from '@/lib/customer-credit';
@@ -81,6 +82,8 @@ export default function NewSalePage() {
         }
     };
 
+    const printHeader = usePrintHeader('SALES_INVOICE');
+
     const handlePrint = (size?: PaperSize) => {
         const selectedSize = size ?? paperSize;
         setShowPaperMenu(false);
@@ -88,7 +91,8 @@ export default function NewSalePage() {
             {
                 referenceNumber: refNumber || '—',
                 date: new Date(saleDate).toLocaleDateString('en-BD'),
-                companyName: currentUser?.store?.name || salesSettings?.tenant?.business_name,
+                companyName: currentUser?.store?.name || salesSettings?.tenant?.business_name || printHeader.companyName,
+                headerConfig: printHeader.headerConfig,
                 customerName: customer?.name,
                 customerPhone: customer?.phone,
                 items: items.map((item) => ({

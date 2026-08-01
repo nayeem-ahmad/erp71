@@ -1,7 +1,12 @@
 import { formatBDT } from './format';
+import { MONEY_RECEIPT_STYLES } from './customer-payment-receipt';
+import { openPrintWindow, renderHeaderHtml } from './print';
+import type { DeepPartial, PaperSize, PrintHeaderConfig } from './print';
 
 export interface SupplierPaymentReceiptData {
     businessName?: string;
+    /** Tenant header design; falls back to the built-in default when omitted. */
+    headerConfig?: DeepPartial<PrintHeaderConfig>;
     paymentNumber: string;
     date: string;
     direction: 'pay' | 'receive';
@@ -27,47 +32,24 @@ export interface SupplierPaymentReceiptData {
     };
 }
 
-export function printSupplierPaymentReceipt(data: SupplierPaymentReceiptData): void {
+export function printSupplierPaymentReceipt(
+    data: SupplierPaymentReceiptData,
+    paperSize: PaperSize = 'Thermal80',
+): void {
     const isPay = data.direction === 'pay';
     const title = isPay ? data.labels.paymentVoucher : data.labels.moneyReceipt;
     const subtitle = isPay ? data.labels.payTitle : data.labels.receiveTitle;
 
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>${escHtml(title)} ${escHtml(data.paymentNumber)}</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 12px;
-            color: #000;
-            background: #fff;
-            padding: 12px;
-            width: 320px;
-        }
-        .business-name { text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 2px; }
-        .doc-title { text-align: center; font-size: 13px; font-weight: bold; text-transform: uppercase; margin-bottom: 2px; }
-        .doc-subtitle { text-align: center; font-size: 10px; color: #555; margin-bottom: 8px; }
-        .divider { border: none; border-top: 1px dashed #000; margin: 8px 0; }
-        .info-table { width: 100%; border-collapse: collapse; margin: 6px 0; }
-        .info-table td { padding: 3px 0; vertical-align: top; }
-        .info-table td:first-child { font-weight: bold; width: 38%; padding-right: 8px; }
-        .amount-box { border: 2px solid #000; padding: 10px; margin: 10px 0; text-align: center; }
-        .amount-label { font-size: 10px; text-transform: uppercase; color: #444; }
-        .amount-value { font-size: 20px; font-weight: bold; margin-top: 4px; }
-        .note-box { border: 1px dashed #aaa; padding: 6px; margin: 8px 0; font-size: 11px; }
-        .footer { text-align: center; font-size: 10px; margin-top: 16px; color: #555; }
-        .signatures { display: flex; justify-content: space-between; margin-top: 28px; gap: 16px; }
-        .signature { flex: 1; text-align: center; font-size: 10px; }
-        .signature-line { border-top: 1px solid #000; margin-top: 32px; padding-top: 4px; }
-        @media print { body { width: 100%; padding: 0; } @page { margin: 6mm; size: 80mm auto; } }
-    </style>
-</head>
-<body>
-    <div class="business-name">${escHtml(data.businessName || 'RETAIL STORE')}</div>
-    <div class="doc-title">${escHtml(title)}</div>
+    const headerHtml = renderHeaderHtml(
+        data.headerConfig,
+        {
+            docTitle: title,
+            companyName: data.businessName || 'RETAIL STORE',
+        },
+        paperSize,
+    );
+
+    const bodyHtml = `
     <div class="doc-subtitle">${escHtml(subtitle)}</div>
     <hr class="divider">
     <table class="info-table">
@@ -85,22 +67,23 @@ export function printSupplierPaymentReceipt(data: SupplierPaymentReceiptData): v
     <div class="signatures">
         <div class="signature"><div class="signature-line">${escHtml(data.labels.supplier)}</div></div>
         <div class="signature"><div class="signature-line">${escHtml(data.labels.recordedBy)}</div></div>
-    </div>
-    <div class="footer">${escHtml(data.labels.footer)}</div>
-</body>
-</html>`;
+    </div>`;
 
-    const win = window.open('', '_blank', 'width=400,height=700');
-    if (!win) return;
-    win.document.write(html);
-    win.document.close();
-    win.onload = () => win.print();
+    openPrintWindow({
+        title: `${title} ${data.paymentNumber}`,
+        paperSize,
+        headerConfig: data.headerConfig,
+        headerHtml,
+        bodyHtml,
+        footerHtml: `<div class="footer">${escHtml(data.labels.footer)}</div>`,
+        styles: MONEY_RECEIPT_STYLES,
+    });
 }
 
 function escHtml(str: string): string {
     return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;');
 }

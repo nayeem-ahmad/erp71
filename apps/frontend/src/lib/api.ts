@@ -708,6 +708,20 @@ export const api = {
         if (params?.to) query.set('to', params.to);
         return fetchWithAuth(`/inventory-reports/shrinkage-summary${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    getPrintTemplates: () => fetchWithAuth('/print-templates'),
+    createPrintTemplate: (data: any) => fetchWithAuth('/print-templates', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updatePrintTemplate: (id: string, data: any) => fetchWithAuth(`/print-templates/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deletePrintTemplate: (id: string) => fetchWithAuth(`/print-templates/${id}`, {
+        method: 'DELETE',
+    }),
     uploadFile: (file: File) => {
         const formData = new FormData();
         formData.append('file', file);

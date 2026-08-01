@@ -188,6 +188,7 @@ export const routes = {
         discountCodes: '/settings/discount-codes',
         paymentMethods: '/settings/payment-methods',
         sales: '/settings/sales',
+        printTemplates: '/settings/print-templates',
         team: '/team',
         counters: '/settings/counters',
         localization: '/settings/localization',

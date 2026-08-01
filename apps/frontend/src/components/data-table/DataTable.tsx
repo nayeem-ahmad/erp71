@@ -57,6 +57,8 @@ import { useIsMdUp } from '@/hooks/useMediaQuery';
 import { dataTableDensity, type UiDensity } from '@/lib/ui/compact-density';
 import { useTablePreferences } from './useTablePreferences';
 import { exportToCSV, exportToExcel, exportToPDF, printTable } from './export-utils';
+import { renderHeaderHtml } from '@/lib/print';
+import { usePrintHeader } from '@/lib/print/use-print-header';
 import BulkActionBar, { type BulkAction } from './BulkActionBar';
 
 declare module '@tanstack/react-table' {
@@ -214,6 +216,8 @@ export default function DataTable<T>({
     serverPagination,
 }: DataTableProps<T>) {
     const { t } = useI18n();
+    // Lazy: every list page renders this table, but printing is a rare click.
+    const printHeader = usePrintHeader('LIST_REPORT', { eager: false });
     const compactUi = useCompactUi();
     const resolvedDensity = density ?? compactUi.density;
     const d = dataTableDensity[resolvedDensity];
@@ -672,7 +676,17 @@ export default function DataTable<T>({
 
                         {/* Print */}
                         <button
-                            onClick={() => printTable(table, title)}
+                            onClick={async () => {
+                                const header = await printHeader.resolve();
+                                printTable(table, title, {
+                                    html: renderHeaderHtml(
+                                        header.headerConfig,
+                                        { docTitle: title, companyName: header.companyName },
+                                        'A4',
+                                    ),
+                                    config: header.headerConfig,
+                                });
+                            }}
                             className={toolbarBtnBase}
                             title={t.common.dataTable.print}
                         >

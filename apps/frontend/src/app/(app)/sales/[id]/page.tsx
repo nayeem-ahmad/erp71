@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { toDatetimeLocal } from '@/lib/format';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
 import { printSalesInvoice, PAPER_SIZES, type PaperSize } from '@/lib/sales-invoice-printer';
+import { usePrintHeader } from '@/lib/print/use-print-header';
 import Link from 'next/link';
 import { useI18n } from '@/lib/i18n';
 import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
@@ -210,11 +211,15 @@ function SaleDetailPageContent() {
         }
     };
 
+    const printHeader = usePrintHeader('SALES_INVOICE');
+
     const handlePOSPrint = async () => {
         if (!sale) return;
         await printPOSReceipt({
             invoiceId: sale.id,
             serialNumber: sale.serial_number,
+            storeName: printHeader.companyName,
+            headerConfig: printHeader.headerConfig,
             date: new Date(sale.sale_date ?? sale.created_at).toLocaleString(),
             customerName: sale.customer?.name,
             items: items.map((i) => ({
@@ -239,6 +244,8 @@ function SaleDetailPageContent() {
             {
                 referenceNumber: sale.reference_number || sale.serial_number,
                 date: new Date(sale.sale_date ?? sale.created_at).toLocaleDateString('en-BD'),
+                companyName: printHeader.companyName,
+                headerConfig: printHeader.headerConfig,
                 customerName: customer?.name,
                 customerPhone: customer?.phone,
                 items: items.map((i) => ({

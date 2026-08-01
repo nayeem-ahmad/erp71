@@ -7,6 +7,7 @@ import { Eye, Loader2, Pencil, Plus, Printer, Trash2, Wallet } from 'lucide-reac
 import { DataTable } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { useBranding } from '@/lib/branding';
+import { usePrintHeader } from '@/lib/print/use-print-header';
 import { printCustomerPaymentReceipt } from '@/lib/customer-payment-receipt';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { formatBDT } from '@/lib/format';
@@ -73,6 +74,7 @@ function CustomerPaymentsContent() {
     const { t, locale } = useI18n();
     const copy = t.customerPayments;
     const { businessName } = useBranding();
+    const printHeader = usePrintHeader('MONEY_RECEIPT');
     const searchParams = useSearchParams();
     const preselectedCustomerId = searchParams.get('customerId');
 
@@ -234,6 +236,7 @@ function CustomerPaymentsContent() {
         const direction = directionFromType(payment.type);
         printCustomerPaymentReceipt({
             businessName: businessName ?? undefined,
+            headerConfig: printHeader.headerConfig,
             paymentNumber: payment.payment_number ?? payment.id,
             date: formatDateTime(payment.created_at, locale),
             direction,
@@ -261,7 +264,7 @@ function CustomerPaymentsContent() {
                 footer: copy.print.footer,
             },
         });
-    }, [businessName, copy, locale]);
+    }, [businessName, printHeader, copy, locale]);
 
     const columns: ColumnDef<CustomerCreditPayment, unknown>[] = useMemo(
         () => [

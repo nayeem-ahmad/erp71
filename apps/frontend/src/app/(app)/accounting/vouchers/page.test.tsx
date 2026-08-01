@@ -59,6 +59,8 @@ jest.mock('lucide-react', () => ({
 }));
 
 jest.mock('@/lib/api', () => ({
+    // The print-header hook resolves the tenant's print template on mount.
+    fetchWithAuth: jest.fn().mockResolvedValue(null),
     api: {
         getVouchers: jest.fn(),
         getVoucher: jest.fn(),

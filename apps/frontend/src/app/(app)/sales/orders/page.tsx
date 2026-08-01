@@ -10,6 +10,8 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
 import { compactDensity } from '@/lib/ui/compact-density';
 import StorefrontOrdersPanel from './StorefrontOrdersPanel';
+import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
+import { usePrintHeader } from '@/lib/print/use-print-header';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -50,6 +52,7 @@ const columnHelper = createColumnHelper<SalesOrder>();
 
 export default function OrdersPage() {
     const { t, locale } = useI18n();
+    const printHeader = usePrintHeader('SALES_ORDER');
     const router = useRouter();
     const searchParams = useSearchParams();
     const activeTab: OrdersTab = searchParams.get('tab') === 'online' ? 'online' : 'sales';
@@ -95,24 +98,23 @@ export default function OrdersPage() {
     };
 
     const handlePrint = (order: SalesOrder) => {
-        const printWindow = window.open('', '_blank');
-        if (!printWindow) return;
-        printWindow.document.write(`
-            <html>
-            <head>
-                <title>${order.order_number}</title>
-                <style>
-                    body { font-family: Arial, sans-serif; padding: 20px; color: #111; }
-                    h1 { font-size: 24px; margin-bottom: 4px; }
-                    .subtitle { color: #666; font-size: 12px; margin-bottom: 20px; }
-                    table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-                    th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #eee; }
-                    th { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #999; }
-                    .total-row { font-weight: bold; border-top: 2px solid #333; }
-                    .footer { margin-top: 40px; text-align: center; color: #999; font-size: 11px; }
-                </style>
-            </head>
-            <body>
+        openPrintWindow({
+            title: order.order_number,
+            paperSize: 'A4',
+            headerConfig: printHeader.headerConfig,
+            headerHtml: renderHeaderHtml(
+                printHeader.headerConfig,
+                {
+                    docTitle: t.shared.print.salesOrder,
+                    docNumber: order.order_number,
+                    docDate: formatDate(order.created_at, locale),
+                    companyName: printHeader.companyName,
+                },
+                'A4',
+            ),
+            styles: SIMPLE_DOC_STYLES,
+            repeatHeader: true,
+            bodyHtml: `
                 <h1>${order.order_number}</h1>
                 <div class="subtitle">${formatMessage(t.shared.print.datePayment, {
                     date: new Date(order.created_at).toLocaleString(),
@@ -127,13 +129,9 @@ export default function OrdersPage() {
                         <tr class="total-row"><td colspan="3">${t.shared.print.total}</td><td>${formatBDT(Number(order.total_amount), { locale })}</td></tr>
                     </tbody>
                 </table>
-                <p><strong>${t.shared.print.paid}</strong> ${formatBDT(Number(order.amount_paid), { locale })} | <strong>${t.shared.print.due}</strong> ${formatBDT(Number(order.total_amount) - Number(order.amount_paid), { locale })}</p>
-                <div class="footer">${t.shared.print.salesOrder}</div>
-            </body>
-            </html>
-        `);
-        printWindow.document.close();
-        printWindow.print();
+                <p><strong>${t.shared.print.paid}</strong> ${formatBDT(Number(order.amount_paid), { locale })} | <strong>${t.shared.print.due}</strong> ${formatBDT(Number(order.total_amount) - Number(order.amount_paid), { locale })}</p>`,
+            footerHtml: `<div class="footer">${t.shared.print.salesOrder}</div>`,
+        });
     };
 
     const columns: ColumnDef<SalesOrder, any>[] = useMemo(
