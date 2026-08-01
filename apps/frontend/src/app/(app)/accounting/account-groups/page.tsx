@@ -461,8 +461,31 @@ function GroupFormModal({
     const { t } = useI18n();
     const [name, setName] = useState(group?.name ?? '');
     const [type, setType] = useState<AccountType>(group?.type ?? 'asset');
+    const [code, setCode] = useState(group?.code ?? '');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+
+    /**
+     * Suggest the next free code for the chosen type. Only on create: a group's
+     * code is its accounts' prefix, so re-coding one would strand every account
+     * beneath it — the API rejects the attempt outright.
+     */
+    useEffect(() => {
+        if (group) return;
+
+        let cancelled = false;
+        api.getNextAccountGroupCode(type)
+            .then((result: { code: string }) => {
+                if (!cancelled) setCode(result.code);
+            })
+            .catch(() => {
+                // A suggestion is a convenience; the server allocates on its own.
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [group, type]);
 
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
@@ -477,7 +500,11 @@ function GroupFormModal({
                 toast.success(t.accountGroups.groupUpdated);
                 await onSaved(saved?.id ?? group.id);
             } else {
-                const saved = await api.createAccountGroup({ name: name.trim(), type });
+                const saved = await api.createAccountGroup({
+                    name: name.trim(),
+                    type,
+                    code: code.trim() || undefined,
+                });
                 toast.success(t.accountGroups.groupCreated);
                 await onSaved(saved?.id ?? '');
             }
@@ -514,6 +541,24 @@ function GroupFormModal({
                             {error}
                         </div>
                     ) : null}
+
+                    <label className="block">
+                        <span className={`${compactDensity.formLabel} block mb-1`}>
+                            {t.accountGroups.groupCode}
+                        </span>
+                        <input
+                            aria-label={t.accountGroups.groupCode}
+                            value={code}
+                            onChange={(event) => setCode(event.target.value.toUpperCase())}
+                            maxLength={2}
+                            disabled={group !== null}
+                            className={`${compactDensity.formField} font-mono disabled:opacity-60`}
+                            placeholder="11"
+                        />
+                        <span className="mt-1 block text-xs text-gray-400">
+                            {group ? t.accountGroups.codeLocked : t.accountGroups.codeHint}
+                        </span>
+                    </label>
 
                     <label className="block">
                         <span className={`${compactDensity.formLabel} block mb-1`}>
@@ -594,8 +639,30 @@ function SubgroupFormModal({
         subgroup ? subgroupGroupId(subgroup) : defaultGroupId,
     );
     const [name, setName] = useState(subgroup?.name ?? '');
+    const [code, setCode] = useState(subgroup?.code ?? '');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+
+    /**
+     * Suggest the next free code under the chosen group. Only on create — a
+     * subgroup's code prefixes its accounts', so it is fixed once allocated.
+     */
+    useEffect(() => {
+        if (subgroup || !groupId) return;
+
+        let cancelled = false;
+        api.getNextAccountSubgroupCode(groupId)
+            .then((result: { code: string }) => {
+                if (!cancelled) setCode(result.code);
+            })
+            .catch(() => {
+                // A suggestion is a convenience; the server allocates on its own.
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [subgroup, groupId]);
 
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
@@ -611,7 +678,11 @@ function SubgroupFormModal({
                 toast.success(t.accountGroups.subgroupUpdated);
                 await onSaved(subgroupGroupId(subgroup));
             } else {
-                await api.createAccountSubgroup({ groupId, name: name.trim() });
+                await api.createAccountSubgroup({
+                    groupId,
+                    name: name.trim(),
+                    code: code.trim() || undefined,
+                });
                 toast.success(t.accountGroups.subgroupCreated);
                 await onSaved(groupId);
             }
@@ -653,6 +724,24 @@ function SubgroupFormModal({
 
                     <label className="block">
                         <span className={`${compactDensity.formLabel} block mb-1`}>
+                            {t.accountGroups.subgroupCode}
+                        </span>
+                        <input
+                            aria-label={t.accountGroups.subgroupCode}
+                            value={code}
+                            onChange={(event) => setCode(event.target.value.toUpperCase())}
+                            maxLength={4}
+                            disabled={subgroup !== null || !groupId}
+                            className={`${compactDensity.formField} font-mono disabled:opacity-60`}
+                            placeholder="1101"
+                        />
+                        <span className="mt-1 block text-xs text-gray-400">
+                            {subgroup ? t.accountGroups.codeLocked : t.accountGroups.subgroupCodeHint}
+                        </span>
+                    </label>
+
+                    <label className="block">
+                        <span className={`${compactDensity.formLabel} block mb-1`}>
                             {t.accountGroups.parentGroup}
                         </span>
                         <select
@@ -666,7 +755,7 @@ function SubgroupFormModal({
                             <option value="">{t.accountGroups.selectGroup}</option>
                             {groups.map((group) => (
                                 <option key={group.id} value={group.id}>
-                                    {group.name}
+                                    {group.code ? `${group.code} — ` : ''}{group.name}
                                 </option>
                             ))}
                         </select>

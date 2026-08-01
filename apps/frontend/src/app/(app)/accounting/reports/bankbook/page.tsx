@@ -11,6 +11,7 @@ import {
 } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import AccountSelect from '@/components/accounting/AccountSelect';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
@@ -136,13 +137,16 @@ export default function BankbookPage() {
                     {data && data.accounts.length > 0 && (
                         <div className="flex flex-col gap-1">
                             <span className={compactDensity.formLabel}>Bank Account</span>
-                            <select value={accountId} onChange={(e) => setAccountId(e.target.value)}
-                                className={`${compactDensity.formField} min-w-[220px]`}>
-                                <option value="">All Bank Accounts</option>
-                                {data.accounts.map((a) => (
-                                    <option key={a.id} value={a.id}>{a.name}</option>
-                                ))}
-                            </select>
+                            <AccountSelect
+                                accounts={data.accounts}
+                                value={accountId}
+                                onChange={setAccountId}
+                                ariaLabel="Bank account"
+                                placeholder="All Bank Accounts"
+                                allowClear
+                                clearLabel="All Bank Accounts"
+                                className={`${compactDensity.formField} min-w-[220px]`}
+                            />
                         </div>
                     )}
                     <div className="flex flex-col gap-1">

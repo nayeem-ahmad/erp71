@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AccountingLedgerPage from './page';
 import { api } from '@/lib/api';
+import { selectAccount, selectedAccountLabel } from '@/test-utils/account-select';
 
 const replace = jest.fn();
 
@@ -35,6 +36,10 @@ jest.mock('lucide-react', () => ({
     Filter: () => <span data-testid="icon-filter" />,
     ReceiptText: () => <span data-testid="icon-receipt-text" />,
     Wallet: () => <span data-testid="icon-wallet" />,
+    // AccountSelect's chrome.
+    Check: () => <span data-testid="icon-check" />,
+    ChevronDown: () => <span data-testid="icon-chevron-down" />,
+    Search: () => <span data-testid="icon-search" />,
 }));
 
 jest.mock('@/lib/api', () => ({
@@ -95,15 +100,12 @@ describe('AccountingLedgerPage — Story 30.8', () => {
 
         await waitFor(() => {
             expect(api.getAccounts).toHaveBeenCalled();
-            expect(screen.getByRole('option', { name: /Cash in Hand/ })).toBeInTheDocument();
         });
 
-        fireEvent.change(screen.getByLabelText('Ledger account'), {
-            target: { value: 'cash-1' },
-        });
+        selectAccount('Ledger account', /Cash in Hand/);
 
         await waitFor(() => {
-            expect((screen.getByLabelText('Ledger account') as HTMLSelectElement).value).toBe('cash-1');
+            expect(selectedAccountLabel('Ledger account')).toContain('Cash in Hand');
             expect(api.getLedger).toHaveBeenLastCalledWith('cash-1', {
                 from: undefined,
                 to: undefined,

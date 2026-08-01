@@ -14,19 +14,19 @@ import { unassignedSubgroupLabel } from './report-level.utils';
  */
 
 const groups = {
-    currentAssets: { id: 'g-ca', name: 'Current Assets' },
-    liabilities: { id: 'g-liab', name: 'Current Liabilities' },
-    equity: { id: 'g-eq', name: 'Equity' },
-    revenue: { id: 'g-rev', name: 'Revenue' },
-    expenses: { id: 'g-exp', name: 'Expenses' },
+    currentAssets: { id: 'g-ca', name: 'Current Assets', code: '11' },
+    liabilities: { id: 'g-liab', name: 'Current Liabilities', code: '21' },
+    equity: { id: 'g-eq', name: 'Equity', code: '31' },
+    revenue: { id: 'g-rev', name: 'Revenue', code: '41' },
+    expenses: { id: 'g-exp', name: 'Expenses', code: '51' },
 };
 
 const subgroups = {
-    bank: { id: 'sg-bank', name: 'Bank' },
-    cash: { id: 'sg-cash', name: 'Cash' },
-    payables: { id: 'sg-ap', name: 'Payables' },
-    sales: { id: 'sg-sales', name: 'Sales' },
-    opex: { id: 'sg-opex', name: 'Operating' },
+    bank: { id: 'sg-bank', name: 'Bank', code: '1101' },
+    cash: { id: 'sg-cash', name: 'Cash', code: '1102' },
+    payables: { id: 'sg-ap', name: 'Payables', code: '2101' },
+    sales: { id: 'sg-sales', name: 'Sales', code: '4101' },
+    opex: { id: 'sg-opex', name: 'Operating', code: '5101' },
 };
 
 type Fixture = {
@@ -34,8 +34,8 @@ type Fixture = {
     name: string;
     code: string | null;
     type: string;
-    group: { id: string; name: string };
-    subgroup: { id: string; name: string } | null;
+    group: { id: string; name: string; code: string };
+    subgroup: { id: string; name: string; code: string } | null;
     debit: number;
     credit: number;
     storeId: string;
@@ -47,18 +47,18 @@ type Fixture = {
  * account (Sales Returns) that offsets its subgroup sibling.
  */
 const FIXTURE: Fixture[] = [
-    { id: 'a-bank1', name: 'City Bank', code: '1010', type: AccountType.ASSET, group: groups.currentAssets, subgroup: subgroups.bank, debit: 1000, credit: 0, storeId: 'store-a' },
-    { id: 'a-bank2', name: 'Brac Bank', code: '1011', type: AccountType.ASSET, group: groups.currentAssets, subgroup: subgroups.bank, debit: 500, credit: 0, storeId: 'store-a' },
-    { id: 'a-cash', name: 'Cash In Hand', code: '1001', type: AccountType.ASSET, group: groups.currentAssets, subgroup: subgroups.cash, debit: 200, credit: 0, storeId: 'store-a' },
-    { id: 'a-adv', name: 'Advance To Supplier', code: '1200', type: AccountType.ASSET, group: groups.currentAssets, subgroup: null, debit: 100, credit: 0, storeId: 'store-a' },
-    { id: 'a-ap', name: 'Accounts Payable', code: '2010', type: AccountType.LIABILITY, group: groups.liabilities, subgroup: subgroups.payables, debit: 0, credit: 800, storeId: 'store-a' },
-    { id: 'a-cap', name: 'Owner Capital', code: '3010', type: AccountType.EQUITY, group: groups.equity, subgroup: null, debit: 0, credit: 800, storeId: 'store-a' },
-    { id: 'a-sales', name: 'Sales Revenue', code: '4010', type: AccountType.REVENUE, group: groups.revenue, subgroup: subgroups.sales, debit: 0, credit: 1200, storeId: 'store-a' },
-    { id: 'a-sales-b', name: 'Sales Revenue', code: '4010', type: AccountType.REVENUE, group: groups.revenue, subgroup: subgroups.sales, debit: 0, credit: 800, storeId: 'store-b' },
-    { id: 'a-returns', name: 'Sales Returns', code: '4090', type: AccountType.REVENUE, group: groups.revenue, subgroup: subgroups.sales, debit: 300, credit: 0, storeId: 'store-a' },
-    { id: 'a-rent', name: 'Rent', code: '5010', type: AccountType.EXPENSE, group: groups.expenses, subgroup: subgroups.opex, debit: 600, credit: 0, storeId: 'store-a' },
-    { id: 'a-salary', name: 'Salary', code: '5020', type: AccountType.EXPENSE, group: groups.expenses, subgroup: subgroups.opex, debit: 500, credit: 0, storeId: 'store-b' },
-    { id: 'a-misc', name: 'Miscellaneous', code: '5900', type: AccountType.EXPENSE, group: groups.expenses, subgroup: null, debit: 400, credit: 0, storeId: 'store-a' },
+    { id: 'a-bank1', name: 'City Bank', code: '110101', type: AccountType.ASSET, group: groups.currentAssets, subgroup: subgroups.bank, debit: 1000, credit: 0, storeId: 'store-a' },
+    { id: 'a-bank2', name: 'Brac Bank', code: '110102', type: AccountType.ASSET, group: groups.currentAssets, subgroup: subgroups.bank, debit: 500, credit: 0, storeId: 'store-a' },
+    { id: 'a-cash', name: 'Cash In Hand', code: '110201', type: AccountType.ASSET, group: groups.currentAssets, subgroup: subgroups.cash, debit: 200, credit: 0, storeId: 'store-a' },
+    { id: 'a-adv', name: 'Advance To Supplier', code: '110001', type: AccountType.ASSET, group: groups.currentAssets, subgroup: null, debit: 100, credit: 0, storeId: 'store-a' },
+    { id: 'a-ap', name: 'Accounts Payable', code: '210101', type: AccountType.LIABILITY, group: groups.liabilities, subgroup: subgroups.payables, debit: 0, credit: 800, storeId: 'store-a' },
+    { id: 'a-cap', name: 'Owner Capital', code: '310001', type: AccountType.EQUITY, group: groups.equity, subgroup: null, debit: 0, credit: 800, storeId: 'store-a' },
+    { id: 'a-sales', name: 'Sales Revenue', code: '410101', type: AccountType.REVENUE, group: groups.revenue, subgroup: subgroups.sales, debit: 0, credit: 1200, storeId: 'store-a' },
+    { id: 'a-sales-b', name: 'Sales Revenue', code: '410101', type: AccountType.REVENUE, group: groups.revenue, subgroup: subgroups.sales, debit: 0, credit: 800, storeId: 'store-b' },
+    { id: 'a-returns', name: 'Sales Returns', code: '410102', type: AccountType.REVENUE, group: groups.revenue, subgroup: subgroups.sales, debit: 300, credit: 0, storeId: 'store-a' },
+    { id: 'a-rent', name: 'Rent', code: '510101', type: AccountType.EXPENSE, group: groups.expenses, subgroup: subgroups.opex, debit: 600, credit: 0, storeId: 'store-a' },
+    { id: 'a-salary', name: 'Salary', code: '510102', type: AccountType.EXPENSE, group: groups.expenses, subgroup: subgroups.opex, debit: 500, credit: 0, storeId: 'store-b' },
+    { id: 'a-misc', name: 'Miscellaneous', code: '510001', type: AccountType.EXPENSE, group: groups.expenses, subgroup: null, debit: 400, credit: 0, storeId: 'store-a' },
 ];
 
 const LEVELS = ['account', 'subgroup', 'group'] as const;
@@ -130,9 +130,9 @@ describe('accounting reports — detail level', () => {
                 unassignedSubgroupLabel('Current Assets'),
                 'Payables',
                 unassignedSubgroupLabel('Equity'),
+                'Sales',
                 'Operating',
                 unassignedSubgroupLabel('Expenses'),
-                'Sales',
             ]);
 
             const bank = result.rows.find((row: any) => row.account.name === 'Bank');
@@ -140,6 +140,7 @@ describe('accounting reports — detail level', () => {
             expect(bank.debit_total).toBe(1500);
         });
 
+        // Code order, not alphabetical: Revenue (41) precedes Expenses (51).
         it('collapses to one row per group', async () => {
             const result = await trialBalance('group');
 
@@ -147,8 +148,8 @@ describe('accounting reports — detail level', () => {
                 'Current Assets',
                 'Current Liabilities',
                 'Equity',
-                'Expenses',
                 'Revenue',
+                'Expenses',
             ]);
             expect(result.rows.find((row: any) => row.account.name === 'Current Assets').debit_balance).toBe(1800);
             expect(result.rows.find((row: any) => row.account.name === 'Revenue').credit_balance).toBe(1700);

@@ -10,10 +10,10 @@ import {
     type LevelledAccount,
 } from './report-level.utils';
 
-const cashGroup = { id: 'g-assets', name: 'Current Assets' };
-const expenseGroup = { id: 'g-opex', name: 'Operating Expenses' };
-const bankSubgroup = { id: 'sg-bank', name: 'Bank Accounts' };
-const cashSubgroup = { id: 'sg-cash', name: 'Cash In Hand' };
+const cashGroup = { id: 'g-assets', name: 'Current Assets', code: '11' };
+const expenseGroup = { id: 'g-opex', name: 'Operating Expenses', code: '51' };
+const bankSubgroup = { id: 'sg-bank', name: 'Bank Accounts', code: '1101' };
+const cashSubgroup = { id: 'sg-cash', name: 'Cash In Hand', code: '1102' };
 
 function account(overrides: Partial<LevelledAccount> & { id: string }): LevelledAccount {
     return {
@@ -47,7 +47,7 @@ describe('report-level.utils', () => {
         const bankAccount = account({
             id: 'a-1',
             name: 'City Bank',
-            code: '1020',
+            code: '110101',
             subgroup: bankSubgroup,
         });
 
@@ -56,28 +56,28 @@ describe('report-level.utils', () => {
             expect(bucket).toMatchObject({
                 id: 'a-1',
                 name: 'City Bank',
-                code: '1020',
+                code: '110101',
                 is_unassigned: false,
             });
             expect(bucket.subgroup).toEqual(bankSubgroup);
         });
 
-        it('buckets by subgroup at subgroup level', () => {
+        it('buckets by subgroup at subgroup level, carrying the subgroup code', () => {
             const bucket = bucketForAccount(bankAccount, ReportLevel.SUBGROUP);
             expect(bucket).toMatchObject({
                 id: 'sg-bank',
                 name: 'Bank Accounts',
-                code: null,
+                code: '1101',
                 is_unassigned: false,
             });
         });
 
-        it('buckets by group at group level', () => {
+        it('buckets by group at group level, carrying the group code', () => {
             const bucket = bucketForAccount(bankAccount, ReportLevel.GROUP);
             expect(bucket).toMatchObject({
                 id: 'g-assets',
                 name: 'Current Assets',
-                code: null,
+                code: '11',
                 subgroup: null,
             });
         });
@@ -89,6 +89,8 @@ describe('report-level.utils', () => {
             expect(bucket.is_unassigned).toBe(true);
             expect(bucket.name).toBe(unassignedSubgroupLabel('Current Assets'));
             expect(bucket.id).toBe('g-assets:__none__');
+            // The reserved slot accounts hanging off the group are coded into.
+            expect(bucket.code).toBe('1100');
         });
 
         it('keeps unassigned buckets of different groups apart', () => {
@@ -117,18 +119,18 @@ describe('report-level.utils', () => {
         const sum = (a: { value: number }, b: { value: number }) => ({ value: a.value + b.value });
 
         const items = [
-            { account: account({ id: 'a-1', name: 'City Bank', subgroup: bankSubgroup }), payload: { value: 100 } },
-            { account: account({ id: 'a-2', name: 'Brac Bank', subgroup: bankSubgroup }), payload: { value: 250 } },
-            { account: account({ id: 'a-3', name: 'Cash Register', subgroup: cashSubgroup }), payload: { value: 40 } },
-            { account: account({ id: 'a-4', name: 'Petty Cash', subgroup: null }), payload: { value: 10 } },
+            { account: account({ id: 'a-1', name: 'City Bank', code: '110101', subgroup: bankSubgroup }), payload: { value: 100 } },
+            { account: account({ id: 'a-2', name: 'Brac Bank', code: '110102', subgroup: bankSubgroup }), payload: { value: 250 } },
+            { account: account({ id: 'a-3', name: 'Cash Register', code: '110201', subgroup: cashSubgroup }), payload: { value: 40 } },
+            { account: account({ id: 'a-4', name: 'Petty Cash', code: '110001', subgroup: null }), payload: { value: 10 } },
         ];
 
-        it('is an order-preserving identity at account level', () => {
+        it('is a code-ordered identity at account level', () => {
             const rolled = rollUpByLevel(items, ReportLevel.ACCOUNT, sum);
 
             expect(rolled).toHaveLength(4);
-            expect(rolled.map((entry) => entry.bucket.id)).toEqual(['a-1', 'a-2', 'a-3', 'a-4']);
-            expect(rolled.map((entry) => entry.payload.value)).toEqual([100, 250, 40, 10]);
+            expect(rolled.map((entry) => entry.bucket.id)).toEqual(['a-4', 'a-1', 'a-2', 'a-3']);
+            expect(rolled.map((entry) => entry.payload.value)).toEqual([10, 100, 250, 40]);
         });
 
         it('merges accounts sharing a subgroup', () => {

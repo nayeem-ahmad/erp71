@@ -13,6 +13,7 @@ import {
     serializeAttachmentsForApi,
     VoucherAttachments,
 } from '@/components/accounting/VoucherAttachments';
+import AccountSelect from '@/components/accounting/AccountSelect';
 import type { VoucherAttachmentItem } from '@/lib/file-preview';
 
 type VoucherAccount = {
@@ -665,20 +666,16 @@ function AccountingVouchersPageContent() {
                                             <tr key={row.id} className={`border-b last:border-b-0 ${error ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
                                                 <td className="px-2 py-1 text-gray-500 align-top">{index + 1}</td>
                                                 <td className="px-2 py-1 align-top">
-                                                    <select
-                                                        aria-label={`Account row ${index + 1}`}
+                                                    <AccountSelect
+                                                        accounts={options}
                                                         value={row.accountId}
-                                                        onChange={(event) => updateRow(row.id, 'accountId', event.target.value)}
-                                                        className={`w-full ${inputClass}`}
+                                                        onChange={(accountId) => updateRow(row.id, 'accountId', accountId)}
+                                                        ariaLabel={`Account row ${index + 1}`}
+                                                        placeholder={`${getRowLabel(voucherType, index)}…`}
+                                                        className={`w-full bg-white ${inputClass}`}
                                                         title={getRowHint(voucherType)}
-                                                    >
-                                                        <option value="">{getRowLabel(voucherType, index)}…</option>
-                                                        {options.map((account) => (
-                                                            <option key={account.id} value={account.id}>
-                                                                {account.name} {account.code ? `(${account.code})` : ''}
-                                                            </option>
-                                                        ))}
-                                                    </select>
+                                                        invalid={Boolean(error)}
+                                                    />
                                                     {error ? <p className="mt-0.5 text-[11px] text-red-600">{error}</p> : null}
                                                 </td>
                                                 <td className="px-2 py-1 text-right align-top">

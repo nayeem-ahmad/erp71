@@ -16,6 +16,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import AccountSelect from '@/components/accounting/AccountSelect';
 import { compactDensity } from '@/lib/ui/compact-density';
 
 type LedgerAccount = {
@@ -274,19 +275,14 @@ function AccountingLedgerPageContent() {
                 <div className={`${compactDensity.filterBar} mb-3`}>
                     <label className="block flex-1 min-w-[200px]">
                         <span className={`${compactDensity.formLabel} block mb-1`}>{t.accountingShared.account}</span>
-                        <select
-                            aria-label={t.ledger.accountAria}
+                        <AccountSelect
+                            accounts={accounts}
                             value={selectedAccountId}
-                            onChange={(event) => setSelectedAccountId(event.target.value)}
+                            onChange={setSelectedAccountId}
+                            ariaLabel={t.ledger.accountAria}
+                            placeholder={t.accountingShared.selectAccount}
                             className={compactDensity.formField}
-                        >
-                            <option value="">{t.accountingShared.selectAccount}</option>
-                            {accounts.map((account) => (
-                                <option key={account.id} value={account.id}>
-                                    {account.code ? `${account.code} - ` : ''}{account.name}
-                                </option>
-                            ))}
-                        </select>
+                        />
                     </label>
 
                     <label className="block">

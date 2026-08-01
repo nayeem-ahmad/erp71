@@ -12,6 +12,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import AccountSelect from '@/components/accounting/AccountSelect';
 import { compactDensity } from '@/lib/ui/compact-density';
 
 interface BankAccount { id: string; name: string; code?: string | null; }
@@ -158,10 +159,14 @@ export default function BankReconciliationPage() {
                         <div className={`${compactDensity.formStack} max-w-xl`}>
                             <label className="block">
                                 <span className={`${compactDensity.formLabel} block mb-1`}>Bank Account</span>
-                                <select value={form.accountId} onChange={(e) => setForm((f) => ({ ...f, accountId: e.target.value }))} className={compactDensity.formField}>
-                                    <option value="">Select bank account…</option>
-                                    {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-                                </select>
+                                <AccountSelect
+                                    accounts={accounts}
+                                    value={form.accountId}
+                                    onChange={(accountId) => setForm((f) => ({ ...f, accountId }))}
+                                    ariaLabel="Bank account"
+                                    placeholder="Select bank account…"
+                                    className={compactDensity.formField}
+                                />
                             </label>
                             <div className="grid grid-cols-2 gap-2">
                                 <label className="block">

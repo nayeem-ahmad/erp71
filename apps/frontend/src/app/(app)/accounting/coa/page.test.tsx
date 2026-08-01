@@ -43,7 +43,6 @@ describe('ChartOfAccountsPage', () => {
                 id: 'account-1',
                 name: 'Cash in Hand',
                 code: '110101',
-                legacy_code: '1010',
                 type: 'asset',
                 category: 'cash',
                 group: { id: 'group-1', name: 'Current Assets', code: '11', type: 'asset' },
@@ -66,9 +65,7 @@ describe('ChartOfAccountsPage', () => {
             expect(screen.getByText('Cash in Hand')).toBeInTheDocument();
         });
 
-        // jsdom reports a mobile viewport, so the dedicated code column (which
-        // also carries the old pre-migration number) is hidden and this comes
-        // from the name cell's mobile subtitle.
+        // The code leads every row, at every viewport.
         expect(screen.getByText('110101')).toBeInTheDocument();
         expect(screen.getAllByText('Current Assets').length).toBeGreaterThan(0);
     });

@@ -17,6 +17,8 @@ jest.mock('@/lib/api', () => ({
         getAccountGroups: jest.fn(),
         getAccountSubgroups: jest.fn(),
         createAccountGroup: jest.fn(),
+        getNextAccountGroupCode: jest.fn(),
+        getNextAccountSubgroupCode: jest.fn(),
         updateAccountGroup: jest.fn(),
         deleteAccountGroup: jest.fn(),
         createAccountSubgroup: jest.fn(),
@@ -34,14 +36,17 @@ describe('AccountGroupsPage', () => {
         const { api } = require('@/lib/api');
         jest.clearAllMocks();
         api.getAccountGroups.mockResolvedValue([
-            { id: 'group-1', name: 'Current Assets', type: 'asset', _count: { subgroups: 1, accounts: 2 } },
-            { id: 'group-2', name: 'Operating Revenue', type: 'revenue', _count: { subgroups: 1, accounts: 1 } },
+            { id: 'group-1', name: 'Current Assets', code: '11', type: 'asset', _count: { subgroups: 1, accounts: 2 } },
+            { id: 'group-2', name: 'Operating Revenue', code: '41', type: 'revenue', _count: { subgroups: 1, accounts: 1 } },
         ]);
         api.getAccountSubgroups.mockResolvedValue([
-            { id: 'subgroup-1', name: 'Cash and Bank', group: { id: 'group-1', name: 'Current Assets' }, _count: { accounts: 2 } },
-            { id: 'subgroup-2', name: 'Sales', group: { id: 'group-2', name: 'Operating Revenue' }, _count: { accounts: 1 } },
+            { id: 'subgroup-1', name: 'Cash and Bank', code: '1101', group: { id: 'group-1', name: 'Current Assets' }, _count: { accounts: 2 } },
+            { id: 'subgroup-2', name: 'Sales', code: '4101', group: { id: 'group-2', name: 'Operating Revenue' }, _count: { accounts: 1 } },
         ]);
         api.createAccountGroup.mockResolvedValue({ id: 'group-3' });
+        // Both modals ask the server to suggest the next free code.
+        api.getNextAccountGroupCode.mockResolvedValue({ code: '12' });
+        api.getNextAccountSubgroupCode.mockResolvedValue({ code: '1102' });
         api.updateAccountGroup.mockResolvedValue({ id: 'group-1' });
         api.deleteAccountGroup.mockResolvedValue({ id: 'group-1' });
         api.createAccountSubgroup.mockResolvedValue({ id: 'subgroup-3' });
@@ -67,7 +72,8 @@ describe('AccountGroupsPage', () => {
 
         await waitFor(() => expect(screen.getByText('Cash and Bank')).toBeInTheDocument());
 
-        fireEvent.click(screen.getByRole('button', { name: /^Operating Revenue/ }));
+        // The rail button reads "41 Operating Revenue …" — the code leads the name.
+        fireEvent.click(screen.getByRole('button', { name: /^41 Operating Revenue/ }));
 
         await waitFor(() => {
             expect(screen.getByText('Subgroups in Operating Revenue')).toBeInTheDocument();
@@ -85,10 +91,17 @@ describe('AccountGroupsPage', () => {
         fireEvent.click(screen.getByRole('button', { name: /new group/i }));
         fireEvent.change(screen.getByLabelText('Account group name'), { target: { value: 'Fixed Assets' } });
         fireEvent.change(screen.getByLabelText('Group type'), { target: { value: 'asset' } });
+
+        await waitFor(() => expect(screen.getByLabelText('Group code')).toHaveValue('12'));
+
         fireEvent.click(screen.getByRole('button', { name: /create group/i }));
 
         await waitFor(() => {
-            expect(api.createAccountGroup).toHaveBeenCalledWith({ name: 'Fixed Assets', type: 'asset' });
+            expect(api.createAccountGroup).toHaveBeenCalledWith({
+                name: 'Fixed Assets',
+                type: 'asset',
+                code: '12',
+            });
         });
     });
 
@@ -100,12 +113,19 @@ describe('AccountGroupsPage', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /add subgroup/i }));
         fireEvent.change(screen.getByLabelText('Subgroup name'), { target: { value: 'Receivables' } });
+
+        await waitFor(() =>
+            expect(api.getNextAccountSubgroupCode).toHaveBeenCalledWith('group-1'),
+        );
+        await waitFor(() => expect(screen.getByLabelText('Subgroup code')).toHaveValue('1102'));
+
         fireEvent.click(screen.getByRole('button', { name: /create subgroup/i }));
 
         await waitFor(() => {
             expect(api.createAccountSubgroup).toHaveBeenCalledWith({
                 groupId: 'group-1',
                 name: 'Receivables',
+                code: '1102',
             });
         });
     });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     AccountingPageShell,
     AccountingToolbar,
@@ -15,6 +15,7 @@ import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import {
+    getDefaultHideZero,
     getDefaultReportLevel,
     getDefaultReportScope,
     type ReportLevelMode,
@@ -27,7 +28,7 @@ function defaultToday() {
 }
 
 interface TBRow {
-    account: { id: string; name: string; code?: string | null; type: string; group: { name: string }; subgroup?: { name: string } | null; is_unassigned?: boolean };
+    account: { id: string; name: string; code?: string | null; type: string; group: { name: string; code?: string | null }; subgroup?: { name: string } | null; is_unassigned?: boolean };
     debit_total: number;
     credit_total: number;
     closing_balance: number;
@@ -73,6 +74,7 @@ export default function TrialBalancePage() {
     const [storeId, setStoreId] = useState('');
     const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
     const [includeCompanyBucket, setIncludeCompanyBucket] = useState(false);
+    const [hideZero, setHideZero] = useState(false);
     const [asOfDate, setAsOfDate] = useState(defaultToday());
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -92,6 +94,7 @@ export default function TrialBalancePage() {
         setSelectedStoreIds(stores.map((store) => store.id));
         setScope(getDefaultReportScope(stores.length, canConsolidate));
         setLevel(getDefaultReportLevel());
+        setHideZero(getDefaultHideZero());
         setInitialized(true);
     }, [stores, storesLoading, canConsolidate]);
 
@@ -126,6 +129,14 @@ export default function TrialBalancePage() {
     const activeLevel = data?.level ?? 'account';
     const isRolledUp = activeLevel !== 'account';
     const rowLabel = t.accounting.reports.reportLevel[activeLevel];
+
+    // Zero means the closing balance nets out. Only the two balance columns are
+    // totalled in the footer, so dropping such a row never leaves a column that
+    // fails to tie.
+    const visibleRows = useMemo(() => {
+        const rows = (data?.rows ?? []) as TBRow[];
+        return hideZero ? rows.filter((row) => Math.abs(row.closing_balance) >= 0.005) : rows;
+    }, [data, hideZero]);
 
     return (
         <AccountingPageShell maxWidth="full">
@@ -164,6 +175,8 @@ export default function TrialBalancePage() {
                     generating={loading}
                     level={level}
                     onLevelChange={setLevel}
+                    hideZero={hideZero}
+                    onHideZeroChange={setHideZero}
                 />
                 {!isCompare && data ? (
                     <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${data.is_balanced ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
@@ -192,6 +205,7 @@ export default function TrialBalancePage() {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="bg-gray-50 border-b border-gray-100">
+                                    <th className={`${thLeftClass} w-20`}>{t.coa.columns.code}</th>
                                     <th className={thLeftClass}>{rowLabel}</th>
                                     <th className={thLeftClass}>{t.accountingShared.type}</th>
                                     <th className={thClass}>Gross Debit</th>
@@ -201,11 +215,13 @@ export default function TrialBalancePage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {(data.rows as TBRow[]).map((row) => (
+                                {visibleRows.map((row) => (
                                     <tr key={row.account.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                                        <td className="px-3 py-2 font-mono text-xs text-gray-500">
+                                            {row.account.code || '—'}
+                                        </td>
                                         <td className="px-3 py-2">
                                             <span className="font-medium text-gray-800">{row.account.name}</span>
-                                            {row.account.code && <span className="ml-2 text-xs text-gray-400">{row.account.code}</span>}
                                             {activeLevel !== 'group' && (
                                                 <div className="text-xs text-gray-400">{row.account.group.name}</div>
                                             )}
@@ -220,7 +236,7 @@ export default function TrialBalancePage() {
                             </tbody>
                             <tfoot>
                                 <tr className="bg-gray-50 font-semibold border-t border-gray-200">
-                                    <td className="px-3 py-2 text-xs" colSpan={4}>{t.accountingShared.totals}</td>
+                                    <td className="px-3 py-2 text-xs" colSpan={5}>{t.accountingShared.totals}</td>
                                     <td className="px-3 py-2 text-right text-gray-900">{formatBDT(data.totals.debit as number, { locale })}</td>
                                     <td className="px-3 py-2 text-right text-gray-900">{formatBDT(data.totals.credit as number, { locale })}</td>
                                 </tr>

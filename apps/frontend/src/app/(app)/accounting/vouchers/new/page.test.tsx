@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AccountingVouchersPage from './page';
 import { api } from '@/lib/api';
+import { selectAccount, selectedAccountLabel } from '@/test-utils/account-select';
 
 const replace = jest.fn();
 let mockSearchParams: Record<string, string | null> = {};
@@ -28,6 +29,10 @@ jest.mock('lucide-react', () => ({
     FileText: () => <span data-testid="icon-file-text" />,
     ImageIcon: () => <span data-testid="icon-image" />,
     X: () => <span data-testid="icon-x" />,
+    // AccountSelect's chrome.
+    Check: () => <span data-testid="icon-check" />,
+    ChevronDown: () => <span data-testid="icon-chevron-down" />,
+    Search: () => <span data-testid="icon-search" />,
 }));
 
 jest.mock('@/lib/api', () => ({
@@ -97,9 +102,9 @@ describe('AccountingVouchersPage — Story 30.5', () => {
         });
 
         fireEvent.change(screen.getByLabelText('Description'), { target: { value: '   ' } });
-        fireEvent.change(screen.getByLabelText('Account row 1'), { target: { value: 'cash-1' } });
+        selectAccount('Account row 1', 'Cash in Hand');
         fireEvent.change(screen.getByLabelText('Credit row 1'), { target: { value: '100' } });
-        fireEvent.change(screen.getByLabelText('Account row 2'), { target: { value: 'expense-1' } });
+        selectAccount('Account row 2', 'General Operating Expense');
         fireEvent.change(screen.getByLabelText('Debit row 2'), { target: { value: '100' } });
 
         await waitFor(() => {
@@ -121,9 +126,9 @@ describe('AccountingVouchersPage — Story 30.5', () => {
         expect(screen.getByLabelText('Account row 3')).toBeInTheDocument();
 
         fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Partial cash payment' } });
-        fireEvent.change(screen.getByLabelText('Account row 1'), { target: { value: 'cash-1' } });
+        selectAccount('Account row 1', 'Cash in Hand');
         fireEvent.change(screen.getByLabelText('Credit row 1'), { target: { value: '100' } });
-        fireEvent.change(screen.getByLabelText('Account row 2'), { target: { value: 'expense-1' } });
+        selectAccount('Account row 2', 'General Operating Expense');
         fireEvent.change(screen.getByLabelText('Debit row 2'), { target: { value: '60' } });
 
         expect(screen.getByText('Voucher must balance before it can be saved.')).toBeInTheDocument();
@@ -141,9 +146,9 @@ describe('AccountingVouchersPage — Story 30.5', () => {
 
         fireEvent.change(screen.getByLabelText('Reference number'), { target: { value: 'CP-REF-01' } });
         fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Paid office rent' } });
-        fireEvent.change(screen.getByLabelText('Account row 1'), { target: { value: 'cash-1' } });
+        selectAccount('Account row 1', 'Cash in Hand');
         fireEvent.change(screen.getByLabelText('Credit row 1'), { target: { value: '125' } });
-        fireEvent.change(screen.getByLabelText('Account row 2'), { target: { value: 'expense-1' } });
+        selectAccount('Account row 2', 'General Operating Expense');
         fireEvent.change(screen.getByLabelText('Debit row 2'), { target: { value: '125' } });
 
         await waitFor(() => {
@@ -184,9 +189,9 @@ describe('AccountingVouchersPage — Story 30.5', () => {
 
         await waitFor(() => {
             expect(screen.getByLabelText('Description')).toHaveValue('Monthly office rent');
-            expect(screen.getByLabelText('Account row 1')).toHaveValue('expense-1');
+            expect(selectedAccountLabel('Account row 1')).toBe('General Operating Expense');
             expect(screen.getByLabelText('Debit row 1')).toHaveValue(100);
-            expect(screen.getByLabelText('Account row 2')).toHaveValue('cash-1');
+            expect(selectedAccountLabel('Account row 2')).toBe('Cash in Hand');
             expect(screen.getByLabelText('Credit row 2')).toHaveValue(100);
         });
     });
@@ -240,10 +245,10 @@ describe('AccountingVouchersPage — Story 30.5', () => {
             ]);
 
             await waitFor(() => {
-                expect(screen.getByLabelText('Account row 2')).toHaveValue('cash-1');
+                expect(selectedAccountLabel('Account row 2')).toBe('Cash in Hand');
             });
 
-            expect(screen.getByLabelText('Account row 1')).toHaveValue('expense-1');
+            expect(selectedAccountLabel('Account row 1')).toBe('General Operating Expense');
             expect(screen.queryByText('Select an account for this row.')).not.toBeInTheDocument();
         });
 
@@ -288,9 +293,9 @@ describe('AccountingVouchersPage — Story 30.5', () => {
         });
 
         fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Rent accrual' } });
-        fireEvent.change(screen.getByLabelText('Account row 1'), { target: { value: 'expense-1' } });
+        selectAccount('Account row 1', 'General Operating Expense');
         fireEvent.change(screen.getByLabelText('Debit row 1'), { target: { value: '100' } });
-        fireEvent.change(screen.getByLabelText('Account row 2'), { target: { value: 'revenue-1' } });
+        selectAccount('Account row 2', 'Sales Revenue');
         fireEvent.change(screen.getByLabelText('Credit row 2'), { target: { value: '100' } });
 
         await waitFor(() => {
@@ -299,7 +304,7 @@ describe('AccountingVouchersPage — Story 30.5', () => {
         });
 
         // The cash leg is accepted on any row, not just the first.
-        fireEvent.change(screen.getByLabelText('Account row 2'), { target: { value: 'cash-1' } });
+        selectAccount('Account row 2', 'Cash in Hand');
 
         await waitFor(() => {
             expect(screen.queryByText('Cash vouchers require at least one cash account line.')).not.toBeInTheDocument();

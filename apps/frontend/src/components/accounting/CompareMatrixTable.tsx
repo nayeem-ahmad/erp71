@@ -2,6 +2,7 @@
 
 import { Fragment } from 'react';
 import { CompactSection } from '@/components/accounting/compact';
+import { CodedLabel } from '@/components/accounting/StatementSection';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { compactDensity } from '@/lib/ui/compact-density';
@@ -27,6 +28,7 @@ export type CompareMatrixRow = {
 
 export type CompareMatrixGroup = {
     name: string;
+    code?: string | null;
     rows: CompareMatrixRow[];
     subtotals?: CompareAmounts;
 };
@@ -110,13 +112,10 @@ export function CompareMatrixTable({
                     <tbody>
                         {trialBalanceRows.map((row) => (
                             <tr key={row.account.id ?? row.account.name} className="border-b border-gray-50 hover:bg-gray-50/50">
-                                <td className="px-3 py-2 sticky left-0 bg-white">
-                                    <span className="font-medium text-gray-800">{row.account.name}</span>
-                                    {row.account.code ? (
-                                        <span className="ml-2 text-xs text-gray-400">{row.account.code}</span>
-                                    ) : null}
+                                <td className="px-3 py-2 sticky left-0 bg-white text-gray-800">
+                                    <CodedLabel code={row.account.code} name={row.account.name} bold />
                                     {row.account.group?.name ? (
-                                        <div className="text-xs text-gray-400">{row.account.group.name}</div>
+                                        <div className="pl-16 text-xs text-gray-400">{row.account.group.name}</div>
                                     ) : null}
                                 </td>
                                 {columns.map((column) => (
@@ -183,7 +182,9 @@ export function CompareMatrixTable({
                             {section.groups.map((group) => (
                                 <Fragment key={`group-${section.name}-${group.name}`}>
                                     <tr className="bg-gray-50">
-                                        <td className="px-3 py-1.5 font-semibold text-gray-700 sticky left-0 bg-gray-50">{group.name}</td>
+                                        <td className="px-3 py-1.5 text-gray-700 sticky left-0 bg-gray-50">
+                                            <CodedLabel code={group.code} name={group.name} bold />
+                                        </td>
                                         {columns.map((column) => (
                                             <td key={`${group.name}-${column.key}`} className="px-3 py-1.5 text-right font-semibold text-gray-700">
                                                 <AmountCell value={group.subtotals?.[column.key] ?? 0} locale={locale} />
@@ -193,10 +194,7 @@ export function CompareMatrixTable({
                                     {group.rows.map((row) => (
                                         <tr key={row.account.id ?? `${group.name}-${row.account.name}`} className="border-b border-gray-50 hover:bg-gray-50/50">
                                             <td className="px-5 py-1 text-gray-600 sticky left-0 bg-white">
-                                                {row.account.name}
-                                                {row.account.code ? (
-                                                    <span className="ml-2 text-xs text-gray-400">{row.account.code}</span>
-                                                ) : null}
+                                                <CodedLabel code={row.account.code} name={row.account.name} />
                                             </td>
                                             {columns.map((column) => (
                                                 <td key={`${row.account.id}-${column.key}`} className="px-3 py-1 text-right text-gray-700">

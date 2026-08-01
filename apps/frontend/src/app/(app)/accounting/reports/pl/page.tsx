@@ -10,12 +10,17 @@ import {
 import PageHeader from '@/components/ui/compact/PageHeader';
 import ReportScopeBar from '@/components/accounting/ReportScopeBar';
 import CompareMatrixTable, { type CompareMatrixSection } from '@/components/accounting/CompareMatrixTable';
+import StatementSection, {
+    hideZeroGroups,
+    type StatementGroup,
+} from '@/components/accounting/StatementSection';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import {
+    getDefaultHideZero,
     getDefaultReportLevel,
     getDefaultReportScope,
     type ReportLevelMode,
@@ -32,21 +37,7 @@ function defaultTo() {
     return new Date().toISOString().slice(0, 10);
 }
 
-interface AccountRow {
-    id: string;
-    name: string;
-    code?: string | null;
-    subgroup?: { name: string } | null;
-    is_unassigned?: boolean;
-    balance: number;
-}
-
-interface Group {
-    group: { id: string; name: string };
-    /** Rows at the requested detail level — empty when the level is `group`. */
-    rows: AccountRow[];
-    total: number;
-}
+type Group = StatementGroup;
 
 interface PLData {
     scope?: string;
@@ -75,30 +66,6 @@ function buildScopeParams(
     return { scope: 'company' as const };
 }
 
-function AccountSection({ groups, label, colorClass, locale }: { groups: Group[]; label: string; colorClass: string; locale: string }) {
-    return (
-        <div>
-            <div className={`px-3 py-1.5 rounded-lg text-xs font-medium ${colorClass} mb-2`}>
-                {label}
-            </div>
-            {groups.map((g) => (
-                <div key={g.group.id} className="mb-3">
-                    <div className="flex justify-between items-center px-3 py-1.5 bg-gray-50 rounded-lg font-semibold text-sm text-gray-700">
-                        <span>{g.group.name}</span>
-                        <span>{formatBDT(g.total, { locale })}</span>
-                    </div>
-                    {g.rows.map((a) => (
-                        <div key={a.id} className="flex justify-between items-center px-5 py-1 text-sm text-gray-600">
-                            <span>{a.name}{a.code ? <span className="ml-2 text-xs text-gray-400">{a.code}</span> : null}</span>
-                            <span>{formatBDT(a.balance, { locale })}</span>
-                        </div>
-                    ))}
-                </div>
-            ))}
-        </div>
-    );
-}
-
 export default function ProfitLossPage() {
     const { t, locale } = useI18n();
     const { stores, canConsolidate, loading: storesLoading } = useReportStores();
@@ -108,6 +75,7 @@ export default function ProfitLossPage() {
     const [storeId, setStoreId] = useState('');
     const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
     const [includeCompanyBucket, setIncludeCompanyBucket] = useState(false);
+    const [hideZero, setHideZero] = useState(false);
     const [fromDate, setFromDate] = useState(defaultFrom());
     const [toDate, setToDate] = useState(defaultTo());
     const [loading, setLoading] = useState(false);
@@ -128,6 +96,7 @@ export default function ProfitLossPage() {
         setSelectedStoreIds(stores.map((store) => store.id));
         setScope(getDefaultReportScope(stores.length, canConsolidate));
         setLevel(getDefaultReportLevel());
+        setHideZero(getDefaultHideZero());
         setInitialized(true);
     }, [stores, storesLoading, canConsolidate]);
 
@@ -202,6 +171,8 @@ export default function ProfitLossPage() {
                     generating={loading}
                     level={level}
                     onLevelChange={setLevel}
+                    hideZero={hideZero}
+                    onHideZeroChange={setHideZero}
                 />
             </AccountingToolbar>
 
@@ -241,14 +212,14 @@ export default function ProfitLossPage() {
                             </div>
                         ) : null}
 
-                        <AccountSection groups={data.revenue.groups} label={t.accounting.reports.revenue} colorClass="bg-emerald-50 text-emerald-700" locale={locale} />
+                        <StatementSection groups={hideZeroGroups(data.revenue.groups, hideZero)} label={t.accounting.reports.revenue} colorClass="bg-emerald-50 text-emerald-700" />
 
                         <div className="flex justify-between items-center px-3 py-2 bg-emerald-50 rounded-lg font-semibold text-sm text-emerald-800 border border-emerald-100">
                             <span>{t.accounting.reports.totalRevenue}</span>
                             <span>{formatBDT(data.revenue.total, { locale })}</span>
                         </div>
 
-                        <AccountSection groups={data.expenses.groups} label={t.accounting.reports.expenses} colorClass="bg-danger-light text-danger-text" locale={locale} />
+                        <StatementSection groups={hideZeroGroups(data.expenses.groups, hideZero)} label={t.accounting.reports.expenses} colorClass="bg-danger-light text-danger-text" />
 
                         <div className="flex justify-between items-center px-3 py-2 bg-danger-light rounded-lg font-semibold text-sm text-danger-text border border-red-100">
                             <span>{t.accounting.reports.totalExpenses}</span>

@@ -41,13 +41,15 @@ export function normalizeReportLevel(level?: string): ReportLevel {
     throw new BadRequestException(`Invalid report level: ${level}`);
 }
 
+export type LevelledRef = { id: string; name: string; code?: string | null };
+
 export type LevelledAccount = {
     id: string;
     name: string;
     code?: string | null;
     type: string;
-    group: { id: string; name: string };
-    subgroup?: { id: string; name: string } | null;
+    group: LevelledRef;
+    subgroup?: LevelledRef | null;
 };
 
 export type LevelBucket = {
@@ -58,10 +60,29 @@ export type LevelBucket = {
     name: string;
     code: string | null;
     type: string;
-    group: { id: string; name: string };
-    subgroup: { id: string; name: string } | null;
+    group: { id: string; name: string; code: string | null };
+    subgroup: { id: string; name: string; code: string | null } | null;
     is_unassigned: boolean;
 };
+
+/**
+ * Hierarchical order: codes are fixed-width and prefix-nested, so a plain string
+ * sort over them *is* the chart-of-accounts order. Rows without a code (a
+ * synthetic bucket, or a tenant mid-backfill) fall back to the name so the
+ * ordering never collapses.
+ */
+export function compareByCodeThenName(
+    a: { name: string; code?: string | null },
+    b: { name: string; code?: string | null },
+) {
+    if (a.code && b.code && a.code !== b.code) {
+        return a.code < b.code ? -1 : 1;
+    }
+    if (Boolean(a.code) !== Boolean(b.code)) {
+        return a.code ? -1 : 1;
+    }
+    return a.name.localeCompare(b.name);
+}
 
 /**
  * The bucket an account rolls into at the requested level.
@@ -71,9 +92,17 @@ export type LevelBucket = {
  * meaningless. Mixed groups therefore split into one row per type.
  */
 export function bucketForAccount(account: LevelledAccount, level: ReportLevel): LevelBucket {
-    const group = { id: account.group.id, name: account.group.name };
+    const group = {
+        id: account.group.id,
+        name: account.group.name,
+        code: account.group.code ?? null,
+    };
     const subgroup = account.subgroup
-        ? { id: account.subgroup.id, name: account.subgroup.name }
+        ? {
+            id: account.subgroup.id,
+            name: account.subgroup.name,
+            code: account.subgroup.code ?? null,
+          }
         : null;
 
     if (level === ReportLevel.GROUP) {
@@ -81,7 +110,7 @@ export function bucketForAccount(account: LevelledAccount, level: ReportLevel): 
             key: `${account.type}:grp:${group.id}`,
             id: group.id,
             name: group.name,
-            code: null,
+            code: group.code,
             type: account.type,
             group,
             subgroup: null,
@@ -94,7 +123,9 @@ export function bucketForAccount(account: LevelledAccount, level: ReportLevel): 
             key: `${account.type}:sub:${group.id}:${subgroup?.id ?? UNASSIGNED_SUBGROUP_KEY}`,
             id: subgroup?.id ?? `${group.id}:${UNASSIGNED_SUBGROUP_KEY}`,
             name: subgroup?.name ?? unassignedSubgroupLabel(group.name),
-            code: null,
+            // The unassigned bucket sits directly under the group, which is exactly
+            // what the reserved `00` account slot means.
+            code: subgroup?.code ?? (group.code ? `${group.code}00` : null),
             type: account.type,
             group,
             subgroup,
@@ -117,9 +148,10 @@ export function bucketForAccount(account: LevelledAccount, level: ReportLevel): 
 export type LevelBucketEntry<T> = { bucket: LevelBucket; payload: T };
 
 /**
- * Fold account-grained rows into level buckets. At `account` level every account
- * is its own bucket and the input order is preserved, so callers get byte-identical
- * output to the pre-level behaviour.
+ * Fold account-grained rows into level buckets. Every level comes back in
+ * chart-of-accounts order — account rows included, since a report that lists
+ * accounts by whatever order the query returned reads as unsorted next to the
+ * codes it now prints.
  */
 export function rollUpByLevel<T>(
     items: Array<{ account: LevelledAccount; payload: T }>,
@@ -138,21 +170,20 @@ export function rollUpByLevel<T>(
         buckets.set(bucket.key, { bucket, payload: item.payload });
     }
 
-    const entries = Array.from(buckets.values());
-    return level === ReportLevel.ACCOUNT ? entries : sortLevelEntries(entries);
+    return sortLevelEntries(Array.from(buckets.values()));
 }
 
-/** Group name, then real subgroups before the synthetic unassigned bucket, then name. */
+/** Group order, then real subgroups before the synthetic unassigned bucket, then row order. */
 export function sortLevelEntries<T>(entries: Array<LevelBucketEntry<T>>) {
     return [...entries].sort((a, b) => {
-        const groupCompare = a.bucket.group.name.localeCompare(b.bucket.group.name);
+        const groupCompare = compareByCodeThenName(a.bucket.group, b.bucket.group);
         if (groupCompare !== 0) {
             return groupCompare;
         }
         if (a.bucket.is_unassigned !== b.bucket.is_unassigned) {
             return a.bucket.is_unassigned ? 1 : -1;
         }
-        return a.bucket.name.localeCompare(b.bucket.name);
+        return compareByCodeThenName(a.bucket, b.bucket);
     });
 }
 

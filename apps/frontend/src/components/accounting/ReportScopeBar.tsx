@@ -3,7 +3,12 @@
 import { compactDensity } from '@/lib/ui/compact-density';
 import { useI18n } from '@/lib/i18n';
 import type { ReportLevelMode, ReportScopeMode } from '@/lib/accounting-report-scope';
-import { persistReportLevel, persistReportScope, REPORT_LEVEL_MODES } from '@/lib/accounting-report-scope';
+import {
+    persistHideZero,
+    persistReportLevel,
+    persistReportScope,
+    REPORT_LEVEL_MODES,
+} from '@/lib/accounting-report-scope';
 
 export type ReportStore = { id: string; name: string };
 
@@ -28,6 +33,9 @@ export type ReportScopeBarProps = {
     /** Omit both to hide the detail-level control on reports that are not COA-grained. */
     level?: ReportLevelMode;
     onLevelChange?: (level: ReportLevelMode) => void;
+    /** Omit both on reports with no balance column to suppress. */
+    hideZero?: boolean;
+    onHideZeroChange?: (hideZero: boolean) => void;
 };
 
 export function ReportScopeBar({
@@ -50,6 +58,8 @@ export function ReportScopeBar({
     generating = false,
     level,
     onLevelChange,
+    hideZero,
+    onHideZeroChange,
 }: ReportScopeBarProps) {
     const { t } = useI18n();
     const scopeLabels = t.accounting.reports.reportScope;
@@ -63,6 +73,11 @@ export function ReportScopeBar({
     const handleLevelChange = (nextLevel: ReportLevelMode) => {
         persistReportLevel(nextLevel);
         onLevelChange?.(nextLevel);
+    };
+
+    const handleHideZeroChange = (nextHideZero: boolean) => {
+        persistHideZero(nextHideZero);
+        onHideZeroChange?.(nextHideZero);
     };
 
     const toggleStoreSelection = (id: string) => {
@@ -140,6 +155,18 @@ export function ReportScopeBar({
                     </div>
                 ) : null}
             </div>
+
+            {onHideZeroChange ? (
+                <label className="inline-flex w-fit items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        checked={hideZero ?? false}
+                        onChange={(event) => handleHideZeroChange(event.target.checked)}
+                        className="text-blue-600"
+                    />
+                    {t.accountingShared.hideZeroBalances}
+                </label>
+            ) : null}
 
             {scope === 'branch' ? (
                 <div className="flex flex-col gap-1 min-w-[180px]">
