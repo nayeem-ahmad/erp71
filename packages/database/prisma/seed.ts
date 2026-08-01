@@ -5,6 +5,7 @@ config({ path: resolve(__dirname, '../../../.env') });
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { bootstrapDefaultAccountingForTenant } from './bootstrap-accounting';
+import { nextAccountCode, nextSubgroupCode } from './account-code';
 import { seedDemoAccount, DEMO_ACCOUNT_EMAIL } from './seed-demo';
 import { ROLE_DEFAULT_PERMISSIONS, UserRole, resolveBaseUserRole, SYSTEM_TENANT_ROLE_TO_USER_ROLE } from '@erp71/shared-types';
 import { seedDefaultTenantRoles } from './tenant-role.seed';
@@ -740,16 +741,51 @@ async function main() {
     });
 
     if (expensesGroup) {
+        // Codes are allocated rather than hardcoded: these sit alongside the
+        // template's own expense accounts, so a fixed code here would collide
+        // the moment the template grows. See prisma/account-code.ts.
+        const existingSubgroupCodes = (
+            await prisma.accountSubgroup.findMany({
+                where: { tenant_id: tenant.id },
+                select: { code: true },
+            })
+        ).map((row) => row.code);
+
         const overheadSubgroup = await prisma.accountSubgroup.upsert({
             where: { group_id_name: { group_id: expensesGroup.id, name: 'Overhead' } },
             update: {},
-            create: { tenant_id: tenant.id, group_id: expensesGroup.id, name: 'Overhead' },
+            create: {
+                tenant_id: tenant.id,
+                group_id: expensesGroup.id,
+                name: 'Overhead',
+                code: nextSubgroupCode(expensesGroup.code, existingSubgroupCodes),
+            },
         });
-        for (const [name, code] of [['Rent Expense', '5030'], ['Staff Salaries', '5040'], ['Utilities Expense', '5050'], ['Marketing Expense', '5060']] as [string, string][]) {
+
+        for (const name of ['Rent Expense', 'Staff Salaries', 'Utilities Expense', 'Marketing Expense']) {
+            const takenAccountCodes = (
+                await prisma.account.findMany({
+                    where: { tenant_id: tenant.id },
+                    select: { code: true },
+                })
+            ).map((row) => row.code);
+
             await prisma.account.upsert({
                 where: { tenant_id_name: { tenant_id: tenant.id, name } },
                 update: {},
-                create: { tenant_id: tenant.id, group_id: expensesGroup.id, subgroup_id: overheadSubgroup.id, name, code, type: 'expense', category: 'general' },
+                create: {
+                    tenant_id: tenant.id,
+                    group_id: expensesGroup.id,
+                    subgroup_id: overheadSubgroup.id,
+                    name,
+                    code: nextAccountCode(
+                        expensesGroup.code,
+                        overheadSubgroup.code,
+                        takenAccountCodes,
+                    ),
+                    type: 'expense',
+                    category: 'general',
+                },
             });
         }
     }

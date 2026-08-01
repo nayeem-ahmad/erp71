@@ -42,6 +42,18 @@ export class CreateAccountGroupDto {
     @IsNotEmpty()
     name: string;
 
+    /** Left blank, the server allocates the next free code. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(2)
+    code?: string;
+
+    @IsString()
+    @IsIn(Object.values(AccountType))
+    type: AccountType;
+}
+
+export class NextAccountGroupCodeQueryDto {
     @IsString()
     @IsIn(Object.values(AccountType))
     type: AccountType;
@@ -61,6 +73,28 @@ export class CreateAccountSubgroupDto {
     @IsString()
     @IsNotEmpty()
     name: string;
+
+    /** Left blank, the server allocates the next free code under the group. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(4)
+    code?: string;
+}
+
+export class NextAccountSubgroupCodeQueryDto {
+    @IsString()
+    @IsNotEmpty()
+    groupId: string;
+}
+
+export class NextAccountCodeQueryDto {
+    @IsString()
+    @IsNotEmpty()
+    groupId: string;
+
+    @IsOptional()
+    @IsString()
+    subgroupId?: string;
 }
 
 export class UpdateAccountSubgroupDto {
@@ -84,6 +118,7 @@ export class CreateAccountDto {
 
     @IsOptional()
     @IsString()
+    @MaxLength(6)
     code?: string;
 
     @IsString()
@@ -116,6 +151,7 @@ export class UpdateAccountDto {
 
     @IsOptional()
     @IsString()
+    @MaxLength(6)
     code?: string;
 
     @IsString()

@@ -1182,6 +1182,8 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteAccountGroup: (id: string) => fetchWithAuth(`/accounting/account-groups/${id}`, { method: 'DELETE' }),
+    getNextAccountGroupCode: (type: string) =>
+        fetchWithAuth(`/accounting/account-groups/next-code?type=${encodeURIComponent(type)}`),
     getAccountSubgroups: (params?: { groupId?: string }) => {
         const query = new URLSearchParams();
         if (params?.groupId) query.set('groupId', params.groupId);
@@ -1198,6 +1200,8 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteAccountSubgroup: (id: string) => fetchWithAuth(`/accounting/account-subgroups/${id}`, { method: 'DELETE' }),
+    getNextAccountSubgroupCode: (groupId: string) =>
+        fetchWithAuth(`/accounting/account-subgroups/next-code?groupId=${encodeURIComponent(groupId)}`),
     getAccounts: (params?: { search?: string; groupId?: string; type?: string; category?: string }) => {
         const query = new URLSearchParams();
         if (params?.search) query.set('search', params.search);
@@ -1217,6 +1221,11 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteAccount: (id: string) => fetchWithAuth(`/accounting/accounts/${id}`, { method: 'DELETE' }),
+    getNextAccountCode: (groupId: string, subgroupId?: string) => {
+        const query = new URLSearchParams({ groupId });
+        if (subgroupId) query.set('subgroupId', subgroupId);
+        return fetchWithAuth(`/accounting/accounts/next-code?${query.toString()}`);
+    },
     getVoucherNumberPreview: (voucherType: string) => fetchWithAuth(`/accounting/vouchers/next-number?voucherType=${encodeURIComponent(voucherType)}`),
     getVouchers: (params?: { voucherType?: string; from?: string; to?: string; page?: number; limit?: number }) => {
         const query = new URLSearchParams();

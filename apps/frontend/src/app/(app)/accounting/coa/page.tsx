@@ -103,9 +103,22 @@ function buildColumns(
         columnHelper.accessor((row) => row.code ?? '', {
             id: 'code',
             header: t.coa.columns.code,
-            cell: (info) => (
-                <span className="font-mono text-xs text-gray-500">{info.getValue() || '—'}</span>
-            ),
+            cell: (info) => {
+                const { legacy_code: legacyCode } = info.row.original;
+                return (
+                    <div className="min-w-0">
+                        <span className="block font-mono text-xs text-gray-500">
+                            {info.getValue() || '—'}
+                        </span>
+                        {/* The pre-migration number, still on the tenant's paperwork. */}
+                        {legacyCode ? (
+                            <span className="block font-mono text-xs text-gray-400">
+                                {formatMessage(t.coa.legacyCode, { code: legacyCode })}
+                            </span>
+                        ) : null}
+                    </div>
+                );
+            },
             size: 90,
             meta: { hideOnMobile: true },
         }),

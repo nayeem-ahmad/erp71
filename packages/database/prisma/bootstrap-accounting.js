@@ -1,34 +1,37 @@
 const { AccountCategory, AccountType } = require('./accounting.constants.js');
+const { nextAccountCode, nextGroupCode, nextSubgroupCode } = require('./account-code.js');
 
 const DEFAULT_ACCOUNTING_TEMPLATE = [
 	{
 		name: 'Current Assets',
+		code: '11',
 		type: AccountType.ASSET,
 		subgroups: [
 			{
 				name: 'Cash and Bank',
+				code: '1101',
 				accounts: [
 					{
 						name: 'Cash in Hand',
-						code: '1010',
+						code: '110101',
 						type: AccountType.ASSET,
 						category: AccountCategory.CASH,
 					},
 					{
 						name: 'Main Bank Account',
-						code: '1020',
+						code: '110102',
 						type: AccountType.ASSET,
 						category: AccountCategory.BANK,
 					},
 					{
 						name: 'bKash Account',
-						code: '1015',
+						code: '110103',
 						type: AccountType.ASSET,
 						category: AccountCategory.CASH,
 					},
 					{
 						name: 'Nagad Account',
-						code: '1016',
+						code: '110104',
 						type: AccountType.ASSET,
 						category: AccountCategory.CASH,
 					},
@@ -36,17 +39,18 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 			},
 			{
 				name: 'Receivables',
+				code: '1102',
 				accounts: [
 					{
 						name: 'Accounts Receivable',
-						code: '1030',
+						code: '110201',
 						type: AccountType.ASSET,
 						category: AccountCategory.GENERAL,
 						party_type: 'CUSTOMER',
 					},
 					{
 						name: 'Staff Advances',
-						code: '1060',
+						code: '110202',
 						type: AccountType.ASSET,
 						category: AccountCategory.GENERAL,
 					},
@@ -54,10 +58,11 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 			},
 			{
 				name: 'Loans Receivable',
+				code: '1103',
 				accounts: [
 					{
 						name: 'Loans Receivable',
-						code: '1035',
+						code: '110301',
 						type: AccountType.ASSET,
 						category: AccountCategory.GENERAL,
 					},
@@ -65,10 +70,11 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 			},
 			{
 				name: 'Inter-Branch Clearing',
+				code: '1104',
 				accounts: [
 					{
 						name: 'Due from Branches',
-						code: '1040',
+						code: '110401',
 						type: AccountType.ASSET,
 						category: AccountCategory.GENERAL,
 					},
@@ -78,20 +84,22 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 	},
 	{
 		name: 'Non-Current Assets',
+		code: '12',
 		type: AccountType.ASSET,
 		subgroups: [
 			{
 				name: 'Fixed Assets',
+				code: '1201',
 				accounts: [
 					{
 						name: 'Fixed Assets',
-						code: '1050',
+						code: '120101',
 						type: AccountType.ASSET,
 						category: AccountCategory.GENERAL,
 					},
 					{
 						name: 'Accumulated Depreciation',
-						code: '1055',
+						code: '120102',
 						type: AccountType.ASSET,
 						category: AccountCategory.GENERAL,
 					},
@@ -101,14 +109,16 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 	},
 	{
 		name: 'Current Liabilities',
+		code: '21',
 		type: AccountType.LIABILITY,
 		subgroups: [
 			{
 				name: 'Trade Payables',
+				code: '2101',
 				accounts: [
 					{
 						name: 'Purchase Payable',
-						code: '2010',
+						code: '210101',
 						type: AccountType.LIABILITY,
 						category: AccountCategory.GENERAL,
 						party_type: 'SUPPLIER',
@@ -117,10 +127,11 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 			},
 			{
 				name: 'Loans Payable',
+				code: '2102',
 				accounts: [
 					{
 						name: 'Loans Payable',
-						code: '2020',
+						code: '210201',
 						type: AccountType.LIABILITY,
 						category: AccountCategory.GENERAL,
 					},
@@ -128,10 +139,11 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 			},
 			{
 				name: 'Payroll',
+				code: '2103',
 				accounts: [
 					{
 						name: 'Salary Payable',
-						code: '2050',
+						code: '210301',
 						type: AccountType.LIABILITY,
 						category: AccountCategory.GENERAL,
 						party_type: 'EMPLOYEE',
@@ -140,10 +152,11 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 			},
 			{
 				name: 'Inter-Branch Clearing',
+				code: '2104',
 				accounts: [
 					{
 						name: 'Due to Branches',
-						code: '2040',
+						code: '210401',
 						type: AccountType.LIABILITY,
 						category: AccountCategory.GENERAL,
 					},
@@ -153,14 +166,16 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 	},
 	{
 		name: 'Owner Equity',
+		code: '31',
 		type: AccountType.EQUITY,
 		subgroups: [
 			{
 				name: 'Capital',
+				code: '3101',
 				accounts: [
 					{
 						name: "Owner's Equity",
-						code: '3010',
+						code: '310101',
 						type: AccountType.EQUITY,
 						category: AccountCategory.GENERAL,
 					},
@@ -170,14 +185,16 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 	},
 	{
 		name: 'Operating Revenue',
+		code: '41',
 		type: AccountType.REVENUE,
 		subgroups: [
 			{
 				name: 'Sales',
+				code: '4101',
 				accounts: [
 					{
 						name: 'Sales Revenue',
-						code: '4010',
+						code: '410101',
 						type: AccountType.REVENUE,
 						category: AccountCategory.GENERAL,
 					},
@@ -187,14 +204,16 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 	},
 	{
 		name: 'Operating Expenses',
+		code: '51',
 		type: AccountType.EXPENSE,
 		subgroups: [
 			{
 				name: 'Cost of Sales',
+				code: '5101',
 				accounts: [
 					{
 						name: 'Purchases',
-						code: '5015',
+						code: '510101',
 						type: AccountType.EXPENSE,
 						category: AccountCategory.GENERAL,
 					},
@@ -202,22 +221,23 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 			},
 			{
 				name: 'General Expenses',
+				code: '5102',
 				accounts: [
 					{
 						name: 'General Operating Expense',
-						code: '5010',
+						code: '510201',
 						type: AccountType.EXPENSE,
 						category: AccountCategory.GENERAL,
 					},
 					{
 						name: 'Depreciation Expense',
-						code: '5030',
+						code: '510203',
 						type: AccountType.EXPENSE,
 						category: AccountCategory.GENERAL,
 					},
 					{
 						name: 'Salary & Wages',
-						code: '5020',
+						code: '510202',
 						type: AccountType.EXPENSE,
 						category: AccountCategory.GENERAL,
 					},
@@ -305,42 +325,128 @@ const DEFAULT_POSTING_RULES = [
 	// Cr Cash in Hand for every warehouse transfer. See posting-contract.spec.ts.
 ];
 
+/**
+ * The template's pinned code if it is still free and still sits under the parent
+ * we actually resolved, otherwise the next free slot. See the .ts twin.
+ */
+function resolveTemplateCode(preferred, parentCode, takenCodes, allocate) {
+	const fitsParent = parentCode === null || preferred.startsWith(parentCode);
+	if (fitsParent && !takenCodes.includes(preferred)) {
+		return preferred;
+	}
+	return allocate(takenCodes);
+}
+
+async function upsertTemplateGroup(db, tenantId, name, type, preferredCode) {
+	const existing = await db.accountGroup.findUnique({
+		where: { tenant_id_name: { tenant_id: tenantId, name } },
+		select: { code: true },
+	});
+
+	const code =
+		existing?.code ??
+		resolveTemplateCode(
+			preferredCode,
+			null,
+			(
+				await db.accountGroup.findMany({
+					where: { tenant_id: tenantId },
+					select: { code: true },
+				})
+			).map((row) => row.code),
+			(taken) => nextGroupCode(type, taken),
+		);
+
+	return db.accountGroup.upsert({
+		where: { tenant_id_name: { tenant_id: tenantId, name } },
+		update: { type },
+		create: { tenant_id: tenantId, name, code, type },
+	});
+}
+
+async function upsertTemplateSubgroup(db, tenantId, group, name, preferredCode) {
+	const existing = await db.accountSubgroup.findUnique({
+		where: { group_id_name: { group_id: group.id, name } },
+		select: { code: true },
+	});
+
+	const code =
+		existing?.code ??
+		resolveTemplateCode(
+			preferredCode,
+			group.code,
+			(
+				await db.accountSubgroup.findMany({
+					where: { tenant_id: tenantId },
+					select: { code: true },
+				})
+			).map((row) => row.code),
+			(taken) => nextSubgroupCode(group.code, taken),
+		);
+
+	return db.accountSubgroup.upsert({
+		where: { group_id_name: { group_id: group.id, name } },
+		update: {},
+		create: { tenant_id: tenantId, group_id: group.id, name, code },
+	});
+}
+
+/**
+ * Every caller re-parents its account under the template subgroup, so a code
+ * stranded by a tenant's own move has to be reissued rather than reused.
+ */
+async function resolveTemplateAccountCode(db, tenantId, name, group, subgroup, preferredCode) {
+	const existing = await db.account.findUnique({
+		where: { tenant_id_name: { tenant_id: tenantId, name } },
+		select: { code: true },
+	});
+
+	if (existing && existing.code.startsWith(subgroup.code)) {
+		return existing.code;
+	}
+
+	return resolveTemplateCode(
+		preferredCode,
+		subgroup.code,
+		(
+			await db.account.findMany({
+				where: { tenant_id: tenantId },
+				select: { code: true },
+			})
+		).map((row) => row.code),
+		(taken) => nextAccountCode(group.code, subgroup.code, taken),
+	);
+}
+
 async function bootstrapDefaultAccountingForTenant(db, tenantId) {
 	for (const groupDefinition of DEFAULT_ACCOUNTING_TEMPLATE) {
-		const group = await db.accountGroup.upsert({
-			where: {
-				tenant_id_name: {
-					tenant_id: tenantId,
-					name: groupDefinition.name,
-				},
-			},
-			update: {
-				type: groupDefinition.type,
-			},
-			create: {
-				tenant_id: tenantId,
-				name: groupDefinition.name,
-				type: groupDefinition.type,
-			},
-		});
+		const group = await upsertTemplateGroup(
+			db,
+			tenantId,
+			groupDefinition.name,
+			groupDefinition.type,
+			groupDefinition.code,
+		);
 
 		for (const subgroupDefinition of groupDefinition.subgroups) {
-			const subgroup = await db.accountSubgroup.upsert({
-				where: {
-					group_id_name: {
-						group_id: group.id,
-						name: subgroupDefinition.name,
-					},
-				},
-				update: {},
-				create: {
-					tenant_id: tenantId,
-					group_id: group.id,
-					name: subgroupDefinition.name,
-				},
-			});
+			const subgroup = await upsertTemplateSubgroup(
+				db,
+				tenantId,
+				group,
+				subgroupDefinition.name,
+				subgroupDefinition.code,
+			);
 
 			for (const accountDefinition of subgroupDefinition.accounts) {
+				const accountCode = await resolveTemplateAccountCode(
+					db,
+					tenantId,
+					accountDefinition.name,
+					group,
+					subgroup,
+					accountDefinition.code,
+				);
+
 				await db.account.upsert({
 					where: {
 						tenant_id_name: {
@@ -351,7 +457,7 @@ async function bootstrapDefaultAccountingForTenant(db, tenantId) {
 					update: {
 						group_id: group.id,
 						subgroup_id: subgroup.id,
-						code: accountDefinition.code,
+						code: accountCode,
 						type: accountDefinition.type,
 						category: accountDefinition.category,
 						party_type: accountDefinition.party_type ?? null,
@@ -361,7 +467,7 @@ async function bootstrapDefaultAccountingForTenant(db, tenantId) {
 						group_id: group.id,
 						subgroup_id: subgroup.id,
 						name: accountDefinition.name,
-						code: accountDefinition.code,
+						code: accountCode,
 						type: accountDefinition.type,
 						category: accountDefinition.category,
 						party_type: accountDefinition.party_type ?? null,
@@ -430,34 +536,48 @@ async function bootstrapDefaultAccountingForTenant(db, tenantId) {
  * Idempotently ensure inter-branch clearing accounts exist for a tenant.
  */
 async function ensureInterBranchAccounts(db, tenantId) {
-	const assetGroup = await db.accountGroup.upsert({
-		where: { tenant_id_name: { tenant_id: tenantId, name: 'Current Assets' } },
-		update: {},
-		create: { tenant_id: tenantId, name: 'Current Assets', type: AccountType.ASSET },
-	});
-	const liabilityGroup = await db.accountGroup.upsert({
-		where: { tenant_id_name: { tenant_id: tenantId, name: 'Current Liabilities' } },
-		update: {},
-		create: { tenant_id: tenantId, name: 'Current Liabilities', type: AccountType.LIABILITY },
-	});
+	// Shares the template helpers so a tenant that reaches this path first --
+	// fund-transfers calls it directly -- still gets codes allocated, and gets
+	// the same ones the template would have handed out.
+	const assetGroup = await upsertTemplateGroup(db, tenantId, 'Current Assets', AccountType.ASSET, '11');
+	const liabilityGroup = await upsertTemplateGroup(
+		db,
+		tenantId,
+		'Current Liabilities',
+		AccountType.LIABILITY,
+		'21',
+	);
 
-	const dueFromSubgroup = await db.accountSubgroup.upsert({
-		where: { group_id_name: { group_id: assetGroup.id, name: 'Inter-Branch Clearing' } },
-		update: {},
-		create: { tenant_id: tenantId, group_id: assetGroup.id, name: 'Inter-Branch Clearing' },
-	});
-	const dueToSubgroup = await db.accountSubgroup.upsert({
-		where: { group_id_name: { group_id: liabilityGroup.id, name: 'Inter-Branch Clearing' } },
-		update: {},
-		create: { tenant_id: tenantId, group_id: liabilityGroup.id, name: 'Inter-Branch Clearing' },
-	});
+	const dueFromSubgroup = await upsertTemplateSubgroup(
+		db,
+		tenantId,
+		assetGroup,
+		'Inter-Branch Clearing',
+		'1104',
+	);
+	const dueToSubgroup = await upsertTemplateSubgroup(
+		db,
+		tenantId,
+		liabilityGroup,
+		'Inter-Branch Clearing',
+		'2104',
+	);
+
+	const dueFromCode = await resolveTemplateAccountCode(
+		db,
+		tenantId,
+		'Due from Branches',
+		assetGroup,
+		dueFromSubgroup,
+		'110401',
+	);
 
 	await db.account.upsert({
 		where: { tenant_id_name: { tenant_id: tenantId, name: 'Due from Branches' } },
 		update: {
 			group_id: assetGroup.id,
 			subgroup_id: dueFromSubgroup.id,
-			code: '1040',
+			code: dueFromCode,
 			type: AccountType.ASSET,
 			category: AccountCategory.GENERAL,
 		},
@@ -466,18 +586,27 @@ async function ensureInterBranchAccounts(db, tenantId) {
 			group_id: assetGroup.id,
 			subgroup_id: dueFromSubgroup.id,
 			name: 'Due from Branches',
-			code: '1040',
+			code: dueFromCode,
 			type: AccountType.ASSET,
 			category: AccountCategory.GENERAL,
 		},
 	});
+
+	const dueToCode = await resolveTemplateAccountCode(
+		db,
+		tenantId,
+		'Due to Branches',
+		liabilityGroup,
+		dueToSubgroup,
+		'210401',
+	);
 
 	await db.account.upsert({
 		where: { tenant_id_name: { tenant_id: tenantId, name: 'Due to Branches' } },
 		update: {
 			group_id: liabilityGroup.id,
 			subgroup_id: dueToSubgroup.id,
-			code: '2040',
+			code: dueToCode,
 			type: AccountType.LIABILITY,
 			category: AccountCategory.GENERAL,
 		},
@@ -486,7 +615,7 @@ async function ensureInterBranchAccounts(db, tenantId) {
 			group_id: liabilityGroup.id,
 			subgroup_id: dueToSubgroup.id,
 			name: 'Due to Branches',
-			code: '2040',
+			code: dueToCode,
 			type: AccountType.LIABILITY,
 			category: AccountCategory.GENERAL,
 		},

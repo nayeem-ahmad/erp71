@@ -7,16 +7,21 @@ describe('bootstrapDefaultAccountingForTenant — Story 30.2', () => {
                 id: `${create.name}-id`,
                 ...create,
             })),
+            findUnique: jest.fn().mockResolvedValue(null),
+            findMany: jest.fn().mockResolvedValue([]),
         };
         const accountSubgroup = {
             upsert: jest.fn().mockImplementation(async ({ create }: any) => ({
                 id: `${create.name}-id`,
                 ...create,
             })),
+            findUnique: jest.fn().mockResolvedValue(null),
+            findMany: jest.fn().mockResolvedValue([]),
         };
         const account = {
             upsert: jest.fn().mockResolvedValue({ id: 'account-id' }),
             findFirst: jest.fn().mockResolvedValue({ id: 'cash-id' }),
+            findUnique: jest.fn().mockResolvedValue(null),
             findMany: jest.fn().mockResolvedValue([
                 { id: 'cash-id', name: 'Cash in Hand' },
                 { id: 'bank-id', name: 'Main Bank Account' },
@@ -56,16 +61,21 @@ describe('bootstrapDefaultAccountingForTenant — Story 30.2', () => {
                 id: `${create.name}-id`,
                 ...create,
             })),
+            findUnique: jest.fn().mockResolvedValue(null),
+            findMany: jest.fn().mockResolvedValue([]),
         };
         const accountSubgroup = {
             upsert: jest.fn().mockImplementation(async ({ create }: any) => ({
                 id: `${create.name}-id`,
                 ...create,
             })),
+            findUnique: jest.fn().mockResolvedValue(null),
+            findMany: jest.fn().mockResolvedValue([]),
         };
         const account = {
             upsert: jest.fn().mockResolvedValue({ id: 'account-id' }),
             findFirst: jest.fn().mockResolvedValue({ id: 'cash-id' }),
+            findUnique: jest.fn().mockResolvedValue(null),
             findMany: jest.fn().mockResolvedValue([
                 { id: 'cash-id', name: 'Cash in Hand' },
                 { id: 'bank-id', name: 'Main Bank Account' },
@@ -100,11 +110,11 @@ describe('DEFAULT_ACCOUNTING_TEMPLATE — chart of accounts', () => {
     );
 
     it.each([
-        ['Accounts Receivable', '1030'],
-        ['bKash Account', '1015'],
-        ['Nagad Account', '1016'],
-        ['Purchases', '5015'],
-        ['Loans Receivable', '1035'],
+        ['Accounts Receivable', '110201'],
+        ['bKash Account', '110103'],
+        ['Nagad Account', '110104'],
+        ['Purchases', '510101'],
+        ['Loans Receivable', '110301'],
     ])('provisions %s at code %s', (name, code) => {
         const account = allAccounts.find((a) => a.name === name);
         expect(account).toBeDefined();
@@ -114,6 +124,42 @@ describe('DEFAULT_ACCOUNTING_TEMPLATE — chart of accounts', () => {
     it('assigns every account code exactly once', () => {
         const codes = allAccounts.map((a) => a.code).filter(Boolean);
         expect(codes).toHaveLength(new Set(codes).size);
+    });
+
+    it('gives every group and subgroup a unique code too', () => {
+        const groupCodes = DEFAULT_ACCOUNTING_TEMPLATE.map((g) => g.code);
+        const subgroupCodes = DEFAULT_ACCOUNTING_TEMPLATE.flatMap((g) =>
+            g.subgroups.map((s) => s.code),
+        );
+        expect(groupCodes).toHaveLength(new Set(groupCodes).size);
+        expect(subgroupCodes).toHaveLength(new Set(subgroupCodes).size);
+    });
+
+    it('prefixes every subgroup with its group and every account with its subgroup', () => {
+        for (const group of DEFAULT_ACCOUNTING_TEMPLATE) {
+            expect(group.code).toHaveLength(2);
+            for (const subgroup of group.subgroups) {
+                expect(subgroup.code).toHaveLength(4);
+                expect(subgroup.code.startsWith(group.code)).toBe(true);
+                for (const account of subgroup.accounts) {
+                    expect(account.code).toHaveLength(6);
+                    expect(account.code.startsWith(subgroup.code)).toBe(true);
+                }
+            }
+        }
+    });
+
+    it('opens every group code with the digit for its type', () => {
+        const digits: Record<string, string> = {
+            asset: '1',
+            liability: '2',
+            equity: '3',
+            revenue: '4',
+            expense: '5',
+        };
+        for (const group of DEFAULT_ACCOUNTING_TEMPLATE) {
+            expect(group.code[0]).toBe(digits[group.type]);
+        }
     });
 
     it.each([

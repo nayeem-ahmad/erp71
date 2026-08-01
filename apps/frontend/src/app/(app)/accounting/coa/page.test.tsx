@@ -17,6 +17,7 @@ jest.mock('@/lib/api', () => ({
         getAccountGroups: jest.fn(),
         getAccountSubgroups: jest.fn(),
         getAccounts: jest.fn(),
+        getNextAccountCode: jest.fn(),
         createAccount: jest.fn(),
         updateAccount: jest.fn(),
         deleteAccount: jest.fn(),
@@ -32,24 +33,27 @@ describe('ChartOfAccountsPage', () => {
         const { api } = require('@/lib/api');
         jest.clearAllMocks();
         api.getAccountGroups.mockResolvedValue([
-            { id: 'group-1', name: 'Current Assets', type: 'asset', _count: { subgroups: 1, accounts: 2 } },
+            { id: 'group-1', name: 'Current Assets', code: '11', type: 'asset', _count: { subgroups: 1, accounts: 2 } },
         ]);
         api.getAccountSubgroups.mockResolvedValue([
-            { id: 'subgroup-1', name: 'Cash and Bank', group: { id: 'group-1', name: 'Current Assets' }, _count: { accounts: 2 } },
+            { id: 'subgroup-1', name: 'Cash and Bank', code: '1101', group: { id: 'group-1', name: 'Current Assets' }, _count: { accounts: 2 } },
         ]);
         api.getAccounts.mockResolvedValue([
             {
                 id: 'account-1',
                 name: 'Cash in Hand',
-                code: '1010',
+                code: '110101',
+                legacy_code: '1010',
                 type: 'asset',
                 category: 'cash',
-                group: { id: 'group-1', name: 'Current Assets', type: 'asset' },
-                subgroup: { id: 'subgroup-1', name: 'Cash and Bank' },
+                group: { id: 'group-1', name: 'Current Assets', code: '11', type: 'asset' },
+                subgroup: { id: 'subgroup-1', name: 'Cash and Bank', code: '1101' },
                 balance: 3800,
                 balance_side: 'debit',
             },
         ]);
+        // The modal asks for a suggested code whenever the parent changes.
+        api.getNextAccountCode.mockResolvedValue({ code: '110102' });
         api.createAccount.mockResolvedValue({ id: 'account-2' });
         api.updateAccount.mockResolvedValue({ id: 'account-1' });
         api.deleteAccount.mockResolvedValue({ id: 'account-1' });
@@ -62,7 +66,10 @@ describe('ChartOfAccountsPage', () => {
             expect(screen.getByText('Cash in Hand')).toBeInTheDocument();
         });
 
-        expect(screen.getByText('1010')).toBeInTheDocument();
+        // jsdom reports a mobile viewport, so the dedicated code column (which
+        // also carries the old pre-migration number) is hidden and this comes
+        // from the name cell's mobile subtitle.
+        expect(screen.getByText('110101')).toBeInTheDocument();
         expect(screen.getAllByText('Current Assets').length).toBeGreaterThan(0);
     });
 
@@ -98,6 +105,15 @@ describe('ChartOfAccountsPage', () => {
 
         fireEvent.change(screen.getByLabelText('Account group'), { target: { value: 'group-1' } });
         fireEvent.change(screen.getByLabelText('Account name'), { target: { value: 'Petty Cash' } });
+
+        // Choosing a parent asks the server for the next free code and fills it in.
+        await waitFor(() =>
+            expect(api.getNextAccountCode).toHaveBeenCalledWith('group-1', undefined),
+        );
+        await waitFor(() =>
+            expect(screen.getByLabelText('Account code')).toHaveValue('110102'),
+        );
+
         fireEvent.click(screen.getByRole('button', { name: /create account/i }));
 
         await waitFor(() => {
@@ -105,11 +121,26 @@ describe('ChartOfAccountsPage', () => {
                 groupId: 'group-1',
                 subgroupId: undefined,
                 name: 'Petty Cash',
-                code: undefined,
+                code: '110102',
                 category: 'general',
                 type: 'asset',
             });
         });
+    });
+
+    it('keeps an existing code when the account is not moved', async () => {
+        const { api } = require('@/lib/api');
+        renderPage();
+
+        await waitFor(() => screen.getByText('Cash in Hand'));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+        // The suggestion must not overwrite a code that already sits under the
+        // account's current parent.
+        await waitFor(() => expect(api.getNextAccountCode).toHaveBeenCalled());
+        expect(screen.getByLabelText('Account code')).toHaveValue('110101');
+        expect(screen.queryByText(/changes its code/i)).not.toBeInTheDocument();
     });
 
     it('edits an existing account without sending a hand-picked type', async () => {
@@ -127,7 +158,7 @@ describe('ChartOfAccountsPage', () => {
                 groupId: 'group-1',
                 subgroupId: 'subgroup-1',
                 name: 'Cash on Hand',
-                code: '1010',
+                code: '110101',
                 category: 'cash',
             });
         });
