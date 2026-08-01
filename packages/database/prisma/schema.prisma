@@ -1908,6 +1908,10 @@ model AccountGroup {
   id         String   @id @default(uuid())
   tenant_id  String
   name       String
+  /// `<type digit><serial>`, e.g. 11 = the first asset group. See account-code.ts.
+  /// Defaults to '' so `prisma db push` can add it to a populated table; the
+  /// boot-time backfill fills it before the API serves. Phase B makes it unique.
+  code       String   @default("") @db.VarChar(2)
   type       String
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -1926,6 +1930,8 @@ model AccountSubgroup {
   tenant_id  String
   group_id   String
   name       String
+  /// Always prefixed with the parent group's code, e.g. 1101 under group 11.
+  code       String   @default("") @db.VarChar(4)
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -1945,7 +1951,15 @@ model Account {
   group_id    String
   subgroup_id String?
   name        String
-  code        String?
+  /// Always prefixed with the parent subgroup's code (or `<group>00` when the
+  /// account hangs directly off its group), e.g. 110101 under subgroup 1101.
+  /// Still nullable in phase A: this column already existed with NULL rows, and
+  /// `db push` refuses to make an existing column required, default or not.
+  /// The backfill fills every row; phase B is what tightens it. See TODO.md.
+  code        String?  @db.VarChar(6)
+  /// The flat 4-digit code this account carried before hierarchical codes.
+  /// Kept searchable for one release so tenants can map their old paperwork.
+  legacy_code String?
   type        String
   category    String   @default("general")
   /// Non-null on a control account (AR / Purchase Payable / Salary Payable):
@@ -1973,6 +1987,7 @@ model Account {
   @@index([subgroup_id])
   @@index([tenant_id, type])
   @@index([tenant_id, category])
+  @@index([tenant_id, code])
   @@map("accounts")
 }
 

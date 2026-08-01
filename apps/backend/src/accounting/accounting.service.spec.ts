@@ -108,6 +108,7 @@ describe('AccountingService — Story 30.2', () => {
 
     it('creates account groups with tenant-scoped uniqueness', async () => {
         db.accountGroup.findUnique.mockResolvedValue(null);
+        db.accountGroup.findMany.mockResolvedValue([]);
         db.accountGroup.create.mockResolvedValue({ id: 'group-1', name: 'Current Assets', type: 'asset' });
 
         const result = await service.createAccountGroup('tenant-1', {
@@ -120,9 +121,39 @@ describe('AccountingService — Story 30.2', () => {
             data: {
                 tenant_id: 'tenant-1',
                 name: 'Current Assets',
+                // first asset group on the tenant: type digit 1, serial 1
+                code: '11',
                 type: 'asset',
             },
         });
+    });
+
+    it('allocates the next free group code within the type', async () => {
+        db.accountGroup.findUnique.mockResolvedValue(null);
+        db.accountGroup.findMany.mockResolvedValue([{ code: '11' }, { code: '12' }, { code: '21' }]);
+        db.accountGroup.create.mockResolvedValue({ id: 'group-3' });
+
+        await service.createAccountGroup('tenant-1', {
+            name: 'Other Assets',
+            type: AccountType.ASSET,
+        });
+
+        expect(db.accountGroup.create).toHaveBeenCalledWith(
+            expect.objectContaining({ data: expect.objectContaining({ code: '13' }) }),
+        );
+    });
+
+    it('rejects a hand-typed group code that clashes with the type digit', async () => {
+        db.accountGroup.findUnique.mockResolvedValue(null);
+        db.accountGroup.findMany.mockResolvedValue([]);
+
+        await expect(
+            service.createAccountGroup('tenant-1', {
+                name: 'Mislabelled',
+                code: '51',
+                type: AccountType.ASSET,
+            }),
+        ).rejects.toThrow(BadRequestException);
     });
 
     it('rejects duplicate account groups', async () => {
@@ -137,8 +168,9 @@ describe('AccountingService — Story 30.2', () => {
     });
 
     it('requires subgroups to belong to the current tenant group', async () => {
-        db.accountGroup.findFirst.mockResolvedValue({ id: 'group-1', tenant_id: 'tenant-1' });
+        db.accountGroup.findFirst.mockResolvedValue({ id: 'group-1', tenant_id: 'tenant-1', code: '11' });
         db.accountSubgroup.findUnique.mockResolvedValue(null);
+        db.accountSubgroup.findMany.mockResolvedValue([]);
         db.accountSubgroup.create.mockResolvedValue({ id: 'subgroup-1', name: 'Cash and Bank', group: { id: 'group-1' } });
 
         const result = await service.createAccountSubgroup('tenant-1', {
@@ -151,16 +183,17 @@ describe('AccountingService — Story 30.2', () => {
     });
 
     it('creates accounts only when group type and subgroup integrity match', async () => {
-        db.accountGroup.findFirst.mockResolvedValue({ id: 'group-1', tenant_id: 'tenant-1', type: 'asset' });
-        db.accountSubgroup.findFirst.mockResolvedValue({ id: 'subgroup-1', tenant_id: 'tenant-1', group_id: 'group-1' });
+        db.accountGroup.findFirst.mockResolvedValue({ id: 'group-1', tenant_id: 'tenant-1', type: 'asset', code: '11' });
+        db.accountSubgroup.findFirst.mockResolvedValue({ id: 'subgroup-1', tenant_id: 'tenant-1', group_id: 'group-1', code: '1101' });
         db.account.findUnique.mockResolvedValue(null);
+        db.account.findMany.mockResolvedValue([]);
         db.account.create.mockResolvedValue({ id: 'account-1', name: 'Cash in Hand', category: 'cash' });
 
         const result = await service.createAccount('tenant-1', {
             groupId: 'group-1',
             subgroupId: 'subgroup-1',
             name: 'Cash in Hand',
-            code: '1010',
+            code: '110101',
             type: AccountType.ASSET,
             category: AccountCategory.CASH,
         });
@@ -172,7 +205,7 @@ describe('AccountingService — Story 30.2', () => {
                 group_id: 'group-1',
                 subgroup_id: 'subgroup-1',
                 name: 'Cash in Hand',
-                code: '1010',
+                code: '110101',
                 type: 'asset',
                 category: 'cash',
             },
@@ -181,6 +214,42 @@ describe('AccountingService — Story 30.2', () => {
                 subgroup: true,
             },
         });
+    });
+
+    it('rejects an account code that is not prefixed by its subgroup', async () => {
+        db.accountGroup.findFirst.mockResolvedValue({ id: 'group-1', tenant_id: 'tenant-1', type: 'asset', code: '11' });
+        db.accountSubgroup.findFirst.mockResolvedValue({ id: 'subgroup-1', tenant_id: 'tenant-1', group_id: 'group-1', code: '1101' });
+        db.account.findUnique.mockResolvedValue(null);
+        db.account.findMany.mockResolvedValue([]);
+
+        await expect(
+            service.createAccount('tenant-1', {
+                groupId: 'group-1',
+                subgroupId: 'subgroup-1',
+                name: 'Misfiled',
+                code: '110201',
+                type: AccountType.ASSET,
+                category: AccountCategory.CASH,
+            }),
+        ).rejects.toThrow(BadRequestException);
+    });
+
+    it('parks an account with no subgroup in the reserved 00 slot', async () => {
+        db.accountGroup.findFirst.mockResolvedValue({ id: 'group-1', tenant_id: 'tenant-1', type: 'asset', code: '11' });
+        db.account.findUnique.mockResolvedValue(null);
+        db.account.findMany.mockResolvedValue([]);
+        db.account.create.mockResolvedValue({ id: 'account-1' });
+
+        await service.createAccount('tenant-1', {
+            groupId: 'group-1',
+            name: 'Suspense',
+            type: AccountType.ASSET,
+            category: AccountCategory.GENERAL,
+        });
+
+        expect(db.account.create).toHaveBeenCalledWith(
+            expect.objectContaining({ data: expect.objectContaining({ code: '110001' }) }),
+        );
     });
 
     it('filters accounts by tenant, group, type, category, and search', async () => {
@@ -203,13 +272,14 @@ describe('AccountingService — Story 30.2', () => {
                 OR: [
                     { name: { contains: 'cash', mode: 'insensitive' } },
                     { code: { contains: 'cash', mode: 'insensitive' } },
+                    { legacy_code: { contains: 'cash', mode: 'insensitive' } },
                 ],
             },
             include: {
                 group: true,
                 subgroup: true,
             },
-            orderBy: [{ type: 'asc' }, { name: 'asc' }],
+            orderBy: [{ code: 'asc' }],
         });
     });
 

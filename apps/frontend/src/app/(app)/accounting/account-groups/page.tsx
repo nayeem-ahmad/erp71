@@ -34,6 +34,13 @@ function buildSubgroupColumns(
     onDelete: (subgroup: AccountSubgroup) => void,
 ): ColumnDef<AccountSubgroup, any>[] {
     return [
+        subgroupColumnHelper.accessor('code', {
+            header: t.coa.columns.code,
+            cell: (info) => (
+                <span className="font-mono text-xs text-gray-500">{info.getValue()}</span>
+            ),
+            size: 70,
+        }),
         subgroupColumnHelper.accessor('name', {
             header: t.accountGroups.columns.subgroup,
             cell: (info) => (
@@ -411,6 +418,9 @@ function GroupRailItem({
                         selected ? 'text-blue-900' : 'text-gray-900'
                     }`}
                 >
+                    <span className="mr-1.5 font-mono text-xs font-normal text-gray-400">
+                        {group.code}
+                    </span>
                     {group.name}
                 </span>
                 <span className={`block text-xs ${selected ? 'text-blue-700' : 'text-gray-500'}`}>

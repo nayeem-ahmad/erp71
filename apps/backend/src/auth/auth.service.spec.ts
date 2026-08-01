@@ -28,10 +28,11 @@ describe('AuthService', () => {
             create: jest.fn(),
             update: jest.fn(),
         },
-        accountGroup: { upsert: jest.fn() },
-        accountSubgroup: { upsert: jest.fn() },
+        accountGroup: { upsert: jest.fn(), findUnique: jest.fn(), findMany: jest.fn() },
+        accountSubgroup: { upsert: jest.fn(), findUnique: jest.fn(), findMany: jest.fn() },
         account: {
             upsert: jest.fn(),
+            findUnique: jest.fn(),
             findFirst: jest.fn().mockResolvedValue({ id: 'cash-id', name: 'Cash in Hand' }),
             findMany: jest.fn().mockResolvedValue([
                 { id: 'cash-id', name: 'Cash in Hand' },
@@ -126,8 +127,14 @@ describe('AuthService', () => {
         emailService.sendWelcome.mockResolvedValue(undefined);
         emailService.sendEmailVerification.mockResolvedValue(undefined);
         db.$transaction.mockImplementation(async (callback: any) => callback(db));
-        db.accountGroup.upsert.mockResolvedValue({ id: 'group-1', name: 'Current Assets' });
-        db.accountSubgroup.upsert.mockResolvedValue({ id: 'subgroup-1', name: 'Cash and Bank' });
+        db.accountGroup.upsert.mockResolvedValue({ id: 'group-1', name: 'Current Assets', code: '11' });
+        db.accountSubgroup.upsert.mockResolvedValue({ id: 'subgroup-1', name: 'Cash and Bank', code: '1101' });
+        // Code allocation looks up existing codes before every upsert.
+        db.accountGroup.findUnique.mockResolvedValue(null);
+        db.accountGroup.findMany.mockResolvedValue([]);
+        db.accountSubgroup.findUnique.mockResolvedValue(null);
+        db.accountSubgroup.findMany.mockResolvedValue([]);
+        db.account.findUnique.mockResolvedValue(null);
         db.account.upsert.mockResolvedValue({ id: 'account-1', name: 'Cash in Hand' });
         db.account.findFirst.mockResolvedValue({ id: 'cash-id', name: 'Cash in Hand' });
         db.account.findMany.mockResolvedValue([

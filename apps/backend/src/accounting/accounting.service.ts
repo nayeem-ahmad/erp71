@@ -26,6 +26,17 @@ import {
     type LevelledAccount,
 } from './report-level.utils';
 import { assertFiscalPeriodOpen, autoPostFromRules } from './posting.utils';
+import {
+    AccountCodeExhaustedError,
+    ACCOUNT_TYPE_CODE_DIGIT,
+    accountCodePrefix,
+    nextAccountCode,
+    nextGroupCode,
+    nextSubgroupCode,
+    normalizeAccountCode,
+    validateAccountCode,
+    type AccountCodeLevel,
+} from '@erp71/database';
 import { classifyPaymentMode } from '../sales/classify-payment-mode';
 import { AuditService } from '../audit/audit.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
@@ -126,6 +137,73 @@ export class AccountingService {
         };
     }
 
+    /**
+     * A code the user typed, checked against its level and parent, or the next
+     * free one when they left the field alone.
+     *
+     * The allocator runs server-side either way — a client-supplied code is only
+     * ever validated, never trusted, so two people creating accounts at once
+     * cannot talk each other into the same slot. The unique index is the final
+     * backstop; {@link translateCodeConflict} turns its error into English.
+     */
+    private resolveCode(
+        requested: string | undefined | null,
+        level: AccountCodeLevel,
+        parentCode: string | null,
+        takenCodes: string[],
+        allocate: () => string,
+    ): string {
+        const trimmed = requested?.trim();
+        if (!trimmed) {
+            try {
+                return allocate();
+            } catch (error) {
+                if (error instanceof AccountCodeExhaustedError) {
+                    throw new BadRequestException(error.message);
+                }
+                throw error;
+            }
+        }
+
+        const code = normalizeAccountCode(trimmed);
+        const problem = validateAccountCode(code, level, parentCode);
+        if (problem) {
+            throw new BadRequestException(problem);
+        }
+
+        if (takenCodes.includes(code)) {
+            throw new BadRequestException(`Code ${code} is already in use.`);
+        }
+
+        return code;
+    }
+
+    private async tenantGroupCodes(tenantId: string) {
+        const rows = await this.db.accountGroup.findMany({
+            where: { tenant_id: tenantId },
+            select: { code: true },
+        });
+        return rows.map((row) => row.code);
+    }
+
+    private async tenantSubgroupCodes(tenantId: string) {
+        const rows = await this.db.accountSubgroup.findMany({
+            where: { tenant_id: tenantId },
+            select: { code: true },
+        });
+        return rows.map((row) => row.code);
+    }
+
+    private async tenantAccountCodes(tenantId: string) {
+        const rows = await this.db.account.findMany({
+            where: { tenant_id: tenantId },
+            select: { code: true },
+        });
+        // Nullable until the phase-B tightening; an un-backfilled row occupies
+        // no slot, so it must not be handed to the allocator as one.
+        return rows.map((row) => row.code).filter((code): code is string => Boolean(code));
+    }
+
     async createAccountGroup(tenantId: string, dto: CreateAccountGroupDto) {
         const existing = await this.db.accountGroup.findUnique({
             where: {
@@ -140,13 +218,41 @@ export class AccountingService {
             throw new BadRequestException('An account group with this name already exists.');
         }
 
+        const typeDigit = ACCOUNT_TYPE_CODE_DIGIT[dto.type];
+        if (!typeDigit) {
+            throw new BadRequestException(`Unknown account type "${dto.type}".`);
+        }
+
+        const taken = await this.tenantGroupCodes(tenantId);
+        // The type digit is the group's parent: it is what stops an asset group
+        // being filed under 5x and quietly reading as an expense in reports.
+        const code = this.resolveCode(dto.code, 'group', typeDigit, taken, () =>
+            nextGroupCode(dto.type, taken),
+        );
+
+        // A group's code carries its type in the leading digit, and the type is
+        // immutable once set (updateAccountGroup renames only), so this is the
+        // only place the digit is ever chosen.
         return this.db.accountGroup.create({
             data: {
                 tenant_id: tenantId,
                 name: dto.name,
+                code,
                 type: dto.type,
             },
         });
+    }
+
+    async nextAccountGroupCode(tenantId: string, type: AccountType) {
+        const taken = await this.tenantGroupCodes(tenantId);
+        try {
+            return { code: nextGroupCode(type, taken) };
+        } catch (error) {
+            if (error instanceof AccountCodeExhaustedError) {
+                throw new BadRequestException(error.message);
+            }
+            throw error;
+        }
     }
 
     async findAccountGroups(tenantId: string) {
@@ -160,7 +266,7 @@ export class AccountingService {
                     },
                 },
             },
-            orderBy: [{ type: 'asc' }, { name: 'asc' }],
+            orderBy: [{ code: 'asc' }],
         });
     }
 
@@ -189,16 +295,43 @@ export class AccountingService {
             throw new BadRequestException('An account subgroup with this name already exists in the selected group.');
         }
 
+        const taken = await this.tenantSubgroupCodes(tenantId);
+        const code = this.resolveCode(dto.code, 'subgroup', group.code, taken, () =>
+            nextSubgroupCode(group.code, taken),
+        );
+
         return this.db.accountSubgroup.create({
             data: {
                 tenant_id: tenantId,
                 group_id: dto.groupId,
                 name: dto.name,
+                code,
             },
             include: {
                 group: true,
             },
         });
+    }
+
+    async nextAccountSubgroupCode(tenantId: string, groupId: string) {
+        const group = await this.db.accountGroup.findFirst({
+            where: { id: groupId, tenant_id: tenantId },
+            select: { code: true },
+        });
+
+        if (!group) {
+            throw new BadRequestException('Account group not found for this tenant.');
+        }
+
+        const taken = await this.tenantSubgroupCodes(tenantId);
+        try {
+            return { code: nextSubgroupCode(group.code, taken) };
+        } catch (error) {
+            if (error instanceof AccountCodeExhaustedError) {
+                throw new BadRequestException(error.message);
+            }
+            throw error;
+        }
     }
 
     async findAccountSubgroups(tenantId: string, query: ListAccountSubgroupsQueryDto) {
@@ -215,7 +348,7 @@ export class AccountingService {
                     },
                 },
             },
-            orderBy: [{ group: { name: 'asc' } }, { name: 'asc' }],
+            orderBy: [{ code: 'asc' }],
         });
     }
 
@@ -236,6 +369,7 @@ export class AccountingService {
         }
 
         let subgroupId: string | undefined;
+        let subgroupCode: string | null = null;
         if (dto.subgroupId) {
             const subgroup = await this.db.accountSubgroup.findFirst({
                 where: {
@@ -250,6 +384,7 @@ export class AccountingService {
             }
 
             subgroupId = subgroup.id;
+            subgroupCode = subgroup.code;
         }
 
         const existing = await this.db.account.findUnique({
@@ -265,21 +400,86 @@ export class AccountingService {
             throw new BadRequestException('An account with this name already exists.');
         }
 
-        return this.db.account.create({
-            data: {
-                tenant_id: tenantId,
-                group_id: dto.groupId,
-                subgroup_id: subgroupId,
-                name: dto.name,
-                code: dto.code,
-                type: dto.type,
-                category: dto.category,
-            },
-            include: {
-                group: true,
-                subgroup: true,
-            },
+        const taken = await this.tenantAccountCodes(tenantId);
+        const code = this.resolveCode(
+            dto.code,
+            'account',
+            accountCodePrefix(group.code, subgroupCode),
+            taken,
+            () => nextAccountCode(group.code, subgroupCode, taken),
+        );
+
+        try {
+            return await this.db.account.create({
+                data: {
+                    tenant_id: tenantId,
+                    group_id: dto.groupId,
+                    subgroup_id: subgroupId,
+                    name: dto.name,
+                    code,
+                    type: dto.type,
+                    category: dto.category,
+                },
+                include: {
+                    group: true,
+                    subgroup: true,
+                },
+            });
+        } catch (error) {
+            throw this.translateCodeConflict(error, code);
+        }
+    }
+
+    /**
+     * The unique index is what actually decides a race between two concurrent
+     * creates; without this the loser sees a raw Prisma P2002.
+     */
+    private translateCodeConflict(error: unknown, code: string): unknown {
+        if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === 'P2002' &&
+            (error.meta?.target as string[] | undefined)?.includes('code')
+        ) {
+            return new ConflictException(
+                `Code ${code} was just taken by someone else. Try again to get the next free code.`,
+            );
+        }
+        return error;
+    }
+
+    async nextAccountCodeFor(tenantId: string, groupId: string, subgroupId?: string) {
+        const group = await this.db.accountGroup.findFirst({
+            where: { id: groupId, tenant_id: tenantId },
+            select: { code: true },
         });
+
+        if (!group) {
+            throw new BadRequestException('Account group not found for this tenant.');
+        }
+
+        let subgroupCode: string | null = null;
+        if (subgroupId) {
+            const subgroup = await this.db.accountSubgroup.findFirst({
+                where: { id: subgroupId, tenant_id: tenantId, group_id: groupId },
+                select: { code: true },
+            });
+
+            if (!subgroup) {
+                throw new BadRequestException('Account subgroup not found for this tenant and group.');
+            }
+
+            subgroupCode = subgroup.code;
+        }
+
+        const taken = await this.tenantAccountCodes(tenantId);
+        try {
+            return { code: nextAccountCode(group.code, subgroupCode, taken) };
+        } catch (error) {
+            if (error instanceof AccountCodeExhaustedError) {
+                throw new BadRequestException(error.message);
+            }
+            throw error;
+        }
     }
 
     async findAccounts(tenantId: string, query: ListAccountsQueryDto) {
@@ -295,7 +495,11 @@ export class AccountingService {
                     ? {
                           OR: [
                               { name: { contains: search, mode: 'insensitive' } },
+                              // A prefix search doubles as a subtree filter:
+                              // "1101" returns exactly that subgroup's accounts.
                               { code: { contains: search, mode: 'insensitive' } },
+                              // Tenants still have the old flat numbers on paper.
+                              { legacy_code: { contains: search, mode: 'insensitive' } },
                           ],
                       }
                     : {}),
@@ -304,7 +508,9 @@ export class AccountingService {
                 group: true,
                 subgroup: true,
             },
-            orderBy: [{ type: 'asc' }, { name: 'asc' }],
+            // Fixed-width codes make a plain string sort the hierarchy order:
+            // assets before liabilities, and each account under its own parent.
+            orderBy: [{ code: 'asc' }],
         });
 
         if (accounts.length === 0) {
@@ -476,6 +682,7 @@ export class AccountingService {
         }
 
         let subgroupId: string | null = null;
+        let subgroupCode: string | null = null;
         if (dto.subgroupId) {
             const subgroup = await this.db.accountSubgroup.findFirst({
                 where: { id: dto.subgroupId, tenant_id: tenantId, group_id: dto.groupId },
@@ -486,6 +693,7 @@ export class AccountingService {
             }
 
             subgroupId = subgroup.id;
+            subgroupCode = subgroup.code;
         }
 
         const clash = await this.db.account.findUnique({
@@ -497,18 +705,38 @@ export class AccountingService {
             throw new BadRequestException('An account with this name already exists.');
         }
 
-        return this.db.account.update({
-            where: { id },
-            data: {
-                group_id: dto.groupId,
-                subgroup_id: subgroupId,
-                name: dto.name,
-                code: dto.code ?? null,
-                type: group.type,
-                category: dto.category,
-            },
-            include: { group: true, subgroup: true },
-        });
+        // Re-parenting invalidates the code's prefix, so the account is re-coded
+        // under its new parent. Safe because vouchers reference accounts by id,
+        // never by code — only humans and printed paper track the old number,
+        // which is why the UI confirms the change before sending it.
+        const prefix = accountCodePrefix(group.code, subgroupCode);
+        const taken = (await this.tenantAccountCodes(tenantId)).filter(
+            (existing) => existing !== account.code,
+        );
+
+        const code =
+            !dto.code?.trim() && account.code?.startsWith(prefix)
+                ? account.code
+                : this.resolveCode(dto.code, 'account', prefix, taken, () =>
+                      nextAccountCode(group.code, subgroupCode, taken),
+                  );
+
+        try {
+            return await this.db.account.update({
+                where: { id },
+                data: {
+                    group_id: dto.groupId,
+                    subgroup_id: subgroupId,
+                    name: dto.name,
+                    code,
+                    type: group.type,
+                    category: dto.category,
+                },
+                include: { group: true, subgroup: true },
+            });
+        } catch (error) {
+            throw this.translateCodeConflict(error, code);
+        }
     }
 
     async deleteAccount(tenantId: string, id: string) {

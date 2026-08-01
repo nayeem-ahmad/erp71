@@ -11,7 +11,18 @@ const snap = (accounts: string[], rules: string[]) => ({
 });
 
 describe('sync-accounting — applySync', () => {
-    const client = {} as any;
+    /** A tenant that already has hierarchical codes: the backfill is a no-op. */
+    const codedClient = () =>
+        ({
+            accountGroup: {
+                findMany: jest.fn().mockResolvedValue([
+                    { id: 'g1', name: 'Current Assets', code: '11', type: 'asset' },
+                ]),
+                update: jest.fn(),
+            },
+            accountSubgroup: { findMany: jest.fn().mockResolvedValue([]), update: jest.fn() },
+            account: { findMany: jest.fn().mockResolvedValue([]), update: jest.fn() },
+        }) as any;
 
     beforeEach(() => jest.clearAllMocks());
 
@@ -19,9 +30,47 @@ describe('sync-accounting — applySync', () => {
         // customer_payment and loan rules are now plain DEFAULT_POSTING_RULES
         // entries (not lazy ensure* helpers), so the bootstrap provisions the whole
         // default set — one mechanism.
+        const client = codedClient();
+
         await applySync(client, 'tenant-1');
 
         expect(bootstrapDefaultAccountingForTenant).toHaveBeenCalledWith(client, 'tenant-1');
+    });
+
+    it('writes nothing when the tenant is already coded', async () => {
+        const client = codedClient();
+
+        await applySync(client, 'tenant-1');
+
+        expect(client.accountGroup.update).not.toHaveBeenCalled();
+        expect(client.account.update).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Load-bearing order: the bootstrap hangs new subgroup and account codes off
+     * their parent's code, so a group still holding '' would poison everything
+     * created under it.
+     */
+    it('backfills codes BEFORE the bootstrap runs', async () => {
+        const order: string[] = [];
+        const client = {
+            accountGroup: {
+                findMany: jest.fn().mockImplementation(async () => {
+                    order.push('backfill');
+                    return [];
+                }),
+                update: jest.fn(),
+            },
+            accountSubgroup: { findMany: jest.fn().mockResolvedValue([]), update: jest.fn() },
+            account: { findMany: jest.fn().mockResolvedValue([]), update: jest.fn() },
+        } as any;
+        (bootstrapDefaultAccountingForTenant as jest.Mock).mockImplementation(async () => {
+            order.push('bootstrap');
+        });
+
+        await applySync(client, 'tenant-1');
+
+        expect(order).toEqual(['backfill', 'bootstrap']);
     });
 });
 

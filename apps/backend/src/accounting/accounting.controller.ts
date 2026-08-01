@@ -18,6 +18,9 @@ import {
     CreateAccountDto,
     CreateAccountGroupDto,
     CreateAccountSubgroupDto,
+    NextAccountCodeQueryDto,
+    NextAccountGroupCodeQueryDto,
+    NextAccountSubgroupCodeQueryDto,
     UpdateAccountDto,
     UpdateAccountGroupDto,
     UpdateAccountSubgroupDto,
@@ -116,6 +119,14 @@ export class AccountingController {
         return this.accountingService.findAccountGroups(tenant.tenantId);
     }
 
+    @Get('account-groups/next-code')
+    nextAccountGroupCode(
+        @Tenant() tenant: TenantContext,
+        @Query() query: NextAccountGroupCodeQueryDto,
+    ) {
+        return this.accountingService.nextAccountGroupCode(tenant.tenantId, query.type);
+    }
+
     @Post('account-groups')
     createAccountGroup(@Tenant() tenant: TenantContext, @Body() dto: CreateAccountGroupDto) {
         return this.accountingService.createAccountGroup(tenant.tenantId, dto);
@@ -143,6 +154,14 @@ export class AccountingController {
         return this.accountingService.findAccountSubgroups(tenant.tenantId, query);
     }
 
+    @Get('account-subgroups/next-code')
+    nextAccountSubgroupCode(
+        @Tenant() tenant: TenantContext,
+        @Query() query: NextAccountSubgroupCodeQueryDto,
+    ) {
+        return this.accountingService.nextAccountSubgroupCode(tenant.tenantId, query.groupId);
+    }
+
     @Post('account-subgroups')
     createAccountSubgroup(@Tenant() tenant: TenantContext, @Body() dto: CreateAccountSubgroupDto) {
         return this.accountingService.createAccountSubgroup(tenant.tenantId, dto);
@@ -165,6 +184,15 @@ export class AccountingController {
     @Get('accounts')
     findAccounts(@Tenant() tenant: TenantContext, @Query() query: ListAccountsQueryDto) {
         return this.accountingService.findAccounts(tenant.tenantId, query);
+    }
+
+    @Get('accounts/next-code')
+    nextAccountCode(@Tenant() tenant: TenantContext, @Query() query: NextAccountCodeQueryDto) {
+        return this.accountingService.nextAccountCodeFor(
+            tenant.tenantId,
+            query.groupId,
+            query.subgroupId,
+        );
     }
 
     @Post('accounts')

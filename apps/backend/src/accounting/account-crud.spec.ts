@@ -17,18 +17,21 @@ describe('AccountingService — chart of accounts update/delete', () => {
         accountGroup: {
             findFirst: jest.fn(),
             findUnique: jest.fn(),
+            findMany: jest.fn(),
             update: jest.fn(),
             delete: jest.fn(),
         },
         accountSubgroup: {
             findFirst: jest.fn(),
             findUnique: jest.fn(),
+            findMany: jest.fn(),
             update: jest.fn(),
             delete: jest.fn(),
         },
         account: {
             findFirst: jest.fn(),
             findUnique: jest.fn(),
+            findMany: jest.fn(),
             update: jest.fn(),
             delete: jest.fn(),
         },
@@ -54,6 +57,11 @@ describe('AccountingService — chart of accounts update/delete', () => {
 
     beforeEach(async () => {
         jest.resetAllMocks();
+
+        // Code allocation reads the tenant's codes on every create/update.
+        db.accountGroup.findMany.mockResolvedValue([]);
+        db.accountSubgroup.findMany.mockResolvedValue([]);
+        db.account.findMany.mockResolvedValue([]);
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -204,8 +212,8 @@ describe('AccountingService — chart of accounts update/delete', () => {
         };
 
         it('refuses to move a posted account into a group of a different type', async () => {
-            db.account.findFirst.mockResolvedValue({ id: 'account-1', type: 'asset' });
-            db.accountGroup.findFirst.mockResolvedValue({ id: 'group-2', type: 'expense' });
+            db.account.findFirst.mockResolvedValue({ id: 'account-1', type: 'asset', code: '110101' });
+            db.accountGroup.findFirst.mockResolvedValue({ id: 'group-2', type: 'expense', code: '51' });
             db.voucherDetail.count.mockResolvedValue(7);
 
             await expect(
@@ -215,8 +223,8 @@ describe('AccountingService — chart of accounts update/delete', () => {
         });
 
         it('allows a cross-type move while the account is unused, deriving the new type', async () => {
-            db.account.findFirst.mockResolvedValue({ id: 'account-1', type: 'asset' });
-            db.accountGroup.findFirst.mockResolvedValue({ id: 'group-2', type: 'expense' });
+            db.account.findFirst.mockResolvedValue({ id: 'account-1', type: 'asset', code: '110101' });
+            db.accountGroup.findFirst.mockResolvedValue({ id: 'group-2', type: 'expense', code: '51' });
             db.voucherDetail.count.mockResolvedValue(0);
             db.account.findUnique.mockResolvedValue(null);
             db.account.update.mockResolvedValue({ id: 'account-1' });
@@ -232,8 +240,8 @@ describe('AccountingService — chart of accounts update/delete', () => {
         });
 
         it('detaches the subgroup when none is supplied', async () => {
-            db.account.findFirst.mockResolvedValue({ id: 'account-1', type: 'asset' });
-            db.accountGroup.findFirst.mockResolvedValue({ id: 'group-2', type: 'asset' });
+            db.account.findFirst.mockResolvedValue({ id: 'account-1', type: 'asset', code: '110101' });
+            db.accountGroup.findFirst.mockResolvedValue({ id: 'group-2', type: 'asset', code: '11' });
             db.account.findUnique.mockResolvedValue(null);
             db.account.update.mockResolvedValue({ id: 'account-1' });
 
@@ -247,8 +255,8 @@ describe('AccountingService — chart of accounts update/delete', () => {
         });
 
         it('rejects a subgroup that belongs to a different group', async () => {
-            db.account.findFirst.mockResolvedValue({ id: 'account-1', type: 'asset' });
-            db.accountGroup.findFirst.mockResolvedValue({ id: 'group-2', type: 'asset' });
+            db.account.findFirst.mockResolvedValue({ id: 'account-1', type: 'asset', code: '110101' });
+            db.accountGroup.findFirst.mockResolvedValue({ id: 'group-2', type: 'asset', code: '11' });
             db.accountSubgroup.findFirst.mockResolvedValue(null);
 
             await expect(
@@ -260,8 +268,8 @@ describe('AccountingService — chart of accounts update/delete', () => {
         });
 
         it('rejects a name already taken by another account', async () => {
-            db.account.findFirst.mockResolvedValue({ id: 'account-1', type: 'asset' });
-            db.accountGroup.findFirst.mockResolvedValue({ id: 'group-2', type: 'asset' });
+            db.account.findFirst.mockResolvedValue({ id: 'account-1', type: 'asset', code: '110101' });
+            db.accountGroup.findFirst.mockResolvedValue({ id: 'group-2', type: 'asset', code: '11' });
             db.account.findUnique.mockResolvedValue({ id: 'account-9' });
 
             await expect(
@@ -270,8 +278,8 @@ describe('AccountingService — chart of accounts update/delete', () => {
         });
 
         it('lets an account keep its own name', async () => {
-            db.account.findFirst.mockResolvedValue({ id: 'account-1', type: 'asset' });
-            db.accountGroup.findFirst.mockResolvedValue({ id: 'group-2', type: 'asset' });
+            db.account.findFirst.mockResolvedValue({ id: 'account-1', type: 'asset', code: '110101' });
+            db.accountGroup.findFirst.mockResolvedValue({ id: 'group-2', type: 'asset', code: '11' });
             db.account.findUnique.mockResolvedValue({ id: 'account-1' });
             db.account.update.mockResolvedValue({ id: 'account-1' });
 
