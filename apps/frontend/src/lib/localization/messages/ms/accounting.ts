@@ -237,7 +237,7 @@ export const accountingMessages = {
         filterBySubgroup: 'Tapis mengikut subkumpulan',
         filterByType: 'Tapis mengikut jenis',
         filterByCategory: 'Tapis mengikut kategori',
-        columns: { code: 'Kod', account: 'Akaun', type: 'Jenis', category: 'Kategori', group: 'Kumpulan', subgroup: 'Subkumpulan' },
+        columns: { code: 'Kod', account: 'Akaun', type: 'Jenis', category: 'Kategori', group: 'Kumpulan', subgroup: 'Subkumpulan', balance: 'Baki' },
         unassigned: 'Tidak ditetapkan',
         noCode: 'Tiada kod',
         cashInHand: 'Tunai di Tangan',

@@ -332,6 +332,7 @@ export const accountingMessages = {
             category: 'Category',
             group: 'Group',
             subgroup: 'Subgroup',
+            balance: 'Balance',
         },
         unassigned: 'Unassigned',
         noCode: 'No code',

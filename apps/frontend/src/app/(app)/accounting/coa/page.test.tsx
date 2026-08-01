@@ -46,6 +46,8 @@ describe('ChartOfAccountsPage', () => {
                 category: 'cash',
                 group: { id: 'group-1', name: 'Current Assets', type: 'asset' },
                 subgroup: { id: 'subgroup-1', name: 'Cash and Bank' },
+                balance: 3800,
+                balance_side: 'debit',
             },
         ]);
         api.createAccount.mockResolvedValue({ id: 'account-2' });
@@ -62,6 +64,15 @@ describe('ChartOfAccountsPage', () => {
 
         expect(screen.getByText('1010')).toBeInTheDocument();
         expect(screen.getAllByText('Current Assets').length).toBeGreaterThan(0);
+    });
+
+    it('shows each account current balance with the side it sits on', async () => {
+        renderPage();
+
+        await waitFor(() => screen.getByText('Cash in Hand'));
+
+        expect(screen.getByText(/3,800/)).toBeInTheDocument();
+        expect(screen.getByText('Debit')).toBeInTheDocument();
     });
 
     it('applies account type filters through the API loader', async () => {

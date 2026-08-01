@@ -285,7 +285,7 @@ export class AccountingService {
     async findAccounts(tenantId: string, query: ListAccountsQueryDto) {
         const search = query.search?.trim();
 
-        return this.db.account.findMany({
+        const accounts = await this.db.account.findMany({
             where: {
                 tenant_id: tenantId,
                 ...(query.groupId ? { group_id: query.groupId } : {}),
@@ -305,6 +305,38 @@ export class AccountingService {
                 subgroup: true,
             },
             orderBy: [{ type: 'asc' }, { name: 'asc' }],
+        });
+
+        if (accounts.length === 0) {
+            return [];
+        }
+
+        // Current balance is the all-time closing balance, matching what the ledger
+        // and the trial balance show with no date filter applied — one grouped query
+        // for the whole page rather than a per-account aggregate.
+        const totals = await this.db.voucherDetail.groupBy({
+            by: ['account_id'],
+            where: {
+                account_id: { in: accounts.map((account) => account.id) },
+                voucher: { tenant_id: tenantId },
+            },
+            _sum: { debit_amount: true, credit_amount: true },
+        });
+
+        const totalsByAccount = new Map(totals.map((total) => [total.account_id, total._sum]));
+
+        return accounts.map((account) => {
+            const sums = totalsByAccount.get(account.id);
+            const balance = this.presentBalance(
+                account.type as AccountType,
+                this.calculateSignedBalance(
+                    account.type as AccountType,
+                    Number(sums?.debit_amount ?? 0),
+                    Number(sums?.credit_amount ?? 0),
+                ),
+            );
+
+            return { ...account, balance: balance.amount, balance_side: balance.side };
         });
     }
 
