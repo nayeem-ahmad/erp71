@@ -15,8 +15,26 @@ import { PrismaClient, SubscriptionPlan } from '@prisma/client';
  * hand-inserting a row.
  *
  * So this file — and ONLY this file — is safe to run automatically on every
- * production deploy. It is pure idempotent upserts of version-controlled
- * definitions and never touches tenants, users, or anything a customer created.
+ * production deploy. It never touches tenants, users, or anything a customer
+ * created.
+ *
+ * Create-once, then additive
+ * --------------------------
+ * These rows are ALSO editable by a platform admin (Admin → Subscription Plans,
+ * Admin → Platform Settings → Add-ons), which makes "idempotent upsert of the
+ * version-controlled definition" the wrong shape: it reverted every price, name
+ * and entitlement an admin had changed, on every single deploy. The admin UI was
+ * effectively a lie — the edit saved, then vanished at the next release.
+ *
+ * So the definitions below are the values a row is *born* with, not the values
+ * it is held at. On a row that already exists this only ever ADDS entitlement
+ * keys that are missing — which is what carries a newly-coded feature flag to
+ * production — and never rewrites a key that is already there, nor the name,
+ * description, prices, active flag or marketing bullets.
+ *
+ * The cost, stated plainly: changing a plan's price or an existing entitlement
+ * in this file no longer reaches an environment where that plan exists. Change
+ * it in the admin UI, which is now the source of truth for live values.
  *
  * Demo and development fixtures live in `seed.ts`, which must never run against
  * production. See the header comment there.
@@ -24,10 +42,30 @@ import { PrismaClient, SubscriptionPlan } from '@prisma/client';
 
 type PlanCode = 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
 
+type Json = Record<string, unknown>;
+
+/**
+ * `defaults` keys that `current` does not already have. Existing keys are left
+ * exactly as they are, including when an admin has set them to something the
+ * code disagrees with — that disagreement is the admin's decision, not drift.
+ */
+export function addMissingKeys(current: unknown, defaults: Json): { merged: Json; added: string[] } {
+    const base: Json =
+        current && typeof current === 'object' && !Array.isArray(current) ? { ...(current as Json) } : {};
+    const added: string[] = [];
+    for (const [key, value] of Object.entries(defaults)) {
+        if (!(key in base)) {
+            base[key] = value;
+            added.push(key);
+        }
+    }
+    return { merged: base, added };
+}
+
 export async function seedPlatformReferenceData(
     prisma: PrismaClient,
 ): Promise<Record<PlanCode, SubscriptionPlan>> {
-    const upsertPlan = (data: {
+    const upsertPlan = async (data: {
         code: PlanCode;
         name: string;
         description: string;
@@ -39,27 +77,32 @@ export async function seedPlatformReferenceData(
     }) => {
         const isActive = data.is_active ?? true;
 
-        return prisma.subscriptionPlan.upsert({
+        const existing = await prisma.subscriptionPlan.findUnique({ where: { code: data.code } });
+        if (!existing) {
+            return prisma.subscriptionPlan.create({
+                data: {
+                    code: data.code,
+                    name: data.name,
+                    description: data.description,
+                    monthly_price: data.monthly_price,
+                    yearly_price: data.yearly_price,
+                    is_active: isActive,
+                    features_json: data.features_json as never,
+                    marketing_features_json: data.marketing_features_json ?? [],
+                },
+            });
+        }
+
+        // Entitlements only, and only the keys that are missing. Price, name,
+        // description, active flag and marketing bullets belong to whoever last
+        // edited them in the admin UI.
+        const { merged, added } = addMissingKeys(existing.features_json, data.features_json);
+        if (added.length === 0) return existing;
+
+        console.log(`  ${data.code}: added entitlement(s) ${added.join(', ')}`);
+        return prisma.subscriptionPlan.update({
             where: { code: data.code },
-            update: {
-                name: data.name,
-                description: data.description,
-                monthly_price: data.monthly_price,
-                yearly_price: data.yearly_price,
-                is_active: isActive,
-                features_json: data.features_json,
-                marketing_features_json: data.marketing_features_json ?? [],
-            },
-            create: {
-                code: data.code,
-                name: data.name,
-                description: data.description,
-                monthly_price: data.monthly_price,
-                yearly_price: data.yearly_price,
-                is_active: isActive,
-                features_json: data.features_json,
-                marketing_features_json: data.marketing_features_json ?? [],
-            },
+            data: { features_json: merged as never },
         });
     };
 
@@ -236,7 +279,7 @@ export async function seedPlatformReferenceData(
     // Storefront and Book Publishing are intentionally not seeded here yet —
     // storefront needs a grandfathering decision before it can be paywalled,
     // and Book Publishing has no backend module yet (see TODO.md).
-    const upsertAddon = (data: {
+    const upsertAddon = async (data: {
         code: string;
         name: string;
         description: string;
@@ -245,28 +288,33 @@ export async function seedPlatformReferenceData(
         yearly_price: number;
         sort_order: number;
         features_json: Record<string, unknown>;
-    }) => prisma.addonModule.upsert({
-        where: { code: data.code },
-        update: {
-            name: data.name,
-            description: data.description,
-            category: data.category,
-            monthly_price: data.monthly_price,
-            yearly_price: data.yearly_price,
-            sort_order: data.sort_order,
-            features_json: data.features_json,
-        },
-        create: {
-            code: data.code,
-            name: data.name,
-            description: data.description,
-            category: data.category,
-            monthly_price: data.monthly_price,
-            yearly_price: data.yearly_price,
-            sort_order: data.sort_order,
-            features_json: data.features_json,
-        },
-    });
+    }) => {
+        const existing = await prisma.addonModule.findUnique({ where: { code: data.code } });
+        if (!existing) {
+            return prisma.addonModule.create({
+                data: {
+                    code: data.code,
+                    name: data.name,
+                    description: data.description,
+                    category: data.category,
+                    monthly_price: data.monthly_price,
+                    yearly_price: data.yearly_price,
+                    sort_order: data.sort_order,
+                    features_json: data.features_json as never,
+                },
+            });
+        }
+
+        // Same rule as plans: an admin's pricing and copy survive the deploy.
+        const { merged, added } = addMissingKeys(existing.features_json, data.features_json);
+        if (added.length === 0) return existing;
+
+        console.log(`  add-on ${data.code}: added entitlement(s) ${added.join(', ')}`);
+        return prisma.addonModule.update({
+            where: { code: data.code },
+            data: { features_json: merged as never },
+        });
+    };
 
     await upsertAddon({
         code: 'MANUFACTURING',
