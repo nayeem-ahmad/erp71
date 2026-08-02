@@ -2867,7 +2867,11 @@ export const api = {
         for (const [key, value] of Object.entries(params)) {
             if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
         }
-        return fetchWithAuth(`/projects?${query}`);
+        // fetchPaginated, not fetchWithAuth: TransformInterceptor reshapes the
+        // service's `{ items, total, … }` into `{ data: items, meta }`, and
+        // fetchWithAuth returns the unwrapped `data` — a bare array with no
+        // `.items`, which every caller here reads.
+        return fetchPaginated(`/projects?${query}`);
     },
     getProject: (id: string) => fetchWithAuth(`/projects/${id}`),
     createProject: (data: Record<string, unknown>) =>
@@ -2947,7 +2951,7 @@ export const api = {
         for (const [key, value] of Object.entries(params)) {
             if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
         }
-        return fetchWithAuth(`/project-tasks?${query}`);
+        return fetchPaginated(`/project-tasks?${query}`);
     },
     /** Kanban passes no sprintId; scrum passes the active sprint's. */
     getProjectBoard: (projectId: string, sprintId?: string) =>
@@ -2997,7 +3001,7 @@ export const api = {
         for (const [key, value] of Object.entries(params)) {
             if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
         }
-        return fetchWithAuth(`/project-time?${query}`);
+        return fetchPaginated(`/project-time?${query}`);
     },
     logProjectTime: (data: {
         taskId: string;
