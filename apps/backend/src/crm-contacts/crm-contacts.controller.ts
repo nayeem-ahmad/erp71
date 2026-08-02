@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards, Us
 import { Throttle } from '@nestjs/throttler';
 import { CrmContactsService } from './crm-contacts.service';
 import {
+    AddContactAttachmentDto,
     BulkContactActionDto,
     CreateContactDto,
     ListContactsDto,
@@ -57,6 +58,36 @@ export class CrmContactsController {
     @Get(':id')
     findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.service.findOne(tenant.tenantId, id);
+    }
+
+    @Get(':id/attachments')
+    listAttachments(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.service.listAttachments(tenant.tenantId, id);
+    }
+
+    /**
+     * Keep the scanned card against a contact that already exists.
+     *
+     * Throttled like the scan route: the body carries an image, so a retry loop
+     * here is a bandwidth and storage problem rather than an ordinary one.
+     */
+    @Post(':id/attachments')
+    @Throttle({ default: { limit: 20, ttl: 60_000 } })
+    addAttachment(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: AddContactAttachmentDto,
+    ) {
+        return this.service.addAttachment(tenant.tenantId, tenant.userId, id, dto);
+    }
+
+    @Delete(':id/attachments/:attachmentId')
+    removeAttachment(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Param('attachmentId') attachmentId: string,
+    ) {
+        return this.service.removeAttachment(tenant.tenantId, id, attachmentId);
     }
 
     @Patch(':id')

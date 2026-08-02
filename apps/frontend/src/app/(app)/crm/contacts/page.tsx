@@ -14,8 +14,12 @@ import { DataTable, type BulkAction } from '@/components/data-table';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import { PageShell, PageHeader, Button, Select, Input, ConfirmDialog } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import BusinessCardScanner, { type ScannedCard } from './BusinessCardScanner';
-import { CONTACT_CAPTURE_SOURCES, SCANNED_CARD_STORAGE_KEY } from './contact-form-fields';
+import BusinessCardScanner, { type ScannedCard, type ScannedCardImage } from './BusinessCardScanner';
+import {
+    CONTACT_CAPTURE_SOURCES,
+    SCANNED_CARD_IMAGE_STORAGE_KEY,
+    SCANNED_CARD_STORAGE_KEY,
+} from './contact-form-fields';
 
 interface Contact {
     id: string;
@@ -149,12 +153,21 @@ export default function ContactsPage() {
      * handed to the create form through sessionStorage and the user lands on a
      * pre-filled form rather than an already-saved contact they never reviewed.
      */
-    const applyScan = useCallback((fields: ScannedCard) => {
+    const applyScan = useCallback((fields: ScannedCard, image: ScannedCardImage | null) => {
         try {
             sessionStorage.setItem(SCANNED_CARD_STORAGE_KEY, JSON.stringify(fields));
         } catch {
             // Private-mode storage failures are not worth blocking on; the form
             // simply opens empty.
+        }
+        // Written separately so a photo that blows the quota still leaves the
+        // fields above intact — losing the card is a smaller loss than losing
+        // everything the scan read off it.
+        try {
+            if (image) sessionStorage.setItem(SCANNED_CARD_IMAGE_STORAGE_KEY, JSON.stringify(image));
+            else sessionStorage.removeItem(SCANNED_CARD_IMAGE_STORAGE_KEY);
+        } catch {
+            // The contact is still created; it simply arrives without its card.
         }
         setScannerOpen(false);
         router.push(routes.crm.contactNew);

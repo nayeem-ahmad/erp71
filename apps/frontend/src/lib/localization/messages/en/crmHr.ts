@@ -137,6 +137,12 @@ export const crmHrMessages = {
                 rawText: 'Text read from the card',
                 nothingFound: 'No fields could be read from that image.',
                 creditsHint: 'Scanning uses AI credits from your plan.',
+                cardSection: 'Business card',
+                cardSectionHint: 'The photo this contact was read from. Tap to open it full size.',
+                cardNotKept: 'Contact saved, but the card image could not be kept.',
+                cardRemoveTitle: 'Remove card image',
+                cardRemoveConfirm: 'Delete this card photo? The contact details stay.',
+                cardRemoveFailed: 'Could not remove the card image.',
             },
         },
         leads: {

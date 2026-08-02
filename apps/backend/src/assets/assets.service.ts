@@ -49,6 +49,54 @@ export class AssetsService implements OnModuleInit {
     }
 
     /**
+     * Upload a raw buffer and return the asset's identity, not just its URL.
+     *
+     * `uploadFile` above hands back `secure_url` alone, and a URL cannot be
+     * turned back into a `public_id` — so anything uploaded through it can
+     * never be deleted again. Callers that keep a row pointing at the asset
+     * need the `public_id` to clean up when that row goes, which is what this
+     * returns.
+     */
+    async uploadBuffer(
+        buffer: Buffer,
+        folder: string,
+        fileName: string,
+    ): Promise<{ url: string; publicId: string; bytes: number; format?: string }> {
+        if (!this.enabled) {
+            throw new Error('Cloudinary is not configured');
+        }
+
+        return new Promise((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream(
+                {
+                    folder: `retail/${folder}`,
+                    public_id: fileName,
+                    resource_type: 'image',
+                    unique_filename: true,
+                    overwrite: false,
+                    transformation: [{ quality: 'auto', fetch_format: 'auto' }],
+                },
+                (error, result?: UploadApiResponse) => {
+                    if (error) return reject(error);
+                    if (!result) return reject(new Error('Cloudinary returned no result'));
+                    resolve({
+                        url: result.secure_url,
+                        publicId: result.public_id,
+                        bytes: result.bytes,
+                        format: result.format,
+                    });
+                },
+            );
+            stream.end(buffer);
+        });
+    }
+
+    /** Whether uploads can run at all — lets callers fail with a clear message. */
+    isEnabled(): boolean {
+        return this.enabled;
+    }
+
+    /**
      * Delete a Cloudinary asset by its public_id.
      */
     async deleteFile(publicId: string): Promise<void> {

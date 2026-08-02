@@ -20,6 +20,15 @@ import {
     type ContactFormErrors,
 } from '../contact-form-fields';
 
+interface ContactAttachment {
+    id: string;
+    file_url: string;
+    file_name: string;
+    mime_type: string | null;
+    file_size: number | null;
+    created_at: string;
+}
+
 interface ContactRecord {
     id: string;
     name: string;
@@ -30,6 +39,7 @@ interface ContactRecord {
     capture_source: string;
     created_at: string;
     creator: { id: string; name: string } | null;
+    attachments?: ContactAttachment[];
 }
 
 export default function ContactDetailPage() {
@@ -48,6 +58,7 @@ export default function ContactDetailPage() {
     const [saveError, setSaveError] = useState<string | null>(null);
     const [teamMembers, setTeamMembers] = useState<any[]>([]);
     const [deleteOpen, setDeleteOpen] = useState(false);
+    const [cardToRemove, setCardToRemove] = useState<ContactAttachment | null>(null);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -96,6 +107,19 @@ export default function ContactDetailPage() {
         }
     };
 
+    const removeCard = async (attachment: ContactAttachment) => {
+        setCardToRemove(null);
+        try {
+            await api.deleteContactAttachment(id, attachment.id);
+            // Reloaded rather than spliced out locally: the card is the evidence
+            // behind a BUSINESS_CARD contact, so what the server holds is what
+            // should be on screen.
+            await load();
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : m.scan.cardRemoveFailed);
+        }
+    };
+
     if (loading) {
         return (
             <PageShell maxWidth="narrow">
@@ -117,6 +141,7 @@ export default function ContactDetailPage() {
 
     const captureSourceLabel =
         (m.captureSources as Record<string, string>)[contact.capture_source] ?? contact.capture_source;
+    const cards = contact.attachments ?? [];
 
     return (
         <PageShell maxWidth="narrow">
@@ -180,6 +205,39 @@ export default function ContactDetailPage() {
                 </FormFooter>
             </div>
 
+            {cards.length > 0 && (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 space-y-3">
+                    <h2 className="text-sm font-semibold text-gray-700">{m.scan.cardSection}</h2>
+                    <p className="text-xs text-gray-500">{m.scan.cardSectionHint}</p>
+                    <ul className="grid gap-3 sm:grid-cols-2">
+                        {cards.map((card) => (
+                            <li key={card.id} className="space-y-2">
+                                {/* Opens full size: a card is read, not glanced at, and the
+                                    thumbnail is deliberately too small for the fine print. */}
+                                <a href={card.file_url} target="_blank" rel="noopener noreferrer">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                        src={card.file_url}
+                                        alt={m.scan.cardSection}
+                                        className="w-full max-h-56 object-contain rounded-lg border border-gray-200 bg-gray-50"
+                                    />
+                                </a>
+                                <div className="flex items-center justify-between gap-2 text-xs text-gray-500">
+                                    <span>{formatDate(card.created_at)}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCardToRemove(card)}
+                                        className="inline-flex items-center gap-1 text-danger hover:underline min-h-touch"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" /> {c.delete}
+                                    </button>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
             <ConfirmDialog
                 open={deleteOpen}
                 title={c.delete}
@@ -189,6 +247,17 @@ export default function ContactDetailPage() {
                 danger
                 onConfirm={() => void remove()}
                 onCancel={() => setDeleteOpen(false)}
+            />
+
+            <ConfirmDialog
+                open={!!cardToRemove}
+                title={m.scan.cardRemoveTitle}
+                prompt={m.scan.cardRemoveConfirm}
+                confirmLabel={c.delete}
+                cancelLabel={c.cancel}
+                danger
+                onConfirm={() => { if (cardToRemove) void removeCard(cardToRemove); }}
+                onCancel={() => setCardToRemove(null)}
             />
         </PageShell>
     );
