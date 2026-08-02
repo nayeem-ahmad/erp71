@@ -11,9 +11,30 @@ export class SprintsService {
         private readonly snapshots: SprintSnapshotService,
     ) {}
 
-    async list(tenantId: string, projectId: string) {
+    /**
+     * Every sprint in the tenant. Sprints are no longer scoped to a project, so
+     * `projectId` filters by *participation* — sprints holding at least one task
+     * from that project — rather than by ownership, which no longer exists.
+     */
+    async list(tenantId: string, projectId?: string) {
+        const participating = projectId
+            ? (await this.db.projectTask.findMany({
+                where: {
+                    tenant_id: tenantId,
+                    project_id: projectId,
+                    deleted_at: null,
+                    sprint_id: { not: null },
+                },
+                select: { sprint_id: true },
+                distinct: ['sprint_id'],
+            })).map((row) => row.sprint_id as string)
+            : null;
+
         const sprints = await this.db.sprint.findMany({
-            where: { tenant_id: tenantId, project_id: projectId },
+            where: {
+                tenant_id: tenantId,
+                ...(participating ? { id: { in: participating } } : {}),
+            },
             orderBy: [{ start_date: 'desc' }],
             include: { _count: { select: { tasks: true } } },
         });
@@ -23,7 +44,6 @@ export class SprintsService {
             by: ['sprint_id'],
             where: {
                 tenant_id: tenantId,
-                project_id: projectId,
                 deleted_at: null,
                 sprint_id: { not: null },
             },
@@ -39,29 +59,42 @@ export class SprintsService {
             ]),
         );
 
+        // Which projects a sprint spans is now derived from its tasks — there is
+        // no column for it — so it is resolved here once rather than by every
+        // caller re-querying.
+        const spans = sprints.length === 0 ? [] : await this.db.projectTask.findMany({
+            where: {
+                tenant_id: tenantId,
+                deleted_at: null,
+                sprint_id: { in: sprints.map((s) => s.id) },
+            },
+            select: { sprint_id: true, project: { select: { id: true, code: true, name: true } } },
+            distinct: ['sprint_id', 'project_id'],
+        });
+        const projectsBySprint = new Map<string, { id: string; code: string; name: string }[]>();
+        for (const row of spans) {
+            const list = projectsBySprint.get(row.sprint_id as string) ?? [];
+            list.push(row.project);
+            projectsBySprint.set(row.sprint_id as string, list);
+        }
+
         return sprints.map((sprint) => ({
             ...sprint,
             estimated_hours: bySprint.get(sprint.id)?.estimated ?? 0,
             remaining_hours: bySprint.get(sprint.id)?.remaining ?? 0,
+            projects: projectsBySprint.get(sprint.id) ?? [],
         }));
     }
 
     async findOne(tenantId: string, sprintId: string) {
         const sprint = await this.db.sprint.findFirst({
             where: { id: sprintId, tenant_id: tenantId },
-            include: { project: { select: { id: true, name: true, code: true } } },
         });
         if (!sprint) throw new NotFoundException('Sprint not found');
         return sprint;
     }
 
     async create(tenantId: string, dto: CreateSprintDto) {
-        const project = await this.db.project.findFirst({
-            where: { id: dto.projectId, tenant_id: tenantId, deleted_at: null },
-            select: { id: true },
-        });
-        if (!project) throw new NotFoundException('Project not found');
-
         const start = new Date(dto.startDate);
         const end = new Date(dto.endDate);
         if (end < start) throw new BadRequestException('A sprint cannot end before it starts.');
@@ -69,7 +102,6 @@ export class SprintsService {
         return this.db.sprint.create({
             data: {
                 tenant_id: tenantId,
-                project_id: dto.projectId,
                 name: dto.name.trim(),
                 goal: dto.goal?.trim() || null,
                 start_date: start,
@@ -86,7 +118,7 @@ export class SprintsService {
         if (end < start) throw new BadRequestException('A sprint cannot end before it starts.');
 
         if (dto.status === 'ACTIVE' && sprint.status !== 'ACTIVE') {
-            await this.assertNoOtherActive(tenantId, sprint.project_id, sprintId);
+            await this.assertNoOtherActive(tenantId, sprintId);
         }
 
         return this.db.sprint.update({
@@ -110,7 +142,7 @@ export class SprintsService {
         if (sprint.status === 'COMPLETED') {
             throw new BadRequestException('That sprint is already complete.');
         }
-        await this.assertNoOtherActive(tenantId, sprint.project_id, sprintId);
+        await this.assertNoOtherActive(tenantId, sprintId);
 
         const updated = await this.db.sprint.update({
             where: { id: sprintId },
@@ -152,12 +184,12 @@ export class SprintsService {
         return { ...updated, carried_over: carried.length };
     }
 
+    /** Tasks may come from any project — that is the point of a tenant-level sprint. */
     async assignTasks(tenantId: string, sprintId: string, dto: AssignTasksToSprintDto) {
-        const sprint = await this.findOne(tenantId, sprintId);
+        await this.findOne(tenantId, sprintId);
         const result = await this.db.projectTask.updateMany({
             where: {
                 tenant_id: tenantId,
-                project_id: sprint.project_id,
                 id: { in: dto.taskIds },
                 deleted_at: null,
             },
@@ -228,14 +260,15 @@ export class SprintsService {
     }
 
     /**
-     * One active sprint per project. More than one makes "the board" ambiguous
-     * and gives the burndown two candidate sprints to draw.
+     * One active sprint per TENANT. Was per project; a sprint no longer belongs
+     * to one, so the tenant is the only scope left — and more than one active
+     * sprint makes "the active sprint" (which the board and burndown both lean
+     * on) ambiguous.
      */
-    private async assertNoOtherActive(tenantId: string, projectId: string, exceptId: string) {
+    private async assertNoOtherActive(tenantId: string, exceptId: string) {
         const active = await this.db.sprint.findFirst({
             where: {
                 tenant_id: tenantId,
-                project_id: projectId,
                 status: 'ACTIVE' as never,
                 id: { not: exceptId },
             },

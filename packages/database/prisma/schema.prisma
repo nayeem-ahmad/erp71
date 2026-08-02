@@ -2970,6 +2970,8 @@ model Employee {
   salaryPayments    SalaryPayment[]
   salaryAccruals    SalaryAccrual[]
   projectTimeEntries ProjectTimeEntry[]
+  projectMemberships ProjectMember[] @relation("ProjectMemberEmployee")
+  projectTasksAssigned ProjectTask[] @relation("ProjectTaskAssigneeEmployee")
 
   @@unique([tenant_id, employee_code])
   @@unique([tenant_id, phone])
@@ -3670,7 +3672,6 @@ model Project {
   milestones  ProjectMilestone[]
   tasks       ProjectTask[]
   timeEntries ProjectTimeEntry[]
-  sprints     Sprint[]
   comments    ProjectComment[]
   attachments ProjectAttachment[]
   remainingLogs ProjectTaskRemainingLog[]
@@ -3699,20 +3700,28 @@ model ProjectType {
   @@map("project_types")
 }
 
+/// A person on a project. EXACTLY ONE of user_id / employee_id is set — Prisma
+/// cannot express that, so ProjectsService enforces it. An employee with no
+/// login is a real staffing fact worth recording, which is why both exist;
+/// ProjectTimeEntry already carries the same pair for the same reason.
 model ProjectMember {
-  id         String            @id @default(uuid())
-  tenant_id  String
-  project_id String
-  user_id    String
-  role       ProjectMemberRole @default(MEMBER)
-  created_at DateTime          @default(now())
+  id          String            @id @default(uuid())
+  tenant_id   String
+  project_id  String
+  user_id     String?
+  employee_id String?
+  role        ProjectMemberRole @default(MEMBER)
+  created_at  DateTime          @default(now())
 
-  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  user    User    @relation("ProjectMemberUser", fields: [user_id], references: [id], onDelete: Cascade)
+  tenant   Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  project  Project   @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  user     User?     @relation("ProjectMemberUser", fields: [user_id], references: [id], onDelete: Cascade)
+  employee Employee? @relation("ProjectMemberEmployee", fields: [employee_id], references: [id], onDelete: Cascade)
 
   @@unique([project_id, user_id])
+  @@unique([project_id, employee_id])
   @@index([tenant_id, user_id])
+  @@index([tenant_id, employee_id])
   @@map("project_members")
 }
 
@@ -3766,7 +3775,11 @@ model ProjectTask {
   description     String?
   status_id       String
   priority        ProjectPriority @default(MEDIUM)
-  assignee_id     String?
+  /// Assignment mirrors ProjectMember: a task goes to a User OR to an Employee
+  /// who has no login. At most one is set. Everything that reports on "who is
+  /// this for" must read both — see assigneeOf() in project-tasks.service.ts.
+  assignee_id          String?
+  assignee_employee_id String?
   due_date        DateTime?       @db.Date
   estimate_hours  Decimal?        @db.Decimal(8, 2)
   /// An independent re-estimate, never derived from estimate minus logged.
@@ -3787,6 +3800,7 @@ model ProjectTask {
   subtasks   ProjectTask[]      @relation("ProjectTaskSubtask")
   status     ProjectTaskStatus  @relation(fields: [status_id], references: [id])
   assignee   User?              @relation("ProjectTaskAssignee", fields: [assignee_id], references: [id])
+  assigneeEmployee Employee?    @relation("ProjectTaskAssigneeEmployee", fields: [assignee_employee_id], references: [id])
   creator    User?              @relation("ProjectTaskCreator", fields: [created_by], references: [id])
 
   checklistItems ProjectTaskChecklistItem[]
@@ -3798,6 +3812,7 @@ model ProjectTask {
   @@index([tenant_id, project_id, deleted_at])
   @@index([tenant_id, sprint_id])
   @@index([tenant_id, assignee_id])
+  @@index([tenant_id, assignee_employee_id])
   @@index([project_id, status_id, sort_order])
   @@map("project_tasks")
 }
@@ -3878,10 +3893,12 @@ model ProjectTimeEntry {
   @@map("project_time_entries")
 }
 
+/// Tenant-level time-box. Deliberately NOT scoped to a project: one sprint
+/// takes tasks from any number of projects, so the only ownership is the tenant.
+/// At most one sprint per tenant may be ACTIVE (enforced in SprintsService).
 model Sprint {
   id         String       @id @default(uuid())
   tenant_id  String
-  project_id String
   name       String
   goal       String?
   start_date DateTime     @db.Date
@@ -3890,14 +3907,13 @@ model Sprint {
   created_at DateTime     @default(now())
   updated_at DateTime     @updatedAt
 
-  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   tasks         ProjectTask[]
   snapshots     SprintSnapshot[]
   remainingLogs ProjectTaskRemainingLog[]
 
-  @@index([tenant_id, project_id, status])
+  @@index([tenant_id, status])
   @@map("sprints")
 }
 

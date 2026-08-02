@@ -73,6 +73,7 @@ import {
     Cpu,
     Database,
     Factory,
+    Timer,
 } from 'lucide-react';
 
 const NAV_ICON_MAP: Record<string, LucideIcon> = {
@@ -149,6 +150,7 @@ const NAV_ICON_MAP: Record<string, LucideIcon> = {
     Waves,
     Copy,
     Factory,
+    Timer,
 };
 
 export function resolveNavIcon(name: string): LucideIcon {

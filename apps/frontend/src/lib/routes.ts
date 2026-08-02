@@ -158,8 +158,10 @@ export const routes = {
         new: '/projects/new' as const,
         detail: (id: string) => `/projects/${id}` as const,
         board: (id: string) => `/projects/${id}/board` as const,
-        backlog: (id: string) => `/projects/${id}/backlog` as const,
-        myTasks: '/projects/my-tasks',
+        edit: (id: string) => `/projects/${id}/edit` as const,
+        tasks: '/projects/tasks',
+        sprints: '/projects/sprints',
+        sprintDetail: (id: string) => `/projects/sprints/${id}` as const,
         settings: '/projects/settings',
     },
 

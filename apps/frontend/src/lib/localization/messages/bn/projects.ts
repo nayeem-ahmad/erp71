@@ -1,11 +1,18 @@
 export const projectsMessages = {
-    title: 'প্রকল্প',
+    title: 'প্রকল্প ব্যবস্থাপনা',
     subtitle: 'কাজ, টাস্ক, সময় ও স্প্রিন্ট',
     newProject: 'নতুন প্রকল্প',
     editProject: 'প্রকল্প সম্পাদনা',
     empty: 'এখনও কোনো প্রকল্প নেই। কাজ ট্র্যাক করতে একটি তৈরি করুন।',
     emptyFiltered: 'এই ফিল্টারে কোনো প্রকল্প নেই।',
     searchPlaceholder: 'কোড, নাম বা গ্রাহক খুঁজুন',
+    saved: "প্রকল্প সংরক্ষিত হয়েছে",
+    saveFailed: "প্রকল্প সংরক্ষণ করা যায়নি",
+    loadFailed: "প্রকল্প লোড করা যায়নি",
+    deleted: "প্রকল্প মুছে ফেলা হয়েছে",
+    deleteFailed: "প্রকল্প মুছে ফেলা যায়নি",
+    deleteProject: "প্রকল্প মুছুন",
+    deletePrompt: "{name} মুছবেন?\n\nএর কাজ ও লগ করা ঘণ্টা রেখে দেওয়া হবে — শুধু প্রকল্পটি তালিকা থেকে সরানো হবে।",
 
     fields: {
         code: 'কোড',
@@ -23,6 +30,11 @@ export const projectsMessages = {
         budget: 'বাজেট',
         tasks: 'টাস্ক',
         progress: 'অগ্রগতি',
+        actions: "কার্যক্রম",
+        project: "প্রকল্প",
+        assignee: "দায়িত্বপ্রাপ্ত",
+        sprint: "স্প্রিন্ট",
+        dueDate: "সময়সীমা",
     },
 
     status: {
@@ -38,6 +50,27 @@ export const projectsMessages = {
         MEDIUM: 'মাঝারি',
         HIGH: 'উচ্চ',
         URGENT: 'জরুরি',
+    },
+
+    validation: {
+        nameRequired: "প্রকল্পের একটি নাম দিন।",
+    },
+
+    statusCategory: {
+        TODO: "করণীয়",
+        IN_PROGRESS: "চলমান",
+        DONE: "সম্পন্ন",
+    },
+
+    tasks: {
+        title: "কাজ",
+        subtitle: "সব প্রকল্পের সব কাজ",
+        empty: "এই ফিল্টারে কোনো কাজ নেই।",
+        searchPlaceholder: "কাজের শিরোনাম খুঁজুন",
+        mine: "আমার উপর অর্পিত",
+        anyone: "যে কেউ",
+        allProjects: "সব প্রকল্প",
+        anyStatus: "যেকোনো অবস্থা",
     },
 
     tabs: {
@@ -66,6 +99,13 @@ export const projectsMessages = {
         MEMBER: 'সদস্য',
         VIEWER: 'দর্শক',
         remove: 'প্রকল্প থেকে সরান',
+        added: "প্রকল্পে যুক্ত হয়েছে",
+        addFailed: "যুক্ত করা যায়নি",
+        removed: "প্রকল্প থেকে সরানো হয়েছে",
+        removeFailed: "সরানো যায়নি",
+        person: "ব্যক্তি",
+        noLogin: "লগইন নেই",
+        noLoginHint: "ওয়ার্কস্পেস অ্যাকাউন্ট ছাড়া কর্মী দলে থাকতে ও কাজ নিতে পারেন, তবে সাইন ইন করে দেখতে পারবেন না।",
     },
 
     milestones: {
@@ -131,7 +171,7 @@ export const projectsMessages = {
         kanban: 'কানবান',
         scrum: 'স্ক্রাম',
         allTasks: 'সব টাস্ক',
-        noSprint: 'কোনো স্প্রিন্ট চলছে না। স্ক্রাম মোড ব্যবহার করতে ব্যাকলগ থেকে একটি শুরু করুন।',
+        noSprint: 'কোনো স্প্রিন্ট চলছে না। স্ক্রাম মোড ব্যবহার করতে স্প্রিন্ট থেকে একটি শুরু করুন।',
         emptyColumn: 'এখানে কিছু নেই',
         moveFailed: 'কার্ডটি সরানো যায়নি',
         columnTotal: 'ঘণ্টা বাকি',
@@ -157,7 +197,20 @@ export const projectsMessages = {
         carriedOver: '{count}টি অসমাপ্ত টাস্ক ব্যাকলগে ফেরত গেছে',
         empty: 'এখনও কোনো স্প্রিন্ট নেই।',
         emptyBacklog: 'ব্যাকলগ খালি।',
-        oneActive: 'একটি প্রকল্পে একসাথে একটি স্প্রিন্টই চলতে পারে।',
+        oneActive: 'পুরো ওয়ার্কস্পেসে একসাথে একটি স্প্রিন্টই চলতে পারে।',
+        subtitle: "সব প্রকল্প জুড়ে সময়সীমা",
+        planning: "এই স্প্রিন্ট পরিকল্পনা করুন",
+        loadFailed: "স্প্রিন্ট লোড করা যায়নি",
+        saveFailed: "স্প্রিন্ট সংরক্ষণ করা যায়নি",
+        created: "স্প্রিন্ট তৈরি হয়েছে",
+        started: "স্প্রিন্ট শুরু হয়েছে",
+        completedMsg: "স্প্রিন্ট সম্পন্ন হয়েছে",
+        deleted: "স্প্রিন্ট মুছে ফেলা হয়েছে",
+        deleteSprint: "স্প্রিন্ট মুছুন",
+        deletePrompt: "{name} মুছবেন?\n\nএর কাজগুলো ব্যাকলগে ফিরে যাবে — কিছুই হারাবে না।",
+        emptySprint: "এই স্প্রিন্টে এখনো কোনো কাজ নেই।",
+        noProjects: "এখনো কোনো প্রকল্প নেই",
+        tenantHint: "একটি স্প্রিন্ট পুরো ওয়ার্কস্পেস জুড়ে চলে। একসাথে একটিই চালু থাকতে পারে।",
     },
 
     burndown: {
@@ -170,6 +223,7 @@ export const projectsMessages = {
         rebuild: 'ইতিহাস থেকে পুনর্গঠন',
         rebuilt: '{written} দিন পুনর্গঠিত, {skipped} অপরিবর্তিত',
         weekendNote: 'আদর্শ রেখা শুক্র/শনি বাদ দেয়।',
+        tenantScope: "এই স্প্রিন্টের সব প্রকল্প",
     },
 
     settings: {
@@ -192,9 +246,4 @@ export const projectsMessages = {
         typeDeactivated: 'এই ধরনটি {count}টি প্রকল্পে ব্যবহৃত, তাই মুছে না দিয়ে লুকানো হয়েছে।',
     },
 
-    myTasks: {
-        title: 'আমার টাস্ক',
-        subtitle: 'সব প্রকল্পে আপনাকে দেওয়া কাজ',
-        empty: 'এই মুহূর্তে আপনাকে কিছু দেওয়া হয়নি।',
-    },
 } as const;

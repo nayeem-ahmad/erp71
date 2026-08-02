@@ -74,21 +74,24 @@ describe('SprintsService', () => {
             ).rejects.toBeInstanceOf(BadRequestException);
         });
 
-        it('refuses a project from another tenant', async () => {
-            db.project.findFirst.mockResolvedValue(null);
-            await expect(
-                service.create('tenant-1', {
-                    projectId: 'project-x',
-                    name: 'Sprint',
-                    startDate: '2026-08-01',
-                    endDate: '2026-08-10',
-                } as never),
-            ).rejects.toBeInstanceOf(NotFoundException);
+        it('creates against the tenant, with no project to belong to', async () => {
+            // A sprint is a tenant-wide time-box: there is no project to
+            // validate, and none is written.
+            await service.create('tenant-1', {
+                name: 'Aug W1',
+                startDate: '2026-08-01',
+                endDate: '2026-08-10',
+            } as never);
+
+            expect(db.project.findFirst).not.toHaveBeenCalled();
+            const data = db.sprint.create.mock.calls[0][0].data;
+            expect(data).toMatchObject({ tenant_id: 'tenant-1', name: 'Aug W1' });
+            expect(data).not.toHaveProperty('project_id');
         });
     });
 
     describe('start', () => {
-        it('refuses to run two sprints in one project at once', async () => {
+        it('refuses to run two sprints in one TENANT at once', async () => {
             db.sprint.findFirst
                 .mockResolvedValueOnce(sprint())
                 .mockResolvedValueOnce({ id: 'sprint-other', name: 'Sprint 0' });
@@ -96,6 +99,18 @@ describe('SprintsService', () => {
             await expect(service.start('tenant-1', 'sprint-1')).rejects.toBeInstanceOf(
                 ConflictException,
             );
+        });
+
+        it('scopes the conflict check to the tenant, not to a project', async () => {
+            // The rule moved with the column: a sprint no longer belongs to a
+            // project, so scoping the check by one would let N sprints run.
+            db.sprint.findFirst.mockResolvedValueOnce(sprint()).mockResolvedValueOnce(null);
+
+            await service.start('tenant-1', 'sprint-1');
+
+            const conflictQuery = db.sprint.findFirst.mock.calls[1][0].where;
+            expect(conflictQuery).toMatchObject({ tenant_id: 'tenant-1', status: 'ACTIVE' });
+            expect(conflictQuery).not.toHaveProperty('project_id');
         });
 
         it('snapshots immediately so day one has a point to anchor the ideal line', async () => {
@@ -187,16 +202,18 @@ describe('SprintsService', () => {
         expect(db.sprint.delete).toHaveBeenCalled();
     });
 
-    it('only assigns tasks that belong to the sprint’s own project', async () => {
-        await service.assignTasks('tenant-1', 'sprint-1', { taskIds: ['task-a'] } as never);
+    it('assigns tasks from any project, scoped only by tenant', async () => {
+        // The point of a tenant-level sprint. Previously this filtered on the
+        // sprint's own project_id, which silently dropped tasks from every other
+        // project in the request.
+        await service.assignTasks('tenant-1', 'sprint-1', { taskIds: ['task-a', 'task-b'] } as never);
 
-        expect(db.projectTask.updateMany).toHaveBeenCalledWith(
-            expect.objectContaining({
-                where: expect.objectContaining({
-                    tenant_id: 'tenant-1',
-                    project_id: 'project-1',
-                }),
-            }),
-        );
+        const where = db.projectTask.updateMany.mock.calls[0][0].where;
+        expect(where).toMatchObject({
+            tenant_id: 'tenant-1',
+            deleted_at: null,
+            id: { in: ['task-a', 'task-b'] },
+        });
+        expect(where).not.toHaveProperty('project_id');
     });
 });

@@ -1,11 +1,18 @@
 export const projectsMessages = {
-    title: 'Projects',
+    title: 'Project Management',
     subtitle: 'Jobs, tasks, time and sprints',
     newProject: 'New Project',
     editProject: 'Edit Project',
     empty: 'No projects yet. Create one to start tracking a job.',
     emptyFiltered: 'No projects match these filters.',
     searchPlaceholder: 'Search code, name or customer',
+    saved: 'Project saved',
+    saveFailed: 'Could not save the project',
+    loadFailed: 'Could not load the project',
+    deleted: 'Project deleted',
+    deleteFailed: 'Could not delete the project',
+    deleteProject: 'Delete project',
+    deletePrompt: 'Delete {name}?\n\nIts tasks and the hours already logged against them are kept — only the project is removed from your lists.',
 
     fields: {
         code: 'Code',
@@ -23,6 +30,11 @@ export const projectsMessages = {
         budget: 'Budget',
         tasks: 'Tasks',
         progress: 'Progress',
+        actions: 'Actions',
+        project: 'Project',
+        assignee: 'Assignee',
+        sprint: 'Sprint',
+        dueDate: 'Due',
     },
 
     status: {
@@ -38,6 +50,27 @@ export const projectsMessages = {
         MEDIUM: 'Medium',
         HIGH: 'High',
         URGENT: 'Urgent',
+    },
+
+    validation: {
+        nameRequired: 'Give the project a name.',
+    },
+
+    statusCategory: {
+        TODO: 'To do',
+        IN_PROGRESS: 'In progress',
+        DONE: 'Done',
+    },
+
+    tasks: {
+        title: 'Tasks',
+        subtitle: 'Every task across every project',
+        empty: 'No tasks match these filters.',
+        searchPlaceholder: 'Search task titles',
+        mine: 'Assigned to me',
+        anyone: 'Anyone',
+        allProjects: 'All projects',
+        anyStatus: 'Any status',
     },
 
     tabs: {
@@ -66,6 +99,13 @@ export const projectsMessages = {
         MEMBER: 'Member',
         VIEWER: 'Viewer',
         remove: 'Remove from project',
+        added: 'Added to the project',
+        addFailed: 'Could not add that person',
+        removed: 'Removed from the project',
+        removeFailed: 'Could not remove that person',
+        person: 'Person',
+        noLogin: 'no login',
+        noLoginHint: 'Employees without a workspace account can be on the team and hold tasks, but cannot sign in to see them.',
     },
 
     milestones: {
@@ -131,7 +171,7 @@ export const projectsMessages = {
         kanban: 'Kanban',
         scrum: 'Scrum',
         allTasks: 'All tasks',
-        noSprint: 'No sprint is running. Start one from the backlog to use scrum mode.',
+        noSprint: 'No sprint is running. Start one from Sprints to use scrum mode.',
         emptyColumn: 'Nothing here',
         moveFailed: 'Could not move that card',
         columnTotal: 'h left',
@@ -157,7 +197,20 @@ export const projectsMessages = {
         carriedOver: '{count} unfinished task(s) returned to the backlog',
         empty: 'No sprints yet.',
         emptyBacklog: 'The backlog is empty.',
-        oneActive: 'Only one sprint can run at a time in a project.',
+        oneActive: 'Only one sprint can run at a time across the workspace.',
+        subtitle: 'Time-boxes that span every project',
+        planning: 'Plan this sprint',
+        loadFailed: 'Could not load sprints',
+        saveFailed: 'Could not save the sprint',
+        created: 'Sprint created',
+        started: 'Sprint started',
+        completedMsg: 'Sprint completed',
+        deleted: 'Sprint deleted',
+        deleteSprint: 'Delete sprint',
+        deletePrompt: 'Delete {name}?\n\nIts tasks return to the backlog — nothing is lost.',
+        emptySprint: 'No tasks in this sprint yet.',
+        noProjects: 'No projects yet',
+        tenantHint: 'A sprint spans the whole workspace. Only one can run at a time.',
     },
 
     burndown: {
@@ -170,6 +223,7 @@ export const projectsMessages = {
         rebuild: 'Rebuild from history',
         rebuilt: 'Rebuilt {written} day(s), kept {skipped}',
         weekendNote: 'The ideal line skips Fri/Sat.',
+        tenantScope: 'All projects in this sprint',
     },
 
     settings: {
@@ -192,9 +246,4 @@ export const projectsMessages = {
         typeDeactivated: 'That type is used by {count} project(s), so it was hidden rather than deleted.',
     },
 
-    myTasks: {
-        title: 'My Tasks',
-        subtitle: 'Everything assigned to you across projects',
-        empty: 'Nothing is assigned to you right now.',
-    },
 } as const;

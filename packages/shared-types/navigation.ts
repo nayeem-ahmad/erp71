@@ -170,7 +170,8 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
 
   projects: { id: 'projects', kind: 'module', icon: 'FolderKanban', labelKey: 'sidebar.modules.projects', moduleKey: 'projects' },
   'projects.list': { id: 'projects.list', kind: 'link', icon: 'FolderKanban', labelKey: 'sidebar.items.projectsList', href: '/projects', exact: true },
-  'projects.my-tasks': { id: 'projects.my-tasks', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.projectsMyTasks', href: '/projects/my-tasks' },
+  'projects.tasks': { id: 'projects.tasks', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.projectsTasks', href: '/projects/tasks' },
+  'projects.sprints': { id: 'projects.sprints', kind: 'link', icon: 'Timer', labelKey: 'sidebar.items.projectsSprints', href: '/projects/sprints' },
   'projects.setup': { id: 'projects.setup', kind: 'link', icon: 'Settings', labelKey: 'sidebar.items.projectsSetup', href: '/projects/settings' },
   crm: { id: 'crm', kind: 'module', icon: 'Users', labelKey: 'sidebar.modules.crm', moduleKey: 'crm' },
   'crm.overview': { id: 'crm.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/crm', exact: true },
@@ -364,8 +365,9 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
 
   layoutNode('projects', null, 7),
   layoutNode('projects.list', 'projects', 0),
-  layoutNode('projects.my-tasks', 'projects', 1),
-  layoutNode('projects.setup', 'projects', 2),
+  layoutNode('projects.tasks', 'projects', 1),
+  layoutNode('projects.sprints', 'projects', 2),
+  layoutNode('projects.setup', 'projects', 3),
 
   layoutNode('manufacturing', null, 8),
 
