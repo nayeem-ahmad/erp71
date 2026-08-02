@@ -179,7 +179,7 @@ export default function TaskDetailPanel({
                             </Select>
                         </Field>
 
-                        <section className="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+                        <section className="rounded-md border border-gray-200 p-3">
                             <h3 className="mb-2 text-sm font-medium">{m.time.log}</h3>
                             <form onSubmit={logTime} className="space-y-2">
                                 <div className="grid gap-2 md:grid-cols-3">
@@ -233,7 +233,7 @@ export default function TaskDetailPanel({
                             </form>
                         </section>
 
-                        <section className="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+                        <section className="rounded-md border border-gray-200 p-3">
                             <h3 className="text-sm font-medium">{m.task.remaining}</h3>
                             <p className="mb-2 mt-1 text-xs text-gray-500">{m.remaining.hint}</p>
                             <div className="grid gap-2 md:grid-cols-3">
@@ -276,14 +276,14 @@ export default function TaskDetailPanel({
                             {(task.timeEntries ?? []).length === 0 ? (
                                 <p className="text-sm text-gray-500">{m.time.empty}</p>
                             ) : (
-                                <ul className="divide-y divide-gray-200 text-sm dark:divide-gray-700">
+                                <ul className="divide-y divide-gray-200 text-sm">
                                     {(task.timeEntries ?? []).map((entry) => (
                                         <li key={entry.id} className="flex items-center gap-2 py-1.5">
                                             <span className="w-24 shrink-0 text-gray-500">
                                                 {new Date(entry.work_date).toLocaleDateString()}
                                             </span>
                                             <span className="w-14 shrink-0">{num(entry.hours)}h</span>
-                                            <span className="flex-1 truncate text-gray-600 dark:text-gray-400">
+                                            <span className="flex-1 truncate text-gray-600">
                                                 {entry.note ?? ''}
                                             </span>
                                             <button
@@ -306,7 +306,7 @@ export default function TaskDetailPanel({
                             {history.length === 0 ? (
                                 <p className="text-sm text-gray-500">{m.remaining.empty}</p>
                             ) : (
-                                <ul className="divide-y divide-gray-200 text-sm dark:divide-gray-700">
+                                <ul className="divide-y divide-gray-200 text-sm">
                                     {history.map((row) => {
                                         const delta = Number(row.delta);
                                         const up = delta > 0;
@@ -329,7 +329,7 @@ export default function TaskDetailPanel({
                                                                 row.source as keyof typeof m.remaining.sources
                                                             ] ?? row.source}
                                                         </StatusBadge>
-                                                        <span className="text-gray-600 dark:text-gray-400">
+                                                        <span className="text-gray-600">
                                                             {num(row.previous_hours)}h → {num(row.new_hours)}h
                                                         </span>
                                                     </p>
@@ -367,8 +367,8 @@ function Metric({ label, value, highlight }: { label: string; value: string; hig
         <div
             className={`rounded-md border p-2 text-center ${
                 highlight
-                    ? 'border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/30'
-                    : 'border-gray-200 dark:border-gray-700'
+                    ? 'border-blue-200 bg-blue-50'
+                    : 'border-gray-200'
             }`}
         >
             <p className="text-xs text-gray-500">{label}</p>

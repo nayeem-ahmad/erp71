@@ -153,20 +153,20 @@ export default function ProjectDetailPage() {
 
             <section className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-3 md:col-span-2">
-                    <div className="rounded-md border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
-                        <h2 className="border-b border-gray-200 px-3 py-2 text-sm font-medium dark:border-gray-700">
+                    <div className="rounded-md border border-gray-200 bg-white">
+                        <h2 className="border-b border-gray-200 px-3 py-2 text-sm font-medium">
                             {m.tabs.tasks}
                         </h2>
                         {tasks.length === 0 ? (
                             <p className="p-3 text-sm text-gray-500">{m.task.noTasks}</p>
                         ) : (
-                            <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                            <ul className="divide-y divide-gray-200">
                                 {tasks.map((task) => (
                                     <li key={task.id}>
                                         <button
                                             type="button"
                                             onClick={() => setOpenTaskId(task.id)}
-                                            className="flex min-h-touch w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+                                            className="flex min-h-touch w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
                                         >
                                             <span className="flex-1 truncate">{task.title}</span>
                                             {task.status && (
@@ -188,7 +188,7 @@ export default function ProjectDetailPage() {
                 </div>
 
                 <div className="space-y-3">
-                    <div className="rounded-md border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
+                    <div className="rounded-md border border-gray-200 bg-white p-3">
                         <h2 className="mb-2 text-sm font-medium">{m.tabs.overview}</h2>
                         <dl className="space-y-1.5 text-sm">
                             <Row label={m.fields.status}>
@@ -211,7 +211,7 @@ export default function ProjectDetailPage() {
                         </dl>
                     </div>
 
-                    <div className="rounded-md border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
+                    <div className="rounded-md border border-gray-200 bg-white p-3">
                         <h2 className="mb-2 text-sm font-medium">{m.tabs.milestones}</h2>
                         {project.milestones.length === 0 ? (
                             <p className="text-sm text-gray-500">{m.overview.noMilestones}</p>
@@ -234,7 +234,7 @@ export default function ProjectDetailPage() {
                         )}
                     </div>
 
-                    <div className="rounded-md border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
+                    <div className="rounded-md border border-gray-200 bg-white p-3">
                         <h2 className="mb-2 text-sm font-medium">{m.tabs.team}</h2>
                         {project.members.length === 0 ? (
                             <p className="text-sm text-gray-500">{m.overview.noTeam}</p>
@@ -305,7 +305,7 @@ export default function ProjectDetailPage() {
 
 function Stat({ label, value }: { label: string; value: string }) {
     return (
-        <div className="rounded-md border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
+        <div className="rounded-md border border-gray-200 bg-white p-3">
             <p className="text-xs text-gray-500">{label}</p>
             <p className="mt-0.5 text-sm font-medium">{value}</p>
         </div>

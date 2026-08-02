@@ -145,8 +145,8 @@ export default function ProjectBacklogPage() {
             />
 
             <section className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-md border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
-                    <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2 dark:border-gray-700">
+                <div className="rounded-md border border-gray-200 bg-white">
+                    <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2">
                         <h2 className="text-sm font-medium">{m.sprint.backlog}</h2>
                         {selected.size > 0 && (
                             <span className="text-xs text-gray-500">
@@ -157,7 +157,7 @@ export default function ProjectBacklogPage() {
                     {backlog.length === 0 ? (
                         <p className="p-3 text-sm text-gray-500">{m.sprint.emptyBacklog}</p>
                     ) : (
-                        <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                        <ul className="divide-y divide-gray-200">
                             {backlog.map((task) => (
                                 <li key={task.id} className="flex min-h-touch items-center gap-2 px-3 py-2">
                                     <Checkbox
@@ -175,14 +175,14 @@ export default function ProjectBacklogPage() {
                     )}
                 </div>
 
-                <div className="rounded-md border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
-                    <h2 className="border-b border-gray-200 px-3 py-2 text-sm font-medium dark:border-gray-700">
+                <div className="rounded-md border border-gray-200 bg-white">
+                    <h2 className="border-b border-gray-200 px-3 py-2 text-sm font-medium">
                         {m.sprint.sprints}
                     </h2>
                     {sprints.length === 0 ? (
                         <p className="p-3 text-sm text-gray-500">{m.sprint.empty}</p>
                     ) : (
-                        <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                        <ul className="divide-y divide-gray-200">
                             {sprints.map((sprint) => (
                                 <li key={sprint.id} className="space-y-2 px-3 py-2.5">
                                     <div className="flex items-center justify-between gap-2">

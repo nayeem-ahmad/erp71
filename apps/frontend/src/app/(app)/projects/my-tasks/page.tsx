@@ -58,7 +58,7 @@ export default function MyTasksPage() {
             ) : tasks.length === 0 ? (
                 <p className="text-sm text-gray-500">{m.myTasks.empty}</p>
             ) : (
-                <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white dark:divide-gray-700 dark:border-gray-700 dark:bg-gray-900">
+                <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
                     {tasks.map((task) => (
                         <li key={task.id} className="flex min-h-touch items-center gap-2 px-3 py-2">
                             <button
