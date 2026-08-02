@@ -38,6 +38,15 @@ describe('BusinessCardScanner', () => {
         Reflect.deleteProperty(navigator, 'mediaDevices');
     });
 
+    /**
+     * A crop step now sits between choosing an image and scanning it. These
+     * tests are about the scan, so they take the escape hatch; the crop step
+     * itself is covered separately.
+     */
+    const skipCrop = async () => {
+        fireEvent.click(await screen.findByRole('button', { name: /use full image/i }));
+    };
+
     it('renders nothing while closed', () => {
         const { container } = render(
             <BusinessCardScanner open={false} onClose={jest.fn()} onApply={jest.fn()} />,
@@ -126,6 +135,7 @@ describe('BusinessCardScanner', () => {
         render(<BusinessCardScanner open onClose={jest.fn()} onApply={jest.fn()} />);
 
         pickImage(fileInputs()[0]);
+        await skipCrop();
         fireEvent.click(await screen.findByRole('button', { name: /read card/i }));
 
         expect(await screen.findByText('Rafiq Islam')).toBeInTheDocument();
@@ -142,6 +152,7 @@ describe('BusinessCardScanner', () => {
         expect(apply).toBeDisabled();
 
         pickImage(fileInputs()[0]);
+        await skipCrop();
         fireEvent.click(await screen.findByRole('button', { name: /read card/i }));
         await screen.findByText('Rafiq Islam');
 
@@ -159,6 +170,7 @@ describe('BusinessCardScanner', () => {
         render(<BusinessCardScanner open onClose={jest.fn()} onApply={jest.fn()} />);
 
         pickImage(fileInputs()[0]);
+        await skipCrop();
         fireEvent.click(await screen.findByRole('button', { name: /read card/i }));
 
         expect(await screen.findByRole('alert')).toHaveTextContent('AI credit limit reached');
@@ -169,6 +181,7 @@ describe('BusinessCardScanner', () => {
         render(<BusinessCardScanner open onClose={jest.fn()} onApply={jest.fn()} />);
 
         pickImage(fileInputs()[0]);
+        await skipCrop();
         fireEvent.click(await screen.findByRole('button', { name: /read card/i }));
 
         await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());

@@ -143,6 +143,18 @@ export const crmHrMessages = {
                 cardRemoveTitle: 'Remove card image',
                 cardRemoveConfirm: 'Delete this card photo? The contact details stay.',
                 cardRemoveFailed: 'Could not remove the card image.',
+                cropTitle: 'Check the edges',
+                cropDetected: 'Card edges detected. Drag any corner to adjust, then crop.',
+                cropManual: 'No card edges found. Drag the corners onto the card, or use the full image.',
+                useCrop: 'Crop to card',
+                useFullImage: 'Use full image',
+                resetCrop: 'Reset corners',
+                corners: {
+                    topLeft: 'Top left corner',
+                    topRight: 'Top right corner',
+                    bottomRight: 'Bottom right corner',
+                    bottomLeft: 'Bottom left corner',
+                },
             },
         },
         leads: {
