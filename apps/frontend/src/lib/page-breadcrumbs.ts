@@ -17,6 +17,7 @@ export type ModuleKey =
     | 'team'
     | 'help'
     | 'manufacturing'
+    | 'projects'
     | 'profile'
     | 'status'
     | 'support'
@@ -38,6 +39,7 @@ const moduleRoots: Record<ModuleKey, string> = {
     team: routes.team,
     help: routes.help,
     manufacturing: routes.manufacturing,
+    projects: routes.projects.root,
     profile: routes.profile,
     status: routes.status,
     support: routes.support,
@@ -70,6 +72,27 @@ export function modulePageBreadcrumbs(
             { label: moduleLabel, href: moduleHref },
             { label: pageLabel },
         ]);
+}
+
+/**
+ * Home → Projects → <project> → current page, for the board and backlog.
+ *
+ * Those two screens are titled only "Board" / "Backlog" and are reachable only
+ * from a project, so without this there is nothing on the page naming the
+ * project you are in and no way back to it. The project segment is dropped
+ * rather than faked while it loads (or if the fetch failed), so the trail is
+ * never a dead link.
+ */
+export function projectChildBreadcrumbs(
+    homeLabel: string,
+    projectsLabel: string,
+    project: { id: string; code: string; name: string } | null,
+    pageLabel: string,
+): BreadcrumbItem[] {
+    const parents: BreadcrumbItem[] = project
+        ? [{ label: `${project.code} · ${project.name}`, href: routes.projects.detail(project.id) }]
+        : [];
+    return nestedPageBreadcrumbs(homeLabel, projectsLabel, 'projects', parents, pageLabel);
 }
 
 /** Home → Module → parent page → current page (detail/nested screens). */

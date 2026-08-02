@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
+import { projectChildBreadcrumbs } from '@/lib/page-breadcrumbs';
 
 interface BoardTask {
     id: string;
@@ -37,6 +38,12 @@ interface Sprint {
     end_date: string;
 }
 
+interface ProjectSummary {
+    id: string;
+    code: string;
+    name: string;
+}
+
 type Mode = 'kanban' | 'scrum';
 
 const num = (value: unknown): number => (value == null ? 0 : Number(value));
@@ -48,6 +55,7 @@ export default function ProjectBoardPage() {
     const m = t.projects;
 
     const [mode, setMode] = useState<Mode>('kanban');
+    const [project, setProject] = useState<ProjectSummary | null>(null);
     const [columns, setColumns] = useState<BoardColumn[]>([]);
     const [sprints, setSprints] = useState<Sprint[]>([]);
     const [burndown, setBurndown] = useState<BurndownPoint[] | null>(null);
@@ -75,6 +83,15 @@ export default function ProjectBoardPage() {
         api.getSprints(projectId)
             .then((list: unknown) => setSprints(Array.isArray(list) ? list : []))
             .catch(() => setSprints([]));
+    }, [projectId]);
+
+    // Header identity only. Fetched separately from the board so switching
+    // kanban/scrum or sprint does not re-request it, and a failure here leaves
+    // the board usable with a plain breadcrumb rather than blocking it.
+    useEffect(() => {
+        api.getProject(projectId)
+            .then((res: unknown) => setProject(res as ProjectSummary))
+            .catch(() => setProject(null));
     }, [projectId]);
 
     useEffect(() => {
@@ -135,9 +152,15 @@ export default function ProjectBoardPage() {
             <PageHeader
                 title={m.board.title}
                 subtitle={activeSprint && mode === 'scrum' ? activeSprint.name : m.board.allTasks}
+                breadcrumbs={projectChildBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.projects,
+                    project,
+                    m.board.title,
+                )}
                 actions={
                     <div className="flex flex-wrap items-center gap-2">
-                        <div className="inline-flex overflow-hidden rounded-md border border-gray-200 dark:border-gray-700">
+                        <div className="inline-flex overflow-hidden rounded-md border border-gray-200">
                             {(['kanban', 'scrum'] as Mode[]).map((value) => (
                                 <button
                                     key={value}
@@ -146,7 +169,7 @@ export default function ProjectBoardPage() {
                                     className={`min-h-touch px-3 text-sm ${
                                         mode === value
                                             ? 'bg-blue-600 text-white'
-                                            : 'bg-white text-gray-700 dark:bg-gray-900 dark:text-gray-200'
+                                            : 'bg-white text-gray-700'
                                     }`}
                                 >
                                     {value === 'kanban' ? m.board.kanban : m.board.scrum}
@@ -163,7 +186,7 @@ export default function ProjectBoardPage() {
             />
 
             {mode === 'scrum' && !activeSprint && (
-                <div className="rounded-md border border-gray-200 bg-white p-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                <div className="rounded-md border border-gray-200 bg-white p-3 text-sm text-gray-600">
                     <p>{m.board.noSprint}</p>
                     {sprints.filter((s) => s.status === 'PLANNED').length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-2">
@@ -185,7 +208,7 @@ export default function ProjectBoardPage() {
             )}
 
             {mode === 'scrum' && activeSprint && burndown && (
-                <section className="rounded-md border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900 md:p-4">
+                <section className="rounded-md border border-gray-200 bg-white p-3 md:p-4">
                     <h2 className="mb-3 text-sm font-medium">{m.burndown.title}</h2>
                     <BurndownChart series={burndown} />
                 </section>
@@ -203,7 +226,7 @@ export default function ProjectBoardPage() {
                         return (
                             <div
                                 key={column.id}
-                                className="flex w-72 flex-col rounded-md border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50"
+                                className="flex w-72 flex-col rounded-md border border-gray-200 bg-gray-50"
                                 onDragOver={(e) => e.preventDefault()}
                                 onDrop={(e) => {
                                     e.preventDefault();
@@ -212,7 +235,7 @@ export default function ProjectBoardPage() {
                                     setDragging(null);
                                 }}
                             >
-                                <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2 dark:border-gray-700">
+                                <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2">
                                     <span className="text-sm font-medium">{column.name}</span>
                                     <span className="text-xs text-gray-500">
                                         {column.tasks.length}
@@ -246,7 +269,7 @@ export default function ProjectBoardPage() {
                                                 }
                                                 setDragging(null);
                                             }}
-                                            className="cursor-grab rounded-md border border-gray-200 bg-white p-2 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900"
+                                            className="cursor-grab rounded-md border border-gray-200 bg-white p-2 text-sm shadow-sm"
                                         >
                                             <p className="font-medium">{task.title}</p>
                                             <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">

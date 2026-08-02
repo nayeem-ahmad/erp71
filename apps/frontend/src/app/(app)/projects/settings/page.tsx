@@ -88,13 +88,13 @@ export default function ProjectSettingsPage() {
         <PageShell>
             <PageHeader title={m.settings.title} subtitle={m.settings.subtitle} />
 
-            <section className="rounded-md border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
-                <div className="border-b border-gray-200 px-3 py-2 dark:border-gray-700">
+            <section className="rounded-md border border-gray-200 bg-white">
+                <div className="border-b border-gray-200 px-3 py-2">
                     <h2 className="text-sm font-medium">{m.settings.columns}</h2>
                     <p className="mt-0.5 text-xs text-gray-500">{m.settings.columnsHint}</p>
                 </div>
 
-                <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                <ul className="divide-y divide-gray-200">
                     {columns.map((col) => (
                         <li key={col.id} className="flex min-h-touch flex-wrap items-center gap-2 px-3 py-2">
                             <span className="flex-1 truncate text-sm">{col.name}</span>
@@ -118,7 +118,7 @@ export default function ProjectSettingsPage() {
                     ))}
                 </ul>
 
-                <form onSubmit={addColumn} className="flex flex-col gap-2 border-t border-gray-200 p-3 md:flex-row dark:border-gray-700">
+                <form onSubmit={addColumn} className="flex flex-col gap-2 border-t border-gray-200 p-3 md:flex-row">
                     <Input
                         value={column.name}
                         onChange={(e) => setColumn((p) => ({ ...p, name: e.target.value }))}
@@ -143,13 +143,13 @@ export default function ProjectSettingsPage() {
                 </form>
             </section>
 
-            <section className="rounded-md border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
-                <div className="border-b border-gray-200 px-3 py-2 dark:border-gray-700">
+            <section className="rounded-md border border-gray-200 bg-white">
+                <div className="border-b border-gray-200 px-3 py-2">
                     <h2 className="text-sm font-medium">{m.settings.types}</h2>
                     <p className="mt-0.5 text-xs text-gray-500">{m.settings.typesHint}</p>
                 </div>
 
-                <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                <ul className="divide-y divide-gray-200">
                     {types.map((type) => (
                         <li key={type.id} className="flex min-h-touch items-center gap-2 px-3 py-2">
                             <span className="flex-1 truncate text-sm">{type.name}</span>
@@ -167,7 +167,7 @@ export default function ProjectSettingsPage() {
                     ))}
                 </ul>
 
-                <form onSubmit={addType} className="flex flex-col gap-2 border-t border-gray-200 p-3 md:flex-row dark:border-gray-700">
+                <form onSubmit={addType} className="flex flex-col gap-2 border-t border-gray-200 p-3 md:flex-row">
                     <Input
                         value={typeName}
                         onChange={(e) => setTypeName(e.target.value)}

@@ -99,7 +99,7 @@ export default function BurndownChart({ series }: { series: BurndownPoint[] }) {
                             y={PAD.top}
                             width={stepX}
                             height={innerH}
-                            className="fill-gray-100 dark:fill-gray-800/40"
+                            className="fill-gray-100"
                         />
                     ))}
 
@@ -110,7 +110,7 @@ export default function BurndownChart({ series }: { series: BurndownPoint[] }) {
                                 x2={WIDTH - PAD.right}
                                 y1={y(tick)}
                                 y2={y(tick)}
-                                className="stroke-gray-200 dark:stroke-gray-700"
+                                className="stroke-gray-200"
                                 strokeWidth={1}
                             />
                             <text
@@ -185,7 +185,7 @@ export default function BurndownChart({ series }: { series: BurndownPoint[] }) {
                 </svg>
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-400">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
                 <span className="flex items-center gap-1.5">
                     <span className="inline-block h-0.5 w-4 bg-blue-600" />
                     {m.actual}
