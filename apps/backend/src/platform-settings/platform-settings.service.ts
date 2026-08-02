@@ -81,6 +81,11 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
         voice_enabled:    { isSecret: false, default: 'false' },
         manufacturing_enabled: { isSecret: false, default: 'true' },
         ai_chat_enabled:  { isSecret: false, default: 'false' },
+        // getPlatformFeatures() only reads keys listed here, so a feature flag
+        // missing from this schema is pinned off platform-wide no matter what
+        // the DB holds — every PlatformFeatures key needs an entry.
+        external_import_enabled: { isSecret: false, default: 'false' },
+        projects_enabled: { isSecret: false, default: 'false' },
         default_signup_plan:   { isSecret: false, default: 'STANDARD' },
     },
     navigation: {
