@@ -3,10 +3,10 @@
 import Link from 'next/link';
 import {
     BookOpen,
-    ClipboardList,
     FileText,
-    HandCoins,
+    Landmark,
     ReceiptText,
+    Scale,
     TrendingUp,
     Wallet,
     type LucideIcon,
@@ -43,11 +43,11 @@ export default function FrequentQuickLinks({ accountingOnlyMode = false }: Frequ
 
     const accountingLinks: QuickLink[] = [
         { key: 'vouchers', href: routes.accounting.voucherEntry, label: accountingCopy.vouchers.title, icon: FileText, accent: 'bg-teal-50 text-teal-700 border-teal-100' },
-        { key: 'expenses', href: `${routes.accounting.expenses}?new=1`, label: accountingCopy.expenses.title, icon: ReceiptText, accent: 'bg-rose-50 text-rose-700 border-rose-100' },
         { key: 'ledger', href: routes.accounting.ledger, label: accountingCopy.ledger.title, icon: BookOpen, accent: 'bg-violet-50 text-violet-700 border-violet-100' },
-        { key: 'journal', href: routes.accounting.journal, label: accountingCopy.journal.title, icon: ClipboardList, accent: 'bg-sky-50 text-sky-700 border-sky-100' },
         { key: 'pl', href: routes.accounting.reports.pl, label: accountingCopy.pl.title, icon: TrendingUp, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
-        { key: 'loans', href: routes.accounting.loans, label: accountingCopy.loans.title, icon: HandCoins, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
+        { key: 'balance-sheet', href: routes.accounting.reports.balanceSheet, label: accountingCopy.balanceSheet.title, icon: Scale, accent: 'bg-sky-50 text-sky-700 border-sky-100' },
+        { key: 'cashbook', href: routes.accounting.reports.cashbook, label: accountingCopy.cashbook.title, icon: Wallet, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
+        { key: 'bankbook', href: routes.accounting.reports.bankbook, label: accountingCopy.bankbook.title, icon: Landmark, accent: 'bg-primary-light text-blue-700 border-primary-border' },
     ];
 
     const links = accountingOnlyMode ? accountingLinks : retailLinks;

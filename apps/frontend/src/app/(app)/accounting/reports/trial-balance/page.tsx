@@ -9,11 +9,15 @@ import {
 import PageHeader from '@/components/ui/compact/PageHeader';
 import ReportScopeBar from '@/components/accounting/ReportScopeBar';
 import CompareMatrixTable, { type CompareTrialBalanceRow } from '@/components/accounting/CompareMatrixTable';
+import ReportPrintButton from '@/components/accounting/ReportPrintButton';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { api } from '@/lib/api';
+import { useBranding } from '@/lib/branding';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { usePrintHeader } from '@/lib/print/use-print-header';
+import { printTrialBalanceReport, reportContextLines } from '@/lib/statement-printer';
 import {
     getDefaultHideZero,
     getDefaultReportLevel,
@@ -68,6 +72,8 @@ const thLeftClass = `text-left px-3 py-2 ${compactDensity.formLabel}`;
 
 export default function TrialBalancePage() {
     const { t, locale } = useI18n();
+    const { businessName } = useBranding();
+    const printHeader = usePrintHeader('LIST_REPORT');
     const { stores, canConsolidate, loading: storesLoading } = useReportStores();
     const { approvedOnly, setApprovedOnly, approvalEnabled, ready: approvalReady } = useApprovedOnly();
     const [data, setData] = useState<TBData | null>(null);
@@ -143,6 +149,68 @@ export default function TrialBalancePage() {
         return hideZero ? rows.filter((row) => Math.abs(row.closing_balance) >= 0.005) : rows;
     }, [data, hideZero]);
 
+    const printCopy = t.accounting.reports.print;
+
+    const handlePrint = useCallback(async () => {
+        if (!data || isCompare) return;
+
+        // Resolve on click rather than on mount: the template is only needed by
+        // the people who actually print, and this page loads for everyone.
+        const header = await printHeader.resolve();
+
+        printTrialBalanceReport(
+            {
+                businessName,
+                headerConfig: header.headerConfig,
+                title: t.accounting.reports.trialBalance.title,
+                periodLabel: t.accounting.reports.balanceSheet.asOf,
+                periodValue: data.as_of,
+                contextLines: reportContextLines(
+                    {
+                        scope,
+                        storeName: stores.find((store) => store.id === storeId)?.name,
+                        level,
+                        levelLabel: rowLabel,
+                        approvedOnly,
+                        approvalEnabled,
+                    },
+                    printCopy,
+                ),
+                statusNote: data.is_balanced ? t.accountingShared.balanced : t.accountingShared.notBalanced,
+                locale,
+                generatedLabel: printCopy.generated,
+                generatedAt: new Date().toLocaleString(locale),
+            },
+            // `visibleRows`, so the printed copy honours hide-zero the same way
+            // the table does — the footer totals are the server's either way.
+            visibleRows.map((row) => ({
+                code: row.account.code ?? '',
+                name: row.account.name,
+                group: isRolledUp ? undefined : row.account.group.name,
+                type: row.account.type,
+                debitTotal: row.debit_total,
+                creditTotal: row.credit_total,
+                debitBalance: row.debit_balance,
+                creditBalance: row.credit_balance,
+            })),
+            { debit: data.totals.debit as number, credit: data.totals.credit as number },
+            {
+                code: t.coa.columns.code,
+                account: rowLabel,
+                type: t.accountingShared.type,
+                grossDebit: printCopy.grossDebit,
+                grossCredit: printCopy.grossCredit,
+                debitBalance: printCopy.debitBalance,
+                creditBalance: printCopy.creditBalance,
+                totals: t.accountingShared.totals,
+                noRows: printCopy.noRows,
+            },
+        );
+    }, [
+        data, isCompare, printHeader, businessName, t, scope, stores, storeId, level, rowLabel,
+        approvedOnly, approvalEnabled, printCopy, locale, visibleRows, isRolledUp,
+    ]);
+
     return (
         <AccountingPageShell maxWidth="full">
             <PageHeader
@@ -155,7 +223,15 @@ export default function TrialBalancePage() {
                     'accounting',
                 )}
             />
-            <AccountingToolbar>
+            <AccountingToolbar
+                actions={(
+                    <ReportPrintButton
+                        onPrint={() => void handlePrint()}
+                        disabled={!data || loading || isCompare}
+                        disabledReason={isCompare ? printCopy.unavailableInCompare : undefined}
+                    />
+                )}
+            >
                 <ReportScopeBar
                     scope={scope}
                     onScopeChange={setScope}

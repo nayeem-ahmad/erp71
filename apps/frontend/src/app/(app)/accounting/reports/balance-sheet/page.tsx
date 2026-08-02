@@ -14,10 +14,14 @@ import StatementSection, {
     hideZeroGroups,
     type StatementGroup,
 } from '@/components/accounting/StatementSection';
+import ReportPrintButton from '@/components/accounting/ReportPrintButton';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
+import { useBranding } from '@/lib/branding';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { usePrintHeader } from '@/lib/print/use-print-header';
+import { printStatementReport, reportContextLines } from '@/lib/statement-printer';
 import {
     getDefaultHideZero,
     getDefaultReportLevel,
@@ -63,6 +67,8 @@ function buildScopeParams(
 
 export default function BalanceSheetPage() {
     const { t, locale } = useI18n();
+    const { businessName } = useBranding();
+    const printHeader = usePrintHeader('LIST_REPORT');
     const { stores, canConsolidate, loading: storesLoading } = useReportStores();
     const { approvedOnly, setApprovedOnly, approvalEnabled, ready: approvalReady } = useApprovedOnly();
     const [data, setData] = useState<BSData | null>(null);
@@ -126,6 +132,78 @@ export default function BalanceSheetPage() {
     }, [initialized, approvalReady, load]);
 
     const isCompare = data?.scope === 'compare';
+    const printCopy = t.accounting.reports.print;
+
+    const handlePrint = useCallback(async () => {
+        if (!data || isCompare) return;
+
+        // Resolve on click rather than on mount: the template is only needed by
+        // the people who actually print, and this page loads for everyone.
+        const header = await printHeader.resolve();
+
+        printStatementReport(
+            {
+                businessName,
+                headerConfig: header.headerConfig,
+                title: t.accounting.reports.balanceSheet.title,
+                periodLabel: t.accounting.reports.balanceSheet.asOf,
+                periodValue: data.as_of,
+                contextLines: reportContextLines(
+                    {
+                        scope,
+                        storeName: stores.find((store) => store.id === storeId)?.name,
+                        level,
+                        levelLabel: t.accounting.reports.reportLevel[level],
+                        approvedOnly,
+                        approvalEnabled,
+                    },
+                    printCopy,
+                ),
+                statusNote: data.is_balanced ? t.accountingShared.balanced : t.accountingShared.notBalanced,
+                locale,
+                generatedLabel: printCopy.generated,
+                generatedAt: new Date().toLocaleString(locale),
+            },
+            [
+                {
+                    label: t.accounting.reports.assets,
+                    // The printed copy honours hide-zero, so it matches the screen.
+                    groups: hideZeroGroups(data.assets?.groups ?? [], hideZero),
+                    totalLabel: t.accounting.reports.totalAssets,
+                    total: data.assets?.total ?? 0,
+                },
+                {
+                    label: t.accounting.reports.liabilities,
+                    groups: hideZeroGroups(data.liabilities?.groups ?? [], hideZero),
+                    totalLabel: t.accounting.reports.totalLiabilities,
+                    total: data.liabilities?.total ?? 0,
+                },
+                {
+                    label: t.accounting.reports.equity,
+                    groups: hideZeroGroups(data.equity?.groups ?? [], hideZero),
+                    totalLabel: t.accounting.reports.totalEquity,
+                    total: data.equity?.total ?? 0,
+                },
+            ],
+            [
+                {
+                    // Sits outside the equity groups on screen too — it is the
+                    // period's result, not a posted equity account.
+                    label: t.accounting.reports.currentPeriodNetProfit,
+                    amount: data.equity?.net_profit ?? 0,
+                },
+                {
+                    label: t.accounting.reports.totalLiabilitiesAndEquity,
+                    amount: data.total_liabilities_and_equity ?? 0,
+                    strong: true,
+                },
+            ],
+            { account: printCopy.account, amount: printCopy.amount, noRows: printCopy.noRows },
+        );
+    }, [
+        data, isCompare, printHeader, businessName, t, scope, stores, storeId, level,
+        approvedOnly, approvalEnabled, printCopy, locale, hideZero,
+    ]);
 
     return (
         <AccountingPageShell maxWidth={isCompare ? 'full' : 'narrow'}>
@@ -139,7 +217,15 @@ export default function BalanceSheetPage() {
                     'accounting',
                 )}
             />
-            <AccountingToolbar>
+            <AccountingToolbar
+                actions={(
+                    <ReportPrintButton
+                        onPrint={() => void handlePrint()}
+                        disabled={!data || loading || isCompare}
+                        disabledReason={isCompare ? printCopy.unavailableInCompare : undefined}
+                    />
+                )}
+            >
                 <ReportScopeBar
                     scope={scope}
                     onScopeChange={setScope}
@@ -187,17 +273,17 @@ export default function BalanceSheetPage() {
                             sections={data.sections}
                             footerRows={[
                                 ...(data.net_profit ? [{
-                                    label: 'Current Period Net Profit',
+                                    label: t.accounting.reports.currentPeriodNetProfit,
                                     amounts: data.net_profit,
                                     emphasis: 'profit' as const,
                                 }] : []),
                                 ...(data.total_assets ? [{
-                                    label: 'Total Assets',
+                                    label: t.accounting.reports.totalAssets,
                                     amounts: data.total_assets,
                                     emphasis: 'default' as const,
                                 }] : []),
                                 ...(data.totals ? [{
-                                    label: 'Total Liabilities + Equity',
+                                    label: t.accounting.reports.totalLiabilitiesAndEquity,
                                     amounts: data.totals,
                                     emphasis: 'total' as const,
                                 }] : []),
@@ -218,7 +304,7 @@ export default function BalanceSheetPage() {
                             <CompactSection className="space-y-3">
                                 <StatementSection groups={hideZeroGroups(data.assets?.groups ?? [], hideZero)} label={t.accounting.reports.assets} colorClass="bg-sky-50 text-sky-700" />
                                 <div className="flex justify-between items-center px-3 py-2 bg-sky-50 rounded-lg font-semibold text-sm text-sky-800 border border-sky-100">
-                                    <span>Total Assets</span>
+                                    <span>{t.accounting.reports.totalAssets}</span>
                                     <span>{formatBDT(data.assets?.total ?? 0, { locale })}</span>
                                 </div>
                             </CompactSection>
@@ -227,7 +313,7 @@ export default function BalanceSheetPage() {
                                 <CompactSection className="space-y-3">
                                     <StatementSection groups={hideZeroGroups(data.liabilities?.groups ?? [], hideZero)} label={t.accounting.reports.liabilities} colorClass="bg-danger-light text-danger-text" />
                                     <div className="flex justify-between items-center px-3 py-2 bg-danger-light rounded-lg font-semibold text-sm text-danger-text border border-red-100">
-                                        <span>Total Liabilities</span>
+                                        <span>{t.accounting.reports.totalLiabilities}</span>
                                         <span>{formatBDT(data.liabilities?.total ?? 0, { locale })}</span>
                                     </div>
                                 </CompactSection>
@@ -235,19 +321,19 @@ export default function BalanceSheetPage() {
                                 <CompactSection className="space-y-3">
                                     <StatementSection groups={hideZeroGroups(data.equity?.groups ?? [], hideZero)} label={t.accounting.reports.equity} colorClass="bg-primary-light text-blue-700" />
                                     <div className="flex justify-between items-center px-5 py-1 text-sm text-gray-600">
-                                        <span>Current Period Net Profit</span>
+                                        <span>{t.accounting.reports.currentPeriodNetProfit}</span>
                                         <span className={(data.equity?.net_profit ?? 0) >= 0 ? 'text-emerald-700 font-semibold' : 'text-red-600 font-semibold'}>
                                             {formatBDT(data.equity?.net_profit ?? 0, { locale })}
                                         </span>
                                     </div>
                                     <div className="flex justify-between items-center px-3 py-2 bg-primary-light rounded-lg font-semibold text-sm text-blue-800 border border-primary-border">
-                                        <span>Total Equity</span>
+                                        <span>{t.accounting.reports.totalEquity}</span>
                                         <span>{formatBDT(data.equity?.total ?? 0, { locale })}</span>
                                     </div>
                                 </CompactSection>
 
                                 <div className="flex justify-between items-center px-4 py-3 bg-gray-900 text-white rounded-lg font-semibold text-sm">
-                                    <span>Total Liabilities + Equity</span>
+                                    <span>{t.accounting.reports.totalLiabilitiesAndEquity}</span>
                                     <span>{formatBDT(data.total_liabilities_and_equity ?? 0, { locale })}</span>
                                 </div>
                             </div>

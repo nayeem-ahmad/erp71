@@ -17,4 +17,18 @@ describe('FrequentQuickLinks', () => {
         render(<FrequentQuickLinks accountingOnlyMode />);
         expect(screen.queryByRole('link', { name: /sales entry/i })).toBeNull();
     });
+
+    it('offers the six accounting quick actions, statements included', () => {
+        render(<FrequentQuickLinks accountingOnlyMode />);
+
+        const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
+        expect(hrefs).toEqual([
+            '/accounting/vouchers/new',
+            '/accounting/ledger',
+            '/accounting/reports/pl',
+            '/accounting/reports/balance-sheet',
+            '/accounting/reports/cashbook',
+            '/accounting/reports/bankbook',
+        ]);
+    });
 });

@@ -14,11 +14,15 @@ import StatementSection, {
     hideZeroGroups,
     type StatementGroup,
 } from '@/components/accounting/StatementSection';
+import ReportPrintButton from '@/components/accounting/ReportPrintButton';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { api } from '@/lib/api';
+import { useBranding } from '@/lib/branding';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { usePrintHeader } from '@/lib/print/use-print-header';
+import { printStatementReport, reportContextLines } from '@/lib/statement-printer';
 import {
     getDefaultHideZero,
     getDefaultReportLevel,
@@ -69,6 +73,8 @@ function buildScopeParams(
 
 export default function ProfitLossPage() {
     const { t, locale } = useI18n();
+    const { businessName } = useBranding();
+    const printHeader = usePrintHeader('LIST_REPORT');
     const { stores, canConsolidate, loading: storesLoading } = useReportStores();
     const { approvedOnly, setApprovedOnly, approvalEnabled, ready: approvalReady } = useApprovedOnly();
     const [data, setData] = useState<PLData | null>(null);
@@ -140,6 +146,66 @@ export default function ProfitLossPage() {
         : (data?.net_profit?.total ?? 0);
     const isProfit = netProfitValue >= 0;
 
+    const printCopy = t.accounting.reports.print;
+
+    const handlePrint = useCallback(async () => {
+        if (!data || isCompare) return;
+
+        // Resolve on click rather than on mount: the template is only needed by
+        // the people who actually print, and this page loads for everyone.
+        const header = await printHeader.resolve();
+
+        printStatementReport(
+            {
+                businessName,
+                headerConfig: header.headerConfig,
+                title: t.accounting.reports.pl.title,
+                periodLabel: t.accountingShared.period,
+                periodValue: period ? `${period.from} — ${period.to}` : '—',
+                contextLines: reportContextLines(
+                    {
+                        scope,
+                        storeName: stores.find((store) => store.id === storeId)?.name,
+                        level,
+                        levelLabel: t.accounting.reports.reportLevel[level],
+                        approvedOnly,
+                        approvalEnabled,
+                    },
+                    printCopy,
+                ),
+                locale,
+                generatedLabel: printCopy.generated,
+                generatedAt: new Date().toLocaleString(locale),
+            },
+            [
+                {
+                    label: t.accounting.reports.revenue,
+                    // The printed copy honours hide-zero, so it matches the screen.
+                    groups: hideZeroGroups(data.revenue.groups, hideZero),
+                    totalLabel: t.accounting.reports.totalRevenue,
+                    total: data.revenue.total,
+                },
+                {
+                    label: t.accounting.reports.expenses,
+                    groups: hideZeroGroups(data.expenses.groups, hideZero),
+                    totalLabel: t.accounting.reports.totalExpenses,
+                    total: data.expenses.total,
+                },
+            ],
+            [
+                {
+                    label: isProfit ? t.accounting.reports.netProfit : t.accounting.reports.netLoss,
+                    amount: Math.abs(netProfitValue),
+                    strong: true,
+                },
+            ],
+            { account: printCopy.account, amount: printCopy.amount, noRows: printCopy.noRows },
+        );
+    }, [
+        data, isCompare, printHeader, businessName, t, period, scope, stores, storeId, level,
+        approvedOnly, approvalEnabled, printCopy, locale, hideZero, isProfit, netProfitValue,
+    ]);
+
     return (
         <AccountingPageShell maxWidth={isCompare ? 'full' : 'narrow'}>
             <PageHeader
@@ -152,7 +218,15 @@ export default function ProfitLossPage() {
                     'accounting',
                 )}
             />
-            <AccountingToolbar>
+            <AccountingToolbar
+                actions={(
+                    <ReportPrintButton
+                        onPrint={() => void handlePrint()}
+                        disabled={!data || loading || isCompare}
+                        disabledReason={isCompare ? printCopy.unavailableInCompare : undefined}
+                    />
+                )}
+            >
                 <ReportScopeBar
                     scope={scope}
                     onScopeChange={setScope}
