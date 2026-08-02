@@ -37,14 +37,8 @@ export interface Quad {
 
 /** Longest edge used for detection. Card borders survive this; noise does not. */
 const DETECT_EDGE_PX = 256;
-/** Fraction of pixels kept as "edge" after the Sobel pass. */
-const EDGE_KEEP_RATIO = 0.12;
-/**
- * A kept edge must also be this strong relative to the frame's strongest.
- * Without it a clean photo — where only the card border has any gradient at all
- * — has a ratio-cutoff of zero and every flat pixel qualifies as an edge.
- */
-const EDGE_MIN_RELATIVE = 0.18;
+/** Bins used to threshold the gradient field. 256 is ample for an 8-bit source. */
+const EDGE_HISTOGRAM_BINS = 256;
 /**
  * How much stronger the gradient along the quad's own edges must be than the
  * frame average. This is what separates a card from noise: a real border is a
@@ -192,33 +186,70 @@ export interface GradientField {
     max: number;
 }
 
-/** Greyscale with a 3×3 box blur, which is enough to stop paper grain firing Sobel. */
+/**
+ * Greyscale, blurred hard enough that only large-scale structure survives.
+ *
+ * This is where the card's border is separated from everything else competing
+ * with it, and it is a question of *scale* rather than strength. A border is a
+ * step between two surfaces: blurring spreads that step over more pixels but
+ * the total change across it is untouched, so it still reads as a strong
+ * gradient. Printing is thin strokes and desk texture is a fine repeating
+ * pattern; both are narrower than the blur, so each gets averaged against its
+ * own surroundings and flattens out.
+ *
+ * The 3×3 box this replaces was too narrow to tell them apart, which left the
+ * threshold trying to separate populations that overlapped — and no threshold
+ * could, because a printed card, a grainy desk and a grainy desk holding a
+ * printed card each want the cut in a different place.
+ */
+const BLUR_RADIUS = 2;
+const BLUR_PASSES = 2;
+
 function toBlurredGray(data: ImageData): { gray: Float32Array; width: number; height: number } {
     const { width, height } = data;
-    const raw = new Float32Array(width * height);
+    let gray = new Float32Array(width * height);
     for (let i = 0; i < width * height; i += 1) {
         const o = i * 4;
-        raw[i] = 0.299 * data.data[o] + 0.587 * data.data[o + 1] + 0.114 * data.data[o + 2];
+        gray[i] = 0.299 * data.data[o] + 0.587 * data.data[o + 1] + 0.114 * data.data[o + 2];
     }
 
-    const gray = new Float32Array(width * height);
-    for (let y = 0; y < height; y += 1) {
-        for (let x = 0; x < width; x += 1) {
+    // Separable, and repeated: box blurs stack into a close-enough Gaussian,
+    // which falls off smoothly instead of ringing on hard edges the way a
+    // single wide box does.
+    const scratch = new Float32Array(width * height);
+    for (let pass = 0; pass < BLUR_PASSES; pass += 1) {
+        blurAxis(gray, scratch, width, height, BLUR_RADIUS, true);
+        blurAxis(scratch, gray, width, height, BLUR_RADIUS, false);
+    }
+
+    return { gray, width, height };
+}
+
+/** One box-blur pass along a single axis, clamping at the borders. */
+function blurAxis(
+    src: Float32Array,
+    dst: Float32Array,
+    width: number,
+    height: number,
+    radius: number,
+    horizontal: boolean,
+): void {
+    const outer = horizontal ? height : width;
+    const inner = horizontal ? width : height;
+
+    for (let o = 0; o < outer; o += 1) {
+        for (let i = 0; i < inner; i += 1) {
             let sum = 0;
             let n = 0;
-            for (let dy = -1; dy <= 1; dy += 1) {
-                for (let dx = -1; dx <= 1; dx += 1) {
-                    const nx = x + dx;
-                    const ny = y + dy;
-                    if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-                    sum += raw[ny * width + nx];
-                    n += 1;
-                }
+            for (let k = -radius; k <= radius; k += 1) {
+                const j = i + k;
+                if (j < 0 || j >= inner) continue;
+                sum += src[horizontal ? o * width + j : j * width + o];
+                n += 1;
             }
-            gray[y * width + x] = sum / n;
+            dst[horizontal ? o * width + i : i * width + o] = sum / n;
         }
     }
-    return { gray, width, height };
 }
 
 /** Sobel magnitude for the whole frame, kept so it can be reused for scoring. */
@@ -274,23 +305,127 @@ export function strongEdgePoints(data: ImageData): Point[] {
     return edgePointsFrom(gradientField(data));
 }
 
+/**
+ * The outermost strong edge on each scanline, scanned from all four directions.
+ *
+ * Returning *every* strong pixel does not work, because gradient magnitude
+ * alone cannot tell a card's border from the card's own printing — black text
+ * on a white card is routinely a stronger edge than that card against a desk.
+ * Feeding both to the hull makes the result a race between how much text a card
+ * carries and how textured the desk is, and no single cutoff wins both: loose
+ * enough to keep the border on a text-heavy card is loose enough for wood grain
+ * to swallow the frame, and tight enough to reject grain drops the border in
+ * favour of the text block.
+ *
+ * Printing is always *inside* the border, so it is never the first strong edge
+ * a scanline meets from outside. Taking only the extremes removes it as a
+ * category rather than by threshold, which leaves the cutoff with the one job
+ * it can actually do: keeping faint background texture out.
+ */
+/**
+ * Otsu's threshold over the gradient field: the split that best separates
+ * "edge" from "not edge" for this frame.
+ *
+ * Every fixed rule tried here failed on some ordinary photo, because a frame
+ * holds up to three populations — flat surface, desk texture, and the sharp
+ * stuff (the card's border and its printing) — and where the useful cut lies
+ * depends on which are present. A percentile of the population follows whatever
+ * covers the most area, so texture sets the bar. A fraction of the strongest
+ * edge follows the printing, so a heavily printed card raises the bar above its
+ * own border and the card disappears. Between a wood desk (needing a bar above
+ * 0.40 of the strongest) and that same desk with a printed card (needing below
+ * 0.55), the workable band was too narrow to hold.
+ *
+ * Otsu picks the cut by maximising between-class variance, so it lands in
+ * whichever gap the frame actually has instead of one assumed in advance, and
+ * it takes no tuning constant to do it. It only works because the blur has
+ * already removed the populations it could not have separated — on an
+ * unblurred frame the biggest split is flat-surface against desk texture,
+ * which puts the cut below the texture and hands the hull back to the desk.
+ */
+function otsuThreshold(mag: Float32Array, width: number, height: number, max: number): number {
+    if (max <= 0) return 0;
+
+    const bins = EDGE_HISTOGRAM_BINS;
+    const scale = (bins - 1) / max;
+    const histogram = new Uint32Array(bins);
+    for (let y = 1; y < height - 1; y += 1) {
+        for (let x = 1; x < width - 1; x += 1) {
+            histogram[Math.round(mag[y * width + x] * scale)] += 1;
+        }
+    }
+
+    return otsuBin(histogram, 0) / scale;
+}
+
+/** The bin maximising between-class variance, considering only bins >= `from`. */
+function otsuBin(histogram: Uint32Array, from: number): number {
+    let total = 0;
+    let sumAll = 0;
+    for (let b = from; b < histogram.length; b += 1) {
+        total += histogram[b];
+        sumAll += b * histogram[b];
+    }
+    if (total === 0) return from;
+
+    let weightBelow = 0;
+    let sumBelow = 0;
+    let bestVariance = -1;
+    let bestBin = from;
+
+    for (let b = from; b < histogram.length; b += 1) {
+        weightBelow += histogram[b];
+        if (weightBelow === 0) continue;
+        const weightAbove = total - weightBelow;
+        if (weightAbove === 0) break;
+
+        sumBelow += b * histogram[b];
+        const meanBelow = sumBelow / weightBelow;
+        const meanAbove = (sumAll - sumBelow) / weightAbove;
+        const variance = weightBelow * weightAbove * (meanBelow - meanAbove) ** 2;
+        if (variance > bestVariance) {
+            bestVariance = variance;
+            bestBin = b;
+        }
+    }
+
+    return bestBin;
+}
+
 function edgePointsFrom(field: GradientField): Point[] {
     const { mag, width, height, max } = field;
     if (max <= 0) return [];
 
-    const values: number[] = [];
-    for (let y = 1; y < height - 1; y += 1) {
-        for (let x = 1; x < width - 1; x += 1) values.push(mag[y * width + x]);
-    }
-    const ratioCutoff = [...values].sort((a, b) => b - a)[
-        Math.min(values.length - 1, Math.floor(values.length * EDGE_KEEP_RATIO))
-    ];
-    const cutoff = Math.max(ratioCutoff, max * EDGE_MIN_RELATIVE);
+    const cutoff = otsuThreshold(mag, width, height, max);
+    if (cutoff <= 0) return [];
 
     const points: Point[] = [];
     for (let y = 1; y < height - 1; y += 1) {
+        let first = -1;
+        let last = -1;
         for (let x = 1; x < width - 1; x += 1) {
-            if (mag[y * width + x] >= cutoff) points.push({ x, y });
+            if (mag[y * width + x] >= cutoff) {
+                if (first < 0) first = x;
+                last = x;
+            }
+        }
+        if (first >= 0) {
+            points.push({ x: first, y });
+            if (last !== first) points.push({ x: last, y });
+        }
+    }
+    for (let x = 1; x < width - 1; x += 1) {
+        let first = -1;
+        let last = -1;
+        for (let y = 1; y < height - 1; y += 1) {
+            if (mag[y * width + x] >= cutoff) {
+                if (first < 0) first = y;
+                last = y;
+            }
+        }
+        if (first >= 0) {
+            points.push({ x, y: first });
+            if (last !== first) points.push({ x, y: last });
         }
     }
     return points;

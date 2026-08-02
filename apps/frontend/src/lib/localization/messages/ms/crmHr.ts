@@ -123,6 +123,8 @@ export const crmHrMessages = {
                 subtitle: 'Ambil gambar kad dan medan akan diisi untuk anda.',
                 takePhoto: 'Ambil gambar',
                 openingCamera: 'Membuka kamera...',
+                cardInView: 'Kad dikesan — pegang stabil dan ambil gambar.',
+                lookingForCard: 'Mencari kad. Letakkan pada permukaan yang kosong.',
                 capture: 'Tangkap',
                 chooseFile: 'Pilih imej',
                 changeImage: 'Pilih yang lain',

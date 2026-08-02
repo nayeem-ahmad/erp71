@@ -123,6 +123,8 @@ export const crmHrMessages = {
                 subtitle: 'Photograph the card and the fields fill in for you.',
                 takePhoto: 'Take photo',
                 openingCamera: 'Opening camera...',
+                cardInView: 'Card detected — hold steady and take the photo.',
+                lookingForCard: 'Looking for a card. Place it on a plain surface.',
                 capture: 'Capture',
                 chooseFile: 'Choose image',
                 changeImage: 'Choose another',

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import CardCropper from './CardCropper';
+import LiveCardOutline from './LiveCardOutline';
 import type { ContactFormState } from './contact-form-fields';
 
 export type ScannedCard = Partial<Record<keyof ContactFormState, string>> & { raw_text?: string };
@@ -111,12 +112,15 @@ export default function BusinessCardScanner({ open, onClose, onApply }: Readonly
     const [startingCamera, setStartingCamera] = useState(false);
     /** The first frame has dimensions only once metadata arrives. */
     const [cameraReady, setCameraReady] = useState(false);
+    /** Whether the live feed currently has a card outlined, for the hint below it. */
+    const [cardInView, setCardInView] = useState(false);
     const galleryInput = useRef<HTMLInputElement>(null);
     const cameraInput = useRef<HTMLInputElement>(null);
     const video = useRef<HTMLVideoElement>(null);
 
     const stopCamera = useCallback(() => {
         setCameraReady(false);
+        setCardInView(false);
         setStream((current) => {
             current?.getTracks().forEach((track) => track.stop());
             return null;
@@ -270,14 +274,24 @@ export default function BusinessCardScanner({ open, onClose, onApply }: Readonly
     } else if (stream) {
         sourcePanel = (
             <div className="space-y-3">
-                <video
-                    ref={video}
-                    autoPlay
-                    muted
-                    playsInline
-                    onLoadedMetadata={() => setCameraReady(true)}
-                    className="w-full max-h-64 rounded-lg border border-gray-200 bg-black object-contain"
-                />
+                <div className="relative">
+                    <video
+                        ref={video}
+                        autoPlay
+                        muted
+                        playsInline
+                        onLoadedMetadata={() => setCameraReady(true)}
+                        className="w-full max-h-64 rounded-lg border border-gray-200 bg-black object-contain"
+                    />
+                    <LiveCardOutline
+                        video={video}
+                        active={cameraReady}
+                        onDetectionChange={setCardInView}
+                    />
+                </div>
+                <p className={`text-xs ${cardInView ? 'text-blue-600' : 'text-gray-500'}`}>
+                    {cardInView ? m.cardInView : m.lookingForCard}
+                </p>
                 <div className="flex flex-wrap gap-2">
                     <Button
                         onClick={capture}
