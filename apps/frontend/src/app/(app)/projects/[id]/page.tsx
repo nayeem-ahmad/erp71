@@ -11,6 +11,7 @@ import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
+import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { formatBDT } from '@/lib/format';
 
 interface Progress {
@@ -124,6 +125,12 @@ export default function ProjectDetailPage() {
             <PageHeader
                 title={`${project.code} · ${project.name}`}
                 subtitle={project.customer?.name ?? project.projectType?.name ?? m.subtitle}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.projects,
+                    `${project.code} · ${project.name}`,
+                    'projects',
+                )}
                 actions={
                     <div className="flex flex-wrap gap-2">
                         <Link href={routes.projects.board(projectId)}>

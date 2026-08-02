@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
+import { projectChildBreadcrumbs } from '@/lib/page-breadcrumbs';
 
 interface BoardTask {
     id: string;
@@ -37,6 +38,12 @@ interface Sprint {
     end_date: string;
 }
 
+interface ProjectSummary {
+    id: string;
+    code: string;
+    name: string;
+}
+
 type Mode = 'kanban' | 'scrum';
 
 const num = (value: unknown): number => (value == null ? 0 : Number(value));
@@ -48,6 +55,7 @@ export default function ProjectBoardPage() {
     const m = t.projects;
 
     const [mode, setMode] = useState<Mode>('kanban');
+    const [project, setProject] = useState<ProjectSummary | null>(null);
     const [columns, setColumns] = useState<BoardColumn[]>([]);
     const [sprints, setSprints] = useState<Sprint[]>([]);
     const [burndown, setBurndown] = useState<BurndownPoint[] | null>(null);
@@ -75,6 +83,15 @@ export default function ProjectBoardPage() {
         api.getSprints(projectId)
             .then((list: unknown) => setSprints(Array.isArray(list) ? list : []))
             .catch(() => setSprints([]));
+    }, [projectId]);
+
+    // Header identity only. Fetched separately from the board so switching
+    // kanban/scrum or sprint does not re-request it, and a failure here leaves
+    // the board usable with a plain breadcrumb rather than blocking it.
+    useEffect(() => {
+        api.getProject(projectId)
+            .then((res: unknown) => setProject(res as ProjectSummary))
+            .catch(() => setProject(null));
     }, [projectId]);
 
     useEffect(() => {
@@ -135,6 +152,12 @@ export default function ProjectBoardPage() {
             <PageHeader
                 title={m.board.title}
                 subtitle={activeSprint && mode === 'scrum' ? activeSprint.name : m.board.allTasks}
+                breadcrumbs={projectChildBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.projects,
+                    project,
+                    m.board.title,
+                )}
                 actions={
                     <div className="flex flex-wrap items-center gap-2">
                         <div className="inline-flex overflow-hidden rounded-md border border-gray-200">
