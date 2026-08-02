@@ -143,6 +143,18 @@ export const crmHrMessages = {
                 cardRemoveTitle: 'Buang imej kad',
                 cardRemoveConfirm: 'Padam gambar kad ini? Butiran kenalan kekal.',
                 cardRemoveFailed: 'Imej kad tidak dapat dibuang.',
+                cropTitle: 'Semak tepi kad',
+                cropDetected: 'Tepi kad dikesan. Seret mana-mana bucu untuk melaraskan, kemudian pangkas.',
+                cropManual: 'Tepi kad tidak dijumpai. Seret bucu ke atas kad, atau guna imej penuh.',
+                useCrop: 'Pangkas ke kad',
+                useFullImage: 'Guna imej penuh',
+                resetCrop: 'Set semula bucu',
+                corners: {
+                    topLeft: 'Bucu kiri atas',
+                    topRight: 'Bucu kanan atas',
+                    bottomRight: 'Bucu kanan bawah',
+                    bottomLeft: 'Bucu kiri bawah',
+                },
             },
         },
         leads: {

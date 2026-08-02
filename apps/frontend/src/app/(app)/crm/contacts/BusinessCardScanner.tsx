@@ -6,6 +6,7 @@ import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import CardCropper from './CardCropper';
 import type { ContactFormState } from './contact-form-fields';
 
 export type ScannedCard = Partial<Record<keyof ContactFormState, string>> & { raw_text?: string };
@@ -97,6 +98,12 @@ export default function BusinessCardScanner({ open, onClose, onApply }: Readonly
 
     const [preview, setPreview] = useState<string | null>(null);
     const [payload, setPayload] = useState<{ dataUrl: string; mimeType: string } | null>(null);
+    /**
+     * The photo as taken, held only while the user is adjusting the crop. Once
+     * they accept or skip, `payload` is what gets scanned and stored — the
+     * cropped card if they cropped, the original if they did not.
+     */
+    const [cropping, setCropping] = useState<string | null>(null);
     const [scanning, setScanning] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<ScannedCard | null>(null);
@@ -119,6 +126,7 @@ export default function BusinessCardScanner({ open, onClose, onApply }: Readonly
     const reset = useCallback(() => {
         setPreview(null);
         setPayload(null);
+        setCropping(null);
         setResult(null);
         setError(null);
         setScanning(false);
@@ -177,6 +185,7 @@ export default function BusinessCardScanner({ open, onClose, onApply }: Readonly
         if (!el?.videoWidth) return;
         try {
             const dataUrl = drawScaled(el, el.videoWidth, el.videoHeight);
+            setCropping(dataUrl);
             setPayload({ dataUrl, mimeType: 'image/jpeg' });
             setPreview(dataUrl);
             setResult(null);
@@ -200,6 +209,9 @@ export default function BusinessCardScanner({ open, onClose, onApply }: Readonly
             const prepared = await toScannablePayload(file);
             setPayload(prepared);
             setPreview(prepared.dataUrl);
+            // Same crop step for a picked file as for a camera frame — the file
+            // path is the desktop fallback, so it must not be the poorer one.
+            setCropping(prepared.dataUrl);
         } catch {
             // An unreadable file leaves the picker where it was, with a reason.
             setError(m.failed);
@@ -239,8 +251,23 @@ export default function BusinessCardScanner({ open, onClose, onApply }: Readonly
         return labels[camel] ?? labels[key] ?? key;
     };
 
+    const acceptCrop = (croppedDataUrl: string) => {
+        setPayload({ dataUrl: croppedDataUrl, mimeType: 'image/jpeg' });
+        setPreview(croppedDataUrl);
+        setCropping(null);
+    };
+
     let sourcePanel: React.ReactNode;
-    if (stream) {
+    if (cropping) {
+        sourcePanel = (
+            <CardCropper
+                dataUrl={cropping}
+                onCropped={acceptCrop}
+                onSkip={() => setCropping(null)}
+                busy={scanning}
+            />
+        );
+    } else if (stream) {
         sourcePanel = (
             <div className="space-y-3">
                 <video
