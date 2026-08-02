@@ -33,6 +33,7 @@ jest.mock('lucide-react', () => ({
     FileText: () => <span data-testid="icon-file-text" />,
     ClipboardList: () => <span data-testid="icon-clipboard-list" />,
     HandCoins: () => <span data-testid="icon-hand-coins" />,
+    Scale: () => <span data-testid="icon-scale" />,
 }));
 
 jest.mock('@/lib/api', () => ({
