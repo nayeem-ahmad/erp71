@@ -125,16 +125,35 @@ describe('ProjectTasksService', () => {
             ).rejects.toBeInstanceOf(BadRequestException);
         });
 
-        it('refuses a sprint belonging to another project', async () => {
-            db.sprint.findFirst.mockResolvedValue({ id: 'sprint-9', project_id: 'other-project' });
+        it('accepts a sprint that holds tasks from other projects', async () => {
+            // Sprints are tenant-level: this exact case used to throw
+            // "That sprint belongs to a different project", which is the whole
+            // thing cross-project sprints exist to allow.
+            db.sprint.findFirst.mockResolvedValue({ id: 'sprint-9' });
+
+            await service.create('tenant-1', 'user-1', {
+                projectId: 'project-1',
+                title: 'Borrowed into a shared sprint',
+                sprintId: 'sprint-9',
+            } as never);
+
+            expect(db.projectTask.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ sprint_id: 'sprint-9', project_id: 'project-1' }),
+                }),
+            );
+        });
+
+        it('still refuses a sprint from another tenant', async () => {
+            db.sprint.findFirst.mockResolvedValue(null);
 
             await expect(
                 service.create('tenant-1', 'user-1', {
                     projectId: 'project-1',
-                    title: 'Wrong sprint',
-                    sprintId: 'sprint-9',
+                    title: 'Foreign sprint',
+                    sprintId: 'sprint-x',
                 } as never),
-            ).rejects.toBeInstanceOf(BadRequestException);
+            ).rejects.toBeInstanceOf(NotFoundException);
         });
     });
 

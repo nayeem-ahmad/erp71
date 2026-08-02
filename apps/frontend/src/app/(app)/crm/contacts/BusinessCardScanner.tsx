@@ -41,21 +41,26 @@ async function toScannablePayload(file: File): Promise<{ dataUrl: string; mimeTy
     let bitmap: ImageBitmap | undefined;
     try {
         bitmap = await createImageBitmap(file);
-        const scale = Math.min(1, MAX_EDGE_PX / Math.max(bitmap.width, bitmap.height));
-
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(bitmap.width * scale);
-        canvas.height = Math.round(bitmap.height * scale);
-        const ctx = canvas.getContext('2d');
-        if (!ctx) throw new Error('no canvas context');
-        ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-
-        return { dataUrl: canvas.toDataURL('image/jpeg', JPEG_QUALITY), mimeType: 'image/jpeg' };
+        return { dataUrl: drawScaled(bitmap, bitmap.width, bitmap.height), mimeType: 'image/jpeg' };
     } catch {
         return original();
     } finally {
         bitmap?.close?.();
     }
+}
+
+/** Re-encode any drawable source down to `MAX_EDGE_PX` as JPEG. */
+function drawScaled(source: CanvasImageSource, width: number, height: number): string {
+    const scale = Math.min(1, MAX_EDGE_PX / Math.max(width, height));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('no canvas context');
+    ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+
+    return canvas.toDataURL('image/jpeg', JPEG_QUALITY);
 }
 
 function readAsDataUrl(file: File): Promise<string> {
@@ -85,8 +90,21 @@ export default function BusinessCardScanner({ open, onClose, onApply }: Readonly
     const [scanning, setScanning] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<ScannedCard | null>(null);
+    const [stream, setStream] = useState<MediaStream | null>(null);
+    const [startingCamera, setStartingCamera] = useState(false);
+    /** The first frame has dimensions only once metadata arrives. */
+    const [cameraReady, setCameraReady] = useState(false);
     const galleryInput = useRef<HTMLInputElement>(null);
     const cameraInput = useRef<HTMLInputElement>(null);
+    const video = useRef<HTMLVideoElement>(null);
+
+    const stopCamera = useCallback(() => {
+        setCameraReady(false);
+        setStream((current) => {
+            current?.getTracks().forEach((track) => track.stop());
+            return null;
+        });
+    }, []);
 
     const reset = useCallback(() => {
         setPreview(null);
@@ -94,11 +112,71 @@ export default function BusinessCardScanner({ open, onClose, onApply }: Readonly
         setResult(null);
         setError(null);
         setScanning(false);
-    }, []);
+        stopCamera();
+    }, [stopCamera]);
 
     useEffect(() => {
         if (!open) reset();
     }, [open, reset]);
+
+    // A stream left running holds the camera light on after the modal is gone.
+    useEffect(() => stopCamera, [stopCamera]);
+
+    // The <video> only exists once the stream does, so binding has to wait for
+    // the render that introduces it.
+    useEffect(() => {
+        const el = video.current;
+        if (!el || !stream) return;
+        el.srcObject = stream;
+        // `play()` predates the promise-returning spec in some engines, so the
+        // result is checked before anything is chained onto it.
+        const played: unknown = el.play();
+        if (played instanceof Promise) {
+            played.catch(() => { /* autoplay racing the unmount is harmless */ });
+        }
+    }, [stream]);
+
+    /**
+     * `capture="environment"` is only a hint, and desktop browsers ignore it
+     * outright — the user gets a file dialog where they asked for a camera.
+     * So take the live stream when there is one, and keep the input as the
+     * fallback for anything that cannot or will not grant it.
+     */
+    const takePhoto = async () => {
+        if (!navigator.mediaDevices?.getUserMedia) {
+            cameraInput.current?.click();
+            return;
+        }
+        setStartingCamera(true);
+        setError(null);
+        try {
+            const live = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: 'environment' } },
+            });
+            setStream(live);
+        } catch {
+            // Denied, no device, or an insecure origin — the file picker still works.
+            cameraInput.current?.click();
+        } finally {
+            setStartingCamera(false);
+        }
+    };
+
+    const capture = () => {
+        const el = video.current;
+        if (!el?.videoWidth) return;
+        try {
+            const dataUrl = drawScaled(el, el.videoWidth, el.videoHeight);
+            setPayload({ dataUrl, mimeType: 'image/jpeg' });
+            setPreview(dataUrl);
+            setResult(null);
+            setError(null);
+        } catch {
+            setError(m.failed);
+        } finally {
+            stopCamera();
+        }
+    };
 
     const pickFile = async (file: File | undefined) => {
         if (!file) return;
@@ -151,6 +229,87 @@ export default function BusinessCardScanner({ open, onClose, onApply }: Readonly
         return labels[camel] ?? labels[key] ?? key;
     };
 
+    let sourcePanel: React.ReactNode;
+    if (stream) {
+        sourcePanel = (
+            <div className="space-y-3">
+                <video
+                    ref={video}
+                    autoPlay
+                    muted
+                    playsInline
+                    onLoadedMetadata={() => setCameraReady(true)}
+                    className="w-full max-h-64 rounded-lg border border-gray-200 bg-black object-contain"
+                />
+                <div className="flex flex-wrap gap-2">
+                    <Button
+                        onClick={capture}
+                        disabled={!cameraReady}
+                        leftIcon={<Camera className="w-4 h-4" />}
+                    >
+                        {m.capture}
+                    </Button>
+                    <Button variant="secondary" onClick={stopCamera}>
+                        {c.cancel}
+                    </Button>
+                </div>
+            </div>
+        );
+    } else if (preview) {
+        sourcePanel = (
+            <div className="space-y-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                    src={preview}
+                    alt={m.title}
+                    className="w-full max-h-64 object-contain rounded-lg border border-gray-200 bg-gray-50"
+                />
+                <div className="flex flex-wrap gap-2">
+                    <Button
+                        variant="secondary"
+                        onClick={() => galleryInput.current?.click()}
+                        leftIcon={<ImagePlus className="w-4 h-4" />}
+                    >
+                        {m.changeImage}
+                    </Button>
+                    {!result && (
+                        <Button
+                            onClick={scan}
+                            loading={scanning}
+                            leftIcon={<ScanLine className="w-4 h-4" />}
+                        >
+                            {scanning ? m.scanning : m.scan}
+                        </Button>
+                    )}
+                </div>
+            </div>
+        );
+    } else {
+        sourcePanel = (
+            <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center space-y-3">
+                <ScanLine className="w-8 h-8 mx-auto text-gray-300" />
+                <p className="text-sm text-gray-500">{m.noFile}</p>
+                <div className="flex flex-wrap gap-2 justify-center">
+                    <Button
+                        onClick={() => void takePhoto()}
+                        loading={startingCamera}
+                        leftIcon={<Camera className="w-4 h-4" />}
+                    >
+                        {startingCamera ? m.openingCamera : m.takePhoto}
+                    </Button>
+                    <Button
+                        variant="secondary"
+                        onClick={() => galleryInput.current?.click()}
+                        leftIcon={<ImagePlus className="w-4 h-4" />}
+                    >
+                        {m.chooseFile}
+                    </Button>
+                </div>
+                <p className="text-xs text-gray-400">{m.creditsHint}</p>
+            </div>
+        );
+    }
+
     return (
         <ModalShell size="md" onBackdropClick={onClose}>
             <ModalHeader title={m.title} subtitle={m.subtitle} onClose={onClose} closeLabel={c.cancel} />
@@ -172,55 +331,7 @@ export default function BusinessCardScanner({ open, onClose, onApply }: Readonly
                     onChange={(e) => { void pickFile(e.target.files?.[0]); e.target.value = ''; }}
                 />
 
-                {preview ? (
-                    <div className="space-y-3">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                            src={preview}
-                            alt={m.title}
-                            className="w-full max-h-64 object-contain rounded-lg border border-gray-200 bg-gray-50"
-                        />
-                        <div className="flex flex-wrap gap-2">
-                            <Button
-                                variant="secondary"
-                                onClick={() => galleryInput.current?.click()}
-                                leftIcon={<ImagePlus className="w-4 h-4" />}
-                            >
-                                {m.changeImage}
-                            </Button>
-                            {!result && (
-                                <Button
-                                    onClick={scan}
-                                    loading={scanning}
-                                    leftIcon={<ScanLine className="w-4 h-4" />}
-                                >
-                                    {scanning ? m.scanning : m.scan}
-                                </Button>
-                            )}
-                        </div>
-                    </div>
-                ) : (
-                    <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center space-y-3">
-                        <ScanLine className="w-8 h-8 mx-auto text-gray-300" />
-                        <p className="text-sm text-gray-500">{m.noFile}</p>
-                        <div className="flex flex-wrap gap-2 justify-center">
-                            <Button
-                                onClick={() => cameraInput.current?.click()}
-                                leftIcon={<Camera className="w-4 h-4" />}
-                            >
-                                {m.takePhoto}
-                            </Button>
-                            <Button
-                                variant="secondary"
-                                onClick={() => galleryInput.current?.click()}
-                                leftIcon={<ImagePlus className="w-4 h-4" />}
-                            >
-                                {m.chooseFile}
-                            </Button>
-                        </div>
-                        <p className="text-xs text-gray-400">{m.creditsHint}</p>
-                    </div>
-                )}
+                {sourcePanel}
 
                 {error && (
                     <p role="alert" className="text-xs text-danger">

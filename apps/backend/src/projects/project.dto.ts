@@ -125,8 +125,12 @@ export class UpdateProjectDto extends CreateProjectDto {
 }
 
 export class UpsertProjectMemberDto {
-    @IsUUID()
-    userId!: string;
+    /** Exactly one of userId / employeeId. Enforced in ProjectsService.addMember. */
+    @IsOptional() @IsUUID()
+    userId?: string;
+
+    @IsOptional() @IsUUID()
+    employeeId?: string;
 
     @IsOptional() @IsEnum(ProjectMemberRoleDto)
     role?: ProjectMemberRoleDto;
@@ -171,6 +175,20 @@ export class ListTasksDto {
     @IsOptional() @IsString()
     backlogOnly?: string;
 
+    @IsOptional() @IsUUID()
+    statusId?: string;
+
+    /**
+     * TODO | IN_PROGRESS | DONE. Filters on what a column *means* rather than on
+     * a column id, so "open tasks" is one parameter instead of the caller
+     * enumerating this tenant's board columns.
+     */
+    @IsOptional() @IsString()
+    statusCategory?: string;
+
+    @IsOptional() @IsUUID()
+    assigneeEmployeeId?: string;
+
     @IsOptional() @Type(() => Number) @IsInt() @Min(1)
     page?: number;
 
@@ -202,6 +220,10 @@ export class CreateTaskDto {
 
     @IsOptional() @IsUUID()
     assigneeId?: string;
+
+    /** Alternative to assigneeId for a team member who has no login. */
+    @IsOptional() @IsUUID()
+    assigneeEmployeeId?: string;
 
     @IsOptional() @IsUUID()
     milestoneId?: string;
@@ -241,6 +263,10 @@ export class UpdateTaskDto {
 
     @IsOptional() @IsUUID()
     assigneeId?: string;
+
+    /** Alternative to assigneeId for a team member who has no login. */
+    @IsOptional() @IsUUID()
+    assigneeEmployeeId?: string;
 
     @IsOptional() @IsUUID()
     milestoneId?: string;
@@ -348,9 +374,6 @@ export class ListTimeEntriesDto {
 }
 
 export class CreateSprintDto {
-    @IsUUID()
-    projectId!: string;
-
     @IsString() @MinLength(1) @MaxLength(200)
     name!: string;
 

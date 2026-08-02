@@ -2889,14 +2889,15 @@ export const api = {
     deleteProject: (id: string) => fetchWithAuth(`/projects/${id}`, { method: 'DELETE' }),
     getProjectTimeSummary: (id: string) => fetchWithAuth(`/projects/${id}/time-summary`),
 
-    addProjectMember: (projectId: string, data: { userId: string; role?: string }) =>
+    addProjectMember: (projectId: string, data: { userId?: string; employeeId?: string; role?: string }) =>
         fetchWithAuth(`/projects/${projectId}/members`, {
             method: 'POST',
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
-    removeProjectMember: (projectId: string, userId: string) =>
-        fetchWithAuth(`/projects/${projectId}/members/${userId}`, { method: 'DELETE' }),
+    /** Keyed on the member row — an employee member has no user id. */
+    removeProjectMember: (projectId: string, memberId: string) =>
+        fetchWithAuth(`/projects/${projectId}/members/${memberId}`, { method: 'DELETE' }),
 
     createProjectMilestone: (projectId: string, data: Record<string, unknown>) =>
         fetchWithAuth(`/projects/${projectId}/milestones`, {
@@ -3017,7 +3018,9 @@ export const api = {
         }),
     deleteProjectTimeEntry: (id: string) => fetchWithAuth(`/project-time/${id}`, { method: 'DELETE' }),
 
-    getSprints: (projectId: string) => fetchWithAuth(`/sprints?projectId=${projectId}`),
+    /** Omit projectId for every sprint in the tenant; pass one to filter by participation. */
+    getSprints: (projectId?: string) =>
+        fetchWithAuth(`/sprints${projectId ? `?projectId=${projectId}` : ''}`),
     getSprint: (id: string) => fetchWithAuth(`/sprints/${id}`),
     getSprintBurndown: (id: string) => fetchWithAuth(`/sprints/${id}/burndown`),
     rebuildSprintSnapshots: (id: string, overwrite = false) =>

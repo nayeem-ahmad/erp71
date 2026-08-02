@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import BusinessCardScanner from './BusinessCardScanner';
 
 jest.mock('@/lib/api', () => ({
@@ -22,9 +22,20 @@ function pickImage(input: HTMLInputElement, type = 'image/png') {
     fireEvent.change(input, { target: { files: [file] } });
 }
 
+function mockCamera(getUserMedia: jest.Mock) {
+    Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: { getUserMedia },
+    });
+}
+
 describe('BusinessCardScanner', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+    });
+
+    afterEach(() => {
+        Reflect.deleteProperty(navigator, 'mediaDevices');
     });
 
     it('renders nothing while closed', () => {
@@ -41,6 +52,61 @@ describe('BusinessCardScanner', () => {
         expect(inputs).toHaveLength(2);
         expect(inputs.some((input) => input.hasAttribute('capture'))).toBe(true);
         expect(inputs.every((input) => input.accept === 'image/*')).toBe(true);
+    });
+
+    // `capture="environment"` is a hint desktop browsers ignore, which left the
+    // camera button opening a file dialog. The live stream is the real path.
+    it('opens a live camera stream when asked for a photo', async () => {
+        const stop = jest.fn();
+        const getUserMedia = jest.fn().mockResolvedValue({ getTracks: () => [{ stop }] });
+        mockCamera(getUserMedia);
+        render(<BusinessCardScanner open onClose={jest.fn()} onApply={jest.fn()} />);
+
+        fireEvent.click(screen.getByRole('button', { name: /take photo/i }));
+
+        expect(await screen.findByRole('button', { name: /capture/i })).toBeInTheDocument();
+        expect(getUserMedia).toHaveBeenCalledWith({ video: { facingMode: { ideal: 'environment' } } });
+        expect(document.querySelector('video')).toBeInTheDocument();
+    });
+
+    // A frame has no dimensions until metadata lands, so capturing early would
+    // silently produce nothing.
+    it('holds capture disabled until the stream reports its dimensions', async () => {
+        mockCamera(jest.fn().mockResolvedValue({ getTracks: () => [{ stop: jest.fn() }] }));
+        render(<BusinessCardScanner open onClose={jest.fn()} onApply={jest.fn()} />);
+
+        fireEvent.click(screen.getByRole('button', { name: /take photo/i }));
+        expect(await screen.findByRole('button', { name: /capture/i })).toBeDisabled();
+
+        fireEvent.loadedMetadata(document.querySelector('video')!);
+        expect(screen.getByRole('button', { name: /capture/i })).toBeEnabled();
+    });
+
+    it('releases the camera when the stream is dismissed', async () => {
+        const stop = jest.fn();
+        mockCamera(jest.fn().mockResolvedValue({ getTracks: () => [{ stop }] }));
+        render(<BusinessCardScanner open onClose={jest.fn()} onApply={jest.fn()} />);
+
+        fireEvent.click(screen.getByRole('button', { name: /take photo/i }));
+        // The header and footer carry a Cancel too — this is the viewfinder's own.
+        const capture = await screen.findByRole('button', { name: /capture/i });
+        fireEvent.click(within(capture.parentElement!).getByRole('button', { name: /^cancel$/i }));
+
+        await waitFor(() => expect(stop).toHaveBeenCalled());
+        expect(document.querySelector('video')).not.toBeInTheDocument();
+    });
+
+    // Permission denied, no device, or an insecure origin still needs a way in.
+    it('falls back to the capture input when the camera is refused', async () => {
+        mockCamera(jest.fn().mockRejectedValue(new Error('NotAllowedError')));
+        render(<BusinessCardScanner open onClose={jest.fn()} onApply={jest.fn()} />);
+        const capture = fileInputs().find((input) => input.hasAttribute('capture'))!;
+        const click = jest.spyOn(capture, 'click');
+
+        fireEvent.click(screen.getByRole('button', { name: /take photo/i }));
+
+        await waitFor(() => expect(click).toHaveBeenCalled());
+        expect(document.querySelector('video')).not.toBeInTheDocument();
     });
 
     it('rejects a non-image file without calling the API', async () => {

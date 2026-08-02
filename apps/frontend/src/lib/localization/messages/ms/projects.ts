@@ -1,11 +1,18 @@
 export const projectsMessages = {
-    title: 'Projek',
+    title: 'Pengurusan Projek',
     subtitle: 'Kerja, tugasan, masa dan sprint',
     newProject: 'Projek Baharu',
     editProject: 'Sunting Projek',
     empty: 'Tiada projek lagi. Cipta satu untuk mula menjejak kerja.',
     emptyFiltered: 'Tiada projek sepadan dengan penapis ini.',
     searchPlaceholder: 'Cari kod, nama atau pelanggan',
+    saved: "Projek disimpan",
+    saveFailed: "Tidak dapat menyimpan projek",
+    loadFailed: "Tidak dapat memuatkan projek",
+    deleted: "Projek dipadam",
+    deleteFailed: "Tidak dapat memadam projek",
+    deleteProject: "Padam projek",
+    deletePrompt: "Padam {name}?\n\nTugasan dan jam yang telah dilog dikekalkan — hanya projek dibuang daripada senarai anda.",
 
     fields: {
         code: 'Kod',
@@ -23,6 +30,11 @@ export const projectsMessages = {
         budget: 'Bajet',
         tasks: 'Tugasan',
         progress: 'Kemajuan',
+        actions: "Tindakan",
+        project: "Projek",
+        assignee: "Ditugaskan kepada",
+        sprint: "Sprint",
+        dueDate: "Tarikh akhir",
     },
 
     status: {
@@ -38,6 +50,27 @@ export const projectsMessages = {
         MEDIUM: 'Sederhana',
         HIGH: 'Tinggi',
         URGENT: 'Segera',
+    },
+
+    validation: {
+        nameRequired: "Berikan nama kepada projek ini.",
+    },
+
+    statusCategory: {
+        TODO: "Perlu dibuat",
+        IN_PROGRESS: "Sedang berjalan",
+        DONE: "Selesai",
+    },
+
+    tasks: {
+        title: "Tugasan",
+        subtitle: "Setiap tugasan merentas semua projek",
+        empty: "Tiada tugasan sepadan dengan penapis ini.",
+        searchPlaceholder: "Cari tajuk tugasan",
+        mine: "Ditugaskan kepada saya",
+        anyone: "Sesiapa sahaja",
+        allProjects: "Semua projek",
+        anyStatus: "Sebarang status",
     },
 
     tabs: {
@@ -66,6 +99,13 @@ export const projectsMessages = {
         MEMBER: 'Ahli',
         VIEWER: 'Pemerhati',
         remove: 'Keluarkan dari projek',
+        added: "Ditambah ke projek",
+        addFailed: "Tidak dapat menambah orang itu",
+        removed: "Dibuang daripada projek",
+        removeFailed: "Tidak dapat membuang orang itu",
+        person: "Orang",
+        noLogin: "tiada log masuk",
+        noLoginHint: "Pekerja tanpa akaun ruang kerja boleh berada dalam pasukan dan memegang tugasan, tetapi tidak boleh log masuk untuk melihatnya.",
     },
 
     milestones: {
@@ -131,7 +171,7 @@ export const projectsMessages = {
         kanban: 'Kanban',
         scrum: 'Scrum',
         allTasks: 'Semua tugasan',
-        noSprint: 'Tiada sprint berjalan. Mulakan satu dari backlog untuk mod scrum.',
+        noSprint: 'Tiada sprint berjalan. Mulakan satu dari Sprint untuk mod scrum.',
         emptyColumn: 'Tiada apa-apa di sini',
         moveFailed: 'Kad itu tidak dapat dialihkan',
         columnTotal: 'j tinggal',
@@ -157,7 +197,20 @@ export const projectsMessages = {
         carriedOver: '{count} tugasan belum selesai dikembalikan ke backlog',
         empty: 'Tiada sprint lagi.',
         emptyBacklog: 'Backlog kosong.',
-        oneActive: 'Hanya satu sprint boleh berjalan serentak dalam satu projek.',
+        oneActive: 'Hanya satu sprint boleh berjalan serentak merentas ruang kerja.',
+        subtitle: "Kotak masa merentas setiap projek",
+        planning: "Rancang sprint ini",
+        loadFailed: "Tidak dapat memuatkan sprint",
+        saveFailed: "Tidak dapat menyimpan sprint",
+        created: "Sprint dicipta",
+        started: "Sprint dimulakan",
+        completedMsg: "Sprint selesai",
+        deleted: "Sprint dipadam",
+        deleteSprint: "Padam sprint",
+        deletePrompt: "Padam {name}?\n\nTugasannya kembali ke backlog — tiada apa yang hilang.",
+        emptySprint: "Belum ada tugasan dalam sprint ini.",
+        noProjects: "Belum ada projek",
+        tenantHint: "Satu sprint merentas seluruh ruang kerja. Hanya satu boleh berjalan pada satu masa.",
     },
 
     burndown: {
@@ -170,6 +223,7 @@ export const projectsMessages = {
         rebuild: 'Bina semula dari sejarah',
         rebuilt: 'Dibina semula {written} hari, dikekalkan {skipped}',
         weekendNote: 'Garis unggul melangkau Jum/Sab.',
+        tenantScope: "Semua projek dalam sprint ini",
     },
 
     settings: {
@@ -192,9 +246,4 @@ export const projectsMessages = {
         typeDeactivated: 'Jenis ini digunakan oleh {count} projek, jadi ia disembunyikan dan bukan dipadam.',
     },
 
-    myTasks: {
-        title: 'Tugasan Saya',
-        subtitle: 'Semua yang ditugaskan kepada anda merentas projek',
-        empty: 'Tiada apa-apa ditugaskan kepada anda sekarang.',
-    },
 } as const;

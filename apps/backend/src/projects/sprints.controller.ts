@@ -27,8 +27,9 @@ export class SprintsController {
 
     @Get()
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
-    list(@Tenant() tenant: TenantContext, @Query('projectId') projectId: string) {
-        return this.sprints.list(tenant.tenantId, projectId);
+    /** No projectId returns every sprint in the tenant; one filters by participation. */
+    list(@Tenant() tenant: TenantContext, @Query('projectId') projectId?: string) {
+        return this.sprints.list(tenant.tenantId, projectId || undefined);
     }
 
     @Post()

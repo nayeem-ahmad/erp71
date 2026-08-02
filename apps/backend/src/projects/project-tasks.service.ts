@@ -25,6 +25,7 @@ const TASK_INCLUDE = {
     project: { select: { id: true, code: true, name: true } },
     status: { select: { id: true, name: true, category: true, sort_order: true } },
     assignee: { select: { id: true, name: true, email: true } },
+    assigneeEmployee: { select: { id: true, name: true } },
     milestone: { select: { id: true, name: true } },
     sprint: { select: { id: true, name: true, status: true } },
     checklistItems: { orderBy: { sort_order: 'asc' } },
@@ -48,6 +49,11 @@ export class ProjectTasksService {
             deleted_at: null,
             ...(query.projectId ? { project_id: query.projectId } : {}),
             ...(query.assigneeId ? { assignee_id: query.assigneeId } : {}),
+            ...(query.assigneeEmployeeId ? { assignee_employee_id: query.assigneeEmployeeId } : {}),
+            ...(query.statusId ? { status_id: query.statusId } : {}),
+            ...(query.statusCategory
+                ? { status: { category: query.statusCategory.toUpperCase() } }
+                : {}),
             ...(query.milestoneId ? { milestone_id: query.milestoneId } : {}),
         };
         if (query.backlogOnly === 'true') where.sprint_id = null;
@@ -135,7 +141,7 @@ export class ProjectTasksService {
                 throw new BadRequestException('A subtask cannot have subtasks of its own.');
             }
         }
-        if (dto.sprintId) await this.assertSprint(tenantId, dto.sprintId, dto.projectId);
+        if (dto.sprintId) await this.assertSprint(tenantId, dto.sprintId);
 
         const sortOrder = await this.nextSortOrder(tenantId, dto.projectId, statusId);
         const estimate = dto.estimateHours ?? null;
@@ -152,6 +158,7 @@ export class ProjectTasksService {
                 status_id: statusId,
                 priority: (dto.priority ?? 'MEDIUM') as never,
                 assignee_id: dto.assigneeId ?? null,
+                assignee_employee_id: dto.assigneeEmployeeId ?? null,
                 milestone_id: dto.milestoneId ?? null,
                 sprint_id: dto.sprintId ?? null,
                 parent_task_id: dto.parentTaskId ?? null,
@@ -197,7 +204,7 @@ export class ProjectTasksService {
             if (becameUndone) completedAt = null;
         }
 
-        if (dto.sprintId) await this.assertSprint(tenantId, dto.sprintId, task.project_id);
+        if (dto.sprintId) await this.assertSprint(tenantId, dto.sprintId);
 
         await this.db.projectTask.update({
             where: { id: taskId },
@@ -207,6 +214,9 @@ export class ProjectTasksService {
                 ...(dto.statusId !== undefined ? { status_id: statusId, completed_at: completedAt } : {}),
                 ...(dto.priority !== undefined ? { priority: dto.priority as never } : {}),
                 ...(dto.assigneeId !== undefined ? { assignee_id: dto.assigneeId || null } : {}),
+                ...(dto.assigneeEmployeeId !== undefined
+                    ? { assignee_employee_id: dto.assigneeEmployeeId || null }
+                    : {}),
                 ...(dto.milestoneId !== undefined ? { milestone_id: dto.milestoneId || null } : {}),
                 ...(dto.sprintId !== undefined ? { sprint_id: dto.sprintId || null } : {}),
                 ...(dto.dueDate !== undefined ? { due_date: dto.dueDate ? new Date(dto.dueDate) : null } : {}),
@@ -271,7 +281,7 @@ export class ProjectTasksService {
     async move(tenantId: string, userId: string, taskId: string, dto: MoveTaskDto) {
         const task = await this.assertTask(tenantId, taskId);
         const status = await this.assertStatus(tenantId, dto.statusId);
-        if (dto.sprintId) await this.assertSprint(tenantId, dto.sprintId, task.project_id);
+        if (dto.sprintId) await this.assertSprint(tenantId, dto.sprintId);
 
         const sprintId = dto.clearSprint ? null : (dto.sprintId ?? task.sprint_id);
         const wasDone = task.status?.category === 'DONE';
@@ -459,15 +469,17 @@ export class ProjectTasksService {
         return status;
     }
 
-    private async assertSprint(tenantId: string, sprintId: string, projectId: string) {
+    /**
+     * A sprint is tenant-level, so a task from any project may join it. The old
+     * same-project check was removed with `Sprint.project_id` — the tenant scope
+     * below is now the only thing that matters.
+     */
+    private async assertSprint(tenantId: string, sprintId: string) {
         const sprint = await this.db.sprint.findFirst({
             where: { id: sprintId, tenant_id: tenantId },
-            select: { id: true, project_id: true },
+            select: { id: true },
         });
         if (!sprint) throw new NotFoundException('Sprint not found');
-        if (sprint.project_id !== projectId) {
-            throw new BadRequestException('That sprint belongs to a different project.');
-        }
         return sprint;
     }
 }

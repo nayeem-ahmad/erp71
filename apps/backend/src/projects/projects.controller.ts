@@ -158,14 +158,14 @@ export class ProjectsController {
         return this.projects.addMember(tenant.tenantId, id, dto);
     }
 
-    @Delete(':id/members/:userId')
+    @Delete(':id/members/:memberId')
     @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
     removeMember(
         @Tenant() tenant: TenantContext,
         @Param('id') id: string,
-        @Param('userId') userId: string,
+        @Param('memberId') memberId: string,
     ) {
-        return this.projects.removeMember(tenant.tenantId, id, userId);
+        return this.projects.removeMember(tenant.tenantId, id, memberId);
     }
 
     // ── Milestones ─────────────────────────────────────────────────────────

@@ -176,9 +176,11 @@ export default function ProjectBoardPage() {
                                 </button>
                             ))}
                         </div>
-                        <Link href={routes.projects.backlog(projectId)}>
+                        {/* Planning is tenant-wide now: a sprint pulls from every
+                            project, so it lives in Sprints rather than here. */}
+                        <Link href={routes.projects.sprints}>
                             <Button variant="secondary" className="min-h-touch">
-                                {m.sprint.backlog}
+                                {m.sprint.sprints}
                             </Button>
                         </Link>
                     </div>

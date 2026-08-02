@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Plus } from 'lucide-react';
-import { PageShell, PageHeader, Button, Input, Select, StatusBadge } from '@/components/ui';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { PageShell, PageHeader, Button, Input, Select, StatusBadge, ConfirmDialog } from '@/components/ui';
 import DataTable from '@/components/data-table/DataTable';
 import { useServerList } from '@/hooks/useServerList';
 import { api } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { formatBDT } from '@/lib/format';
@@ -43,6 +44,8 @@ export default function ProjectsPage() {
     const [typeId, setTypeId] = useState('');
     const [types, setTypes] = useState<{ id: string; name: string }[]>([]);
     const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [pendingDelete, setPendingDelete] = useState<ProjectRow | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -55,7 +58,7 @@ export default function ProjectsPage() {
             .catch(() => setTypes([]));
     }, []);
 
-    const { items, loading, serverPagination } = useServerList<ProjectRow>({
+    const { items, loading, serverPagination, reload } = useServerList<ProjectRow>({
         tableId: 'projects',
         initialSort: { id: 'created_at', desc: true },
         deps: [debouncedSearch, status, typeId],
@@ -67,6 +70,23 @@ export default function ProjectsPage() {
                 projectTypeId: typeId || undefined,
             }),
     });
+
+    const confirmDelete = async () => {
+        if (!pendingDelete) return;
+        setDeleting(true);
+        try {
+            await api.deleteProject(pendingDelete.id);
+            toast.success(m.deleted);
+            setPendingDelete(null);
+            // Re-query rather than splicing the row out locally: the row's
+            // absence changes the server's total and page count too.
+            await reload();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.deleteFailed);
+        } finally {
+            setDeleting(false);
+        }
+    };
 
     const columns = useMemo(
         () => [
@@ -131,6 +151,29 @@ export default function ProjectsPage() {
                 cell: ({ row }: { row: { original: ProjectRow } }) =>
                     row.original.budget_amount ? formatBDT(Number(row.original.budget_amount)) : '—',
             },
+            {
+                id: 'actions',
+                header: m.fields.actions,
+                cell: ({ row }: { row: { original: ProjectRow } }) => (
+                    <div className="flex items-center justify-end gap-1">
+                        <Link
+                            href={routes.projects.edit(row.original.id)}
+                            className="rounded-lg p-1.5 text-blue-600 transition-colors hover:bg-blue-50"
+                            title={m.editProject}
+                        >
+                            <Pencil className="h-4 w-4" />
+                        </Link>
+                        <button
+                            type="button"
+                            onClick={() => setPendingDelete(row.original)}
+                            className="rounded-lg p-1.5 text-red-600 transition-colors hover:bg-red-50"
+                            title={m.deleteProject}
+                        >
+                            <Trash2 className="h-4 w-4" />
+                        </button>
+                    </div>
+                ),
+            },
         ],
         [m],
     );
@@ -183,6 +226,23 @@ export default function ProjectsPage() {
                 isLoading={loading}
                 serverPagination={serverPagination}
                 emptyMessage={debouncedSearch || status || typeId ? m.emptyFiltered : m.empty}
+            />
+
+            <ConfirmDialog
+                open={pendingDelete !== null}
+                title={m.deleteProject}
+                // Says what survives: this is a soft delete, so the tasks and the
+                // hours already logged against them stay in the database.
+                prompt={m.deletePrompt.replace(
+                    '{name}',
+                    pendingDelete ? `${pendingDelete.code} · ${pendingDelete.name}` : '',
+                )}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                loading={deleting}
+                danger
+                onConfirm={confirmDelete}
+                onCancel={() => setPendingDelete(null)}
             />
         </PageShell>
     );

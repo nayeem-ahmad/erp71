@@ -7,6 +7,7 @@ import { Plus } from 'lucide-react';
 import { PageShell, PageHeader, Button, Input, Select, Field, StatusBadge } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
+import ProjectTeamCard from '@/components/projects/ProjectTeamCard';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -42,7 +43,12 @@ interface Project {
     customer?: { id: string; name: string } | null;
     projectType?: { id: string; name: string } | null;
     manager?: { id: string; name?: string | null; email: string } | null;
-    members: { id: string; role: string; user: { id: string; name?: string | null; email: string } }[];
+    members: {
+        id: string;
+        role: string;
+        user?: { id: string; name?: string | null; email: string } | null;
+        employee?: { id: string; name: string; employee_code: string } | null;
+    }[];
     milestones: { id: string; name: string; target_date?: string | null; completed_at?: string | null }[];
     progress: Progress;
 }
@@ -50,14 +56,25 @@ interface Project {
 interface Task {
     id: string;
     title: string;
+    priority: string;
+    due_date?: string | null;
     remaining_hours?: string | null;
     estimate_hours?: string | null;
     logged_hours?: number;
     status?: { id: string; name: string; category: string };
+    sprint?: { id: string; name: string; status: string } | null;
     assignee?: { id: string; name?: string | null; email: string } | null;
+    assigneeEmployee?: { id: string; name: string } | null;
 }
 
 const num = (value: unknown): number => (value == null ? 0 : Number(value));
+
+/** A task goes to a user or to an employee with no login; show whichever holds it. */
+function assigneeLabel(task: Task): string {
+    if (task.assignee) return task.assignee.name || task.assignee.email;
+    if (task.assigneeEmployee) return task.assigneeEmployee.name;
+    return '—';
+}
 
 export default function ProjectDetailPage() {
     const params = useParams<{ id: string }>();
@@ -133,14 +150,14 @@ export default function ProjectDetailPage() {
                 )}
                 actions={
                     <div className="flex flex-wrap gap-2">
+                        <Link href={routes.projects.edit(projectId)}>
+                            <Button variant="secondary" className="min-h-touch">
+                                {m.editProject}
+                            </Button>
+                        </Link>
                         <Link href={routes.projects.board(projectId)}>
                             <Button variant="secondary" className="min-h-touch">
                                 {m.tabs.board}
-                            </Button>
-                        </Link>
-                        <Link href={routes.projects.backlog(projectId)}>
-                            <Button variant="secondary" className="min-h-touch">
-                                {m.tabs.backlog}
                             </Button>
                         </Link>
                         <Button className="min-h-touch" onClick={() => setCreating(true)}>
@@ -167,29 +184,74 @@ export default function ProjectDetailPage() {
                         {tasks.length === 0 ? (
                             <p className="p-3 text-sm text-gray-500">{m.task.noTasks}</p>
                         ) : (
-                            <ul className="divide-y divide-gray-200">
-                                {tasks.map((task) => (
-                                    <li key={task.id}>
-                                        <button
-                                            type="button"
-                                            onClick={() => setOpenTaskId(task.id)}
-                                            className="flex min-h-touch w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
-                                        >
-                                            <span className="flex-1 truncate">{task.title}</span>
-                                            {task.status && (
-                                                <StatusBadge
-                                                    tone={task.status.category === 'DONE' ? 'success' : 'neutral'}
-                                                >
-                                                    {task.status.name}
-                                                </StatusBadge>
-                                            )}
-                                            <span className="w-16 shrink-0 text-right text-xs text-gray-500">
-                                                {num(task.remaining_hours)}h
-                                            </span>
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b border-gray-200 text-left text-xs text-gray-500">
+                                            <th className="px-3 py-2 font-medium">{m.task.title}</th>
+                                            <th className="px-3 py-2 font-medium">{m.fields.status}</th>
+                                            <th className="hidden px-3 py-2 font-medium md:table-cell">
+                                                {m.fields.sprint}
+                                            </th>
+                                            <th className="hidden px-3 py-2 font-medium md:table-cell">
+                                                {m.fields.assignee}
+                                            </th>
+                                            <th className="hidden px-3 py-2 font-medium md:table-cell">
+                                                {m.fields.priority}
+                                            </th>
+                                            <th className="px-3 py-2 text-right font-medium">
+                                                {m.overview.remaining}
+                                            </th>
+                                            <th className="hidden px-3 py-2 font-medium md:table-cell">
+                                                {m.fields.dueDate}
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200">
+                                        {tasks.map((task) => (
+                                            <tr
+                                                key={task.id}
+                                                onClick={() => setOpenTaskId(task.id)}
+                                                className="cursor-pointer hover:bg-gray-50"
+                                            >
+                                                <td className="max-w-[16rem] truncate px-3 py-2" title={task.title}>
+                                                    {task.title}
+                                                </td>
+                                                <td className="px-3 py-2">
+                                                    {task.status ? (
+                                                        <StatusBadge
+                                                            tone={task.status.category === 'DONE' ? 'success' : 'neutral'}
+                                                        >
+                                                            {task.status.name}
+                                                        </StatusBadge>
+                                                    ) : (
+                                                        '—'
+                                                    )}
+                                                </td>
+                                                {/* No sprint IS the backlog — which is why the standalone
+                                                    backlog page was redundant with this list. */}
+                                                <td className="hidden px-3 py-2 text-gray-600 md:table-cell">
+                                                    {task.sprint?.name ?? m.sprint.backlog}
+                                                </td>
+                                                <td className="hidden px-3 py-2 text-gray-600 md:table-cell">
+                                                    {assigneeLabel(task)}
+                                                </td>
+                                                <td className="hidden px-3 py-2 text-gray-600 md:table-cell">
+                                                    {m.priority[task.priority as keyof typeof m.priority] ?? task.priority}
+                                                </td>
+                                                <td className="px-3 py-2 text-right tabular-nums text-gray-600">
+                                                    {num(task.remaining_hours)}h
+                                                </td>
+                                                <td className="hidden px-3 py-2 text-gray-600 md:table-cell">
+                                                    {task.due_date
+                                                        ? new Date(task.due_date).toLocaleDateString()
+                                                        : '—'}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -241,25 +303,11 @@ export default function ProjectDetailPage() {
                         )}
                     </div>
 
-                    <div className="rounded-md border border-gray-200 bg-white p-3">
-                        <h2 className="mb-2 text-sm font-medium">{m.tabs.team}</h2>
-                        {project.members.length === 0 ? (
-                            <p className="text-sm text-gray-500">{m.overview.noTeam}</p>
-                        ) : (
-                            <ul className="space-y-1.5 text-sm">
-                                {project.members.map((member) => (
-                                    <li key={member.id} className="flex items-center justify-between gap-2">
-                                        <span className="truncate">
-                                            {member.user.name ?? member.user.email}
-                                        </span>
-                                        <span className="shrink-0 text-xs text-gray-500">
-                                            {m.team[member.role as keyof typeof m.team] as string}
-                                        </span>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </div>
+                    <ProjectTeamCard
+                        projectId={projectId}
+                        members={project.members}
+                        onChanged={load}
+                    />
                 </div>
             </section>
 

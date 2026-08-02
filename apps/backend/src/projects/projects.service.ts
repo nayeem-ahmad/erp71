@@ -23,6 +23,12 @@ const PROJECT_SORTABLE: SortableMap = {
 
 const VALID_STATUSES = ['DRAFT', 'ACTIVE', 'ON_HOLD', 'COMPLETED', 'CANCELLED'];
 
+/** A member is a user or an employee; both sides are always loaded. */
+const MEMBER_INCLUDE = {
+    user: { select: { id: true, name: true, email: true } },
+    employee: { select: { id: true, name: true, employee_code: true } },
+} as const;
+
 @Injectable()
 export class ProjectsService {
     constructor(private readonly db: DatabaseService) {}
@@ -102,11 +108,10 @@ export class ProjectsService {
                 manager: { select: { id: true, name: true, email: true } },
                 store: { select: { id: true, name: true } },
                 members: {
-                    include: { user: { select: { id: true, name: true, email: true } } },
+                    include: MEMBER_INCLUDE,
                     orderBy: { created_at: 'asc' },
                 },
                 milestones: { orderBy: [{ sort_order: 'asc' }, { created_at: 'asc' }] },
-                sprints: { orderBy: { start_date: 'desc' } },
             },
         });
         if (!project) throw new NotFoundException('Project not found');
@@ -225,39 +230,82 @@ export class ProjectsService {
         });
     }
 
+    /**
+     * Soft delete. Tasks and time entries are deliberately left in place — they
+     * are the record of work that was actually done and of hours already costed.
+     *
+     * The project's tasks are detached from any sprint first. Sprints are
+     * tenant-level and shared, so a deleted project must not leave phantom rows
+     * inflating a live sprint's committed hours. Same reasoning as
+     * `removeMilestone`, which detaches rather than cascades.
+     */
     async remove(tenantId: string, id: string) {
         await this.assertProject(tenantId, id);
-        await this.db.project.update({ where: { id }, data: { deleted_at: new Date() } });
+        await this.db.$transaction([
+            this.db.projectTask.updateMany({
+                where: { tenant_id: tenantId, project_id: id, sprint_id: { not: null } },
+                data: { sprint_id: null },
+            }),
+            this.db.project.update({ where: { id }, data: { deleted_at: new Date() } }),
+        ]);
         return { success: true };
     }
 
     // ── Members ────────────────────────────────────────────────────────────
 
+    /**
+     * A member is either a workspace user or an employee with no login. Prisma
+     * cannot express "exactly one of", so it is enforced here — the alternative
+     * is a row that belongs to nobody or to two people.
+     */
     async addMember(tenantId: string, projectId: string, dto: UpsertProjectMemberDto) {
         await this.assertProject(tenantId, projectId);
+        if (Boolean(dto.userId) === Boolean(dto.employeeId)) {
+            throw new BadRequestException('Pick either a workspace user or an employee, not both.');
+        }
+
+        if (dto.employeeId) {
+            const employee = await this.db.employee.findFirst({
+                where: { id: dto.employeeId, tenant_id: tenantId, deleted_at: null },
+                select: { id: true },
+            });
+            if (!employee) throw new BadRequestException('That employee is not in this workspace.');
+            return this.upsertMemberRow(tenantId, projectId, dto, { employee_id: dto.employeeId });
+        }
+
         const member = await this.db.tenantUser.findFirst({
             where: { tenant_id: tenantId, user_id: dto.userId },
             select: { id: true },
         });
         if (!member) throw new BadRequestException('That user is not part of this workspace.');
 
+        return this.upsertMemberRow(tenantId, projectId, dto, { user_id: dto.userId });
+    }
+
+    private async upsertMemberRow(
+        tenantId: string,
+        projectId: string,
+        dto: UpsertProjectMemberDto,
+        key: { user_id?: string; employee_id?: string },
+    ) {
+        const role = (dto.role ?? 'MEMBER') as never;
+        const where = key.user_id
+            ? { project_id_user_id: { project_id: projectId, user_id: key.user_id } }
+            : { project_id_employee_id: { project_id: projectId, employee_id: key.employee_id! } };
+
         return this.db.projectMember.upsert({
-            where: { project_id_user_id: { project_id: projectId, user_id: dto.userId } },
-            create: {
-                tenant_id: tenantId,
-                project_id: projectId,
-                user_id: dto.userId,
-                role: (dto.role ?? 'MEMBER') as never,
-            },
-            update: { role: (dto.role ?? 'MEMBER') as never },
-            include: { user: { select: { id: true, name: true, email: true } } },
+            where: where as never,
+            create: { tenant_id: tenantId, project_id: projectId, ...key, role },
+            update: { role },
+            include: MEMBER_INCLUDE,
         });
     }
 
-    async removeMember(tenantId: string, projectId: string, userId: string) {
+    /** Keyed on the member row, not the user — an employee member has no user id. */
+    async removeMember(tenantId: string, projectId: string, memberId: string) {
         await this.assertProject(tenantId, projectId);
         await this.db.projectMember.deleteMany({
-            where: { tenant_id: tenantId, project_id: projectId, user_id: userId },
+            where: { tenant_id: tenantId, project_id: projectId, id: memberId },
         });
         return { success: true };
     }
