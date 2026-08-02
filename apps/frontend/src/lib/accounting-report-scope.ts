@@ -15,6 +15,7 @@ export const REPORT_LEVEL_MODES: ReportLevelMode[] = ['account', 'subgroup', 'gr
 const REPORT_SCOPE_KEY = 'report_scope';
 const REPORT_LEVEL_KEY = 'report_level';
 const REPORT_HIDE_ZERO_KEY = 'report_hide_zero';
+const REPORT_APPROVED_ONLY_KEY = 'report_approved_only';
 
 /**
  * Whether rows with no balance are suppressed. Purely presentational — totals are
@@ -49,6 +50,71 @@ export function persistReportLevel(level: ReportLevelMode) {
     if (typeof window !== 'undefined') {
         localStorage.setItem(REPORT_LEVEL_KEY, level);
     }
+}
+
+/**
+ * Per-request override of the tenant's `reports_approved_only` setting.
+ *
+ * Unlike scope/level/hideZero this is a SERVER filter, so the value is sent on
+ * every report call rather than applied to the response. The tenant setting is
+ * the starting point; once the user flips the toggle their choice is remembered
+ * across report pages, and `undefined` (nothing saved) means "follow the
+ * tenant setting" — which is also what the API does when the param is absent.
+ */
+export function getSavedApprovedOnly(): boolean | undefined {
+    if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem(REPORT_APPROVED_ONLY_KEY);
+        if (saved === 'true') return true;
+        if (saved === 'false') return false;
+    }
+
+    return undefined;
+}
+
+export function persistApprovedOnly(approvedOnly: boolean) {
+    if (typeof window !== 'undefined') {
+        localStorage.setItem(REPORT_APPROVED_ONLY_KEY, String(approvedOnly));
+    }
+}
+
+/**
+ * Resolves the approved-only toggle for a report page: the tenant's setting,
+ * overridden by whatever the user last chose. `ready` gates the first fetch so a
+ * report is never generated against the wrong value and then silently corrected.
+ */
+export function useApprovedOnly() {
+    const [approvedOnly, setApprovedOnlyState] = useState(false);
+    const [approvalEnabled, setApprovalEnabled] = useState(false);
+    const [ready, setReady] = useState(false);
+
+    useEffect(() => {
+        let active = true;
+
+        api.getAccountingSettings()
+            .then((settings) => {
+                if (!active) return;
+                setApprovalEnabled(Boolean(settings?.requireVoucherApproval));
+                setApprovedOnlyState(getSavedApprovedOnly() ?? Boolean(settings?.reportsApprovedOnly));
+            })
+            .catch(() => {
+                if (!active) return;
+                setApprovedOnlyState(getSavedApprovedOnly() ?? false);
+            })
+            .finally(() => {
+                if (active) setReady(true);
+            });
+
+        return () => {
+            active = false;
+        };
+    }, []);
+
+    const setApprovedOnly = (value: boolean) => {
+        persistApprovedOnly(value);
+        setApprovedOnlyState(value);
+    };
+
+    return { approvedOnly, setApprovedOnly, approvalEnabled, ready };
 }
 
 export function canViewConsolidatedReports(role: string | null | undefined, permissions?: string[]) {

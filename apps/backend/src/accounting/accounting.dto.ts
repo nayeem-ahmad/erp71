@@ -1,5 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import {
+    ArrayMaxSize,
     ArrayMinSize,
     IsDateString,
     IsIn,
@@ -16,7 +17,7 @@ import {
     Min,
     Max,
 } from 'class-validator';
-import { AccountCategory, AccountType, VoucherAttribution, VoucherType } from './accounting.constants';
+import { AccountCategory, AccountType, VoucherApprovalStatus, VoucherAttribution, VoucherType } from './accounting.constants';
 import { REPORT_LEVELS } from './report-level.utils';
 
 const REPORT_SCOPES = ['branch', 'company', 'compare'] as const;
@@ -35,6 +36,18 @@ function parseBooleanQuery(value: unknown): boolean | undefined {
         return false;
     }
     return undefined;
+}
+
+/**
+ * Mixed into every report query. `?approvedOnly=true|false` overrides the
+ * tenant's `reports_approved_only` accounting setting for one request; omitted,
+ * the setting decides.
+ */
+export class ApprovedOnlyQueryDto {
+    @IsOptional()
+    @Transform(({ value }) => parseBooleanQuery(value))
+    @IsBoolean()
+    approvedOnly?: boolean;
 }
 
 export class CreateAccountGroupDto {
@@ -290,6 +303,12 @@ export class ListVouchersQueryDto {
     @IsDateString()
     to?: string;
 
+    /** Drives the approval queue: `?approvalStatus=PENDING`. */
+    @IsOptional()
+    @IsString()
+    @IsIn(Object.values(VoucherApprovalStatus))
+    approvalStatus?: VoucherApprovalStatus;
+
     @IsOptional()
     @Type(() => Number)
     @IsInt()
@@ -303,7 +322,47 @@ export class ListVouchersQueryDto {
     limit?: number;
 }
 
-export class ListLedgerQueryDto {
+export class RejectVoucherDto {
+    @IsOptional()
+    @IsString()
+    @MaxLength(500)
+    reason?: string;
+}
+
+/**
+ * Bulk sign-off from the approval queue. Capped at 200 so one request cannot
+ * rewrite an unbounded slice of the ledger; the queue pages at 20.
+ */
+export class BulkVoucherApprovalDto {
+    @ArrayMinSize(1)
+    @ArrayMaxSize(200)
+    @IsUUID(undefined, { each: true })
+    ids: string[];
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(500)
+    reason?: string;
+}
+
+export class UpdateAccountingSettingsDto {
+    @IsOptional()
+    @Transform(({ value }) => parseBooleanQuery(value))
+    @IsBoolean()
+    requireVoucherApproval?: boolean;
+
+    @IsOptional()
+    @Transform(({ value }) => parseBooleanQuery(value))
+    @IsBoolean()
+    autoApproveSystemVouchers?: boolean;
+
+    @IsOptional()
+    @Transform(({ value }) => parseBooleanQuery(value))
+    @IsBoolean()
+    reportsApprovedOnly?: boolean;
+}
+
+export class ListLedgerQueryDto extends ApprovedOnlyQueryDto {
     @IsOptional()
     @IsDateString()
     from?: string;
@@ -313,7 +372,7 @@ export class ListLedgerQueryDto {
     to?: string;
 }
 
-export class FinancialKpiQueryDto {
+export class FinancialKpiQueryDto extends ApprovedOnlyQueryDto {
     @IsOptional()
     @IsDateString()
     from?: string;
@@ -323,7 +382,7 @@ export class FinancialKpiQueryDto {
     to?: string;
 }
 
-export class FinancialTrendQueryDto {
+export class FinancialTrendQueryDto extends ApprovedOnlyQueryDto {
     @IsOptional()
     @IsDateString()
     from?: string;
@@ -426,7 +485,7 @@ export class ListPostingExceptionsQueryDto {
     limit?: number;
 }
 
-export class ProfitLossQueryDto {
+export class ProfitLossQueryDto extends ApprovedOnlyQueryDto {
     @IsOptional()
     @IsDateString()
     from?: string;
@@ -459,7 +518,7 @@ export class ProfitLossQueryDto {
     level?: string;
 }
 
-export class BalanceSheetQueryDto {
+export class BalanceSheetQueryDto extends ApprovedOnlyQueryDto {
     @IsOptional()
     @IsDateString()
     asOfDate?: string;
@@ -488,7 +547,7 @@ export class BalanceSheetQueryDto {
     level?: string;
 }
 
-export class CashbookQueryDto {
+export class CashbookQueryDto extends ApprovedOnlyQueryDto {
     @IsOptional()
     @IsDateString()
     from?: string;
@@ -502,7 +561,7 @@ export class CashbookQueryDto {
     accountId?: string;
 }
 
-export class BankbookQueryDto {
+export class BankbookQueryDto extends ApprovedOnlyQueryDto {
     @IsOptional()
     @IsDateString()
     from?: string;
@@ -518,7 +577,7 @@ export class BankbookQueryDto {
 
 const EXPORT_FORMATS = ['tally', 'quickbooks'] as const;
 
-export class ExportLedgerQueryDto {
+export class ExportLedgerQueryDto extends ApprovedOnlyQueryDto {
     @IsString()
     @IsIn(EXPORT_FORMATS)
     format: typeof EXPORT_FORMATS[number];
@@ -532,7 +591,7 @@ export class ExportLedgerQueryDto {
     to?: string;
 }
 
-export class TrialBalanceQueryDto {
+export class TrialBalanceQueryDto extends ApprovedOnlyQueryDto {
     @IsOptional()
     @IsDateString()
     asOfDate?: string;
@@ -561,19 +620,19 @@ export class TrialBalanceQueryDto {
     level?: string;
 }
 
-export class ArAgingQueryDto {
+export class ArAgingQueryDto extends ApprovedOnlyQueryDto {
     @IsOptional()
     @IsDateString()
     asOfDate?: string;
 }
 
-export class ApAgingQueryDto {
+export class ApAgingQueryDto extends ApprovedOnlyQueryDto {
     @IsOptional()
     @IsDateString()
     asOfDate?: string;
 }
 
-export class ComparativePLQueryDto {
+export class ComparativePLQueryDto extends ApprovedOnlyQueryDto {
     @IsOptional()
     @IsDateString()
     from?: string;
@@ -583,7 +642,7 @@ export class ComparativePLQueryDto {
     to?: string;
 }
 
-export class VatTaxReportQueryDto {
+export class VatTaxReportQueryDto extends ApprovedOnlyQueryDto {
     @IsOptional()
     @IsDateString()
     from?: string;
@@ -593,7 +652,7 @@ export class VatTaxReportQueryDto {
     to?: string;
 }
 
-export class FinancialRatiosQueryDto {
+export class FinancialRatiosQueryDto extends ApprovedOnlyQueryDto {
     @IsOptional()
     @IsDateString()
     asOfDate?: string;
@@ -607,7 +666,7 @@ export class FinancialRatiosQueryDto {
     to?: string;
 }
 
-export class CashFlowQueryDto {
+export class CashFlowQueryDto extends ApprovedOnlyQueryDto {
     @IsOptional()
     @IsDateString()
     from?: string;
@@ -689,7 +748,7 @@ export class UpsertBudgetDto {
     amount: number;
 }
 
-export class BudgetVsActualQueryDto {
+export class BudgetVsActualQueryDto extends ApprovedOnlyQueryDto {
     @Type(() => Number)
     @IsInt()
     @Min(2020)
@@ -714,7 +773,7 @@ export class CreateCostCenterDto {
     name: string;
 }
 
-export class CostCenterPLQueryDto {
+export class CostCenterPLQueryDto extends ApprovedOnlyQueryDto {
     @IsUUID()
     costCenterId: string;
 

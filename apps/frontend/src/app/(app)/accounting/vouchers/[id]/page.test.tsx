@@ -19,6 +19,10 @@ jest.mock('lucide-react', () => ({
 jest.mock('@/lib/api', () => ({
     api: {
         getVoucher: jest.fn(),
+        approveVoucher: jest.fn(),
+        rejectVoucher: jest.fn(),
+        // The page resolves the caller's APPROVE_VOUCHER grant on mount.
+        getMe: jest.fn().mockResolvedValue({ tenants: [{ id: 'tenant-1', role: 'ACCOUNTANT', permissions: [] }] }),
     },
 }));
 

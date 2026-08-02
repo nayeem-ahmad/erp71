@@ -16,6 +16,8 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { useApprovedOnly } from '@/lib/accounting-report-scope';
+import { ApprovedOnlyToggle } from '@/components/accounting/ApprovedOnlyToggle';
 import AccountSelect from '@/components/accounting/AccountSelect';
 import { compactDensity } from '@/lib/ui/compact-density';
 
@@ -89,6 +91,7 @@ function AccountingLedgerPageContent() {
     const [ledger, setLedger] = useState<LedgerResponse | null>(null);
     const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
     const [isLoadingLedger, setIsLoadingLedger] = useState(false);
+    const { approvedOnly, setApprovedOnly, approvalEnabled, ready: approvalReady } = useApprovedOnly();
     const [accountError, setAccountError] = useState('');
     const [ledgerError, setLedgerError] = useState('');
 
@@ -145,6 +148,12 @@ function AccountingLedgerPageContent() {
     useEffect(() => {
         let active = true;
 
+        // Hold off until the tenant's approved-only setting is known, so the
+        // ledger is never drawn against the wrong value and then corrected.
+        if (!approvalReady) {
+            return;
+        }
+
         if (!selectedAccountId) {
             setLedger(null);
             setLedgerError('');
@@ -160,6 +169,7 @@ function AccountingLedgerPageContent() {
                 const data = await api.getLedger(selectedAccountId, {
                     from: from || undefined,
                     to: to || undefined,
+                    approvedOnly,
                 });
 
                 if (!active) {
@@ -186,7 +196,7 @@ function AccountingLedgerPageContent() {
         return () => {
             active = false;
         };
-    }, [selectedAccountId, from, to]);
+    }, [selectedAccountId, from, to, approvedOnly, approvalReady]);
 
     const selectedAccount = accounts.find((account) => account.id === selectedAccountId) || ledger?.account || null;
     const periodMovement = ledger
@@ -284,6 +294,14 @@ function AccountingLedgerPageContent() {
                             className={compactDensity.formField}
                         />
                     </label>
+
+                    <div className="flex items-end">
+                        <ApprovedOnlyToggle
+                            checked={approvedOnly}
+                            onChange={setApprovedOnly}
+                            enabled={approvalEnabled}
+                        />
+                    </div>
 
                     <label className="block">
                         <span className={`${compactDensity.formLabel} block mb-1`}>{t.accountingShared.from}</span>

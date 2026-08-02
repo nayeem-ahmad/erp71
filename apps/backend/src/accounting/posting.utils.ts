@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { Prisma, PartyType } from '@prisma/client';
 import { VoucherAttribution, VoucherType } from './accounting.constants';
+import { initialApprovalStatus, toApprovalSettings } from './voucher-approval.util';
 
 export type PostingEventType =
     | 'sale'
@@ -353,11 +354,19 @@ export async function autoPostFromRules(input: AutoPostInput): Promise<AutoPostR
             ? { party_type: input.partyType, party_id: input.partyId }
             : {};
 
+    // Vouchers other modules post automatically clear approval on their own
+    // unless the tenant explicitly asked for them to queue too — see
+    // `initialApprovalStatus`.
+    const approvalSettings = toApprovalSettings(
+        await input.tx.accountingSettings.findUnique({ where: { tenant_id: input.tenantId } }),
+    );
+
     const voucher = await input.tx.voucher.create({
         data: {
             tenant_id: input.tenantId,
             voucher_number: voucherNumber,
             voucher_type: voucherType,
+            approval_status: initialApprovalStatus(approvalSettings, 'system'),
             source_module: input.sourceModule,
             source_type: input.sourceType,
             source_id: input.sourceId,

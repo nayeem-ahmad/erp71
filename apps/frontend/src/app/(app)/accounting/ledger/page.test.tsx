@@ -46,6 +46,12 @@ jest.mock('@/lib/api', () => ({
     api: {
         getAccounts: jest.fn(),
         getLedger: jest.fn(),
+        // The approved-only toggle resolves the tenant's setting on mount.
+        getAccountingSettings: jest.fn().mockResolvedValue({
+            requireVoucherApproval: false,
+            autoApproveSystemVouchers: true,
+            reportsApprovedOnly: false,
+        }),
     },
 }));
 
@@ -109,6 +115,7 @@ describe('AccountingLedgerPage — Story 30.8', () => {
             expect(api.getLedger).toHaveBeenLastCalledWith('cash-1', {
                 from: undefined,
                 to: undefined,
+                approvedOnly: false,
             });
         });
 
@@ -123,6 +130,7 @@ describe('AccountingLedgerPage — Story 30.8', () => {
             expect(api.getLedger).toHaveBeenLastCalledWith('cash-1', {
                 from: '2026-03-01',
                 to: '2026-03-31',
+                approvedOnly: false,
             });
             expect(screen.getByText(/CR-00001/)).toBeInTheDocument();
             expect(screen.getByText('৳ 125.00 credit')).toBeInTheDocument();

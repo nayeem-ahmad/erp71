@@ -42,6 +42,7 @@ export type AccountingLinkKey =
     | 'recurringJournals'
     | 'recurringVouchers'
     | 'voucherTemplates'
+    | 'accountingSettings'
     | 'bankReconciliation'
     | 'expenses'
     | 'expenseCategories'
@@ -128,6 +129,7 @@ export const ACCOUNTING_SETUP_LINKS: AccountingNavItem[] = [
     { key: 'recurringJournals', href: routes.accounting.recurringJournals, icon: RefreshCw, accent: 'bg-purple-50 text-purple-700 border-purple-100' },
     { key: 'recurringVouchers', href: routes.accounting.recurringVouchers, icon: RefreshCw, accent: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-100' },
     { key: 'voucherTemplates', href: routes.accounting.voucherTemplates, icon: Copy, accent: 'bg-lime-50 text-lime-700 border-lime-100' },
+    { key: 'accountingSettings', href: routes.accounting.settings, icon: Settings, accent: 'bg-slate-50 text-slate-700 border-slate-100' },
 ];
 
 export const ACCOUNTING_RECONCILIATION_LINKS: AccountingNavItem[] = [

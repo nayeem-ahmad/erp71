@@ -13,6 +13,8 @@ import { compactDensity } from '@/lib/ui/compact-density';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { useApprovedOnly } from '@/lib/accounting-report-scope';
+import { ApprovedOnlyToggle } from '@/components/accounting/ApprovedOnlyToggle';
 
 function defaultFrom() {
     const d = new Date();
@@ -75,14 +77,17 @@ export default function FinancialRatiosPage() {
     const [fromDate, setFromDate] = useState(defaultFrom());
     const [toDate, setToDate] = useState(defaultTo());
     const [loading, setLoading] = useState(true);
+    const { approvedOnly, setApprovedOnly, approvalEnabled, ready: approvalReady } = useApprovedOnly();
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => { void load(); }, [asOfDate, fromDate, toDate]);
+    // approvalReady holds the first fetch until the tenant's approved-only
+    // setting is known, so the report is never generated against the wrong value.
+    useEffect(() => { if (approvalReady) void load(); }, [asOfDate, fromDate, toDate, approvalReady, approvedOnly]);
 
     const load = async () => {
         setLoading(true); setError(null);
         try {
-            const result = await (api as any).getFinancialRatios({
+            const result = await (api as any).getFinancialRatios({ approvedOnly,
                 asOfDate: asOfDate || undefined,
                 from: fromDate || undefined,
                 to: toDate || undefined,
@@ -121,6 +126,8 @@ export default function FinancialRatiosPage() {
                         <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
                             className={compactDensity.formField} />
                     </div>
+
+                    <ApprovedOnlyToggle checked={approvedOnly} onChange={setApprovedOnly} enabled={approvalEnabled} />
                 </div>
             </AccountingToolbar>
 

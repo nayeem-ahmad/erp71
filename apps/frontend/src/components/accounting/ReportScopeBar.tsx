@@ -3,6 +3,7 @@
 import { compactDensity } from '@/lib/ui/compact-density';
 import { useI18n } from '@/lib/i18n';
 import type { ReportLevelMode, ReportScopeMode } from '@/lib/accounting-report-scope';
+import { ApprovedOnlyToggle } from '@/components/accounting/ApprovedOnlyToggle';
 import {
     persistHideZero,
     persistReportLevel,
@@ -36,6 +37,13 @@ export type ReportScopeBarProps = {
     /** Omit both on reports with no balance column to suppress. */
     hideZero?: boolean;
     onHideZeroChange?: (hideZero: boolean) => void;
+    /**
+     * Per-request override of the tenant's approved-only setting. The toggle
+     * hides itself unless the tenant actually requires voucher approval.
+     */
+    approvedOnly?: boolean;
+    onApprovedOnlyChange?: (approvedOnly: boolean) => void;
+    approvalEnabled?: boolean;
 };
 
 export function ReportScopeBar({
@@ -60,6 +68,9 @@ export function ReportScopeBar({
     onLevelChange,
     hideZero,
     onHideZeroChange,
+    approvedOnly,
+    onApprovedOnlyChange,
+    approvalEnabled = false,
 }: ReportScopeBarProps) {
     const { t } = useI18n();
     const scopeLabels = t.accounting.reports.reportScope;
@@ -156,17 +167,27 @@ export function ReportScopeBar({
                 ) : null}
             </div>
 
-            {onHideZeroChange ? (
-                <label className="inline-flex w-fit items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
-                    <input
-                        type="checkbox"
-                        checked={hideZero ?? false}
-                        onChange={(event) => handleHideZeroChange(event.target.checked)}
-                        className="text-blue-600"
+            <div className="flex flex-wrap items-center gap-4">
+                {onHideZeroChange ? (
+                    <label className="inline-flex w-fit items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={hideZero ?? false}
+                            onChange={(event) => handleHideZeroChange(event.target.checked)}
+                            className="text-blue-600"
+                        />
+                        {t.accountingShared.hideZeroBalances}
+                    </label>
+                ) : null}
+
+                {onApprovedOnlyChange ? (
+                    <ApprovedOnlyToggle
+                        checked={approvedOnly ?? false}
+                        onChange={onApprovedOnlyChange}
+                        enabled={approvalEnabled}
                     />
-                    {t.accountingShared.hideZeroBalances}
-                </label>
-            ) : null}
+                ) : null}
+            </div>
 
             {scope === 'branch' ? (
                 <div className="flex flex-col gap-1 min-w-[180px]">

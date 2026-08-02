@@ -89,6 +89,8 @@ export const routes = {
         postingRules: '/accounting/posting-rules',
         costCenters: '/accounting/cost-centers',
         fiscalPeriods: '/accounting/fiscal-periods',
+        settings: '/accounting/settings',
+        approvalQueue: '/accounting/vouchers?approvalStatus=PENDING',
         fixedAssets: '/accounting/fixed-assets',
         openingBalances: '/accounting/opening-balances',
         recurringJournals: '/accounting/recurring-journals',

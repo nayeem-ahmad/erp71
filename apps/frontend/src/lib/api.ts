@@ -276,6 +276,13 @@ export type ReportLevel = 'account' | 'subgroup' | 'group';
 
 export type ReportLevelParams = { level?: ReportLevel };
 
+/**
+ * Per-request override of the tenant's `reports_approved_only` setting. Omitted,
+ * the server falls back to that setting — so `undefined` is meaningful and must
+ * not be coerced to false.
+ */
+export type ApprovedOnlyParams = { approvedOnly?: boolean };
+
 export type CustomFieldDef = { key: string; label: string; order: number };
 
 export type ExternalSyncTally = { created: number; updated: number; skipped: number };
@@ -343,12 +350,21 @@ export type ExternalSyncRun = {
     finished_at: string | null;
 };
 
-function appendReportScopeParams(query: URLSearchParams, params?: ReportScopeParams & ReportLevelParams) {
+function appendReportScopeParams(
+    query: URLSearchParams,
+    params?: ReportScopeParams & ReportLevelParams & ApprovedOnlyParams,
+) {
     if (params?.scope) query.set('scope', params.scope);
     if (params?.storeId) query.set('storeId', params.storeId);
     if (params?.storeIds?.length) query.set('storeIds', params.storeIds.join(','));
     if (params?.includeCompanyBucket) query.set('includeCompanyBucket', 'true');
     if (params?.level) query.set('level', params.level);
+    appendApprovedOnly(query, params);
+}
+
+/** `false` is a real instruction ("include pending"), so only undefined is dropped. */
+function appendApprovedOnly(query: URLSearchParams, params?: ApprovedOnlyParams) {
+    if (params?.approvedOnly !== undefined) query.set('approvedOnly', String(params.approvedOnly));
 }
 
 /**
@@ -1227,32 +1243,36 @@ export const api = {
         return fetchWithAuth(`/accounting/accounts/next-code?${query.toString()}`);
     },
     getVoucherNumberPreview: (voucherType: string) => fetchWithAuth(`/accounting/vouchers/next-number?voucherType=${encodeURIComponent(voucherType)}`),
-    getVouchers: (params?: { voucherType?: string; from?: string; to?: string; page?: number; limit?: number }) => {
+    getVouchers: (params?: { voucherType?: string; from?: string; to?: string; approvalStatus?: string; page?: number; limit?: number }) => {
         const query = new URLSearchParams();
         if (params?.voucherType) query.set('voucherType', params.voucherType);
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        if (params?.approvalStatus) query.set('approvalStatus', params.approvalStatus);
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
         return fetchWithAuth(`/accounting/vouchers${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getVoucher: (id: string) => fetchWithAuth(`/accounting/vouchers/${id}`),
-    getLedger: (accountId: string, params?: { from?: string; to?: string }) => {
+    getLedger: (accountId: string, params?: { from?: string; to?: string } & ApprovedOnlyParams) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        appendApprovedOnly(query, params);
         return fetchWithAuth(`/accounting/reports/ledger/${accountId}${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getFinancialKpis: (params?: { from?: string; to?: string }) => {
+    getFinancialKpis: (params?: { from?: string; to?: string } & ApprovedOnlyParams) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        appendApprovedOnly(query, params);
         return fetchWithAuth(`/accounting/dashboard/kpis${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getFinancialTrends: (params?: { from?: string; to?: string }) => {
+    getFinancialTrends: (params?: { from?: string; to?: string } & ApprovedOnlyParams) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        appendApprovedOnly(query, params);
         return fetchWithAuth(`/accounting/dashboard/trends${query.toString() ? `?${query.toString()}` : ''}`);
     },
     createVoucher: (data: any) => fetchWithAuth('/accounting/vouchers', {
@@ -1267,6 +1287,35 @@ export const api = {
     }),
     deleteVoucher: (id: string) => fetchWithAuth(`/accounting/vouchers/${id}`, {
         method: 'DELETE',
+    }),
+    approveVoucher: (id: string) => fetchWithAuth(`/accounting/vouchers/${id}/approve`, {
+        method: 'POST',
+    }),
+    rejectVoucher: (id: string, reason?: string) => fetchWithAuth(`/accounting/vouchers/${id}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    bulkApproveVouchers: (ids: string[]) => fetchWithAuth('/accounting/vouchers/bulk-approve', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    bulkRejectVouchers: (ids: string[], reason?: string) => fetchWithAuth('/accounting/vouchers/bulk-reject', {
+        method: 'POST',
+        body: JSON.stringify({ ids, reason }),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    getPendingVoucherCount: () => fetchWithAuth('/accounting/vouchers/pending-count'),
+    getAccountingSettings: () => fetchWithAuth('/accounting/settings/accounting'),
+    updateAccountingSettings: (data: {
+        requireVoucherApproval?: boolean;
+        autoApproveSystemVouchers?: boolean;
+        reportsApprovedOnly?: boolean;
+    }) => fetchWithAuth('/accounting/settings/accounting', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
     }),
     getPostingRules: (params?: { eventType?: string; isActive?: boolean }) => {
         const query = new URLSearchParams();
@@ -1299,31 +1348,33 @@ export const api = {
     retryPostingException: (id: string) => fetchWithAuth(`/accounting/reconciliation/posting-exceptions/${id}/retry`, {
         method: 'POST',
     }),
-    getProfitLoss: (params?: { from?: string; to?: string } & ReportScopeParams & ReportLevelParams) => {
+    getProfitLoss: (params?: { from?: string; to?: string } & ReportScopeParams & ReportLevelParams & ApprovedOnlyParams) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
         appendReportScopeParams(query, params);
         return fetchWithAuth(`/accounting/reports/profit-loss${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getBalanceSheet: (params?: { asOfDate?: string } & ReportScopeParams & ReportLevelParams) => {
+    getBalanceSheet: (params?: { asOfDate?: string } & ReportScopeParams & ReportLevelParams & ApprovedOnlyParams) => {
         const query = new URLSearchParams();
         if (params?.asOfDate) query.set('asOfDate', params.asOfDate);
         appendReportScopeParams(query, params);
         return fetchWithAuth(`/accounting/reports/balance-sheet${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getCashbook: (params?: { from?: string; to?: string; accountId?: string }) => {
+    getCashbook: (params?: { from?: string; to?: string; accountId?: string } & ApprovedOnlyParams) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
         if (params?.accountId) query.set('accountId', params.accountId);
+        appendApprovedOnly(query, params);
         return fetchWithAuth(`/accounting/reports/cashbook${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getBankbook: (params?: { from?: string; to?: string; accountId?: string }) => {
+    getBankbook: (params?: { from?: string; to?: string; accountId?: string } & ApprovedOnlyParams) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
         if (params?.accountId) query.set('accountId', params.accountId);
+        appendApprovedOnly(query, params);
         return fetchWithAuth(`/accounting/reports/bankbook${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getSalesByCustomer: (params?: { storeId?: string; from?: string; to?: string }) => {
@@ -2391,7 +2442,7 @@ export const api = {
     markNotificationRead: (id: string) => fetchWithAuth(`/notifications/${id}/read`, { method: 'PATCH' }),
     markAllNotificationsRead: () => fetchWithAuth('/notifications/read-all', { method: 'PATCH' }),
     // Accounting — Mid-Size Features
-    getTrialBalance: (params?: { asOfDate?: string } & ReportScopeParams & ReportLevelParams) => {
+    getTrialBalance: (params?: { asOfDate?: string } & ReportScopeParams & ReportLevelParams & ApprovedOnlyParams) => {
         const q = new URLSearchParams();
         if (params?.asOfDate) q.set('asOfDate', params.asOfDate);
         appendReportScopeParams(q, params);
@@ -2417,39 +2468,45 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     receiveFundTransfer: (id: string) => fetchWithAuth(`/fund-transfers/${id}/receive`, { method: 'POST' }),
-    getArAging: (params?: { asOfDate?: string }) => {
+    getArAging: (params?: { asOfDate?: string } & ApprovedOnlyParams) => {
         const q = new URLSearchParams();
         if (params?.asOfDate) q.set('asOfDate', params.asOfDate);
+        appendApprovedOnly(q, params);
         return fetchWithAuth(`/accounting/reports/ar-aging${q.toString() ? `?${q}` : ''}`);
     },
-    getApAging: (params?: { asOfDate?: string }) => {
+    getApAging: (params?: { asOfDate?: string } & ApprovedOnlyParams) => {
         const q = new URLSearchParams();
         if (params?.asOfDate) q.set('asOfDate', params.asOfDate);
+        appendApprovedOnly(q, params);
         return fetchWithAuth(`/accounting/reports/ap-aging${q.toString() ? `?${q}` : ''}`);
     },
-    getComparativePL: (params?: { from?: string; to?: string }) => {
+    getComparativePL: (params?: { from?: string; to?: string } & ApprovedOnlyParams) => {
         const q = new URLSearchParams();
         if (params?.from) q.set('from', params.from);
         if (params?.to) q.set('to', params.to);
+        appendApprovedOnly(q, params);
         return fetchWithAuth(`/accounting/reports/comparative-pl${q.toString() ? `?${q}` : ''}`);
     },
-    getVatTaxReport: (params?: { from?: string; to?: string }) => {
+    getVatTaxReport: (params?: { from?: string; to?: string } & ApprovedOnlyParams) => {
         const q = new URLSearchParams();
         if (params?.from) q.set('from', params.from);
         if (params?.to) q.set('to', params.to);
+        appendApprovedOnly(q, params);
         return fetchWithAuth(`/accounting/reports/vat-tax${q.toString() ? `?${q}` : ''}`);
     },
-    getFinancialRatios: (params?: { asOfDate?: string; from?: string; to?: string }) => {
+    getFinancialRatios: (params?: { asOfDate?: string; from?: string; to?: string } & ApprovedOnlyParams) => {
         const q = new URLSearchParams();
         if (params?.asOfDate) q.set('asOfDate', params.asOfDate);
         if (params?.from) q.set('from', params.from);
         if (params?.to) q.set('to', params.to);
+        appendApprovedOnly(q, params);
         return fetchWithAuth(`/accounting/reports/financial-ratios${q.toString() ? `?${q}` : ''}`);
     },
-    getCashFlow: (params?: { from?: string; to?: string }) => {
+    getCashFlow: (params?: { from?: string; to?: string } & ApprovedOnlyParams) => {
         const q = new URLSearchParams();
         if (params?.from) q.set('from', params.from);
         if (params?.to) q.set('to', params.to);
+        appendApprovedOnly(q, params);
         return fetchWithAuth(`/accounting/reports/cash-flow${q.toString() ? `?${q}` : ''}`);
     },
     // Fiscal Periods
@@ -2468,21 +2525,23 @@ export const api = {
     // Budget vs Actual
     upsertBudget: (data: any) =>
         fetchWithAuth('/accounting/budgets', { method: 'POST', body: JSON.stringify(data) }),
-    getBudgetVsActual: (params: { fiscalYear: number; month?: number }) => {
+    getBudgetVsActual: (params: { fiscalYear: number; month?: number } & ApprovedOnlyParams) => {
         const q = new URLSearchParams();
         q.set('fiscalYear', String(params.fiscalYear));
         if (params.month) q.set('month', String(params.month));
+        appendApprovedOnly(q, params);
         return fetchWithAuth(`/accounting/reports/budget-vs-actual?${q}`);
     },
     // Cost Centers
     listCostCenters: () => fetchWithAuth('/accounting/cost-centers'),
     createCostCenter: (data: any) =>
         fetchWithAuth('/accounting/cost-centers', { method: 'POST', body: JSON.stringify(data) }),
-    getCostCenterPL: (params: { costCenterId: string; from?: string; to?: string }) => {
+    getCostCenterPL: (params: { costCenterId: string; from?: string; to?: string } & ApprovedOnlyParams) => {
         const q = new URLSearchParams();
         q.set('costCenterId', params.costCenterId);
         if (params.from) q.set('from', params.from);
         if (params.to) q.set('to', params.to);
+        appendApprovedOnly(q, params);
         return fetchWithAuth(`/accounting/reports/cost-center-pl?${q}`);
     },
     // Fixed Assets

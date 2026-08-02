@@ -12,6 +12,8 @@ import { compactDensity } from '@/lib/ui/compact-density';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { useApprovedOnly } from '@/lib/accounting-report-scope';
+import { ApprovedOnlyToggle } from '@/components/accounting/ApprovedOnlyToggle';
 
 interface BudgetRow {
     account: { id: string; name: string; code?: string | null; type: string };
@@ -44,15 +46,18 @@ export default function BudgetVsActualPage() {
     const [month, setMonth] = useState<number | ''>('');
     const [data, setData] = useState<BudgetVsActualData | null>(null);
     const [loading, setLoading] = useState(true);
+    const { approvedOnly, setApprovedOnly, approvalEnabled, ready: approvalReady } = useApprovedOnly();
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => { void load(); }, [fiscalYear, month]);
+    // approvalReady holds the first fetch until the tenant's approved-only
+    // setting is known, so the report is never generated against the wrong value.
+    useEffect(() => { if (approvalReady) void load(); }, [fiscalYear, month, approvalReady, approvedOnly]);
 
     const load = async () => {
         setLoading(true);
         setError(null);
         try {
-            const result = await api.getBudgetVsActual({ fiscalYear, month: month !== '' ? month : undefined });
+            const result = await api.getBudgetVsActual({ approvedOnly, fiscalYear, month: month !== '' ? month : undefined });
             setData(result);
         } catch (e: any) {
             setError(e?.message ?? 'Failed to load report');
@@ -94,6 +99,8 @@ export default function BudgetVsActualPage() {
                             ))}
                         </select>
                     </div>
+
+                    <ApprovedOnlyToggle checked={approvedOnly} onChange={setApprovedOnly} enabled={approvalEnabled} />
                 </div>
             </AccountingToolbar>
 

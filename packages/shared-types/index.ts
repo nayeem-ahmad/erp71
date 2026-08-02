@@ -50,6 +50,7 @@ export const StorePermission = {
   // Accounting
   VIEW_LEDGER: "VIEW_LEDGER",
   CREATE_VOUCHER: "CREATE_VOUCHER",
+  APPROVE_VOUCHER: "APPROVE_VOUCHER",
   VIEW_FINANCIAL_REPORTS: "VIEW_FINANCIAL_REPORTS",
 
   // Fund Transfers
@@ -147,6 +148,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.VIEW_PRODUCT_CATALOG,
     StorePermission.VIEW_LEDGER,
     StorePermission.CREATE_VOUCHER,
+    StorePermission.APPROVE_VOUCHER,
     StorePermission.VIEW_FINANCIAL_REPORTS,
     StorePermission.SWITCH_STORES,
     StorePermission.VIEW_CONSOLIDATED_REPORTS,
@@ -192,6 +194,7 @@ export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.CREATE_QUOTATION]: "Create quotations",
   [StorePermission.VIEW_LEDGER]: "View ledger",
   [StorePermission.CREATE_VOUCHER]: "Create vouchers",
+  [StorePermission.APPROVE_VOUCHER]: "Approve & reject vouchers",
   [StorePermission.VIEW_FINANCIAL_REPORTS]: "View financial reports",
   [StorePermission.CREATE_FUND_TRANSFER]: "Create fund transfers",
   [StorePermission.APPROVE_FUND_TRANSFER]: "Approve fund transfers",
@@ -257,6 +260,7 @@ export const STORE_PERMISSION_GROUPS: { label: string; permissions: StorePermiss
     permissions: [
       StorePermission.VIEW_LEDGER,
       StorePermission.CREATE_VOUCHER,
+      StorePermission.APPROVE_VOUCHER,
       StorePermission.VIEW_FINANCIAL_REPORTS,
       StorePermission.CREATE_FUND_TRANSFER,
       StorePermission.APPROVE_FUND_TRANSFER,
@@ -452,6 +456,20 @@ export const VoucherType = {
   JOURNAL: "journal",
 } as const;
 export type VoucherType = (typeof VoucherType)[keyof typeof VoucherType];
+
+/**
+ * Maker-checker state of a voucher. Defaults to APPROVED everywhere so a tenant
+ * that never turns approval on behaves exactly as it did before the feature
+ * existed — PENDING only ever appears when the tenant asked for it in
+ * accounting settings.
+ */
+export const VoucherApprovalStatus = {
+  PENDING: "PENDING",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+} as const;
+export type VoucherApprovalStatus =
+  (typeof VoucherApprovalStatus)[keyof typeof VoucherApprovalStatus];
 
 export const PostingRuleEventType = {
   SALE: 'sale',

@@ -30,7 +30,10 @@ import {
     ListAccountsQueryDto,
     ListLedgerQueryDto,
     ListAccountSubgroupsQueryDto,
+    BulkVoucherApprovalDto,
     ListVouchersQueryDto,
+    RejectVoucherDto,
+    UpdateAccountingSettingsDto,
     VoucherNumberPreviewQueryDto,
     ListPostingRulesQueryDto,
     UpdatePostingRuleDto,
@@ -227,6 +230,12 @@ export class AccountingController {
         return this.accountingService.getVoucherNumberPreview(tenant.tenantId, query.voucherType);
     }
 
+    /** Drives the sidebar approval-queue badge; polled, so kept deliberately cheap. */
+    @Get('vouchers/pending-count')
+    getPendingVoucherCount(@Tenant() tenant: TenantContext) {
+        return this.accountingService.getPendingVoucherCount(tenant.tenantId);
+    }
+
     @Get('vouchers/:id')
     findVoucherById(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.accountingService.findVoucherById(tenant.tenantId, id);
@@ -245,6 +254,52 @@ export class AccountingController {
     @Delete('vouchers/:id')
     deleteVoucher(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.accountingService.deleteVoucher(tenant.tenantId, id, tenant.userId);
+    }
+
+    @Post('vouchers/bulk-approve')
+    @RequireStorePermission(StorePermission.VIEW_LEDGER, StorePermission.APPROVE_VOUCHER)
+    bulkApproveVouchers(@Tenant() tenant: TenantContext, @Body() dto: BulkVoucherApprovalDto) {
+        return this.accountingService.bulkUpdateVoucherApproval(tenant.tenantId, dto, 'approve', tenant.userId);
+    }
+
+    @Post('vouchers/bulk-reject')
+    @RequireStorePermission(StorePermission.VIEW_LEDGER, StorePermission.APPROVE_VOUCHER)
+    bulkRejectVouchers(@Tenant() tenant: TenantContext, @Body() dto: BulkVoucherApprovalDto) {
+        return this.accountingService.bulkUpdateVoucherApproval(tenant.tenantId, dto, 'reject', tenant.userId);
+    }
+
+    @Post('vouchers/:id/approve')
+    @RequireStorePermission(StorePermission.VIEW_LEDGER, StorePermission.APPROVE_VOUCHER)
+    approveVoucher(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.accountingService.approveVoucher(tenant.tenantId, id, tenant.userId);
+    }
+
+    @Post('vouchers/:id/reject')
+    @RequireStorePermission(StorePermission.VIEW_LEDGER, StorePermission.APPROVE_VOUCHER)
+    rejectVoucher(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: RejectVoucherDto,
+    ) {
+        return this.accountingService.rejectVoucher(tenant.tenantId, id, dto, tenant.userId);
+    }
+
+    /**
+     * Readable by anyone who can see the ledger — the voucher UI needs to know
+     * whether approval is on — but only the owner sets the policy.
+     */
+    @Get('settings/accounting')
+    getAccountingSettings(@Tenant() tenant: TenantContext) {
+        return this.accountingService.getAccountingSettings(tenant.tenantId);
+    }
+
+    @Patch('settings/accounting')
+    @TenantRoles('OWNER')
+    updateAccountingSettings(
+        @Tenant() tenant: TenantContext,
+        @Body() dto: UpdateAccountingSettingsDto,
+    ) {
+        return this.accountingService.updateAccountingSettings(tenant.tenantId, dto, tenant.userId);
     }
 
     @Get('dashboard/kpis')

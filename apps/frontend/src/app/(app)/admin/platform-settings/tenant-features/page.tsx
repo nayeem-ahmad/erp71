@@ -18,6 +18,7 @@ type FeatureSettings = {
     manufacturing_enabled: string;
     ai_chat_enabled: string;
     external_import_enabled: string;
+    projects_enabled: string;
 };
 
 const DEFAULTS: FeatureSettings = {
@@ -28,13 +29,14 @@ const DEFAULTS: FeatureSettings = {
     manufacturing_enabled: 'true',
     ai_chat_enabled: 'false',
     external_import_enabled: 'false',
+    projects_enabled: 'false',
 };
 
 type FeatureToggleKey = keyof FeatureSettings;
 
 const FEATURE_TOGGLES: Array<{
     key: FeatureToggleKey;
-    labelKey: 'feedback' | 'support' | 'help' | 'voice' | 'manufacturing' | 'aiChat' | 'externalImport';
+    labelKey: 'feedback' | 'support' | 'help' | 'voice' | 'manufacturing' | 'aiChat' | 'externalImport' | 'projects';
 }> = [
     { key: 'feedback_enabled', labelKey: 'feedback' },
     { key: 'support_enabled', labelKey: 'support' },
@@ -43,6 +45,7 @@ const FEATURE_TOGGLES: Array<{
     { key: 'manufacturing_enabled', labelKey: 'manufacturing' },
     { key: 'ai_chat_enabled', labelKey: 'aiChat' },
     { key: 'external_import_enabled', labelKey: 'externalImport' },
+    { key: 'projects_enabled', labelKey: 'projects' },
 ];
 
 function FeatureSwitch({
@@ -94,6 +97,7 @@ export default function PlatformTenantFeaturesPage() {
                     manufacturing_enabled: d.manufacturing_enabled ?? DEFAULTS.manufacturing_enabled,
                     ai_chat_enabled: d.ai_chat_enabled ?? DEFAULTS.ai_chat_enabled,
                     external_import_enabled: d.external_import_enabled ?? DEFAULTS.external_import_enabled,
+                    projects_enabled: d.projects_enabled ?? DEFAULTS.projects_enabled,
                 });
             })
             .catch(() => toast.error(c.loadFailed))

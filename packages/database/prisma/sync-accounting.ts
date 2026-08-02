@@ -35,6 +35,7 @@ config({ path: resolve(__dirname, '../../../.env') });
 
 import { PrismaClient } from '@prisma/client';
 import { applySync, added, snapshot, Delta } from './sync-accounting.utils';
+import { syncApproveVoucherPermission } from './sync-approve-voucher-permission';
 
 const prisma = new PrismaClient();
 
@@ -142,7 +143,27 @@ async function main() {
     }
 }
 
+/**
+ * Role-permission drift, same shape as the account/rule drift above:
+ * ROLE_DEFAULT_PERMISSIONS is only read when a tenant or member is provisioned,
+ * so a permission added later never reaches anyone who already exists.
+ */
+async function syncPermissions(dryRun: boolean) {
+    const result = await syncApproveVoucherPermission(prisma, { dryRun });
+
+    if (result.roleGrants === 0 && result.memberGrants === 0) {
+        console.log('\nAPPROVE_VOUCHER: every Accountant role already has it. Nothing to do.');
+        return;
+    }
+
+    console.log(
+        `\nAPPROVE_VOUCHER: ${dryRun ? 'would grant' : 'granted'} to ` +
+        `${result.roleGrants} Accountant role(s) and ${result.memberGrants} member/store pair(s).`,
+    );
+}
+
 main()
+    .then(() => syncPermissions(process.argv.includes('--dry-run')))
     .catch((error) => {
         console.error(error);
         process.exit(1);
