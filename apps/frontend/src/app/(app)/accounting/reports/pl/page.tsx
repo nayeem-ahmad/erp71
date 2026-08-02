@@ -26,6 +26,7 @@ import {
     type ReportLevelMode,
     type ReportScopeMode,
     useReportStores,
+    useApprovedOnly,
 } from '@/lib/accounting-report-scope';
 
 function defaultFrom() {
@@ -69,6 +70,7 @@ function buildScopeParams(
 export default function ProfitLossPage() {
     const { t, locale } = useI18n();
     const { stores, canConsolidate, loading: storesLoading } = useReportStores();
+    const { approvedOnly, setApprovedOnly, approvalEnabled, ready: approvalReady } = useApprovedOnly();
     const [data, setData] = useState<PLData | null>(null);
     const [scope, setScope] = useState<ReportScopeMode>('branch');
     const [level, setLevel] = useState<ReportLevelMode>('account');
@@ -101,7 +103,9 @@ export default function ProfitLossPage() {
     }, [stores, storesLoading, canConsolidate]);
 
     const load = useCallback(async () => {
-        if (!initialized) {
+        // approvalReady gates the first fetch so the report is never generated
+        // against the wrong approved-only value and then silently corrected.
+        if (!initialized || !approvalReady) {
             return;
         }
 
@@ -109,6 +113,7 @@ export default function ProfitLossPage() {
         setError(null);
         try {
             const result = await api.getProfitLoss({
+                approvedOnly,
                 from: fromDate || undefined,
                 to: toDate || undefined,
                 level,
@@ -120,13 +125,13 @@ export default function ProfitLossPage() {
         } finally {
             setLoading(false);
         }
-    }, [fromDate, toDate, scope, level, storeId, selectedStoreIds, includeCompanyBucket, initialized, t.accounting.reports.loadFailed]);
+    }, [fromDate, toDate, scope, level, storeId, selectedStoreIds, includeCompanyBucket, initialized, approvalReady, approvedOnly, t.accounting.reports.loadFailed]);
 
     useEffect(() => {
-        if (initialized) {
+        if (initialized && approvalReady) {
             void load();
         }
-    }, [initialized, load]);
+    }, [initialized, approvalReady, load]);
 
     const isCompare = data?.scope === 'compare';
     const period = data?.period ?? data?.filters;
@@ -171,6 +176,9 @@ export default function ProfitLossPage() {
                     generating={loading}
                     level={level}
                     onLevelChange={setLevel}
+                    approvedOnly={approvedOnly}
+                    onApprovedOnlyChange={setApprovedOnly}
+                    approvalEnabled={approvalEnabled}
                     hideZero={hideZero}
                     onHideZeroChange={setHideZero}
                 />

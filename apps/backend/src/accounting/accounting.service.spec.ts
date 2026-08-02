@@ -78,12 +78,19 @@ describe('AccountingService — Story 30.2', () => {
             create: jest.fn(),
             delete: jest.fn(),
         },
+        accountingSettings: {
+            findUnique: jest.fn(),
+            upsert: jest.fn(),
+        },
         $transaction: jest.fn(),
     };
 
     beforeEach(async () => {
         jest.resetAllMocks();
         db.$transaction.mockImplementation(async (callback: any) => callback(db));
+        // Default: no settings row, i.e. approval off — the behaviour every
+        // pre-existing test in this file was written against.
+        db.accountingSettings.findUnique.mockResolvedValue(null);
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [

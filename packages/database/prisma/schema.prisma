@@ -104,6 +104,7 @@ enum StorePermission {
   // Accounting
   VIEW_LEDGER
   CREATE_VOUCHER
+  APPROVE_VOUCHER
   VIEW_FINANCIAL_REPORTS
 
   // Fund Transfers
@@ -252,6 +253,7 @@ model User {
   storefrontOrders          StorefrontOrder[]
   employee                  Employee?
   approvedLeaves            LeaveRequest[] @relation("LeaveApprover")
+  approvedVouchers          Voucher[]      @relation("VoucherApprover")
   createdInteractions       CustomerInteraction[] @relation("InteractionCreator")
   assignedCrmFollowUps      CrmFollowUp[] @relation("CrmFollowUpAssignee")
   createdCrmFollowUps       CrmFollowUp[] @relation("CrmFollowUpCreator")
@@ -522,6 +524,7 @@ model Tenant {
   aiConversations   AiConversation[]
   paymentMethods    PaymentMethod[]
   salesSettings     SalesSettings?
+  accountingSettings AccountingSettings?
   printTemplates    PrintTemplate[]
   navLayout         TenantNavLayout?
   referralSignup    ReferralSignup?
@@ -2015,6 +2018,30 @@ model PostingRule {
   @@map("posting_rules")
 }
 
+/// Tenant-wide accounting controls. Every flag defaults to the pre-feature
+/// behaviour, so a tenant that never opens the settings page is unaffected.
+model AccountingSettings {
+  id                            String   @id @default(uuid())
+  tenant_id                     String   @unique
+  /// Manually entered vouchers (and opening-balance imports) land as PENDING and
+  /// stay out of approved-only reports until someone with APPROVE_VOUCHER acts.
+  require_voucher_approval      Boolean  @default(false)
+  /// What happens to vouchers other modules post automatically (sales, purchases,
+  /// payments, payroll…) while approval is required. True — the default — lets
+  /// them post straight through so day-to-day operations never queue behind an
+  /// approver. False routes them into the same approval queue as manual entries.
+  auto_approve_system_vouchers  Boolean  @default(true)
+  /// When true every accounting report, ledger and dashboard figure counts only
+  /// APPROVED vouchers. A per-request `approvedOnly` param overrides it.
+  reports_approved_only         Boolean  @default(false)
+  created_at                    DateTime @default(now())
+  updated_at                    DateTime @updatedAt
+
+  tenant                        Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@map("accounting_settings")
+}
+
 model VoucherSequence {
   id           String   @id
   tenant_id    String
@@ -2046,12 +2073,20 @@ model Voucher {
   store_id         String?
   attribution      String   @default("BRANCH")
   counterparty_store_id String?
+  /// Maker-checker state: PENDING / APPROVED / REJECTED. Defaults to APPROVED so
+  /// tenants that never enable voucher approval keep the pre-feature behaviour —
+  /// every voucher hits the ledger the moment it is saved.
+  approval_status  String   @default("APPROVED")
+  approved_by      String?
+  approved_at      DateTime?
+  rejection_reason String?
   created_at       DateTime @default(now())
   updated_at       DateTime @updatedAt
 
   tenant           Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   store            Store?   @relation("VoucherStore", fields: [store_id], references: [id])
   counterpartyStore Store?  @relation("VoucherCounterpartyStore", fields: [counterparty_store_id], references: [id])
+  approver         User?    @relation("VoucherApprover", fields: [approved_by], references: [id])
   details          VoucherDetail[]
   attachments      VoucherAttachment[]
   postingEvents    PostingEvent[]
@@ -2064,6 +2099,7 @@ model Voucher {
   @@index([tenant_id, source_module, source_type, source_id])
   @@index([tenant_id, store_id])
   @@index([tenant_id, attribution])
+  @@index([tenant_id, approval_status])
   @@index([date])
   @@map("vouchers")
 }

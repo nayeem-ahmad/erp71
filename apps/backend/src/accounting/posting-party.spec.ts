@@ -39,6 +39,8 @@ function buildTx(accountPartyTypes: Record<string, string | null>) {
             upsert: jest.fn().mockResolvedValue({ next_number: 1, prefix: 'CR' }),
             update: jest.fn().mockResolvedValue({}),
         },
+        // No settings row → approval off, so the posting is APPROVED on create.
+        accountingSettings: { findUnique: jest.fn().mockResolvedValue(null) },
         voucher: {
             create: jest.fn().mockImplementation(async ({ data }: any) => {
                 captured.details = data.details.create;

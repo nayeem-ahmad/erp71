@@ -25,6 +25,7 @@ import {
     type ReportLevelMode,
     type ReportScopeMode,
     useReportStores,
+    useApprovedOnly,
 } from '@/lib/accounting-report-scope';
 
 type Group = StatementGroup;
@@ -63,6 +64,7 @@ function buildScopeParams(
 export default function BalanceSheetPage() {
     const { t, locale } = useI18n();
     const { stores, canConsolidate, loading: storesLoading } = useReportStores();
+    const { approvedOnly, setApprovedOnly, approvalEnabled, ready: approvalReady } = useApprovedOnly();
     const [data, setData] = useState<BSData | null>(null);
     const [scope, setScope] = useState<ReportScopeMode>('branch');
     const [level, setLevel] = useState<ReportLevelMode>('account');
@@ -94,7 +96,9 @@ export default function BalanceSheetPage() {
     }, [stores, storesLoading, canConsolidate]);
 
     const load = useCallback(async () => {
-        if (!initialized) {
+        // approvalReady gates the first fetch so the report is never generated
+        // against the wrong approved-only value and then silently corrected.
+        if (!initialized || !approvalReady) {
             return;
         }
 
@@ -102,6 +106,7 @@ export default function BalanceSheetPage() {
         setError(null);
         try {
             const result = await api.getBalanceSheet({
+                approvedOnly,
                 asOfDate: asOfDate || undefined,
                 level,
                 ...buildScopeParams(scope, storeId, selectedStoreIds, includeCompanyBucket),
@@ -112,13 +117,13 @@ export default function BalanceSheetPage() {
         } finally {
             setLoading(false);
         }
-    }, [asOfDate, scope, level, storeId, selectedStoreIds, includeCompanyBucket, initialized, t.accounting.reports.loadFailed]);
+    }, [asOfDate, scope, level, storeId, selectedStoreIds, includeCompanyBucket, initialized, approvalReady, approvedOnly, t.accounting.reports.loadFailed]);
 
     useEffect(() => {
-        if (initialized) {
+        if (initialized && approvalReady) {
             void load();
         }
-    }, [initialized, load]);
+    }, [initialized, approvalReady, load]);
 
     const isCompare = data?.scope === 'compare';
 
@@ -159,6 +164,9 @@ export default function BalanceSheetPage() {
                     generating={loading}
                     level={level}
                     onLevelChange={setLevel}
+                    approvedOnly={approvedOnly}
+                    onApprovedOnlyChange={setApprovedOnly}
+                    approvalEnabled={approvalEnabled}
                     hideZero={hideZero}
                     onHideZeroChange={setHideZero}
                 />

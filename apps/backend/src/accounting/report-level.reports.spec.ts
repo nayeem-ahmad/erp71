@@ -70,10 +70,13 @@ describe('accounting reports — detail level', () => {
         account: { findMany: jest.fn() },
         voucherDetail: { findMany: jest.fn() },
         store: { findMany: jest.fn() },
+        // No settings row → approval defaults (off), so these reports see every voucher.
+        accountingSettings: { findUnique: jest.fn() },
     };
 
     beforeEach(async () => {
         jest.resetAllMocks();
+        db.accountingSettings.findUnique.mockResolvedValue(null);
 
         db.account.findMany.mockImplementation(({ where }: any) => {
             const types: string[] | undefined = where?.type?.in;

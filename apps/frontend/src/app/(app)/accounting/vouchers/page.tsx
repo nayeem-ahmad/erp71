@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Eye, FileText, Pencil, Plus, Printer, Trash2 } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Eye, FileText, Pencil, Plus, Printer, Trash2, X } from 'lucide-react';
 import { AccountingPageShell } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -17,7 +17,10 @@ import { usePrintHeader } from '@/lib/print/use-print-header';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { printVoucher } from '@/lib/voucher-printer';
+import { hasPermission, isOwner } from '@/lib/permissions';
+import { VoucherApprovalBadge } from '@/components/accounting/VoucherApprovalBadge';
 import { toast } from '@/lib/toast';
+import { notifyVoucherApprovalChanged } from '@/hooks/usePendingVoucherCount';
 
 type VoucherRow = {
     id: string;
@@ -27,6 +30,7 @@ type VoucherRow = {
     description?: string | null;
     date: string;
     total_amount: number;
+    approval_status?: string | null;
     source?: { module: string | null; type: string | null; id: string | null };
 };
 
@@ -75,8 +79,24 @@ function AccountingVouchersListPageContent() {
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
     const [page, setPage] = useState(1);
+    // `?approvalStatus=PENDING` turns this page into the approval queue, which is
+    // what the sidebar/settings copy points at rather than a second list page.
+    const [approvalStatus, setApprovalStatus] = useState(searchParams.get('approvalStatus') ?? '');
+    const [canApprove, setCanApprove] = useState(false);
+    const [, setSelectedRows] = useState<VoucherRow[]>([]);
+    const [bulkWorking, setBulkWorking] = useState(false);
 
     const createdVoucherNumber = searchParams.get('voucher');
+
+    useEffect(() => {
+        api.getMe()
+            .then((me) => {
+                const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === localStorage.getItem('tenant_id'))
+                    ?? me?.tenants?.[0];
+                setCanApprove(isOwner(tenant?.role) || hasPermission(tenant?.permissions, 'APPROVE_VOUCHER'));
+            })
+            .catch(() => setCanApprove(false));
+    }, []);
 
     const loadVouchers = useCallback(async () => {
         setLoading(true);
@@ -85,17 +105,19 @@ function AccountingVouchersListPageContent() {
                 voucherType: voucherType || undefined,
                 from: from || undefined,
                 to: to || undefined,
+                approvalStatus: approvalStatus || undefined,
                 page,
                 limit: 20,
             });
             setResponse(data);
+            setSelectedRows([]);
         } catch (error) {
             console.error('Failed to load vouchers', error);
             setResponse({ data: [], meta: { page: 1, limit: 20, total: 0, totalPages: 1 } });
         } finally {
             setLoading(false);
         }
-    }, [voucherType, from, to, page]);
+    }, [voucherType, from, to, approvalStatus, page]);
 
     useEffect(() => {
         void loadVouchers();
@@ -163,6 +185,71 @@ function AccountingVouchersListPageContent() {
         }
     }, [loadVouchers, t]);
 
+    const handleApprove = useCallback(async (voucher: VoucherRow) => {
+        try {
+            await api.approveVoucher(voucher.id);
+            toast.success(t.vouchers.approval.approveSuccess);
+            notifyVoucherApprovalChanged();
+            void loadVouchers();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : t.vouchers.approval.approveFailed);
+        }
+    }, [loadVouchers, t]);
+
+    const handleReject = useCallback(async (voucher: VoucherRow) => {
+        const reason = window.prompt(t.vouchers.approval.rejectPrompt);
+        if (reason === null) {
+            return;
+        }
+        try {
+            await api.rejectVoucher(voucher.id, reason || undefined);
+            toast.success(t.vouchers.approval.rejectSuccess);
+            notifyVoucherApprovalChanged();
+            void loadVouchers();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : t.vouchers.approval.rejectFailed);
+        }
+    }, [loadVouchers, t]);
+
+    const runBulk = useCallback(async (action: 'approve' | 'reject', rows: VoucherRow[]) => {
+        // Only PENDING rows are actionable; the backend counts the rest as
+        // skipped, but filtering here keeps the confirmation honest.
+        const pending = rows.filter((row) => row.approval_status === 'PENDING');
+        if (pending.length === 0) {
+            toast.info(t.vouchers.approval.bulkNoPending);
+            return;
+        }
+
+        let reason: string | undefined;
+        if (action === 'reject') {
+            const answer = window.prompt(t.vouchers.approval.rejectPrompt);
+            if (answer === null) {
+                return;
+            }
+            reason = answer || undefined;
+        }
+
+        setBulkWorking(true);
+        try {
+            const ids = pending.map((row) => row.id);
+            const result = action === 'approve'
+                ? await api.bulkApproveVouchers(ids)
+                : await api.bulkRejectVouchers(ids, reason);
+            toast.success(
+                (action === 'approve' ? t.vouchers.approval.bulkApproved : t.vouchers.approval.bulkRejected)
+                    .replace('{count}', String(result?.updated ?? ids.length)),
+            );
+            notifyVoucherApprovalChanged();
+            void loadVouchers();
+        } catch (error) {
+            toast.error(error instanceof Error
+                ? error.message
+                : (action === 'approve' ? t.vouchers.approval.approveFailed : t.vouchers.approval.rejectFailed));
+        } finally {
+            setBulkWorking(false);
+        }
+    }, [loadVouchers, t]);
+
     const columns: ColumnDef<VoucherRow, any>[] = useMemo(
         () => [
             columnHelper.accessor('voucher_number', {
@@ -211,14 +298,40 @@ function AccountingVouchersListPageContent() {
                 ),
                 size: 110,
             }),
+            columnHelper.accessor('approval_status', {
+                header: t.vouchers.approval.status,
+                cell: (info) => <VoucherApprovalBadge status={info.getValue()} />,
+                size: 100,
+            }),
             columnHelper.display({
                 id: 'actions',
                 header: t.vouchers.list.actions,
                 cell: ({ row }) => {
                     const voucher = row.original;
                     const isSystem = Boolean(voucher.source?.module);
+                    const isPending = voucher.approval_status === 'PENDING';
                     return (
                         <div className="flex items-center gap-0.5">
+                            {canApprove && isPending ? (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleApprove(voucher)}
+                                        className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50"
+                                        title={t.vouchers.approval.approve}
+                                    >
+                                        <Check className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleReject(voucher)}
+                                        className="p-1.5 rounded-lg text-danger hover:bg-red-50"
+                                        title={t.vouchers.approval.reject}
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </>
+                            ) : null}
                             <Link
                                 href={`/accounting/vouchers/${voucher.id}`}
                                 className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50"
@@ -255,10 +368,10 @@ function AccountingVouchersListPageContent() {
                     );
                 },
                 enableSorting: false,
-                size: 140,
+                size: 200,
             }),
         ],
-        [handleDelete, handlePrint, locale, t],
+        [canApprove, handleApprove, handleDelete, handlePrint, handleReject, locale, t],
     );
 
     const filterControls = (
@@ -288,6 +401,17 @@ function AccountingVouchersListPageContent() {
                 onChange={(e) => { setTo(e.target.value); setPage(1); }}
                 className="px-1.5 py-0.5 border rounded text-xs"
             />
+            <select
+                aria-label={t.vouchers.approval.status}
+                value={approvalStatus}
+                onChange={(e) => { setApprovalStatus(e.target.value); setPage(1); }}
+                className="px-1.5 py-0.5 border rounded text-xs"
+            >
+                <option value="">{t.vouchers.approval.all}</option>
+                <option value="PENDING">{t.vouchers.approval.pending}</option>
+                <option value="APPROVED">{t.vouchers.approval.approved}</option>
+                <option value="REJECTED">{t.vouchers.approval.rejected}</option>
+            </select>
             <span className="text-gray-500">{response.meta.total} total</span>
         </div>
     );
@@ -325,6 +449,13 @@ function AccountingVouchersListPageContent() {
                     emptyMessage={t.vouchers.list.emptyMessage}
                     emptyIcon={<FileText className="w-10 h-10 text-gray-200" />}
                     searchPlaceholder={t.vouchers.list.searchPlaceholder}
+                    enableRowSelection={canApprove}
+                    onRowSelectionChange={setSelectedRows}
+                    bulkActionsDisabled={bulkWorking}
+                    bulkActions={canApprove ? [
+                        { label: t.vouchers.approval.bulkApprove, onClick: (rows) => void runBulk('approve', rows) },
+                        { label: t.vouchers.approval.bulkReject, tone: 'danger', onClick: (rows) => void runBulk('reject', rows) },
+                    ] : undefined}
                 />
 
             <div className={`flex items-center justify-end gap-2 ${compactDensity.filterBar} !mt-0`}>

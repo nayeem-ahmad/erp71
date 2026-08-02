@@ -6,6 +6,12 @@ jest.mock('@/lib/api', () => ({
     api: {
         getMe: jest.fn(),
         getProfitLoss: jest.fn(),
+        // The approved-only toggle resolves the tenant's setting on mount.
+        getAccountingSettings: jest.fn().mockResolvedValue({
+            requireVoucherApproval: false,
+            autoApproveSystemVouchers: true,
+            reportsApprovedOnly: false,
+        }),
     },
 }));
 

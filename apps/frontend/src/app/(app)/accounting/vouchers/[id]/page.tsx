@@ -15,6 +15,10 @@ import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { mapApiAttachments, VoucherAttachments } from '@/components/accounting/VoucherAttachments';
+import { VoucherApprovalBadge } from '@/components/accounting/VoucherApprovalBadge';
+import { hasPermission, isOwner } from '@/lib/permissions';
+import { toast } from '@/lib/toast';
+import { notifyVoucherApprovalChanged } from '@/hooks/usePendingVoucherCount';
 import type { VoucherAttachmentItem } from '@/lib/file-preview';
 
 type VoucherDetail = {
@@ -25,6 +29,8 @@ type VoucherDetail = {
     reference_number?: string | null;
     date: string;
     total_amount: number;
+    approval_status?: string | null;
+    rejection_reason?: string | null;
     details: Array<{
         id: string;
         debit_amount: number;
@@ -53,6 +59,18 @@ export default function VoucherDetailPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [attachments, setAttachments] = useState<VoucherAttachmentItem[]>([]);
+    const [canApprove, setCanApprove] = useState(false);
+    const [acting, setActing] = useState(false);
+
+    useEffect(() => {
+        api.getMe()
+            .then((me) => {
+                const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === localStorage.getItem('tenant_id'))
+                    ?? me?.tenants?.[0];
+                setCanApprove(isOwner(tenant?.role) || hasPermission(tenant?.permissions, 'APPROVE_VOUCHER'));
+            })
+            .catch(() => setCanApprove(false));
+    }, []);
 
     useEffect(() => {
         let active = true;
@@ -91,6 +109,34 @@ export default function VoucherDetailPage() {
 
     const debitTotal = voucher?.details.reduce((sum, row) => sum + Number(row.debit_amount || 0), 0) ?? 0;
     const creditTotal = voucher?.details.reduce((sum, row) => sum + Number(row.credit_amount || 0), 0) ?? 0;
+    const isPending = voucher?.approval_status === 'PENDING';
+
+    const act = async (action: 'approve' | 'reject') => {
+        if (!voucher) return;
+
+        let reason: string | undefined;
+        if (action === 'reject') {
+            const answer = window.prompt(t.vouchers.approval.rejectPrompt);
+            if (answer === null) return;
+            reason = answer || undefined;
+        }
+
+        setActing(true);
+        try {
+            const updated = action === 'approve'
+                ? await api.approveVoucher(voucher.id)
+                : await api.rejectVoucher(voucher.id, reason);
+            setVoucher(updated);
+            notifyVoucherApprovalChanged();
+            toast.success(action === 'approve' ? t.vouchers.approval.approveSuccess : t.vouchers.approval.rejectSuccess);
+        } catch (actionError) {
+            toast.error(actionError instanceof Error
+                ? actionError.message
+                : (action === 'approve' ? t.vouchers.approval.approveFailed : t.vouchers.approval.rejectFailed));
+        } finally {
+            setActing(false);
+        }
+    };
 
     return (
         <AccountingPageShell maxWidth="full">
@@ -117,6 +163,43 @@ export default function VoucherDetailPage() {
                         <CompactStat label={t.accountingShared.date} value={formatDate(voucher.date, locale)} />
                         <CompactStat label={t.accountingShared.reference} value={voucher.reference_number || t.accountingShared.notProvided} />
                     </div>
+
+                    {voucher.approval_status && voucher.approval_status !== 'APPROVED' ? (
+                        <CompactSection className={isPending ? 'border-amber-100 bg-amber-50/50' : 'border-red-100 bg-red-50/50'}>
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="space-y-1">
+                                    <VoucherApprovalBadge status={voucher.approval_status} />
+                                    <p className={`text-xs ${isPending ? 'text-amber-800' : 'text-danger'}`}>
+                                        {isPending
+                                            ? t.vouchers.approval.pendingNotice
+                                            : `${t.vouchers.approval.rejectedReason}: ${voucher.rejection_reason || '—'}`}
+                                    </p>
+                                </div>
+                                {canApprove ? (
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => void act('approve')}
+                                            disabled={acting || voucher.approval_status === 'APPROVED'}
+                                            className="min-h-touch px-3 py-1.5 rounded bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-40"
+                                        >
+                                            {t.vouchers.approval.approve}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => void act('reject')}
+                                            disabled={acting || voucher.approval_status === 'REJECTED'}
+                                            className="min-h-touch px-3 py-1.5 rounded border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                                        >
+                                            {t.vouchers.approval.reject}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-gray-500">{t.vouchers.approval.noPermission}</p>
+                                )}
+                            </div>
+                        </CompactSection>
+                    ) : null}
 
                     <CompactSection title={t.accountingShared.narration}>
                         <p className="text-sm text-gray-700">{voucher.description || t.journal.detail.noNarrationCaptured}</p>

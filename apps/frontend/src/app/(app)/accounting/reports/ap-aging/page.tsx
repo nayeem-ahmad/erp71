@@ -12,6 +12,8 @@ import { compactDensity } from '@/lib/ui/compact-density';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { useApprovedOnly } from '@/lib/accounting-report-scope';
+import { ApprovedOnlyToggle } from '@/components/accounting/ApprovedOnlyToggle';
 
 function defaultToday() { return new Date().toISOString().slice(0, 10); }
 
@@ -35,14 +37,17 @@ export default function ApAgingPage() {
     const [data, setData] = useState<AgingData | null>(null);
     const [asOfDate, setAsOfDate] = useState(defaultToday());
     const [loading, setLoading] = useState(true);
+    const { approvedOnly, setApprovedOnly, approvalEnabled, ready: approvalReady } = useApprovedOnly();
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => { void load(); }, [asOfDate]);
+    // approvalReady holds the first fetch until the tenant's approved-only
+    // setting is known, so the report is never generated against the wrong value.
+    useEffect(() => { if (approvalReady) void load(); }, [asOfDate, approvalReady, approvedOnly]);
 
     const load = async () => {
         setLoading(true); setError(null);
         try {
-            const result = await (api as any).getApAging({ asOfDate: asOfDate || undefined });
+            const result = await (api as any).getApAging({ approvedOnly, asOfDate: asOfDate || undefined });
             setData(result);
         } catch (err: any) { setError(err?.message ?? 'Failed to load'); }
         finally { setLoading(false); }
@@ -67,6 +72,8 @@ export default function ApAgingPage() {
                         <input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)}
                             className={compactDensity.formField} />
                     </div>
+
+                    <ApprovedOnlyToggle checked={approvedOnly} onChange={setApprovedOnly} enabled={approvalEnabled} />
                 </div>
             </AccountingToolbar>
 

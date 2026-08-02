@@ -140,6 +140,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'accounting.setup.recurring-journals': { id: 'accounting.setup.recurring-journals', kind: 'link', icon: 'RefreshCw', labelKey: 'accounting.links.recurringJournals.title', href: '/accounting/recurring-journals' },
   'accounting.setup.recurring-vouchers': { id: 'accounting.setup.recurring-vouchers', kind: 'link', icon: 'RefreshCw', labelKey: 'accounting.links.recurringVouchers.title', href: '/accounting/recurring-vouchers' },
   'accounting.setup.voucher-templates': { id: 'accounting.setup.voucher-templates', kind: 'link', icon: 'Copy', labelKey: 'accounting.links.voucherTemplates.title', href: '/accounting/voucher-templates' },
+  'accounting.setup.settings': { id: 'accounting.setup.settings', kind: 'link', icon: 'Settings', labelKey: 'accounting.links.accountingSettings.title', href: '/accounting/settings' },
 
   // Expenses is its own sidebar module, but the pages still live under
   // /accounting/expenses, so the labels stay on the accounting message keys.
@@ -326,6 +327,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('accounting.setup.recurring-journals', 'accounting.setup', 7),
   layoutNode('accounting.setup.recurring-vouchers', 'accounting.setup', 8),
   layoutNode('accounting.setup.voucher-templates', 'accounting.setup', 9),
+  layoutNode('accounting.setup.settings', 'accounting.setup', 10),
 
   layoutNode('expenses', null, 4),
   layoutNode('expenses.list', 'expenses', 0),

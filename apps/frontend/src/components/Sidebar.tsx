@@ -29,10 +29,25 @@ import {
     normalizeNavSearchQuery,
 } from '@/lib/sidebar-nav-filter';
 import { routes } from '@/lib/routes';
+import { usePendingVoucherCount } from '@/hooks/usePendingVoucherCount';
 
 /* ------------------------------------------------------------------ */
 /*  Navigation structure                                               */
 /* ------------------------------------------------------------------ */
+
+/** Count pill on a nav link. Renders nothing at zero so links stay quiet. */
+function NavCountBadge({ count, title }: { count: number; title: string }) {
+    if (count <= 0) return null;
+
+    return (
+        <span
+            title={title}
+            className="ml-auto inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800"
+        >
+            {count > 99 ? '99+' : count}
+        </span>
+    );
+}
 
 /**
  * Account-settings ("Admin") links that stay relevant to an accounting-only
@@ -525,6 +540,12 @@ export default function Sidebar({
     const navText = compactNav ? 'text-[13px]' : 'text-sm';
     const navLabelCls = `${navText} font-normal tracking-tight whitespace-nowrap`;
 
+    // The approval queue is just the voucher list filtered to PENDING, so the
+    // badge hangs off the vouchers link rather than a nav entry of its own.
+    const { count: pendingVoucherCount } = usePendingVoucherCount();
+    const pendingBadgeFor = (href: string) =>
+        href === routes.accounting.vouchers ? pendingVoucherCount : 0;
+
     const linkCls = (active: boolean) =>
         `flex items-center rounded-xl transition-all duration-150 group ${
             collapsed
@@ -797,6 +818,10 @@ export default function Sidebar({
                                                                         <Link key={href} href={href} className={childLinkCls(active, true)}>
                                                                             <LinkIcon className={`flex-shrink-0 w-3.5 h-3.5 ${active ? 'text-blue-600' : ''}`} />
                                                                             <span className={navLabelCls}>{label}</span>
+                                                                            <NavCountBadge
+                                                                                count={pendingBadgeFor(href)}
+                                                                                title={t.vouchers.approval.queueBadge}
+                                                                            />
                                                                         </Link>
                                                                     );
                                                                 })}
@@ -820,6 +845,10 @@ export default function Sidebar({
                                                 <Link key={href} href={href} className={childLinkCls(active)}>
                                                     <ChildIcon className={`flex-shrink-0 w-4 h-4 ${active ? 'text-blue-600' : ''}`} />
                                                     <span className={navLabelCls}>{label}</span>
+                                                    <NavCountBadge
+                                                        count={pendingBadgeFor(href)}
+                                                        title={t.vouchers.approval.queueBadge}
+                                                    />
                                                 </Link>
                                             );
                                         })}

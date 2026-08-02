@@ -12,11 +12,22 @@ jest.mock('next/link', () => {
 });
 
 jest.mock('@/components/data-table', () => ({
-    DataTable: ({ columns, data }: {
+    DataTable: ({ columns, data, enableRowSelection, onRowSelectionChange, bulkActions }: {
         columns: Array<{ id?: string; accessorKey?: string; header: unknown; cell: (info: unknown) => React.ReactNode }>;
         data: Array<Record<string, unknown>>;
+        enableRowSelection?: boolean;
+        onRowSelectionChange?: (rows: Array<Record<string, unknown>>) => void;
+        bulkActions?: Array<{ label: string; onClick: (rows: Array<Record<string, unknown>>) => void }>;
     }) => (
         <div>
+            {enableRowSelection ? (
+                <button type="button" onClick={() => onRowSelectionChange?.(data)}>select-all</button>
+            ) : null}
+            {(bulkActions ?? []).map((action) => (
+                <button key={action.label} type="button" onClick={() => action.onClick(data)}>
+                    bulk-{action.label}
+                </button>
+            ))}
             <div>
                 {columns.map((column, index) => (
                     <span key={column.id ?? column.accessorKey ?? index}>
@@ -48,6 +59,8 @@ jest.mock('@/lib/toast', () => ({
 }));
 
 jest.mock('lucide-react', () => ({
+    Check: () => <span />,
+    X: () => <span />,
     ChevronLeft: () => <span />,
     ChevronRight: () => <span />,
     Eye: () => <span />,
@@ -65,10 +78,27 @@ jest.mock('@/lib/api', () => ({
         getVouchers: jest.fn(),
         getVoucher: jest.fn(),
         deleteVoucher: jest.fn(),
+        approveVoucher: jest.fn(),
+        rejectVoucher: jest.fn(),
+        bulkApproveVouchers: jest.fn(),
+        bulkRejectVouchers: jest.fn(),
+        getPendingVoucherCount: jest.fn().mockResolvedValue({ count: 0, approvalEnabled: false }),
+        // The page resolves the caller's APPROVE_VOUCHER grant on mount.
+        getMe: jest.fn().mockResolvedValue({ tenants: [{ id: 'tenant-1', role: 'ACCOUNTANT', permissions: [] }] }),
     },
 }));
 
 describe('AccountingVouchersListPage', () => {
+    beforeEach(() => {
+        // Mock state leaks between tests otherwise — the bulk assertions below
+        // check that an endpoint was NOT called, which a stale call defeats.
+        jest.clearAllMocks();
+        (api.getMe as jest.Mock).mockResolvedValue({
+            tenants: [{ id: 'tenant-1', role: 'ACCOUNTANT', permissions: [] }],
+        });
+        (api.getPendingVoucherCount as jest.Mock).mockResolvedValue({ count: 0, approvalEnabled: false });
+    });
+
     it('loads voucher rows with filters and pagination controls', async () => {
         const getVouchers = api.getVouchers as jest.Mock;
         getVouchers.mockResolvedValue({
@@ -108,5 +138,107 @@ describe('AccountingVouchersListPage', () => {
         await waitFor(() => {
             expect(getVouchers).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }));
         });
+    });
+
+    it('badges an unapproved voucher and filters the list down to the approval queue', async () => {
+        const getVouchers = api.getVouchers as jest.Mock;
+        getVouchers.mockResolvedValue({
+            data: [
+                {
+                    id: 'voucher-2',
+                    voucher_number: 'JV-00007',
+                    voucher_type: 'journal',
+                    reference_number: null,
+                    date: '2026-03-22T00:00:00.000Z',
+                    description: 'Accrual',
+                    total_amount: 400,
+                    approval_status: 'PENDING',
+                },
+            ],
+            meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
+        });
+
+        render(<AccountingVouchersListPage />);
+
+        await waitFor(() => {
+            expect(screen.getByText('JV-00007')).toBeInTheDocument();
+        });
+
+        // "Pending" also names an option in the status filter, so pin the badge itself.
+        expect(screen.getAllByText('Pending').some((node) => node.tagName === 'SPAN')).toBe(true);
+
+        fireEvent.change(screen.getByLabelText('Approval'), { target: { value: 'PENDING' } });
+
+        await waitFor(() => {
+            expect(getVouchers).toHaveBeenLastCalledWith(expect.objectContaining({ approvalStatus: 'PENDING' }));
+        });
+    });
+
+    it('bulk-approves the selected pending vouchers and refreshes the list', async () => {
+        const getVouchers = api.getVouchers as jest.Mock;
+        getVouchers.mockResolvedValue({
+            data: [
+                {
+                    id: 'voucher-2',
+                    voucher_number: 'JV-00007',
+                    voucher_type: 'journal',
+                    reference_number: null,
+                    date: '2026-03-22T00:00:00.000Z',
+                    description: 'Accrual',
+                    total_amount: 400,
+                    approval_status: 'PENDING',
+                },
+            ],
+            meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
+        });
+        (api.getMe as jest.Mock).mockResolvedValue({
+            tenants: [{ id: 'tenant-1', role: 'ACCOUNTANT', permissions: ['APPROVE_VOUCHER'] }],
+        });
+        (api.bulkApproveVouchers as jest.Mock).mockResolvedValue({ updated: 1, skipped: 0, notFound: 0 });
+
+        render(<AccountingVouchersListPage />);
+
+        await waitFor(() => {
+            expect(screen.getByText('select-all')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByText('select-all'));
+        fireEvent.click(await screen.findByText('bulk-Approve selected'));
+
+        await waitFor(() => {
+            expect(api.bulkApproveVouchers).toHaveBeenCalledWith(['voucher-2']);
+        });
+    });
+
+    it('does not call the API when the selection holds nothing pending', async () => {
+        const getVouchers = api.getVouchers as jest.Mock;
+        getVouchers.mockResolvedValue({
+            data: [
+                {
+                    id: 'voucher-3',
+                    voucher_number: 'JV-00008',
+                    voucher_type: 'journal',
+                    reference_number: null,
+                    date: '2026-03-23T00:00:00.000Z',
+                    description: 'Already signed off',
+                    total_amount: 400,
+                    approval_status: 'APPROVED',
+                },
+            ],
+            meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
+        });
+        (api.getMe as jest.Mock).mockResolvedValue({
+            tenants: [{ id: 'tenant-1', role: 'ACCOUNTANT', permissions: ['APPROVE_VOUCHER'] }],
+        });
+
+        render(<AccountingVouchersListPage />);
+
+        fireEvent.click(await screen.findByText('select-all'));
+        fireEvent.click(await screen.findByText('bulk-Approve selected'));
+
+        await waitFor(() => {
+            expect(screen.getByText('bulk-Approve selected')).toBeInTheDocument();
+        });
+        expect(api.bulkApproveVouchers).not.toHaveBeenCalled();
     });
 });

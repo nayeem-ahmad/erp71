@@ -2,7 +2,14 @@ import { BadRequestException, ConflictException, Injectable, Logger, NotFoundExc
 import { Cron } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
-import { AccountCategory, AccountType, ReportScope, TOTAL_SCOPE_KEY, VoucherAttribution, VoucherType } from './accounting.constants';
+import { AccountCategory, AccountType, ReportScope, TOTAL_SCOPE_KEY, VoucherApprovalStatus, VoucherAttribution, VoucherType } from './accounting.constants';
+import {
+    approvalVoucherFilter,
+    initialApprovalStatus,
+    resolveApprovedOnly,
+    toApprovalSettings,
+    type AccountingApprovalSettings,
+} from './voucher-approval.util';
 import {
     assertConsolidatedScopePermission,
     assertReportScopeQuery,
@@ -54,6 +61,9 @@ import {
     ListAccountSubgroupsQueryDto,
     ListVouchersQueryDto,
     ListPostingRulesQueryDto,
+    BulkVoucherApprovalDto,
+    RejectVoucherDto,
+    UpdateAccountingSettingsDto,
     UpdateAccountDto,
     UpdateAccountGroupDto,
     UpdateAccountSubgroupDto,
@@ -520,12 +530,15 @@ export class AccountingService {
 
         // Current balance is the all-time closing balance, matching what the ledger
         // and the trial balance show with no date filter applied — one grouped query
-        // for the whole page rather than a per-account aggregate.
+        // for the whole page rather than a per-account aggregate. It follows the
+        // tenant's approved-only setting for the same reason: the number here has to
+        // agree with the ledger it links to.
+        const approvalFilter = await this.reportApprovalFilter(tenantId);
         const totals = await this.db.voucherDetail.groupBy({
             by: ['account_id'],
             where: {
                 account_id: { in: accounts.map((account) => account.id) },
-                voucher: { tenant_id: tenantId },
+                voucher: { tenant_id: tenantId, ...approvalFilter },
             },
             _sum: { debit_amount: true, credit_amount: true },
         });
@@ -834,6 +847,7 @@ export class AccountingService {
         const where = {
             tenant_id: tenantId,
             ...(query.voucherType ? { voucher_type: query.voucherType } : {}),
+            ...(query.approvalStatus ? { approval_status: query.approvalStatus } : {}),
             ...this.buildVoucherDateRangeFilter(query.from, query.to),
         };
 
@@ -897,14 +911,15 @@ export class AccountingService {
             payableAccountIds,
             taxLiabilityAccountIds,
         } = await this.getFinancialDashboardAccountIds(tenantId);
+        const approvalFilter = await this.reportApprovalFilter(tenantId, query.approvedOnly);
 
         const [liquidityTotals, revenueTotals, expenseTotals, receivableTotals, payableTotals, taxLiabilityTotals] = await Promise.all([
-            this.aggregateVoucherDetailTotals(tenantId, liquidityAccountIds, range.fromDate, range.toDate),
-            this.aggregateVoucherDetailTotals(tenantId, revenueAccountIds, range.fromDate, range.toDate),
-            this.aggregateVoucherDetailTotals(tenantId, expenseAccountIds, range.fromDate, range.toDate),
-            this.aggregateVoucherDetailTotals(tenantId, receivableAccountIds, range.fromDate, range.toDate),
-            this.aggregateVoucherDetailTotals(tenantId, payableAccountIds, range.fromDate, range.toDate),
-            this.aggregateVoucherDetailTotals(tenantId, taxLiabilityAccountIds, range.fromDate, range.toDate),
+            this.aggregateVoucherDetailTotals(tenantId, liquidityAccountIds, range.fromDate, range.toDate, approvalFilter),
+            this.aggregateVoucherDetailTotals(tenantId, revenueAccountIds, range.fromDate, range.toDate, approvalFilter),
+            this.aggregateVoucherDetailTotals(tenantId, expenseAccountIds, range.fromDate, range.toDate, approvalFilter),
+            this.aggregateVoucherDetailTotals(tenantId, receivableAccountIds, range.fromDate, range.toDate, approvalFilter),
+            this.aggregateVoucherDetailTotals(tenantId, payableAccountIds, range.fromDate, range.toDate, approvalFilter),
+            this.aggregateVoucherDetailTotals(tenantId, taxLiabilityAccountIds, range.fromDate, range.toDate, approvalFilter),
         ]);
 
         const cashInflow = liquidityTotals.debit;
@@ -953,6 +968,8 @@ export class AccountingService {
             ...expenseAccountIds,
         ])];
 
+        const approvalFilter = await this.reportApprovalFilter(tenantId, query.approvedOnly);
+
         const entries = relevantAccountIds.length === 0
             ? []
             : await this.db.voucherDetail.findMany({
@@ -960,6 +977,7 @@ export class AccountingService {
                     account_id: { in: relevantAccountIds },
                     voucher: {
                         tenant_id: tenantId,
+                        ...approvalFilter,
                         date: {
                             gte: range.fromDate,
                             lte: range.toDate,
@@ -1079,6 +1097,7 @@ export class AccountingService {
 
         const openingRangeStart = query.from ? this.toStartOfDay(query.from) : undefined;
         const ledgerDateRange = this.buildVoucherDateRangeFilter(query.from, query.to);
+        const approvalFilter = await this.reportApprovalFilter(tenantId, query.approvedOnly);
 
         const [openingTotals, entries] = await Promise.all([
             this.db.voucherDetail.aggregate({
@@ -1086,6 +1105,7 @@ export class AccountingService {
                     account_id: accountId,
                     voucher: {
                         tenant_id: tenantId,
+                        ...approvalFilter,
                         ...(openingRangeStart ? { date: { lt: openingRangeStart } } : {}),
                     },
                 },
@@ -1099,6 +1119,7 @@ export class AccountingService {
                     account_id: accountId,
                     voucher: {
                         tenant_id: tenantId,
+                        ...approvalFilter,
                         ...ledgerDateRange,
                     },
                 },
@@ -1181,6 +1202,8 @@ export class AccountingService {
     async createVoucher(tenantId: string, dto: CreateVoucherDto, attempt = 1, userId?: string) {
         this.validateVoucherDetails(dto);
 
+        const approvalStatus = initialApprovalStatus(await this.loadApprovalSettings(tenantId), 'manual');
+
         try {
             const result = await this.db.$transaction(async (tx) => {
                 const uniqueAccountIds = [...new Set(dto.details.map((detail) => detail.accountId))];
@@ -1215,6 +1238,7 @@ export class AccountingService {
                         store_id: dto.storeId ?? null,
                         attribution: this.resolveManualVoucherAttribution(dto),
                         counterparty_store_id: dto.counterpartyStoreId ?? null,
+                        approval_status: approvalStatus,
                         details: {
                             create: dto.details.map((detail) => ({
                                 account_id: detail.accountId,
@@ -1263,6 +1287,14 @@ export class AccountingService {
             throw new BadRequestException('System-posted vouchers cannot be edited.');
         }
 
+        // An edit invalidates any earlier sign-off: while approval is required the
+        // voucher re-enters the queue, otherwise it stays approved as before.
+        const approvalStatus = initialApprovalStatus(await this.loadApprovalSettings(tenantId), 'manual');
+        const approvalReset =
+            approvalStatus === VoucherApprovalStatus.PENDING
+                ? { approval_status: approvalStatus, approved_by: null, approved_at: null, rejection_reason: null }
+                : {};
+
         const result = await this.db.$transaction(async (tx) => {
             const uniqueAccountIds = [...new Set(dto.details.map((detail) => detail.accountId))];
             const accounts = await tx.account.findMany({
@@ -1291,6 +1323,7 @@ export class AccountingService {
                     store_id: dto.storeId ?? null,
                     attribution: this.resolveManualVoucherAttribution(dto),
                     counterparty_store_id: dto.counterpartyStoreId ?? null,
+                    ...approvalReset,
                     details: {
                         create: dto.details.map((detail) => ({
                             account_id: detail.accountId,
@@ -1329,6 +1362,213 @@ export class AccountingService {
 
         this.auditService.log('accounting.voucher.delete', 'voucher', { tenantId, userId }, id, { voucher_number: existing.voucher_number }).catch(() => {});
         return { success: true, id };
+    }
+
+    // ============ Voucher approval (maker-checker) ============
+
+    /**
+     * Tenant accounting controls. Deliberately does NOT create the row on read —
+     * a tenant that never opens the settings page keeps zero rows and the
+     * defaults below, which are the pre-feature behaviour.
+     */
+    async getAccountingSettings(tenantId: string) {
+        const row = await this.db.accountingSettings.findUnique({
+            where: { tenant_id: tenantId },
+        });
+
+        const settings = toApprovalSettings(row);
+        return {
+            requireVoucherApproval: settings.requireVoucherApproval,
+            autoApproveSystemVouchers: settings.autoApproveSystemVouchers,
+            reportsApprovedOnly: settings.reportsApprovedOnly,
+            updatedAt: row?.updated_at ?? null,
+        };
+    }
+
+    async updateAccountingSettings(tenantId: string, dto: UpdateAccountingSettingsDto, userId?: string) {
+        const current = toApprovalSettings(
+            await this.db.accountingSettings.findUnique({ where: { tenant_id: tenantId } }),
+        );
+
+        const next = {
+            require_voucher_approval: dto.requireVoucherApproval ?? current.requireVoucherApproval,
+            auto_approve_system_vouchers: dto.autoApproveSystemVouchers ?? current.autoApproveSystemVouchers,
+            reports_approved_only: dto.reportsApprovedOnly ?? current.reportsApprovedOnly,
+        };
+
+        const row = await this.db.accountingSettings.upsert({
+            where: { tenant_id: tenantId },
+            create: { tenant_id: tenantId, ...next },
+            update: next,
+        });
+
+        this.auditService
+            .log('accounting.settings.update', 'accounting_settings', { tenantId, userId }, row.id, next)
+            .catch(() => {});
+
+        return {
+            requireVoucherApproval: row.require_voucher_approval,
+            autoApproveSystemVouchers: row.auto_approve_system_vouchers,
+            reportsApprovedOnly: row.reports_approved_only,
+            updatedAt: row.updated_at,
+        };
+    }
+
+    /**
+     * Size of the approval queue, for the sidebar badge. Returns 0 without
+     * touching the vouchers table when the tenant does not require approval —
+     * this is polled, and no tenant should pay for a count that is structurally
+     * always zero.
+     */
+    async getPendingVoucherCount(tenantId: string) {
+        const settings = await this.loadApprovalSettings(tenantId);
+        if (!settings.requireVoucherApproval) {
+            return { count: 0, approvalEnabled: false };
+        }
+
+        const count = await this.db.voucher.count({
+            where: { tenant_id: tenantId, approval_status: VoucherApprovalStatus.PENDING },
+        });
+
+        return { count, approvalEnabled: true };
+    }
+
+    private async loadApprovalSettings(tenantId: string): Promise<AccountingApprovalSettings> {
+        return toApprovalSettings(
+            await this.db.accountingSettings.findUnique({ where: { tenant_id: tenantId } }),
+        );
+    }
+
+    /**
+     * The `voucher` where-fragment every report spreads in. Empty (a genuine
+     * no-op) unless this request, or the tenant's setting, asked for
+     * approved-only figures.
+     */
+    private async reportApprovalFilter(
+        tenantId: string,
+        approvedOnly?: boolean,
+    ): Promise<Prisma.VoucherWhereInput> {
+        const settings = await this.loadApprovalSettings(tenantId);
+        return approvalVoucherFilter(resolveApprovedOnly(settings, approvedOnly));
+    }
+
+    async approveVoucher(tenantId: string, id: string, userId?: string) {
+        const existing = await this.db.voucher.findFirst({ where: { tenant_id: tenantId, id } });
+
+        if (!existing) {
+            throw new NotFoundException('Voucher not found');
+        }
+
+        if (existing.approval_status === VoucherApprovalStatus.APPROVED) {
+            throw new BadRequestException('Voucher is already approved.');
+        }
+
+        const updated = await this.db.voucher.update({
+            where: { id },
+            data: {
+                approval_status: VoucherApprovalStatus.APPROVED,
+                approved_by: userId ?? null,
+                approved_at: new Date(),
+                rejection_reason: null,
+            },
+            include: this.getVoucherInclude(),
+        });
+
+        this.auditService
+            .log('accounting.voucher.approve', 'voucher', { tenantId, userId }, id, {
+                voucher_number: updated.voucher_number,
+                previous_status: existing.approval_status,
+            })
+            .catch(() => {});
+
+        return this.serializeVoucher(updated);
+    }
+
+    /**
+     * Sign off (or reject) a whole page of the approval queue at once.
+     *
+     * Vouchers already in the target state are counted as `skipped` rather than
+     * failing the request — a stale selection is the normal case when two people
+     * work the queue, and it should not lose the rest of the batch.
+     */
+    async bulkUpdateVoucherApproval(
+        tenantId: string,
+        dto: BulkVoucherApprovalDto,
+        action: 'approve' | 'reject',
+        userId?: string,
+    ) {
+        const targetStatus = action === 'approve'
+            ? VoucherApprovalStatus.APPROVED
+            : VoucherApprovalStatus.REJECTED;
+
+        const ids = [...new Set(dto.ids)];
+        const vouchers = await this.db.voucher.findMany({
+            where: { tenant_id: tenantId, id: { in: ids } },
+            select: { id: true, approval_status: true },
+        });
+
+        // Anything not returned belongs to another tenant, or does not exist.
+        const found = new Set(vouchers.map((voucher) => voucher.id));
+        const notFound = ids.filter((id) => !found.has(id));
+        const actionable = vouchers.filter((voucher) => voucher.approval_status !== targetStatus);
+
+        if (actionable.length > 0) {
+            await this.db.voucher.updateMany({
+                where: { tenant_id: tenantId, id: { in: actionable.map((voucher) => voucher.id) } },
+                data: {
+                    approval_status: targetStatus,
+                    approved_by: userId ?? null,
+                    approved_at: new Date(),
+                    rejection_reason: action === 'reject' ? (dto.reason?.trim() || null) : null,
+                },
+            });
+
+            this.auditService
+                .log(`accounting.voucher.bulk_${action}`, 'voucher', { tenantId, userId }, undefined, {
+                    ids: actionable.map((voucher) => voucher.id),
+                    count: actionable.length,
+                })
+                .catch(() => {});
+        }
+
+        return {
+            updated: actionable.length,
+            skipped: vouchers.length - actionable.length,
+            notFound: notFound.length,
+        };
+    }
+
+    async rejectVoucher(tenantId: string, id: string, dto: RejectVoucherDto, userId?: string) {
+        const existing = await this.db.voucher.findFirst({ where: { tenant_id: tenantId, id } });
+
+        if (!existing) {
+            throw new NotFoundException('Voucher not found');
+        }
+
+        if (existing.approval_status === VoucherApprovalStatus.REJECTED) {
+            throw new BadRequestException('Voucher is already rejected.');
+        }
+
+        const updated = await this.db.voucher.update({
+            where: { id },
+            data: {
+                approval_status: VoucherApprovalStatus.REJECTED,
+                approved_by: userId ?? null,
+                approved_at: new Date(),
+                rejection_reason: dto.reason?.trim() || null,
+            },
+            include: this.getVoucherInclude(),
+        });
+
+        this.auditService
+            .log('accounting.voucher.reject', 'voucher', { tenantId, userId }, id, {
+                voucher_number: updated.voucher_number,
+                previous_status: existing.approval_status,
+                reason: updated.rejection_reason,
+            })
+            .catch(() => {});
+
+        return this.serializeVoucher(updated);
     }
 
     async listPostingRules(tenantId: string, query: ListPostingRulesQueryDto) {
@@ -1542,10 +1782,19 @@ export class AccountingService {
         const range = this.resolveDateRange(query.from, query.to);
 
         if (scopeParams.scope === ReportScope.COMPARE) {
-            return this.getProfitLossCompare(tenantId, range, scopeParams, level);
+            return this.getProfitLossCompare(
+                tenantId,
+                range,
+                scopeParams,
+                level,
+                await this.reportApprovalFilter(tenantId, query.approvedOnly),
+            );
         }
 
-        const voucherWhere = buildVoucherWhereForScope(tenantId, scopeParams.scope, scopeParams.storeId);
+        const voucherWhere = {
+            ...buildVoucherWhereForScope(tenantId, scopeParams.scope, scopeParams.storeId),
+            ...(await this.reportApprovalFilter(tenantId, query.approvedOnly)),
+        };
 
         const accounts = await this.db.account.findMany({
             where: {
@@ -1631,10 +1880,20 @@ export class AccountingService {
         const asOfDate = this.toEndOfDay(asOfDateStr);
 
         if (scopeParams.scope === ReportScope.COMPARE) {
-            return this.getBalanceSheetCompare(tenantId, asOfDateStr, asOfDate, scopeParams, level);
+            return this.getBalanceSheetCompare(
+                tenantId,
+                asOfDateStr,
+                asOfDate,
+                scopeParams,
+                level,
+                await this.reportApprovalFilter(tenantId, query.approvedOnly),
+            );
         }
 
-        const voucherWhere = buildVoucherWhereForScope(tenantId, scopeParams.scope, scopeParams.storeId);
+        const voucherWhere = {
+            ...buildVoucherWhereForScope(tenantId, scopeParams.scope, scopeParams.storeId),
+            ...(await this.reportApprovalFilter(tenantId, query.approvedOnly)),
+        };
 
         const bsAccounts = await this.db.account.findMany({
             where: {
@@ -1725,10 +1984,20 @@ export class AccountingService {
         const asOfDate = this.toEndOfDay(asOfDateStr);
 
         if (scopeParams.scope === ReportScope.COMPARE) {
-            return this.getTrialBalanceCompare(tenantId, asOfDateStr, asOfDate, scopeParams, level);
+            return this.getTrialBalanceCompare(
+                tenantId,
+                asOfDateStr,
+                asOfDate,
+                scopeParams,
+                level,
+                await this.reportApprovalFilter(tenantId, query.approvedOnly),
+            );
         }
 
-        const voucherWhere = buildVoucherWhereForScope(tenantId, scopeParams.scope, scopeParams.storeId);
+        const voucherWhere = {
+            ...buildVoucherWhereForScope(tenantId, scopeParams.scope, scopeParams.storeId),
+            ...(await this.reportApprovalFilter(tenantId, query.approvedOnly)),
+        };
 
         const accounts = await this.db.account.findMany({
             where: { tenant_id: tenantId },
@@ -1845,10 +2114,11 @@ export class AccountingService {
             };
         }
 
+        const approvalFilter = await this.reportApprovalFilter(tenantId, query.approvedOnly);
         const entries = await this.db.voucherDetail.findMany({
             where: {
                 account_id: { in: arAccounts.map((a) => a.id) },
-                voucher: { tenant_id: tenantId, date: { lte: asOfDate } },
+                voucher: { tenant_id: tenantId, ...approvalFilter, date: { lte: asOfDate } },
             },
             select: {
                 account_id: true,
@@ -1931,10 +2201,11 @@ export class AccountingService {
             };
         }
 
+        const approvalFilter = await this.reportApprovalFilter(tenantId, query.approvedOnly);
         const entries = await this.db.voucherDetail.findMany({
             where: {
                 account_id: { in: apAccounts.map((a) => a.id) },
-                voucher: { tenant_id: tenantId, date: { lte: asOfDate } },
+                voucher: { tenant_id: tenantId, ...approvalFilter, date: { lte: asOfDate } },
             },
             select: {
                 account_id: true,
@@ -2034,17 +2305,19 @@ export class AccountingService {
 
         const allIds = accounts.map((a) => a.id);
 
+        const approvalFilter = await this.reportApprovalFilter(tenantId, query.approvedOnly);
+
         const [currentDetails, prevDetails, yearAgoDetails] = await Promise.all([
             this.db.voucherDetail.findMany({
-                where: { account_id: { in: allIds }, voucher: { tenant_id: tenantId, date: { gte: fromDate, lte: toDate } } },
+                where: { account_id: { in: allIds }, voucher: { tenant_id: tenantId, ...approvalFilter, date: { gte: fromDate, lte: toDate } } },
                 select: { account_id: true, debit_amount: true, credit_amount: true },
             }),
             this.db.voucherDetail.findMany({
-                where: { account_id: { in: allIds }, voucher: { tenant_id: tenantId, date: { gte: prevFromDate, lte: prevToDate } } },
+                where: { account_id: { in: allIds }, voucher: { tenant_id: tenantId, ...approvalFilter, date: { gte: prevFromDate, lte: prevToDate } } },
                 select: { account_id: true, debit_amount: true, credit_amount: true },
             }),
             this.db.voucherDetail.findMany({
-                where: { account_id: { in: allIds }, voucher: { tenant_id: tenantId, date: { gte: yearAgoFromDate, lte: yearAgoToDate } } },
+                where: { account_id: { in: allIds }, voucher: { tenant_id: tenantId, ...approvalFilter, date: { gte: yearAgoFromDate, lte: yearAgoToDate } } },
                 select: { account_id: true, debit_amount: true, credit_amount: true },
             }),
         ]);
@@ -2155,10 +2428,11 @@ export class AccountingService {
 
         const allVatIds = [...outputVatAccounts.map((a) => a.id), ...inputVatAccounts.map((a) => a.id)];
 
+        const approvalFilter = await this.reportApprovalFilter(tenantId, query.approvedOnly);
         const details = allVatIds.length === 0 ? [] : await this.db.voucherDetail.findMany({
             where: {
                 account_id: { in: allVatIds },
-                voucher: { tenant_id: tenantId, date: { gte: range.fromDate, lte: range.toDate } },
+                voucher: { tenant_id: tenantId, ...approvalFilter, date: { gte: range.fromDate, lte: range.toDate } },
             },
             select: { account_id: true, debit_amount: true, credit_amount: true },
         });
@@ -2203,19 +2477,20 @@ export class AccountingService {
         });
 
         const allIds = accounts.map((a) => a.id);
+        const approvalFilter = await this.reportApprovalFilter(tenantId, query.approvedOnly);
 
         const [bsDetails, plDetails] = await Promise.all([
             allIds.length === 0 ? Promise.resolve([]) : this.db.voucherDetail.findMany({
                 where: {
                     account_id: { in: allIds },
-                    voucher: { tenant_id: tenantId, date: { lte: asOfDate } },
+                    voucher: { tenant_id: tenantId, ...approvalFilter, date: { lte: asOfDate } },
                 },
                 select: { account_id: true, debit_amount: true, credit_amount: true },
             }),
             allIds.length === 0 ? Promise.resolve([]) : this.db.voucherDetail.findMany({
                 where: {
                     account_id: { in: allIds },
-                    voucher: { tenant_id: tenantId, date: { gte: range.fromDate, lte: range.toDate } },
+                    voucher: { tenant_id: tenantId, ...approvalFilter, date: { gte: range.fromDate, lte: range.toDate } },
                 },
                 select: { account_id: true, debit_amount: true, credit_amount: true },
             }),
@@ -2327,10 +2602,11 @@ export class AccountingService {
         const allIds = accounts.map((a) => a.id);
 
         // Opening balances (before period)
+        const approvalFilter = await this.reportApprovalFilter(tenantId, query.approvedOnly);
         const openingDetails = allIds.length === 0 ? [] : await this.db.voucherDetail.findMany({
             where: {
                 account_id: { in: allIds },
-                voucher: { tenant_id: tenantId, date: { lt: range.fromDate } },
+                voucher: { tenant_id: tenantId, ...approvalFilter, date: { lt: range.fromDate } },
             },
             select: { account_id: true, debit_amount: true, credit_amount: true },
         });
@@ -2339,7 +2615,7 @@ export class AccountingService {
         const periodDetails = allIds.length === 0 ? [] : await this.db.voucherDetail.findMany({
             where: {
                 account_id: { in: allIds },
-                voucher: { tenant_id: tenantId, date: { gte: range.fromDate, lte: range.toDate } },
+                voucher: { tenant_id: tenantId, ...approvalFilter, date: { gte: range.fromDate, lte: range.toDate } },
             },
             select: { account_id: true, debit_amount: true, credit_amount: true },
         });
@@ -2492,6 +2768,10 @@ export class AccountingService {
             throw new BadRequestException('One or more accounts do not belong to this tenant.');
         }
 
+        // Hand-entered like any other manual voucher, so it queues for approval
+        // on the same terms.
+        const approvalStatus = initialApprovalStatus(await this.loadApprovalSettings(tenantId), 'manual');
+
         return this.db.$transaction(async (tx) => {
             const generatedNumber = await this.generateNextVoucherNumberWithClient(tx, tenantId, VoucherType.JOURNAL);
             // The voucher is explicitly dated with `dto.asOfDate` below - guard
@@ -2504,6 +2784,7 @@ export class AccountingService {
                     voucher_type: VoucherType.JOURNAL,
                     description: `Opening Balances as of ${dto.asOfDate}`,
                     date: new Date(dto.asOfDate),
+                    approval_status: approvalStatus,
                     details: {
                         create: dto.entries.map((e) => ({
                             account_id: e.accountId,
@@ -2574,10 +2855,11 @@ export class AccountingService {
         }
 
         const accountIds = budgets.map((b) => b.account_id);
+        const approvalFilter = await this.reportApprovalFilter(tenantId, query.approvedOnly);
         const details = await this.db.voucherDetail.findMany({
             where: {
                 account_id: { in: accountIds },
-                voucher: { tenant_id: tenantId, date: { gte: fromDate, lte: toDate } },
+                voucher: { tenant_id: tenantId, ...approvalFilter, date: { gte: fromDate, lte: toDate } },
             },
             select: { account_id: true, debit_amount: true, credit_amount: true },
         });
@@ -2672,11 +2954,12 @@ export class AccountingService {
             };
         }
 
+        const approvalFilter = await this.reportApprovalFilter(tenantId, query.approvedOnly);
         const details = await this.db.voucherDetail.findMany({
             where: {
                 cost_center_id: query.costCenterId,
                 account_id: { in: accounts.map((a) => a.id) },
-                voucher: { tenant_id: tenantId, date: { gte: range.fromDate, lte: range.toDate } },
+                voucher: { tenant_id: tenantId, ...approvalFilter, date: { gte: range.fromDate, lte: range.toDate } },
             },
             select: { account_id: true, debit_amount: true, credit_amount: true },
         });
@@ -3199,10 +3482,11 @@ export class AccountingService {
         });
 
         // Get voucher details for the bank account in the period
+        const approvalFilter = await this.reportApprovalFilter(tenantId);
         const voucherDetails = await this.db.voucherDetail.findMany({
             where: {
                 account_id: recon.account_id,
-                voucher: { tenant_id: tenantId },
+                voucher: { tenant_id: tenantId, ...approvalFilter },
             },
             include: { voucher: { select: { date: true } } },
         });
@@ -3261,7 +3545,7 @@ export class AccountingService {
         const bookTotals = await this.db.voucherDetail.aggregate({
             where: {
                 account_id: recon.account_id,
-                voucher: { tenant_id: tenantId, date: { lte: recon.statement_date } },
+                voucher: { tenant_id: tenantId, ...(await this.reportApprovalFilter(tenantId)), date: { lte: recon.statement_date } },
             },
             _sum: { debit_amount: true, credit_amount: true },
         });
@@ -3339,11 +3623,12 @@ export class AccountingService {
         }
 
         const accountIds = bookAccounts.map((a) => a.id);
+        const approvalFilter = await this.reportApprovalFilter(tenantId, query.approvedOnly);
 
         const openingTotals = await this.db.voucherDetail.aggregate({
             where: {
                 account_id: { in: accountIds },
-                voucher: { tenant_id: tenantId, date: { lt: range.fromDate } },
+                voucher: { tenant_id: tenantId, ...approvalFilter, date: { lt: range.fromDate } },
             },
             _sum: { debit_amount: true, credit_amount: true },
         });
@@ -3356,7 +3641,7 @@ export class AccountingService {
         const entries = await this.db.voucherDetail.findMany({
             where: {
                 account_id: { in: accountIds },
-                voucher: { tenant_id: tenantId, ...this.buildVoucherDateRangeFilter(range.from, range.to) },
+                voucher: { tenant_id: tenantId, ...approvalFilter, ...this.buildVoucherDateRangeFilter(range.from, range.to) },
             },
             include: {
                 voucher: true,
@@ -3580,6 +3865,7 @@ ${voucherMessages}
         accountIds: string[],
         fromDate: Date,
         toDate: Date,
+        approvalFilter: Prisma.VoucherWhereInput = {},
     ) {
         if (accountIds.length === 0) {
             return {
@@ -3593,6 +3879,7 @@ ${voucherMessages}
                 account_id: { in: accountIds },
                 voucher: {
                     tenant_id: tenantId,
+                    ...approvalFilter,
                     date: {
                         gte: fromDate,
                         lte: toDate,
@@ -4073,6 +4360,7 @@ ${voucherMessages}
         range: { from: string; to: string; fromDate: Date; toDate: Date },
         scopeParams: ReturnType<typeof assertReportScopeQuery>,
         level: ReportLevel = ReportLevel.ACCOUNT,
+        approvalFilter: Prisma.VoucherWhereInput = {},
     ) {
         const { columns, columnKeys } = await this.loadCompareColumns(
             tenantId,
@@ -4098,6 +4386,7 @@ ${voucherMessages}
                             scopeParams.storeIds,
                             scopeParams.includeCompanyBucket,
                         ),
+                        ...approvalFilter,
                         date: { gte: range.fromDate, lte: range.toDate },
                     },
                 },
@@ -4157,6 +4446,7 @@ ${voucherMessages}
         asOfDate: Date,
         scopeParams: ReturnType<typeof assertReportScopeQuery>,
         level: ReportLevel = ReportLevel.ACCOUNT,
+        approvalFilter: Prisma.VoucherWhereInput = {},
     ) {
         const { columns, columnKeys } = await this.loadCompareColumns(
             tenantId,
@@ -4187,6 +4477,7 @@ ${voucherMessages}
                             scopeParams.storeIds,
                             scopeParams.includeCompanyBucket,
                         ),
+                        ...approvalFilter,
                         date: { lte: asOfDate },
                     },
                 },
@@ -4272,6 +4563,7 @@ ${voucherMessages}
         asOfDate: Date,
         scopeParams: ReturnType<typeof assertReportScopeQuery>,
         level: ReportLevel = ReportLevel.ACCOUNT,
+        approvalFilter: Prisma.VoucherWhereInput = {},
     ) {
         const { columns, columnKeys } = await this.loadCompareColumns(
             tenantId,
@@ -4294,6 +4586,7 @@ ${voucherMessages}
                             scopeParams.storeIds,
                             scopeParams.includeCompanyBucket,
                         ),
+                        ...approvalFilter,
                         date: { lte: asOfDate },
                     },
                 },

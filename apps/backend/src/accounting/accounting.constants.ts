@@ -35,6 +35,14 @@ export const VoucherAttribution = {
 
 export type VoucherAttribution = (typeof VoucherAttribution)[keyof typeof VoucherAttribution];
 
+export const VoucherApprovalStatus = {
+    PENDING: 'PENDING',
+    APPROVED: 'APPROVED',
+    REJECTED: 'REJECTED',
+} as const;
+
+export type VoucherApprovalStatus = (typeof VoucherApprovalStatus)[keyof typeof VoucherApprovalStatus];
+
 export const ReportScope = {
     BRANCH: 'branch',
     COMPANY: 'company',
