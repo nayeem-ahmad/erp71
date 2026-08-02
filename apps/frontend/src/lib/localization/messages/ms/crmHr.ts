@@ -137,6 +137,12 @@ export const crmHrMessages = {
                 rawText: 'Teks yang dibaca daripada kad',
                 nothingFound: 'Tiada medan dapat dibaca daripada imej itu.',
                 creditsHint: 'Pengimbasan menggunakan kredit AI daripada pelan anda.',
+                cardSection: 'Kad perniagaan',
+                cardSectionHint: 'Gambar yang menjadi sumber kenalan ini. Ketik untuk buka saiz penuh.',
+                cardNotKept: 'Kenalan disimpan, tetapi imej kad tidak dapat disimpan.',
+                cardRemoveTitle: 'Buang imej kad',
+                cardRemoveConfirm: 'Padam gambar kad ini? Butiran kenalan kekal.',
+                cardRemoveFailed: 'Imej kad tidak dapat dibuang.',
             },
         },
         leads: {

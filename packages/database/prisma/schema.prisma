@@ -263,6 +263,7 @@ model User {
   createdLeads              Lead[]        @relation("LeadCreator")
   assignedCrmContacts       CrmContact[]  @relation("CrmContactAssignee")
   createdCrmContacts        CrmContact[]  @relation("CrmContactCreator")
+  crmContactAttachments     CrmContactAttachment[] @relation("CrmContactAttachmentCreator")
   createdLeadConversations  LeadConversation[] @relation("LeadConversationCreator")
   createdCreditTransactions CustomerCreditTransaction[] @relation("CreditTransactionCreator")
   createdSupplierCreditTransactions SupplierCreditTransaction[] @relation("SupplierCreditTransactionCreator")
@@ -509,6 +510,7 @@ model Tenant {
   leadSourceOptions   LeadSourceOption[]
   leadCategoryOptions LeadCategoryOption[]
   crmContacts         CrmContact[]
+  crmContactAttachments CrmContactAttachment[]
   customFieldDefinitions CustomFieldDefinition[]
   customerCreditTransactions CustomerCreditTransaction[]
   supplierCreditTransactions SupplierCreditTransaction[]
@@ -1746,9 +1748,10 @@ model CrmContact {
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
 
-  tenant   Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  assignee User?  @relation("CrmContactAssignee", fields: [assigned_to], references: [id])
-  creator  User?  @relation("CrmContactCreator", fields: [created_by], references: [id])
+  tenant      Tenant                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  assignee    User?                  @relation("CrmContactAssignee", fields: [assigned_to], references: [id])
+  creator     User?                  @relation("CrmContactCreator", fields: [created_by], references: [id])
+  attachments CrmContactAttachment[]
 
   // Mobile is the dedupe key, as it is on Lead. Postgres treats NULLs as
   // distinct, so any number of contacts may have no mobile at all.
@@ -1757,6 +1760,39 @@ model CrmContact {
   @@index([tenant_id, company])
   @@index([tenant_id, assigned_to])
   @@index([tenant_id, created_at])
+}
+
+/// A file kept alongside a contact — today only the photographed business card
+/// the contact was read from, so the extraction can be checked against the card
+/// itself rather than taken on trust.
+model CrmContactAttachment {
+  id         String @id @default(uuid())
+  tenant_id  String
+  contact_id String
+
+  file_url  String
+  file_name String
+  mime_type String?
+  file_size Int?
+
+  /// Cloudinary's handle for the stored asset. Kept because `file_url` cannot be
+  /// turned back into one, and without it deleting the row would strand the file.
+  storage_key String?
+
+  /// BUSINESS_CARD is the only producer today. A plain string rather than an
+  /// enum so a second kind does not need a schema change, matching
+  /// `LeadConversation.type`.
+  kind String @default("BUSINESS_CARD")
+
+  created_by String?
+  created_at DateTime @default(now())
+
+  tenant  Tenant     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  contact CrmContact @relation(fields: [contact_id], references: [id], onDelete: Cascade)
+  creator User?      @relation("CrmContactAttachmentCreator", fields: [created_by], references: [id])
+
+  @@index([tenant_id, contact_id, created_at])
+  @@map("crm_contact_attachments")
 }
 
 enum CustomFieldEntity {

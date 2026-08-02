@@ -12,6 +12,14 @@ export const CONTACT_CAPTURE_SOURCES = ['MANUAL', 'BUSINESS_CARD', 'IMPORT'] as 
  */
 export const SCANNED_CARD_STORAGE_KEY = 'erp71.crm.scannedCard';
 
+/**
+ * The card photo travelling with that hand-off, kept under its own key so a
+ * photo too large for the quota cannot cost the user the extracted fields too.
+ * ~250 KB of JPEG becomes ~340 KB of base64, comfortably inside the ~5 MB
+ * sessionStorage budget, but private-mode limits are not worth betting a form on.
+ */
+export const SCANNED_CARD_IMAGE_STORAGE_KEY = 'erp71.crm.scannedCardImage';
+
 export type ContactCaptureSource = (typeof CONTACT_CAPTURE_SOURCES)[number];
 
 export type ContactFormState = {

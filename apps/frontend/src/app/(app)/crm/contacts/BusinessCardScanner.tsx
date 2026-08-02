@@ -10,6 +10,13 @@ import type { ContactFormState } from './contact-form-fields';
 
 export type ScannedCard = Partial<Record<keyof ContactFormState, string>> & { raw_text?: string };
 
+/**
+ * The card photo itself, handed back so the caller can keep it once the contact
+ * is actually saved. This is the same downscaled JPEG that was sent for the
+ * scan, not a second encode of the original.
+ */
+export type ScannedCardImage = { dataUrl: string; mimeType: string };
+
 /** Longest edge of the image actually sent. Card text stays legible well below this. */
 const MAX_EDGE_PX = 1600;
 const JPEG_QUALITY = 0.85;
@@ -75,8 +82,11 @@ function readAsDataUrl(file: File): Promise<string> {
 type BusinessCardScannerProps = {
     open: boolean;
     onClose: () => void;
-    /** Receives the extracted fields; the caller decides what to do with them. */
-    onApply: (fields: ScannedCard) => void;
+    /**
+     * Receives the extracted fields and the photo they came from; the caller
+     * decides what to do with both.
+     */
+    onApply: (fields: ScannedCard, image: ScannedCardImage | null) => void;
 };
 
 export default function BusinessCardScanner({ open, onClose, onApply }: Readonly<BusinessCardScannerProps>) {
@@ -369,7 +379,7 @@ export default function BusinessCardScanner({ open, onClose, onApply }: Readonly
                 </Button>
                 <Button
                     onClick={() => {
-                        if (result) onApply(result);
+                        if (result) onApply(result, payload);
                     }}
                     disabled={!result}
                 >

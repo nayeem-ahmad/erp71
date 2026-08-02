@@ -10,9 +10,10 @@ import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { PageShell, PageHeader, Button, FormFooter } from '@/components/ui';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import BusinessCardScanner, { type ScannedCard } from '../BusinessCardScanner';
+import BusinessCardScanner, { type ScannedCard, type ScannedCardImage } from '../BusinessCardScanner';
 import {
     ContactFormFields,
+    SCANNED_CARD_IMAGE_STORAGE_KEY,
     SCANNED_CARD_STORAGE_KEY,
     applyScannedCard,
     contactFormToPayload,
@@ -35,6 +36,7 @@ export default function NewContactPage() {
     const [scannerOpen, setScannerOpen] = useState(false);
     const [scannedNotice, setScannedNotice] = useState(false);
     const [fromCard, setFromCard] = useState(false);
+    const [cardImage, setCardImage] = useState<ScannedCardImage | null>(null);
 
     useEffect(() => {
         api.getTeamMembers().then((data) => setTeamMembers(Array.isArray(data) ? data : [])).catch(() => null);
@@ -44,9 +46,12 @@ export default function NewContactPage() {
     // later visit to this page does not resurrect a card the user walked away from.
     useEffect(() => {
         let stored: string | null = null;
+        let storedImage: string | null = null;
         try {
             stored = sessionStorage.getItem(SCANNED_CARD_STORAGE_KEY);
             if (stored) sessionStorage.removeItem(SCANNED_CARD_STORAGE_KEY);
+            storedImage = sessionStorage.getItem(SCANNED_CARD_IMAGE_STORAGE_KEY);
+            if (storedImage) sessionStorage.removeItem(SCANNED_CARD_IMAGE_STORAGE_KEY);
         } catch {
             return;
         }
@@ -59,10 +64,16 @@ export default function NewContactPage() {
         } catch {
             // A malformed hand-off is not worth surfacing — the form stays empty.
         }
+        try {
+            if (storedImage) setCardImage(JSON.parse(storedImage) as ScannedCardImage);
+        } catch {
+            // Same: the contact is still creatable, just without its card.
+        }
     }, []);
 
-    const applyScan = (fields: ScannedCard) => {
+    const applyScan = (fields: ScannedCard, image: ScannedCardImage | null) => {
         setForm((prev) => applyScannedCard(prev, fields));
+        setCardImage(image);
         setFromCard(true);
         setScannedNotice(true);
         setScannerOpen(false);
@@ -79,6 +90,23 @@ export default function NewContactPage() {
                 ...contactFormToPayload(form),
                 ...(fromCard ? { capture_source: 'BUSINESS_CARD' } : {}),
             });
+
+            // The card is kept only now the contact exists, so a scan the user
+            // walked away from never leaves a file behind. It is also allowed to
+            // fail on its own: the contact is saved either way, and losing the
+            // photo must not read as losing the contact.
+            if (created?.id && cardImage) {
+                try {
+                    await api.addContactAttachment(created.id, {
+                        imageBase64: cardImage.dataUrl,
+                        mimeType: cardImage.mimeType,
+                        fileName: `${form.name || 'business-card'}`,
+                    });
+                } catch {
+                    toast.error(m.scan.cardNotKept);
+                }
+            }
+
             toast.success(m.saved);
             router.push(created?.id ? routes.crm.contactDetail(created.id) : routes.crm.contacts);
         } catch (err: unknown) {

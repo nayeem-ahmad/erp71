@@ -8,6 +8,7 @@ import {
     IsOptional,
     IsString,
     IsUUID,
+    MaxLength,
     Min,
     ValidateIf,
 } from 'class-validator';
@@ -204,9 +205,10 @@ export class BulkContactActionDto {
 /**
  * A photographed business card, as a base64 payload.
  *
- * Deliberately not multipart: the card never lands on disk. It goes straight to
- * the vision model and only the extracted fields come back, so there is no
- * uploaded image to store, serve, or later have to delete.
+ * Deliberately not multipart: the scan itself stores nothing. The image goes to
+ * the vision model and only the extracted fields come back. Keeping the card is
+ * a separate, later step — see `AddContactAttachmentDto` — so an abandoned scan
+ * never leaves a file behind.
  */
 export class ScanBusinessCardDto {
     @IsString()
@@ -217,4 +219,30 @@ export class ScanBusinessCardDto {
     @Transform(emptyToUndefined)
     @IsString()
     mimeType?: string;
+}
+
+/**
+ * The card image kept against a saved contact.
+ *
+ * Sent only once the contact exists, which is what keeps storage free of
+ * orphans: a scan the user walks away from was never uploaded in the first
+ * place. The payload is the same downscaled JPEG the scan already sent, so this
+ * costs no extra work in the browser and no second encode.
+ */
+export class AddContactAttachmentDto {
+    /** A `data:` URL or a bare base64 string. */
+    @IsString()
+    imageBase64: string;
+
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsString()
+    mimeType?: string;
+
+    /** Shown in the UI and used as the stored filename stem. */
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsString()
+    @MaxLength(200)
+    fileName?: string;
 }

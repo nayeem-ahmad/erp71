@@ -1,14 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { CrmContactsService } from './crm-contacts.service';
 import { DatabaseService } from '../database/database.service';
 import { AiService } from '../ai/ai.service';
+import { AssetsService } from '../assets/assets.service';
 import { ContactBulkAction, CrmContactCaptureSource } from './crm-contacts.dto';
 
 describe('CrmContactsService', () => {
     let service: CrmContactsService;
     let db: any;
     let ai: any;
+    let assets: any;
 
     const TENANT = 'tenant-1';
     const USER = 'user-1';
@@ -26,14 +28,30 @@ describe('CrmContactsService', () => {
                 deleteMany: jest.fn().mockResolvedValue({ count: 2 }),
                 updateMany: jest.fn().mockResolvedValue({ count: 2 }),
             },
+            crmContactAttachment: {
+                findFirst: jest.fn(),
+                findMany: jest.fn().mockResolvedValue([]),
+                create: jest.fn().mockImplementation(({ data }: any) => ({ id: 'attachment-1', ...data })),
+                delete: jest.fn().mockResolvedValue({}),
+            },
         };
         ai = { scanBusinessCard: jest.fn() };
+        assets = {
+            isEnabled: jest.fn().mockReturnValue(true),
+            uploadBuffer: jest.fn().mockResolvedValue({
+                url: 'https://cdn.example/card.jpg',
+                publicId: 'retail/tenant-1/contact-cards/card',
+                bytes: 4,
+            }),
+            deleteFile: jest.fn().mockResolvedValue(undefined),
+        };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CrmContactsService,
                 { provide: DatabaseService, useValue: db },
                 { provide: AiService, useValue: ai },
+                { provide: AssetsService, useValue: assets },
             ],
         }).compile();
 
@@ -203,6 +221,110 @@ describe('CrmContactsService', () => {
 
             await expect(service.remove(TENANT, 'contact-1')).rejects.toBeInstanceOf(NotFoundException);
             expect(db.crmContact.delete).not.toHaveBeenCalled();
+        });
+
+        // The rows go with the contact via onDelete: Cascade, but Cloudinary
+        // knows nothing about that — without this every deleted contact is
+        // billed for its card forever.
+        it('drops the stored card files before deleting the contact', async () => {
+            db.crmContact.findFirst.mockResolvedValue({ id: 'contact-1' });
+            db.crmContactAttachment.findMany.mockResolvedValue([
+                { storage_key: 'retail/t/contact-cards/a' },
+                { storage_key: null },
+                { storage_key: 'retail/t/contact-cards/b' },
+            ]);
+
+            await service.remove(TENANT, 'contact-1');
+
+            expect(assets.deleteFile).toHaveBeenCalledWith('retail/t/contact-cards/a');
+            expect(assets.deleteFile).toHaveBeenCalledWith('retail/t/contact-cards/b');
+            // A row that never got a storage key must not become a `deleteFile(null)`.
+            expect(assets.deleteFile).toHaveBeenCalledTimes(2);
+            expect(db.crmContact.delete).toHaveBeenCalled();
+        });
+    });
+
+    describe('attachments', () => {
+        const CARD = { imageBase64: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==' };
+
+        beforeEach(() => {
+            db.crmContact.findFirst.mockResolvedValue({ id: 'contact-1' });
+        });
+
+        it('uploads the card and records it against the contact', async () => {
+            const created = await service.addAttachment(TENANT, USER, 'contact-1', CARD);
+
+            const [buffer, folder] = assets.uploadBuffer.mock.calls[0];
+            expect(Buffer.isBuffer(buffer)).toBe(true);
+            expect(folder).toBe(`${TENANT}/contact-cards`);
+            expect(created).toMatchObject({
+                tenant_id: TENANT,
+                contact_id: 'contact-1',
+                file_url: 'https://cdn.example/card.jpg',
+                storage_key: 'retail/tenant-1/contact-cards/card',
+                mime_type: 'image/jpeg',
+                kind: 'BUSINESS_CARD',
+                created_by: USER,
+            });
+        });
+
+        it('refuses a contact belonging to another tenant without uploading anything', async () => {
+            db.crmContact.findFirst.mockResolvedValue(null);
+
+            await expect(
+                service.addAttachment(TENANT, USER, 'contact-1', CARD),
+            ).rejects.toBeInstanceOf(NotFoundException);
+            expect(assets.uploadBuffer).not.toHaveBeenCalled();
+        });
+
+        it('rejects a payload that is not an image we can store', async () => {
+            await expect(
+                service.addAttachment(TENANT, USER, 'contact-1', {
+                    imageBase64: 'data:application/pdf;base64,JVBERi0=',
+                }),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(assets.uploadBuffer).not.toHaveBeenCalled();
+        });
+
+        // A configuration problem must not read as a transient upload blip.
+        it('reports storage being unconfigured rather than failing opaquely', async () => {
+            assets.isEnabled.mockReturnValue(false);
+
+            await expect(
+                service.addAttachment(TENANT, USER, 'contact-1', CARD),
+            ).rejects.toBeInstanceOf(ServiceUnavailableException);
+            expect(db.crmContactAttachment.create).not.toHaveBeenCalled();
+        });
+
+        // No row may be written pointing at a file that is not there.
+        it('writes no row when the upload itself fails', async () => {
+            assets.uploadBuffer.mockRejectedValue(new Error('cloudinary down'));
+
+            await expect(
+                service.addAttachment(TENANT, USER, 'contact-1', CARD),
+            ).rejects.toBeInstanceOf(ServiceUnavailableException);
+            expect(db.crmContactAttachment.create).not.toHaveBeenCalled();
+        });
+
+        it('removes the stored file along with the row', async () => {
+            db.crmContactAttachment.findFirst.mockResolvedValue({
+                id: 'attachment-1',
+                storage_key: 'retail/t/contact-cards/a',
+            });
+
+            await service.removeAttachment(TENANT, 'contact-1', 'attachment-1');
+
+            expect(db.crmContactAttachment.delete).toHaveBeenCalledWith({ where: { id: 'attachment-1' } });
+            expect(assets.deleteFile).toHaveBeenCalledWith('retail/t/contact-cards/a');
+        });
+
+        it('404s on an attachment that belongs to another contact', async () => {
+            db.crmContactAttachment.findFirst.mockResolvedValue(null);
+
+            await expect(
+                service.removeAttachment(TENANT, 'contact-1', 'attachment-1'),
+            ).rejects.toBeInstanceOf(NotFoundException);
+            expect(db.crmContactAttachment.delete).not.toHaveBeenCalled();
         });
     });
 

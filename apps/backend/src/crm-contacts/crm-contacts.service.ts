@@ -1,7 +1,14 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    Injectable,
+    NotFoundException,
+    ServiceUnavailableException,
+} from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { AiService, type BusinessCardScanResult } from '../ai/ai.service';
+import { AssetsService } from '../assets/assets.service';
 import {
+    AddContactAttachmentDto,
     BulkContactActionDto,
     ContactBulkAction,
     CreateContactDto,
@@ -14,10 +21,62 @@ import { paginate } from '../common/pagination.dto';
 import { runImport, ImportResult } from '../common/import.util';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
 
+const attachmentIncludes = {
+    creator: { select: { id: true, name: true, email: true } },
+} as const;
+
 const contactIncludes = {
     assignee: { select: { id: true, name: true, email: true } },
     creator: { select: { id: true, name: true, email: true } },
+    attachments: {
+        orderBy: { created_at: 'desc' },
+        include: attachmentIncludes,
+    },
 } as const;
+
+/** What Cloudinary is asked to store, and what a browser can render back. */
+const ATTACHMENT_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+/** ~7 MB of base64 ≈ a 5 MB image, just under the 5 MB JSON body limit's headroom. */
+const MAX_ATTACHMENT_BASE64_LENGTH = 7 * 1024 * 1024;
+
+/**
+ * Turn the browser's payload into bytes.
+ *
+ * Accepts a `data:` URL or a bare base64 string for the same reason the scan
+ * route does — `FileReader.readAsDataURL` produces the former and expecting
+ * every caller to strip the prefix is how one of them eventually forgets.
+ */
+export function parseImageUpload(
+    imageBase64: string,
+    mimeType?: string,
+): { buffer: Buffer; mimeType: string } {
+    const raw = (imageBase64 ?? '').trim();
+    if (!raw) throw new BadRequestException('No image was provided.');
+
+    let data = raw;
+    let resolved = (mimeType ?? '').trim().toLowerCase();
+
+    const dataUrl = raw.match(/^data:([^;,]+);base64,(.*)$/s);
+    if (dataUrl) {
+        resolved = dataUrl[1].toLowerCase();
+        data = dataUrl[2];
+    }
+
+    if (!resolved) resolved = 'image/jpeg';
+    if (!ATTACHMENT_MIME_TYPES.includes(resolved)) {
+        throw new BadRequestException('Unsupported image type. Use a JPEG, PNG, or WebP image.');
+    }
+    if (data.length > MAX_ATTACHMENT_BASE64_LENGTH) {
+        throw new BadRequestException('Image is too large to keep.');
+    }
+
+    const buffer = Buffer.from(data, 'base64');
+    // Buffer.from never throws on junk — it just returns fewer bytes — so an
+    // empty result is the only signal that the payload was not base64 at all.
+    if (!buffer.byteLength) throw new BadRequestException('The image could not be read.');
+
+    return { buffer, mimeType: resolved };
+}
 
 const CONTACT_SORTABLE: SortableMap = {
     name: (dir) => ({ name: dir }),
@@ -48,6 +107,7 @@ export class CrmContactsService {
     constructor(
         private db: DatabaseService,
         private ai: AiService,
+        private assets: AssetsService,
     ) {}
 
     /**
@@ -151,6 +211,114 @@ export class CrmContactsService {
         return contact;
     }
 
+    async listAttachments(tenantId: string, contactId: string) {
+        await this.assertContact(tenantId, contactId);
+        return this.db.crmContactAttachment.findMany({
+            where: { tenant_id: tenantId, contact_id: contactId },
+            orderBy: { created_at: 'desc' },
+            include: attachmentIncludes,
+        });
+    }
+
+    /**
+     * Keep the card image against a contact that already exists.
+     *
+     * Split from contact creation on purpose: an upload to a third party can
+     * fail or hang, and a contact the user has already typed must not be lost
+     * because a CDN was having a bad minute. The caller saves the contact first
+     * and attaches afterwards, so the worst case is a contact without its card.
+     */
+    async addAttachment(
+        tenantId: string,
+        userId: string | undefined,
+        contactId: string,
+        dto: AddContactAttachmentDto,
+    ) {
+        await this.assertContact(tenantId, contactId);
+
+        const { buffer, mimeType } = parseImageUpload(dto.imageBase64, dto.mimeType);
+
+        if (!this.assets.isEnabled()) {
+            // Distinguishable from a transient failure: this one will not fix
+            // itself on retry, and the operator needs to know why.
+            throw new ServiceUnavailableException(
+                'File storage is not configured, so the card image could not be kept.',
+            );
+        }
+
+        const stem = (dto.fileName ?? 'business-card').replace(/\.[^.]+$/, '').slice(0, 100);
+        const safeStem = stem.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'business-card';
+
+        let stored: { url: string; publicId: string; bytes: number };
+        try {
+            stored = await this.assets.uploadBuffer(buffer, `${tenantId}/contact-cards`, safeStem);
+        } catch {
+            throw new ServiceUnavailableException(
+                'The card image could not be uploaded. The contact was saved without it.',
+            );
+        }
+
+        return this.db.crmContactAttachment.create({
+            data: {
+                tenant_id: tenantId,
+                contact_id: contactId,
+                file_url: stored.url,
+                file_name: `${safeStem}.${mimeType.split('/')[1] ?? 'jpg'}`,
+                mime_type: mimeType,
+                file_size: stored.bytes ?? buffer.byteLength,
+                storage_key: stored.publicId,
+                kind: 'BUSINESS_CARD',
+                created_by: userId,
+            },
+            include: attachmentIncludes,
+        });
+    }
+
+    async removeAttachment(tenantId: string, contactId: string, attachmentId: string) {
+        const existing = await this.db.crmContactAttachment.findFirst({
+            where: { id: attachmentId, contact_id: contactId, tenant_id: tenantId },
+            select: { id: true, storage_key: true },
+        });
+        if (!existing) throw new NotFoundException('Attachment not found');
+
+        await this.db.crmContactAttachment.delete({ where: { id: existing.id } });
+        // After the row, not before: a failed delete here is a stray file, while
+        // a failed delete the other way round is a row pointing at nothing.
+        if (existing.storage_key) await this.assets.deleteFile(existing.storage_key);
+
+        return { success: true };
+    }
+
+    private async assertContact(tenantId: string, contactId: string) {
+        const contact = await this.db.crmContact.findFirst({
+            where: { id: contactId, tenant_id: tenantId },
+            select: { id: true },
+        });
+        if (!contact) throw new NotFoundException('Contact not found');
+        return contact;
+    }
+
+    /**
+     * Drop the stored files for contacts about to be deleted.
+     *
+     * The rows go on their own via `onDelete: Cascade`, but Cloudinary knows
+     * nothing about that — without this every deleted contact leaves its card
+     * behind, billed forever.
+     */
+    private async purgeAttachmentAssets(tenantId: string, contactIds: string[]) {
+        if (!contactIds.length) return;
+        const rows = await this.db.crmContactAttachment.findMany({
+            where: { tenant_id: tenantId, contact_id: { in: contactIds } },
+            select: { storage_key: true },
+        });
+        await Promise.all(
+            rows
+                .map((row) => row.storage_key)
+                .filter((key): key is string => !!key)
+                .map((key) => this.assets.deleteFile(key)),
+        );
+    }
+
     async update(tenantId: string, id: string, dto: UpdateContactDto) {
         const existing = await this.db.crmContact.findFirst({
             where: { id, tenant_id: tenantId },
@@ -189,6 +357,7 @@ export class CrmContactsService {
             select: { id: true },
         });
         if (!existing) throw new NotFoundException('Contact not found');
+        await this.purgeAttachmentAssets(tenantId, [id]);
         await this.db.crmContact.delete({ where: { id } });
         return { success: true };
     }
@@ -197,6 +366,7 @@ export class CrmContactsService {
         const where = { tenant_id: tenantId, id: { in: dto.ids } };
 
         if (dto.action === ContactBulkAction.DELETE) {
+            await this.purgeAttachmentAssets(tenantId, dto.ids);
             const res = await this.db.crmContact.deleteMany({ where });
             return { count: res.count };
         }

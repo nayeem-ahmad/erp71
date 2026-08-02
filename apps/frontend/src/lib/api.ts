@@ -1012,6 +1012,19 @@ export const api = {
             body: JSON.stringify({ imageBase64, ...(mimeType ? { mimeType } : {}) }),
             headers: { 'Content-Type': 'application/json' },
         }),
+    getContactAttachments: (id: string) => fetchWithAuth(`/crm/contacts/${id}/attachments`),
+    /** Sent only after the contact exists, so an abandoned scan stores nothing. */
+    addContactAttachment: (
+        id: string,
+        payload: { imageBase64: string; mimeType?: string; fileName?: string },
+    ) =>
+        fetchWithAuth(`/crm/contacts/${id}/attachments`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteContactAttachment: (id: string, attachmentId: string) =>
+        fetchWithAuth(`/crm/contacts/${id}/attachments/${attachmentId}`, { method: 'DELETE' }),
     // CRM Lead Taxonomy (tenant-managed lead sources / categories)
     getLeadTaxonomy: (kind: 'sources' | 'categories', includeInactive = false) =>
         fetchWithAuth(`/crm/lead-taxonomy/${kind}${includeInactive ? '?includeInactive=true' : ''}`),

@@ -145,8 +145,13 @@ describe('BusinessCardScanner', () => {
         fireEvent.click(await screen.findByRole('button', { name: /read card/i }));
         await screen.findByText('Rafiq Islam');
 
+        // The photo rides along with the fields so the caller can keep it once
+        // the contact is actually saved.
         fireEvent.click(screen.getByRole('button', { name: /use these details/i }));
-        expect(onApply).toHaveBeenCalledWith({ name: 'Rafiq Islam' });
+        expect(onApply).toHaveBeenCalledWith(
+            { name: 'Rafiq Islam' },
+            { dataUrl: expect.stringMatching(/^data:image\//), mimeType: 'image/png' },
+        );
     });
 
     it('surfaces a scan failure instead of silently doing nothing', async () => {
