@@ -123,6 +123,8 @@ export const crmHrMessages = {
                 subtitle: "কার্ডের ছবি তুলুন — ফিল্ডগুলো নিজে থেকেই পূরণ হবে।",
                 takePhoto: "ছবি তুলুন",
                 openingCamera: "ক্যামেরা চালু হচ্ছে...",
+                cardInView: "কার্ড শনাক্ত হয়েছে — স্থির রেখে ছবি তুলুন।",
+                lookingForCard: "কার্ড খোঁজা হচ্ছে। সমতল পরিষ্কার জায়গায় রাখুন।",
                 capture: "ছবি নিন",
                 chooseFile: "ছবি বাছুন",
                 changeImage: "অন্য ছবি বাছুন",
