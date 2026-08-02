@@ -207,7 +207,7 @@ const BLUR_PASSES = 2;
 
 function toBlurredGray(data: ImageData): { gray: Float32Array; width: number; height: number } {
     const { width, height } = data;
-    let gray = new Float32Array(width * height);
+    const gray = new Float32Array(width * height);
     for (let i = 0; i < width * height; i += 1) {
         const o = i * 4;
         gray[i] = 0.299 * data.data[o] + 0.587 * data.data[o + 1] + 0.114 * data.data[o + 2];
