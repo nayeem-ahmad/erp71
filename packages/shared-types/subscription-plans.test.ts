@@ -6,6 +6,7 @@ import {
     normalizePlanFeatures,
     parsePlanFeatures,
     resolveAiCreditsMonthly,
+    resolveDashboardVariant,
     resolvePlanRank,
 } from './subscription-plans';
 
@@ -82,6 +83,65 @@ describe('subscription-plans helpers', () => {
             expect(merged.premiumManufacturing).toBe(true);
             expect(merged.premiumStorefront).toBe(true);
             expect(merged.premiumBookPublishing).toBe(false);
+        });
+    });
+
+    describe('resolveDashboardVariant', () => {
+        const LEDGER = ['VIEW_LEDGER'];
+
+        it('follows the plan default when the tenant has expressed no preference', () => {
+            const retail = normalizePlanFeatures({ premiumAccounting: true }, 'STANDARD');
+            expect(resolveDashboardVariant('AUTO', retail, LEDGER)).toBe('RETAIL');
+
+            const accounting = normalizePlanFeatures(
+                { premiumAccounting: true, accountingDashboard: true },
+                'STANDARD',
+            );
+            expect(resolveDashboardVariant('AUTO', accounting, LEDGER)).toBe('ACCOUNTING');
+        });
+
+        it('lets a tenant opt in to the accounting dashboard on a retail plan', () => {
+            const features = normalizePlanFeatures({ premiumAccounting: true }, 'STANDARD');
+            expect(resolveDashboardVariant('ACCOUNTING', features, LEDGER)).toBe('ACCOUNTING');
+        });
+
+        it('lets a tenant opt out of a plan that defaults to accounting', () => {
+            const features = normalizePlanFeatures(
+                { premiumAccounting: true, accountingDashboard: true },
+                'STANDARD',
+            );
+            expect(resolveDashboardVariant('RETAIL', features, LEDGER)).toBe('RETAIL');
+        });
+
+        it('refuses the accounting dashboard without the accounting module', () => {
+            const features = normalizePlanFeatures({}, 'BASIC');
+            expect(resolveDashboardVariant('ACCOUNTING', features, LEDGER)).toBe('RETAIL');
+        });
+
+        it('refuses the accounting dashboard for a user who cannot read the ledger', () => {
+            const features = normalizePlanFeatures(
+                { premiumAccounting: true, accountingDashboard: true },
+                'STANDARD',
+            );
+            expect(resolveDashboardVariant('AUTO', features, ['CREATE_SALE'])).toBe('RETAIL');
+            expect(resolveDashboardVariant('AUTO', features)).toBe('RETAIL');
+        });
+
+        it('pins accounting-only tenants to the accounting dashboard', () => {
+            const features = normalizePlanFeatures(
+                { premiumAccounting: true, accountingOnly: true, accountingDashboard: true },
+                'ACCOUNTING',
+            );
+            // No retail modules, routes or data exist for these tenants, so neither
+            // an explicit preference nor a missing permission can move them.
+            expect(resolveDashboardVariant('RETAIL', features, LEDGER)).toBe('ACCOUNTING');
+            expect(resolveDashboardVariant('AUTO', features, [])).toBe('ACCOUNTING');
+        });
+
+        it('ignores an unrecognised stored preference', () => {
+            const features = normalizePlanFeatures({ premiumAccounting: true }, 'STANDARD');
+            expect(resolveDashboardVariant('SOMETHING_ELSE', features, LEDGER)).toBe('RETAIL');
+            expect(resolveDashboardVariant(null, features, LEDGER)).toBe('RETAIL');
         });
     });
 });

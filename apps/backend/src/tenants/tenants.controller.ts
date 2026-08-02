@@ -2,6 +2,7 @@ import { Controller, Get, Patch, Delete, Body, Query, UseGuards, UseInterceptors
 import { TenantsService } from './tenants.service';
 import { StorefrontSettingsDto } from '../storefront/storefront.dto';
 import { UpdateBrandingDto } from './update-branding.dto';
+import { UpdateDashboardSettingsDto } from './dashboard-settings.dto';
 import { UpdateLocalizationSettingsDto } from './localization-settings.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
@@ -89,6 +90,19 @@ export class TenantsController {
         @Body() dto: UpdateLocalizationSettingsDto,
     ) {
         return this.tenantsService.updateLocalizationSettings(tenant.tenantId, dto);
+    }
+
+    @Get('dashboard-settings')
+    async getDashboardSettings(@Tenant() tenant: TenantContext) {
+        return this.tenantsService.getDashboardSettings(tenant.tenantId);
+    }
+
+    @Patch('dashboard-settings')
+    async updateDashboardSettings(
+        @Tenant() tenant: TenantContext,
+        @Body() dto: UpdateDashboardSettingsDto,
+    ) {
+        return this.tenantsService.updateDashboardSettings(tenant.tenantId, dto, tenant.userRole);
     }
 
     @Delete('data')

@@ -1,8 +1,10 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { seedDefaultLeadTaxonomy } from '@erp71/database';
+import { isDashboardPreference } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { StorefrontSettingsDto } from '../storefront/storefront.dto';
 import { UpdateBrandingDto } from './update-branding.dto';
+import { UpdateDashboardSettingsDto } from './dashboard-settings.dto';
 import { UpdateLocalizationSettingsDto } from './localization-settings.dto';
 
 @Injectable()
@@ -187,6 +189,49 @@ export class TenantsService {
                 secondary_locale: true,
             },
         });
+    }
+
+    async getDashboardSettings(tenantId: string) {
+        const tenant = await this.db.tenant.findUnique({
+            where: { id: tenantId },
+            select: { dashboard_preference: true },
+        });
+
+        if (!tenant) {
+            throw new NotFoundException('Tenant not found');
+        }
+
+        return {
+            dashboard_preference: isDashboardPreference(tenant.dashboard_preference)
+                ? tenant.dashboard_preference
+                : 'AUTO',
+        };
+    }
+
+    /**
+     * Workspace-wide, so it is restricted to the roles that administer the
+     * workspace — a cashier switching it would change what every colleague sees.
+     */
+    async updateDashboardSettings(
+        tenantId: string,
+        dto: UpdateDashboardSettingsDto,
+        userRole: string | undefined,
+    ) {
+        if (userRole !== 'OWNER' && userRole !== 'MANAGER') {
+            throw new ForbiddenException('Only an owner or manager can change the dashboard.');
+        }
+
+        if (dto.dashboard_preference === undefined) {
+            return this.getDashboardSettings(tenantId);
+        }
+
+        const tenant = await this.db.tenant.update({
+            where: { id: tenantId },
+            data: { dashboard_preference: dto.dashboard_preference },
+            select: { dashboard_preference: true },
+        });
+
+        return { dashboard_preference: tenant.dashboard_preference };
     }
 
     async clearData(tenantId: string, mode: 'transactions' | 'all', userRole: string | undefined) {

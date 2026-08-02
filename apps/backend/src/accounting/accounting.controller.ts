@@ -24,6 +24,7 @@ import {
     UpdateAccountDto,
     UpdateAccountGroupDto,
     UpdateAccountSubgroupDto,
+    AccountingOverviewQueryDto,
     ExportLedgerQueryDto,
     FinancialKpiQueryDto,
     FinancialTrendQueryDto,
@@ -300,6 +301,14 @@ export class AccountingController {
         @Body() dto: UpdateAccountingSettingsDto,
     ) {
         return this.accountingService.updateAccountingSettings(tenant.tenantId, dto, tenant.userId);
+    }
+
+    @Get('dashboard/overview')
+    getAccountingDashboardOverview(
+        @Tenant() tenant: TenantContext,
+        @Query() query: AccountingOverviewQueryDto,
+    ) {
+        return this.accountingService.getAccountingDashboardOverview(tenant.tenantId, query);
     }
 
     @Get('dashboard/kpis')

@@ -382,6 +382,16 @@ export class FinancialKpiQueryDto extends ApprovedOnlyQueryDto {
     to?: string;
 }
 
+export class AccountingOverviewQueryDto extends ApprovedOnlyQueryDto {
+    @IsOptional()
+    @IsDateString()
+    from?: string;
+
+    @IsOptional()
+    @IsDateString()
+    to?: string;
+}
+
 export class FinancialTrendQueryDto extends ApprovedOnlyQueryDto {
     @IsOptional()
     @IsDateString()

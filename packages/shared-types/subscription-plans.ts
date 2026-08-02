@@ -162,6 +162,18 @@ export const PLAN_ENTITLEMENT_REGISTRY: PlanEntitlementDefinition[] = [
     group: 'modules',
   },
   {
+    // Never grant this from an add-on: `mergeAddonFeatures` ORs booleans in, so
+    // an add-on carrying it would silently replace a retail tenant's dashboard
+    // rather than adding anything. A tenant's own choice lives in
+    // `Tenant.dashboard_preference` — see `resolveDashboardVariant`.
+    key: 'accountingDashboard',
+    type: 'boolean',
+    label: 'Accounting dashboard',
+    description: 'Lands on the ledger-focused dashboard instead of the retail one.',
+    defaultValue: false,
+    group: 'modules',
+  },
+  {
     key: 'premiumAccountingAdvanced',
     type: 'boolean',
     label: 'Advanced accounting reports',
@@ -460,6 +472,57 @@ export function hasPlanEntitlement(
     return value > 0;
   }
   return false;
+}
+
+/** Stored in `Tenant.dashboard_preference`. AUTO defers to the plan. */
+export const DASHBOARD_PREFERENCES = ['AUTO', 'RETAIL', 'ACCOUNTING'] as const;
+
+export type DashboardPreference = (typeof DASHBOARD_PREFERENCES)[number];
+
+/** What the dashboard page actually renders once the preference is resolved. */
+export type DashboardVariant = 'RETAIL' | 'ACCOUNTING';
+
+export function isDashboardPreference(value: unknown): value is DashboardPreference {
+  return typeof value === 'string' && (DASHBOARD_PREFERENCES as readonly string[]).includes(value);
+}
+
+/**
+ * Which dashboard a given user in a given tenant lands on, resolved from three
+ * layers: the plan's `accountingDashboard` default, the tenant's own choice, and
+ * what the user can actually load.
+ *
+ * The two fallbacks are not cosmetic. Every accounting panel reads from
+ * `AccountingController`, which is gated on both `premiumAccounting` and the
+ * `VIEW_LEDGER` *store* permission — send a cashier there and every tile 403s.
+ * In the other direction an `accountingOnly` tenant has no retail routes to fall
+ * back to, so the plan stays the floor and the choice cannot escape it.
+ */
+export function resolveDashboardVariant(
+  preference: string | null | undefined,
+  features: Record<string, boolean | number>,
+  permissions: readonly string[] = [],
+): DashboardVariant {
+  // An accounting-only workspace has no retail modules, routes or data, so
+  // neither a preference nor a missing permission can move it elsewhere.
+  if (hasPlanEntitlement(features, 'accountingOnly')) {
+    return 'ACCOUNTING';
+  }
+
+  const planDefault: DashboardVariant = hasPlanEntitlement(features, 'accountingDashboard')
+    ? 'ACCOUNTING'
+    : 'RETAIL';
+
+  const chosen = isDashboardPreference(preference) && preference !== 'AUTO'
+    ? (preference as DashboardVariant)
+    : planDefault;
+
+  if (chosen === 'RETAIL') {
+    return 'RETAIL';
+  }
+
+  const canReadLedger =
+    hasPlanEntitlement(features, 'premiumAccounting') && permissions.includes('VIEW_LEDGER');
+  return canReadLedger ? 'ACCOUNTING' : 'RETAIL';
 }
 
 export function parseMarketingFeatures(input: unknown): string[] {

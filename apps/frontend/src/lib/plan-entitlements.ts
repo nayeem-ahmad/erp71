@@ -1,4 +1,9 @@
-import { hasPlanEntitlement, normalizePlanFeatures } from '@erp71/shared-types';
+import {
+    hasPlanEntitlement,
+    normalizePlanFeatures,
+    resolveDashboardVariant,
+    type DashboardVariant,
+} from '@erp71/shared-types';
 
 export function resolveTenantPlanFeatures(
     planCode: string | null | undefined,
@@ -33,4 +38,26 @@ export function isAccountingOnlyPlan(
     featuresJson: Record<string, unknown> | null | undefined,
 ) {
     return Boolean(resolveTenantPlanFeatures(planCode, featuresJson).accountingOnly);
+}
+
+/** True when the plan or an admin could put this tenant on the accounting dashboard. */
+export function canChooseAccountingDashboard(
+    planCode: string | null | undefined,
+    featuresJson: Record<string, unknown> | null | undefined,
+) {
+    return hasPlanEntitlement(resolveTenantPlanFeatures(planCode, featuresJson), 'premiumAccounting');
+}
+
+/** Which dashboard to render — plan default, tenant choice, then what the user can load. */
+export function tenantDashboardVariant(
+    planCode: string | null | undefined,
+    featuresJson: Record<string, unknown> | null | undefined,
+    dashboardPreference: string | null | undefined,
+    permissions: readonly string[] = [],
+): DashboardVariant {
+    return resolveDashboardVariant(
+        dashboardPreference,
+        resolveTenantPlanFeatures(planCode, featuresJson),
+        permissions,
+    );
 }

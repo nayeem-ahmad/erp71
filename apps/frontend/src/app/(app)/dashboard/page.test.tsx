@@ -45,12 +45,53 @@ jest.mock('@/lib/api', () => ({
         getSalesByCategory: jest.fn(),
         getSalesByProduct: jest.fn(),
         getSalesByCustomer: jest.fn(),
+        getAccountingDashboardOverview: jest.fn(),
     },
 }));
 
 const EMPTY_CATEGORY = { summary: { totalRevenue: 0, categoryCount: 0 }, rows: [] };
 const EMPTY_PRODUCT_REPORT = { summary: { totalRevenue: 0, totalUnitsSold: 0, productCount: 0 }, rows: [] };
 const EMPTY_CUSTOMER_REPORT = { summary: { totalRevenue: 0, totalOrders: 0, customerCount: 0, avgOrderValue: 0 }, rows: [] };
+
+const ACCOUNTING_OVERVIEW = {
+    filters: { from: '2026-03-01', to: '2026-03-31' },
+    as_of: '2026-03-31',
+    position: {
+        cash_and_bank: 482150,
+        accounts_receivable: 210400,
+        accounts_payable: 166900,
+        total_assets: 1071120,
+        total_liabilities: 166900,
+        net_worth: 904220,
+    },
+    performance: { revenue: 640000, expenses: 412300, net_profit: 227700, net_margin_pct: 35.6 },
+    aging: {
+        receivable: { current: 150000, overdue_31_60: 22300, overdue_61_90: 0, overdue_90_plus: 38100 },
+        payable: { current: 154900, overdue_31_60: 0, overdue_61_90: 0, overdue_90_plus: 12000 },
+        note: 'Aging is based on voucher date; individual invoice due dates are not tracked.',
+    },
+    books_health: {
+        trial_balance: { debit: 100, credit: 100, difference: 0, is_balanced: true },
+        pending_vouchers: 0,
+        voucher_approval_enabled: false,
+        failed_postings: 0,
+        recurring_due: 0,
+        unlocked_closed_periods: 0,
+    },
+    expense_mix: [{ id: 'exp-1', name: 'Salaries', code: '5001', amount: 158000 }],
+    expense_mix_other: 0,
+    recent_vouchers: [
+        {
+            id: 'v-1',
+            voucher_number: 'JV-0231',
+            voucher_type: 'journal',
+            date: '2026-03-20T00:00:00.000Z',
+            description: 'March payroll',
+            approval_status: 'APPROVED',
+            amount: 12000,
+        },
+    ],
+};
 
 describe('DashboardPage — Business Monitor v2', () => {
     beforeEach(() => {
@@ -73,6 +114,7 @@ describe('DashboardPage — Business Monitor v2', () => {
         (api.getSalesByCategory as jest.Mock).mockResolvedValue(EMPTY_CATEGORY);
         (api.getSalesByProduct as jest.Mock).mockResolvedValue(EMPTY_PRODUCT_REPORT);
         (api.getSalesByCustomer as jest.Mock).mockResolvedValue(EMPTY_CUSTOMER_REPORT);
+        (api.getAccountingDashboardOverview as jest.Mock).mockResolvedValue(ACCOUNTING_OVERVIEW);
         (api.getFinancialKpis as jest.Mock).mockResolvedValue({
             filters: { from: '2026-03-01', to: '2026-03-31' },
             kpis: {
@@ -192,63 +234,113 @@ describe('DashboardPage — Business Monitor v2', () => {
         expect(await screen.findByText('No accounting movement')).toBeInTheDocument();
         expect(screen.getByText('Business health')).toBeInTheDocument();
     });
+});
 
-    it('hides retail sections for accounting-only plans', async () => {
-        (api.getMe as jest.Mock).mockResolvedValue({
-            name: 'Ledger Admin',
-            tenants: [{
-                name: 'Ledger Co',
-                subscription: {
-                    plan: {
-                        code: 'ACCOUNTING',
-                        features_json: { accountingOnly: true, premiumAccounting: true },
-                    },
+describe('DashboardPage — variant selection', () => {
+    const accountingTenant = (overrides: Record<string, unknown> = {}) => ({
+        name: 'Ledger Admin',
+        tenants: [{
+            id: 't1',
+            name: 'Ledger Co',
+            permissions: ['VIEW_LEDGER'],
+            subscription: {
+                plan: {
+                    code: 'ACCOUNTING',
+                    features_json: { accountingOnly: true, premiumAccounting: true, accountingDashboard: true },
                 },
-            }],
-        });
+            },
+            ...overrides,
+        }],
+    });
+
+    beforeEach(() => {
+        jest.resetAllMocks();
+        (api.getAccountingDashboardOverview as jest.Mock).mockResolvedValue(ACCOUNTING_OVERVIEW);
+        (api.getFinancialTrends as jest.Mock).mockResolvedValue({ points: [] });
+        (api.getProducts as jest.Mock).mockResolvedValue([]);
+        (api.getSalesList as jest.Mock).mockResolvedValue({ items: [], total: 0 });
+        (api.getSalesByCategory as jest.Mock).mockResolvedValue(EMPTY_CATEGORY);
+        (api.getSalesByProduct as jest.Mock).mockResolvedValue(EMPTY_PRODUCT_REPORT);
+        (api.getSalesByCustomer as jest.Mock).mockResolvedValue(EMPTY_CUSTOMER_REPORT);
         (api.getFinancialKpis as jest.Mock).mockResolvedValue({
             filters: { from: '2026-03-01', to: '2026-03-31' },
             kpis: {
-                cash_inflow: 0,
-                cash_outflow: 0,
-                net_cash_movement: 0,
-                gross_revenue: 0,
-                operating_expense: 0,
-                accounts_receivable: null,
-                accounts_payable: null,
-                tax_liability: null,
+                cash_inflow: 0, cash_outflow: 0, net_cash_movement: 0, gross_revenue: 0,
+                operating_expense: 0, accounts_receivable: null, accounts_payable: null, tax_liability: null,
             },
         });
-        (api.getFinancialTrends as jest.Mock).mockResolvedValue({
-            filters: { from: '2026-03-01', to: '2026-03-31' },
-            granularity: 'day',
-            has_activity: false,
-            points: [],
-            comparison: {
-                net_profit: 0,
-                gross_margin: null,
-                gross_margin_status: 'unavailable',
-                gross_margin_reason: 'Sale-time cost basis is not tracked in the current data model.',
-            },
+    });
+
+    it('renders the accounting dashboard for an accounting-only plan', async () => {
+        (api.getMe as jest.Mock).mockResolvedValue(accountingTenant());
+
+        render(<DashboardPage />);
+
+        expect(await screen.findByText('Where the money sits')).toBeInTheDocument();
+        expect(screen.getByText('Health of your books')).toBeInTheDocument();
+        expect(screen.getByText('Receivable & payable aging')).toBeInTheDocument();
+        expect(screen.getByText('Recent vouchers')).toBeInTheDocument();
+        expect(screen.getByText('Voucher Entry')).toBeInTheDocument();
+
+        // No retail panel, and none of the retail endpoints are touched.
+        expect(screen.queryByText('Top selling products')).not.toBeInTheDocument();
+        expect(screen.queryByText('Sales by category')).not.toBeInTheDocument();
+        expect(api.getProducts).not.toHaveBeenCalled();
+        expect(api.getSalesList).not.toHaveBeenCalled();
+        expect(api.getSalesByCategory).not.toHaveBeenCalled();
+    });
+
+    it('renders the accounting dashboard when a retail tenant opts in', async () => {
+        (api.getMe as jest.Mock).mockResolvedValue({
+            name: 'Ada',
+            tenants: [{
+                id: 't1',
+                name: 'Northwind Retail',
+                dashboard_preference: 'ACCOUNTING',
+                permissions: ['VIEW_LEDGER'],
+                subscription: { plan: { code: 'STANDARD', features_json: { premiumAccounting: true } } },
+            }],
         });
 
         render(<DashboardPage />);
 
-        await waitFor(() => {
-            expect(screen.getByText('Voucher Entry')).toBeInTheDocument();
-            expect(screen.getByText('Profit & Loss')).toBeInTheDocument();
-            expect(screen.getByText('Business health')).toBeInTheDocument();
+        expect(await screen.findByText('Where the money sits')).toBeInTheDocument();
+        expect(screen.queryByText('Top selling products')).not.toBeInTheDocument();
+    });
+
+    it('falls back to retail when the user cannot read the ledger', async () => {
+        (api.getMe as jest.Mock).mockResolvedValue({
+            name: 'Cashier',
+            tenants: [{
+                id: 't1',
+                name: 'Northwind Retail',
+                dashboard_preference: 'ACCOUNTING',
+                permissions: ['CREATE_SALE'],
+                subscription: { plan: { code: 'STANDARD', features_json: { premiumAccounting: true } } },
+            }],
         });
 
-        expect(screen.queryByText('Sales Entry')).not.toBeInTheDocument();
-        expect(screen.queryByText('Needs your attention')).not.toBeInTheDocument();
-        expect(screen.queryByText('Sales by category')).not.toBeInTheDocument();
-        expect(screen.queryByText('Top selling products')).not.toBeInTheDocument();
-        expect(screen.queryByText('Top customers')).not.toBeInTheDocument();
-        expect(api.getProducts).not.toHaveBeenCalled();
-        expect(api.getSalesList).not.toHaveBeenCalled();
-        expect(api.getSalesByCategory).not.toHaveBeenCalled();
-        expect(api.getSalesByProduct).not.toHaveBeenCalled();
-        expect(api.getSalesByCustomer).not.toHaveBeenCalled();
+        render(<DashboardPage />);
+
+        expect(await screen.findByText('Business health')).toBeInTheDocument();
+        expect(screen.queryByText('Where the money sits')).not.toBeInTheDocument();
+        expect(api.getAccountingDashboardOverview).not.toHaveBeenCalled();
+    });
+
+    it('keeps a retail tenant on the retail dashboard by default', async () => {
+        (api.getMe as jest.Mock).mockResolvedValue({
+            name: 'Ada',
+            tenants: [{
+                id: 't1',
+                name: 'Northwind Retail',
+                permissions: ['VIEW_LEDGER'],
+                subscription: { plan: { code: 'STANDARD', features_json: { premiumAccounting: true } } },
+            }],
+        });
+
+        render(<DashboardPage />);
+
+        expect(await screen.findByText('Business health')).toBeInTheDocument();
+        expect(screen.queryByText('Where the money sits')).not.toBeInTheDocument();
     });
 });

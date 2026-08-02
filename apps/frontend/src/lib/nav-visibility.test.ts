@@ -23,16 +23,39 @@ describe('extractTenantPlan', () => {
   const me = {
     tenants: [
       { id: 't1', subscription: { plan: { code: 'BASIC', features_json: { premiumCrm: false } } } },
-      { id: 't2', subscription: { plan: { code: 'PREMIUM', features_json: { premiumCrm: true } } } },
+      {
+        id: 't2',
+        dashboard_preference: 'ACCOUNTING',
+        permissions: ['VIEW_LEDGER'],
+        subscription: { plan: { code: 'PREMIUM', features_json: { premiumCrm: true } } },
+      },
     ],
   };
   it('selects the tenant matching tenantId', () => {
-    expect(extractTenantPlan(me, 't2')).toEqual({ planCode: 'PREMIUM', features: { premiumCrm: true } });
+    expect(extractTenantPlan(me, 't2')).toEqual({
+      planCode: 'PREMIUM',
+      features: { premiumCrm: true },
+      dashboardPreference: 'ACCOUNTING',
+      permissions: ['VIEW_LEDGER'],
+    });
   });
   it('falls back to the first tenant when tenantId is null/unknown', () => {
     expect(extractTenantPlan(me, null).planCode).toBe('BASIC');
   });
+  it('defaults the dashboard preference and permissions when the tenant omits them', () => {
+    expect(extractTenantPlan(me, 't1')).toEqual({
+      planCode: 'BASIC',
+      features: { premiumCrm: false },
+      dashboardPreference: 'AUTO',
+      permissions: [],
+    });
+  });
   it('returns empty features when me has no tenants', () => {
-    expect(extractTenantPlan({}, 't1')).toEqual({ planCode: null, features: {} });
+    expect(extractTenantPlan({}, 't1')).toEqual({
+      planCode: null,
+      features: {},
+      dashboardPreference: 'AUTO',
+      permissions: [],
+    });
   });
 });

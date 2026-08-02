@@ -400,6 +400,11 @@ model Tenant {
   vat_registration_no  String?                      // NBR VAT registration number
   business_tin         String?                      // Tax Identification Number
   business_type        String?  // e.g. SURGICAL_MEDICAL, PHARMACY, GROCERY, COMPUTER_HARDWARE
+  /// Which dashboard this workspace lands on: AUTO | RETAIL | ACCOUNTING.
+  /// AUTO defers to the plan's `accountingDashboard` entitlement. This is a
+  /// preference, not a capability, which is why it is a column and not a key in
+  /// the plan's features_json — see `resolveDashboardVariant` in shared-types.
+  dashboard_preference String   @default("AUTO")
   /// When the setup wizard was finished or skipped for this workspace. Set once
   /// by whoever dismisses it; every member on every device then skips onboarding.
   onboarding_dismissed_at DateTime?
