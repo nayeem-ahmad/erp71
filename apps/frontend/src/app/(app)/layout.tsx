@@ -239,13 +239,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const hasPremiumCrm = Boolean(planFeatures.premiumCrm);
     const canAccessManufacturing =
         platformFeatures.manufacturing && hasPlanEntitlement(planFeatures, 'premiumManufacturing');
-    // Off by default platform-wide; a tenant override switches it on for one
-    // workspace without exposing it to everyone else.
-    const canAccessProjects = Boolean(platformFeatures.projects);
     const accountingOnlyMode = Boolean(planFeatures.accountingOnly);
     const isPlatformAdmin = inPlatformAdminMode;
     const perms = activeTenant?.permissions ?? [];
     const owner = isOwner(primaryRole);
+    // Off by default platform-wide; a tenant override switches it on for one
+    // workspace without exposing it to everyone else. Gated on the permission as
+    // well as the flag: every /projects endpoint requires VIEW_PROJECTS, so
+    // without this a cashier sees the module and gets a 403 behind every page.
+    const canAccessProjects =
+        Boolean(platformFeatures.projects) && (owner || hasPermission(perms, 'VIEW_PROJECTS'));
     const canManageBilling = owner || hasPermission(perms, 'MANAGE_USERS');
     const canManageTeam = owner || hasPermission(perms, 'MANAGE_USERS');
     const canViewAudit = canManageTeam;
@@ -356,6 +359,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         if (!hasPremiumCrm && premiumCrmPaths.some((p) => pathname.startsWith(p))) {
             router.replace(routes.crm.root);
         }
+        // Same reasoning as the premium-CRM paths above: every /projects endpoint
+        // 403s without VIEW_PROJECTS, but the shell would still render and the
+        // list would swallow the 403 into an empty table — a blank page with no
+        // explanation, which is how the module's missing grants went unnoticed.
+        if (!canAccessProjects && pathname.startsWith(routes.projects.root)) {
+            router.replace(routes.home);
+        }
         if (!platformFeatures.help && pathname.startsWith(routes.help)) {
             router.replace(routes.home);
         }
@@ -365,7 +375,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         if (!posEnabled && pathname.startsWith(routes.sales.pos)) {
             router.replace(routes.sales.list);
         }
-    }, [accountingOnlyMode, activeContext, canAccessAccounting, canAccessAccountingAdvanced, canAccessInventoryReports, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, platformFeatures.help, platformFeatures.support, posEnabled, router, user]);
+    }, [accountingOnlyMode, activeContext, canAccessAccounting, canAccessAccountingAdvanced, canAccessInventoryReports, canAccessProjects, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, platformFeatures.help, platformFeatures.support, posEnabled, router, user]);
 
     const activeStore =
         tenantStores.find((store: { id: string }) => store.id === activeStoreId) ?? tenantStores[0];

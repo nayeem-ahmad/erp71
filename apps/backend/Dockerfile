@@ -81,4 +81,11 @@ ENV GIT_SHA=$GIT_SHA
 # columns. It is idempotent and additive-only, and it degrades to "seed defaults
 # only" once those columns are dropped (it checks information_schema rather than
 # assuming they exist) — so it cannot become the reason the backend stops booting.
-CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
+#
+# sync:role-permissions is the same idea for the permission matrix:
+# ROLE_DEFAULT_PERMISSIONS is read only at tenant creation and role assignment,
+# so a permission added later reaches nobody who already exists — and the OWNER
+# bypass in StorePermissionGuard hides that from whoever tests the new module.
+# It grants by explicit group and skips a role that already holds part of one, so
+# re-running never undoes an owner's later edit (see prisma/sync-role-permissions.ts).
+CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
