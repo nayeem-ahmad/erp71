@@ -122,6 +122,8 @@ export const crmHrMessages = {
                 title: 'Scan Business Card',
                 subtitle: 'Photograph the card and the fields fill in for you.',
                 takePhoto: 'Take photo',
+                openingCamera: 'Opening camera...',
+                capture: 'Capture',
                 chooseFile: 'Choose image',
                 changeImage: 'Choose another',
                 scan: 'Read card',

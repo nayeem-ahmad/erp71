@@ -122,6 +122,8 @@ export const crmHrMessages = {
                 title: 'Imbas Kad Perniagaan',
                 subtitle: 'Ambil gambar kad dan medan akan diisi untuk anda.',
                 takePhoto: 'Ambil gambar',
+                openingCamera: 'Membuka kamera...',
+                capture: 'Tangkap',
                 chooseFile: 'Pilih imej',
                 changeImage: 'Pilih yang lain',
                 scan: 'Baca kad',
