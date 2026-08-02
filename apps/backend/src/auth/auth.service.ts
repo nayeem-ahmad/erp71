@@ -678,6 +678,9 @@ export class AuthService {
             onboarding_dismissed: !!membership.tenant.onboarding_dismissed_at,
             localization_enabled: membership.tenant.localization_enabled,
             secondary_locale: membership.tenant.secondary_locale,
+            // Feeds `resolveDashboardVariant` on the client, so the dashboard picks
+            // its variant from this response rather than a second round-trip.
+            dashboard_preference: membership.tenant.dashboard_preference ?? 'AUTO',
             role: membership.role,
             tenant_role:
                 membership.role === 'OWNER'

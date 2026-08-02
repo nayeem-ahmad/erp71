@@ -1281,6 +1281,16 @@ export const api = {
         appendApprovedOnly(query, params);
         return fetchWithAuth(`/accounting/dashboard/kpis${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    // One request for the whole accounting dashboard. The equivalent report
+    // endpoints each rescan the tenant's voucher details, so this exists to keep
+    // the page to a single pass over them.
+    getAccountingDashboardOverview: (params?: { from?: string; to?: string } & ApprovedOnlyParams) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        appendApprovedOnly(query, params);
+        return fetchWithAuth(`/accounting/dashboard/overview${query.toString() ? `?${query.toString()}` : ''}`);
+    },
     getFinancialTrends: (params?: { from?: string; to?: string } & ApprovedOnlyParams) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
@@ -2310,6 +2320,13 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    getTenantDashboardSettings: () => fetchWithAuth('/tenants/dashboard-settings'),
+    updateTenantDashboardSettings: (data: { dashboard_preference: 'AUTO' | 'RETAIL' | 'ACCOUNTING' }) =>
+        fetchWithAuth('/tenants/dashboard-settings', {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     getTenantLocalizationSettings: () => fetchWithAuth('/tenants/localization-settings'),
     updateTenantLocalizationSettings: (data: { default_locale: 'en' | 'bn' | 'ms' }) => fetchWithAuth('/tenants/localization-settings', {
         method: 'PATCH',

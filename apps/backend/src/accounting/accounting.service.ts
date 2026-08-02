@@ -50,6 +50,7 @@ import { AuditService } from '../audit/audit.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 import { JOB_NAMES } from '../system-health/jobs/job-names';
 import {
+    AccountingOverviewQueryDto,
     CreateVoucherDto,
     CreateAccountDto,
     CreateAccountGroupDto,
@@ -899,6 +900,246 @@ export class AccountingService {
         }
 
         return this.serializeVoucher(voucher);
+    }
+
+    /**
+     * Everything the accounting dashboard needs, in one request.
+     *
+     * The equivalent set of report endpoints (`ar-aging`, `ap-aging`,
+     * `trial-balance`, `financial-ratios`, `cashbook`, `bankbook`,
+     * `profit-loss`) each pull the tenant's voucher details independently, so
+     * calling them side by side scans the same rows six or seven times over. This
+     * takes two grouped aggregates — cumulative-to-date and in-period — plus one
+     * row-level read restricted to the receivable and payable accounts, which are
+     * the only figures here that need individual voucher dates.
+     */
+    async getAccountingDashboardOverview(tenantId: string, query: AccountingOverviewQueryDto) {
+        const range = this.resolveDateRange(query.from, query.to);
+        const asOf = range.toDate;
+        const approvalFilter = await this.reportApprovalFilter(tenantId, query.approvedOnly);
+
+        const accounts = await this.db.account.findMany({
+            where: { tenant_id: tenantId },
+            select: { id: true, name: true, code: true, type: true, category: true },
+        });
+
+        const byId = new Map(accounts.map((account) => [account.id, account]));
+        const receivableAccounts = accounts.filter(
+            (a) => a.type === AccountType.ASSET && this.matchesAccountPattern(a, RECEIVABLE_ACCOUNT_PATTERN),
+        );
+        const taxAccountIds = new Set(
+            accounts
+                .filter((a) => a.type === AccountType.LIABILITY && this.matchesAccountPattern(a, TAX_LIABILITY_ACCOUNT_PATTERN))
+                .map((a) => a.id),
+        );
+        const payableAccounts = accounts.filter(
+            (a) => a.type === AccountType.LIABILITY
+                && this.matchesAccountPattern(a, PAYABLE_ACCOUNT_PATTERN)
+                && !taxAccountIds.has(a.id),
+        );
+        const agingAccountIds = [...receivableAccounts, ...payableAccounts].map((a) => a.id);
+        const liquidityAccountIds = new Set(
+            accounts
+                .filter((a) => a.category === AccountCategory.CASH || a.category === AccountCategory.BANK)
+                .map((a) => a.id),
+        );
+
+        const groupByAccount = (voucherWhere: Prisma.VoucherWhereInput) =>
+            accounts.length === 0
+                ? Promise.resolve([])
+                : this.db.voucherDetail.groupBy({
+                    by: ['account_id'],
+                    where: { account_id: { in: accounts.map((a) => a.id) }, voucher: voucherWhere },
+                    _sum: { debit_amount: true, credit_amount: true },
+                });
+
+        const [cumulative, period, agingEntries, pendingVouchers, failedPostings, recurringDue, openPeriods, recentVouchers] =
+            await Promise.all([
+                groupByAccount({ tenant_id: tenantId, ...approvalFilter, date: { lte: asOf } }),
+                groupByAccount({
+                    tenant_id: tenantId,
+                    ...approvalFilter,
+                    date: { gte: range.fromDate, lte: range.toDate },
+                }),
+                agingAccountIds.length === 0 ? Promise.resolve([]) : this.db.voucherDetail.findMany({
+                    where: {
+                        account_id: { in: agingAccountIds },
+                        voucher: { tenant_id: tenantId, ...approvalFilter, date: { lte: asOf } },
+                    },
+                    select: {
+                        account_id: true,
+                        debit_amount: true,
+                        credit_amount: true,
+                        voucher: { select: { date: true } },
+                    },
+                }),
+                this.getPendingVoucherCount(tenantId),
+                this.db.postingEvent.count({ where: { tenant_id: tenantId, status: 'failed' } }),
+                this.db.recurringVoucher.count({
+                    where: { tenant_id: tenantId, is_active: true, next_due_date: { lte: asOf } },
+                }),
+                // A month that has already ended but was never locked still accepts
+                // backdated entries, which quietly changes reports someone has filed.
+                this.db.fiscalPeriod.count({
+                    where: { tenant_id: tenantId, is_locked: false, end_date: { lt: asOf } },
+                }),
+                this.db.voucher.findMany({
+                    where: { tenant_id: tenantId },
+                    orderBy: [{ date: 'desc' }, { created_at: 'desc' }],
+                    take: 5,
+                    select: {
+                        id: true,
+                        voucher_number: true,
+                        voucher_type: true,
+                        date: true,
+                        description: true,
+                        approval_status: true,
+                        details: { select: { debit_amount: true } },
+                    },
+                }),
+            ]);
+
+        const totalsFor = (rows: Array<{ account_id: string; _sum: { debit_amount: unknown; credit_amount: unknown } }>) => {
+            const map = new Map<string, { debit: number; credit: number }>();
+            for (const row of rows) {
+                map.set(row.account_id, {
+                    debit: Number(row._sum.debit_amount ?? 0),
+                    credit: Number(row._sum.credit_amount ?? 0),
+                });
+            }
+            return map;
+        };
+
+        const cumulativeTotals = totalsFor(cumulative as never);
+        const periodTotals = totalsFor(period as never);
+        const zero = { debit: 0, credit: 0 };
+
+        // --- Position: cumulative balances as of the end of the window ---
+        let cashAndBank = 0;
+        let totalAssets = 0;
+        let totalLiabilities = 0;
+        let trialDebit = 0;
+        let trialCredit = 0;
+
+        for (const account of accounts) {
+            const totals = cumulativeTotals.get(account.id) ?? zero;
+            const signed = this.calculateSignedBalance(account.type as AccountType, totals.debit, totals.credit);
+            const presented = this.presentBalance(account.type as AccountType, signed);
+
+            if (presented.side === 'debit') trialDebit = this.roundAmount(trialDebit + presented.amount);
+            if (presented.side === 'credit') trialCredit = this.roundAmount(trialCredit + presented.amount);
+
+            if (liquidityAccountIds.has(account.id)) cashAndBank = this.roundAmount(cashAndBank + signed);
+            if (account.type === AccountType.ASSET) totalAssets = this.roundAmount(totalAssets + signed);
+            if (account.type === AccountType.LIABILITY) totalLiabilities = this.roundAmount(totalLiabilities + signed);
+        }
+
+        // --- Aging: bucketed by voucher date, matching the AR/AP aging reports ---
+        const receivableIds = new Set(receivableAccounts.map((a) => a.id));
+        const emptyBuckets = () => ({ current: 0, overdue_31_60: 0, overdue_61_90: 0, overdue_90_plus: 0 });
+        const arBuckets = emptyBuckets();
+        const apBuckets = emptyBuckets();
+        const dayMs = 24 * 60 * 60 * 1000;
+        const asOfMs = asOf.getTime();
+
+        for (const entry of agingEntries) {
+            const isReceivable = receivableIds.has(entry.account_id);
+            // Receivables age from the debit that raised them; payables from the credit.
+            const amount = Number((isReceivable ? entry.debit_amount : entry.credit_amount) ?? 0);
+            if (amount <= 0) continue;
+
+            const buckets = isReceivable ? arBuckets : apBuckets;
+            const ageDays = Math.floor((asOfMs - entry.voucher.date.getTime()) / dayMs);
+            if (ageDays <= 30) buckets.current = this.roundAmount(buckets.current + amount);
+            else if (ageDays <= 60) buckets.overdue_31_60 = this.roundAmount(buckets.overdue_31_60 + amount);
+            else if (ageDays <= 90) buckets.overdue_61_90 = this.roundAmount(buckets.overdue_61_90 + amount);
+            else buckets.overdue_90_plus = this.roundAmount(buckets.overdue_90_plus + amount);
+        }
+
+        const sumBalances = (list: typeof accounts) =>
+            list.reduce((sum, account) => {
+                const totals = cumulativeTotals.get(account.id) ?? zero;
+                return this.roundAmount(
+                    sum + this.calculateSignedBalance(account.type as AccountType, totals.debit, totals.credit),
+                );
+            }, 0);
+
+        // --- Performance: flows inside the window ---
+        let revenue = 0;
+        let expenses = 0;
+        const expenseRows: Array<{ id: string; name: string; code: string | null; amount: number }> = [];
+
+        for (const [accountId, totals] of periodTotals) {
+            const account = byId.get(accountId);
+            if (!account) continue;
+
+            if (account.type === AccountType.REVENUE) {
+                revenue = this.roundAmount(revenue + (totals.credit - totals.debit));
+            } else if (account.type === AccountType.EXPENSE) {
+                const amount = this.roundAmount(totals.debit - totals.credit);
+                expenses = this.roundAmount(expenses + amount);
+                if (amount > 0) {
+                    expenseRows.push({ id: account.id, name: account.name, code: account.code, amount });
+                }
+            }
+        }
+
+        const netProfit = this.roundAmount(revenue - expenses);
+        expenseRows.sort((a, b) => b.amount - a.amount);
+
+        return {
+            filters: { from: range.from, to: range.to },
+            as_of: range.to,
+            position: {
+                cash_and_bank: cashAndBank,
+                accounts_receivable: receivableAccounts.length > 0 ? sumBalances(receivableAccounts) : null,
+                accounts_payable: payableAccounts.length > 0 ? sumBalances(payableAccounts) : null,
+                total_assets: totalAssets,
+                total_liabilities: totalLiabilities,
+                net_worth: this.roundAmount(totalAssets - totalLiabilities),
+            },
+            performance: {
+                revenue,
+                expenses,
+                net_profit: netProfit,
+                net_margin_pct: revenue !== 0 ? this.roundAmount((netProfit / revenue) * 100) : null,
+            },
+            aging: {
+                receivable: receivableAccounts.length > 0 ? arBuckets : null,
+                payable: payableAccounts.length > 0 ? apBuckets : null,
+                note: 'Aging is based on voucher date; individual invoice due dates are not tracked.',
+            },
+            books_health: {
+                trial_balance: {
+                    debit: trialDebit,
+                    credit: trialCredit,
+                    difference: this.roundAmount(Math.abs(trialDebit - trialCredit)),
+                    is_balanced: Math.abs(trialDebit - trialCredit) < 0.01,
+                },
+                pending_vouchers: pendingVouchers.count,
+                voucher_approval_enabled: pendingVouchers.approvalEnabled,
+                failed_postings: failedPostings,
+                recurring_due: recurringDue,
+                unlocked_closed_periods: openPeriods,
+            },
+            expense_mix: expenseRows.slice(0, 6),
+            expense_mix_other: this.roundAmount(
+                expenseRows.slice(6).reduce((sum, row) => sum + row.amount, 0),
+            ),
+            recent_vouchers: recentVouchers.map((voucher) => ({
+                id: voucher.id,
+                voucher_number: voucher.voucher_number,
+                voucher_type: voucher.voucher_type,
+                date: voucher.date,
+                description: voucher.description,
+                approval_status: voucher.approval_status,
+                // Debits and credits balance on every voucher, so either side is the
+                // voucher's value; debits are summed because they are always present.
+                amount: this.roundAmount(
+                    voucher.details.reduce((sum, detail) => sum + Number(detail.debit_amount ?? 0), 0),
+                ),
+            })),
+        };
     }
 
     async getFinancialKpis(tenantId: string, query: FinancialKpiQueryDto) {

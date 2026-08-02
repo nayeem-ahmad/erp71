@@ -196,6 +196,7 @@ export const routes = {
         team: '/team',
         counters: '/settings/counters',
         localization: '/settings/localization',
+        dashboard: '/settings/dashboard',
         data: '/settings/data',
         stores: '/settings/stores',
     },

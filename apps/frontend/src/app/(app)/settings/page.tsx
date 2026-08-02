@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import {
   Palette, Globe, Receipt, Monitor, ShoppingBag, CreditCard, Tag, Gift,
   Bell, Mail, HandCoins, Sparkles, FileSearch, Database, Store, Printer,
+  BarChart3,
 } from 'lucide-react';
 import CompactLinkGrid from '@/components/ui/compact/CompactLinkGrid';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -23,6 +24,9 @@ const SECTIONS: Section[] = [
   { key: 'businessProfile', cards: [
     { href: routes.settings.branding, key: 'branding', icon: Palette, accent: 'bg-primary-light text-blue-700 border-primary-border' },
     { href: routes.settings.localization, key: 'localization', icon: Globe, accent: 'bg-sky-50 text-sky-700 border-sky-100' },
+    // Gated on the accounting module: without it the only choice on the page is
+    // the retail dashboard the tenant already has.
+    { href: routes.settings.dashboard, key: 'dashboard', icon: BarChart3, accent: 'bg-blue-50 text-blue-700 border-blue-100', entitlement: 'premiumAccounting' },
     { href: routes.settings.tax, key: 'tax', icon: Receipt, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
     { href: routes.settings.stores, key: 'stores', icon: Store, accent: 'bg-orange-50 text-orange-700 border-orange-100' },
   ]},

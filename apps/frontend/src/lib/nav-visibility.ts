@@ -13,11 +13,18 @@ export function isItemVisible(
 export function extractTenantPlan(
   me: any,
   tenantId: string | null,
-): { planCode: string | null; features: Record<string, unknown> } {
+): {
+  planCode: string | null;
+  features: Record<string, unknown>;
+  dashboardPreference: string;
+  permissions: string[];
+} {
   const tenants = me?.tenants ?? [];
   const tenant = tenants.find((entry: { id: string }) => entry.id === tenantId) ?? tenants[0];
   return {
     planCode: tenant?.subscription?.plan?.code ?? null,
     features: (tenant?.subscription?.plan?.features_json ?? {}) as Record<string, unknown>,
+    dashboardPreference: tenant?.dashboard_preference ?? 'AUTO',
+    permissions: Array.isArray(tenant?.permissions) ? tenant.permissions : [],
   };
 }

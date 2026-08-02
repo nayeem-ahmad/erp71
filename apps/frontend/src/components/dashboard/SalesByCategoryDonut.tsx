@@ -31,11 +31,14 @@ export function SalesByCategoryDonut({
     totalLabel,
     totalTitle,
     emptyLabel,
+    ariaLabel,
 }: {
     rows: CategoryRow[];
     totalLabel: string;
     totalTitle?: string;
     emptyLabel: string;
+    /** Overrides the accessible name — the accounting dashboard charts expenses here. */
+    ariaLabel?: string;
 }) {
     if (!rows.length) {
         return (
@@ -72,7 +75,7 @@ export function SalesByCategoryDonut({
                     height={SIZE}
                     className="-rotate-90"
                     role="img"
-                    aria-label={`Revenue share by category, total ${totalLabel}`}
+                    aria-label={ariaLabel ?? `Revenue share by category, total ${totalLabel}`}
                 >
                     {arcs.map((arc) => (
                         <circle

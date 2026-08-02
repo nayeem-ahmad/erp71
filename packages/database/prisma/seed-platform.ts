@@ -187,6 +187,7 @@ export async function seedPlatformReferenceData(
             multiStore: false,
             apiAccess: false,
             accountingOnly: true,
+            accountingDashboard: true,
             premiumAccountingAdvanced: true,
             premiumAi: false,
             premiumVoice: false,
