@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { UserPlus, Users, Megaphone, ListChecks, AlertTriangle, MessageSquare, Tags, SlidersHorizontal, Contact } from 'lucide-react';
+import { UserPlus, Users, Megaphone, ListChecks, AlertTriangle, MessageSquare, SlidersHorizontal, Contact } from 'lucide-react';
 import ModuleHub, { type HubSectionConfig } from '@/components/ModuleHub';
 import { FinancialKpiTile } from '@/components/dashboard/KpiTile';
 import { useI18n } from '@/lib/i18n';
@@ -94,13 +94,13 @@ export default function CrmHubPage() {
                         { href: routes.crm.campaigns, key: 'crmCampaigns', icon: Megaphone, accent: 'bg-danger-light text-danger-text border-red-200' },
                     ],
                 },
-                // The settings screens were previously reachable only by typing
-                // the URL — nothing linked to /crm/settings/custom-fields at all.
+                // One entry now: the three lookup lists and the custom fields are all
+                // tabs of CRM Setup, and two of them were previously reachable only
+                // by typing the URL.
                 {
                     sectionKey: 'settings',
                     links: [
-                        { href: routes.crm.leadTaxonomy, key: 'leadTaxonomy', icon: Tags, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
-                        { href: routes.crm.customFields, key: 'customFields', icon: SlidersHorizontal, accent: 'bg-gray-50 text-gray-700 border-gray-200' },
+                        { href: routes.crm.setup, key: 'crmSetup', icon: SlidersHorizontal, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
                     ],
                 },
             );

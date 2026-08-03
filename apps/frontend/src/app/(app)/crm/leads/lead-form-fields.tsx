@@ -6,7 +6,6 @@ import type { LeadTaxonomyOption } from '@/lib/use-lead-taxonomy';
 
 export const LEAD_STATUSES = ['NEW', 'CONTACTED', 'QUALIFIED', 'LOST', 'CONVERTED'] as const;
 export const LEAD_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const;
-export const LEAD_CONVERSATION_TYPES = ['CALL', 'SMS', 'WHATSAPP', 'EMAIL', 'VISIT', 'ONLINE_MEETING', 'NOTE'] as const;
 
 export type NextStepState = {
     next_step: string;

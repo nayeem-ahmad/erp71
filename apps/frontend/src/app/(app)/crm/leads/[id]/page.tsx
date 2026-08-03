@@ -16,7 +16,6 @@ import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import FollowUpPanel from '@/components/crm/FollowUpPanel';
 import {
     LeadFormFields,
-    LEAD_CONVERSATION_TYPES,
     NextStepFields,
     emptyNextStep,
     leadFormToPayload,
@@ -28,7 +27,7 @@ import {
     type LeadFormState,
     type NextStepState,
 } from '../lead-form-fields';
-import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
+import { channelIcon, channelLabel, useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 
 const leadStatusTone: Record<string, StatusBadgeTone> = {
     NEW: 'info',
@@ -36,10 +35,6 @@ const leadStatusTone: Record<string, StatusBadgeTone> = {
     QUALIFIED: 'neutral',
     LOST: 'danger',
     CONVERTED: 'success',
-};
-
-const typeIcons: Record<string, string> = {
-    CALL: '📞', SMS: '💬', WHATSAPP: '🟢', EMAIL: '📧', VISIT: '🏪', ONLINE_MEETING: '💻', NOTE: '📝',
 };
 
 const priorityColors: Record<string, string> = {
@@ -61,8 +56,12 @@ type NewConversationState = {
     outcome: string;
 } & NextStepState;
 
-const emptyConversation = (): NewConversationState => ({
-    type: 'CALL',
+/**
+ * `type` is a channel `code` from the tenant's own list, so there is no constant to
+ * default to — the caller passes whichever channel is first in the tenant's order.
+ */
+const emptyConversation = (channelCode = ''): NewConversationState => ({
+    type: channelCode,
     summary: '',
     outcome: '',
     ...emptyNextStep(),
@@ -74,7 +73,6 @@ export default function LeadDetailPage() {
     const router = useRouter();
     const { t } = useI18n();
     const m = t.crm.leads;
-    const convTypes = t.crm.leadConversations.types;
 
     const [lead, setLead] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -83,12 +81,12 @@ export default function LeadDetailPage() {
     const [showConvForm, setShowConvForm] = useState(false);
     const [showDraftPanel, setShowDraftPanel] = useState(false);
     const [showEditForm, setShowEditForm] = useState(false);
-    const [newConv, setNewConv] = useState<NewConversationState>(emptyConversation);
+    const [newConv, setNewConv] = useState<NewConversationState>(() => emptyConversation());
     const [savingConv, setSavingConv] = useState(false);
     const [converting, setConverting] = useState(false);
     const [draftingMessage, setDraftingMessage] = useState(false);
     const [draftPurpose, setDraftPurpose] = useState('follow_up');
-    const [draftChannel, setDraftChannel] = useState('WHATSAPP');
+    const [draftChannel, setDraftChannel] = useState('');
     const [editForm, setEditForm] = useState<LeadFormState | null>(null);
     const [editFormErrors, setEditFormErrors] = useState<LeadFormErrors>({});
     const [savingLead, setSavingLead] = useState(false);
@@ -97,6 +95,19 @@ export default function LeadDetailPage() {
     const [customFieldDefs, setCustomFieldDefs] = useState<{ key: string; label: string }[]>([]);
     const { options: sourceOptions } = useLeadTaxonomy('sources');
     const { options: categoryOptions } = useLeadTaxonomy('categories');
+    const { options: channels } = useLeadTaxonomy('channels');
+    // The tenant's first channel, in their own sort order. Both selects below start
+    // here rather than on a hardcoded 'CALL' that a tenant may have retired.
+    const defaultChannel = channels[0]?.code ?? '';
+
+    // Runs once the channel list lands, and only while the pickers are untouched —
+    // the form mounts before the request resolves, so without this both selects sit
+    // on a blank option that submits nothing.
+    useEffect(() => {
+        if (!defaultChannel) return;
+        setNewConv((prev) => (prev.type ? prev : { ...prev, type: defaultChannel }));
+        setDraftChannel((prev) => prev || defaultChannel);
+    }, [defaultChannel]);
 
     useEffect(() => {
         api.getTeamMembers().then((data) => setTeamMembers(Array.isArray(data) ? data : [])).catch(() => null);
@@ -140,7 +151,7 @@ export default function LeadDetailPage() {
     };
 
     const openConversationForm = () => {
-        setNewConv({ ...emptyConversation(), ...nextStepFromLead(lead ?? {}) });
+        setNewConv({ ...emptyConversation(defaultChannel), ...nextStepFromLead(lead ?? {}) });
         setShowConvForm(true);
         setShowDraftPanel(false);
     };
@@ -158,7 +169,7 @@ export default function LeadDetailPage() {
             const outcome = newConv.outcome.trim();
             if (outcome) payload.outcome = outcome;
             await api.createLeadConversation(payload);
-            setNewConv(emptyConversation());
+            setNewConv(emptyConversation(defaultChannel));
             setShowConvForm(false);
             await refreshAll();
         } catch (err: unknown) {
@@ -192,12 +203,15 @@ export default function LeadDetailPage() {
         setDraftingMessage(true);
         try {
             const draft = await api.aiDraftMessage({
-                channel: draftChannel,
+                // The channel's label, not its code: this goes straight into the prompt
+                // ("write a short, professional {channel} message"), where "WhatsApp"
+                // reads as intended and "ONLINE_MEETING" does not.
+                channel: channelLabel(channels, draftChannel),
                 purpose: draftPurpose,
                 customerContext: { name: lead.name, phone: lead.mobile ?? lead.phone, type: 'lead' },
             });
             setNewConv({
-                ...emptyConversation(),
+                ...emptyConversation(draftChannel || defaultChannel),
                 summary: draft?.message ?? draft?.text ?? draft?.draft ?? '',
                 ...nextStepFromLead(lead),
             });
@@ -435,7 +449,7 @@ export default function LeadDetailPage() {
                             <p className="text-xs font-semibold text-blue-700">AI Message Drafter</p>
                             <div className="grid grid-cols-2 gap-3">
                                 <select value={draftChannel} onChange={(e) => setDraftChannel(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
-                                    {LEAD_CONVERSATION_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+                                    {channels.map((c) => <option key={c.id} value={c.code}>{c.name}</option>)}
                                 </select>
                                 <select value={draftPurpose} onChange={(e) => setDraftPurpose(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
                                     <option value="follow_up">Follow up</option>
@@ -457,8 +471,8 @@ export default function LeadDetailPage() {
                     {showConvForm && !isConverted && (
                         <div className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-200">
                             <select value={newConv.type} onChange={(e) => setNewConv({ ...newConv, type: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
-                                {LEAD_CONVERSATION_TYPES.map((type) => (
-                                    <option key={type} value={type}>{(convTypes as Record<string, string>)[type] ?? type}</option>
+                                {channels.map((c) => (
+                                    <option key={c.id} value={c.code}>{c.name}</option>
                                 ))}
                             </select>
                             <textarea
@@ -497,11 +511,11 @@ export default function LeadDetailPage() {
                         <div className="space-y-3">
                             {conversations.map((conv) => (
                                 <div key={conv.id} className="flex gap-3">
-                                    <div className="text-xl mt-0.5">{typeIcons[conv.type] ?? '💬'}</div>
+                                    <div className="text-xl mt-0.5">{channelIcon(channels, conv.type)}</div>
                                     <div className="flex-1 bg-white border border-gray-100 rounded-xl p-4">
                                         <div className="flex items-center gap-2 mb-1">
                                             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                                {(convTypes as Record<string, string>)[conv.type] ?? conv.type}
+                                                {channelLabel(channels, conv.type)}
                                             </span>
                                             <span className="text-xs text-gray-400">{formatDate(conv.created_at)}</span>
                                         </div>

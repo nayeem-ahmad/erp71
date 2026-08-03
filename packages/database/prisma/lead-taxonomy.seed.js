@@ -34,6 +34,19 @@ const DEFAULT_LEAD_CATEGORIES = [
     { code: 'OTHER', name: 'Other', sort_order: 6 },
 ];
 
+// Channels a lead conversation can be logged under. The seven codes mirror the
+// members of the old LeadConversationType enum, so `LeadConversation.type` values
+// written before these rows existed still resolve to a channel by `code`.
+const DEFAULT_CONVERSATION_CHANNELS = [
+    { code: 'CALL', name: 'Call', icon: '📞', sort_order: 1 },
+    { code: 'SMS', name: 'SMS', icon: '💬', sort_order: 2 },
+    { code: 'WHATSAPP', name: 'WhatsApp', icon: '🟢', sort_order: 3 },
+    { code: 'EMAIL', name: 'Email', icon: '📧', sort_order: 4 },
+    { code: 'VISIT', name: 'Visit', icon: '🏪', sort_order: 5 },
+    { code: 'ONLINE_MEETING', name: 'Online Meeting', icon: '💻', sort_order: 6 },
+    { code: 'NOTE', name: 'Note', icon: '📝', sort_order: 7 },
+];
+
 // Idempotent: `skipDuplicates` honours @@unique([tenant_id, code]), so a tenant
 // that renamed a default keeps its label instead of gaining a second row.
 async function seedDefaultLeadTaxonomy(tx, tenantId) {
@@ -61,12 +74,26 @@ async function seedDefaultLeadTaxonomy(tx, tenantId) {
         })),
         skipDuplicates: true,
     });
+
+    await tx.conversationChannel.createMany({
+        data: DEFAULT_CONVERSATION_CHANNELS.map((c) => ({
+            tenant_id: tenantId,
+            code: c.code,
+            name: c.name,
+            icon: c.icon,
+            sort_order: c.sort_order,
+            is_system: true,
+            is_active: true,
+        })),
+        skipDuplicates: true,
+    });
 }
 
 module.exports = {
     seedDefaultLeadTaxonomy,
     DEFAULT_LEAD_SOURCES,
     DEFAULT_LEAD_CATEGORIES,
+    DEFAULT_CONVERSATION_CHANNELS,
     LEGACY_LEAD_SOURCE_CODES,
     LEGACY_LEAD_CATEGORY_CODES,
     FALLBACK_SOURCE_CODE,

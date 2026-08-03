@@ -18,9 +18,40 @@ export type TaxonomyOption = {
     code: string;
     name: string;
     score_weight?: number;
+    icon?: string | null;
     sort_order: number;
     is_system: boolean;
     is_active: boolean;
+};
+
+/**
+ * Where rows of a given list are consumed. `usage()` counts against it and
+ * `remove()` reassigns through it, which is the only structural difference
+ * between the three lists.
+ */
+type Consumer = {
+    /** Prisma delegate name on DatabaseService. */
+    table: 'lead' | 'leadConversation';
+    /** FK column on that table pointing back at the list. */
+    fk: 'source_id' | 'category_id' | 'channel_id';
+    /** Human noun used in "in use by N …" messages. */
+    noun: string;
+};
+
+const CONSUMERS: Record<LeadTaxonomyKind, Consumer> = {
+    [LeadTaxonomyKind.SOURCE]: { table: 'lead', fk: 'source_id', noun: 'lead' },
+    [LeadTaxonomyKind.CATEGORY]: { table: 'lead', fk: 'category_id', noun: 'lead' },
+    [LeadTaxonomyKind.CHANNEL]: {
+        table: 'leadConversation',
+        fk: 'channel_id',
+        noun: 'conversation',
+    },
+};
+
+const LABELS: Record<LeadTaxonomyKind, string> = {
+    [LeadTaxonomyKind.SOURCE]: 'Lead source',
+    [LeadTaxonomyKind.CATEGORY]: 'Lead category',
+    [LeadTaxonomyKind.CHANNEL]: 'Conversation channel',
 };
 
 @Injectable()
@@ -28,24 +59,25 @@ export class CrmLeadTaxonomyService {
     constructor(private readonly db: DatabaseService) {}
 
     /**
-     * Both lists are structurally identical apart from `score_weight`, so the
-     * Prisma delegate is selected once here rather than branching in every
-     * method. `as any` is confined to this one place: the two delegates have
-     * different generated types that no shared interface unifies.
+     * The three lists are structurally identical apart from `score_weight`
+     * (sources) and `icon` (channels), so the Prisma delegate is selected once
+     * here rather than branching in every method. `as any` is confined to this
+     * one place: the delegates have different generated types that no shared
+     * interface unifies.
      */
     private model(kind: LeadTaxonomyKind) {
-        return kind === LeadTaxonomyKind.SOURCE
-            ? (this.db.leadSourceOption as any)
-            : (this.db.leadCategoryOption as any);
+        if (kind === LeadTaxonomyKind.SOURCE) return this.db.leadSourceOption as any;
+        if (kind === LeadTaxonomyKind.CATEGORY) return this.db.leadCategoryOption as any;
+        return this.db.conversationChannel as any;
     }
 
-    /** Column on Lead that FKs this list. */
-    private leadFk(kind: LeadTaxonomyKind): 'source_id' | 'category_id' {
-        return kind === LeadTaxonomyKind.SOURCE ? 'source_id' : 'category_id';
+    /** The table + column that reference this list. */
+    private consumer(kind: LeadTaxonomyKind): Consumer {
+        return CONSUMERS[kind];
     }
 
     private label(kind: LeadTaxonomyKind) {
-        return kind === LeadTaxonomyKind.SOURCE ? 'Lead source' : 'Lead category';
+        return LABELS[kind];
     }
 
     async list(
@@ -63,12 +95,12 @@ export class CrmLeadTaxonomyService {
     }
 
     /**
-     * Lead counts per row, for the settings screen. Returned as a map so the
+     * Usage counts per row, for the CRM Setup screen. Returned as a map so the
      * list + usage pair costs two queries rather than one per row.
      */
     async usage(tenantId: string, kind: LeadTaxonomyKind): Promise<Record<string, number>> {
-        const fk = this.leadFk(kind);
-        const grouped = await this.db.lead.groupBy({
+        const { table, fk } = this.consumer(kind);
+        const grouped = await (this.db[table] as any).groupBy({
             by: [fk],
             where: { tenant_id: tenantId, [fk]: { not: null } } as any,
             _count: { _all: true },
@@ -138,6 +170,7 @@ export class CrmLeadTaxonomyService {
                 ...(kind === LeadTaxonomyKind.SOURCE
                     ? { score_weight: dto.score_weight ?? 5 }
                     : {}),
+                ...(kind === LeadTaxonomyKind.CHANNEL ? { icon: dto.icon || null } : {}),
             },
         });
     }
@@ -172,6 +205,10 @@ export class CrmLeadTaxonomyService {
             );
         }
 
+        if (dto.is_active === false && row.is_active) {
+            await this.assertNotLastActiveChannel(tenantId, kind, id);
+        }
+
         return this.model(kind).update({
             where: { id },
             data: {
@@ -181,12 +218,39 @@ export class CrmLeadTaxonomyService {
                 ...(kind === LeadTaxonomyKind.SOURCE && dto.score_weight !== undefined
                     ? { score_weight: dto.score_weight }
                     : {}),
+                ...(kind === LeadTaxonomyKind.CHANNEL && dto.icon !== undefined
+                    ? { icon: dto.icon || null }
+                    : {}),
             },
         });
     }
 
     /**
-     * Remove a row, moving any leads that use it onto `reassignTo` first.
+     * Channels have no protected fallback the way sources do — any of them can be
+     * retired. What cannot happen is the last one going, because then the
+     * log-conversation form has nothing to offer and conversations stop being
+     * loggable at all. Sources and categories are unaffected: a lead can be
+     * created without either.
+     */
+    private async assertNotLastActiveChannel(
+        tenantId: string,
+        kind: LeadTaxonomyKind,
+        id: string,
+    ) {
+        if (kind !== LeadTaxonomyKind.CHANNEL) return;
+        const remaining = await this.model(kind).count({
+            where: { tenant_id: tenantId, is_active: true, id: { not: id } },
+        });
+        if (remaining === 0) {
+            throw new BadRequestException(
+                'At least one conversation channel must stay active — otherwise conversations cannot be logged.',
+            );
+        }
+    }
+
+    /**
+     * Remove a row, moving whatever uses it — leads, or conversations for the
+     * channel list — onto `reassignTo` first.
      *
      * Seeded (`is_system`) rows deactivate rather than delete: the idempotent
      * `sync-lead-taxonomy` re-creates missing defaults on every container start,
@@ -199,7 +263,8 @@ export class CrmLeadTaxonomyService {
         reassignTo?: string,
     ) {
         const row = await this.findOwned(tenantId, kind, id);
-        const fk = this.leadFk(kind);
+        const { table, fk, noun } = this.consumer(kind);
+        const consumerModel = this.db[table] as any;
 
         if (kind === LeadTaxonomyKind.SOURCE && row.code === FALLBACK_SOURCE_CODE) {
             throw new BadRequestException(
@@ -207,7 +272,13 @@ export class CrmLeadTaxonomyService {
             );
         }
 
-        const inUse = await this.db.lead.count({
+        // Only when the row is still active — removing an already-hidden channel
+        // does not change how many are selectable, so it must not be blocked.
+        if (row.is_active) {
+            await this.assertNotLastActiveChannel(tenantId, kind, id);
+        }
+
+        const inUse = await consumerModel.count({
             where: { tenant_id: tenantId, [fk]: id } as any,
         });
 
@@ -215,19 +286,25 @@ export class CrmLeadTaxonomyService {
             if (!reassignTo) {
                 throw new ConflictException({
                     message:
-                        `${this.label(kind)} "${row.name}" is used by ${inUse} lead(s). ` +
+                        `${this.label(kind)} "${row.name}" is used by ${inUse} ${noun}(s). ` +
                         'Choose a replacement to move them to.',
                     inUse,
                     requiresReassign: true,
                 });
             }
             if (reassignTo === id) {
-                throw new BadRequestException('Cannot reassign leads to the row being removed.');
+                throw new BadRequestException(`Cannot reassign ${noun}s to the row being removed.`);
             }
             const target = await this.findOwned(tenantId, kind, reassignTo);
-            await this.db.lead.updateMany({
+            await consumerModel.updateMany({
                 where: { tenant_id: tenantId, [fk]: id } as any,
-                data: { [fk]: target.id } as any,
+                // `LeadConversation.type` mirrors the channel's code and is what every
+                // filter and groupBy reads, so it has to move with the FK or the
+                // reassigned rows keep reporting under a channel that no longer exists.
+                data: {
+                    [fk]: target.id,
+                    ...(kind === LeadTaxonomyKind.CHANNEL ? { type: target.code } : {}),
+                } as any,
             });
         }
 
