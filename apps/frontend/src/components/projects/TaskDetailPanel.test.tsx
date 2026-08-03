@@ -545,6 +545,143 @@ describe('TaskDetailPanel activity', () => {
     });
 });
 
+describe('TaskDetailPanel title', () => {
+    it('turns the heading into an input and saves on Enter', async () => {
+        panel();
+        fireEvent.click(await screen.findByRole('button', { name: 'Edit title: Wire the meter' }));
+
+        const field = screen.getByDisplayValue('Wire the meter');
+        fireEvent.change(field, { target: { value: '  Wire the sub-meter  ' } });
+        fireEvent.keyDown(field, { key: 'Enter' });
+
+        await waitFor(() =>
+            // Trimmed — trailing whitespace is never part of what they meant.
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { title: 'Wire the sub-meter' }),
+        );
+    });
+
+    it('saves when the field loses focus', async () => {
+        panel();
+        fireEvent.click(await screen.findByRole('button', { name: /^Edit title/ }));
+
+        const field = screen.getByDisplayValue('Wire the meter');
+        fireEvent.change(field, { target: { value: 'Wire the riser' } });
+        fireEvent.blur(field);
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { title: 'Wire the riser' }),
+        );
+    });
+
+    it('discards the edit on Escape', async () => {
+        panel();
+        fireEvent.click(await screen.findByRole('button', { name: /^Edit title/ }));
+
+        const field = screen.getByDisplayValue('Wire the meter');
+        fireEvent.change(field, { target: { value: 'Something else' } });
+        fireEvent.keyDown(field, { key: 'Escape' });
+
+        expect(await screen.findByRole('button', { name: /^Edit title/ })).toBeInTheDocument();
+        expect(updateProjectTask).not.toHaveBeenCalled();
+    });
+
+    it('refuses to blank the title', async () => {
+        panel();
+        fireEvent.click(await screen.findByRole('button', { name: /^Edit title/ }));
+
+        const field = screen.getByDisplayValue('Wire the meter');
+        fireEvent.change(field, { target: { value: '   ' } });
+        fireEvent.keyDown(field, { key: 'Enter' });
+
+        expect(updateProjectTask).not.toHaveBeenCalled();
+    });
+});
+
+describe('TaskDetailPanel description', () => {
+    const descriptionSection = (editor: HTMLElement) => editor.closest('section') as HTMLElement;
+
+    const withDescription = (description: string | null) => ({
+        id: 't1',
+        title: 'Wire the meter',
+        description,
+        checklistItems: [],
+        timeEntries: [],
+    });
+
+    it('offers to add one when the task has none', async () => {
+        getProjectTask.mockResolvedValue(withDescription(null));
+        panel();
+
+        expect(await screen.findByRole('button', { name: 'Add a description…' })).toBeInTheDocument();
+    });
+
+    it('renders what is there as markdown rather than as source', async () => {
+        getProjectTask.mockResolvedValue(withDescription('**Isolate** the board first'));
+        panel();
+
+        const bold = await screen.findByText('Isolate');
+        expect(bold.tagName).toBe('STRONG');
+        expect(screen.queryByText('**Isolate** the board first')).not.toBeInTheDocument();
+    });
+
+    it('saves the text the editor holds', async () => {
+        getProjectTask.mockResolvedValue(withDescription(null));
+        panel();
+        fireEvent.click(await screen.findByRole('button', { name: 'Add a description…' }));
+
+        const editor = screen.getByLabelText('Description');
+        fireEvent.change(editor, { target: { value: '  Two circuits, one meter  ' } });
+        // Scoped: the card carries other Save buttons (hours, re-estimate).
+        fireEvent.click(within(descriptionSection(editor)).getByRole('button', { name: 'Save' }));
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', {
+                description: 'Two circuits, one meter',
+            }),
+        );
+    });
+
+    it('clears the description when the text is emptied', async () => {
+        getProjectTask.mockResolvedValue(withDescription('Old detail'));
+        panel();
+        fireEvent.click(await screen.findByRole('button', { name: 'Edit description' }));
+
+        const editor = screen.getByLabelText('Description');
+        fireEvent.change(editor, { target: { value: '' } });
+        fireEvent.click(within(descriptionSection(editor)).getByRole('button', { name: 'Save' }));
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { description: '' }),
+        );
+    });
+
+    it('wraps the selection when a formatting button is used', async () => {
+        getProjectTask.mockResolvedValue(withDescription(null));
+        panel();
+        fireEvent.click(await screen.findByRole('button', { name: 'Add a description…' }));
+
+        const editor = screen.getByLabelText('Description') as HTMLTextAreaElement;
+        fireEvent.change(editor, { target: { value: 'isolate the board' } });
+        editor.setSelectionRange(0, 7);
+        fireEvent.click(screen.getByRole('button', { name: 'Bold' }));
+
+        await waitFor(() => expect(editor).toHaveValue('**isolate** the board'));
+    });
+
+    it('leaves the card open when Escape cancels the edit', async () => {
+        const onClose = jest.fn();
+        getProjectTask.mockResolvedValue(withDescription(null));
+        render(<TaskDetailPanel taskId="t1" onClose={onClose} />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Add a description…' }));
+
+        fireEvent.keyDown(screen.getByLabelText('Description'), { key: 'Escape' });
+
+        expect(await screen.findByRole('button', { name: 'Add a description…' })).toBeInTheDocument();
+        expect(onClose).not.toHaveBeenCalled();
+        expect(updateProjectTask).not.toHaveBeenCalled();
+    });
+});
+
 describe('TaskDetailPanel board columns', () => {
     // Since Phase 3L the tenant template and a board's columns are different
     // sets. Offering the template here would let someone move a card into a

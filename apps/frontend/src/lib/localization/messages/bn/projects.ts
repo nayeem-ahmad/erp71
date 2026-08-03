@@ -132,6 +132,17 @@ export const projectsMessages = {
         deleted: 'টাস্ক মুছে ফেলা হয়েছে',
         created: 'টাস্ক তৈরি',
         updated: 'টাস্ক হালনাগাদ হয়েছে',
+        editTitle: 'শিরোনাম সম্পাদনা',
+        renameFailed: 'টাস্কের নাম বদলানো যায়নি',
+    },
+
+    description: {
+        title: 'বিবরণ',
+        add: 'একটি বিবরণ যোগ করুন…',
+        edit: 'বিবরণ সম্পাদনা',
+        empty: 'এখনও কোনো বিবরণ নেই।',
+        placeholder: 'যে কাজটি করবে তার যা জানা দরকার।',
+        saveFailed: 'বিবরণ সংরক্ষণ করা যায়নি',
     },
 
     dates: {

@@ -132,6 +132,17 @@ export const projectsMessages = {
         deleted: 'Task deleted',
         created: 'Task created',
         updated: 'Task updated',
+        editTitle: 'Edit title',
+        renameFailed: 'Could not rename the task',
+    },
+
+    description: {
+        title: 'Description',
+        add: 'Add a description…',
+        edit: 'Edit description',
+        empty: 'No description yet.',
+        placeholder: 'Anything the person doing this needs to know.',
+        saveFailed: 'Could not save the description',
     },
 
     dates: {

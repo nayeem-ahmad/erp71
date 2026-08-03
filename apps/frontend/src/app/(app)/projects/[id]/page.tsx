@@ -4,7 +4,15 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
-import { PageShell, PageHeader, Button, Input, Select, Field, StatusBadge } from '@/components/ui';
+import {
+    PageShell,
+    PageHeader,
+    Button,
+    Input,
+    RichTextEditor,
+    Field,
+    StatusBadge,
+} from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import ProjectTeamCard from '@/components/projects/ProjectTeamCard';
@@ -86,7 +94,7 @@ export default function ProjectDetailPage() {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
     const [creating, setCreating] = useState(false);
-    const [newTask, setNewTask] = useState({ title: '', estimateHours: '' });
+    const [newTask, setNewTask] = useState({ title: '', description: '', estimateHours: '' });
     const [saving, setSaving] = useState(false);
 
     const load = useCallback(async () => {
@@ -114,11 +122,12 @@ export default function ProjectDetailPage() {
             await api.createProjectTask({
                 projectId,
                 title: newTask.title.trim(),
+                description: newTask.description.trim() || undefined,
                 estimateHours: newTask.estimateHours ? Number(newTask.estimateHours) : undefined,
             });
             toast.success(m.task.created);
             setCreating(false);
-            setNewTask({ title: '', estimateHours: '' });
+            setNewTask({ title: '', description: '', estimateHours: '' });
             await load();
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Could not create the task');
@@ -321,6 +330,18 @@ export default function ProjectDetailPage() {
                                     value={newTask.title}
                                     onChange={(e) => setNewTask((p) => ({ ...p, title: e.target.value }))}
                                     autoFocus
+                                />
+                            </Field>
+                            <Field label={m.description.title}>
+                                <RichTextEditor
+                                    rows={4}
+                                    maxLength={5000}
+                                    value={newTask.description}
+                                    placeholder={m.description.placeholder}
+                                    ariaLabel={m.description.title}
+                                    onChange={(value) =>
+                                        setNewTask((p) => ({ ...p, description: value }))
+                                    }
                                 />
                             </Field>
                             <Field label={m.task.estimate}>

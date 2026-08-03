@@ -1,9 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { ArrowDown, ArrowUp, Eye, EyeOff, Paperclip, Trash2 } from 'lucide-react';
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
+import { ArrowDown, ArrowUp, Eye, EyeOff, Paperclip, Pencil, Trash2 } from 'lucide-react';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
-import { Button, Checkbox, Input, Select, Textarea, Field, StatusBadge } from '@/components/ui';
+import {
+    Button,
+    Checkbox,
+    Input,
+    RichTextEditor,
+    Select,
+    Textarea,
+    Field,
+    StatusBadge,
+} from '@/components/ui';
 import {
     coverClass,
     labelClass,
@@ -65,6 +74,15 @@ interface Task {
     cover_color?: ProjectLabelColor | null;
     timeEntries?: TimeEntry[];
 }
+
+/**
+ * Rendered, not stored: descriptions are markdown text, and react-markdown is
+ * heavy enough to be worth keeping out of the bundle until a card is opened.
+ */
+const Markdown = lazy(() => import('@/components/ui/Markdown'));
+
+const TITLE_MAX = 300;
+const DESCRIPTION_MAX = 5000;
 
 /** `@db.Date` arrives as an ISO instant; a date input wants YYYY-MM-DD. */
 const dateInputValue = (value?: string | null) => (value ? value.slice(0, 10) : '');
@@ -192,13 +210,30 @@ export default function TaskDetailPanel({
 
     return (
         <ModalShell onBackdropClick={onClose} size="lg">
-            <ModalHeader title={task?.title ?? m.task.title} onClose={onClose} />
+            <ModalHeader
+                title={
+                    task ? (
+                        <TitleField title={task.title} taskId={taskId} onChanged={refresh} />
+                    ) : (
+                        m.task.title
+                    )
+                }
+                onClose={onClose}
+            />
 
             <div className="max-h-[70vh] space-y-4 overflow-y-auto p-4">
                 {!task ? (
                     <p className="text-sm text-gray-500">{t.common.loading}</p>
                 ) : (
                     <>
+                        {/* Directly under the title, and given room to breathe:
+                            it is the first thing you read when the card opens. */}
+                        <DescriptionSection
+                            description={task.description ?? ''}
+                            taskId={taskId}
+                            onChanged={refresh}
+                        />
+
                         <div className="grid grid-cols-3 gap-2">
                             <Metric label={m.task.estimate} value={`${num(task.estimate_hours)}h`} />
                             <Metric label={m.task.logged} value={`${num(task.logged_hours)}h`} />
@@ -422,6 +457,213 @@ export default function TaskDetailPanel({
                 </Button>
             </ModalFooter>
         </ModalShell>
+    );
+}
+
+/**
+ * The title, editable where it is read. One click on the heading turns it into
+ * an input and Enter (or clicking away) saves it — an "Edit task" screen for a
+ * single field is three clicks to change a typo.
+ */
+function TitleField({
+    title,
+    taskId,
+    onChanged,
+}: {
+    title: string;
+    taskId: string;
+    onChanged: () => Promise<void>;
+}) {
+    const { t } = useI18n();
+    const m = t.projects.task;
+
+    const [editing, setEditing] = useState(false);
+    const [value, setValue] = useState(title);
+    const [saving, setSaving] = useState(false);
+
+    const open = () => {
+        setValue(title);
+        setEditing(true);
+    };
+
+    const commit = async () => {
+        setEditing(false);
+        const next = value.trim();
+        // A blank title is not something the backend will take, and quietly
+        // erasing the one thing that names the card would be worse than
+        // ignoring the edit.
+        if (!next || next === title) return;
+        setSaving(true);
+        try {
+            await api.updateProjectTask(taskId, { title: next });
+            await onChanged();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.renameFailed);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (!editing) {
+        return (
+            <button
+                type="button"
+                disabled={saving}
+                title={m.editTitle}
+                aria-label={`${m.editTitle}: ${title}`}
+                onClick={open}
+                className="group -mx-1 flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-gray-100 disabled:opacity-60 max-md:min-h-touch"
+            >
+                <span className="truncate">{title}</span>
+                <Pencil
+                    className="h-3.5 w-3.5 shrink-0 text-gray-400 group-hover:text-gray-600"
+                    aria-hidden
+                />
+            </button>
+        );
+    }
+
+    return (
+        <Input
+            autoFocus
+            value={value}
+            maxLength={TITLE_MAX}
+            disabled={saving}
+            aria-label={m.titleField}
+            className="text-base font-semibold"
+            onChange={(event) => setValue(event.target.value)}
+            onBlur={commit}
+            onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    commit();
+                }
+                if (event.key === 'Escape') {
+                    // Kept off the document, where ModalShell would read it as
+                    // "close the card" and take the rest of the edit with it.
+                    event.stopPropagation();
+                    setValue(title);
+                    setEditing(false);
+                }
+            }}
+        />
+    );
+}
+
+/**
+ * The description, in markdown. Stored as the text the user typed rather than
+ * as HTML: it stays legible everywhere else the field surfaces (exports, the
+ * API, a notification email) and there is nothing to sanitise on the way out —
+ * `Markdown` renders it with raw HTML and images disallowed.
+ */
+function DescriptionSection({
+    description,
+    taskId,
+    onChanged,
+}: {
+    description: string;
+    taskId: string;
+    onChanged: () => Promise<void>;
+}) {
+    const { t } = useI18n();
+    const m = t.projects.description;
+
+    const [editing, setEditing] = useState(false);
+    const [value, setValue] = useState(description);
+    const [saving, setSaving] = useState(false);
+
+    const open = () => {
+        setValue(description);
+        setEditing(true);
+    };
+
+    const save = async () => {
+        const next = value.trim();
+        if (next === description.trim()) {
+            setEditing(false);
+            return;
+        }
+        setSaving(true);
+        try {
+            // '' clears it — the backend stores an empty description as null.
+            await api.updateProjectTask(taskId, { description: next });
+            setEditing(false);
+            await onChanged();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.saveFailed);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <section>
+            <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-medium">{m.title}</h3>
+                {!editing && description !== '' && (
+                    <button
+                        type="button"
+                        onClick={open}
+                        className="inline-flex min-h-touch items-center gap-1 rounded px-1.5 text-xs text-blue-600 hover:bg-blue-50"
+                    >
+                        <Pencil className="h-3.5 w-3.5" aria-hidden />
+                        {m.edit}
+                    </button>
+                )}
+            </div>
+
+            {editing ? (
+                <div className="mt-2 space-y-2">
+                    <RichTextEditor
+                        autoFocus
+                        rows={6}
+                        value={value}
+                        onChange={setValue}
+                        disabled={saving}
+                        maxLength={DESCRIPTION_MAX}
+                        placeholder={m.placeholder}
+                        ariaLabel={m.title}
+                        onSubmit={save}
+                        onCancel={() => setEditing(false)}
+                    />
+                    <div className="flex gap-2">
+                        <Button
+                            type="button"
+                            className="min-h-touch"
+                            disabled={saving}
+                            onClick={save}
+                        >
+                            {t.common.save}
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            className="min-h-touch"
+                            disabled={saving}
+                            onClick={() => setEditing(false)}
+                        >
+                            {t.common.cancel}
+                        </Button>
+                    </div>
+                </div>
+            ) : description !== '' ? (
+                <div className="mt-2 text-sm text-gray-700">
+                    <Suspense
+                        fallback={<p className="whitespace-pre-wrap">{description}</p>}
+                    >
+                        <Markdown content={description} />
+                    </Suspense>
+                </div>
+            ) : (
+                <button
+                    type="button"
+                    onClick={open}
+                    className="mt-2 min-h-touch w-full rounded-md border border-dashed border-gray-200 px-3 py-2 text-left text-sm text-gray-500 hover:border-gray-300 hover:bg-gray-50"
+                >
+                    {m.add}
+                </button>
+            )}
+        </section>
     );
 }
 

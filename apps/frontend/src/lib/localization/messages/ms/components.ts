@@ -162,4 +162,15 @@ export const componentsMessages = {
                 s5: "Bagaimana saya merekod pemulangan pelanggan?",
             },
         },
+        richText: {
+            toolbar: "Pemformatan",
+            hint: "Pemformatan: **tebal**, *condong*, - senarai dan [pautan](url).",
+            bold: "Tebal",
+            italic: "Condong",
+            strike: "Garis lorek",
+            code: "Kod",
+            bulletList: "Senarai bullet",
+            numberedList: "Senarai bernombor",
+            link: "Pautan",
+        },
 } as const;
