@@ -9,13 +9,28 @@ import {
     Min,
 } from 'class-validator';
 
-/** Which of the two lead lookup lists a request targets. */
+/**
+ * Which CRM lookup list a request targets.
+ *
+ * All three are the same shape — code / name / sort_order / is_system /
+ * is_active, edited from the one CRM Setup screen — so they share a controller
+ * and a service rather than each getting a near-identical module. What differs
+ * is only which table a row is counted against when it is deleted.
+ */
 export enum LeadTaxonomyKind {
     SOURCE = 'sources',
     CATEGORY = 'categories',
+    CHANNEL = 'channels',
 }
 
 export const MAX_TAXONOMY_NAME_LENGTH = 60;
+
+/**
+ * Emoji shown beside a conversation channel. Two code points of headroom over a
+ * single emoji, because several common ones (flags, skin-tone variants) are
+ * multi-code-point sequences.
+ */
+export const MAX_CHANNEL_ICON_LENGTH = 8;
 
 const trim = ({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value;
@@ -40,6 +55,13 @@ export class CreateLeadTaxonomyDto {
     @Max(25)
     score_weight?: number;
 
+    /** Emoji, channels only. Ignored for the two lead lists. */
+    @IsOptional()
+    @Transform(trim)
+    @IsString()
+    @Length(0, MAX_CHANNEL_ICON_LENGTH)
+    icon?: string;
+
     @IsOptional()
     @IsInt()
     @Min(0)
@@ -58,6 +80,12 @@ export class UpdateLeadTaxonomyDto {
     @Min(0)
     @Max(25)
     score_weight?: number;
+
+    @IsOptional()
+    @Transform(trim)
+    @IsString()
+    @Length(0, MAX_CHANNEL_ICON_LENGTH)
+    icon?: string;
 
     @IsOptional()
     @IsInt()

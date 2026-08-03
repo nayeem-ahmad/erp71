@@ -23,11 +23,11 @@ describe('addNavNodesToLayout', () => {
     ];
 
     it('adds a newly-registered node and leaves the result valid', () => {
-        const { layout, added } = addNavNodesToLayout(customised, ['crm.lead-taxonomy']);
+        const { layout, added } = addNavNodesToLayout(customised, ['crm.setup']);
 
-        expect(added).toEqual(['crm.lead-taxonomy']);
-        expect(layout.find((n) => n.id === 'crm.lead-taxonomy')).toEqual(
-            expect.objectContaining({ id: 'crm.lead-taxonomy', parentId: 'crm' }),
+        expect(added).toEqual(['crm.setup']);
+        expect(layout.find((n) => n.id === 'crm.setup')).toEqual(
+            expect.objectContaining({ id: 'crm.setup', parentId: 'crm' }),
         );
         expect(validateNavLayout(layout)).toEqual({ valid: true });
     });
@@ -35,14 +35,14 @@ describe('addNavNodesToLayout', () => {
     it('appends after existing siblings instead of reusing the default order', () => {
         // The default puts lead-taxonomy at sortOrder 6, but this layout's CRM
         // children stop at 2 — reusing 6 could collide with a customised sibling.
-        const { layout } = addNavNodesToLayout(customised, ['crm.lead-taxonomy']);
-        const node = layout.find((n) => n.id === 'crm.lead-taxonomy');
+        const { layout } = addNavNodesToLayout(customised, ['crm.setup']);
+        const node = layout.find((n) => n.id === 'crm.setup');
 
         expect(node?.sortOrder).toBe(3);
     });
 
     it('does not disturb the nodes already in the layout', () => {
-        const { layout } = addNavNodesToLayout(customised, ['crm.lead-taxonomy']);
+        const { layout } = addNavNodesToLayout(customised, ['crm.setup']);
 
         for (const original of customised) {
             expect(layout).toContainEqual(original);
@@ -50,11 +50,11 @@ describe('addNavNodesToLayout', () => {
     });
 
     it('is idempotent', () => {
-        const first = addNavNodesToLayout(customised, ['crm.lead-taxonomy']);
-        const second = addNavNodesToLayout(first.layout, ['crm.lead-taxonomy']);
+        const first = addNavNodesToLayout(customised, ['crm.setup']);
+        const second = addNavNodesToLayout(first.layout, ['crm.setup']);
 
         expect(second.added).toEqual([]);
-        expect(second.skipped).toEqual([{ id: 'crm.lead-taxonomy', reason: 'already present' }]);
+        expect(second.skipped).toEqual([{ id: 'crm.setup', reason: 'already present' }]);
         expect(second.layout).toEqual(first.layout);
     });
 
@@ -62,10 +62,10 @@ describe('addNavNodesToLayout', () => {
         // An orphan child fails validateNavLayout, which would make the whole
         // saved layout unloadable — worse than the missing menu item.
         const withoutCrm: NavLayoutNode[] = [{ id: 'help', parentId: null, sortOrder: 1, visible: true }];
-        const { layout, added, skipped } = addNavNodesToLayout(withoutCrm, ['crm.lead-taxonomy']);
+        const { layout, added, skipped } = addNavNodesToLayout(withoutCrm, ['crm.setup']);
 
         expect(added).toEqual([]);
-        expect(skipped).toEqual([{ id: 'crm.lead-taxonomy', reason: 'parent "crm" is not in this layout' }]);
+        expect(skipped).toEqual([{ id: 'crm.setup', reason: 'parent "crm" is not in this layout' }]);
         expect(layout).toEqual(withoutCrm);
     });
 
@@ -78,15 +78,15 @@ describe('addNavNodesToLayout', () => {
 
     it('leaves a full default layout untouched', () => {
         const defaults = getDefaultNavLayout(NavScope.TENANT);
-        const { layout, added } = addNavNodesToLayout(defaults, ['crm.lead-taxonomy']);
+        const { layout, added } = addNavNodesToLayout(defaults, ['crm.setup']);
 
         expect(added).toEqual([]);
         expect(layout).toEqual(defaults);
     });
 
-    it('ships crm.lead-taxonomy in the default layout under the crm module', () => {
+    it('ships crm.setup in the default layout under the crm module', () => {
         const defaults = getDefaultNavLayout(NavScope.TENANT);
-        const node = defaults.find((n) => n.id === 'crm.lead-taxonomy');
+        const node = defaults.find((n) => n.id === 'crm.setup');
 
         expect(node).toEqual(expect.objectContaining({ parentId: 'crm' }));
         expect(validateNavLayout(defaults)).toEqual({ valid: true });

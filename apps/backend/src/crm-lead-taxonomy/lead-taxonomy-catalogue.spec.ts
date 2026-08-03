@@ -21,18 +21,25 @@ const pkg = require('@erp71/database');
 /* eslint-enable @typescript-eslint/no-var-requires */
 
 const {
+    DEFAULT_CONVERSATION_CHANNELS,
     DEFAULT_LEAD_CATEGORIES,
     DEFAULT_LEAD_SOURCES,
     FALLBACK_SOURCE_CODE,
     LEGACY_LEAD_CATEGORY_CODES,
     LEGACY_LEAD_SOURCE_CODES,
 } = source as {
+    DEFAULT_CONVERSATION_CHANNELS: { code: string; name: string; icon: string; sort_order: number }[];
     DEFAULT_LEAD_CATEGORIES: { code: string; name: string; sort_order: number }[];
     DEFAULT_LEAD_SOURCES: { code: string; name: string; score_weight: number; sort_order: number }[];
     FALLBACK_SOURCE_CODE: string;
     LEGACY_LEAD_CATEGORY_CODES: readonly string[];
     LEGACY_LEAD_SOURCE_CODES: readonly string[];
 };
+
+/** The members of the `LeadConversationType` enum the channel list replaced. */
+const LEGACY_CONVERSATION_TYPES = [
+    'CALL', 'SMS', 'WHATSAPP', 'EMAIL', 'VISIT', 'ONLINE_MEETING', 'NOTE',
+];
 
 describe('lead taxonomy catalogue', () => {
     it('reaches the backend through the package entry point', () => {
@@ -45,6 +52,7 @@ describe('lead taxonomy catalogue', () => {
     it('keeps the runtime mirror identical to the TypeScript source', () => {
         expect(pkg.DEFAULT_LEAD_SOURCES).toEqual(DEFAULT_LEAD_SOURCES);
         expect(pkg.DEFAULT_LEAD_CATEGORIES).toEqual(DEFAULT_LEAD_CATEGORIES);
+        expect(pkg.DEFAULT_CONVERSATION_CHANNELS).toEqual(DEFAULT_CONVERSATION_CHANNELS);
         expect(pkg.LEGACY_LEAD_SOURCE_CODES).toEqual([...LEGACY_LEAD_SOURCE_CODES]);
         expect(pkg.LEGACY_LEAD_CATEGORY_CODES).toEqual([...LEGACY_LEAD_CATEGORY_CODES]);
     });
@@ -77,8 +85,15 @@ describe('lead taxonomy catalogue', () => {
         expect(DEFAULT_LEAD_SOURCES.some((s) => s.code === FALLBACK_SOURCE_CODE)).toBe(true);
     });
 
+    it('ships a channel for every value the old enum allowed, so no logged conversation is orphaned', () => {
+        const channelCodes = DEFAULT_CONVERSATION_CHANNELS.map((c) => c.code);
+        for (const code of LEGACY_CONVERSATION_TYPES) {
+            expect(channelCodes).toContain(code);
+        }
+    });
+
     it('has unique codes and names within each list', () => {
-        for (const list of [DEFAULT_LEAD_SOURCES, DEFAULT_LEAD_CATEGORIES]) {
+        for (const list of [DEFAULT_LEAD_SOURCES, DEFAULT_LEAD_CATEGORIES, DEFAULT_CONVERSATION_CHANNELS]) {
             const codes = list.map((r) => r.code);
             const names = list.map((r) => r.name.toLowerCase());
             expect(new Set(codes).size).toBe(codes.length);

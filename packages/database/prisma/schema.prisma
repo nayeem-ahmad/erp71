@@ -516,6 +516,7 @@ model Tenant {
   leadConversations   LeadConversation[]
   leadSourceOptions   LeadSourceOption[]
   leadCategoryOptions LeadCategoryOption[]
+  conversationChannels ConversationChannel[]
   crmContacts         CrmContact[]
   crmContactAttachments CrmContactAttachment[]
   customFieldDefinitions CustomFieldDefinition[]
@@ -1827,27 +1828,67 @@ model CustomFieldDefinition {
   @@index([tenant_id, entity])
 }
 
+/// Tenant-editable communication channels a conversation can be logged under.
+/// Replaces the hardcoded CALL | SMS | WHATSAPP | … list that used to live in
+/// `LeadConversationType`.
+///
+/// Same shape and same rules as `LeadSourceOption`: `code` is the immutable join
+/// key (seeded rows reuse the old enum members so historical `LeadConversation.type`
+/// values still match), `name` is the label a tenant renames freely, and seeded
+/// rows carry `is_system` so the idempotent tenant sync deactivates rather than
+/// resurrects them.
+model ConversationChannel {
+  id         String   @id @default(uuid())
+  tenant_id  String
+  code       String
+  name       String
+  /// Emoji shown beside the channel in conversation lists. Free text rather than
+  /// an icon-name enum so a tenant adding "Telegram" can pick its own glyph
+  /// without a code change; the UI falls back to a generic bubble when unset.
+  icon       String?
+  sort_order Int      @default(0)
+  is_system  Boolean  @default(false)
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant        Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  conversations LeadConversation[]
+
+  @@unique([tenant_id, code])
+  @@unique([tenant_id, name])
+  @@index([tenant_id, is_active, sort_order])
+}
+
 model LeadConversation {
   id          String   @id @default(uuid())
   tenant_id   String
   store_id    String?
   lead_id     String
-  type        String   // CALL | SMS | WHATSAPP | EMAIL | VISIT | ONLINE_MEETING | NOTE
+  /// The channel's `code`, denormalised. Kept alongside `channel_id` because every
+  /// filter, sort and groupBy on this table reads it, and the composite index below
+  /// serves those directly — resolving a code to an id on every request would buy
+  /// nothing. Written only by the service, always from the resolved channel.
+  type        String
+  channel_id  String?
   direction   String   @default("OUTBOUND")
   summary     String
   outcome     String?
   created_by  String?
   created_at  DateTime @default(now())
 
-  tenant   Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  lead     Lead   @relation(fields: [lead_id], references: [id], onDelete: Cascade)
-  creator  User?  @relation("LeadConversationCreator", fields: [created_by], references: [id])
+  tenant   Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  lead     Lead                 @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+  creator  User?                @relation("LeadConversationCreator", fields: [created_by], references: [id])
+  channel  ConversationChannel? @relation(fields: [channel_id], references: [id], onDelete: Restrict)
 
   @@index([tenant_id, lead_id])
   @@index([tenant_id, created_at])
   // Serves the cross-lead conversations list, which filters by type across every lead.
   // Without it a type filter degrades to a full tenant-partition scan.
   @@index([tenant_id, type, created_at])
+  // Serves the per-channel usage counts on the CRM Setup screen.
+  @@index([tenant_id, channel_id])
 }
 
 /// A dated, assignable prompt to contact a customer or a lead — "call Rahim

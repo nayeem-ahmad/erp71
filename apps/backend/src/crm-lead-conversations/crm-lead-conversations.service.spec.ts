@@ -1,10 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { BadRequestException } from '@nestjs/common';
 import { CrmLeadConversationsService } from './crm-lead-conversations.service';
+import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
 import { DatabaseService } from '../database/database.service';
 
 describe('CrmLeadConversationsService', () => {
     let service: CrmLeadConversationsService;
     let db: any;
+    let taxonomy: { resolveByIdOrCode: jest.Mock };
+
+    const callChannel = { id: 'ch-call', code: 'CALL', name: 'Call', is_active: true };
 
     beforeEach(async () => {
         db = {
@@ -26,10 +31,13 @@ describe('CrmLeadConversationsService', () => {
             $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
         };
 
+        taxonomy = { resolveByIdOrCode: jest.fn().mockResolvedValue(callChannel) };
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CrmLeadConversationsService,
                 { provide: DatabaseService, useValue: db },
+                { provide: CrmLeadTaxonomyService, useValue: taxonomy },
             ],
         }).compile();
 
@@ -166,13 +174,65 @@ describe('CrmLeadConversationsService', () => {
         });
     });
 
+    describe('create() channel resolution', () => {
+        beforeEach(() => {
+            db.lead.findFirst.mockResolvedValue({
+                id: 'lead-1',
+                status: 'NEW',
+                priority: 'MEDIUM',
+                sourceOption: { score_weight: 10 },
+            });
+            db.leadConversation.create.mockResolvedValue({ id: 'conv-1' });
+        });
+
+        // The client may send either form, and `type` is what every filter reads, so
+        // storing the raw input would make an id-sending client invisible to filters.
+        it('stores the resolved code and FK, whatever form the client sent', async () => {
+            taxonomy.resolveByIdOrCode.mockResolvedValue(callChannel);
+
+            await service.create('tenant-1', 'user-1', {
+                lead_id: 'lead-1',
+                type: 'ch-call',
+                summary: 'Called about pricing',
+            });
+
+            const data = db.leadConversation.create.mock.calls[0][0].data;
+            expect(data).toMatchObject({ type: 'CALL', channel_id: 'ch-call' });
+        });
+
+        it('rejects a channel the tenant does not have', async () => {
+            taxonomy.resolveByIdOrCode.mockResolvedValue(null);
+
+            await expect(
+                service.create('tenant-1', 'user-1', {
+                    lead_id: 'lead-1',
+                    type: 'PIGEON',
+                    summary: 'x',
+                }),
+            ).rejects.toThrow(BadRequestException);
+            expect(db.leadConversation.create).not.toHaveBeenCalled();
+        });
+
+        it('rejects a retired channel, which the form must stop offering', async () => {
+            taxonomy.resolveByIdOrCode.mockResolvedValue({ ...callChannel, is_active: false });
+
+            await expect(
+                service.create('tenant-1', 'user-1', {
+                    lead_id: 'lead-1',
+                    type: 'CALL',
+                    summary: 'x',
+                }),
+            ).rejects.toThrow(BadRequestException);
+        });
+    });
+
     describe('getSummary()', () => {
-        it('zero-fills every conversation type so the tiles are stable', async () => {
+        // No fixed set to zero-fill any more — the caller renders the tenant's own
+        // channel list and reads a missing key as zero.
+        it('keys the breakdown only by channels that actually occur', async () => {
             db.leadConversation.groupBy.mockResolvedValue([]);
             const result = await service.getSummary('tenant-1', {});
-            expect(result.countsByType).toEqual({
-                CALL: 0, SMS: 0, WHATSAPP: 0, EMAIL: 0, VISIT: 0, ONLINE_MEETING: 0, NOTE: 0,
-            });
+            expect(result.countsByType).toEqual({});
         });
 
         it('maps grouped counts onto the type breakdown', async () => {
@@ -187,7 +247,7 @@ describe('CrmLeadConversationsService', () => {
             const result = await service.getSummary('tenant-1', {});
             expect(result.countsByType.CALL).toBe(7);
             expect(result.countsByType.VISIT).toBe(2);
-            expect(result.countsByType.SMS).toBe(0);
+            expect(result.countsByType.SMS).toBeUndefined();
         });
 
         it('counts distinct leads via GROUP BY rather than fetching every row', async () => {

@@ -26,11 +26,12 @@ import {
     UpdateLeadTaxonomyDto,
 } from './lead-taxonomy.dto';
 
-/** Rejects any path segment that is not one of the two known lists. */
+const KINDS = Object.values(LeadTaxonomyKind) as string[];
+
+/** Rejects any path segment that is not one of the known lists. */
 function parseKind(kind: string): LeadTaxonomyKind {
-    if (kind === LeadTaxonomyKind.SOURCE) return LeadTaxonomyKind.SOURCE;
-    if (kind === LeadTaxonomyKind.CATEGORY) return LeadTaxonomyKind.CATEGORY;
-    throw new BadRequestException('Unsupported lead taxonomy list.');
+    if (!KINDS.includes(kind)) throw new BadRequestException('Unsupported CRM setup list.');
+    return kind as LeadTaxonomyKind;
 }
 
 @Controller('crm/lead-taxonomy')
@@ -40,8 +41,9 @@ export class CrmLeadTaxonomyController {
     constructor(private readonly service: CrmLeadTaxonomyService) {}
 
     /**
-     * Readable by anyone who can see leads — the lead form and list filters need
-     * it. Only the mutations require MANAGE_CRM_SETTINGS.
+     * Readable by anyone who can see leads — the lead form, the log-conversation
+     * form and the list filters all need it. Only the mutations require
+     * MANAGE_CRM_SETTINGS.
      */
     @Get(':kind')
     list(
