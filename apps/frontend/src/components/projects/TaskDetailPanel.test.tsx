@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import TaskDetailPanel from './TaskDetailPanel';
 
 jest.mock('@/lib/toast', () => ({
@@ -12,6 +12,14 @@ const addTaskChecklistItem = jest.fn();
 const updateTaskChecklistItem = jest.fn();
 const deleteTaskChecklistItem = jest.fn();
 const reorderTaskChecklist = jest.fn();
+const getTaskComments = jest.fn();
+const getTaskActivity = jest.fn();
+const getTaskWatchers = jest.fn();
+const addTaskComment = jest.fn();
+const updateTaskComment = jest.fn();
+const deleteTaskComment = jest.fn();
+const watchTask = jest.fn();
+const unwatchTask = jest.fn();
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -24,6 +32,15 @@ jest.mock('@/lib/api', () => ({
         updateTaskChecklistItem: (...args: unknown[]) => updateTaskChecklistItem(...args),
         deleteTaskChecklistItem: (...args: unknown[]) => deleteTaskChecklistItem(...args),
         reorderTaskChecklist: (...args: unknown[]) => reorderTaskChecklist(...args),
+        getMe: jest.fn().mockResolvedValue({ id: 'user-me' }),
+        getTaskComments: (...args: unknown[]) => getTaskComments(...args),
+        getTaskActivity: (...args: unknown[]) => getTaskActivity(...args),
+        getTaskWatchers: (...args: unknown[]) => getTaskWatchers(...args),
+        addTaskComment: (...args: unknown[]) => addTaskComment(...args),
+        updateTaskComment: (...args: unknown[]) => updateTaskComment(...args),
+        deleteTaskComment: (...args: unknown[]) => deleteTaskComment(...args),
+        watchTask: (...args: unknown[]) => watchTask(...args),
+        unwatchTask: (...args: unknown[]) => unwatchTask(...args),
     },
 }));
 
@@ -53,11 +70,22 @@ beforeEach(() => {
         updateTaskChecklistItem,
         deleteTaskChecklistItem,
         reorderTaskChecklist,
+        getTaskComments,
+        getTaskActivity,
+        getTaskWatchers,
+        addTaskComment,
+        updateTaskComment,
+        deleteTaskComment,
+        watchTask,
+        unwatchTask,
     ]) {
         mock.mockReset();
         mock.mockResolvedValue({});
     }
     getProjectLabels.mockResolvedValue([]);
+    getTaskComments.mockResolvedValue([]);
+    getTaskActivity.mockResolvedValue([]);
+    getTaskWatchers.mockResolvedValue([]);
     getProjectTask.mockResolvedValue(
         withChecklist([item('c1', 'Pull the cable', true), item('c2', 'Fit the box', false, 1)]),
     );
@@ -300,6 +328,9 @@ describe('TaskDetailPanel labels', () => {
 
     it('hides the section entirely when the workspace has no labels', async () => {
         getProjectLabels.mockResolvedValue([]);
+    getTaskComments.mockResolvedValue([]);
+    getTaskActivity.mockResolvedValue([]);
+    getTaskWatchers.mockResolvedValue([]);
         panel();
 
         await screen.findByText('Pull the cable');
@@ -378,5 +409,121 @@ describe('TaskDetailPanel dates', () => {
         });
 
         await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Nope'));
+    });
+});
+
+describe('TaskDetailPanel activity', () => {
+    const comment = (id: string, at: string, userId = 'user-me') => ({
+        id,
+        body: `Comment ${id}`,
+        created_at: at,
+        user: { id: userId, name: 'Karim', email: 'k@x.com' },
+    });
+
+    it('shows comments and activity in one timeline', async () => {
+        getTaskComments.mockResolvedValue([comment('c1', '2026-08-03T10:00:00Z')]);
+        getTaskActivity.mockResolvedValue([
+            {
+                id: 'a1',
+                type: 'STATUS_CHANGED',
+                data: { from: 'To do', to: 'Doing' },
+                created_at: '2026-08-03T11:00:00Z',
+                actor: { id: 'user-2', name: 'Rahim', email: 'r@x.com' },
+            },
+        ]);
+        panel();
+
+        expect(await screen.findByText('Comment c1')).toBeInTheDocument();
+        expect(screen.getByText(/moved it from To do to Doing/)).toBeInTheDocument();
+    });
+
+    it('posts a comment and clears the box', async () => {
+        panel();
+        const box = await screen.findByLabelText('Add a comment…');
+        fireEvent.change(box, { target: { value: '  Looks done  ' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
+
+        await waitFor(() => expect(addTaskComment).toHaveBeenCalledWith('t1', 'Looks done'));
+        await waitFor(() => expect(box).toHaveValue(''));
+    });
+
+    it('will not post an empty comment', async () => {
+        panel();
+        await screen.findByLabelText('Add a comment…');
+        expect(screen.getByRole('button', { name: 'Comment' })).toBeDisabled();
+    });
+
+    it('offers edit and delete only on your own comment', async () => {
+        getTaskComments.mockResolvedValue([
+            comment('mine', '2026-08-03T10:00:00Z', 'user-me'),
+            comment('theirs', '2026-08-03T09:00:00Z', 'user-2'),
+        ]);
+        panel();
+
+        await screen.findByText('Comment mine');
+        // One Edit and one Delete — for the one comment that is yours.
+        expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(1);
+        expect(screen.getAllByRole('button', { name: 'Delete' })).toHaveLength(1);
+    });
+
+    // Scoped to the comment: the re-estimate form above has its own Save.
+    const commentEditor = () =>
+        within(screen.getByLabelText('Edit comment').closest('li') as HTMLElement);
+
+    it('edits your own comment', async () => {
+        getTaskComments.mockResolvedValue([comment('c1', '2026-08-03T10:00:00Z')]);
+        panel();
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+        fireEvent.change(screen.getByLabelText('Edit comment'), { target: { value: 'Revised' } });
+        fireEvent.click(commentEditor().getByRole('button', { name: 'Save' }));
+
+        await waitFor(() => expect(updateTaskComment).toHaveBeenCalledWith('c1', 'Revised'));
+    });
+
+    it('does not save an edit that changed nothing', async () => {
+        getTaskComments.mockResolvedValue([comment('c1', '2026-08-03T10:00:00Z')]);
+        panel();
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+        fireEvent.click(commentEditor().getByRole('button', { name: 'Save' }));
+
+        expect(updateTaskComment).not.toHaveBeenCalled();
+    });
+
+    it('watches and unwatches', async () => {
+        panel();
+        fireEvent.click(await screen.findByRole('button', { name: /Watch/ }));
+        await waitFor(() => expect(watchTask).toHaveBeenCalledWith('t1'));
+
+        getTaskWatchers.mockResolvedValue([{ user_id: 'user-me' }]);
+        panel();
+        fireEvent.click(await screen.findByRole('button', { name: /Watching/ }));
+        await waitFor(() => expect(unwatchTask).toHaveBeenCalledWith('t1'));
+    });
+
+    it('shows you are already watching when you are', async () => {
+        getTaskWatchers.mockResolvedValue([{ user_id: 'user-me' }]);
+        panel();
+
+        expect(await screen.findByRole('button', { name: /Watching/ })).toHaveAttribute(
+            'aria-pressed',
+            'true',
+        );
+    });
+
+    // An empty timeline and a broken one look identical otherwise — the trap
+    // logged against useServerList, in miniature.
+    it('says the feed failed rather than showing it as empty', async () => {
+        getTaskActivity.mockRejectedValue(new Error('nope'));
+        panel();
+
+        expect(await screen.findByText('Could not load the activity.')).toBeInTheDocument();
+        expect(screen.queryByText('Nothing has happened here yet.')).not.toBeInTheDocument();
+    });
+
+    it('says so when there is genuinely nothing yet', async () => {
+        panel();
+        expect(await screen.findByText('Nothing has happened here yet.')).toBeInTheDocument();
     });
 });

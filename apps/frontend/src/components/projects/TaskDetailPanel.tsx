@@ -1,10 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Eye, EyeOff, Trash2 } from 'lucide-react';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
-import { Button, Checkbox, Input, Select, Field, StatusBadge } from '@/components/ui';
+import { Button, Checkbox, Input, Select, Textarea, Field, StatusBadge } from '@/components/ui';
 import { labelClass, labelsOf, type ProjectLabel } from '@/components/projects/board-tasks';
+import {
+    actorName,
+    describeActivity,
+    mergeFeed,
+    type FeedEntry,
+} from '@/components/projects/task-activity';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -215,6 +221,8 @@ export default function TaskDetailPanel({
                             onChanged={refresh}
                         />
 
+                        <ActivitySection taskId={taskId} onChanged={onChanged} />
+
                         <section className="rounded-md border border-gray-200 p-3">
                             <h3 className="mb-2 text-sm font-medium">{m.time.log}</h3>
                             <form onSubmit={logTime} className="space-y-2">
@@ -395,6 +403,226 @@ export default function TaskDetailPanel({
                 </Button>
             </ModalFooter>
         </ModalShell>
+    );
+}
+
+/**
+ * Comments and the change log in one timeline, because "what happened to this
+ * task" is one question. Loads independently of the panel: the feed is the
+ * heaviest part of the card and the least urgent, and a failure here must not
+ * cost you the hours form above it.
+ */
+function ActivitySection({
+    taskId,
+    onChanged,
+}: {
+    taskId: string;
+    onChanged?: () => void;
+}) {
+    const { t } = useI18n();
+    const m = t.projects.activity;
+
+    const [feed, setFeed] = useState<FeedEntry[]>([]);
+    const [watching, setWatching] = useState(false);
+    const [me, setMe] = useState<string | null>(null);
+    const [draft, setDraft] = useState('');
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editBody, setEditBody] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [failed, setFailed] = useState(false);
+
+    const load = useCallback(async () => {
+        try {
+            const [comments, activity, watchers, user] = await Promise.all([
+                api.getTaskComments(taskId),
+                api.getTaskActivity(taskId),
+                api.getTaskWatchers(taskId),
+                api.getMe(),
+            ]);
+            const userId = (user as { id?: string } | null)?.id ?? null;
+            setMe(userId);
+            setFeed(
+                mergeFeed(
+                    Array.isArray(comments) ? comments : [],
+                    Array.isArray(activity) ? activity : [],
+                ),
+            );
+            setWatching(
+                Array.isArray(watchers) &&
+                    watchers.some((w: { user_id?: string }) => w.user_id === userId),
+            );
+            setFailed(false);
+        } catch {
+            // An empty timeline and a broken one look identical otherwise —
+            // the trap logged against useServerList, in miniature.
+            setFailed(true);
+        }
+    }, [taskId]);
+
+    useEffect(() => {
+        load();
+    }, [load]);
+
+    const run = async (action: () => Promise<unknown>) => {
+        setSaving(true);
+        try {
+            await action();
+            await load();
+            onChanged?.();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.saveFailed);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const submit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const body = draft.trim();
+        if (!body) return;
+        return run(async () => {
+            await api.addTaskComment(taskId, body);
+            setDraft('');
+        });
+    };
+
+    const commitEdit = (comment: FeedEntry & { kind: 'comment' }) => {
+        const body = editBody.trim();
+        setEditingId(null);
+        if (!body || body === comment.body) return;
+        return run(() => api.updateTaskComment(comment.id, body));
+    };
+
+    return (
+        <section className="rounded-md border border-gray-200 p-3">
+            <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-medium">{m.title}</h3>
+                <Button
+                    type="button"
+                    variant={watching ? 'secondary' : 'ghost'}
+                    className="min-h-touch"
+                    disabled={saving}
+                    aria-pressed={watching}
+                    onClick={() =>
+                        run(() => (watching ? api.unwatchTask(taskId) : api.watchTask(taskId)))
+                    }
+                >
+                    {watching ? (
+                        <Eye className="mr-1 h-4 w-4" />
+                    ) : (
+                        <EyeOff className="mr-1 h-4 w-4" />
+                    )}
+                    {watching ? m.watching : m.watch}
+                </Button>
+            </div>
+            <p className="mt-0.5 text-xs text-gray-500">{m.watchHint}</p>
+
+            <form onSubmit={submit} className="mt-2 space-y-2">
+                <Textarea
+                    rows={2}
+                    value={draft}
+                    aria-label={m.commentPlaceholder}
+                    placeholder={m.commentPlaceholder}
+                    onChange={(e) => setDraft(e.target.value)}
+                />
+                <Button
+                    type="submit"
+                    className="min-h-touch"
+                    disabled={saving || draft.trim() === ''}
+                >
+                    {m.comment}
+                </Button>
+            </form>
+
+            {failed ? (
+                <p className="mt-3 text-sm text-danger">{m.loadFailed}</p>
+            ) : feed.length === 0 ? (
+                <p className="mt-3 text-sm text-gray-500">{m.empty}</p>
+            ) : (
+                <ul className="mt-3 space-y-2">
+                    {feed.map((entry) => (
+                        <li key={`${entry.kind}-${entry.id}`} className="text-sm">
+                            {entry.kind === 'comment' ? (
+                                <div className="rounded-md bg-gray-50 p-2">
+                                    <p className="text-xs text-gray-500">
+                                        {actorName(entry.user) ?? m.someone} ·{' '}
+                                        {new Date(entry.created_at).toLocaleString()}
+                                    </p>
+                                    {editingId === entry.id ? (
+                                        <div className="mt-1 space-y-2">
+                                            <Textarea
+                                                rows={2}
+                                                autoFocus
+                                                value={editBody}
+                                                aria-label={m.editComment}
+                                                onChange={(e) => setEditBody(e.target.value)}
+                                            />
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    type="button"
+                                                    className="min-h-touch"
+                                                    disabled={saving}
+                                                    onClick={() => commitEdit(entry)}
+                                                >
+                                                    {t.common.save}
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    className="min-h-touch"
+                                                    onClick={() => setEditingId(null)}
+                                                >
+                                                    {t.common.cancel}
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <p className="mt-0.5 whitespace-pre-wrap">{entry.body}</p>
+                                    )}
+
+                                    {/* Only your own — an audit trail nobody
+                                        else can rewrite. */}
+                                    {me && entry.user?.id === me && editingId !== entry.id && (
+                                        <div className="mt-1 flex gap-2 text-xs">
+                                            <button
+                                                type="button"
+                                                className="min-h-touch text-blue-600"
+                                                onClick={() => {
+                                                    setEditingId(entry.id);
+                                                    setEditBody(entry.body);
+                                                }}
+                                            >
+                                                {t.common.edit}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="min-h-touch text-red-600"
+                                                disabled={saving}
+                                                onClick={() =>
+                                                    run(() => api.deleteTaskComment(entry.id))
+                                                }
+                                            >
+                                                {t.common.delete}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <p className="text-gray-600">
+                                    <span className="text-gray-900">
+                                        {actorName(entry.actor) ?? m.someone}
+                                    </span>{' '}
+                                    {describeActivity(entry, m.types as Record<string, string>)}
+                                    <span className="ml-1 text-xs text-gray-400">
+                                        {new Date(entry.created_at).toLocaleString()}
+                                    </span>
+                                </p>
+                            )}
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </section>
     );
 }
 

@@ -3042,6 +3042,29 @@ export const api = {
         }),
     deleteTaskChecklistItem: (itemId: string) =>
         fetchWithAuth(`/project-tasks/checklist/${itemId}`, { method: 'DELETE' }),
+    getTaskComments: (taskId: string) => fetchWithAuth(`/project-tasks/${taskId}/comments`),
+    addTaskComment: (taskId: string, body: string) =>
+        fetchWithAuth(`/project-tasks/${taskId}/comments`, {
+            method: 'POST',
+            body: JSON.stringify({ body }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateTaskComment: (commentId: string, body: string) =>
+        fetchWithAuth(`/project-tasks/comments/${commentId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ body }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteTaskComment: (commentId: string) =>
+        fetchWithAuth(`/project-tasks/comments/${commentId}`, { method: 'DELETE' }),
+
+    getTaskActivity: (taskId: string) => fetchWithAuth(`/project-tasks/${taskId}/activity`),
+    getTaskWatchers: (taskId: string) => fetchWithAuth(`/project-tasks/${taskId}/watchers`),
+    watchTask: (taskId: string) =>
+        fetchWithAuth(`/project-tasks/${taskId}/watch`, { method: 'POST' }),
+    unwatchTask: (taskId: string) =>
+        fetchWithAuth(`/project-tasks/${taskId}/watch`, { method: 'DELETE' }),
+
     // Sends the whole order, not the moved pair — see ReorderChecklistDto.
     reorderTaskChecklist: (taskId: string, itemIds: string[]) =>
         fetchWithAuth(`/project-tasks/${taskId}/checklist/reorder`, {

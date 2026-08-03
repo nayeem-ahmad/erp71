@@ -525,12 +525,11 @@ export class UpdateTaskStatusDto {
 }
 
 export class CreateCommentDto {
-    @IsOptional() @IsUUID()
-    projectId?: string;
+    @IsString() @MinLength(1) @MaxLength(5000)
+    body!: string;
+}
 
-    @IsOptional() @IsUUID()
-    taskId?: string;
-
+export class UpdateCommentDto {
     @IsString() @MinLength(1) @MaxLength(5000)
     body!: string;
 }

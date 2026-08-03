@@ -4,6 +4,7 @@ import { paginate } from '../common/pagination.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { RemainingHoursService, RemainingSource } from './remaining-hours.service';
 import { ProjectSettingsService } from './project-settings.service';
+import { ActivityType, ProjectActivityService } from './project-activity.service';
 import {
     CreateChecklistItemDto,
     CreateTaskDto,
@@ -39,6 +40,7 @@ export class ProjectTasksService {
         private readonly db: DatabaseService,
         private readonly remaining: RemainingHoursService,
         private readonly settings: ProjectSettingsService,
+        private readonly activity: ProjectActivityService,
     ) {}
 
     async list(tenantId: string, query: ListTasksDto) {
@@ -174,6 +176,18 @@ export class ProjectTasksService {
 
         if (dto.labelIds?.length) await this.setLabels(tenantId, task.id, dto.labelIds);
 
+        await this.activity.record({
+            tenantId,
+            taskId: task.id,
+            projectId: dto.projectId,
+            type: ActivityType.CREATED,
+            actorId: userId,
+        });
+        // Whoever made it, and whoever it landed on, hear about it by default —
+        // a watch list nobody is ever added to is a feature nobody uses.
+        await this.activity.watch(tenantId, task.id, userId);
+        if (dto.assigneeId) await this.activity.watch(tenantId, task.id, dto.assigneeId);
+
         if (opening != null) {
             await this.remaining.write({
                 tenantId,
@@ -233,6 +247,8 @@ export class ProjectTasksService {
         });
 
         if (dto.labelIds !== undefined) await this.setLabels(tenantId, taskId, dto.labelIds);
+
+        await this.recordUpdateActivity(tenantId, userId, task, dto, statusId);
 
         const previous = task.remaining_hours == null ? null : Number(task.remaining_hours);
         const sprintId = dto.sprintId !== undefined ? dto.sprintId || null : task.sprint_id;
@@ -331,6 +347,25 @@ export class ProjectTasksService {
             }
         });
 
+        if (status.id !== task.status_id) {
+            await this.activity.record({
+                tenantId,
+                taskId,
+                projectId: task.project_id,
+                type: ActivityType.STATUS_CHANGED,
+                data: { from: task.status?.name ?? null, to: status.name },
+                actorId: userId,
+            });
+            await this.activity.notifyWatchers({
+                tenantId,
+                taskId,
+                actorId: userId,
+                title: task.title,
+                body: `Moved to ${status.name}`,
+                link: `/projects/${task.project_id}/board`,
+            });
+        }
+
         // Dragging a card into or out of a Done column is a status change like
         // any other, so it burns the same way.
         const previous = task.remaining_hours == null ? null : Number(task.remaining_hours);
@@ -406,6 +441,134 @@ export class ProjectTasksService {
                 ...(dto.sortOrder !== undefined ? { sort_order: dto.sortOrder } : {}),
             },
         });
+    }
+
+    /**
+     * One row per thing that actually changed, so the feed reads as a list of
+     * edits rather than "updated the task" repeated forever. `data` carries the
+     * before/after values; the sentence is composed client-side so it translates.
+     */
+    private async recordUpdateActivity(
+        tenantId: string,
+        userId: string,
+        task: TaskForActivity,
+        dto: UpdateTaskDto,
+        statusId: string,
+    ) {
+        const base = { tenantId, taskId: task.id, projectId: task.project_id, actorId: userId };
+
+        if (dto.title !== undefined && dto.title.trim() !== task.title) {
+            await this.activity.record({
+                ...base,
+                type: ActivityType.RENAMED,
+                data: { from: task.title, to: dto.title.trim() },
+            });
+        }
+
+        if (dto.statusId !== undefined && statusId !== task.status_id) {
+            const [from, to] = await Promise.all([
+                this.statusName(tenantId, task.status_id),
+                this.statusName(tenantId, statusId),
+            ]);
+            await this.activity.record({
+                ...base,
+                type: ActivityType.STATUS_CHANGED,
+                data: { from, to },
+            });
+        }
+
+        if (
+            (dto.assigneeId !== undefined && (dto.assigneeId || null) !== task.assignee_id) ||
+            (dto.assigneeEmployeeId !== undefined &&
+                (dto.assigneeEmployeeId || null) !== task.assignee_employee_id)
+        ) {
+            const to = await this.assigneeName(
+                tenantId,
+                dto.assigneeId ?? null,
+                dto.assigneeEmployeeId ?? null,
+            );
+            await this.activity.record({ ...base, type: ActivityType.ASSIGNED, data: { to } });
+
+            if (dto.assigneeId) {
+                await this.activity.watch(tenantId, task.id, dto.assigneeId);
+                await this.activity.notifyWatchers({
+                    tenantId,
+                    taskId: task.id,
+                    actorId: userId,
+                    title: task.title,
+                    body: `Assigned to ${to ?? 'nobody'}`,
+                    link: `/projects/${task.project_id}/board`,
+                });
+            }
+        }
+
+        if (dto.priority !== undefined && dto.priority !== task.priority) {
+            await this.activity.record({
+                ...base,
+                type: ActivityType.PRIORITY_CHANGED,
+                data: { from: task.priority, to: dto.priority },
+            });
+        }
+
+        if (dto.startDate !== undefined || dto.dueDate !== undefined) {
+            await this.activity.record({
+                ...base,
+                type: ActivityType.DATES_CHANGED,
+                data: {
+                    ...(dto.startDate !== undefined ? { start: dto.startDate || null } : {}),
+                    ...(dto.dueDate !== undefined ? { due: dto.dueDate || null } : {}),
+                },
+            });
+        }
+
+        if (dto.labelIds !== undefined) {
+            await this.activity.record({
+                ...base,
+                type: ActivityType.LABELS_CHANGED,
+                data: { count: dto.labelIds.length },
+            });
+        }
+
+        if (dto.remainingHours !== undefined) {
+            await this.activity.record({
+                ...base,
+                type: ActivityType.RE_ESTIMATED,
+                data: {
+                    from: task.remaining_hours == null ? null : Number(task.remaining_hours),
+                    to: dto.remainingHours,
+                },
+            });
+        }
+    }
+
+    private async statusName(tenantId: string, statusId: string) {
+        const status = await this.db.projectTaskStatus.findFirst({
+            where: { id: statusId, tenant_id: tenantId },
+            select: { name: true },
+        });
+        return status?.name ?? null;
+    }
+
+    private async assigneeName(
+        tenantId: string,
+        userId: string | null,
+        employeeId: string | null,
+    ) {
+        if (userId) {
+            const user = await this.db.user.findFirst({
+                where: { id: userId },
+                select: { name: true, email: true },
+            });
+            return user?.name ?? user?.email ?? null;
+        }
+        if (employeeId) {
+            const employee = await this.db.employee.findFirst({
+                where: { id: employeeId, tenant_id: tenantId },
+                select: { name: true },
+            });
+            return employee?.name ?? null;
+        }
+        return null;
     }
 
     /**
@@ -525,7 +688,7 @@ export class ProjectTasksService {
     async assertTask(tenantId: string, taskId: string) {
         const task = await this.db.projectTask.findFirst({
             where: { id: taskId, tenant_id: tenantId, deleted_at: null },
-            include: { status: { select: { id: true, category: true } } },
+            include: { status: { select: { id: true, name: true, category: true } } },
         });
         if (!task) throw new NotFoundException('Task not found');
         return task;
@@ -543,7 +706,7 @@ export class ProjectTasksService {
     private async assertStatus(tenantId: string, statusId: string) {
         const status = await this.db.projectTaskStatus.findFirst({
             where: { id: statusId, tenant_id: tenantId },
-            select: { id: true, category: true },
+            select: { id: true, name: true, category: true },
         });
         if (!status) throw new NotFoundException('Board column not found');
         return status;
@@ -568,4 +731,20 @@ interface TaskRow {
     id: string;
     status_id?: string;
     [key: string]: unknown;
+}
+
+/**
+ * The precise shape the activity recorder needs. `TaskRow` is deliberately
+ * loose (an index signature for the logged-hours merge), which makes every
+ * field `unknown` — no use to a function that has to compare before and after.
+ */
+interface TaskForActivity {
+    id: string;
+    project_id: string;
+    title: string;
+    status_id: string;
+    priority: string;
+    assignee_id: string | null;
+    assignee_employee_id: string | null;
+    remaining_hours: unknown;
 }

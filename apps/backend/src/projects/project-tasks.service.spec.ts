@@ -3,12 +3,14 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ProjectTasksService } from './project-tasks.service';
 import { ProjectSettingsService } from './project-settings.service';
 import { RemainingHoursService } from './remaining-hours.service';
+import { ProjectActivityService } from './project-activity.service';
 import { DatabaseService } from '../database/database.service';
 
 describe('ProjectTasksService', () => {
     let service: ProjectTasksService;
     let db: any;
     let remaining: { write: jest.Mock; history: jest.Mock };
+    let activity: { record: jest.Mock; watch: jest.Mock; notifyWatchers: jest.Mock };
 
     const todo = { id: 'status-todo', category: 'TODO' };
     const doing = { id: 'status-doing', category: 'IN_PROGRESS' };
@@ -30,6 +32,11 @@ describe('ProjectTasksService', () => {
 
     beforeEach(async () => {
         remaining = { write: jest.fn().mockResolvedValue(true), history: jest.fn() };
+        activity = {
+            record: jest.fn().mockResolvedValue(null),
+            watch: jest.fn().mockResolvedValue(null),
+            notifyWatchers: jest.fn().mockResolvedValue(0),
+        };
 
         db = {
             project: { findFirst: jest.fn().mockResolvedValue({ id: 'project-1' }) },
@@ -41,6 +48,8 @@ describe('ProjectTasksService', () => {
                 update: jest.fn().mockResolvedValue({}),
             },
             projectTaskStatus: { findFirst: jest.fn().mockResolvedValue(todo) },
+            user: { findFirst: jest.fn().mockResolvedValue({ name: 'Karim', email: 'k@x.com' }) },
+            employee: { findFirst: jest.fn().mockResolvedValue({ name: 'Rahim Uddin' }) },
             projectLabel: {
                 count: jest.fn().mockResolvedValue(0),
                 findMany: jest.fn().mockResolvedValue([]),
@@ -75,6 +84,7 @@ describe('ProjectTasksService', () => {
                 ProjectTasksService,
                 { provide: DatabaseService, useValue: db },
                 { provide: RemainingHoursService, useValue: remaining },
+                { provide: ProjectActivityService, useValue: activity },
                 {
                     provide: ProjectSettingsService,
                     useValue: {
@@ -431,6 +441,128 @@ describe('ProjectTasksService', () => {
             const data = db.projectTask.update.mock.calls.at(-1)[0].data;
             expect(data).not.toHaveProperty('due_date');
             expect(data).not.toHaveProperty('start_date');
+        });
+    });
+
+    describe('activity', () => {
+        it('records the creation and subscribes the creator', async () => {
+            await service.create('tenant-1', 'user-1', {
+                projectId: 'project-1',
+                title: 'Wire the panel',
+            } as never);
+
+            expect(activity.record).toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'CREATED', actorId: 'user-1' }),
+            );
+            expect(activity.watch).toHaveBeenCalledWith('tenant-1', 'task-new', 'user-1');
+        });
+
+        it('subscribes whoever the new task lands on', async () => {
+            await service.create('tenant-1', 'user-1', {
+                projectId: 'project-1',
+                title: 'Wire the panel',
+                assigneeId: 'user-2',
+            } as never);
+
+            expect(activity.watch).toHaveBeenCalledWith('tenant-1', 'task-new', 'user-2');
+        });
+
+        it('records a rename with both sides', async () => {
+            db.projectTask.findFirst.mockResolvedValue(task({ title: 'Old name' }));
+
+            await service.update('tenant-1', 'user-1', 'task-1', { title: 'New name' } as never);
+
+            expect(activity.record).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    type: 'RENAMED',
+                    data: { from: 'Old name', to: 'New name' },
+                }),
+            );
+        });
+
+        // Otherwise every save writes "renamed it from X to X" and the feed
+        // becomes unreadable.
+        it('records nothing when a field is sent unchanged', async () => {
+            db.projectTask.findFirst.mockResolvedValue(task({ title: 'Same' }));
+
+            await service.update('tenant-1', 'user-1', 'task-1', { title: 'Same' } as never);
+
+            expect(activity.record).not.toHaveBeenCalled();
+        });
+
+        it('records a status change with the column names, not their ids', async () => {
+            db.projectTaskStatus.findFirst.mockResolvedValue({
+                id: doing.id,
+                name: 'In Progress',
+                category: doing.category,
+            });
+
+            await service.update('tenant-1', 'user-1', 'task-1', { statusId: doing.id } as never);
+
+            expect(activity.record).toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'STATUS_CHANGED' }),
+            );
+        });
+
+        it('records an assignment and notifies, naming the new holder', async () => {
+            await service.update('tenant-1', 'user-1', 'task-1', {
+                assigneeId: 'user-2',
+            } as never);
+
+            expect(activity.record).toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'ASSIGNED', data: { to: 'Karim' } }),
+            );
+            expect(activity.watch).toHaveBeenCalledWith('tenant-1', 'task-1', 'user-2');
+            expect(activity.notifyWatchers).toHaveBeenCalled();
+        });
+
+        it('records an unassignment as a null target rather than skipping it', async () => {
+            db.projectTask.findFirst.mockResolvedValue(task({ assignee_id: 'user-2' }));
+
+            await service.update('tenant-1', 'user-1', 'task-1', { assigneeId: '' } as never);
+
+            expect(activity.record).toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'ASSIGNED', data: { to: null } }),
+            );
+        });
+
+        it('records a re-estimate with both numbers', async () => {
+            await service.update('tenant-1', 'user-1', 'task-1', { remainingHours: 2 } as never);
+
+            expect(activity.record).toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'RE_ESTIMATED', data: { from: 5, to: 2 } }),
+            );
+        });
+
+        it('records a move and tells the watchers', async () => {
+            db.projectTaskStatus.findFirst.mockResolvedValue({
+                id: doing.id,
+                name: 'In Progress',
+                category: doing.category,
+            });
+
+            await service.move('tenant-1', 'user-1', 'task-1', {
+                statusId: doing.id,
+                sortOrder: 0,
+            } as never);
+
+            expect(activity.record).toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'STATUS_CHANGED' }),
+            );
+            expect(activity.notifyWatchers).toHaveBeenCalledWith(
+                expect.objectContaining({ actorId: 'user-1' }),
+            );
+        });
+
+        // Reordering within a column is not news.
+        it('records nothing when a card is dropped back in the same column', async () => {
+            await service.move('tenant-1', 'user-1', 'task-1', {
+                statusId: todo.id,
+                sortOrder: 2,
+            } as never);
+
+            expect(activity.record).not.toHaveBeenCalled();
+            expect(activity.notifyWatchers).not.toHaveBeenCalled();
         });
     });
 

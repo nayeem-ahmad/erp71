@@ -142,6 +142,32 @@ export const projectsMessages = {
         saveFailed: 'Could not save the dates',
     },
 
+    activity: {
+        title: 'Activity',
+        comment: 'Comment',
+        commentPlaceholder: 'Add a comment…',
+        editComment: 'Edit comment',
+        empty: 'Nothing has happened here yet.',
+        loadFailed: 'Could not load the activity.',
+        saveFailed: 'Could not save that',
+        someone: 'Someone',
+        watch: 'Watch',
+        watching: 'Watching',
+        watchHint: 'Watchers are notified when this task moves, is reassigned, or gets a comment.',
+        none: '—',
+        types: {
+            CREATED: 'created this task',
+            RENAMED: 'renamed it from “{from}” to “{to}”',
+            STATUS_CHANGED: 'moved it from {from} to {to}',
+            ASSIGNED: 'assigned it to {to}',
+            UNASSIGNED: 'removed the assignee',
+            PRIORITY_CHANGED: 'changed priority from {from} to {to}',
+            DATES_CHANGED: 'changed the dates',
+            LABELS_CHANGED: 'changed the labels ({count} now)',
+            RE_ESTIMATED: 're-estimated from {from}h to {to}h',
+        },
+    },
+
     labels: {
         title: 'Labels',
         hint: 'Shared across every project, so the workspace-wide task list and sprint board can filter on them.',

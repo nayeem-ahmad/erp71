@@ -142,6 +142,32 @@ export const projectsMessages = {
         saveFailed: 'Tarikh tidak dapat disimpan',
     },
 
+    activity: {
+        title: 'Aktiviti',
+        comment: 'Komen',
+        commentPlaceholder: 'Tambah komen…',
+        editComment: 'Sunting komen',
+        empty: 'Belum ada apa-apa berlaku di sini.',
+        loadFailed: 'Aktiviti tidak dapat dimuatkan.',
+        saveFailed: 'Tidak dapat menyimpan',
+        someone: 'Seseorang',
+        watch: 'Perhati',
+        watching: 'Memerhati',
+        watchHint: 'Pemerhati dimaklumkan apabila tugasan ini dialih, ditugaskan semula, atau menerima komen.',
+        none: '—',
+        types: {
+            CREATED: 'mencipta tugasan ini',
+            RENAMED: 'menamakan semula daripada “{from}” kepada “{to}”',
+            STATUS_CHANGED: 'mengalihkannya dari {from} ke {to}',
+            ASSIGNED: 'menugaskannya kepada {to}',
+            UNASSIGNED: 'membuang penerima tugasan',
+            PRIORITY_CHANGED: 'menukar keutamaan dari {from} ke {to}',
+            DATES_CHANGED: 'menukar tarikh',
+            LABELS_CHANGED: 'menukar label ({count} kini)',
+            RE_ESTIMATED: 'menganggar semula dari {from}j ke {to}j',
+        },
+    },
+
     labels: {
         title: 'Label',
         hint: 'Dikongsi merentas semua projek, supaya senarai tugasan seluruh ruang kerja dan papan sprint boleh menapisnya.',

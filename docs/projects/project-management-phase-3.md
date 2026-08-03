@@ -1,6 +1,6 @@
 # Project Management — Phase 3: Trello-style task cards
 
-**Status:** 3A, 3B, 3M, 3N, 3F and 3H shipped 2026-08-03; the rest scoped and sequenced below
+**Status:** 3A, 3B, 3M, 3N, 3F, 3H, 3C and 3I shipped 2026-08-03; the rest scoped and sequenced below
 **Written:** 2026-08-02 · **Decisions taken:** 2026-08-03
 **Predecessors:** `project-management-phase-1.md`, `project-management-phase-2.md`
 
@@ -217,8 +217,8 @@ employee without a login rendered as unassigned.
 | 2 | 3B | **shipped 2026-08-03** | Pure UI over finished endpoints. No schema, no risk. |
 | 3 | 3M + 3N | **shipped 2026-08-03** | Board becomes usable — create without leaving, filter, and work on a phone. |
 | 4 | 3F + 3H | **shipped 2026-08-03** | First schema change; labels and dates in one migration. |
-| 5 | 3C + 3I | next | Comments and activity together — the same panel, and activity is what makes comments findable. |
-| 6 | 3L | | Per-project columns, per decision 1. Carries a data migration. |
+| 5 | 3C + 3I | **shipped 2026-08-03** | Comments and activity together — the same panel, and activity is what makes comments findable. |
+| 6 | 3L | next | Per-project columns, per decision 1. Carries a data migration. |
 | 7 | 3D | | Needs the `storage_key` fix, so it is the only item with a prerequisite outside this phase. |
 | 8 | 3J + 3K | | Archive, then cover colour. |
 | — | 3E | postponed | Subtasks on the card — dropped from the queue on request, not cancelled. |
@@ -228,8 +228,9 @@ employee without a login rendered as unassigned.
 
 ## What shipped on 2026-08-03
 
-3A, 3B, 3M, 3N, 3F and 3H. 3E (subtasks on the card) was postponed on request —
-the card badge for it already ships, only the panel section is outstanding.
+3A, 3B, 3M, 3N, 3F, 3H, 3C and 3I. 3E (subtasks on the card) was postponed on
+request — the card badge for it already ships, only the panel section is
+outstanding.
 
 **3A.** The board card is clickable (mouse, touch and keyboard) and opens the
 existing `TaskDetailPanel`; closing it reloads the board so a status change made
@@ -345,8 +346,53 @@ Also fixed in passing: `Field` only associates its label with the control when
 given `htmlFor`, so a `Field`-wrapped input has no accessible name. The new date
 inputs pass it. Most of the app does not — logged.
 
+**3C — comments.** `ProjectComment` had a model and a `CreateCommentDto` since
+Phase 1 and no service or controller behind either. It has both now: list,
+create, and edit or delete **your own only** — the feed is an audit trail, and
+nobody rewrites anybody else's line in it. That rule lives in the service rather
+than in a permission, so it cannot be granted away.
+
+**3I — activity and watchers.** `ProjectTaskActivity` is append-only, and
+`ProjectTaskWatcher` says who hears about a task. `data` holds the before/after
+payload rather than a rendered sentence, so the line is composed client-side and
+**therefore translates** — a stored English string would be permanently English
+in a trilingual app.
+
+There is no `COMMENTED` activity type. Comments are their own rows and the panel
+merges the two streams by timestamp, so a row per comment would draw every
+comment twice.
+
+**Watchers actually do something**, which is the difference between this and
+bookkeeping: they fan out to the existing in-app `Notification` table when a
+task moves, is reassigned, or gets a comment. Nobody is ever notified of their
+own action — being told what you just did is how a notification bell stops being
+read. You are subscribed automatically on creating a task, being assigned one,
+or commenting on one; a watch list nobody is ever added to is a feature nobody
+uses.
+
+**Everything in the activity service is best-effort and never throws.** A task
+move that succeeded must not report failure because an audit row would not write
+or a notification would not send. `record`, `watch` and `notifyWatchers` all
+catch and log.
+
+One ordering detail with a test on it: a comment **notifies before it subscribes
+the author**. The other way round, the author is in the watcher set by the time
+the fan-out reads it and gets told about their own comment. The actor filter
+alone would cover it; the ordering makes the intent survive a refactor of that
+filter.
+
+Activity is recorded per *field that actually changed*, not once per save, so
+the feed reads as a list of edits rather than "updated the task" repeated
+forever — and a field submitted unchanged records nothing. Dropping a card back
+into the column it came from is likewise not news.
+
+Comments, watching and the feed are gated on `VIEW_PROJECTS` rather than
+`MANAGE_PROJECT_TASKS`: if you can see the board you can discuss it and
+subscribe to it. That avoids a new permission and the backfill migration one
+would need.
+
 **Not done:** none of this has been opened in a browser — it is verified by unit
-tests, typecheck, lint and `next build` only. **The migration has not been run
+tests, typecheck, lint and `next build` only. **Neither migration has been run
 against a real Postgres**, only validated by `prisma validate` and hand-written
 to match the schema; it is purely additive (one nullable column, two new tables,
 one new enum), which is the cheapest shape to deploy but not a substitute for

@@ -276,6 +276,8 @@ model User {
   projectTimeEntries        ProjectTimeEntry[]         @relation("ProjectTimeEntryUser")
   projectRemainingLogs      ProjectTaskRemainingLog[]  @relation("RemainingLogUser")
   projectComments           ProjectComment[]           @relation("ProjectCommentUser")
+  projectTaskActivities     ProjectTaskActivity[]      @relation("ProjectTaskActivityActor")
+  projectTaskWatching       ProjectTaskWatcher[]       @relation("ProjectTaskWatcherUser")
 }
 
 model PasswordResetToken {
@@ -548,6 +550,8 @@ model Tenant {
   projectTaskChecklistItems ProjectTaskChecklistItem[]
   projectLabels           ProjectLabel[]
   projectTaskLabels       ProjectTaskLabel[]
+  projectTaskActivities   ProjectTaskActivity[]
+  projectTaskWatchers     ProjectTaskWatcher[]
   projectTimeEntries      ProjectTimeEntry[]
   sprints                 Sprint[]
   sprintSnapshots         SprintSnapshot[]
@@ -3718,6 +3722,7 @@ model Project {
   comments    ProjectComment[]
   attachments ProjectAttachment[]
   remainingLogs ProjectTaskRemainingLog[]
+  taskActivities ProjectTaskActivity[]
 
   @@unique([tenant_id, code])
   @@index([tenant_id, status, deleted_at])
@@ -3852,6 +3857,8 @@ model ProjectTask {
 
   checklistItems ProjectTaskChecklistItem[]
   labels         ProjectTaskLabel[]
+  activities     ProjectTaskActivity[]
+  watchers       ProjectTaskWatcher[]
   timeEntries    ProjectTimeEntry[]
   remainingLogs  ProjectTaskRemainingLog[]
   comments       ProjectComment[]
@@ -3896,6 +3903,63 @@ model ProjectTaskRemainingLog {
   @@index([tenant_id, sprint_id, changed_at])
   @@index([task_id, changed_at])
   @@map("project_task_remaining_logs")
+}
+
+/// No COMMENTED member on purpose: comments are their own rows and the panel
+/// merges the two streams by timestamp, so recording an activity row per comment
+/// would draw every comment twice.
+enum ProjectTaskActivityType {
+  CREATED
+  RENAMED
+  STATUS_CHANGED
+  ASSIGNED
+  PRIORITY_CHANGED
+  DATES_CHANGED
+  LABELS_CHANGED
+  RE_ESTIMATED
+}
+
+/// Append-only. Rows are never updated or deleted, and survive task soft-delete
+/// — "who moved this and when" is the question the feed exists to answer.
+///
+/// `data` holds the before/after payload rather than a rendered sentence, so the
+/// line is composed client-side and therefore translates. A stored English
+/// string would be permanently English in a trilingual app.
+model ProjectTaskActivity {
+  id         String                  @id @default(uuid())
+  tenant_id  String
+  task_id    String
+  project_id String
+  type       ProjectTaskActivityType
+  data       Json?
+  actor_id   String?
+  created_at DateTime                @default(now())
+
+  tenant  Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  task    ProjectTask @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  project Project     @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  actor   User?       @relation("ProjectTaskActivityActor", fields: [actor_id], references: [id])
+
+  @@index([task_id, created_at])
+  @@index([tenant_id, project_id, created_at])
+  @@map("project_task_activities")
+}
+
+/// Who hears about a task. Employees without a login are deliberately absent:
+/// a watcher exists to be notified, and notifications go to a User.
+model ProjectTaskWatcher {
+  tenant_id  String
+  task_id    String
+  user_id    String
+  created_at DateTime @default(now())
+
+  tenant Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  task   ProjectTask @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  user   User        @relation("ProjectTaskWatcherUser", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([task_id, user_id])
+  @@index([tenant_id, user_id])
+  @@map("project_task_watchers")
 }
 
 /// Colour is an enum, not a hex string: the UI rules forbid arbitrary hex, and a
