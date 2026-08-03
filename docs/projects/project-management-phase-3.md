@@ -1,6 +1,6 @@
 # Project Management — Phase 3: Trello-style task cards
 
-**Status:** 3A and 3B shipped 2026-08-03; the rest scoped and sequenced below
+**Status:** 3A, 3B, 3M and 3N shipped 2026-08-03; the rest scoped and sequenced below
 **Written:** 2026-08-02 · **Decisions taken:** 2026-08-03
 **Predecessors:** `project-management-phase-1.md`, `project-management-phase-2.md`
 
@@ -215,18 +215,22 @@ employee without a login rendered as unassigned.
 |---|---|---|---|
 | 1 | 3A | **shipped 2026-08-03** | Cards open and say something. Hours of work; changes how the board *feels* more than anything else on this list. |
 | 2 | 3B | **shipped 2026-08-03** | Pure UI over finished endpoints. No schema, no risk. |
-| 3 | 3E | next | Subtasks, the other half of "already returned, never rendered". |
-| 4 | 3M + 3N | | Board becomes usable — create without leaving, filter, and work on a phone. |
-| 5 | 3F + 3H | | First schema change; do labels and dates in one migration. |
-| 6 | 3C + 3I | | Comments and activity together — the same panel, and activity is what makes comments findable. |
-| 7 | 3L | | Per-project columns, per decision 1. Carries a data migration. |
-| 8 | 3D | | Needs the `storage_key` fix, so it is the only item with a prerequisite outside this phase. |
-| 9 | 3J + 3K | | Archive, then cover colour. |
+| 3 | 3M + 3N | **shipped 2026-08-03** | Board becomes usable — create without leaving, filter, and work on a phone. |
+| 4 | 3F + 3H | next | First schema change; do labels and dates in one migration. |
+| 5 | 3C + 3I | | Comments and activity together — the same panel, and activity is what makes comments findable. |
+| 6 | 3L | | Per-project columns, per decision 1. Carries a data migration. |
+| 7 | 3D | | Needs the `storage_key` fix, so it is the only item with a prerequisite outside this phase. |
+| 8 | 3J + 3K | | Archive, then cover colour. |
+| — | 3E | postponed | Subtasks on the card — dropped from the queue on request, not cancelled. |
 | — | 3G | deferred | Per decision 2 — single assignee stands. |
 
 ---
 
 ## What shipped on 2026-08-03
+
+3A, 3B, 3M and 3N. 3E (subtasks on the card) was postponed on request between
+the two batches — the card badge for it already ships, only the panel section is
+outstanding.
 
 **3A.** The board card is clickable (mouse, touch and keyboard) and opens the
 existing `TaskDetailPanel`; closing it reloads the board so a status change made
@@ -257,5 +261,46 @@ shortcut and it is wrong: a half-applied swap leaves two items sharing a
 position, and `checklistItems` orders by `sort_order` alone, so the list would
 reshuffle on every subsequent read.
 
-**Not done:** neither has been opened in a browser — both are verified by unit
+**3N — the board works on a phone.** HTML5 `draggable` is gone; dragging is
+pointer-based, which covers mouse, touch and pen in one path.
+
+The awkward part is that touch has to serve two gestures on the same surface:
+scrolling a column and picking up a card. Making the whole card touch-draggable
+would have cost the scroll. So the card body arms a drag **only for a mouse**
+(with a 6px threshold, below which the gesture is the tap that opens the card),
+and touch drags start from a **grip** that opts out of `touch-action`. A ghost
+follows the pointer, because on touch there is no cursor to tell you the card
+has been picked up, and a blue bar shows where it will land.
+
+The geometry — which column the pointer is over, which insertion point, and
+whether the gesture passed the threshold — lives in `board-drag.ts` as pure
+functions. jsdom has no layout, so a component test cannot answer "which card is
+the pointer over"; handing those functions rectangles directly can.
+
+**3N — filters.** Assignee, priority and due (overdue / today / this week / no
+date), applied client-side over the board that is already loaded, so there is no
+new request and no new query parameter. The assignee list is built from the cards
+present rather than the project roster: you can only usefully filter by someone
+who holds a card here. A label filter arrives with 3F.
+
+One trap worth recording: **the server reorders against the whole column, not
+the filtered one.** Dropping a card "above the second visible card" while a
+filter is on would otherwise land it at position 1 of twenty, jumping it over
+every hidden card. `toFullIndex` maps the visible position back onto the full
+column.
+
+**3M — add a card in place.** A composer at the foot of every column: type a
+title, press Add, keep typing. It stays open with an empty field so a column can
+be filled in one go, and keeps the text if the save fails. Anything beyond a
+title is the detail panel's job.
+
+**A test-infrastructure fix came out of this.** jsdom implements no
+`PointerEvent`, and Testing Library's fallback silently drops `pointerType`,
+`pointerId` and `button` — a handler branching on any of them sees `undefined`
+and takes a path it would never take in a browser. The first version of the
+touch tests passed for exactly that wrong reason. `jest.setup.ts` now polyfills
+`PointerEvent` over `MouseEvent`, which is what made the mouse and touch paths
+genuinely distinguishable; any future pointer-driven UI inherits it.
+
+**Not done:** none of this has been opened in a browser — it is verified by unit
 tests, typecheck, lint and `next build` only.

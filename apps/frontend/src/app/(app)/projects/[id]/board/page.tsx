@@ -1,45 +1,41 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { AlignLeft, CheckSquare, GitBranch, MessageSquare } from 'lucide-react';
-import { PageShell, PageHeader, Button, StatusBadge } from '@/components/ui';
+import { AlignLeft, CheckSquare, GitBranch, GripVertical, MessageSquare, Plus, X } from 'lucide-react';
+import { PageShell, PageHeader, Button, Input, Select, StatusBadge } from '@/components/ui';
 import type { StatusBadgeTone } from '@/components/ui';
 import BurndownChart, { type BurndownPoint } from '@/components/projects/BurndownChart';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
+import {
+    CARD_ATTR,
+    COLUMN_ATTR,
+    movedFar,
+    resolveDropTarget,
+    toFullIndex,
+    type DropTarget,
+} from '@/components/projects/board-drag';
+import {
+    applyFilters,
+    assigneeNameOf,
+    assigneeOptionsFrom,
+    countTasks,
+    dueStateOf,
+    hasActiveFilter,
+    initialsOf,
+    NO_FILTERS,
+    type BoardColumn,
+    type BoardFilters,
+    type BoardTask,
+    type DueState,
+} from '@/components/projects/board-tasks';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { projectChildBreadcrumbs } from '@/lib/page-breadcrumbs';
-
-interface BoardTask {
-    id: string;
-    title: string;
-    description?: string | null;
-    priority: string;
-    due_date?: string | null;
-    completed_at?: string | null;
-    remaining_hours?: string | null;
-    estimate_hours?: string | null;
-    logged_hours?: number;
-    assignee?: { id: string; name?: string | null; email: string } | null;
-    // Phase 2 made an employee without a login assignable. The card has to read
-    // both or those tasks look unassigned.
-    assigneeEmployee?: { id: string; name?: string | null } | null;
-    checklistItems?: { id: string; is_done: boolean }[];
-    _count?: { subtasks?: number; comments?: number } | null;
-    status_id: string;
-}
-
-interface BoardColumn {
-    id: string;
-    name: string;
-    category: string;
-    tasks: BoardTask[];
-}
 
 interface Sprint {
     id: string;
@@ -60,15 +56,6 @@ type Mode = 'kanban' | 'scrum';
 
 const num = (value: unknown): number => (value == null ? 0 : Number(value));
 
-/** Local calendar day as YYYY-MM-DD, to compare against a `@db.Date` string. */
-function dayKey(date: Date): string {
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${date.getFullYear()}-${month}-${day}`;
-}
-
-type DueState = 'done' | 'overdue' | 'today' | 'soon' | 'later';
-
 const DUE_TONE: Record<DueState, StatusBadgeTone> = {
     done: 'success',
     overdue: 'danger',
@@ -77,33 +64,15 @@ const DUE_TONE: Record<DueState, StatusBadgeTone> = {
     later: 'neutral',
 };
 
-/**
- * Compared as date strings rather than Date objects: `due_date` is a `@db.Date`
- * serialised at UTC midnight, so `new Date(due) < new Date()` calls a task due
- * today overdue for anyone east of UTC — which is everyone here.
- */
-function dueStateOf(dueDate?: string | null, completedAt?: string | null): DueState | null {
-    if (!dueDate) return null;
-    if (completedAt) return 'done';
-
-    const due = dueDate.slice(0, 10);
-    const today = dayKey(new Date());
-    if (due < today) return 'overdue';
-    if (due === today) return 'today';
-
-    const soon = new Date();
-    soon.setDate(soon.getDate() + 2);
-    return due <= dayKey(soon) ? 'soon' : 'later';
-}
-
-function initialsOf(name: string): string {
-    return name
-        .trim()
-        .split(/\s+/)
-        .slice(0, 2)
-        .map((part) => part[0] ?? '')
-        .join('')
-        .toUpperCase();
+interface DragState {
+    taskId: string;
+    pointerId: number;
+    origin: { x: number; y: number };
+    point: { x: number; y: number };
+    /** False until a mouse gesture passes the threshold — before that it is a click. */
+    active: boolean;
+    target: DropTarget | null;
+    title: string;
 }
 
 export default function ProjectBoardPage() {
@@ -118,10 +87,17 @@ export default function ProjectBoardPage() {
     const [sprints, setSprints] = useState<Sprint[]>([]);
     const [burndown, setBurndown] = useState<BurndownPoint[] | null>(null);
     const [loading, setLoading] = useState(true);
-    const [dragging, setDragging] = useState<string | null>(null);
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+    const [filters, setFilters] = useState<BoardFilters>(NO_FILTERS);
+    const [drag, setDrag] = useState<DragState | null>(null);
 
     const activeSprint = useMemo(() => sprints.find((s) => s.status === 'ACTIVE') ?? null, [sprints]);
+
+    const visibleColumns = useMemo(() => applyFilters(columns, filters), [columns, filters]);
+    const assigneeOptions = useMemo(() => assigneeOptionsFrom(columns), [columns]);
+    const filtered = hasActiveFilter(filters);
+    const shown = countTasks(visibleColumns);
+    const total = countTasks(columns);
 
     const loadBoard = useCallback(
         async (sprintId?: string) => {
@@ -195,6 +171,102 @@ export default function ProjectBoardPage() {
             toast.error(error instanceof Error ? error.message : m.board.moveFailed);
         }
     };
+
+    const addCard = async (statusId: string, title: string) => {
+        try {
+            await api.createProjectTask({
+                projectId,
+                title,
+                statusId,
+                ...(mode === 'scrum' && activeSprint ? { sprintId: activeSprint.id } : {}),
+            });
+            await loadBoard(mode === 'scrum' ? (activeSprint?.id ?? undefined) : undefined);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.board.createFailed);
+            throw error;
+        }
+    };
+
+    // ── Pointer dragging ────────────────────────────────────────────────────
+    // Replaces HTML5 draggable, which never fires from touch input, so the board
+    // was read-only on a phone. A card body only arms a mouse drag; touch has to
+    // come through the grip, or the column could not be scrolled by finger.
+
+    const beginDrag = (
+        e: React.PointerEvent,
+        task: BoardTask,
+        { fromHandle }: { fromHandle: boolean },
+    ) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        if (e.pointerType !== 'mouse' && !fromHandle) return;
+
+        const element = e.currentTarget as Element & { setPointerCapture?: (id: number) => void };
+        element.setPointerCapture?.(e.pointerId);
+
+        setDrag({
+            taskId: task.id,
+            pointerId: e.pointerId,
+            origin: { x: e.clientX, y: e.clientY },
+            point: { x: e.clientX, y: e.clientY },
+            // From the grip the intent is unambiguous, so skip the threshold.
+            active: fromHandle,
+            target: null,
+            title: task.title,
+        });
+    };
+
+    const continueDrag = (e: React.PointerEvent) => {
+        if (!drag || e.pointerId !== drag.pointerId) return;
+
+        const point = { x: e.clientX, y: e.clientY };
+        const active = drag.active || movedFar(drag.origin, point);
+        if (!active) {
+            setDrag({ ...drag, point });
+            return;
+        }
+
+        e.preventDefault();
+        setDrag({
+            ...drag,
+            point,
+            active: true,
+            target: resolveDropTarget(point, drag.taskId, document),
+        });
+    };
+
+    const endDrag = (e: React.PointerEvent) => {
+        if (!drag || e.pointerId !== drag.pointerId) return;
+        setDrag(null);
+
+        // Under the threshold the gesture was a tap: open the card.
+        if (!drag.active) {
+            setOpenTaskId(drag.taskId);
+            return;
+        }
+        if (!drag.target) return;
+
+        const target = drag.target;
+        const sourceColumn = columns.find((column) =>
+            column.tasks.some((task) => task.id === drag.taskId),
+        );
+        const sameSpot =
+            sourceColumn?.id === target.columnId &&
+            sourceColumn?.tasks.findIndex((task) => task.id === drag.taskId) === target.index;
+        if (sameSpot) return;
+
+        move(
+            drag.taskId,
+            target.columnId,
+            toFullIndex(
+                columns.find((column) => column.id === target.columnId),
+                visibleColumns.find((column) => column.id === target.columnId)?.tasks ?? [],
+                target.index,
+                drag.taskId,
+            ),
+        );
+    };
+
+    const cancelDrag = () => setDrag(null);
 
     const startSprint = async (sprintId: string) => {
         try {
@@ -275,26 +347,32 @@ export default function ProjectBoardPage() {
                 </section>
             )}
 
+            <BoardFilterBar
+                filters={filters}
+                onChange={setFilters}
+                assignees={assigneeOptions}
+                shown={shown}
+                total={total}
+            />
+
             {/* Columns scroll inside their own container so the page body never
                 scrolls sideways on a phone. */}
             <div className="overflow-x-auto pb-2">
                 <div className="flex min-w-max gap-3">
-                    {columns.map((column) => {
+                    {visibleColumns.map((column) => {
                         const remaining = column.tasks.reduce(
                             (total, task) => total + num(task.remaining_hours),
                             0,
                         );
+                        const dropIndex =
+                            drag?.active && drag.target?.columnId === column.id
+                                ? drag.target.index
+                                : null;
                         return (
                             <div
                                 key={column.id}
+                                {...{ [COLUMN_ATTR]: column.id }}
                                 className="flex w-72 flex-col rounded-md border border-gray-200 bg-gray-50"
-                                onDragOver={(e) => e.preventDefault()}
-                                onDrop={(e) => {
-                                    e.preventDefault();
-                                    const taskId = e.dataTransfer.getData('text/plain') || dragging;
-                                    if (taskId) move(taskId, column.id, column.tasks.length);
-                                    setDragging(null);
-                                }}
                             >
                                 <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2">
                                     <span className="text-sm font-medium">{column.name}</span>
@@ -305,39 +383,54 @@ export default function ProjectBoardPage() {
                                 </div>
 
                                 <div className="flex flex-1 flex-col gap-2 p-2">
-                                    {column.tasks.length === 0 && (
+                                    {column.tasks.length === 0 && dropIndex === null && (
                                         <p className="px-1 py-4 text-center text-xs text-gray-400">
-                                            {m.board.emptyColumn}
+                                            {filtered ? m.board.noMatches : m.board.emptyColumn}
                                         </p>
                                     )}
                                     {column.tasks.map((task, index) => (
-                                        <TaskCard
-                                            key={task.id}
-                                            task={task}
-                                            onOpen={() => setOpenTaskId(task.id)}
-                                            onDragStart={(e) => {
-                                                e.dataTransfer.setData('text/plain', task.id);
-                                                setDragging(task.id);
-                                            }}
-                                            onDragEnd={() => setDragging(null)}
-                                            onDropOnCard={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                const taskId =
-                                                    e.dataTransfer.getData('text/plain') || dragging;
-                                                if (taskId && taskId !== task.id) {
-                                                    move(taskId, column.id, index);
+                                        <Fragment key={task.id}>
+                                            {dropIndex === index && <DropIndicator />}
+                                            <TaskCard
+                                                task={task}
+                                                dragging={drag?.active === true && drag.taskId === task.id}
+                                                onPointerDownBody={(e) =>
+                                                    beginDrag(e, task, { fromHandle: false })
                                                 }
-                                                setDragging(null);
-                                            }}
-                                        />
+                                                onPointerDownHandle={(e) =>
+                                                    beginDrag(e, task, { fromHandle: true })
+                                                }
+                                                onPointerMove={continueDrag}
+                                                onPointerUp={endDrag}
+                                                onPointerCancel={cancelDrag}
+                                                onOpen={() => setOpenTaskId(task.id)}
+                                            />
+                                        </Fragment>
                                     ))}
+                                    {dropIndex === column.tasks.length && <DropIndicator />}
+
+                                    <AddCardComposer
+                                        onAdd={(title) => addCard(column.id, title)}
+                                        columnName={column.name}
+                                    />
                                 </div>
                             </div>
                         );
                     })}
                 </div>
             </div>
+
+            {/* Follows the finger, because on touch there is no cursor to tell
+                you the card has been picked up. */}
+            {drag?.active && (
+                <div
+                    aria-hidden
+                    className="pointer-events-none fixed z-modal max-w-[16rem] truncate rounded-md border border-blue-300 bg-white px-2 py-1 text-sm shadow-lg"
+                    style={{ left: drag.point.x + 12, top: drag.point.y + 12 }}
+                >
+                    {drag.title}
+                </div>
+            )}
 
             {loading && <p className="text-sm text-gray-500">{t.common.loading}</p>}
 
@@ -354,26 +447,204 @@ export default function ProjectBoardPage() {
     );
 }
 
+function DropIndicator() {
+    return <div aria-hidden className="h-0.5 rounded-full bg-blue-600" />;
+}
+
+function BoardFilterBar({
+    filters,
+    onChange,
+    assignees,
+    shown,
+    total,
+}: {
+    filters: BoardFilters;
+    onChange: (next: BoardFilters) => void;
+    assignees: { key: string; label: string }[];
+    shown: number;
+    total: number;
+}) {
+    const { t } = useI18n();
+    const f = t.projects.board.filters;
+    const active = hasActiveFilter(filters);
+
+    return (
+        <div className="flex flex-wrap items-end gap-2 rounded-md border border-gray-200 bg-white p-3">
+            <label className="flex flex-col gap-1 text-xs text-gray-500">
+                {f.assignee}
+                <Select
+                    className="min-h-touch"
+                    value={filters.assignee}
+                    onChange={(e) => onChange({ ...filters, assignee: e.target.value })}
+                >
+                    <option value="all">{t.common.all}</option>
+                    <option value="none">{f.unassigned}</option>
+                    {assignees.map((option) => (
+                        <option key={option.key} value={option.key}>
+                            {option.label}
+                        </option>
+                    ))}
+                </Select>
+            </label>
+
+            <label className="flex flex-col gap-1 text-xs text-gray-500">
+                {f.priority}
+                <Select
+                    className="min-h-touch"
+                    value={filters.priority}
+                    onChange={(e) => onChange({ ...filters, priority: e.target.value })}
+                >
+                    <option value="all">{t.common.all}</option>
+                    {(['URGENT', 'HIGH', 'MEDIUM', 'LOW'] as const).map((value) => (
+                        <option key={value} value={value}>
+                            {t.projects.priority[value]}
+                        </option>
+                    ))}
+                </Select>
+            </label>
+
+            <label className="flex flex-col gap-1 text-xs text-gray-500">
+                {f.due}
+                <Select
+                    className="min-h-touch"
+                    value={filters.due}
+                    onChange={(e) =>
+                        onChange({ ...filters, due: e.target.value as BoardFilters['due'] })
+                    }
+                >
+                    <option value="all">{t.common.all}</option>
+                    <option value="overdue">{f.overdue}</option>
+                    <option value="today">{f.dueToday}</option>
+                    <option value="week">{f.dueThisWeek}</option>
+                    <option value="none">{f.noDueDate}</option>
+                </Select>
+            </label>
+
+            {active && (
+                <>
+                    <span className="pb-2 text-xs text-gray-500">
+                        {f.showing
+                            .replace('{shown}', String(shown))
+                            .replace('{total}', String(total))}
+                    </span>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        className="min-h-touch"
+                        onClick={() => onChange(NO_FILTERS)}
+                    >
+                        <X className="mr-1 h-4 w-4" />
+                        {f.clear}
+                    </Button>
+                </>
+            )}
+        </div>
+    );
+}
+
+/**
+ * Trello's defining interaction: type a title, press Enter, keep typing. The
+ * composer stays open after a save so a column can be filled in one go, and
+ * anything more than a title is left to the detail panel.
+ */
+function AddCardComposer({
+    onAdd,
+    columnName,
+}: {
+    onAdd: (title: string) => Promise<void>;
+    columnName: string;
+}) {
+    const { t } = useI18n();
+    const m = t.projects.board;
+
+    const [open, setOpen] = useState(false);
+    const [title, setTitle] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    const submit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const trimmed = title.trim();
+        if (!trimmed || saving) return;
+        setSaving(true);
+        try {
+            await onAdd(trimmed);
+            setTitle('');
+        } catch {
+            // onAdd has already reported it; keep the text so it is not lost.
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (!open) {
+        return (
+            <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="min-h-touch rounded-md px-2 py-1.5 text-left text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+            >
+                <Plus className="mr-1 inline h-4 w-4" />
+                {m.addCard}
+            </button>
+        );
+    }
+
+    return (
+        <form onSubmit={submit} className="space-y-2">
+            <Input
+                autoFocus
+                value={title}
+                aria-label={`${m.addCard} — ${columnName}`}
+                placeholder={m.newCardPlaceholder}
+                onChange={(e) => setTitle(e.target.value)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                        setOpen(false);
+                        setTitle('');
+                    }
+                }}
+            />
+            <div className="flex items-center gap-2">
+                <Button type="submit" className="min-h-touch" disabled={saving || !title.trim()}>
+                    {t.common.add}
+                </Button>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    className="min-h-touch"
+                    onClick={() => {
+                        setOpen(false);
+                        setTitle('');
+                    }}
+                >
+                    {t.common.cancel}
+                </Button>
+            </div>
+        </form>
+    );
+}
+
 function TaskCard({
     task,
+    dragging,
     onOpen,
-    onDragStart,
-    onDragEnd,
-    onDropOnCard,
+    onPointerDownBody,
+    onPointerDownHandle,
+    onPointerMove,
+    onPointerUp,
+    onPointerCancel,
 }: {
     task: BoardTask;
+    dragging: boolean;
     onOpen: () => void;
-    onDragStart: (e: React.DragEvent) => void;
-    onDragEnd: () => void;
-    onDropOnCard: (e: React.DragEvent) => void;
+    onPointerDownBody: (e: React.PointerEvent) => void;
+    onPointerDownHandle: (e: React.PointerEvent) => void;
+    onPointerMove: (e: React.PointerEvent) => void;
+    onPointerUp: (e: React.PointerEvent) => void;
+    onPointerCancel: () => void;
 }) {
     const { t, locale } = useI18n();
     const c = t.projects.board.card;
-
-    // A native drag does not fire a click in Chrome but does in some browsers,
-    // and a drag that ends where it started reads as a click everywhere. Without
-    // this, dropping a card opens it.
-    const draggedRef = useRef(false);
 
     const checklist = task.checklistItems ?? [];
     const checklistDone = checklist.filter((item) => item.is_done).length;
@@ -388,41 +659,45 @@ function TaskCard({
               ? c.dueToday
               : c.due.replace('{date}', formatDate(task.due_date, locale));
 
-    const assigneeName =
-        task.assignee?.name ?? task.assignee?.email ?? task.assigneeEmployee?.name ?? null;
+    const assigneeName = assigneeNameOf(task);
 
     return (
         <article
-            draggable
+            {...{ [CARD_ATTR]: task.id }}
             role="button"
             tabIndex={0}
             aria-label={`${c.open}: ${task.title}`}
-            onPointerDown={() => {
-                draggedRef.current = false;
-            }}
-            onDragStart={(e) => {
-                draggedRef.current = true;
-                onDragStart(e);
-            }}
-            onDragEnd={onDragEnd}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={onDropOnCard}
-            onClick={() => {
-                if (draggedRef.current) {
-                    draggedRef.current = false;
-                    return;
-                }
-                onOpen();
-            }}
+            onPointerDown={onPointerDownBody}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerCancel}
             onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     onOpen();
                 }
             }}
-            className="cursor-grab rounded-md border border-gray-200 bg-white p-2 text-left text-sm shadow-sm hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-600"
+            // pan-y keeps the column scrollable by finger; the grip below opts
+            // out of that so a touch drag can start there.
+            className={`touch-pan-y rounded-md border border-gray-200 bg-white p-2 text-left text-sm shadow-sm hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-600 md:cursor-grab ${
+                dragging ? 'opacity-40' : ''
+            }`}
         >
-            <p className="font-medium">{task.title}</p>
+            <div className="flex items-start gap-1">
+                <button
+                    type="button"
+                    aria-label={c.drag}
+                    tabIndex={-1}
+                    onPointerDown={onPointerDownHandle}
+                    onPointerMove={onPointerMove}
+                    onPointerUp={onPointerUp}
+                    onPointerCancel={onPointerCancel}
+                    className="-ml-1 min-h-touch touch-none px-1 text-gray-300 hover:text-gray-500"
+                >
+                    <GripVertical className="h-4 w-4" />
+                </button>
+                <p className="flex-1 pt-0.5 font-medium">{task.title}</p>
+            </div>
 
             {(due || task.priority === 'HIGH' || task.priority === 'URGENT') && (
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
