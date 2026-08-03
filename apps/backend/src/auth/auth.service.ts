@@ -10,6 +10,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
 import { SignupDto, LoginDto, UpdateProfileDto, ChangePasswordDto } from './auth.dto';
 import { isPlatformAdminEmail } from './platform-admin.util';
+import { AUTH_SCOPE_APP } from './token-scope';
 import { DEMO_ACCOUNT_EMAIL } from '@erp71/database';
 import {
     DEFAULT_PLATFORM_FEATURES,
@@ -164,7 +165,9 @@ export class AuthService {
     }
 
     async logout(userId: string): Promise<void> {
-        // Increment token_version to invalidate all existing JWTs for this user
+        // Increment token_version to invalidate all existing app JWTs for this user.
+        // `storefront_token_version` is deliberately untouched: signing out of the
+        // workspace should not also sign the same person out of the shops they buy from.
         await this.db.user.update({
             where: { id: userId },
             data: { token_version: { increment: 1 } },
@@ -311,7 +314,7 @@ export class AuthService {
         const storePermissions = user.storePermissions ?? [];
 
         const isPlatformAdmin = (user as any).is_platform_admin === true || isPlatformAdminEmail(user.email);
-        const payload = { sub: user.id, email: user.email, tv: user.token_version };
+        const payload = { sub: user.id, email: user.email, tv: user.token_version, scope: AUTH_SCOPE_APP };
         return {
             access_token: this.jwtService.sign(payload),
             is_platform_admin: isPlatformAdmin,
@@ -459,9 +462,15 @@ export class AuthService {
         }
 
         const newHash = await bcrypt.hash(dto.newPassword, 10);
+        // A password change revokes every session on both surfaces — the storefront
+        // login accepts the same password, so leaving those tokens alive would defeat it.
         await this.db.user.update({
             where: { id: userId },
-            data: { passwordHash: newHash, token_version: { increment: 1 } },
+            data: {
+                passwordHash: newHash,
+                token_version: { increment: 1 },
+                storefront_token_version: { increment: 1 },
+            },
         });
         this.audit.log('PASSWORD_CHANGED', 'User', { userId }, userId).catch(() => {});
     }

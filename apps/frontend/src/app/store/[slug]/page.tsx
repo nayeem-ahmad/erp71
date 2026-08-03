@@ -159,6 +159,16 @@ export default function StorefrontPage() {
     }, [slug]);
 
     const handleSignOut = () => {
+        // Revoke server-side too — dropping the key locally leaves the token
+        // usable until it expires.
+        const token = session?.access_token;
+        if (token) {
+            fetch(`${API_BASE}/storefront/${slug}/auth/logout`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+            }).catch(() => {});
+        }
+
         localStorage.removeItem(`storefront_customer_${slug}`);
         setSession(null);
         setCustomerName('');

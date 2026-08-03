@@ -26,6 +26,10 @@ export default function StorefrontSignInPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    // Set when the account protects its login with TOTP: the password alone does
+    // not mint a session, so we collect the second factor before continuing.
+    const [pendingTwoFactorUserId, setPendingTwoFactorUserId] = useState<string | null>(null);
+    const [twoFactorCode, setTwoFactorCode] = useState('');
 
     useEffect(() => {
         if (!slug) return;
@@ -57,12 +61,47 @@ export default function StorefrontSignInPage() {
             }
 
             const payload = 'data' in json ? json.data : json;
-            localStorage.setItem(
-                `storefront_customer_${slug}`,
-                JSON.stringify({ access_token: payload.access_token, customer: payload.customer }),
-            );
 
-            router.push(`/store/${slug}`);
+            if (payload.requires_2fa) {
+                setPendingTwoFactorUserId(payload.user_id);
+                return;
+            }
+
+            persistSession(payload);
+        } catch (err: any) {
+            setError(err.message || a.defaultError);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const persistSession = (payload: { access_token: string; customer: unknown }) => {
+        localStorage.setItem(
+            `storefront_customer_${slug}`,
+            JSON.stringify({ access_token: payload.access_token, customer: payload.customer }),
+        );
+        router.push(`/store/${slug}`);
+    };
+
+    const handleTwoFactorSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setSubmitting(true);
+
+        try {
+            const res = await fetch(`${API_BASE}/storefront/${slug}/auth/2fa/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: pendingTwoFactorUserId, code: twoFactorCode }),
+            });
+
+            const json = await res.json();
+
+            if (!res.ok) {
+                throw new Error(json.message || a.twoFactorFailed);
+            }
+
+            persistSession('data' in json ? json.data : json);
         } catch (err: any) {
             setError(err.message || a.defaultError);
         } finally {
@@ -77,11 +116,49 @@ export default function StorefrontSignInPage() {
                     <Link href={`/store/${slug}`} className="text-2xl font-bold tracking-tight text-gray-900">
                         {storeName || m.storeFallback}
                     </Link>
-                    <h1 className="mt-4 text-xl font-bold text-gray-800">{a.signInTitle}</h1>
-                    <p className="mt-1 text-sm text-gray-500">{a.signInSubtitle}</p>
+                    <h1 className="mt-4 text-xl font-bold text-gray-800">
+                        {pendingTwoFactorUserId ? a.twoFactorTitle : a.signInTitle}
+                    </h1>
+                    <p className="mt-1 text-sm text-gray-500">
+                        {pendingTwoFactorUserId ? a.twoFactorSubtitle : a.signInSubtitle}
+                    </p>
                 </div>
 
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+                    {pendingTwoFactorUserId ? (
+                        <form onSubmit={handleTwoFactorSubmit} className="space-y-5">
+                            {error && (
+                                <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+                                    <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                                    <span>{error}</span>
+                                </div>
+                            )}
+
+                            <div>
+                                <label htmlFor="totp" className="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    {a.twoFactorCode}
+                                </label>
+                                <input
+                                    id="totp"
+                                    inputMode="numeric"
+                                    autoComplete="one-time-code"
+                                    required
+                                    value={twoFactorCode}
+                                    onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                    placeholder="000000"
+                                    className="w-full border border-gray-300 rounded-xl px-4 py-3 text-center text-lg tracking-[0.4em] focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all"
+                                />
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={submitting || twoFactorCode.length < 6}
+                                className="w-full bg-black hover:bg-gray-800 text-white font-bold py-3.5 rounded-xl transition-colors disabled:opacity-60 mt-2"
+                            >
+                                {submitting ? a.twoFactorVerifying : a.twoFactorVerify}
+                            </button>
+                        </form>
+                    ) : (
                     <form onSubmit={handleSubmit} className="space-y-5">
                         {error && (
                             <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
@@ -138,13 +215,19 @@ export default function StorefrontSignInPage() {
                             {submitting ? 'Signing in…' : 'Sign In'}
                         </button>
                     </form>
+                    )}
 
-                    <p className="mt-6 text-center text-sm text-gray-500">
-                        Don&apos;t have an account?{' '}
-                        <Link href={`/store/${slug}/auth/signup`} className="font-semibold text-black hover:underline">
-                            Sign up
-                        </Link>
-                    </p>
+                    {!pendingTwoFactorUserId && (
+                        <p className="mt-6 text-center text-sm text-gray-500">
+                            Don&apos;t have an account?{' '}
+                            <Link
+                                href={`/store/${slug}/auth/signup`}
+                                className="font-semibold text-black hover:underline"
+                            >
+                                Sign up
+                            </Link>
+                        </p>
+                    )}
                 </div>
 
                 <p className="mt-6 text-center text-sm text-gray-400">

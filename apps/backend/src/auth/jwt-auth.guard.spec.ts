@@ -1,5 +1,6 @@
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { AuthGuard } from '@nestjs/passport';
+import { UnauthorizedException } from '@nestjs/common';
 
 describe('JwtAuthGuard', () => {
     it('is defined and instantiable', () => {
@@ -63,6 +64,32 @@ describe('JwtAuthGuard', () => {
 
             expect(result).toBe(false);
             parentCanActivate.mockRestore();
+        });
+    });
+
+    describe('handleRequest', () => {
+        const guard = new JwtAuthGuard();
+
+        it('accepts an app-scoped token', () => {
+            const user = { userId: 'user-1', scope: 'app' };
+            expect(guard.handleRequest(null, user, null, null)).toBe(user);
+        });
+
+        it('accepts a legacy token with no scope claim', () => {
+            const user = { userId: 'user-1' };
+            expect(guard.handleRequest(null, user, null, null)).toBe(user);
+        });
+
+        it('rejects a storefront customer token', () => {
+            const user = { userId: 'user-1', scope: 'storefront' };
+            expect(() => guard.handleRequest(null, user, null, null)).toThrow(UnauthorizedException);
+            expect(() => guard.handleRequest(null, user, null, null)).toThrow(
+                'This session is not valid for the application API',
+            );
+        });
+
+        it('still rejects an unauthenticated request', () => {
+            expect(() => guard.handleRequest(null, null, null, null)).toThrow(UnauthorizedException);
         });
     });
 });
