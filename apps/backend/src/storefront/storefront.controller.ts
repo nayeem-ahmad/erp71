@@ -11,9 +11,16 @@ import {
     UseInterceptors,
 } from '@nestjs/common';
 import { StorefrontService } from './storefront.service';
-import { PlaceOrderDto, UpdateOrderStatusDto, CustomerSignupDto, CustomerLoginDto } from './storefront.dto';
+import {
+    PlaceOrderDto,
+    UpdateOrderStatusDto,
+    CustomerSignupDto,
+    CustomerLoginDto,
+    CustomerTwoFactorLoginDto,
+} from './storefront.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
+import { StorefrontCustomerGuard } from '../auth/storefront-customer.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 
@@ -76,22 +83,39 @@ export class StorefrontController {
         return this.storefrontService.customerSignup(slug, dto);
     }
 
-    /** Public: customer sign in to a storefront */
+    /**
+     * Public: customer sign in to a storefront.
+     * Returns `{ requires_2fa, user_id }` instead of a session when the account
+     * has TOTP enabled — see `:slug/auth/2fa/verify`.
+     */
     @Post(':slug/auth/login')
     async customerLogin(@Param('slug') slug: string, @Body() dto: CustomerLoginDto) {
         return this.storefrontService.customerLogin(slug, dto);
     }
 
+    /** Public: second leg of a 2FA storefront sign-in */
+    @Post(':slug/auth/2fa/verify')
+    async customerTwoFactorVerify(@Param('slug') slug: string, @Body() dto: CustomerTwoFactorLoginDto) {
+        return this.storefrontService.completeCustomerTwoFactorLogin(slug, dto.userId, dto.code);
+    }
+
+    /** Protected: revoke this shopper's storefront sessions */
+    @Post(':slug/auth/logout')
+    @UseGuards(StorefrontCustomerGuard)
+    async customerLogout(@Req() req: any) {
+        return this.storefrontService.customerLogout(req.user.userId);
+    }
+
     /** Protected: get signed-in customer's profile */
     @Get(':slug/customer/me')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(StorefrontCustomerGuard)
     async getCustomerProfile(@Param('slug') slug: string, @Req() req: any) {
-        return this.storefrontService.getCustomerProfile(slug, req.user.userId);
+        return this.storefrontService.getCustomerProfile(slug, req.user.userId, req.user.storefrontTenantId);
     }
 
     /** Protected: get signed-in customer's order history */
     @Get(':slug/customer/orders')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(StorefrontCustomerGuard)
     async getCustomerOrders(
         @Param('slug') slug: string,
         @Req() req: any,
@@ -103,6 +127,7 @@ export class StorefrontController {
             req.user.userId,
             parseInt(page, 10),
             Math.min(parseInt(limit, 10), 100),
+            req.user.storefrontTenantId,
         );
     }
 }

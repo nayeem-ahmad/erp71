@@ -10,6 +10,7 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { OptionalJwtAuthGuard } from './optional-jwt-auth.guard';
+import { StorefrontCustomerGuard } from './storefront-customer.guard';
 import { ApiKeyStrategy } from './api-key.strategy';
 import { ApiKeyGuard } from './api-key.guard';
 import { CombinedAuthGuard } from './combined-auth.guard';
@@ -34,6 +35,7 @@ import { TotpService } from './totp.service';
         JwtStrategy,
         JwtAuthGuard,
         OptionalJwtAuthGuard,
+        StorefrontCustomerGuard,
         ApiKeyStrategy,
         ApiKeyGuard,
         CombinedAuthGuard,
@@ -47,6 +49,7 @@ import { TotpService } from './totp.service';
         JwtModule,
         JwtAuthGuard,
         OptionalJwtAuthGuard,
+        StorefrontCustomerGuard,
         ApiKeyGuard,
         CombinedAuthGuard,
         PlatformAdminGuard,

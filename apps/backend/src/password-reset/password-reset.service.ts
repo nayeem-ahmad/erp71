@@ -45,7 +45,8 @@ export class PasswordResetService {
 
         const passwordHash = await bcrypt.hash(newPassword, 10);
 
-        // Increment token_version to invalidate all active sessions (#68).
+        // Increment token_version to invalidate all active sessions (#68) — both
+        // surfaces, since the storefront customer login accepts the same password.
         // Using the emailed reset link proves inbox ownership — mark verified if not already.
         await this.db.$transaction(async (tx) => {
             const user = await tx.user.findUnique({
@@ -57,6 +58,7 @@ export class PasswordResetService {
                 data: {
                     passwordHash,
                     token_version: { increment: 1 },
+                    storefront_token_version: { increment: 1 },
                     ...(!user?.email_verified_at && { email_verified_at: new Date() }),
                 },
             });

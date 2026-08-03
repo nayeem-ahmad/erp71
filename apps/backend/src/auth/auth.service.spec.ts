@@ -487,14 +487,17 @@ describe('AuthService', () => {
             auditService.log.mockResolvedValue(undefined);
         });
 
-        it('increments token_version alongside the password hash on a successful change', async () => {
+        it('increments both token versions alongside the password hash on a successful change', async () => {
             await service.changePassword(userId, { currentPassword, newPassword });
 
+            // Storefront customer login accepts the same password, so its sessions
+            // must die with the app's.
             expect(db.user.update).toHaveBeenCalledWith({
                 where: { id: userId },
                 data: {
                     passwordHash: 'hashed-password',
                     token_version: { increment: 1 },
+                    storefront_token_version: { increment: 1 },
                 },
             });
         });

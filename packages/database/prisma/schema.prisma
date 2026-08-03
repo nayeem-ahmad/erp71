@@ -225,6 +225,10 @@ model User {
   name              String?
   preferred_locale  String    @default("en")
   token_version     Int       @default(0)
+  // Bumped independently of `token_version` so signing out of (or being kicked
+  // from) the ERP app does not silently drop the same person's storefront
+  // customer sessions, and vice versa. A password change bumps both.
+  storefront_token_version Int @default(0)
   is_platform_admin Boolean   @default(false)
   mobile_country_code String  @default("BD")
   mobile              String?
@@ -249,7 +253,7 @@ model User {
   feedbacks                 Feedback[]
   supportMessages           SupportMessage[]         @relation("SupportMessageSender")
   notifications             Notification[]
-  storefrontCustomer        Customer?
+  storefrontCustomers       Customer[]
   storefrontOrders          StorefrontOrder[]
   employee                  Employee?
   approvedLeaves            LeaveRequest[] @relation("LeaveApprover")
@@ -1491,7 +1495,9 @@ model Customer {
   anniversary          DateTime?
   created_at           DateTime      @default(now())
   deleted_at           DateTime?
-  user_id              String?       @unique
+  // Scoped per tenant, not globally: one person may shop at several storefronts,
+  // so the same User links to at most one Customer *per tenant*.
+  user_id              String?
 
   // Relations
   tenant           Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -1512,6 +1518,7 @@ model Customer {
 
   @@unique([tenant_id, phone])
   @@unique([tenant_id, customer_code])
+  @@unique([tenant_id, user_id])
   @@index([tenant_id, deleted_at])
   @@index([tenant_id, email])
 }
