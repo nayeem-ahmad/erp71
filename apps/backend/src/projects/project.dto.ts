@@ -13,6 +13,7 @@ import {
     MaxLength,
     Min,
     MinLength,
+    ValidateIf,
 } from 'class-validator';
 
 export enum ProjectStatusDto {
@@ -189,6 +190,9 @@ export class ListTasksDto {
     @IsOptional() @IsUUID()
     assigneeEmployeeId?: string;
 
+    @IsOptional() @IsUUID()
+    labelId?: string;
+
     @IsOptional() @Type(() => Number) @IsInt() @Min(1)
     page?: number;
 
@@ -235,7 +239,14 @@ export class CreateTaskDto {
     parentTaskId?: string;
 
     @IsOptional() @IsDateString()
+    startDate?: string;
+
+    @IsOptional() @IsDateString()
     dueDate?: string;
+
+    /** Replaces the whole label set. An empty array clears it. */
+    @IsOptional() @IsArray() @IsUUID(undefined, { each: true })
+    labelIds?: string[];
 
     @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(9999)
     estimateHours?: number;
@@ -274,8 +285,21 @@ export class UpdateTaskDto {
     @IsOptional() @IsUUID()
     sprintId?: string;
 
-    @IsOptional() @IsDateString()
+    /**
+     * `''` clears the date. `@IsOptional()` alone would not allow it — it skips
+     * only null and undefined, so an empty string reaches `@IsDateString()` and
+     * 400s, and PATCH reads undefined as "leave alone". `@ValidateIf` is what
+     * makes "no start date" expressible at all.
+     */
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsDateString()
+    startDate?: string;
+
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsDateString()
     dueDate?: string;
+
+    /** Replaces the whole label set. An empty array clears it. */
+    @IsOptional() @IsArray() @IsUUID(undefined, { each: true })
+    labelIds?: string[];
 
     @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(9999)
     estimateHours?: number;
@@ -302,6 +326,34 @@ export class MoveTaskDto {
     /** Explicitly clear the sprint — dragging a card back to the backlog. */
     @IsOptional() @IsBoolean()
     clearSprint?: boolean;
+}
+
+export enum ProjectLabelColorDto {
+    GRAY = 'GRAY',
+    BLUE = 'BLUE',
+    EMERALD = 'EMERALD',
+    AMBER = 'AMBER',
+    RED = 'RED',
+    PURPLE = 'PURPLE',
+}
+
+export class CreateLabelDto {
+    @IsString() @MinLength(1) @MaxLength(40)
+    name!: string;
+
+    @IsOptional() @IsEnum(ProjectLabelColorDto)
+    color?: ProjectLabelColorDto;
+}
+
+export class UpdateLabelDto {
+    @IsOptional() @IsString() @MinLength(1) @MaxLength(40)
+    name?: string;
+
+    @IsOptional() @IsEnum(ProjectLabelColorDto)
+    color?: ProjectLabelColorDto;
+
+    @IsOptional() @Type(() => Number) @IsInt() @Min(0)
+    sortOrder?: number;
 }
 
 export class CreateChecklistItemDto {

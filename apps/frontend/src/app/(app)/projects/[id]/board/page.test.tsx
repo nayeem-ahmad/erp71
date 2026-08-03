@@ -4,6 +4,9 @@ import BoardPage from './page';
 const getProjectBoard = jest.fn();
 const moveProjectTask = jest.fn();
 const createProjectTask = jest.fn();
+const getProjectLabels = jest.fn();
+
+const blocked = { id: 'l1', name: 'Blocked', color: 'RED' };
 
 jest.mock('next/navigation', () => ({
     useParams: () => ({ id: 'project-1' }),
@@ -21,6 +24,7 @@ jest.mock('@/lib/api', () => ({
         getProjectBoard: (...args: unknown[]) => getProjectBoard(...args),
         moveProjectTask: (...args: unknown[]) => moveProjectTask(...args),
         createProjectTask: (...args: unknown[]) => createProjectTask(...args),
+        getProjectLabels: (...args: unknown[]) => getProjectLabels(...args),
         // Reached only once a card is opened.
         getProjectTask: jest.fn().mockResolvedValue({ id: 't1', title: 'Wire the meter' }),
         getTaskRemainingHistory: jest.fn().mockResolvedValue([]),
@@ -74,6 +78,7 @@ beforeEach(() => {
     getProjectBoard.mockReset();
     moveProjectTask.mockReset().mockResolvedValue({});
     createProjectTask.mockReset().mockResolvedValue({ id: 'new' });
+    getProjectLabels.mockReset().mockResolvedValue([]);
     getProjectBoard.mockResolvedValue(board([task()]));
 
     // The "did it open?" assertions all read this one mock, so a stale call
@@ -482,5 +487,48 @@ describe('Project board filters', () => {
                 expect.objectContaining({ sortOrder: 2 }),
             ),
         );
+    });
+});
+
+describe('Project board labels', () => {
+    it('shows label chips on the card', async () => {
+        getProjectBoard.mockResolvedValue(board([task({ labels: [{ label: blocked }] })]));
+        render(<BoardPage />);
+
+        expect(within(await card()).getByText('Blocked')).toBeInTheDocument();
+    });
+
+    it('filters by label', async () => {
+        getProjectLabels.mockResolvedValue([blocked]);
+        getProjectBoard.mockResolvedValue(
+            board([
+                task({ labels: [{ label: blocked }] }),
+                task({ id: 't2', title: 'Paint the wall' }),
+            ]),
+        );
+        render(<BoardPage />);
+        await screen.findByText('Wire the meter');
+
+        fireEvent.change(screen.getByLabelText('Label'), { target: { value: 'l1' } });
+
+        expect(screen.getByText('Wire the meter')).toBeInTheDocument();
+        expect(screen.queryByText('Paint the wall')).not.toBeInTheDocument();
+    });
+
+    // An empty select is a dead control that only makes the bar longer.
+    it('does not offer a label filter to a workspace with no labels', async () => {
+        getProjectLabels.mockResolvedValue([]);
+        render(<BoardPage />);
+        await screen.findByText('Wire the meter');
+
+        expect(screen.queryByLabelText('Label')).not.toBeInTheDocument();
+    });
+
+    it('keeps the board usable when the labels request fails', async () => {
+        getProjectLabels.mockRejectedValue(new Error('nope'));
+        render(<BoardPage />);
+
+        expect(await screen.findByText('Wire the meter')).toBeInTheDocument();
+        expect(screen.queryByLabelText('Label')).not.toBeInTheDocument();
     });
 });

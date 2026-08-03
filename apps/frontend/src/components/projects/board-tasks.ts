@@ -4,11 +4,57 @@
  * they are the parts most likely to be quietly wrong.
  */
 
+export type ProjectLabelColor = 'GRAY' | 'BLUE' | 'EMERALD' | 'AMBER' | 'RED' | 'PURPLE';
+
+export interface ProjectLabel {
+    id: string;
+    name: string;
+    color: ProjectLabelColor;
+    sort_order?: number;
+}
+
+export const LABEL_COLORS: ProjectLabelColor[] = [
+    'GRAY',
+    'BLUE',
+    'EMERALD',
+    'AMBER',
+    'RED',
+    'PURPLE',
+];
+
+/**
+ * Written out as whole class strings because Tailwind scans source text — a
+ * template like `bg-${color}-100` produces nothing at build time.
+ *
+ * These are chips carrying tenant data, not UI accents, so the one-accent rule
+ * does not apply; the point of a label is that it is distinguishable at a
+ * glance. The palette is fixed and small for exactly that reason.
+ */
+export const LABEL_CLASS: Record<ProjectLabelColor, string> = {
+    GRAY: 'bg-gray-100 text-gray-700',
+    BLUE: 'bg-blue-100 text-blue-700',
+    EMERALD: 'bg-emerald-100 text-emerald-700',
+    AMBER: 'bg-amber-100 text-amber-700',
+    RED: 'bg-red-100 text-red-700',
+    PURPLE: 'bg-purple-100 text-purple-700',
+};
+
+export function labelClass(color: string | undefined): string {
+    return LABEL_CLASS[(color ?? 'GRAY') as ProjectLabelColor] ?? LABEL_CLASS.GRAY;
+}
+
+/** The join row the API returns, unwrapped. */
+export function labelsOf(task: Pick<BoardTask, 'labels'>): ProjectLabel[] {
+    return (task.labels ?? []).map((row) => row.label).filter(Boolean);
+}
+
 export interface BoardTask {
     id: string;
     title: string;
     description?: string | null;
     priority: string;
+    labels?: { label: ProjectLabel }[];
+    start_date?: string | null;
     due_date?: string | null;
     completed_at?: string | null;
     remaining_hours?: string | null;
@@ -114,12 +160,23 @@ export interface BoardFilters {
     assignee: string;
     priority: string;
     due: DueFilter;
+    label: string;
 }
 
-export const NO_FILTERS: BoardFilters = { assignee: 'all', priority: 'all', due: 'all' };
+export const NO_FILTERS: BoardFilters = {
+    assignee: 'all',
+    priority: 'all',
+    due: 'all',
+    label: 'all',
+};
 
 export function hasActiveFilter(filters: BoardFilters): boolean {
-    return filters.assignee !== 'all' || filters.priority !== 'all' || filters.due !== 'all';
+    return (
+        filters.assignee !== 'all' ||
+        filters.priority !== 'all' ||
+        filters.due !== 'all' ||
+        filters.label !== 'all'
+    );
 }
 
 function matchesDue(task: BoardTask, due: DueFilter): boolean {
@@ -138,6 +195,14 @@ function matchesDue(task: BoardTask, due: DueFilter): boolean {
 export function matchesFilters(task: BoardTask, filters: BoardFilters): boolean {
     if (filters.assignee !== 'all' && assigneeKeyOf(task) !== filters.assignee) return false;
     if (filters.priority !== 'all' && task.priority !== filters.priority) return false;
+    if (filters.label === 'none' && labelsOf(task).length > 0) return false;
+    if (
+        filters.label !== 'all' &&
+        filters.label !== 'none' &&
+        !labelsOf(task).some((label) => label.id === filters.label)
+    ) {
+        return false;
+    }
     return matchesDue(task, filters.due);
 }
 

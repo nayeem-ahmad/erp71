@@ -41,6 +41,15 @@ describe('ProjectTasksService', () => {
                 update: jest.fn().mockResolvedValue({}),
             },
             projectTaskStatus: { findFirst: jest.fn().mockResolvedValue(todo) },
+            projectLabel: {
+                count: jest.fn().mockResolvedValue(0),
+                findMany: jest.fn().mockResolvedValue([]),
+            },
+            projectTaskLabel: {
+                deleteMany: jest.fn(),
+                createMany: jest.fn(),
+                count: jest.fn().mockResolvedValue(0),
+            },
             projectTaskChecklistItem: {
                 count: jest.fn().mockResolvedValue(0),
                 create: jest.fn(),
@@ -304,6 +313,124 @@ describe('ProjectTasksService', () => {
                     where: expect.objectContaining({ sprint_id: 'sprint-1' }),
                 }),
             );
+        });
+    });
+
+    describe('labels', () => {
+        it('replaces the whole set: clears first, then writes what was sent', async () => {
+            db.projectLabel.count.mockResolvedValue(2);
+
+            await service.update('tenant-1', 'user-1', 'task-1', {
+                labelIds: ['label-a', 'label-b'],
+            } as never);
+
+            expect(db.projectTaskLabel.deleteMany).toHaveBeenCalledWith({
+                where: { task_id: 'task-1' },
+            });
+            expect(db.projectTaskLabel.createMany).toHaveBeenCalledWith({
+                data: [
+                    { tenant_id: 'tenant-1', task_id: 'task-1', label_id: 'label-a' },
+                    { tenant_id: 'tenant-1', task_id: 'task-1', label_id: 'label-b' },
+                ],
+            });
+        });
+
+        it('clears every label when sent an empty array', async () => {
+            await service.update('tenant-1', 'user-1', 'task-1', { labelIds: [] } as never);
+
+            expect(db.projectTaskLabel.deleteMany).toHaveBeenCalled();
+            expect(db.projectTaskLabel.createMany).not.toHaveBeenCalled();
+        });
+
+        it('leaves the labels alone when the field is absent', async () => {
+            // PATCH semantics: undefined means "do not touch", which must not be
+            // confused with the empty array that means "remove them all".
+            await service.update('tenant-1', 'user-1', 'task-1', { title: 'Renamed' } as never);
+
+            expect(db.projectTaskLabel.deleteMany).not.toHaveBeenCalled();
+        });
+
+        // The join table carries a tenant_id but nothing validates it on write,
+        // so an unchecked id would let one tenant tag with another's label.
+        it('refuses a label id that is not this tenant’s', async () => {
+            db.projectLabel.count.mockResolvedValue(1);
+
+            await expect(
+                service.update('tenant-1', 'user-1', 'task-1', {
+                    labelIds: ['label-a', 'label-from-another-tenant'],
+                } as never),
+            ).rejects.toBeInstanceOf(BadRequestException);
+
+            expect(db.projectTaskLabel.createMany).not.toHaveBeenCalled();
+        });
+
+        it('scopes the label check to the tenant', async () => {
+            db.projectLabel.count.mockResolvedValue(1);
+            await service.update('tenant-1', 'user-1', 'task-1', {
+                labelIds: ['label-a'],
+            } as never);
+
+            expect(db.projectLabel.count).toHaveBeenCalledWith({
+                where: { tenant_id: 'tenant-1', id: { in: ['label-a'] } },
+            });
+        });
+
+        it('de-duplicates a repeated id rather than violating the primary key', async () => {
+            db.projectLabel.count.mockResolvedValue(1);
+
+            await service.update('tenant-1', 'user-1', 'task-1', {
+                labelIds: ['label-a', 'label-a'],
+            } as never);
+
+            expect(db.projectTaskLabel.createMany).toHaveBeenCalledWith({
+                data: [{ tenant_id: 'tenant-1', task_id: 'task-1', label_id: 'label-a' }],
+            });
+        });
+
+        it('tags a task on create', async () => {
+            db.projectLabel.count.mockResolvedValue(1);
+
+            await service.create('tenant-1', 'user-1', {
+                projectId: 'project-1',
+                title: 'Wire the panel',
+                labelIds: ['label-a'],
+            } as never);
+
+            expect(db.projectTaskLabel.createMany).toHaveBeenCalledWith({
+                data: [{ tenant_id: 'tenant-1', task_id: 'task-new', label_id: 'label-a' }],
+            });
+        });
+    });
+
+    describe('dates', () => {
+        it('stores a start date', async () => {
+            await service.update('tenant-1', 'user-1', 'task-1', {
+                startDate: '2026-08-05',
+            } as never);
+
+            expect(db.projectTask.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ start_date: new Date('2026-08-05') }),
+                }),
+            );
+        });
+
+        // '' is the only way to express "no date" over PATCH, where undefined
+        // already means "leave alone".
+        it('clears a date when sent an empty string', async () => {
+            await service.update('tenant-1', 'user-1', 'task-1', { dueDate: '' } as never);
+
+            expect(db.projectTask.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ due_date: null }) }),
+            );
+        });
+
+        it('leaves a date alone when the field is absent', async () => {
+            await service.update('tenant-1', 'user-1', 'task-1', { title: 'Renamed' } as never);
+
+            const data = db.projectTask.update.mock.calls.at(-1)[0].data;
+            expect(data).not.toHaveProperty('due_date');
+            expect(data).not.toHaveProperty('start_date');
         });
     });
 

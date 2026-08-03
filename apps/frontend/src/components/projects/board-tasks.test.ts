@@ -6,11 +6,18 @@ import {
     dueStateOf,
     hasActiveFilter,
     initialsOf,
+    LABEL_COLORS,
+    labelClass,
+    labelsOf,
     matchesFilters,
     NO_FILTERS,
     type BoardColumn,
     type BoardTask,
+    type ProjectLabel,
 } from './board-tasks';
+
+const blocked: ProjectLabel = { id: 'l1', name: 'Blocked', color: 'RED' };
+const waiting: ProjectLabel = { id: 'l2', name: 'Client waiting', color: 'AMBER' };
 
 const shift = (days: number) => {
     const d = new Date();
@@ -183,8 +190,50 @@ describe('matchesFilters', () => {
 
     it('combines filters as AND', () => {
         const t = task({ priority: 'HIGH', assignee: { id: 'u1', email: 'k@x.com' } });
-        expect(matchesFilters(t, { assignee: 'user:u1', priority: 'HIGH', due: 'all' })).toBe(true);
-        expect(matchesFilters(t, { assignee: 'user:u1', priority: 'LOW', due: 'all' })).toBe(false);
+        expect(matchesFilters(t, { ...NO_FILTERS, assignee: 'user:u1', priority: 'HIGH' })).toBe(true);
+        expect(matchesFilters(t, { ...NO_FILTERS, assignee: 'user:u1', priority: 'LOW' })).toBe(false);
+    });
+
+    it('filters by label', () => {
+        const tagged = task({ labels: [{ label: blocked }] });
+        expect(matchesFilters(tagged, { ...NO_FILTERS, label: 'l1' })).toBe(true);
+        expect(matchesFilters(tagged, { ...NO_FILTERS, label: 'l2' })).toBe(false);
+        expect(matchesFilters(task(), { ...NO_FILTERS, label: 'l1' })).toBe(false);
+    });
+
+    it('matches a card carrying the label among several', () => {
+        const tagged = task({ labels: [{ label: waiting }, { label: blocked }] });
+        expect(matchesFilters(tagged, { ...NO_FILTERS, label: 'l1' })).toBe(true);
+    });
+
+    it('finds cards with no label at all', () => {
+        expect(matchesFilters(task(), { ...NO_FILTERS, label: 'none' })).toBe(true);
+        expect(
+            matchesFilters(task({ labels: [{ label: blocked }] }), { ...NO_FILTERS, label: 'none' }),
+        ).toBe(false);
+    });
+});
+
+describe('label helpers', () => {
+    it('unwraps the join rows the API returns', () => {
+        expect(labelsOf(task({ labels: [{ label: blocked }] }))).toEqual([blocked]);
+    });
+
+    it('treats a task with no labels as having none', () => {
+        expect(labelsOf(task())).toEqual([]);
+    });
+
+    // A template like `bg-${color}-100` produces no CSS, because Tailwind scans
+    // source text. Every colour must resolve to a class string written out.
+    it('maps every colour in the palette to a written-out class pair', () => {
+        for (const color of LABEL_COLORS) {
+            expect(labelClass(color)).toMatch(/^bg-[a-z]+-100 text-[a-z]+-700$/);
+        }
+    });
+
+    it('falls back to grey for a colour it does not know', () => {
+        expect(labelClass(undefined)).toBe(labelClass('GRAY'));
+        expect(labelClass('CHARTREUSE')).toBe(labelClass('GRAY'));
     });
 });
 

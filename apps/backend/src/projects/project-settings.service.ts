@@ -1,8 +1,10 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import {
+    CreateLabelDto,
     CreateProjectTypeDto,
     CreateTaskStatusDto,
+    UpdateLabelDto,
     UpdateProjectTypeDto,
     UpdateTaskStatusDto,
 } from './project.dto';
@@ -135,6 +137,79 @@ export class ProjectSettingsService {
         }
         await this.db.projectTaskStatus.delete({ where: { id } });
         return { success: true };
+    }
+
+    // ── Labels ─────────────────────────────────────────────────────────────
+
+    async listLabels(tenantId: string) {
+        return this.db.projectLabel.findMany({
+            where: { tenant_id: tenantId },
+            orderBy: [{ sort_order: 'asc' }, { created_at: 'asc' }],
+        });
+    }
+
+    async createLabel(tenantId: string, dto: CreateLabelDto) {
+        const name = dto.name.trim();
+        const clash = await this.db.projectLabel.findFirst({
+            where: { tenant_id: tenantId, name },
+            select: { id: true },
+        });
+        if (clash) throw new ConflictException('A label with that name already exists.');
+
+        const count = await this.db.projectLabel.count({ where: { tenant_id: tenantId } });
+        return this.db.projectLabel.create({
+            data: {
+                tenant_id: tenantId,
+                name,
+                color: (dto.color ?? 'GRAY') as never,
+                sort_order: count,
+            },
+        });
+    }
+
+    async updateLabel(tenantId: string, id: string, dto: UpdateLabelDto) {
+        await this.assertLabel(tenantId, id);
+
+        if (dto.name !== undefined) {
+            const name = dto.name.trim();
+            const clash = await this.db.projectLabel.findFirst({
+                where: { tenant_id: tenantId, name, id: { not: id } },
+                select: { id: true },
+            });
+            if (clash) throw new ConflictException('A label with that name already exists.');
+        }
+
+        return this.db.projectLabel.update({
+            where: { id },
+            data: {
+                ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+                ...(dto.color !== undefined ? { color: dto.color as never } : {}),
+                ...(dto.sortOrder !== undefined ? { sort_order: dto.sortOrder } : {}),
+            },
+        });
+    }
+
+    /**
+     * Unlike a board column, a label in use is deleted rather than refused —
+     * removing "Blocked" from the vocabulary should not require untagging
+     * fifty cards first. The join rows cascade; the tasks are untouched.
+     */
+    async removeLabel(tenantId: string, id: string) {
+        await this.assertLabel(tenantId, id);
+        const tagged = await this.db.projectTaskLabel.count({
+            where: { tenant_id: tenantId, label_id: id },
+        });
+        await this.db.projectLabel.delete({ where: { id } });
+        return { success: true, untagged: tagged };
+    }
+
+    private async assertLabel(tenantId: string, id: string) {
+        const label = await this.db.projectLabel.findFirst({
+            where: { id, tenant_id: tenantId },
+            select: { id: true },
+        });
+        if (!label) throw new NotFoundException('Label not found');
+        return label;
     }
 
     private async clearDefault(tenantId: string) {

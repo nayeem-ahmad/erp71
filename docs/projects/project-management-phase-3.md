@@ -1,6 +1,6 @@
 # Project Management — Phase 3: Trello-style task cards
 
-**Status:** 3A, 3B, 3M and 3N shipped 2026-08-03; the rest scoped and sequenced below
+**Status:** 3A, 3B, 3M, 3N, 3F and 3H shipped 2026-08-03; the rest scoped and sequenced below
 **Written:** 2026-08-02 · **Decisions taken:** 2026-08-03
 **Predecessors:** `project-management-phase-1.md`, `project-management-phase-2.md`
 
@@ -216,8 +216,8 @@ employee without a login rendered as unassigned.
 | 1 | 3A | **shipped 2026-08-03** | Cards open and say something. Hours of work; changes how the board *feels* more than anything else on this list. |
 | 2 | 3B | **shipped 2026-08-03** | Pure UI over finished endpoints. No schema, no risk. |
 | 3 | 3M + 3N | **shipped 2026-08-03** | Board becomes usable — create without leaving, filter, and work on a phone. |
-| 4 | 3F + 3H | next | First schema change; do labels and dates in one migration. |
-| 5 | 3C + 3I | | Comments and activity together — the same panel, and activity is what makes comments findable. |
+| 4 | 3F + 3H | **shipped 2026-08-03** | First schema change; labels and dates in one migration. |
+| 5 | 3C + 3I | next | Comments and activity together — the same panel, and activity is what makes comments findable. |
 | 6 | 3L | | Per-project columns, per decision 1. Carries a data migration. |
 | 7 | 3D | | Needs the `storage_key` fix, so it is the only item with a prerequisite outside this phase. |
 | 8 | 3J + 3K | | Archive, then cover colour. |
@@ -228,9 +228,8 @@ employee without a login rendered as unassigned.
 
 ## What shipped on 2026-08-03
 
-3A, 3B, 3M and 3N. 3E (subtasks on the card) was postponed on request between
-the two batches — the card badge for it already ships, only the panel section is
-outstanding.
+3A, 3B, 3M, 3N, 3F and 3H. 3E (subtasks on the card) was postponed on request —
+the card badge for it already ships, only the panel section is outstanding.
 
 **3A.** The board card is clickable (mouse, touch and keyboard) and opens the
 existing `TaskDetailPanel`; closing it reloads the board so a status change made
@@ -302,5 +301,53 @@ touch tests passed for exactly that wrong reason. `jest.setup.ts` now polyfills
 `PointerEvent` over `MouseEvent`, which is what made the mouse and touch paths
 genuinely distinguishable; any future pointer-driven UI inherits it.
 
+**3F — labels.** `ProjectLabel` + a `ProjectTaskLabel` join, chips on the card,
+a fourth filter on the board, and management in project settings beside the
+board columns. Colour is an **enum, not a hex string**: the UI rules forbid
+arbitrary hex, and a free colour field is how a board ends up with twelve
+indistinguishable greys. Each value maps to a Tailwind class pair written out in
+full, because Tailwind scans source text and `bg-${color}-100` compiles to
+nothing.
+
+**Labels are tenant-scoped, not per-board — and that is a deliberate departure
+from decision 1.** A label is a vocabulary ("Blocked", "Client waiting"), and
+the cross-project Tasks page and the tenant-level sprint board are only useful
+if that vocabulary is shared; per-board labels would fragment it exactly the way
+per-project statuses would. Columns are structural and belong to a board; labels
+are descriptive and belong to the workspace. If a board ever needs private
+labels, adding `project_id` is additive.
+
+Two details in the write path. The endpoint **replaces** a task's whole label
+set rather than patching it, so a toggle sends everything that should remain and
+there is no add/remove pair to keep in step — `undefined` still means "leave
+alone", and `[]` means "remove them all". And every id is **checked against the
+tenant before writing**: the join row carries a `tenant_id` that nothing else
+validates, so an unchecked id would let one tenant tag with another's label.
+
+Deleting a label in use is allowed rather than refused — unlike a board column,
+which still blocks on tasks. Retiring "Blocked" from the vocabulary should not
+mean untagging fifty cards first; the join rows cascade and the tasks are
+untouched. The response reports how many were untagged.
+
+**3H — dates.** `start_date` joins `due_date`, and both are editable in the
+panel, saving on change. Clearing needed a backend fix that is worth knowing
+about: `@IsOptional()` skips only `null` and `undefined`, so an empty string
+reaches `@IsDateString()` and 400s — while PATCH reads `undefined` as "leave
+alone". Without a `@ValidateIf`, **"no due date" was not expressible at all**.
+The date fields now accept `''` explicitly.
+
+The same pattern is worth auditing elsewhere: `UpdateProjectDto` has
+`@IsOptional() @IsUUID() customerId`, and the Phase 2 project edit form sends
+`''` to clear a customer link — which by this reasoning 400s. Logged in
+`TODO.md` rather than fixed here.
+
+Also fixed in passing: `Field` only associates its label with the control when
+given `htmlFor`, so a `Field`-wrapped input has no accessible name. The new date
+inputs pass it. Most of the app does not — logged.
+
 **Not done:** none of this has been opened in a browser — it is verified by unit
-tests, typecheck, lint and `next build` only.
+tests, typecheck, lint and `next build` only. **The migration has not been run
+against a real Postgres**, only validated by `prisma validate` and hand-written
+to match the schema; it is purely additive (one nullable column, two new tables,
+one new enum), which is the cheapest shape to deploy but not a substitute for
+running it.

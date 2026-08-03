@@ -546,6 +546,8 @@ model Tenant {
   projectTasks            ProjectTask[]
   projectTaskRemainingLogs ProjectTaskRemainingLog[]
   projectTaskChecklistItems ProjectTaskChecklistItem[]
+  projectLabels           ProjectLabel[]
+  projectTaskLabels       ProjectTaskLabel[]
   projectTimeEntries      ProjectTimeEntry[]
   sprints                 Sprint[]
   sprintSnapshots         SprintSnapshot[]
@@ -3821,6 +3823,10 @@ model ProjectTask {
   /// this for" must read both — see assigneeOf() in project-tasks.service.ts.
   assignee_id          String?
   assignee_employee_id String?
+  /// Paired with due_date so a card can say when work opens as well as when it
+  /// closes. Nothing derives from it — a task with a future start is not
+  /// blocked, it is simply not due yet.
+  start_date      DateTime?       @db.Date
   due_date        DateTime?       @db.Date
   estimate_hours  Decimal?        @db.Decimal(8, 2)
   /// An independent re-estimate, never derived from estimate minus logged.
@@ -3845,6 +3851,7 @@ model ProjectTask {
   creator    User?              @relation("ProjectTaskCreator", fields: [created_by], references: [id])
 
   checklistItems ProjectTaskChecklistItem[]
+  labels         ProjectTaskLabel[]
   timeEntries    ProjectTimeEntry[]
   remainingLogs  ProjectTaskRemainingLog[]
   comments       ProjectComment[]
@@ -3889,6 +3896,55 @@ model ProjectTaskRemainingLog {
   @@index([tenant_id, sprint_id, changed_at])
   @@index([task_id, changed_at])
   @@map("project_task_remaining_logs")
+}
+
+/// Colour is an enum, not a hex string: the UI rules forbid arbitrary hex, and a
+/// free colour field is how a board ends up with twelve indistinguishable greys.
+/// The renderer maps each value to a fixed Tailwind pair.
+enum ProjectLabelColor {
+  GRAY
+  BLUE
+  EMERALD
+  AMBER
+  RED
+  PURPLE
+}
+
+/// Tenant-scoped rather than per-project, deliberately: a label is a vocabulary
+/// ("Blocked", "Client waiting") and the cross-project Tasks page and sprint
+/// board are only useful if that vocabulary is shared. Per-board labels would
+/// fragment it the same way per-project statuses would. Adding `project_id`
+/// later is additive if boards ever need private labels.
+model ProjectLabel {
+  id         String            @id @default(uuid())
+  tenant_id  String
+  name       String
+  color      ProjectLabelColor @default(GRAY)
+  sort_order Int               @default(0)
+  created_at DateTime          @default(now())
+  updated_at DateTime          @updatedAt
+
+  tenant Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  tasks  ProjectTaskLabel[]
+
+  @@unique([tenant_id, name])
+  @@index([tenant_id, sort_order])
+  @@map("project_labels")
+}
+
+model ProjectTaskLabel {
+  tenant_id  String
+  task_id    String
+  label_id   String
+  created_at DateTime @default(now())
+
+  tenant Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  task   ProjectTask  @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  label  ProjectLabel @relation(fields: [label_id], references: [id], onDelete: Cascade)
+
+  @@id([task_id, label_id])
+  @@index([tenant_id, label_id])
+  @@map("project_task_labels")
 }
 
 model ProjectTaskChecklistItem {

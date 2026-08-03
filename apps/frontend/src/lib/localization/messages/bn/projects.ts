@@ -134,6 +134,33 @@ export const projectsMessages = {
         updated: 'টাস্ক হালনাগাদ হয়েছে',
     },
 
+    dates: {
+        title: 'তারিখ',
+        start: 'শুরুর তারিখ',
+        due: 'শেষ তারিখ',
+        inverted: 'শুরুর তারিখ শেষ তারিখের পরে।',
+        saveFailed: 'তারিখ সংরক্ষণ করা যায়নি',
+    },
+
+    labels: {
+        title: 'লেবেল',
+        hint: 'সব প্রকল্পে একই লেবেল ব্যবহার হয়, তাই ওয়ার্কস্পেসজুড়ে টাস্ক তালিকা ও স্প্রিন্ট বোর্ডে ফিল্টার করা যায়।',
+        empty: 'এখনও কোনো লেবেল নেই।',
+        add: 'লেবেল যোগ',
+        namePlaceholder: 'যেমন আটকে আছে',
+        color: 'রং',
+        saveFailed: 'লেবেল হালনাগাদ করা যায়নি',
+        untagged: '{count}টি টাস্ক থেকে সরানো হয়েছে।',
+        colors: {
+            GRAY: 'ধূসর',
+            BLUE: 'নীল',
+            EMERALD: 'সবুজ',
+            AMBER: 'অ্যাম্বার',
+            RED: 'লাল',
+            PURPLE: 'বেগুনি',
+        },
+    },
+
     checklist: {
         title: 'চেকলিস্ট',
         add: 'আইটেম যোগ',
@@ -199,6 +226,8 @@ export const projectsMessages = {
             dueToday: 'আজ শেষ তারিখ',
             dueThisWeek: 'এই সপ্তাহে শেষ',
             noDueDate: 'শেষ তারিখ নেই',
+            label: 'লেবেল',
+            noLabel: 'লেবেল নেই',
             clear: 'মুছুন',
             showing: '{total}টির মধ্যে {shown}টি কার্ড',
         },

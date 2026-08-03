@@ -29,6 +29,7 @@ const TASK_INCLUDE = {
     milestone: { select: { id: true, name: true } },
     sprint: { select: { id: true, name: true, status: true } },
     checklistItems: { orderBy: { sort_order: 'asc' } },
+    labels: { include: { label: true } },
     _count: { select: { subtasks: true, comments: true } },
 } as const;
 
@@ -55,6 +56,7 @@ export class ProjectTasksService {
                 ? { status: { category: query.statusCategory.toUpperCase() } }
                 : {}),
             ...(query.milestoneId ? { milestone_id: query.milestoneId } : {}),
+            ...(query.labelId ? { labels: { some: { label_id: query.labelId } } } : {}),
         };
         if (query.backlogOnly === 'true') where.sprint_id = null;
         else if (query.sprintId) where.sprint_id = query.sprintId;
@@ -162,12 +164,15 @@ export class ProjectTasksService {
                 milestone_id: dto.milestoneId ?? null,
                 sprint_id: dto.sprintId ?? null,
                 parent_task_id: dto.parentTaskId ?? null,
+                start_date: dto.startDate ? new Date(dto.startDate) : null,
                 due_date: dto.dueDate ? new Date(dto.dueDate) : null,
                 estimate_hours: estimate,
                 sort_order: sortOrder,
                 created_by: userId,
             },
         });
+
+        if (dto.labelIds?.length) await this.setLabels(tenantId, task.id, dto.labelIds);
 
         if (opening != null) {
             await this.remaining.write({
@@ -219,10 +224,15 @@ export class ProjectTasksService {
                     : {}),
                 ...(dto.milestoneId !== undefined ? { milestone_id: dto.milestoneId || null } : {}),
                 ...(dto.sprintId !== undefined ? { sprint_id: dto.sprintId || null } : {}),
+                ...(dto.startDate !== undefined
+                    ? { start_date: dto.startDate ? new Date(dto.startDate) : null }
+                    : {}),
                 ...(dto.dueDate !== undefined ? { due_date: dto.dueDate ? new Date(dto.dueDate) : null } : {}),
                 ...(dto.estimateHours !== undefined ? { estimate_hours: dto.estimateHours ?? null } : {}),
             },
         });
+
+        if (dto.labelIds !== undefined) await this.setLabels(tenantId, taskId, dto.labelIds);
 
         const previous = task.remaining_hours == null ? null : Number(task.remaining_hours);
         const sprintId = dto.sprintId !== undefined ? dto.sprintId || null : task.sprint_id;
@@ -396,6 +406,37 @@ export class ProjectTasksService {
                 ...(dto.sortOrder !== undefined ? { sort_order: dto.sortOrder } : {}),
             },
         });
+    }
+
+    /**
+     * Replaces a task's whole label set. Every id is checked against this
+     * tenant first — the join table has no tenant column of its own to trust,
+     * so an unchecked id would let one tenant tag with another's label.
+     */
+    private async setLabels(tenantId: string, taskId: string, labelIds: string[]) {
+        const unique = [...new Set(labelIds)];
+
+        if (unique.length > 0) {
+            const known = await this.db.projectLabel.count({
+                where: { tenant_id: tenantId, id: { in: unique } },
+            });
+            if (known !== unique.length) throw new BadRequestException('Unknown label');
+        }
+
+        await this.db.$transaction([
+            this.db.projectTaskLabel.deleteMany({ where: { task_id: taskId } }),
+            ...(unique.length > 0
+                ? [
+                      this.db.projectTaskLabel.createMany({
+                          data: unique.map((labelId) => ({
+                              tenant_id: tenantId,
+                              task_id: taskId,
+                              label_id: labelId,
+                          })),
+                      }),
+                  ]
+                : []),
+        ]);
     }
 
     /**

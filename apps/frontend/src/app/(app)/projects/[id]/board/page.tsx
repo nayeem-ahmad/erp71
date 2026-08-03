@@ -24,11 +24,14 @@ import {
     dueStateOf,
     hasActiveFilter,
     initialsOf,
+    labelClass,
+    labelsOf,
     NO_FILTERS,
     type BoardColumn,
     type BoardFilters,
     type BoardTask,
     type DueState,
+    type ProjectLabel,
 } from '@/components/projects/board-tasks';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
@@ -89,6 +92,7 @@ export default function ProjectBoardPage() {
     const [loading, setLoading] = useState(true);
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
     const [filters, setFilters] = useState<BoardFilters>(NO_FILTERS);
+    const [labels, setLabels] = useState<ProjectLabel[]>([]);
     const [drag, setDrag] = useState<DragState | null>(null);
 
     const activeSprint = useMemo(() => sprints.find((s) => s.status === 'ACTIVE') ?? null, [sprints]);
@@ -119,6 +123,14 @@ export default function ProjectBoardPage() {
             .then((list: unknown) => setSprints(Array.isArray(list) ? list : []))
             .catch(() => setSprints([]));
     }, [projectId]);
+
+    // Tenant-wide, so it does not need re-fetching when the board or sprint
+    // changes. A failure only costs the label filter, not the board.
+    useEffect(() => {
+        api.getProjectLabels()
+            .then((list: unknown) => setLabels(Array.isArray(list) ? list : []))
+            .catch(() => setLabels([]));
+    }, []);
 
     // Header identity only. Fetched separately from the board so switching
     // kanban/scrum or sprint does not re-request it, and a failure here leaves
@@ -351,6 +363,7 @@ export default function ProjectBoardPage() {
                 filters={filters}
                 onChange={setFilters}
                 assignees={assigneeOptions}
+                labels={labels}
                 shown={shown}
                 total={total}
             />
@@ -455,12 +468,14 @@ function BoardFilterBar({
     filters,
     onChange,
     assignees,
+    labels,
     shown,
     total,
 }: {
     filters: BoardFilters;
     onChange: (next: BoardFilters) => void;
     assignees: { key: string; label: string }[];
+    labels: ProjectLabel[];
     shown: number;
     total: number;
 }) {
@@ -502,6 +517,27 @@ function BoardFilterBar({
                     ))}
                 </Select>
             </label>
+
+            {/* Only offered once the tenant has labels — an empty select is a
+                dead control that just makes the bar longer. */}
+            {labels.length > 0 && (
+                <label className="flex flex-col gap-1 text-xs text-gray-500">
+                    {f.label}
+                    <Select
+                        className="min-h-touch"
+                        value={filters.label}
+                        onChange={(e) => onChange({ ...filters, label: e.target.value })}
+                    >
+                        <option value="all">{t.common.all}</option>
+                        <option value="none">{f.noLabel}</option>
+                        {labels.map((label) => (
+                            <option key={label.id} value={label.id}>
+                                {label.name}
+                            </option>
+                        ))}
+                    </Select>
+                </label>
+            )}
 
             <label className="flex flex-col gap-1 text-xs text-gray-500">
                 {f.due}
@@ -646,6 +682,7 @@ function TaskCard({
     const { t, locale } = useI18n();
     const c = t.projects.board.card;
 
+    const labels = labelsOf(task);
     const checklist = task.checklistItems ?? [];
     const checklistDone = checklist.filter((item) => item.is_done).length;
     const comments = task._count?.comments ?? 0;
@@ -698,6 +735,21 @@ function TaskCard({
                 </button>
                 <p className="flex-1 pt-0.5 font-medium">{task.title}</p>
             </div>
+
+            {/* Above the badges, as on a Trello card: colour is what the eye
+                scans a column by, so it should not be buried in the meta row. */}
+            {labels.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                    {labels.map((label) => (
+                        <span
+                            key={label.id}
+                            className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${labelClass(label.color)}`}
+                        >
+                            {label.name}
+                        </span>
+                    ))}
+                </div>
+            )}
 
             {(due || task.priority === 'HIGH' || task.priority === 'URGENT') && (
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">

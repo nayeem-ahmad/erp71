@@ -134,6 +134,33 @@ export const projectsMessages = {
         updated: 'Task updated',
     },
 
+    dates: {
+        title: 'Dates',
+        start: 'Start date',
+        due: 'Due date',
+        inverted: 'The start is after the due date.',
+        saveFailed: 'Could not save the dates',
+    },
+
+    labels: {
+        title: 'Labels',
+        hint: 'Shared across every project, so the workspace-wide task list and sprint board can filter on them.',
+        empty: 'No labels yet.',
+        add: 'Add label',
+        namePlaceholder: 'e.g. Blocked',
+        color: 'Colour',
+        saveFailed: 'Could not update the labels',
+        untagged: 'Removed from {count} task(s).',
+        colors: {
+            GRAY: 'Grey',
+            BLUE: 'Blue',
+            EMERALD: 'Green',
+            AMBER: 'Amber',
+            RED: 'Red',
+            PURPLE: 'Purple',
+        },
+    },
+
     checklist: {
         title: 'Checklist',
         add: 'Add an item',
@@ -199,6 +226,8 @@ export const projectsMessages = {
             dueToday: 'Due today',
             dueThisWeek: 'Due this week',
             noDueDate: 'No due date',
+            label: 'Label',
+            noLabel: 'No label',
             clear: 'Clear',
             showing: '{shown} of {total} cards',
         },

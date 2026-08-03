@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { Button, Checkbox, Input, Select, Field, StatusBadge } from '@/components/ui';
+import { labelClass, labelsOf, type ProjectLabel } from '@/components/projects/board-tasks';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -41,11 +42,17 @@ interface Task {
     estimate_hours?: string | null;
     remaining_hours?: string | null;
     logged_hours?: number;
+    start_date?: string | null;
+    due_date?: string | null;
     status?: { id: string; name: string; category: string };
     assignee?: { id: string; name?: string | null; email: string } | null;
+    labels?: { label: ProjectLabel }[];
     checklistItems?: ChecklistItem[];
     timeEntries?: TimeEntry[];
 }
+
+/** `@db.Date` arrives as an ISO instant; a date input wants YYYY-MM-DD. */
+const dateInputValue = (value?: string | null) => (value ? value.slice(0, 10) : '');
 
 const num = (value: unknown): number => (value == null ? 0 : Number(value));
 const today = () => new Date().toISOString().slice(0, 10);
@@ -70,15 +77,19 @@ export default function TaskDetailPanel({
     const [timeForm, setTimeForm] = useState({ hours: '', workDate: today(), note: '', remaining: '' });
     const [reestimate, setReestimate] = useState({ hours: '', note: '' });
 
+    const [allLabels, setAllLabels] = useState<ProjectLabel[]>([]);
+
     const load = useCallback(async () => {
-        const [detail, log, cols] = await Promise.all([
+        const [detail, log, cols, labels] = await Promise.all([
             api.getProjectTask(taskId),
             api.getTaskRemainingHistory(taskId),
             api.getProjectTaskStatuses(),
+            api.getProjectLabels(),
         ]);
         setTask(detail as Task);
         setHistory(Array.isArray(log) ? log : []);
         setStatuses(Array.isArray(cols) ? cols : []);
+        setAllLabels(Array.isArray(labels) ? labels : []);
     }, [taskId]);
 
     useEffect(() => {
@@ -186,6 +197,17 @@ export default function TaskDetailPanel({
                                 ))}
                             </Select>
                         </Field>
+
+                        <DatesSection task={task} taskId={taskId} onChanged={refresh} />
+
+                        {allLabels.length > 0 && (
+                            <LabelsSection
+                                taskId={taskId}
+                                all={allLabels}
+                                selected={labelsOf(task)}
+                                onChanged={refresh}
+                            />
+                        )}
 
                         <ChecklistSection
                             taskId={taskId}
@@ -373,6 +395,140 @@ export default function TaskDetailPanel({
                 </Button>
             </ModalFooter>
         </ModalShell>
+    );
+}
+
+/**
+ * Start and due, saved on change rather than behind a Save button — there are
+ * two fields and no validation to batch, so a button would only be one more
+ * click between the user and the thing they came here to do.
+ */
+function DatesSection({
+    task,
+    taskId,
+    onChanged,
+}: {
+    task: Task;
+    taskId: string;
+    onChanged: () => Promise<void>;
+}) {
+    const { t } = useI18n();
+    const m = t.projects;
+    const [saving, setSaving] = useState(false);
+
+    const save = async (field: 'startDate' | 'dueDate', value: string) => {
+        setSaving(true);
+        try {
+            // Sends '' rather than undefined to clear: PATCH reads undefined as
+            // "leave alone", so only the empty string can mean "no date".
+            await api.updateProjectTask(taskId, { [field]: value });
+            await onChanged();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.dates.saveFailed);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const start = dateInputValue(task.start_date);
+    const due = dateInputValue(task.due_date);
+    const inverted = start !== '' && due !== '' && start > due;
+
+    return (
+        <section className="rounded-md border border-gray-200 p-3">
+            <h3 className="mb-2 text-sm font-medium">{m.dates.title}</h3>
+            {/* `Field` only ties its label to the control when given htmlFor —
+                without the matching id these inputs have no accessible name. */}
+            <div className="grid gap-2 md:grid-cols-2">
+                <Field label={m.dates.start} htmlFor="task-start-date">
+                    <Input
+                        id="task-start-date"
+                        type="date"
+                        value={start}
+                        disabled={saving}
+                        onChange={(e) => save('startDate', e.target.value)}
+                    />
+                </Field>
+                <Field
+                    label={m.dates.due}
+                    htmlFor="task-due-date"
+                    error={inverted ? m.dates.inverted : undefined}
+                >
+                    <Input
+                        id="task-due-date"
+                        type="date"
+                        value={due}
+                        disabled={saving}
+                        onChange={(e) => save('dueDate', e.target.value)}
+                    />
+                </Field>
+            </div>
+        </section>
+    );
+}
+
+/**
+ * Toggles rather than a multi-select: a label set is small and visual, and the
+ * chip you tap is the chip you will see on the card.
+ */
+function LabelsSection({
+    taskId,
+    all,
+    selected,
+    onChanged,
+}: {
+    taskId: string;
+    all: ProjectLabel[];
+    selected: ProjectLabel[];
+    onChanged: () => Promise<void>;
+}) {
+    const { t } = useI18n();
+    const m = t.projects.labels;
+    const [saving, setSaving] = useState(false);
+
+    const selectedIds = new Set(selected.map((label) => label.id));
+
+    const toggle = async (labelId: string) => {
+        const next = new Set(selectedIds);
+        if (next.has(labelId)) next.delete(labelId);
+        else next.add(labelId);
+
+        setSaving(true);
+        try {
+            // The whole set every time — the endpoint replaces rather than
+            // patches, so there is no add/remove pair to keep in step.
+            await api.updateProjectTask(taskId, { labelIds: [...next] });
+            await onChanged();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.saveFailed);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <section className="rounded-md border border-gray-200 p-3">
+            <h3 className="mb-2 text-sm font-medium">{m.title}</h3>
+            <div className="flex flex-wrap gap-1.5">
+                {all.map((label) => {
+                    const on = selectedIds.has(label.id);
+                    return (
+                        <button
+                            key={label.id}
+                            type="button"
+                            disabled={saving}
+                            aria-pressed={on}
+                            onClick={() => toggle(label.id)}
+                            className={`min-h-touch rounded px-2 py-1 text-xs font-medium disabled:opacity-60 ${labelClass(label.color)} ${
+                                on ? 'ring-2 ring-blue-600' : 'opacity-50'
+                            }`}
+                        >
+                            {label.name}
+                        </button>
+                    );
+                })}
+            </div>
+        </section>
     );
 }
 

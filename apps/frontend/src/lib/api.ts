@@ -2977,6 +2977,22 @@ export const api = {
     deleteProjectTaskStatus: (id: string) =>
         fetchWithAuth(`/projects/task-statuses/${id}`, { method: 'DELETE' }),
 
+    getProjectLabels: () => fetchWithAuth('/projects/labels'),
+    createProjectLabel: (data: { name: string; color?: string }) =>
+        fetchWithAuth('/projects/labels', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateProjectLabel: (id: string, data: Record<string, unknown>) =>
+        fetchWithAuth(`/projects/labels/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteProjectLabel: (id: string) =>
+        fetchWithAuth(`/projects/labels/${id}`, { method: 'DELETE' }),
+
     getProjectTasks: (params: Record<string, string | number | undefined>) => {
         const query = new URLSearchParams();
         for (const [key, value] of Object.entries(params)) {

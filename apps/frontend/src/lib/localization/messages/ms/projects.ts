@@ -134,6 +134,33 @@ export const projectsMessages = {
         updated: 'Tugasan dikemas kini',
     },
 
+    dates: {
+        title: 'Tarikh',
+        start: 'Tarikh mula',
+        due: 'Tarikh tamat',
+        inverted: 'Tarikh mula selepas tarikh tamat.',
+        saveFailed: 'Tarikh tidak dapat disimpan',
+    },
+
+    labels: {
+        title: 'Label',
+        hint: 'Dikongsi merentas semua projek, supaya senarai tugasan seluruh ruang kerja dan papan sprint boleh menapisnya.',
+        empty: 'Tiada label lagi.',
+        add: 'Tambah label',
+        namePlaceholder: 'cth. Tersekat',
+        color: 'Warna',
+        saveFailed: 'Label tidak dapat dikemas kini',
+        untagged: 'Dibuang daripada {count} tugasan.',
+        colors: {
+            GRAY: 'Kelabu',
+            BLUE: 'Biru',
+            EMERALD: 'Hijau',
+            AMBER: 'Ambar',
+            RED: 'Merah',
+            PURPLE: 'Ungu',
+        },
+    },
+
     checklist: {
         title: 'Senarai semak',
         add: 'Tambah item',
@@ -199,6 +226,8 @@ export const projectsMessages = {
             dueToday: 'Tamat hari ini',
             dueThisWeek: 'Tamat minggu ini',
             noDueDate: 'Tiada tarikh tamat',
+            label: 'Label',
+            noLabel: 'Tiada label',
             clear: 'Kosongkan',
             showing: '{shown} daripada {total} kad',
         },

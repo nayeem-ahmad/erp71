@@ -6,6 +6,8 @@ jest.mock('@/lib/toast', () => ({
 }));
 
 const getProjectTask = jest.fn();
+const getProjectLabels = jest.fn();
+const updateProjectTask = jest.fn();
 const addTaskChecklistItem = jest.fn();
 const updateTaskChecklistItem = jest.fn();
 const deleteTaskChecklistItem = jest.fn();
@@ -14,6 +16,8 @@ const reorderTaskChecklist = jest.fn();
 jest.mock('@/lib/api', () => ({
     api: {
         getProjectTask: (...args: unknown[]) => getProjectTask(...args),
+        getProjectLabels: (...args: unknown[]) => getProjectLabels(...args),
+        updateProjectTask: (...args: unknown[]) => updateProjectTask(...args),
         getTaskRemainingHistory: jest.fn().mockResolvedValue([]),
         getProjectTaskStatuses: jest.fn().mockResolvedValue([]),
         addTaskChecklistItem: (...args: unknown[]) => addTaskChecklistItem(...args),
@@ -22,6 +26,9 @@ jest.mock('@/lib/api', () => ({
         reorderTaskChecklist: (...args: unknown[]) => reorderTaskChecklist(...args),
     },
 }));
+
+const blocked = { id: 'l1', name: 'Blocked', color: 'RED' };
+const waiting = { id: 'l2', name: 'Client waiting', color: 'AMBER' };
 
 const item = (id: string, text: string, isDone = false, sortOrder = 0) => ({
     id,
@@ -40,6 +47,8 @@ const withChecklist = (items: ReturnType<typeof item>[]) => ({
 beforeEach(() => {
     for (const mock of [
         getProjectTask,
+        getProjectLabels,
+        updateProjectTask,
         addTaskChecklistItem,
         updateTaskChecklistItem,
         deleteTaskChecklistItem,
@@ -48,6 +57,7 @@ beforeEach(() => {
         mock.mockReset();
         mock.mockResolvedValue({});
     }
+    getProjectLabels.mockResolvedValue([]);
     getProjectTask.mockResolvedValue(
         withChecklist([item('c1', 'Pull the cable', true), item('c2', 'Fit the box', false, 1)]),
     );
@@ -224,5 +234,149 @@ describe('TaskDetailPanel checklist', () => {
         // task on success, so a failed save leaves the item as the server has it.
         expect(screen.getByLabelText('Fit the box')).not.toBeChecked();
         expect(screen.getByText('1 of 2')).toBeInTheDocument();
+    });
+});
+
+describe('TaskDetailPanel labels', () => {
+    beforeEach(() => {
+        getProjectLabels.mockResolvedValue([blocked, waiting]);
+    });
+
+    it('offers every label in the workspace', async () => {
+        panel();
+        expect(await screen.findByRole('button', { name: 'Blocked' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Client waiting' })).toBeInTheDocument();
+    });
+
+    it('shows which are on the task', async () => {
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), labels: [{ label: blocked }] });
+        panel();
+
+        expect(await screen.findByRole('button', { name: 'Blocked' })).toHaveAttribute(
+            'aria-pressed',
+            'true',
+        );
+        expect(screen.getByRole('button', { name: 'Client waiting' })).toHaveAttribute(
+            'aria-pressed',
+            'false',
+        );
+    });
+
+    // The endpoint replaces the set rather than patching it, so a toggle has to
+    // send everything that should remain — not just the one that changed.
+    it('adds a label by sending the whole set', async () => {
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), labels: [{ label: blocked }] });
+        panel();
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Client waiting' }));
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { labelIds: ['l1', 'l2'] }),
+        );
+    });
+
+    it('removes a label by sending the set without it', async () => {
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            labels: [{ label: blocked }, { label: waiting }],
+        });
+        panel();
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Blocked' }));
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { labelIds: ['l2'] }),
+        );
+    });
+
+    it('clears the last label with an empty array, not by omitting the field', async () => {
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), labels: [{ label: blocked }] });
+        panel();
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Blocked' }));
+
+        await waitFor(() => expect(updateProjectTask).toHaveBeenCalledWith('t1', { labelIds: [] }));
+    });
+
+    it('hides the section entirely when the workspace has no labels', async () => {
+        getProjectLabels.mockResolvedValue([]);
+        panel();
+
+        await screen.findByText('Pull the cable');
+        expect(screen.queryByRole('button', { name: 'Blocked' })).not.toBeInTheDocument();
+    });
+});
+
+describe('TaskDetailPanel dates', () => {
+    it('shows the dates the task carries, trimmed to the date part', async () => {
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            start_date: '2026-08-01T00:00:00.000Z',
+            due_date: '2026-08-10T00:00:00.000Z',
+        });
+        panel();
+
+        expect(await screen.findByLabelText('Start date')).toHaveValue('2026-08-01');
+        expect(screen.getByLabelText('Due date')).toHaveValue('2026-08-10');
+    });
+
+    it('saves a start date', async () => {
+        panel();
+        fireEvent.change(await screen.findByLabelText('Start date'), {
+            target: { value: '2026-08-05' },
+        });
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { startDate: '2026-08-05' }),
+        );
+    });
+
+    // PATCH reads undefined as "leave alone", so only '' can mean "no date" —
+    // and the DTO has a ValidateIf so the empty string is not a 400.
+    it('clears a date by sending an empty string, not undefined', async () => {
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            due_date: '2026-08-10T00:00:00.000Z',
+        });
+        panel();
+
+        fireEvent.change(await screen.findByLabelText('Due date'), { target: { value: '' } });
+
+        await waitFor(() => expect(updateProjectTask).toHaveBeenCalledWith('t1', { dueDate: '' }));
+    });
+
+    it('warns when the start is after the due date', async () => {
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            start_date: '2026-08-20T00:00:00.000Z',
+            due_date: '2026-08-10T00:00:00.000Z',
+        });
+        panel();
+
+        expect(await screen.findByText('The start is after the due date.')).toBeInTheDocument();
+    });
+
+    it('says nothing when the dates are in order', async () => {
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            start_date: '2026-08-01T00:00:00.000Z',
+            due_date: '2026-08-10T00:00:00.000Z',
+        });
+        panel();
+
+        await screen.findByLabelText('Start date');
+        expect(screen.queryByText('The start is after the due date.')).not.toBeInTheDocument();
+    });
+
+    it('reports a failed save', async () => {
+        const { toast } = jest.requireMock('@/lib/toast');
+        updateProjectTask.mockRejectedValue(new Error('Nope'));
+        panel();
+
+        fireEvent.change(await screen.findByLabelText('Start date'), {
+            target: { value: '2026-08-05' },
+        });
+
+        await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Nope'));
     });
 });
