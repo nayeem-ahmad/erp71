@@ -285,6 +285,12 @@ export type ApprovedOnlyParams = { approvedOnly?: boolean };
 
 export type CustomFieldDef = { key: string; label: string; order: number };
 
+/**
+ * The tenant-managed CRM lookup lists, all served by `/crm/lead-taxonomy/:kind`
+ * and all edited from the CRM Setup screen.
+ */
+export type CrmListKind = 'sources' | 'categories' | 'channels';
+
 export type ExternalSyncTally = { created: number; updated: number; skipped: number };
 
 export type ExternalSyncWarning = {
@@ -1025,29 +1031,29 @@ export const api = {
         }),
     deleteContactAttachment: (id: string, attachmentId: string) =>
         fetchWithAuth(`/crm/contacts/${id}/attachments/${attachmentId}`, { method: 'DELETE' }),
-    // CRM Lead Taxonomy (tenant-managed lead sources / categories)
-    getLeadTaxonomy: (kind: 'sources' | 'categories', includeInactive = false) =>
+    // CRM lookup lists (tenant-managed lead sources / categories / conversation channels)
+    getLeadTaxonomy: (kind: CrmListKind, includeInactive = false) =>
         fetchWithAuth(`/crm/lead-taxonomy/${kind}${includeInactive ? '?includeInactive=true' : ''}`),
-    getLeadTaxonomyUsage: (kind: 'sources' | 'categories') =>
+    getLeadTaxonomyUsage: (kind: CrmListKind) =>
         fetchWithAuth(`/crm/lead-taxonomy/${kind}/usage`),
     createLeadTaxonomy: (
-        kind: 'sources' | 'categories',
-        data: { name: string; score_weight?: number; sort_order?: number },
+        kind: CrmListKind,
+        data: { name: string; score_weight?: number; icon?: string; sort_order?: number },
     ) => fetchWithAuth(`/crm/lead-taxonomy/${kind}`, {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
     updateLeadTaxonomy: (
-        kind: 'sources' | 'categories',
+        kind: CrmListKind,
         id: string,
-        data: { name?: string; score_weight?: number; sort_order?: number; is_active?: boolean },
+        data: { name?: string; score_weight?: number; icon?: string; sort_order?: number; is_active?: boolean },
     ) => fetchWithAuth(`/crm/lead-taxonomy/${kind}/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    deleteLeadTaxonomy: (kind: 'sources' | 'categories', id: string, reassignTo?: string) =>
+    deleteLeadTaxonomy: (kind: CrmListKind, id: string, reassignTo?: string) =>
         fetchWithAuth(
             `/crm/lead-taxonomy/${kind}/${id}${reassignTo ? `?reassignTo=${encodeURIComponent(reassignTo)}` : ''}`,
             { method: 'DELETE' },

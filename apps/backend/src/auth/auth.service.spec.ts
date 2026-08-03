@@ -58,6 +58,7 @@ describe('AuthService', () => {
         paymentMethod: { createMany: jest.fn() },
         leadSourceOption: { createMany: jest.fn() },
         leadCategoryOption: { createMany: jest.fn() },
+        conversationChannel: { createMany: jest.fn() },
         store: { create: jest.fn() },
         tenantSubscription: { create: jest.fn(), findUnique: jest.fn().mockResolvedValue(null) },
         userStoreAccess: { create: jest.fn() },
@@ -246,6 +247,17 @@ describe('AuthService', () => {
                 data: expect.arrayContaining([
                     expect.objectContaining({ tenant_id: 'tenant-1', code: 'RETAIL', name: 'Retail', is_system: true }),
                     expect.objectContaining({ tenant_id: 'tenant-1', code: 'OTHER', name: 'Other' }),
+                ]),
+            }),
+        );
+        // Without channels the log-conversation form has nothing to offer, so a lead
+        // can be created but never worked.
+        expect(db.conversationChannel.createMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                skipDuplicates: true,
+                data: expect.arrayContaining([
+                    expect.objectContaining({ tenant_id: 'tenant-1', code: 'CALL', name: 'Call', icon: '📞', is_system: true }),
+                    expect.objectContaining({ tenant_id: 'tenant-1', code: 'WHATSAPP', name: 'WhatsApp' }),
                 ]),
             }),
         );

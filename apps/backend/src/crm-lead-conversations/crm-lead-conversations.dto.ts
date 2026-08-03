@@ -1,26 +1,27 @@
 import { Transform, Type } from 'class-transformer';
-import { IsString, IsOptional, IsEnum, IsUUID, IsIn, IsDateString, IsInt, Min, Max } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsUUID, IsIn, IsDateString, IsInt, Length, Min, Max } from 'class-validator';
 import { LeadStatus } from '../crm-leads/crm-leads.dto';
 
 const emptyToUndefined = ({ value }: { value: unknown }) =>
     value === '' || value === null ? undefined : value;
 
-export enum LeadConversationType {
-    CALL = 'CALL',
-    SMS = 'SMS',
-    WHATSAPP = 'WHATSAPP',
-    EMAIL = 'EMAIL',
-    VISIT = 'VISIT',
-    ONLINE_MEETING = 'ONLINE_MEETING',
-    NOTE = 'NOTE',
-}
+const trim = ({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value;
 
 export class CreateLeadConversationDto {
     @IsUUID()
     lead_id: string;
 
-    @IsEnum(LeadConversationType)
-    type: LeadConversationType;
+    /**
+     * A `ConversationChannel` row id, or its `code`. Free text rather than an enum
+     * because the channel list is tenant-owned now — the service resolves this
+     * against the tenant's channels and rejects anything that does not match, so
+     * an unknown value is still a 400, just not one the DTO can decide.
+     */
+    @Transform(trim)
+    @IsString()
+    @Length(1, 60)
+    type: string;
 
     @IsOptional()
     @IsIn(['INBOUND', 'OUTBOUND'])
@@ -78,10 +79,12 @@ export class QueryLeadConversationsDto {
     @IsString()
     search?: string;
 
+    /** Narrows to one channel by `code` — the value stored in `LeadConversation.type`. */
     @IsOptional()
     @Transform(emptyToUndefined)
-    @IsEnum(LeadConversationType)
-    type?: LeadConversationType;
+    @IsString()
+    @Length(1, 60)
+    type?: string;
 
     @IsOptional()
     @Transform(emptyToUndefined)
@@ -145,9 +148,12 @@ export class QueryLeadConversationsDto {
 }
 
 export class UpdateLeadConversationDto {
+    /** Id or `code` of a channel, resolved the same way as on create. */
     @IsOptional()
-    @IsEnum(LeadConversationType)
-    type?: LeadConversationType;
+    @Transform(trim)
+    @IsString()
+    @Length(1, 60)
+    type?: string;
 
     @IsOptional()
     @IsString()

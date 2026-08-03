@@ -13,6 +13,9 @@ jest.mock('@/lib/api', () => ({
         getLeadConversations: jest.fn(),
         getLeadConversationSummary: jest.fn(),
         getTeamMembers: jest.fn(),
+        // Channel labels, icons and the type filter all come from the tenant's own
+        // list now, so the page is unrenderable without this.
+        getLeadTaxonomy: jest.fn(),
     },
 }));
 
@@ -47,6 +50,14 @@ const mockConversations = [
     },
 ];
 
+/** The tenant's seeded conversation channels, in their configured order. */
+const mockChannels = [
+    { id: 'ch-call', code: 'CALL', name: 'Call', icon: '📞', sort_order: 1, is_system: true, is_active: true },
+    { id: 'ch-sms', code: 'SMS', name: 'SMS', icon: '💬', sort_order: 2, is_system: true, is_active: true },
+    { id: 'ch-wa', code: 'WHATSAPP', name: 'WhatsApp', icon: '🟢', sort_order: 3, is_system: true, is_active: true },
+    { id: 'ch-visit', code: 'VISIT', name: 'Visit', icon: '🏪', sort_order: 4, is_system: true, is_active: true },
+];
+
 const mockSummary = {
     total: 42,
     thisWeek: 9,
@@ -76,6 +87,7 @@ describe('CrmConversationsPage — cross-lead conversations list', () => {
             { userId: 'user-1', name: 'Rahim', email: 'rahim@example.com' },
             { userId: 'user-2', name: 'Nadia', email: 'nadia@example.com' },
         ]);
+        api.getLeadTaxonomy.mockResolvedValue(mockChannels);
     });
 
     afterEach(() => {
@@ -119,7 +131,7 @@ describe('CrmConversationsPage — cross-lead conversations list', () => {
         expect(screen.queryByText(/SMS: 0/)).not.toBeInTheDocument();
     });
 
-    it('shows the localised type and direction of each conversation', async () => {
+    it('shows the channel and direction of each conversation', async () => {
         render(<CrmConversationsPage />);
         await waitFor(() => expect(screen.getByText('Karim Traders')).toBeInTheDocument());
         // Scoped to the table: these same labels also appear in the filter dropdowns.
@@ -128,6 +140,43 @@ describe('CrmConversationsPage — cross-lead conversations list', () => {
         expect(table.getByText('Visit')).toBeInTheDocument();
         expect(table.getByText('Outbound')).toBeInTheDocument();
         expect(table.getByText('Inbound')).toBeInTheDocument();
+    });
+
+    it('labels channels from the tenant list, not a built-in one', async () => {
+        const { api } = require('@/lib/api');
+        api.getLeadTaxonomy.mockResolvedValue([
+            { ...mockChannels[0], name: 'Phone Call', icon: '☎️' },
+            ...mockChannels.slice(1),
+        ]);
+
+        render(<CrmConversationsPage />);
+        await waitFor(() => expect(screen.getByText('Karim Traders')).toBeInTheDocument());
+
+        const table = within(screen.getByRole('table'));
+        expect(table.getByText('Phone Call')).toBeInTheDocument();
+        expect(table.queryByText('Call')).not.toBeInTheDocument();
+    });
+
+    // A conversation logged against a channel the tenant has since deleted must still
+    // render — the stored code is the last resort, not a blank cell.
+    it('falls back to the stored code for a channel that no longer exists', async () => {
+        const { api } = require('@/lib/api');
+        api.getLeadTaxonomy.mockResolvedValue(mockChannels.slice(1));
+
+        render(<CrmConversationsPage />);
+        await waitFor(() => expect(screen.getByText('Karim Traders')).toBeInTheDocument());
+
+        expect(within(screen.getByRole('table')).getByText('CALL')).toBeInTheDocument();
+    });
+
+    it('builds the type filter from the tenant channel list', async () => {
+        render(<CrmConversationsPage />);
+        await waitFor(() => expect(screen.getByText('Karim Traders')).toBeInTheDocument());
+
+        const options = within(screen.getByDisplayValue('All types') as HTMLElement)
+            .getAllByRole('option')
+            .map((o) => (o as HTMLOptionElement).value);
+        expect(options).toEqual(['', 'CALL', 'SMS', 'WHATSAPP', 'VISIT']);
     });
 
     it('sends the type filter to the server rather than filtering in the browser', async () => {

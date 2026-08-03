@@ -1,17 +1,19 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import {
     CreateLeadConversationDto,
-    LeadConversationType,
     UpdateLeadConversationDto,
 } from './crm-lead-conversations.dto';
 import { paginate } from '../common/pagination.dto';
 import { computeLeadScore, DEFAULT_SOURCE_WEIGHT } from '../crm-leads/lead-scoring.util';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
+import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
+import { LeadTaxonomyKind } from '../crm-lead-taxonomy/lead-taxonomy.dto';
 
 const conversationIncludes = {
     lead: { select: { id: true, name: true, mobile: true, status: true, assigned_to: true } },
     creator: { select: { id: true, name: true, email: true } },
+    channel: { select: { id: true, code: true, name: true, icon: true } },
 } as const;
 
 /**
@@ -85,7 +87,30 @@ export interface FindAllConversationsOpts {
 
 @Injectable()
 export class CrmLeadConversationsService {
-    constructor(private db: DatabaseService) {}
+    constructor(
+        private db: DatabaseService,
+        private readonly taxonomy: CrmLeadTaxonomyService,
+    ) {}
+
+    /**
+     * Turns the client's `type` — a channel id or its `code` — into the row to
+     * write. Kept here rather than in the DTO because the valid set is per-tenant
+     * data, not a compile-time enum.
+     */
+    private async resolveChannel(tenantId: string, value: string) {
+        const channel = await this.taxonomy.resolveByIdOrCode(
+            tenantId,
+            LeadTaxonomyKind.CHANNEL,
+            value,
+        );
+        if (!channel) {
+            throw new BadRequestException(`Unknown conversation channel "${value}".`);
+        }
+        if (!channel.is_active) {
+            throw new BadRequestException(`Conversation channel "${channel.name}" is retired.`);
+        }
+        return channel;
+    }
 
     async create(tenantId: string, userId: string, dto: CreateLeadConversationDto) {
         const lead = await this.db.lead.findFirst({
@@ -93,6 +118,8 @@ export class CrmLeadConversationsService {
             include: { sourceOption: { select: { score_weight: true } } },
         });
         if (!lead) throw new NotFoundException('Lead not found');
+
+        const channel = await this.resolveChannel(tenantId, dto.type);
 
         const now = new Date();
         const leadUpdate: Record<string, unknown> = { last_contacted_at: now };
@@ -124,14 +151,20 @@ export class CrmLeadConversationsService {
                 data: {
                     tenant_id: tenantId,
                     lead_id: dto.lead_id,
-                    type: dto.type,
+                    // Always the resolved code, never the raw input: a client may have
+                    // sent an id, and `type` is what the list filters read.
+                    type: channel.code,
+                    channel_id: channel.id,
                     direction: dto.direction ?? 'OUTBOUND',
                     summary: dto.summary,
                     outcome: dto.outcome,
                     store_id: dto.store_id,
                     created_by: userId,
                 },
-                include: { creator: { select: { id: true, name: true, email: true } } },
+                include: {
+                    creator: { select: { id: true, name: true, email: true } },
+                    channel: { select: { id: true, code: true, name: true, icon: true } },
+                },
             }),
             this.db.lead.update({
                 where: { id: dto.lead_id },
@@ -225,9 +258,10 @@ export class CrmLeadConversationsService {
             this.db.leadConversation.groupBy({ by: ['lead_id'], where }),
         ]);
 
-        const countsByType = Object.fromEntries(
-            Object.values(LeadConversationType).map((t) => [t, 0]),
-        ) as Record<string, number>;
+        // Only channels that actually occur are keyed. There is no fixed set to
+        // zero-fill any more, and the caller already renders its own channel list —
+        // a missing key reads as zero there.
+        const countsByType: Record<string, number> = {};
         for (const row of byType) {
             countsByType[row.type] = row._count?._all ?? 0;
         }
@@ -241,6 +275,7 @@ export class CrmLeadConversationsService {
             include: {
                 lead: { select: { id: true, name: true, mobile: true } },
                 creator: { select: { id: true, name: true, email: true } },
+                channel: { select: { id: true, code: true, name: true, icon: true } },
             },
         });
         if (!item) throw new NotFoundException('Lead conversation not found');
@@ -251,12 +286,19 @@ export class CrmLeadConversationsService {
         const existing = await this.db.leadConversation.findFirst({ where: { id, tenant_id: tenantId } });
         if (!existing) throw new NotFoundException('Lead conversation not found');
 
+        const channel = dto.type ? await this.resolveChannel(tenantId, dto.type) : null;
+
         return this.db.leadConversation.update({
             where: { id },
-            data: dto,
+            data: {
+                ...(dto.summary !== undefined ? { summary: dto.summary } : {}),
+                ...(dto.outcome !== undefined ? { outcome: dto.outcome } : {}),
+                ...(channel ? { type: channel.code, channel_id: channel.id } : {}),
+            },
             include: {
                 lead: { select: { id: true, name: true, mobile: true } },
                 creator: { select: { id: true, name: true, email: true } },
+                channel: { select: { id: true, code: true, name: true, icon: true } },
             },
         });
     }
