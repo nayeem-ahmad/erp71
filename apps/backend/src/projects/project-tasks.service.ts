@@ -90,17 +90,41 @@ export class ProjectTasksService {
      * column, which is what makes a kanban view slow as soon as it is useful.
      */
     async board(tenantId: string, projectId: string, sprintId?: string) {
-        const columns = await this.settings.listTaskStatuses(tenantId, false, projectId);
-        const tasks = await this.db.projectTask.findMany({
-            where: {
-                tenant_id: tenantId,
-                project_id: projectId,
-                deleted_at: null,
-                ...(sprintId ? { sprint_id: sprintId } : {}),
-            },
-            orderBy: [{ sort_order: 'asc' }, { created_at: 'asc' }],
+        const where = {
+            tenant_id: tenantId,
+            project_id: projectId,
+            deleted_at: null,
+            ...(sprintId ? { sprint_id: sprintId } : {}),
+        };
+        const order = [{ sort_order: 'asc' as const }, { created_at: 'asc' as const }];
+
+        let columns = await this.settings.listTaskStatuses(tenantId, false, projectId);
+        let tasks = await this.db.projectTask.findMany({
+            where,
+            orderBy: order,
             include: TASK_INCLUDE as never,
         });
+
+        // Self-heal a board whose tasks are still on the tenant template.
+        //
+        // Production applies the schema with `prisma db push`, not
+        // `migrate deploy`, so Phase 3L's data migration never runs there — and
+        // a task left on a template row matches no column, which would render
+        // the whole board empty. The check is free: it is a set lookup over rows
+        // already fetched, and the repair only ever runs once per project.
+        const columnIds = new Set(columns.map((column) => column.id));
+        const orphaned = (tasks as TaskRow[]).some(
+            (task) => task.status_id != null && !columnIds.has(task.status_id),
+        );
+        if (orphaned) {
+            await this.settings.adoptTasksFromTemplate(tenantId, projectId);
+            columns = await this.settings.listTaskStatuses(tenantId, false, projectId);
+            tasks = await this.db.projectTask.findMany({
+                where,
+                orderBy: order,
+                include: TASK_INCLUDE as never,
+            });
+        }
 
         const withLogged = await this.attachLoggedHours(tenantId, tasks as TaskRow[]);
         return {

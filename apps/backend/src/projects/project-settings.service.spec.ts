@@ -34,7 +34,10 @@ describe('ProjectSettingsService', () => {
                 count: jest.fn().mockResolvedValue(0),
             },
             project: { count: jest.fn().mockResolvedValue(0) },
-            projectTask: { count: jest.fn().mockResolvedValue(0) },
+            projectTask: {
+                count: jest.fn().mockResolvedValue(0),
+                updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+            },
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -225,6 +228,37 @@ describe('ProjectSettingsService', () => {
                     where: expect.objectContaining({ project_id: 'project-1' }),
                 }),
             );
+        });
+
+        // Production applies the schema with `prisma db push`, never
+        // `migrate deploy`, so the data migration under prisma/migrations never
+        // runs there. Without this the columns arrive and every task stays on a
+        // template row, matching no column — every board renders empty.
+        it('moves the project’s tasks off the template onto its own copies', async () => {
+            db.projectTaskStatus.findMany
+                .mockResolvedValueOnce([]) // the project has none yet
+                .mockResolvedValueOnce(seeded) // the template to copy
+                .mockResolvedValueOnce([{ id: 's1', name: 'To Do' }]) // adopt: templates
+                .mockResolvedValueOnce([{ id: 'copy-1', name: 'To Do' }]) // adopt: this board's
+                .mockResolvedValueOnce(seeded); // the re-read that returns
+
+            await service.listTaskStatuses('tenant-1', false, 'project-1');
+
+            expect(db.projectTask.updateMany).toHaveBeenCalledWith({
+                where: { tenant_id: 'tenant-1', project_id: 'project-1', status_id: 's1' },
+                data: { status_id: 'copy-1' },
+            });
+        });
+
+        it('leaves a task alone when this board has no column of that name', async () => {
+            db.projectTaskStatus.findMany
+                .mockResolvedValueOnce([{ id: 's9', name: 'Retired' }]) // templates
+                .mockResolvedValueOnce([{ id: 'copy-1', name: 'To Do' }]); // this board's
+
+            await service.adoptTasksFromTemplate('tenant-1', 'project-1');
+
+            // A visible gap beats a silent reassignment to the wrong column.
+            expect(db.projectTask.updateMany).not.toHaveBeenCalled();
         });
 
         it('stores a WIP limit and lets it be removed', async () => {

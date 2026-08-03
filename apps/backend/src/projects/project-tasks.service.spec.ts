@@ -608,6 +608,35 @@ describe('ProjectTasksService', () => {
             ).resolves.toBeDefined();
         });
 
+        // The failure this prevents is total: production applies the schema with
+        // `prisma db push`, so 3L's data migration never runs there, and a task
+        // left on a template column matches nothing — the board renders empty.
+        it('heals a board whose tasks are still on the tenant template', async () => {
+            const settings = (service as any).settings;
+            settings.adoptTasksFromTemplate = jest.fn().mockResolvedValue(undefined);
+            db.projectTask.findMany.mockResolvedValue([
+                { id: 'task-1', status_id: 'template-status' },
+            ]);
+
+            await service.board('tenant-1', 'project-1');
+
+            expect(settings.adoptTasksFromTemplate).toHaveBeenCalledWith('tenant-1', 'project-1');
+            // Re-read, so the caller gets the healed board rather than the
+            // empty one that triggered the repair.
+            expect(db.projectTask.findMany).toHaveBeenCalledTimes(2);
+        });
+
+        it('does not repair a board whose tasks are already on its own columns', async () => {
+            const settings = (service as any).settings;
+            settings.adoptTasksFromTemplate = jest.fn().mockResolvedValue(undefined);
+            db.projectTask.findMany.mockResolvedValue([{ id: 'task-1', status_id: todo.id }]);
+
+            await service.board('tenant-1', 'project-1');
+
+            expect(settings.adoptTasksFromTemplate).not.toHaveBeenCalled();
+            expect(db.projectTask.findMany).toHaveBeenCalledTimes(1);
+        });
+
         it('stores a cover colour', async () => {
             await service.update('tenant-1', 'user-1', 'task-1', { coverColor: 'BLUE' } as never);
 

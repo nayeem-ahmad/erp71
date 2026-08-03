@@ -74,6 +74,50 @@ export class ProjectSettingsService {
             })),
             skipDuplicates: true,
         });
+
+        await this.adoptTasksFromTemplate(tenantId, projectId);
+    }
+
+    /**
+     * Moves a project's tasks off the tenant template and onto its own copies,
+     * matching by column name.
+     *
+     * **This is not belt-and-braces for the migration — in production it is the
+     * only thing that runs.** The container applies the schema with
+     * `prisma db push` (`apps/backend/Dockerfile`), never `migrate deploy`, so
+     * the SQL under `prisma/migrations/` is documentation there. `db push` would
+     * add `project_id` and leave every task pointing at a template row, which
+     * `board()` then matches against the project's own columns and finds
+     * nothing — every board would render empty.
+     *
+     * Idempotent: after it runs, no task in this project is on a template row.
+     */
+    async adoptTasksFromTemplate(tenantId: string, projectId: string) {
+        const [templates, own] = await Promise.all([
+            this.db.projectTaskStatus.findMany({
+                where: { tenant_id: tenantId, project_id: null },
+                select: { id: true, name: true },
+            }),
+            this.db.projectTaskStatus.findMany({
+                where: { tenant_id: tenantId, project_id: projectId },
+                select: { id: true, name: true },
+            }),
+        ]);
+
+        const byName = new Map(own.map((column) => [column.name, column.id]));
+
+        for (const template of templates) {
+            const target = byName.get(template.name);
+            // No same-named column on this board — the task stays where it is
+            // rather than being moved somewhere arbitrary. `board()` will still
+            // not show it, but a visible gap beats a silent reassignment.
+            if (!target) continue;
+
+            await this.db.projectTask.updateMany({
+                where: { tenant_id: tenantId, project_id: projectId, status_id: template.id },
+                data: { status_id: target },
+            });
+        }
     }
 
     /**

@@ -399,10 +399,26 @@ task's `status_id` points at. Plus an advisory `wip_limit` — the column is
 marked over-limit, never blocked, because a WIP limit is a prompt to talk about
 the queue and not a lock.
 
-**This is the only migration in the phase that moves data.** It copies the
-template onto every existing project and repoints that project's tasks at the
-copy, matching by name — safe because the pre-migration unique index made
-`(tenant_id, name)` unique. Nothing appears to move on the day it ships.
+**This is the only migration in the phase that moves data** — and in production
+it never runs.
+
+The container applies the schema with `prisma db push --accept-data-loss`, not
+`migrate deploy` (`apps/backend/Dockerfile`), so everything under
+`prisma/migrations/` is documentation there; the schema arrives by diff. That was
+fine for the phase's three additive migrations. For this one it is not: `db push`
+would add `project_id`, leave every existing task pointing at a template row, and
+`board()` would then match those against the project's own columns and find
+nothing. **Every existing board would render empty.**
+
+So the backfill lives in the code path that actually runs.
+`seedProjectColumns` adopts a project's tasks off the template as it copies the
+columns, and `board()` self-heals: it compares the loaded tasks' `status_id`
+against the loaded columns — a set lookup over rows already fetched, so no extra
+query — and repairs once if any task is orphaned. The SQL migration is kept as
+belt-and-braces for anyone running `migrate deploy`.
+
+A task whose column name has no counterpart on the board is deliberately left
+where it is. A visible gap beats a silent reassignment to the wrong column.
 
 Details worth keeping:
 
