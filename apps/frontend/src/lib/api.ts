@@ -2983,6 +2983,33 @@ export const api = {
     deleteProjectTaskStatus: (id: string) =>
         fetchWithAuth(`/projects/task-statuses/${id}`, { method: 'DELETE' }),
 
+    // Per-project board columns (3L). `getProjectTaskStatuses` above stays the
+    // tenant template that new projects are seeded from.
+    getProjectColumns: (projectId: string, includeInactive = false) =>
+        fetchWithAuth(`/projects/${projectId}/columns?includeInactive=${includeInactive}`),
+    createProjectColumn: (
+        projectId: string,
+        data: { name: string; category: string; wipLimit?: number },
+    ) =>
+        fetchWithAuth(`/projects/${projectId}/columns`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+
+    getTaskAttachments: (taskId: string) => fetchWithAuth(`/project-tasks/${taskId}/attachments`),
+    addTaskAttachment: (
+        taskId: string,
+        data: { fileBase64: string; fileName?: string; mimeType?: string },
+    ) =>
+        fetchWithAuth(`/project-tasks/${taskId}/attachments`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteTaskAttachment: (attachmentId: string) =>
+        fetchWithAuth(`/project-tasks/attachments/${attachmentId}`, { method: 'DELETE' }),
+
     getProjectLabels: () => fetchWithAuth('/projects/labels'),
     createProjectLabel: (data: { name: string; color?: string }) =>
         fetchWithAuth('/projects/labels', {

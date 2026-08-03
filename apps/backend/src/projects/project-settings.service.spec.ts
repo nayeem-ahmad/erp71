@@ -125,6 +125,123 @@ describe('ProjectSettingsService', () => {
         });
     });
 
+    // Phase 3L: columns belong to a project. `project_id IS NULL` is the tenant
+    // template a new project is seeded from, not a board anyone renders.
+    describe('per-project columns', () => {
+        it('reads the template when no project is named', async () => {
+            db.projectTaskStatus.findMany.mockResolvedValue(seeded);
+
+            await service.listTaskStatuses('tenant-1');
+
+            expect(db.projectTaskStatus.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ project_id: null }),
+                }),
+            );
+        });
+
+        it('reads a project’s own columns when one is named', async () => {
+            db.projectTaskStatus.findMany.mockResolvedValue(seeded);
+
+            await service.listTaskStatuses('tenant-1', false, 'project-1');
+
+            expect(db.projectTaskStatus.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ project_id: 'project-1' }),
+                }),
+            );
+        });
+
+        it('seeds a project from the template on first read', async () => {
+            // Empty for the project, then the template, then the copies.
+            db.projectTaskStatus.findMany
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce(seeded)
+                .mockResolvedValueOnce(seeded);
+
+            await service.listTaskStatuses('tenant-1', false, 'project-1');
+
+            expect(db.projectTaskStatus.createMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.arrayContaining([
+                        expect.objectContaining({ project_id: 'project-1', name: 'To Do' }),
+                    ]),
+                    // Two concurrent first-loads of a board must not double the
+                    // columns.
+                    skipDuplicates: true,
+                }),
+            );
+        });
+
+        it('creates a column against the project it was asked for', async () => {
+            db.projectTaskStatus.findMany.mockResolvedValue(seeded);
+            db.projectTaskStatus.findFirst.mockResolvedValue(null);
+
+            await service.createTaskStatus(
+                'tenant-1',
+                { name: 'Blocked', category: 'TODO', wipLimit: 3 } as never,
+                'project-1',
+            );
+
+            expect(db.projectTaskStatus.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ project_id: 'project-1', wip_limit: 3 }),
+                }),
+            );
+        });
+
+        // Two projects may each have a "Blocked". The clash check has to be
+        // scoped or the second one is refused.
+        it('checks the name clash within the project, not the tenant', async () => {
+            db.projectTaskStatus.findMany.mockResolvedValue(seeded);
+            db.projectTaskStatus.findFirst.mockResolvedValue(null);
+
+            await service.createTaskStatus(
+                'tenant-1',
+                { name: 'Blocked', category: 'TODO' } as never,
+                'project-1',
+            );
+
+            expect(db.projectTaskStatus.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        project_id: 'project-1',
+                        name: 'Blocked',
+                    }),
+                }),
+            );
+        });
+
+        it('clears the default within the board, not across the tenant', async () => {
+            db.projectTaskStatus.findFirst.mockResolvedValue({
+                ...seeded[1],
+                project_id: 'project-1',
+            });
+
+            await service.updateTaskStatus('tenant-1', 's2', { isDefault: true } as never);
+
+            expect(db.projectTaskStatus.updateMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ project_id: 'project-1' }),
+                }),
+            );
+        });
+
+        it('stores a WIP limit and lets it be removed', async () => {
+            db.projectTaskStatus.findFirst.mockResolvedValue(seeded[0]);
+
+            await service.updateTaskStatus('tenant-1', 's1', { wipLimit: 5 } as never);
+            expect(db.projectTaskStatus.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ wip_limit: 5 }) }),
+            );
+
+            await service.updateTaskStatus('tenant-1', 's1', { wipLimit: null } as never);
+            expect(db.projectTaskStatus.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ wip_limit: null }) }),
+            );
+        });
+    });
+
     describe('project types', () => {
         it('deactivates rather than deletes a type still used by projects', async () => {
             db.projectType.findFirst.mockResolvedValue({ id: 'type-1', name: 'Installation' });

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
 
 export type StatusBadgeTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
@@ -10,15 +10,21 @@ const TONE_CLASSES: Record<StatusBadgeTone, string> = {
     neutral: 'bg-gray-100 text-gray-600',
 };
 
-interface StatusBadgeProps {
+/**
+ * Extends span attributes so a badge can carry an accessible name. A badge
+ * often *is* the only rendering of a state — "3/2" for an over-limit column —
+ * and without `aria-label` that reads as two numbers to a screen reader.
+ */
+interface StatusBadgeProps extends HTMLAttributes<HTMLSpanElement> {
     tone: StatusBadgeTone;
     children: ReactNode;
     className?: string;
 }
 
-export function StatusBadge({ tone, children, className = '' }: StatusBadgeProps) {
+export function StatusBadge({ tone, children, className = '', ...rest }: StatusBadgeProps) {
     return (
         <span
+            {...rest}
             className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${TONE_CLASSES[tone]} ${className}`.trim()}
         >
             {children}

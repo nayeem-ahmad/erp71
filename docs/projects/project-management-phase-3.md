@@ -1,6 +1,6 @@
 # Project Management — Phase 3: Trello-style task cards
 
-**Status:** 3A, 3B, 3M, 3N, 3F, 3H, 3C and 3I shipped 2026-08-03; the rest scoped and sequenced below
+**Status:** everything except 3E (postponed), 3G (deferred) and 3J shipped 2026-08-03
 **Written:** 2026-08-02 · **Decisions taken:** 2026-08-03
 **Predecessors:** `project-management-phase-1.md`, `project-management-phase-2.md`
 
@@ -218,9 +218,10 @@ employee without a login rendered as unassigned.
 | 3 | 3M + 3N | **shipped 2026-08-03** | Board becomes usable — create without leaving, filter, and work on a phone. |
 | 4 | 3F + 3H | **shipped 2026-08-03** | First schema change; labels and dates in one migration. |
 | 5 | 3C + 3I | **shipped 2026-08-03** | Comments and activity together — the same panel, and activity is what makes comments findable. |
-| 6 | 3L | next | Per-project columns, per decision 1. Carries a data migration. |
-| 7 | 3D | | Needs the `storage_key` fix, so it is the only item with a prerequisite outside this phase. |
-| 8 | 3J + 3K | | Archive, then cover colour. |
+| 6 | 3L | **shipped 2026-08-03** | Per-project columns, per decision 1. Carries a data migration. |
+| 7 | 3D | **shipped 2026-08-03** | Needed the `storage_key` fix, so it was the only item with a prerequisite outside this phase. |
+| 8 | 3K | **shipped 2026-08-03** | Cover colour. |
+| 9 | 3J | next | Archive — the last item outstanding. |
 | — | 3E | postponed | Subtasks on the card — dropped from the queue on request, not cancelled. |
 | — | 3G | deferred | Per decision 2 — single assignee stands. |
 
@@ -228,9 +229,9 @@ employee without a login rendered as unassigned.
 
 ## What shipped on 2026-08-03
 
-3A, 3B, 3M, 3N, 3F, 3H, 3C and 3I. 3E (subtasks on the card) was postponed on
-request — the card badge for it already ships, only the panel section is
-outstanding.
+Everything in the phase except 3E (subtasks on the card, postponed on request —
+the card badge already ships, only the panel section is outstanding), 3G (card
+members, deferred by decision) and 3J (archive).
 
 **3A.** The board card is clickable (mouse, touch and keyboard) and opens the
 existing `TaskDetailPanel`; closing it reloads the board so a status change made
@@ -391,9 +392,69 @@ Comments, watching and the feed are gated on `VIEW_PROJECTS` rather than
 subscribe to it. That avoids a new permission and the backfill migration one
 would need.
 
+**3L — columns belong to a board.** `project_task_statuses` gained a nullable
+`project_id`: NULL marks the tenant **template** (what Project Setup edits, and
+what a new project is seeded from), non-null is a board's own column and what a
+task's `status_id` points at. Plus an advisory `wip_limit` — the column is
+marked over-limit, never blocked, because a WIP limit is a prompt to talk about
+the queue and not a lock.
+
+**This is the only migration in the phase that moves data.** It copies the
+template onto every existing project and repoints that project's tasks at the
+copy, matching by name — safe because the pre-migration unique index made
+`(tenant_id, name)` unique. Nothing appears to move on the day it ships.
+
+Details worth keeping:
+
+- **The over-limit count is taken from the unfiltered column.** A filter
+  narrowing the view to two cards must not make a column of twelve look within a
+  limit of three.
+- **A status id from another board is refused on create and move.** It would not
+  merely be wrong, it would put the card somewhere nobody on that board can see.
+  Template rows are still accepted, since they belong to no project.
+- **Name clashes and the default column are both scoped to the board.** Two
+  projects may each have a "Blocked", and one board's default is not another's.
+- **Postgres treats NULLs as distinct**, so the `(tenant_id, project_id, name)`
+  unique does not constrain template rows; the service checks those in code.
+- **The detail panel now loads the task's own board columns**, not the template.
+  It was reading the template, which after this change would have offered
+  columns the card's board does not have.
+- Columns are seeded both at project creation and lazily on first read, so a
+  project that somehow missed the first path still gets a board rather than an
+  empty screen.
+
+**3D — attachments, and the leak they were blocked behind.** `ProjectAttachment`
+had a model since Phase 1 and no API. The reason to build it carefully is in
+`TODO.md`: `AssetsService.uploadFile()` returns only a URL, which cannot be
+turned back into a Cloudinary `public_id`, so a row deleted that way strands its
+file and it is billed forever. This path uses `uploadBuffer()` and stores a
+`storage_key`, and deleting an attachment purges the asset.
+
+`uploadBuffer` and `deleteFile` gained an optional resource type. A PDF put
+through Cloudinary's image pipeline is rejected or mangled, so it is stored
+`raw` — and **a delete has to name the same resource type or Cloudinary removes
+nothing**, which is how a PDF would linger after its row was gone. Both default
+to `image`, so the existing contact-card caller is untouched.
+
+JPEG, PNG, WebP and PDF, capped at 5 MB, checked on both sides — the client
+refuses before turning 20 MB into base64, and the server refuses because a
+client check is not a control. The row is deleted before the asset: a broken
+link in the UI is worse than a few bytes of orphaned storage.
+
+`VoucherAttachment` still has the original problem and is tracked separately.
+
+**3K — cover colour.** A strip across the top of the card, reusing the label
+palette rather than adding a near-identical enum — a card whose cover matches a
+label it carries is a feature rather than a coincidence.
+
+**One shared primitive changed:** `StatusBadge` now spreads span attributes, so
+a badge can carry an accessible name. A badge is often the *only* rendering of a
+state — "3/2" for an over-limit column — and without `aria-label` that reads as
+two numbers to a screen reader.
+
 **Not done:** none of this has been opened in a browser — it is verified by unit
-tests, typecheck, lint and `next build` only. **Neither migration has been run
-against a real Postgres**, only validated by `prisma validate` and hand-written
+tests, typecheck, lint and `next build` only. **None of this phase's four migrations has been run
+against a real Postgres — and 3L's is the one that moves data**, only validated by `prisma validate` and hand-written
 to match the schema; it is purely additive (one nullable column, two new tables,
 one new enum), which is the cheapest shape to deploy but not a substitute for
 running it.

@@ -566,6 +566,76 @@ describe('ProjectTasksService', () => {
         });
     });
 
+    describe('per-project columns and covers', () => {
+        it('asks for the project’s own columns when building its board', async () => {
+            const settings = (service as any).settings;
+            await service.board('tenant-1', 'project-1');
+
+            expect(settings.listTaskStatuses).toHaveBeenCalledWith('tenant-1', false, 'project-1');
+        });
+
+        // Columns belong to a project now, so a status id from another board
+        // would put the card somewhere nobody on this one can see.
+        it('refuses a column that belongs to another project', async () => {
+            db.projectTaskStatus.findFirst.mockResolvedValue({
+                ...todo,
+                name: 'To Do',
+                project_id: 'project-other',
+            });
+
+            await expect(
+                service.create('tenant-1', 'user-1', {
+                    projectId: 'project-1',
+                    title: 'Wrong board',
+                    statusId: todo.id,
+                } as never),
+            ).rejects.toBeInstanceOf(BadRequestException);
+        });
+
+        it('accepts a template column, which belongs to no project', async () => {
+            db.projectTaskStatus.findFirst.mockResolvedValue({
+                ...todo,
+                name: 'To Do',
+                project_id: null,
+            });
+
+            await expect(
+                service.create('tenant-1', 'user-1', {
+                    projectId: 'project-1',
+                    title: 'Fine',
+                    statusId: todo.id,
+                } as never),
+            ).resolves.toBeDefined();
+        });
+
+        it('stores a cover colour', async () => {
+            await service.update('tenant-1', 'user-1', 'task-1', { coverColor: 'BLUE' } as never);
+
+            expect(db.projectTask.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ cover_color: 'BLUE' }),
+                }),
+            );
+        });
+
+        it('removes a cover with an empty string, the PATCH-clearing convention', async () => {
+            await service.update('tenant-1', 'user-1', 'task-1', { coverColor: '' } as never);
+
+            expect(db.projectTask.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ cover_color: null }),
+                }),
+            );
+        });
+
+        it('leaves the cover alone when the field is absent', async () => {
+            await service.update('tenant-1', 'user-1', 'task-1', { title: 'Renamed' } as never);
+
+            const data = db.projectTask.update.mock.calls.at(-1)[0].data;
+            expect(data).not.toHaveProperty('cover_color');
+        });
+    });
+
     describe('reorderChecklist', () => {
         const items = [{ id: 'item-a' }, { id: 'item-b' }, { id: 'item-c' }];
 

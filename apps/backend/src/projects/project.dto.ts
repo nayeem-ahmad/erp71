@@ -43,6 +43,15 @@ export enum TaskStatusCategoryDto {
     DONE = 'DONE',
 }
 
+export enum ProjectLabelColorDto {
+    GRAY = 'GRAY',
+    BLUE = 'BLUE',
+    EMERALD = 'EMERALD',
+    AMBER = 'AMBER',
+    RED = 'RED',
+    PURPLE = 'PURPLE',
+}
+
 export enum SprintStatusDto {
     PLANNED = 'PLANNED',
     ACTIVE = 'ACTIVE',
@@ -248,6 +257,9 @@ export class CreateTaskDto {
     @IsOptional() @IsArray() @IsUUID(undefined, { each: true })
     labelIds?: string[];
 
+    @IsOptional() @IsEnum(ProjectLabelColorDto)
+    coverColor?: ProjectLabelColorDto;
+
     @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(9999)
     estimateHours?: number;
 
@@ -301,6 +313,10 @@ export class UpdateTaskDto {
     @IsOptional() @IsArray() @IsUUID(undefined, { each: true })
     labelIds?: string[];
 
+    /** `''` removes the cover, for the same PATCH reason as the dates above. */
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsEnum(ProjectLabelColorDto)
+    coverColor?: ProjectLabelColorDto | '';
+
     @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(9999)
     estimateHours?: number;
 
@@ -326,15 +342,6 @@ export class MoveTaskDto {
     /** Explicitly clear the sprint — dragging a card back to the backlog. */
     @IsOptional() @IsBoolean()
     clearSprint?: boolean;
-}
-
-export enum ProjectLabelColorDto {
-    GRAY = 'GRAY',
-    BLUE = 'BLUE',
-    EMERALD = 'EMERALD',
-    AMBER = 'AMBER',
-    RED = 'RED',
-    PURPLE = 'PURPLE',
 }
 
 export class CreateLabelDto {
@@ -505,6 +512,10 @@ export class CreateTaskStatusDto {
 
     @IsOptional() @IsBoolean()
     isDefault?: boolean;
+
+    /** Cards allowed at once. Advisory — the board warns, it does not block. */
+    @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(999)
+    wipLimit?: number;
 }
 
 export class UpdateTaskStatusDto {
@@ -522,6 +533,29 @@ export class UpdateTaskStatusDto {
 
     @IsOptional() @IsBoolean()
     isDefault?: boolean;
+
+    /**
+     * `null` removes the limit. `@IsOptional()` skips null, so the validators
+     * below never see it and "no limit" stays expressible over PATCH.
+     */
+    @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(999)
+    wipLimit?: number | null;
+}
+
+/**
+ * Base64 over JSON rather than multipart, matching the CRM contact-card path —
+ * one upload mechanism in the codebase is worth more than the few bytes
+ * multipart would save.
+ */
+export class CreateAttachmentDto {
+    @IsString() @MinLength(1)
+    fileBase64!: string;
+
+    @IsOptional() @IsString() @MaxLength(200)
+    fileName?: string;
+
+    @IsOptional() @IsString() @MaxLength(100)
+    mimeType?: string;
 }
 
 export class CreateCommentDto {

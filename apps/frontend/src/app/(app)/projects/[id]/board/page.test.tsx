@@ -532,3 +532,70 @@ describe('Project board labels', () => {
         expect(screen.queryByLabelText('Label')).not.toBeInTheDocument();
     });
 });
+
+describe('Project board WIP limits and covers', () => {
+    const columnWith = (tasks: Record<string, unknown>[], wip: number | null) => ({
+        columns: [{ id: 'todo', name: 'To do', category: 'TODO', wip_limit: wip, tasks }],
+    });
+
+    it('shows the count against the limit', async () => {
+        getProjectBoard.mockResolvedValue(columnWith([task(), task({ id: 't2' })], 3));
+        render(<BoardPage />);
+
+        expect(await screen.findByText('2/3')).toBeInTheDocument();
+    });
+
+    it('shows a plain count when the column has no limit', async () => {
+        getProjectBoard.mockResolvedValue(columnWith([task()], null));
+        render(<BoardPage />);
+
+        await screen.findByText('Wire the meter');
+        expect(screen.queryByText(/\/\d/)).not.toBeInTheDocument();
+    });
+
+    it('marks a column that is over its limit', async () => {
+        getProjectBoard.mockResolvedValue(
+            columnWith([task(), task({ id: 't2' }), task({ id: 't3' })], 2),
+        );
+        render(<BoardPage />);
+
+        expect(await screen.findByLabelText('To do is over its limit')).toBeInTheDocument();
+    });
+
+    // The limit is about the column, not about what you happen to be looking at.
+    it('still counts the whole column when a filter is on', async () => {
+        getProjectBoard.mockResolvedValue(
+            columnWith(
+                [
+                    task({ priority: 'URGENT' }),
+                    task({ id: 't2', title: 'Paint', priority: 'LOW' }),
+                    task({ id: 't3', title: 'Wire two', priority: 'LOW' }),
+                ],
+                2,
+            ),
+        );
+        render(<BoardPage />);
+        await screen.findByText('Wire the meter');
+
+        fireEvent.change(screen.getByLabelText('Priority'), { target: { value: 'URGENT' } });
+
+        expect(screen.getByText('3/2')).toBeInTheDocument();
+        expect(screen.getByLabelText('To do is over its limit')).toBeInTheDocument();
+    });
+
+    it('draws a cover strip when the card has one', async () => {
+        getProjectBoard.mockResolvedValue(board([task({ cover_color: 'BLUE' })]));
+        const { container } = render(<BoardPage />);
+
+        await screen.findByText('Wire the meter');
+        expect(container.querySelector('.bg-blue-500')).toBeInTheDocument();
+    });
+
+    it('draws no strip when the card has no cover', async () => {
+        getProjectBoard.mockResolvedValue(board([task()]));
+        const { container } = render(<BoardPage />);
+
+        await screen.findByText('Wire the meter');
+        expect(container.querySelector('.bg-blue-500')).not.toBeInTheDocument();
+    });
+});

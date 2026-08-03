@@ -282,6 +282,7 @@ model User {
   projectComments           ProjectComment[]           @relation("ProjectCommentUser")
   projectTaskActivities     ProjectTaskActivity[]      @relation("ProjectTaskActivityActor")
   projectTaskWatching       ProjectTaskWatcher[]       @relation("ProjectTaskWatcherUser")
+  projectAttachments        ProjectAttachment[]        @relation("ProjectAttachmentCreator")
 }
 
 model PasswordResetToken {
@@ -3771,6 +3772,7 @@ model Project {
   attachments ProjectAttachment[]
   remainingLogs ProjectTaskRemainingLog[]
   taskActivities ProjectTaskActivity[]
+  taskStatuses   ProjectTaskStatus[]
 
   @@unique([tenant_id, code])
   @@index([tenant_id, status, deleted_at])
@@ -3841,21 +3843,41 @@ model ProjectMilestone {
 }
 
 /// Tenant-managed board columns. Ordering here is the ordering on the board.
+/// Board columns. A Trello list belongs to one board, so as of Phase 3L these
+/// belong to one project.
+///
+/// `project_id` NULL marks a **template** row: the tenant's default column set,
+/// managed in Project Setup and copied onto every new project. Non-null rows are
+/// what a board actually renders, and what a task's `status_id` points at.
+///
+/// `category` stays mandatory on every row — Phase 2's tenant-level sprints and
+/// the cross-project Tasks page filter on what a column *means*, never on a
+/// column id, so per-project columns are only safe while every one of them
+/// carries a TODO/IN_PROGRESS/DONE.
 model ProjectTaskStatus {
   id         String                    @id @default(uuid())
   tenant_id  String
+  project_id String?
   name       String
   category   ProjectTaskStatusCategory @default(TODO)
   sort_order Int                       @default(0)
   is_active  Boolean                   @default(true)
   is_default Boolean                   @default(false)
+  /// Cards allowed in this column at once. NULL means no limit. Advisory — the
+  /// board marks the column over-limit, it does not refuse the drop, because a
+  /// WIP limit is a prompt to talk about the queue and not a lock.
+  wip_limit  Int?
   created_at DateTime                  @default(now())
   updated_at DateTime                  @updatedAt
 
-  tenant Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  tasks  ProjectTask[]
+  tenant  Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  project Project?      @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  tasks   ProjectTask[]
 
-  @@unique([tenant_id, name])
+  /// Postgres treats NULLs as distinct, so this does not constrain template
+  /// rows. `ProjectSettingsService` checks those for a name clash instead.
+  @@unique([tenant_id, project_id, name])
+  @@index([tenant_id, project_id, sort_order])
   @@index([tenant_id, is_active, sort_order])
   @@map("project_task_statuses")
 }
@@ -3881,6 +3903,10 @@ model ProjectTask {
   /// blocked, it is simply not due yet.
   start_date      DateTime?       @db.Date
   due_date        DateTime?       @db.Date
+  /// Reuses the label palette rather than adding a near-identical enum: the same
+  /// six colours, and a card whose cover matches a label it carries is a feature
+  /// rather than a coincidence.
+  cover_color     ProjectLabelColor?
   estimate_hours  Decimal?        @db.Decimal(8, 2)
   /// An independent re-estimate, never derived from estimate minus logged.
   /// Written only by RemainingHoursService, always alongside a log row.
@@ -4179,12 +4205,17 @@ model ProjectAttachment {
   file_name  String
   mime_type  String?
   file_size  Int?
+  /// Cloudinary's handle for the stored asset. `file_url` cannot be turned back
+  /// into one, so without this the row could be deleted while the file stayed —
+  /// billed forever. Nullable only because rows predating Phase 3D have none.
+  storage_key String?
   created_by String?
   created_at DateTime @default(now())
 
   tenant  Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   project Project?     @relation(fields: [project_id], references: [id], onDelete: Cascade)
   task    ProjectTask? @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  creator User?        @relation("ProjectAttachmentCreator", fields: [created_by], references: [id])
 
   @@index([tenant_id, project_id])
   @@index([tenant_id, task_id])

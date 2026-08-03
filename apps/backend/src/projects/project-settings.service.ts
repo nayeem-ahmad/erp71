@@ -27,17 +27,52 @@ export class ProjectSettingsService {
 
     // ── Board columns ──────────────────────────────────────────────────────
 
-    async listTaskStatuses(tenantId: string, includeInactive = false) {
-        const existing = await this.db.projectTaskStatus.findMany({
-            where: { tenant_id: tenantId, ...(includeInactive ? {} : { is_active: true }) },
-            orderBy: [{ sort_order: 'asc' }, { created_at: 'asc' }],
-        });
+    /**
+     * Columns for one project, or the tenant template when `projectId` is
+     * omitted.
+     *
+     * Both are lazily seeded on first read — the template from
+     * `DEFAULT_TASK_STATUSES`, a project from the template — so a project
+     * created before Phase 3L, or by a path that forgot to seed it, still has a
+     * board rather than an empty screen.
+     */
+    async listTaskStatuses(tenantId: string, includeInactive = false, projectId?: string) {
+        const where = {
+            tenant_id: tenantId,
+            project_id: projectId ?? null,
+            ...(includeInactive ? {} : { is_active: true }),
+        };
+        const order = [{ sort_order: 'asc' as const }, { created_at: 'asc' as const }];
+
+        const existing = await this.db.projectTaskStatus.findMany({ where, orderBy: order });
         if (existing.length > 0) return existing;
 
-        await this.seedDefaults(tenantId);
-        return this.db.projectTaskStatus.findMany({
-            where: { tenant_id: tenantId, ...(includeInactive ? {} : { is_active: true }) },
-            orderBy: [{ sort_order: 'asc' }, { created_at: 'asc' }],
+        if (projectId) await this.seedProjectColumns(tenantId, projectId);
+        else await this.seedDefaults(tenantId);
+
+        return this.db.projectTaskStatus.findMany({ where, orderBy: order });
+    }
+
+    /**
+     * Gives a project its own copy of the tenant template. Idempotent via
+     * `skipDuplicates` on the (tenant, project, name) unique, so two concurrent
+     * first-loads of a board cannot leave it with doubled columns.
+     */
+    async seedProjectColumns(tenantId: string, projectId: string) {
+        const template = await this.listTaskStatuses(tenantId, true);
+        if (template.length === 0) return;
+
+        await this.db.projectTaskStatus.createMany({
+            data: template.map((status) => ({
+                tenant_id: tenantId,
+                project_id: projectId,
+                name: status.name,
+                category: status.category as never,
+                sort_order: status.sort_order,
+                is_active: status.is_active,
+                is_default: status.is_default,
+            })),
+            skipDuplicates: true,
         });
     }
 
@@ -59,30 +94,36 @@ export class ProjectSettingsService {
     }
 
     /** The column a new task lands in. Falls back to the first by sort order. */
-    async defaultTaskStatus(tenantId: string) {
-        const statuses = await this.listTaskStatuses(tenantId, false);
+    async defaultTaskStatus(tenantId: string, projectId?: string) {
+        const statuses = await this.listTaskStatuses(tenantId, false, projectId);
         if (statuses.length === 0) throw new BadRequestException('No board columns are configured.');
         return statuses.find((s) => s.is_default) ?? statuses[0];
     }
 
-    async createTaskStatus(tenantId: string, dto: CreateTaskStatusDto) {
-        await this.listTaskStatuses(tenantId, true);
+    async createTaskStatus(tenantId: string, dto: CreateTaskStatusDto, projectId?: string) {
+        await this.listTaskStatuses(tenantId, true, projectId);
         const name = dto.name.trim();
+        const scope = { tenant_id: tenantId, project_id: projectId ?? null };
+
+        // Checked in code rather than left to the unique index: Postgres treats
+        // NULLs as distinct, so the index does not constrain template rows.
         const clash = await this.db.projectTaskStatus.findFirst({
-            where: { tenant_id: tenantId, name },
+            where: { ...scope, name },
             select: { id: true },
         });
         if (clash) throw new ConflictException('A column with that name already exists.');
 
-        if (dto.isDefault) await this.clearDefault(tenantId);
-        const count = await this.db.projectTaskStatus.count({ where: { tenant_id: tenantId } });
+        if (dto.isDefault) await this.clearDefault(tenantId, projectId);
+        const count = await this.db.projectTaskStatus.count({ where: scope });
         return this.db.projectTaskStatus.create({
             data: {
                 tenant_id: tenantId,
+                project_id: projectId ?? null,
                 name,
                 category: dto.category as never,
                 sort_order: dto.sortOrder ?? count,
                 is_default: dto.isDefault ?? false,
+                wip_limit: dto.wipLimit ?? null,
             },
         });
     }
@@ -92,7 +133,12 @@ export class ProjectSettingsService {
 
         if (dto.name && dto.name.trim() !== status.name) {
             const clash = await this.db.projectTaskStatus.findFirst({
-                where: { tenant_id: tenantId, name: dto.name.trim(), id: { not: id } },
+                where: {
+                    tenant_id: tenantId,
+                    project_id: status.project_id,
+                    name: dto.name.trim(),
+                    id: { not: id },
+                },
                 select: { id: true },
             });
             if (clash) throw new ConflictException('A column with that name already exists.');
@@ -111,7 +157,7 @@ export class ProjectSettingsService {
             }
         }
 
-        if (dto.isDefault) await this.clearDefault(tenantId);
+        if (dto.isDefault) await this.clearDefault(tenantId, status.project_id ?? undefined);
 
         return this.db.projectTaskStatus.update({
             where: { id },
@@ -121,6 +167,7 @@ export class ProjectSettingsService {
                 ...(dto.sortOrder !== undefined ? { sort_order: dto.sortOrder } : {}),
                 ...(dto.isActive !== undefined ? { is_active: dto.isActive } : {}),
                 ...(dto.isDefault !== undefined ? { is_default: dto.isDefault } : {}),
+                ...(dto.wipLimit !== undefined ? { wip_limit: dto.wipLimit } : {}),
             },
         });
     }
@@ -212,9 +259,10 @@ export class ProjectSettingsService {
         return label;
     }
 
-    private async clearDefault(tenantId: string) {
+    /** Scoped to one board: a project's default column is not the tenant's. */
+    private async clearDefault(tenantId: string, projectId?: string) {
         await this.db.projectTaskStatus.updateMany({
-            where: { tenant_id: tenantId, is_default: true },
+            where: { tenant_id: tenantId, project_id: projectId ?? null, is_default: true },
             data: { is_default: false },
         });
     }

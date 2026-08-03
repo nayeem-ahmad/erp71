@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { ProjectSettingsService } from './project-settings.service';
 import { paginate } from '../common/pagination.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import {
@@ -31,7 +32,10 @@ const MEMBER_INCLUDE = {
 
 @Injectable()
 export class ProjectsService {
-    constructor(private readonly db: DatabaseService) {}
+    constructor(
+        private readonly db: DatabaseService,
+        private readonly settings: ProjectSettingsService,
+    ) {}
 
     /**
      * `PRJ-0001` per tenant. Derived from the current count rather than a
@@ -174,7 +178,7 @@ export class ProjectsService {
         // are rare and a second attempt is cheaper than serialising them all.
         for (let attempt = 0; attempt < 5; attempt += 1) {
             try {
-                return await this.db.project.create({
+                const project = await this.db.project.create({
                     data: {
                         tenant_id: tenantId,
                         code: await this.nextCode(tenantId),
@@ -193,6 +197,13 @@ export class ProjectsService {
                         created_by: userId,
                     },
                 });
+
+                // Columns belong to a project as of Phase 3L. Seeding here means
+                // a board is usable the moment it exists; `listTaskStatuses`
+                // also seeds lazily, so a failure at this point is recoverable
+                // rather than a permanently empty board.
+                await this.settings.seedProjectColumns(tenantId, project.id);
+                return project;
             } catch (error: unknown) {
                 const code = (error as { code?: string })?.code;
                 if (code !== 'P2002' || attempt === 4) throw error;

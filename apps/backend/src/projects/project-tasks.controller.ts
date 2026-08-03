@@ -19,7 +19,9 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { ProjectTasksService } from './project-tasks.service';
 import { ProjectActivityService } from './project-activity.service';
 import { ProjectCommentsService } from './project-comments.service';
+import { ProjectAttachmentsService } from './project-attachments.service';
 import {
+    CreateAttachmentDto,
     CreateChecklistItemDto,
     CreateCommentDto,
     CreateTaskDto,
@@ -39,6 +41,7 @@ export class ProjectTasksController {
         private readonly tasks: ProjectTasksService,
         private readonly comments: ProjectCommentsService,
         private readonly activity: ProjectActivityService,
+        private readonly attachments: ProjectAttachmentsService,
     ) {}
 
     @Get()
@@ -133,6 +136,31 @@ export class ProjectTasksController {
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     removeComment(@Tenant() tenant: TenantContext, @Param('commentId') commentId: string) {
         return this.comments.remove(tenant.tenantId, tenant.userId, commentId);
+    }
+
+    @Get(':id/attachments')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
+    listAttachments(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.attachments.list(tenant.tenantId, id);
+    }
+
+    @Post(':id/attachments')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
+    addAttachment(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: CreateAttachmentDto,
+    ) {
+        return this.attachments.create(tenant.tenantId, tenant.userId, id, dto);
+    }
+
+    @Delete('attachments/:attachmentId')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
+    removeAttachment(
+        @Tenant() tenant: TenantContext,
+        @Param('attachmentId') attachmentId: string,
+    ) {
+        return this.attachments.remove(tenant.tenantId, attachmentId);
     }
 
     @Get(':id/activity')

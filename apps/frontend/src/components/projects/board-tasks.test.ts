@@ -1,5 +1,7 @@
 import {
     applyFilters,
+    coverClass,
+    isOverWip,
     assigneeKeyOf,
     assigneeNameOf,
     assigneeOptionsFrom,
@@ -255,5 +257,47 @@ describe('applyFilters', () => {
         expect(result).toHaveLength(2);
         expect(result[0].tasks.map((t) => t.id)).toEqual(['a']);
         expect(result[1].tasks).toEqual([]);
+    });
+});
+
+describe('isOverWip', () => {
+    const withCount = (n: number, wip: number | null) => ({
+        id: 'todo',
+        name: 'To do',
+        category: 'TODO',
+        wip_limit: wip,
+        tasks: Array.from({ length: n }, (_, i) => task({ id: `t${i}` })),
+    });
+
+    it('is false when the column has no limit', () => {
+        expect(isOverWip(withCount(50, null))).toBe(false);
+    });
+
+    it('is false at the limit and true above it', () => {
+        expect(isOverWip(withCount(3, 3))).toBe(false);
+        expect(isOverWip(withCount(4, 3))).toBe(true);
+    });
+
+    it('is false for a column that is not there', () => {
+        expect(isOverWip(undefined)).toBe(false);
+    });
+});
+
+describe('coverClass', () => {
+    it('is null when there is no cover, so nothing renders', () => {
+        expect(coverClass(null)).toBeNull();
+        expect(coverClass(undefined)).toBeNull();
+    });
+
+    // Same reason as the label classes: Tailwind scans source text, so every
+    // colour has to resolve to a class written out in full.
+    it('maps every palette colour to a written-out class', () => {
+        for (const color of LABEL_COLORS) {
+            expect(coverClass(color)).toMatch(/^bg-[a-z]+-\d00$/);
+        }
+    });
+
+    it('is null for a colour it does not know, rather than an empty class', () => {
+        expect(coverClass('CHARTREUSE')).toBeNull();
     });
 });
