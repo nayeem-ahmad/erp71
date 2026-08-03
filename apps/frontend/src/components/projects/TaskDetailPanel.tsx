@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
-import { Button, Input, Select, Textarea, Field, StatusBadge } from '@/components/ui';
+import { Button, Checkbox, Input, Select, Field, StatusBadge } from '@/components/ui';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -27,6 +27,13 @@ interface TimeEntry {
     user?: { id: string; name?: string | null } | null;
 }
 
+interface ChecklistItem {
+    id: string;
+    text: string;
+    is_done: boolean;
+    sort_order: number;
+}
+
 interface Task {
     id: string;
     title: string;
@@ -36,6 +43,7 @@ interface Task {
     logged_hours?: number;
     status?: { id: string; name: string; category: string };
     assignee?: { id: string; name?: string | null; email: string } | null;
+    checklistItems?: ChecklistItem[];
     timeEntries?: TimeEntry[];
 }
 
@@ -178,6 +186,12 @@ export default function TaskDetailPanel({
                                 ))}
                             </Select>
                         </Field>
+
+                        <ChecklistSection
+                            taskId={taskId}
+                            items={task.checklistItems ?? []}
+                            onChanged={refresh}
+                        />
 
                         <section className="rounded-md border border-gray-200 p-3">
                             <h3 className="mb-2 text-sm font-medium">{m.time.log}</h3>
@@ -359,6 +373,197 @@ export default function TaskDetailPanel({
                 </Button>
             </ModalFooter>
         </ModalShell>
+    );
+}
+
+function ChecklistSection({
+    taskId,
+    items,
+    onChanged,
+}: {
+    taskId: string;
+    items: ChecklistItem[];
+    onChanged: () => Promise<void>;
+}) {
+    const { t } = useI18n();
+    const m = t.projects.checklist;
+
+    const [newText, setNewText] = useState('');
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editText, setEditText] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    const done = items.filter((item) => item.is_done).length;
+    const percent = items.length === 0 ? 0 : Math.round((done / items.length) * 100);
+
+    const run = async (action: () => Promise<unknown>) => {
+        setSaving(true);
+        try {
+            await action();
+            await onChanged();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.saveFailed);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const add = (e: React.FormEvent) => {
+        e.preventDefault();
+        const text = newText.trim();
+        if (!text) return;
+        return run(async () => {
+            await api.addTaskChecklistItem(taskId, { text });
+            setNewText('');
+        });
+    };
+
+    const commitEdit = (item: ChecklistItem) => {
+        const text = editText.trim();
+        setEditingId(null);
+        if (!text || text === item.text) return;
+        return run(() => api.updateTaskChecklistItem(item.id, { text }));
+    };
+
+    // Sends the whole order rather than the swapped pair — a half-applied swap
+    // would leave two items sharing a sort_order and the list would reshuffle.
+    const moveBy = (index: number, delta: number) => {
+        const target = index + delta;
+        if (target < 0 || target >= items.length) return;
+        const next = [...items];
+        [next[index], next[target]] = [next[target], next[index]];
+        return run(() => api.reorderTaskChecklist(taskId, next.map((item) => item.id)));
+    };
+
+    return (
+        <section className="rounded-md border border-gray-200 p-3">
+            <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-medium">{m.title}</h3>
+                {items.length > 0 && (
+                    <span className="text-xs text-gray-500">
+                        {done === items.length
+                            ? m.allDone
+                            : m.progress
+                                  .replace('{done}', String(done))
+                                  .replace('{total}', String(items.length))}
+                    </span>
+                )}
+            </div>
+
+            {items.length > 0 && (
+                <div
+                    className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-200"
+                    role="progressbar"
+                    aria-valuenow={percent}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={m.title}
+                >
+                    <div
+                        className="h-full rounded-full bg-emerald-500 transition-all"
+                        style={{ width: `${percent}%` }}
+                    />
+                </div>
+            )}
+
+            {items.length === 0 ? (
+                <p className="mt-2 text-sm text-gray-500">{m.empty}</p>
+            ) : (
+                <ul className="mt-2 space-y-0.5">
+                    {items.map((item, index) => (
+                        <li key={item.id} className="flex items-center gap-2">
+                            <Checkbox
+                                checked={item.is_done}
+                                disabled={saving}
+                                aria-label={item.text}
+                                onChange={() =>
+                                    run(() =>
+                                        api.updateTaskChecklistItem(item.id, {
+                                            isDone: !item.is_done,
+                                        }),
+                                    )
+                                }
+                            />
+
+                            {editingId === item.id ? (
+                                <Input
+                                    autoFocus
+                                    value={editText}
+                                    className="flex-1"
+                                    onChange={(e) => setEditText(e.target.value)}
+                                    onBlur={() => commitEdit(item)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            commitEdit(item);
+                                        }
+                                        if (e.key === 'Escape') setEditingId(null);
+                                    }}
+                                />
+                            ) : (
+                                <button
+                                    type="button"
+                                    className={`min-h-touch flex-1 text-left text-sm ${
+                                        item.is_done ? 'text-gray-400 line-through' : ''
+                                    }`}
+                                    onClick={() => {
+                                        setEditingId(item.id);
+                                        setEditText(item.text);
+                                    }}
+                                >
+                                    {item.text}
+                                </button>
+                            )}
+
+                            <button
+                                type="button"
+                                aria-label={m.moveUp}
+                                className="px-1 text-gray-400 disabled:opacity-30"
+                                disabled={saving || index === 0}
+                                onClick={() => moveBy(index, -1)}
+                            >
+                                <ArrowUp className="h-4 w-4" />
+                            </button>
+                            <button
+                                type="button"
+                                aria-label={m.moveDown}
+                                className="px-1 text-gray-400 disabled:opacity-30"
+                                disabled={saving || index === items.length - 1}
+                                onClick={() => moveBy(index, 1)}
+                            >
+                                <ArrowDown className="h-4 w-4" />
+                            </button>
+                            <button
+                                type="button"
+                                aria-label={m.deleteItem}
+                                className="px-1 text-red-600"
+                                disabled={saving}
+                                onClick={() => run(() => api.deleteTaskChecklistItem(item.id))}
+                            >
+                                <Trash2 className="h-4 w-4" />
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            <form onSubmit={add} className="mt-2 flex gap-2">
+                <Input
+                    value={newText}
+                    placeholder={m.placeholder}
+                    className="flex-1"
+                    onChange={(e) => setNewText(e.target.value)}
+                />
+                <Button
+                    type="submit"
+                    variant="secondary"
+                    className="min-h-touch"
+                    disabled={saving || newText.trim() === ''}
+                >
+                    {m.add}
+                </Button>
+            </form>
+        </section>
     );
 }
 

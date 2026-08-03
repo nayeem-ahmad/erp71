@@ -1,7 +1,7 @@
 # Project Management — Phase 3: Trello-style task cards
 
-**Status:** proposed, not started
-**Written:** 2026-08-02
+**Status:** 3A and 3B shipped 2026-08-03; the rest scoped and sequenced below
+**Written:** 2026-08-02 · **Decisions taken:** 2026-08-03
 **Predecessors:** `project-management-phase-1.md`, `project-management-phase-2.md`
 
 The ask: *"Project Management board — task cards should have Trello-like
@@ -136,43 +136,52 @@ means a board without these.
 
 ---
 
-## Two decisions I would want taken before building
+## Decisions taken — 2026-08-03
 
 Phase 2 was scoped by taking its open question up front rather than discovering
-it mid-build. Same shape here.
+it mid-build. Same shape here, and both were answered before any code landed.
 
-### 1. Are board columns tenant-wide or per-project?
+### 1. Board columns are per project — DECIDED
 
-`ProjectTaskStatus` is `@@unique([tenant_id, name])` with **no `project_id`** —
-every project in the tenant shares one set of columns. A Trello list belongs to
-exactly one board, so the literal translation is per-project columns.
+`ProjectTaskStatus` is `@@unique([tenant_id, name])` with **no `project_id`**,
+so every project in the tenant currently shares one set of columns. A Trello
+list belongs to exactly one board, and that is the behaviour we want: a board's
+columns are the board's.
 
-I would not do the literal translation. Tenant-wide statuses are load-bearing:
-Phase 2 deliberately made sprints tenant-level and the Tasks page filters by
-`statusCategory` across every project. Per-project columns would fragment that
-vocabulary and break the cross-project views we just built.
+I had recommended keeping the tenant-wide list and layering a per-project
+overlay on top; the call went to genuine per-project columns instead, so 3L is
+the literal translation.
 
-**Recommendation — the middle path:** keep `ProjectTaskStatus` as the shared
-vocabulary and add an opt-in `ProjectBoardColumn(project_id, status_id,
-sort_order, wip_limit, is_hidden)`. A project that configures nothing sees every
-status in tenant order, exactly as today: no data migration, no behaviour change
-for existing tenants, and every cross-project query untouched. A project that
-wants five columns and a WIP limit of 3 on *In Progress* gets it.
+**The one constraint that must survive.** Phase 2 deliberately made sprints
+tenant-level, and the Tasks page filters across every project by
+`statusCategory` rather than by column identity — that is what lets "open tasks"
+be one parameter instead of an enumeration of a tenant's columns. Per-project
+columns are therefore fine **as long as every column still carries a
+TODO/IN_PROGRESS/DONE category**, and every cross-project rollup keys on the
+category rather than on a shared status row. Any 3L implementation that drops
+the category, or lets a project define a column without one, breaks the
+tenant-wide sprint board and the Tasks page together.
 
-### 2. One assignee, or many members per card?
+Migration shape when 3L is built: give existing projects a copy of the current
+tenant column set so nothing moves on the day it ships, then let each project
+diverge.
 
-`ProjectTask` carries `assignee_id` **xor** `assignee_employee_id` — the pair
-Phase 2 added so an employee without a login can hold work. Going plural sounds
-like adding a join table; it is not. That single field is read by remaining-hours
-attribution, the burndown, the Tasks page's default "assigned to me" filter,
-`assigneeOf()`, and every "who is this for" query in the module.
+### 2. One assignee — DECIDED
 
-**Recommendation:** keep the existing assignee as the *owner* — the one
-accountable person that reporting reads — and add `ProjectTaskMember` for
-additional collaborators shown as avatars on the card. This is how most ERP
-boards behave and it costs one table. Making assignment genuinely plural is a
-phase of its own, and it would force a decision about whose burndown a shared
-task belongs to, which nobody has asked for.
+`ProjectTask` keeps `assignee_id` **xor** `assignee_employee_id`, the pair Phase
+2 added so an employee without a login can hold work. **No `ProjectTaskMember`,
+no plural assignment for now.**
+
+This is the cheaper and safer half of the question: that single field is read by
+remaining-hours attribution, the burndown, the Tasks page's default "assigned to
+me" filter, `assigneeOf()`, and every "who is this for" query in the module, and
+going plural would force a decision about whose burndown a shared task belongs
+to. 3G is therefore **deferred, not scheduled** — it comes back only if someone
+actually asks to put two people on a card.
+
+One consequence worth noting, already handled in 3A: the card must read *both*
+assignee fields. The old card read only `assignee`, so every task held by an
+employee without a login rendered as unassigned.
 
 ---
 
@@ -202,17 +211,51 @@ task belongs to, which nobody has asked for.
 
 ## Suggested sequencing
 
-| Order | Item | Why here |
-|---|---|---|
-| 1 | 3A | Cards open and say something. Hours of work; changes how the board *feels* more than anything else on this list. Ship it alone. |
-| 2 | 3B + 3E | Pure UI over finished endpoints. No schema, no risk. |
-| 3 | 3M + 3N | Board becomes usable — create without leaving, filter, and work on a phone. |
-| 4 | 3F + 3H | First schema change; do labels and dates in one migration. |
-| 5 | 3C + 3I | Comments and activity together — the same panel, and activity is what makes comments findable. |
-| 6 | 3G + 3L | Both gated on the decisions above. |
-| 7 | 3D | Last: it needs the `storage_key` fix, so it is the only item with a prerequisite outside this phase. |
-| 8 | 3J + 3K | Archive, then cover colour. |
+| Order | Item | Status | Why here |
+|---|---|---|---|
+| 1 | 3A | **shipped 2026-08-03** | Cards open and say something. Hours of work; changes how the board *feels* more than anything else on this list. |
+| 2 | 3B | **shipped 2026-08-03** | Pure UI over finished endpoints. No schema, no risk. |
+| 3 | 3E | next | Subtasks, the other half of "already returned, never rendered". |
+| 4 | 3M + 3N | | Board becomes usable — create without leaving, filter, and work on a phone. |
+| 5 | 3F + 3H | | First schema change; do labels and dates in one migration. |
+| 6 | 3C + 3I | | Comments and activity together — the same panel, and activity is what makes comments findable. |
+| 7 | 3L | | Per-project columns, per decision 1. Carries a data migration. |
+| 8 | 3D | | Needs the `storage_key` fix, so it is the only item with a prerequisite outside this phase. |
+| 9 | 3J + 3K | | Archive, then cover colour. |
+| — | 3G | deferred | Per decision 2 — single assignee stands. |
 
-**If only one thing ships: item 1.** A board whose cards cannot be opened and
-show three fields is the gap between what we have and "like Trello" far more
-than labels or covers are.
+---
+
+## What shipped on 2026-08-03
+
+**3A.** The board card is clickable (mouse, touch and keyboard) and opens the
+existing `TaskDetailPanel`; closing it reloads the board so a status change made
+in the panel is reflected in the columns. The card now renders the due date with
+overdue / due-today / due-soon / done tones, HIGH and URGENT priority (MEDIUM
+and LOW stay quiet — a badge on every card is not a signal), checklist progress,
+comment and subtask counts, a description marker, remaining hours, and an
+initials avatar that reads **both** assignee fields.
+
+Two things worth recording because they are easy to get wrong:
+
+- **`due_date` is compared as a string, not as a `Date`.** It is a `@db.Date`
+  serialised at UTC midnight, so `new Date(due) < new Date()` marks a task due
+  *today* as overdue for every timezone east of UTC — which is all of them here.
+- **A drag that ends where it began reads as a click**, which would open the
+  card you just dropped. The card tracks whether a native drag started and
+  swallows the click that follows it.
+
+**3B.** Checklists have a UI: progress count and bar, tick/untick, click-to-edit
+rename (Enter saves, Escape discards), delete, and move up/down. The three
+endpoints and their api-client methods already existed and had never been
+called.
+
+Reordering needed one new endpoint, `PATCH /project-tasks/:id/checklist/reorder`,
+which takes **the whole order** and re-sequences it in a single transaction.
+Moving one item by PATCHing two `sortOrder`s is the obvious client-side
+shortcut and it is wrong: a half-applied swap leaves two items sharing a
+position, and `checklistItems` orders by `sort_order` alone, so the list would
+reshuffle on every subsequent read.
+
+**Not done:** neither has been opened in a browser — both are verified by unit
+tests, typecheck, lint and `next build` only.

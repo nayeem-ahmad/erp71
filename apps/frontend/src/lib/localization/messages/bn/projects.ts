@@ -127,13 +127,24 @@ export const projectsMessages = {
         estimate: 'প্রাক্কলন (ঘণ্টা)',
         remaining: 'বাকি (ঘণ্টা)',
         logged: 'লগকৃত (ঘণ্টা)',
-        checklist: 'চেকলিস্ট',
-        addChecklistItem: 'আইটেম যোগ',
         subtasks: 'সাব-টাস্ক',
         noTasks: 'এখনও কোনো টাস্ক নেই।',
         deleted: 'টাস্ক মুছে ফেলা হয়েছে',
         created: 'টাস্ক তৈরি',
         updated: 'টাস্ক হালনাগাদ হয়েছে',
+    },
+
+    checklist: {
+        title: 'চেকলিস্ট',
+        add: 'আইটেম যোগ',
+        placeholder: 'কী করতে হবে?',
+        empty: 'এখনও কোনো চেকলিস্ট আইটেম নেই।',
+        progress: '{total}-এর মধ্যে {done}',
+        allDone: 'সব সম্পন্ন',
+        moveUp: 'উপরে নিন',
+        moveDown: 'নিচে নিন',
+        deleteItem: 'আইটেম মুছুন',
+        saveFailed: 'চেকলিস্ট হালনাগাদ করা যায়নি',
     },
 
     remaining: {
@@ -175,6 +186,18 @@ export const projectsMessages = {
         emptyColumn: 'এখানে কিছু নেই',
         moveFailed: 'কার্ডটি সরানো যায়নি',
         columnTotal: 'ঘণ্টা বাকি',
+        card: {
+            open: 'টাস্ক খুলুন',
+            overdue: 'সময় পার',
+            dueToday: 'আজ শেষ তারিখ',
+            due: 'শেষ {date}',
+            done: 'সম্পন্ন',
+            hasDescription: 'বিবরণ আছে',
+            checklist: '{total}টির মধ্যে {done}টি চেকলিস্ট আইটেম সম্পন্ন',
+            comments: '{count}টি মন্তব্য',
+            subtasks: '{count}টি সাব-টাস্ক',
+            unassigned: 'কেউ নিযুক্ত নয়',
+        },
     },
 
     sprint: {

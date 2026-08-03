@@ -45,6 +45,7 @@ describe('ProjectTasksService', () => {
                 count: jest.fn().mockResolvedValue(0),
                 create: jest.fn(),
                 findFirst: jest.fn(),
+                findMany: jest.fn().mockResolvedValue([]),
                 update: jest.fn(),
                 delete: jest.fn(),
             },
@@ -53,7 +54,11 @@ describe('ProjectTasksService', () => {
                 aggregate: jest.fn().mockResolvedValue({ _sum: { hours: 3 } }),
             },
             sprint: { findFirst: jest.fn().mockResolvedValue({ id: 'sprint-1', project_id: 'project-1' }) },
-            $transaction: jest.fn(async (fn: any) => fn(db)),
+            // Both forms: the interactive callback move() uses, and the array of
+            // promises reorderChecklist() batches.
+            $transaction: jest.fn(async (arg: any) =>
+                typeof arg === 'function' ? arg(db) : Promise.all(arg),
+            ),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -299,6 +304,88 @@ describe('ProjectTasksService', () => {
                     where: expect.objectContaining({ sprint_id: 'sprint-1' }),
                 }),
             );
+        });
+    });
+
+    describe('reorderChecklist', () => {
+        const items = [{ id: 'item-a' }, { id: 'item-b' }, { id: 'item-c' }];
+
+        beforeEach(() => {
+            db.projectTaskChecklistItem.findMany.mockResolvedValue(items);
+            db.projectTaskChecklistItem.update.mockImplementation((args: any) => args);
+        });
+
+        it('renumbers every item to its position in the submitted order', async () => {
+            await service.reorderChecklist('tenant-1', 'task-1', ['item-c', 'item-a', 'item-b']);
+
+            expect(db.projectTaskChecklistItem.update).toHaveBeenCalledWith({
+                where: { id: 'item-c' },
+                data: { sort_order: 0 },
+            });
+            expect(db.projectTaskChecklistItem.update).toHaveBeenCalledWith({
+                where: { id: 'item-a' },
+                data: { sort_order: 1 },
+            });
+            expect(db.projectTaskChecklistItem.update).toHaveBeenCalledWith({
+                where: { id: 'item-b' },
+                data: { sort_order: 2 },
+            });
+        });
+
+        it('writes the whole sequence in one transaction', async () => {
+            await service.reorderChecklist('tenant-1', 'task-1', ['item-c', 'item-a', 'item-b']);
+
+            expect(db.$transaction).toHaveBeenCalledTimes(1);
+            expect(db.$transaction.mock.calls[0][0]).toHaveLength(3);
+        });
+
+        // A partial order would renumber some items and leave the rest on their
+        // old positions — two items sharing a sort_order, and `checklistItems`
+        // only orders by sort_order, so the list would shuffle on every read.
+        it('rejects an order that omits an item, without writing anything', async () => {
+            await expect(
+                service.reorderChecklist('tenant-1', 'task-1', ['item-c', 'item-a']),
+            ).rejects.toBeInstanceOf(BadRequestException);
+
+            expect(db.projectTaskChecklistItem.update).not.toHaveBeenCalled();
+            expect(db.$transaction).not.toHaveBeenCalled();
+        });
+
+        it('rejects an order that repeats an item', async () => {
+            await expect(
+                service.reorderChecklist('tenant-1', 'task-1', ['item-a', 'item-a', 'item-b']),
+            ).rejects.toBeInstanceOf(BadRequestException);
+
+            expect(db.projectTaskChecklistItem.update).not.toHaveBeenCalled();
+        });
+
+        it('rejects an id that is not on this task', async () => {
+            await expect(
+                service.reorderChecklist('tenant-1', 'task-1', [
+                    'item-a',
+                    'item-b',
+                    'item-from-another-task',
+                ]),
+            ).rejects.toBeInstanceOf(BadRequestException);
+
+            expect(db.projectTaskChecklistItem.update).not.toHaveBeenCalled();
+        });
+
+        it('scopes the item lookup to the tenant and the task', async () => {
+            await service.reorderChecklist('tenant-1', 'task-1', ['item-a', 'item-b', 'item-c']);
+
+            expect(db.projectTaskChecklistItem.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ tenant_id: 'tenant-1', task_id: 'task-1' }),
+                }),
+            );
+        });
+
+        it('refuses a task from another tenant', async () => {
+            db.projectTask.findFirst.mockResolvedValue(null);
+            await expect(
+                service.reorderChecklist('tenant-2', 'task-1', ['item-a']),
+            ).rejects.toBeInstanceOf(NotFoundException);
         });
     });
 

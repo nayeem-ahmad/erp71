@@ -398,6 +398,45 @@ export class ProjectTasksService {
         });
     }
 
+    /**
+     * Re-sequences the entire checklist in one transaction. Takes every item id
+     * rather than a moved pair so a partial write cannot leave two items sharing
+     * a `sort_order`.
+     */
+    async reorderChecklist(tenantId: string, taskId: string, itemIds: string[]) {
+        await this.assertTask(tenantId, taskId);
+
+        const existing = await this.db.projectTaskChecklistItem.findMany({
+            where: { task_id: taskId, tenant_id: tenantId },
+            select: { id: true },
+        });
+        const known = new Set(existing.map((item) => item.id));
+
+        if (
+            itemIds.length !== known.size ||
+            new Set(itemIds).size !== itemIds.length ||
+            itemIds.some((id) => !known.has(id))
+        ) {
+            throw new BadRequestException(
+                'The new order must list every checklist item on this task exactly once',
+            );
+        }
+
+        await this.db.$transaction(
+            itemIds.map((id, index) =>
+                this.db.projectTaskChecklistItem.update({
+                    where: { id },
+                    data: { sort_order: index },
+                }),
+            ),
+        );
+
+        return this.db.projectTaskChecklistItem.findMany({
+            where: { task_id: taskId, tenant_id: tenantId },
+            orderBy: { sort_order: 'asc' },
+        });
+    }
+
     async removeChecklistItem(tenantId: string, itemId: string) {
         const item = await this.db.projectTaskChecklistItem.findFirst({
             where: { id: itemId, tenant_id: tenantId },

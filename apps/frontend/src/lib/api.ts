@@ -3026,6 +3026,13 @@ export const api = {
         }),
     deleteTaskChecklistItem: (itemId: string) =>
         fetchWithAuth(`/project-tasks/checklist/${itemId}`, { method: 'DELETE' }),
+    // Sends the whole order, not the moved pair — see ReorderChecklistDto.
+    reorderTaskChecklist: (taskId: string, itemIds: string[]) =>
+        fetchWithAuth(`/project-tasks/${taskId}/checklist/reorder`, {
+            method: 'PATCH',
+            body: JSON.stringify({ itemIds }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
 
     getProjectTimeEntries: (params: Record<string, string | number | undefined>) => {
         const query = new URLSearchParams();

@@ -127,13 +127,24 @@ export const projectsMessages = {
         estimate: 'Estimate (h)',
         remaining: 'Remaining (h)',
         logged: 'Logged (h)',
-        checklist: 'Checklist',
-        addChecklistItem: 'Add an item',
         subtasks: 'Subtasks',
         noTasks: 'No tasks yet.',
         deleted: 'Task deleted',
         created: 'Task created',
         updated: 'Task updated',
+    },
+
+    checklist: {
+        title: 'Checklist',
+        add: 'Add an item',
+        placeholder: 'What needs doing?',
+        empty: 'No checklist items yet.',
+        progress: '{done} of {total}',
+        allDone: 'All done',
+        moveUp: 'Move up',
+        moveDown: 'Move down',
+        deleteItem: 'Delete item',
+        saveFailed: 'Could not update the checklist',
     },
 
     remaining: {
@@ -175,6 +186,18 @@ export const projectsMessages = {
         emptyColumn: 'Nothing here',
         moveFailed: 'Could not move that card',
         columnTotal: 'h left',
+        card: {
+            open: 'Open task',
+            overdue: 'Overdue',
+            dueToday: 'Due today',
+            due: 'Due {date}',
+            done: 'Done',
+            hasDescription: 'Has a description',
+            checklist: '{done}/{total} checklist items done',
+            comments: '{count} comment(s)',
+            subtasks: '{count} subtask(s)',
+            unassigned: 'Unassigned',
+        },
     },
 
     sprint: {

@@ -22,6 +22,7 @@ import {
     CreateTaskDto,
     ListTasksDto,
     MoveTaskDto,
+    ReorderChecklistDto,
     UpdateChecklistItemDto,
     UpdateTaskDto,
 } from './project.dto';
@@ -98,6 +99,16 @@ export class ProjectTasksController {
         @Body() dto: CreateChecklistItemDto,
     ) {
         return this.tasks.addChecklistItem(tenant.tenantId, id, dto);
+    }
+
+    @Patch(':id/checklist/reorder')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
+    reorderChecklist(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: ReorderChecklistDto,
+    ) {
+        return this.tasks.reorderChecklist(tenant.tenantId, id, dto.itemIds);
     }
 
     @Patch('checklist/:itemId')

@@ -320,6 +320,18 @@ export class UpdateChecklistItemDto {
     sortOrder?: number;
 }
 
+/**
+ * The whole order, not a pair to swap. Moving one item by PATCHing two
+ * `sortOrder`s races: a half-applied swap leaves two items sharing a position,
+ * and `checklistItems` only orders by `sort_order`, so the list would then
+ * shuffle on every read.
+ */
+export class ReorderChecklistDto {
+    @IsArray()
+    @IsUUID(undefined, { each: true })
+    itemIds!: string[];
+}
+
 export class CreateTimeEntryDto {
     @IsUUID()
     taskId!: string;

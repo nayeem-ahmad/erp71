@@ -127,13 +127,24 @@ export const projectsMessages = {
         estimate: 'Anggaran (j)',
         remaining: 'Baki (j)',
         logged: 'Direkod (j)',
-        checklist: 'Senarai semak',
-        addChecklistItem: 'Tambah item',
         subtasks: 'Sub-tugasan',
         noTasks: 'Tiada tugasan lagi.',
         deleted: 'Tugasan dipadam',
         created: 'Tugasan dicipta',
         updated: 'Tugasan dikemas kini',
+    },
+
+    checklist: {
+        title: 'Senarai semak',
+        add: 'Tambah item',
+        placeholder: 'Apa yang perlu dibuat?',
+        empty: 'Tiada item senarai semak lagi.',
+        progress: '{done} daripada {total}',
+        allDone: 'Semua selesai',
+        moveUp: 'Alih ke atas',
+        moveDown: 'Alih ke bawah',
+        deleteItem: 'Padam item',
+        saveFailed: 'Senarai semak tidak dapat dikemas kini',
     },
 
     remaining: {
@@ -175,6 +186,18 @@ export const projectsMessages = {
         emptyColumn: 'Tiada apa-apa di sini',
         moveFailed: 'Kad itu tidak dapat dialihkan',
         columnTotal: 'j tinggal',
+        card: {
+            open: 'Buka tugasan',
+            overdue: 'Lewat tempoh',
+            dueToday: 'Tamat hari ini',
+            due: 'Tamat {date}',
+            done: 'Selesai',
+            hasDescription: 'Ada penerangan',
+            checklist: '{done}/{total} item senarai semak selesai',
+            comments: '{count} komen',
+            subtasks: '{count} sub-tugasan',
+            unassigned: 'Tiada penerima',
+        },
     },
 
     sprint: {
