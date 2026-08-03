@@ -162,4 +162,15 @@ export const componentsMessages = {
             s5: 'How do I record a customer return?',
         },
     },
+    richText: {
+        toolbar: 'Formatting',
+        hint: 'Formatting: **bold**, *italic*, - lists and [links](url).',
+        bold: 'Bold',
+        italic: 'Italic',
+        strike: 'Strikethrough',
+        code: 'Code',
+        bulletList: 'Bulleted list',
+        numberedList: 'Numbered list',
+        link: 'Link',
+    },
 } as const;

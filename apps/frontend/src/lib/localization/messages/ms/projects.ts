@@ -132,6 +132,17 @@ export const projectsMessages = {
         deleted: 'Tugasan dipadam',
         created: 'Tugasan dicipta',
         updated: 'Tugasan dikemas kini',
+        editTitle: 'Sunting tajuk',
+        renameFailed: 'Tugasan tidak dapat dinamakan semula',
+    },
+
+    description: {
+        title: 'Penerangan',
+        add: 'Tambah penerangan…',
+        edit: 'Sunting penerangan',
+        empty: 'Tiada penerangan lagi.',
+        placeholder: 'Apa-apa yang perlu diketahui oleh orang yang membuatnya.',
+        saveFailed: 'Penerangan tidak dapat disimpan',
     },
 
     dates: {

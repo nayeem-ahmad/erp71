@@ -162,4 +162,15 @@ export const componentsMessages = {
                 s5: "গ্রাহকের ফেরত কীভাবে রেকর্ড করব?",
             },
         },
+        richText: {
+            toolbar: "ফরম্যাটিং",
+            hint: "ফরম্যাটিং: **বোল্ড**, *ইটালিক*, - তালিকা এবং [লিংক](url)।",
+            bold: "বোল্ড",
+            italic: "ইটালিক",
+            strike: "স্ট্রাইকথ্রু",
+            code: "কোড",
+            bulletList: "বুলেট তালিকা",
+            numberedList: "নম্বরযুক্ত তালিকা",
+            link: "লিংক",
+        },
 } as const;
