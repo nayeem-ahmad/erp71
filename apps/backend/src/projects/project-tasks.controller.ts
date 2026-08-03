@@ -17,12 +17,17 @@ import { RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { ProjectTasksService } from './project-tasks.service';
+import { ProjectActivityService } from './project-activity.service';
+import { ProjectCommentsService } from './project-comments.service';
 import {
     CreateChecklistItemDto,
+    CreateCommentDto,
     CreateTaskDto,
     ListTasksDto,
     MoveTaskDto,
+    ReorderChecklistDto,
     UpdateChecklistItemDto,
+    UpdateCommentDto,
     UpdateTaskDto,
 } from './project.dto';
 
@@ -30,7 +35,11 @@ import {
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class ProjectTasksController {
-    constructor(private readonly tasks: ProjectTasksService) {}
+    constructor(
+        private readonly tasks: ProjectTasksService,
+        private readonly comments: ProjectCommentsService,
+        private readonly activity: ProjectActivityService,
+    ) {}
 
     @Get()
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
@@ -90,6 +99,67 @@ export class ProjectTasksController {
         return this.tasks.remove(tenant.tenantId, id);
     }
 
+    // Comments, watching and the feed are gated on VIEW_PROJECTS rather than
+    // MANAGE_PROJECT_TASKS: if you can see the board you can discuss it and
+    // subscribe to it. Editing stays restricted to your own comment, which is
+    // enforced in the service and cannot be granted away by a permission.
+    @Get(':id/comments')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
+    listComments(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.comments.list(tenant.tenantId, id);
+    }
+
+    @Post(':id/comments')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
+    addComment(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: CreateCommentDto,
+    ) {
+        return this.comments.create(tenant.tenantId, tenant.userId, id, dto);
+    }
+
+    @Patch('comments/:commentId')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
+    updateComment(
+        @Tenant() tenant: TenantContext,
+        @Param('commentId') commentId: string,
+        @Body() dto: UpdateCommentDto,
+    ) {
+        return this.comments.update(tenant.tenantId, tenant.userId, commentId, dto);
+    }
+
+    @Delete('comments/:commentId')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
+    removeComment(@Tenant() tenant: TenantContext, @Param('commentId') commentId: string) {
+        return this.comments.remove(tenant.tenantId, tenant.userId, commentId);
+    }
+
+    @Get(':id/activity')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
+    listActivity(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.activity.list(tenant.tenantId, id);
+    }
+
+    @Get(':id/watchers')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
+    listWatchers(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.activity.listWatchers(tenant.tenantId, id);
+    }
+
+    @Post(':id/watch')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
+    async watch(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        await this.tasks.assertTask(tenant.tenantId, id);
+        return this.activity.watch(tenant.tenantId, id, tenant.userId);
+    }
+
+    @Delete(':id/watch')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
+    unwatch(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.activity.unwatch(tenant.tenantId, id, tenant.userId);
+    }
+
     @Post(':id/checklist')
     @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
     addChecklistItem(
@@ -98,6 +168,16 @@ export class ProjectTasksController {
         @Body() dto: CreateChecklistItemDto,
     ) {
         return this.tasks.addChecklistItem(tenant.tenantId, id, dto);
+    }
+
+    @Patch(':id/checklist/reorder')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
+    reorderChecklist(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: ReorderChecklistDto,
+    ) {
+        return this.tasks.reorderChecklist(tenant.tenantId, id, dto.itemIds);
     }
 
     @Patch('checklist/:itemId')

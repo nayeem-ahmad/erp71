@@ -10,6 +10,9 @@ import { DatabaseService } from '../database/database.service';
 import { PriceListsService } from '../price-lists/price-lists.service';
 import { PlaceOrderDto, CustomerSignupDto, CustomerLoginDto } from './storefront.dto';
 import { paginate } from '../common/pagination.dto';
+import { AuditService } from '../audit/audit.service';
+import { TotpService } from '../auth/totp.service';
+import { AUTH_SCOPE_STOREFRONT } from '../auth/token-scope';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -18,6 +21,8 @@ export class StorefrontService {
         private readonly db: DatabaseService,
         private readonly jwtService: JwtService,
         private readonly priceListsService: PriceListsService,
+        private readonly totp: TotpService,
+        private readonly audit: AuditService,
     ) {}
 
     async getStorefront(slug: string, userId?: string) {
@@ -442,7 +447,21 @@ export class StorefrontService {
             });
         }
 
-        return this.issueCustomerAuthResponse(user, customer);
+        this.audit
+            .log('STOREFRONT_CUSTOMER_SIGNUP', 'Customer', { userId: user.id, tenantId: tenant.id }, customer.id, {
+                email: dto.email,
+                slug,
+            })
+            .catch(() => {});
+
+        // Signing up against an existing account only proves the password. If that
+        // account carries a second factor, it applies here too — the customer row
+        // is already linked, so verifying the code completes the sign-in.
+        if (this.totp.isEnabled(user.totp_secret)) {
+            return { requires_2fa: true, user_id: user.id };
+        }
+
+        return this.issueCustomerAuthResponse(user, customer, tenant.id);
     }
 
     async customerLogin(slug: string, dto: CustomerLoginDto) {
@@ -455,6 +474,9 @@ export class StorefrontService {
 
         const valid = await bcrypt.compare(dto.password, user.passwordHash);
         if (!valid) {
+            this.audit
+                .log('STOREFRONT_LOGIN_FAILED', 'User', { tenantId: tenant.id }, user.id, { email: dto.email, slug })
+                .catch(() => {});
             throw new UnauthorizedException('Invalid credentials');
         }
 
@@ -465,11 +487,65 @@ export class StorefrontService {
             throw new UnauthorizedException('No customer account found for this store. Please sign up first.');
         }
 
-        return this.issueCustomerAuthResponse(user, customer);
+        // Owner/staff accounts can also be customers. If they protect their login
+        // with TOTP, the storefront must ask for it too — otherwise the shop's own
+        // login page becomes a password-only path around their second factor.
+        if (this.totp.isEnabled(user.totp_secret)) {
+            return { requires_2fa: true, user_id: user.id };
+        }
+
+        this.audit
+            .log('STOREFRONT_CUSTOMER_LOGIN', 'Customer', { userId: user.id, tenantId: tenant.id }, customer.id, { slug })
+            .catch(() => {});
+
+        return this.issueCustomerAuthResponse(user, customer, tenant.id);
     }
 
-    async getCustomerProfile(slug: string, userId: string) {
+    /** Second leg of a 2FA storefront login: exchange a TOTP code for the session. */
+    async completeCustomerTwoFactorLogin(slug: string, userId: string, code: string) {
         const tenant = await this.findEnabledTenant(slug);
+
+        const user = await this.db.user.findUnique({ where: { id: userId } });
+        if (!user) {
+            throw new UnauthorizedException('Invalid credentials');
+        }
+
+        const customer = await this.db.customer.findFirst({
+            where: { user_id: user.id, tenant_id: tenant.id, deleted_at: null },
+        });
+        if (!customer) {
+            throw new UnauthorizedException('No customer account found for this store. Please sign up first.');
+        }
+
+        await this.totp.verifyTotpForLogin(userId, code);
+
+        this.audit
+            .log('STOREFRONT_CUSTOMER_LOGIN', 'Customer', { userId: user.id, tenantId: tenant.id }, customer.id, {
+                slug,
+                two_factor: true,
+            })
+            .catch(() => {});
+
+        return this.issueCustomerAuthResponse(user, customer, tenant.id);
+    }
+
+    /**
+     * Revoke every storefront session for this shopper. Bumps only
+     * `storefront_token_version`, so the same person's ERP workspace session
+     * (if they have one) survives.
+     */
+    async customerLogout(userId: string) {
+        await this.db.user.update({
+            where: { id: userId },
+            data: { storefront_token_version: { increment: 1 } },
+        });
+        this.audit.log('STOREFRONT_CUSTOMER_LOGOUT', 'User', { userId }, userId).catch(() => {});
+        return { success: true };
+    }
+
+    async getCustomerProfile(slug: string, userId: string, tokenTenantId?: string | null) {
+        const tenant = await this.findEnabledTenant(slug);
+        this.assertTokenMatchesTenant(tenant.id, tokenTenantId);
         const customer = await this.db.customer.findFirst({
             where: { user_id: userId, tenant_id: tenant.id, deleted_at: null },
         });
@@ -485,8 +561,15 @@ export class StorefrontService {
         };
     }
 
-    async getCustomerOrders(slug: string, userId: string, page: number, limit: number) {
+    async getCustomerOrders(
+        slug: string,
+        userId: string,
+        page: number,
+        limit: number,
+        tokenTenantId?: string | null,
+    ) {
         const tenant = await this.findEnabledTenant(slug);
+        this.assertTokenMatchesTenant(tenant.id, tokenTenantId);
 
         const customer = await this.db.customer.findFirst({
             where: { user_id: userId, tenant_id: tenant.id, deleted_at: null },
@@ -548,8 +631,26 @@ export class StorefrontService {
         return tenant;
     }
 
-    private issueCustomerAuthResponse(user: any, customer: any) {
-        const payload = { sub: user.id, email: user.email, tv: user.token_version };
+    /**
+     * Storefront tokens are bound to the shop they were minted for. Legacy tokens
+     * predating the `tid` claim carry no tenant, so they are let through and fall
+     * back to the per-tenant customer lookup that already guarded these reads.
+     */
+    private assertTokenMatchesTenant(tenantId: string, tokenTenantId?: string | null) {
+        if (tokenTenantId && tokenTenantId !== tenantId) {
+            throw new UnauthorizedException('Sign in to this store to continue');
+        }
+    }
+
+    private issueCustomerAuthResponse(user: any, customer: any, tenantId: string) {
+        const payload = {
+            sub: user.id,
+            email: user.email,
+            // `stv`, not `tv` — storefront sessions revoke independently of the app's.
+            stv: user.storefront_token_version ?? 0,
+            scope: AUTH_SCOPE_STOREFRONT,
+            tid: tenantId,
+        };
         return {
             access_token: this.jwtService.sign(payload),
             customer: {

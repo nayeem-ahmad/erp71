@@ -1,9 +1,10 @@
 /**
- * Default CRM lead sources and lead categories provisioned for every tenant.
+ * Default CRM lookup lists provisioned for every tenant: lead sources, lead
+ * categories and conversation channels.
  *
- * These replace the old `LeadSource` / `LeadCategory` Prisma enums. Tenants can
- * rename, reorder, deactivate and add to these lists from
- * Settings → CRM → Lead Sources / Lead Categories.
+ * These replace the old `LeadSource` / `LeadCategory` Prisma enums and the
+ * hardcoded `LeadConversationType` list. Tenants can rename, reorder, deactivate
+ * and add to all three from CRM → Setup.
  *
  * `code` is the immutable join key and MUST NOT be edited once shipped:
  *   - the backfill in `sync-lead-taxonomy.ts` maps the legacy enum columns onto
@@ -82,6 +83,29 @@ export const DEFAULT_LEAD_CATEGORIES: {
 ];
 
 /**
+ * Communication channels a lead conversation can be logged under.
+ *
+ * The seven codes mirror the members of the old `LeadConversationType` enum, so
+ * every `LeadConversation.type` value written before these rows existed still
+ * resolves to a channel by `code`. `icon` carries the emoji the conversation
+ * lists used to hardcode.
+ */
+export const DEFAULT_CONVERSATION_CHANNELS: {
+    code: string;
+    name: string;
+    icon: string;
+    sort_order: number;
+}[] = [
+    { code: 'CALL', name: 'Call', icon: '📞', sort_order: 1 },
+    { code: 'SMS', name: 'SMS', icon: '💬', sort_order: 2 },
+    { code: 'WHATSAPP', name: 'WhatsApp', icon: '🟢', sort_order: 3 },
+    { code: 'EMAIL', name: 'Email', icon: '📧', sort_order: 4 },
+    { code: 'VISIT', name: 'Visit', icon: '🏪', sort_order: 5 },
+    { code: 'ONLINE_MEETING', name: 'Online Meeting', icon: '💻', sort_order: 6 },
+    { code: 'NOTE', name: 'Note', icon: '📝', sort_order: 7 },
+];
+
+/**
  * Idempotent: safe to call for an existing tenant. `skipDuplicates` honours
  * @@unique([tenant_id, code]), so a tenant that renamed "Facebook" to
  * "Meta Ads" keeps its label instead of having a second row created.
@@ -110,6 +134,19 @@ export async function seedDefaultLeadTaxonomy(tx: any, tenantId: string) {
             tenant_id: tenantId,
             code: c.code,
             name: c.name,
+            sort_order: c.sort_order,
+            is_system: true,
+            is_active: true,
+        })),
+        skipDuplicates: true,
+    });
+
+    await tx.conversationChannel.createMany({
+        data: DEFAULT_CONVERSATION_CHANNELS.map((c) => ({
+            tenant_id: tenantId,
+            code: c.code,
+            name: c.name,
+            icon: c.icon,
             sort_order: c.sort_order,
             is_system: true,
             is_active: true,

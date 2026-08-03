@@ -51,3 +51,29 @@ jest.mock('lucide-react', () => {
         }
     });
 });
+/**
+ * jsdom implements no PointerEvent, and Testing Library's fallback quietly
+ * drops `pointerType`, `pointerId` and `button` — a handler branching on any of
+ * them sees `undefined` and takes a path it would never take in a browser. That
+ * makes pointer-driven UI (the project board's card dragging) untestable, or
+ * worse, testable in a way that passes for the wrong reason.
+ *
+ * MouseEvent already carries button/clientX/clientY, so the polyfill only has
+ * to add the pointer fields.
+ */
+if (typeof window !== 'undefined' && typeof (window as any).PointerEvent === 'undefined') {
+    class PointerEventPolyfill extends MouseEvent {
+        readonly pointerId: number;
+        readonly pointerType: string;
+        readonly isPrimary: boolean;
+
+        constructor(type: string, params: PointerEventInit = {}) {
+            super(type, params);
+            this.pointerId = params.pointerId ?? 0;
+            this.pointerType = params.pointerType ?? '';
+            this.isPrimary = params.isPrimary ?? true;
+        }
+    }
+    (window as any).PointerEvent = PointerEventPolyfill;
+    (globalThis as any).PointerEvent = PointerEventPolyfill;
+}

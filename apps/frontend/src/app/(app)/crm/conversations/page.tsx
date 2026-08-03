@@ -11,6 +11,7 @@ import { useServerList } from '@/hooks/useServerList';
 import { DataTable } from '@/components/data-table';
 import { PageShell, PageHeader, Button, Select, Input, StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { channelIcon, channelLabel, useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 import { LEAD_STATUSES } from '../leads/lead-form-fields';
 
 interface Conversation {
@@ -39,15 +40,11 @@ interface TeamMember {
     email?: string;
 }
 
-const CONVERSATION_TYPES = ['CALL', 'SMS', 'WHATSAPP', 'EMAIL', 'VISIT', 'ONLINE_MEETING', 'NOTE'] as const;
 const DIRECTIONS = ['INBOUND', 'OUTBOUND'] as const;
 
-const typeIcons: Record<string, string> = {
-    CALL: '📞', SMS: '💬', WHATSAPP: '🟢', EMAIL: '📧', VISIT: '🏪', ONLINE_MEETING: '💻', NOTE: '📝',
-};
-
-// Direction is a genuine two-value status, so it earns a badge. Type does not — it is one
-// of seven peers, and inventing a colour per type would add a second accent palette.
+// Direction is a genuine two-value status, so it earns a badge. Channel does not — a tenant
+// can define any number of them, and inventing a colour per channel would add a second
+// accent palette. Channels carry their own emoji instead.
 const directionTone: Record<string, StatusBadgeTone> = {
     INBOUND: 'success',
     OUTBOUND: 'info',
@@ -80,8 +77,10 @@ const columnHelper = createColumnHelper<Conversation>();
 export default function CrmConversationsPage() {
     const { t, locale } = useI18n();
     const m = t.crm.conversations;
-    const typeLabels = t.crm.leadConversations.types as Record<string, string>;
     const leadStatusLabels = t.crm.leads.statuses as Record<string, string>;
+    // Active channels only: a retired one must stop being offered as a filter, but
+    // rows already logged against it still render (channelLabel falls back to the code).
+    const { options: channels } = useLeadTaxonomy('channels');
 
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -216,8 +215,8 @@ export default function CrmConversationsPage() {
                 const type = info.getValue();
                 return (
                     <span className="inline-flex items-center gap-1.5 text-sm text-gray-700 whitespace-nowrap">
-                        <span aria-hidden="true">{typeIcons[type] ?? '💬'}</span>
-                        {typeLabels[type] ?? type}
+                        <span aria-hidden="true">{channelIcon(channels, type)}</span>
+                        {channelLabel(channels, type)}
                     </span>
                 );
             },
@@ -257,12 +256,12 @@ export default function CrmConversationsPage() {
             cell: (info) => <span className="text-sm text-gray-600">{info.getValue() || '—'}</span>,
             meta: { hideOnMobile: true },
         }),
-    ], [m, locale, typeLabels]);
+    ], [m, locale, channels]);
 
     const typeBreakdown = summary
-        ? CONVERSATION_TYPES
-            .filter((type) => (summary.countsByType?.[type] ?? 0) > 0)
-            .map((type) => `${typeLabels[type] ?? type}: ${summary.countsByType[type]}`)
+        ? channels
+            .filter((c) => (summary.countsByType?.[c.code] ?? 0) > 0)
+            .map((c) => `${c.name}: ${summary.countsByType[c.code]}`)
             .join(' · ')
         : '';
 
@@ -314,8 +313,8 @@ export default function CrmConversationsPage() {
 
                 <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allTypes}</option>
-                    {CONVERSATION_TYPES.map((type) => (
-                        <option key={type} value={type}>{typeLabels[type] ?? type}</option>
+                    {channels.map((c) => (
+                        <option key={c.id} value={c.code}>{c.name}</option>
                     ))}
                 </Select>
 

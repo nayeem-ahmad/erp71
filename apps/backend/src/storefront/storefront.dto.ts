@@ -80,6 +80,16 @@ export class CustomerLoginDto {
     password: string;
 }
 
+export class CustomerTwoFactorLoginDto {
+    @IsString()
+    @IsNotEmpty()
+    userId: string;
+
+    @IsString()
+    @IsNotEmpty()
+    code: string;
+}
+
 export class StorefrontSettingsDto {
     @IsOptional()
     @IsString()

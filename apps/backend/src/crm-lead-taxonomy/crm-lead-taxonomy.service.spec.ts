@@ -46,7 +46,21 @@ describe('CrmLeadTaxonomyService', () => {
                 delete: jest.fn(),
                 aggregate: jest.fn().mockResolvedValue({ _max: { sort_order: 3 } }),
             },
+            conversationChannel: {
+                findMany: jest.fn().mockResolvedValue([]),
+                findFirst: jest.fn().mockResolvedValue(null),
+                create: jest.fn(),
+                update: jest.fn(),
+                delete: jest.fn(),
+                count: jest.fn().mockResolvedValue(5),
+                aggregate: jest.fn().mockResolvedValue({ _max: { sort_order: 3 } }),
+            },
             lead: {
+                count: jest.fn().mockResolvedValue(0),
+                updateMany: jest.fn(),
+                groupBy: jest.fn().mockResolvedValue([]),
+            },
+            leadConversation: {
                 count: jest.fn().mockResolvedValue(0),
                 updateMany: jest.fn(),
                 groupBy: jest.fn().mockResolvedValue([]),
@@ -220,6 +234,97 @@ describe('CrmLeadTaxonomyService', () => {
             await expect(service.usage('tenant-1', LeadTaxonomyKind.SOURCE)).resolves.toEqual({
                 'src-walk': 7,
             });
+        });
+
+        it('counts channels against conversations, not leads', async () => {
+            db.leadConversation.groupBy.mockResolvedValue([
+                { channel_id: 'ch-call', _count: { _all: 12 } },
+            ]);
+
+            await expect(service.usage('tenant-1', LeadTaxonomyKind.CHANNEL)).resolves.toEqual({
+                'ch-call': 12,
+            });
+            expect(db.lead.groupBy).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('channels', () => {
+        const call = {
+            id: 'ch-call',
+            tenant_id: 'tenant-1',
+            code: 'CALL',
+            name: 'Call',
+            icon: '📞',
+            is_system: true,
+            is_active: true,
+        };
+        const telegram = { ...call, id: 'ch-tg', code: 'TELEGRAM', name: 'Telegram', is_system: false };
+
+        it('stores the icon on create', async () => {
+            await service.create('tenant-1', LeadTaxonomyKind.CHANNEL, { name: 'Telegram', icon: '✈️' });
+
+            expect(db.conversationChannel.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ code: 'TELEGRAM', icon: '✈️' }),
+                }),
+            );
+        });
+
+        // `type` is what every filter and groupBy on LeadConversation reads, so a
+        // reassignment that moved only the FK would leave the rows reporting under a
+        // channel that no longer exists.
+        it('moves both the FK and the denormalised code when reassigning', async () => {
+            db.conversationChannel.findFirst
+                .mockResolvedValueOnce(telegram)
+                .mockResolvedValueOnce(call);
+            db.leadConversation.count.mockResolvedValue(4);
+
+            await service.remove('tenant-1', LeadTaxonomyKind.CHANNEL, telegram.id, call.id);
+
+            expect(db.leadConversation.updateMany).toHaveBeenCalledWith({
+                where: { tenant_id: 'tenant-1', channel_id: telegram.id },
+                data: { channel_id: call.id, type: 'CALL' },
+            });
+        });
+
+        it('refuses to remove the last active channel', async () => {
+            db.conversationChannel.findFirst.mockResolvedValue(telegram);
+            db.conversationChannel.count.mockResolvedValue(0);
+
+            await expect(
+                service.remove('tenant-1', LeadTaxonomyKind.CHANNEL, telegram.id),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        // Deleting a hidden row does not change how many channels are selectable, so
+        // the floor above must not block it.
+        it('still removes an already-hidden channel when it is the only other row', async () => {
+            db.conversationChannel.findFirst.mockResolvedValue({ ...telegram, is_active: false });
+            db.conversationChannel.count.mockResolvedValue(0);
+
+            await service.remove('tenant-1', LeadTaxonomyKind.CHANNEL, telegram.id);
+
+            expect(db.conversationChannel.delete).toHaveBeenCalledWith({ where: { id: telegram.id } });
+        });
+
+        it('refuses to deactivate the last active channel', async () => {
+            db.conversationChannel.findFirst.mockResolvedValue(telegram);
+            db.conversationChannel.count.mockResolvedValue(0);
+
+            await expect(
+                service.update('tenant-1', LeadTaxonomyKind.CHANNEL, telegram.id, { is_active: false }),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it('leaves the lead lists alone — they have no such floor', async () => {
+            db.leadCategoryOption.findFirst.mockResolvedValue({
+                id: 'cat-1', tenant_id: 'tenant-1', code: 'RETAIL', name: 'Retail',
+                is_system: false, is_active: true,
+            });
+
+            await service.remove('tenant-1', LeadTaxonomyKind.CATEGORY, 'cat-1');
+
+            expect(db.leadCategoryOption.delete).toHaveBeenCalled();
         });
     });
 });

@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { StorefrontService } from './storefront.service';
 import { DatabaseService } from '../database/database.service';
 import { PriceListsService } from '../price-lists/price-lists.service';
+import { AuditService } from '../audit/audit.service';
+import { TotpService } from '../auth/totp.service';
 import { JwtService } from '@nestjs/jwt';
 import {
     BadRequestException,
@@ -30,6 +32,8 @@ describe('StorefrontService', () => {
     let db: any;
     let jwtService: any;
     let priceListsService: any;
+    let totpService: any;
+    let auditService: any;
 
     beforeEach(async () => {
         jest.clearAllMocks();
@@ -118,12 +122,23 @@ describe('StorefrontService', () => {
             getResolvedPricesForProducts: jest.fn().mockResolvedValue(new Map()),
         };
 
+        totpService = {
+            isEnabled: jest.fn().mockReturnValue(false),
+            verifyTotpForLogin: jest.fn().mockResolvedValue({ verified: true }),
+        };
+
+        auditService = {
+            log: jest.fn().mockResolvedValue(undefined),
+        };
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 StorefrontService,
                 { provide: DatabaseService, useValue: db },
                 { provide: JwtService, useValue: jwtService },
                 { provide: PriceListsService, useValue: priceListsService },
+                { provide: TotpService, useValue: totpService },
+                { provide: AuditService, useValue: auditService },
             ],
         }).compile();
 
@@ -552,8 +567,8 @@ describe('StorefrontService', () => {
 
             const result = await service.customerSignup(slug, signupDto as any);
 
-            expect(result.access_token).toBe('test-token');
-            expect(result.customer.email).toBe(signupDto.email);
+            expect((result as any).access_token).toBe('test-token');
+            expect((result as any).customer.email).toBe(signupDto.email);
             expect(db.user.create).toHaveBeenCalled();
             expect(db.customer.create).toHaveBeenCalled();
         });
@@ -575,7 +590,7 @@ describe('StorefrontService', () => {
             });
 
             const result = await service.customerSignup(slug, signupDto as any);
-            expect(result.access_token).toBe('test-token');
+            expect((result as any).access_token).toBe('test-token');
         });
 
         it('throws ConflictException when user exists with wrong password', async () => {
@@ -630,7 +645,7 @@ describe('StorefrontService', () => {
             expect(db.customer.update).toHaveBeenCalledWith(
                 expect.objectContaining({ where: { id: 'existing-cust-by-email' }, data: { user_id: 'user-1' } }),
             );
-            expect(result.access_token).toBe('test-token');
+            expect((result as any).access_token).toBe('test-token');
         });
     });
 
@@ -689,7 +704,13 @@ describe('StorefrontService', () => {
         });
 
         it('returns access_token and customer on valid login', async () => {
-            const user = { id: 'user-1', email: loginDto.email, passwordHash: 'hashed', token_version: 1 };
+            const user = {
+                id: 'user-1',
+                email: loginDto.email,
+                passwordHash: 'hashed',
+                token_version: 1,
+                storefront_token_version: 3,
+            };
             const customer = { id: 'cust-1', name: 'Alice', email: loginDto.email, phone: '01700000001' };
 
             db.tenant.findFirst.mockResolvedValue(mockTenant);
@@ -699,11 +720,116 @@ describe('StorefrontService', () => {
 
             const result = await service.customerLogin(slug, loginDto as any);
 
-            expect(result.access_token).toBe('test-token');
-            expect(result.customer.id).toBe('cust-1');
+            expect((result as any).access_token).toBe('test-token');
+            expect((result as any).customer.id).toBe('cust-1');
             expect(jwtService.sign).toHaveBeenCalledWith(
                 expect.objectContaining({ sub: 'user-1', email: loginDto.email }),
             );
+        });
+
+        it('signs a storefront-scoped token bound to the tenant, versioned by stv', async () => {
+            const user = {
+                id: 'user-1',
+                email: loginDto.email,
+                passwordHash: 'hashed',
+                token_version: 9,
+                storefront_token_version: 3,
+            };
+
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.user.findUnique.mockResolvedValue(user);
+            (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+            db.customer.findFirst.mockResolvedValue({ id: 'cust-1', name: 'Alice' });
+
+            await service.customerLogin(slug, loginDto as any);
+
+            expect(jwtService.sign).toHaveBeenCalledWith({
+                sub: 'user-1',
+                email: loginDto.email,
+                stv: 3,
+                scope: 'storefront',
+                tid: 'tenant-1',
+            });
+            // The app's own token_version must not leak into a storefront token.
+            expect(jwtService.sign).not.toHaveBeenCalledWith(expect.objectContaining({ tv: expect.anything() }));
+        });
+
+        it('demands the second factor instead of a session when the account has TOTP enabled', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.user.findUnique.mockResolvedValue({
+                id: 'user-1',
+                email: loginDto.email,
+                passwordHash: 'hashed',
+                totp_secret: 'SECRET',
+            });
+            (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+            db.customer.findFirst.mockResolvedValue({ id: 'cust-1', name: 'Alice' });
+            totpService.isEnabled.mockReturnValue(true);
+
+            const result = await service.customerLogin(slug, loginDto as any);
+
+            expect(result).toEqual({ requires_2fa: true, user_id: 'user-1' });
+            expect(jwtService.sign).not.toHaveBeenCalled();
+        });
+    });
+
+    // ── completeCustomerTwoFactorLogin ────────────────────────────────────────
+
+    describe('completeCustomerTwoFactorLogin', () => {
+        const slug = 'my-store';
+
+        it('issues the session once the TOTP code verifies', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.user.findUnique.mockResolvedValue({
+                id: 'user-1',
+                email: 'alice@example.com',
+                storefront_token_version: 0,
+            });
+            db.customer.findFirst.mockResolvedValue({ id: 'cust-1', name: 'Alice' });
+
+            const result = await service.completeCustomerTwoFactorLogin(slug, 'user-1', '123456');
+
+            expect(totpService.verifyTotpForLogin).toHaveBeenCalledWith('user-1', '123456');
+            expect(result.access_token).toBe('test-token');
+        });
+
+        it('does not issue a session when the code is rejected', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'alice@example.com' });
+            db.customer.findFirst.mockResolvedValue({ id: 'cust-1', name: 'Alice' });
+            totpService.verifyTotpForLogin.mockRejectedValue(new UnauthorizedException('Invalid code'));
+
+            await expect(service.completeCustomerTwoFactorLogin(slug, 'user-1', '000000')).rejects.toThrow(
+                UnauthorizedException,
+            );
+            expect(jwtService.sign).not.toHaveBeenCalled();
+        });
+
+        it('rejects a user who is not a customer of this store', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'alice@example.com' });
+            db.customer.findFirst.mockResolvedValue(null);
+
+            await expect(service.completeCustomerTwoFactorLogin(slug, 'user-1', '123456')).rejects.toThrow(
+                UnauthorizedException,
+            );
+            expect(totpService.verifyTotpForLogin).not.toHaveBeenCalled();
+        });
+    });
+
+    // ── customerLogout ────────────────────────────────────────────────────────
+
+    describe('customerLogout', () => {
+        it('bumps storefront_token_version only, leaving the app session alive', async () => {
+            db.user.update.mockResolvedValue({ id: 'user-1' });
+
+            const result = await service.customerLogout('user-1');
+
+            expect(db.user.update).toHaveBeenCalledWith({
+                where: { id: 'user-1' },
+                data: { storefront_token_version: { increment: 1 } },
+            });
+            expect(result).toEqual({ success: true });
         });
     });
 
@@ -753,6 +879,21 @@ describe('StorefrontService', () => {
                 total_spent: 2000,
             });
         });
+
+        it('rejects a session minted for a different store', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+
+            const promise = service.getCustomerProfile(slug, userId, 'tenant-other');
+            await expect(promise).rejects.toThrow(UnauthorizedException);
+            expect(db.customer.findFirst).not.toHaveBeenCalled();
+        });
+
+        it('accepts a legacy session with no tenant claim', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.customer.findFirst.mockResolvedValue({ id: 'cust-1', name: 'Alice', loyalty_points: 0, total_spent: 0 });
+
+            await expect(service.getCustomerProfile(slug, userId, null)).resolves.toMatchObject({ id: 'cust-1' });
+        });
     });
 
     // ── getCustomerOrders ─────────────────────────────────────────────────────
@@ -789,6 +930,14 @@ describe('StorefrontService', () => {
             expect(result.items).toEqual(orders);
             expect(result.total).toBe(1);
             expect(result.pages).toBe(1);
+        });
+
+        it('rejects a session minted for a different store', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+
+            const promise = service.getCustomerOrders(slug, userId, 1, 10, 'tenant-other');
+            await expect(promise).rejects.toThrow(UnauthorizedException);
+            expect(db.storefrontOrder.findMany).not.toHaveBeenCalled();
         });
 
         it('passes correct filters for customer orders', async () => {

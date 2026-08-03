@@ -1,9 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Eye, EyeOff, Trash2 } from 'lucide-react';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
-import { Button, Input, Select, Textarea, Field, StatusBadge } from '@/components/ui';
+import { Button, Checkbox, Input, Select, Textarea, Field, StatusBadge } from '@/components/ui';
+import { labelClass, labelsOf, type ProjectLabel } from '@/components/projects/board-tasks';
+import {
+    actorName,
+    describeActivity,
+    mergeFeed,
+    type FeedEntry,
+} from '@/components/projects/task-activity';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -27,6 +34,13 @@ interface TimeEntry {
     user?: { id: string; name?: string | null } | null;
 }
 
+interface ChecklistItem {
+    id: string;
+    text: string;
+    is_done: boolean;
+    sort_order: number;
+}
+
 interface Task {
     id: string;
     title: string;
@@ -34,10 +48,17 @@ interface Task {
     estimate_hours?: string | null;
     remaining_hours?: string | null;
     logged_hours?: number;
+    start_date?: string | null;
+    due_date?: string | null;
     status?: { id: string; name: string; category: string };
     assignee?: { id: string; name?: string | null; email: string } | null;
+    labels?: { label: ProjectLabel }[];
+    checklistItems?: ChecklistItem[];
     timeEntries?: TimeEntry[];
 }
+
+/** `@db.Date` arrives as an ISO instant; a date input wants YYYY-MM-DD. */
+const dateInputValue = (value?: string | null) => (value ? value.slice(0, 10) : '');
 
 const num = (value: unknown): number => (value == null ? 0 : Number(value));
 const today = () => new Date().toISOString().slice(0, 10);
@@ -62,15 +83,19 @@ export default function TaskDetailPanel({
     const [timeForm, setTimeForm] = useState({ hours: '', workDate: today(), note: '', remaining: '' });
     const [reestimate, setReestimate] = useState({ hours: '', note: '' });
 
+    const [allLabels, setAllLabels] = useState<ProjectLabel[]>([]);
+
     const load = useCallback(async () => {
-        const [detail, log, cols] = await Promise.all([
+        const [detail, log, cols, labels] = await Promise.all([
             api.getProjectTask(taskId),
             api.getTaskRemainingHistory(taskId),
             api.getProjectTaskStatuses(),
+            api.getProjectLabels(),
         ]);
         setTask(detail as Task);
         setHistory(Array.isArray(log) ? log : []);
         setStatuses(Array.isArray(cols) ? cols : []);
+        setAllLabels(Array.isArray(labels) ? labels : []);
     }, [taskId]);
 
     useEffect(() => {
@@ -178,6 +203,25 @@ export default function TaskDetailPanel({
                                 ))}
                             </Select>
                         </Field>
+
+                        <DatesSection task={task} taskId={taskId} onChanged={refresh} />
+
+                        {allLabels.length > 0 && (
+                            <LabelsSection
+                                taskId={taskId}
+                                all={allLabels}
+                                selected={labelsOf(task)}
+                                onChanged={refresh}
+                            />
+                        )}
+
+                        <ChecklistSection
+                            taskId={taskId}
+                            items={task.checklistItems ?? []}
+                            onChanged={refresh}
+                        />
+
+                        <ActivitySection taskId={taskId} onChanged={onChanged} />
 
                         <section className="rounded-md border border-gray-200 p-3">
                             <h3 className="mb-2 text-sm font-medium">{m.time.log}</h3>
@@ -359,6 +403,551 @@ export default function TaskDetailPanel({
                 </Button>
             </ModalFooter>
         </ModalShell>
+    );
+}
+
+/**
+ * Comments and the change log in one timeline, because "what happened to this
+ * task" is one question. Loads independently of the panel: the feed is the
+ * heaviest part of the card and the least urgent, and a failure here must not
+ * cost you the hours form above it.
+ */
+function ActivitySection({
+    taskId,
+    onChanged,
+}: {
+    taskId: string;
+    onChanged?: () => void;
+}) {
+    const { t } = useI18n();
+    const m = t.projects.activity;
+
+    const [feed, setFeed] = useState<FeedEntry[]>([]);
+    const [watching, setWatching] = useState(false);
+    const [me, setMe] = useState<string | null>(null);
+    const [draft, setDraft] = useState('');
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editBody, setEditBody] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [failed, setFailed] = useState(false);
+
+    const load = useCallback(async () => {
+        try {
+            const [comments, activity, watchers, user] = await Promise.all([
+                api.getTaskComments(taskId),
+                api.getTaskActivity(taskId),
+                api.getTaskWatchers(taskId),
+                api.getMe(),
+            ]);
+            const userId = (user as { id?: string } | null)?.id ?? null;
+            setMe(userId);
+            setFeed(
+                mergeFeed(
+                    Array.isArray(comments) ? comments : [],
+                    Array.isArray(activity) ? activity : [],
+                ),
+            );
+            setWatching(
+                Array.isArray(watchers) &&
+                    watchers.some((w: { user_id?: string }) => w.user_id === userId),
+            );
+            setFailed(false);
+        } catch {
+            // An empty timeline and a broken one look identical otherwise —
+            // the trap logged against useServerList, in miniature.
+            setFailed(true);
+        }
+    }, [taskId]);
+
+    useEffect(() => {
+        load();
+    }, [load]);
+
+    const run = async (action: () => Promise<unknown>) => {
+        setSaving(true);
+        try {
+            await action();
+            await load();
+            onChanged?.();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.saveFailed);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const submit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const body = draft.trim();
+        if (!body) return;
+        return run(async () => {
+            await api.addTaskComment(taskId, body);
+            setDraft('');
+        });
+    };
+
+    const commitEdit = (comment: FeedEntry & { kind: 'comment' }) => {
+        const body = editBody.trim();
+        setEditingId(null);
+        if (!body || body === comment.body) return;
+        return run(() => api.updateTaskComment(comment.id, body));
+    };
+
+    return (
+        <section className="rounded-md border border-gray-200 p-3">
+            <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-medium">{m.title}</h3>
+                <Button
+                    type="button"
+                    variant={watching ? 'secondary' : 'ghost'}
+                    className="min-h-touch"
+                    disabled={saving}
+                    aria-pressed={watching}
+                    onClick={() =>
+                        run(() => (watching ? api.unwatchTask(taskId) : api.watchTask(taskId)))
+                    }
+                >
+                    {watching ? (
+                        <Eye className="mr-1 h-4 w-4" />
+                    ) : (
+                        <EyeOff className="mr-1 h-4 w-4" />
+                    )}
+                    {watching ? m.watching : m.watch}
+                </Button>
+            </div>
+            <p className="mt-0.5 text-xs text-gray-500">{m.watchHint}</p>
+
+            <form onSubmit={submit} className="mt-2 space-y-2">
+                <Textarea
+                    rows={2}
+                    value={draft}
+                    aria-label={m.commentPlaceholder}
+                    placeholder={m.commentPlaceholder}
+                    onChange={(e) => setDraft(e.target.value)}
+                />
+                <Button
+                    type="submit"
+                    className="min-h-touch"
+                    disabled={saving || draft.trim() === ''}
+                >
+                    {m.comment}
+                </Button>
+            </form>
+
+            {failed ? (
+                <p className="mt-3 text-sm text-danger">{m.loadFailed}</p>
+            ) : feed.length === 0 ? (
+                <p className="mt-3 text-sm text-gray-500">{m.empty}</p>
+            ) : (
+                <ul className="mt-3 space-y-2">
+                    {feed.map((entry) => (
+                        <li key={`${entry.kind}-${entry.id}`} className="text-sm">
+                            {entry.kind === 'comment' ? (
+                                <div className="rounded-md bg-gray-50 p-2">
+                                    <p className="text-xs text-gray-500">
+                                        {actorName(entry.user) ?? m.someone} ·{' '}
+                                        {new Date(entry.created_at).toLocaleString()}
+                                    </p>
+                                    {editingId === entry.id ? (
+                                        <div className="mt-1 space-y-2">
+                                            <Textarea
+                                                rows={2}
+                                                autoFocus
+                                                value={editBody}
+                                                aria-label={m.editComment}
+                                                onChange={(e) => setEditBody(e.target.value)}
+                                            />
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    type="button"
+                                                    className="min-h-touch"
+                                                    disabled={saving}
+                                                    onClick={() => commitEdit(entry)}
+                                                >
+                                                    {t.common.save}
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    className="min-h-touch"
+                                                    onClick={() => setEditingId(null)}
+                                                >
+                                                    {t.common.cancel}
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <p className="mt-0.5 whitespace-pre-wrap">{entry.body}</p>
+                                    )}
+
+                                    {/* Only your own — an audit trail nobody
+                                        else can rewrite. */}
+                                    {me && entry.user?.id === me && editingId !== entry.id && (
+                                        <div className="mt-1 flex gap-2 text-xs">
+                                            <button
+                                                type="button"
+                                                className="min-h-touch text-blue-600"
+                                                onClick={() => {
+                                                    setEditingId(entry.id);
+                                                    setEditBody(entry.body);
+                                                }}
+                                            >
+                                                {t.common.edit}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="min-h-touch text-red-600"
+                                                disabled={saving}
+                                                onClick={() =>
+                                                    run(() => api.deleteTaskComment(entry.id))
+                                                }
+                                            >
+                                                {t.common.delete}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <p className="text-gray-600">
+                                    <span className="text-gray-900">
+                                        {actorName(entry.actor) ?? m.someone}
+                                    </span>{' '}
+                                    {describeActivity(entry, m.types as Record<string, string>)}
+                                    <span className="ml-1 text-xs text-gray-400">
+                                        {new Date(entry.created_at).toLocaleString()}
+                                    </span>
+                                </p>
+                            )}
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </section>
+    );
+}
+
+/**
+ * Start and due, saved on change rather than behind a Save button — there are
+ * two fields and no validation to batch, so a button would only be one more
+ * click between the user and the thing they came here to do.
+ */
+function DatesSection({
+    task,
+    taskId,
+    onChanged,
+}: {
+    task: Task;
+    taskId: string;
+    onChanged: () => Promise<void>;
+}) {
+    const { t } = useI18n();
+    const m = t.projects;
+    const [saving, setSaving] = useState(false);
+
+    const save = async (field: 'startDate' | 'dueDate', value: string) => {
+        setSaving(true);
+        try {
+            // Sends '' rather than undefined to clear: PATCH reads undefined as
+            // "leave alone", so only the empty string can mean "no date".
+            await api.updateProjectTask(taskId, { [field]: value });
+            await onChanged();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.dates.saveFailed);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const start = dateInputValue(task.start_date);
+    const due = dateInputValue(task.due_date);
+    const inverted = start !== '' && due !== '' && start > due;
+
+    return (
+        <section className="rounded-md border border-gray-200 p-3">
+            <h3 className="mb-2 text-sm font-medium">{m.dates.title}</h3>
+            {/* `Field` only ties its label to the control when given htmlFor —
+                without the matching id these inputs have no accessible name. */}
+            <div className="grid gap-2 md:grid-cols-2">
+                <Field label={m.dates.start} htmlFor="task-start-date">
+                    <Input
+                        id="task-start-date"
+                        type="date"
+                        value={start}
+                        disabled={saving}
+                        onChange={(e) => save('startDate', e.target.value)}
+                    />
+                </Field>
+                <Field
+                    label={m.dates.due}
+                    htmlFor="task-due-date"
+                    error={inverted ? m.dates.inverted : undefined}
+                >
+                    <Input
+                        id="task-due-date"
+                        type="date"
+                        value={due}
+                        disabled={saving}
+                        onChange={(e) => save('dueDate', e.target.value)}
+                    />
+                </Field>
+            </div>
+        </section>
+    );
+}
+
+/**
+ * Toggles rather than a multi-select: a label set is small and visual, and the
+ * chip you tap is the chip you will see on the card.
+ */
+function LabelsSection({
+    taskId,
+    all,
+    selected,
+    onChanged,
+}: {
+    taskId: string;
+    all: ProjectLabel[];
+    selected: ProjectLabel[];
+    onChanged: () => Promise<void>;
+}) {
+    const { t } = useI18n();
+    const m = t.projects.labels;
+    const [saving, setSaving] = useState(false);
+
+    const selectedIds = new Set(selected.map((label) => label.id));
+
+    const toggle = async (labelId: string) => {
+        const next = new Set(selectedIds);
+        if (next.has(labelId)) next.delete(labelId);
+        else next.add(labelId);
+
+        setSaving(true);
+        try {
+            // The whole set every time — the endpoint replaces rather than
+            // patches, so there is no add/remove pair to keep in step.
+            await api.updateProjectTask(taskId, { labelIds: [...next] });
+            await onChanged();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.saveFailed);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <section className="rounded-md border border-gray-200 p-3">
+            <h3 className="mb-2 text-sm font-medium">{m.title}</h3>
+            <div className="flex flex-wrap gap-1.5">
+                {all.map((label) => {
+                    const on = selectedIds.has(label.id);
+                    return (
+                        <button
+                            key={label.id}
+                            type="button"
+                            disabled={saving}
+                            aria-pressed={on}
+                            onClick={() => toggle(label.id)}
+                            className={`min-h-touch rounded px-2 py-1 text-xs font-medium disabled:opacity-60 ${labelClass(label.color)} ${
+                                on ? 'ring-2 ring-blue-600' : 'opacity-50'
+                            }`}
+                        >
+                            {label.name}
+                        </button>
+                    );
+                })}
+            </div>
+        </section>
+    );
+}
+
+function ChecklistSection({
+    taskId,
+    items,
+    onChanged,
+}: {
+    taskId: string;
+    items: ChecklistItem[];
+    onChanged: () => Promise<void>;
+}) {
+    const { t } = useI18n();
+    const m = t.projects.checklist;
+
+    const [newText, setNewText] = useState('');
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editText, setEditText] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    const done = items.filter((item) => item.is_done).length;
+    const percent = items.length === 0 ? 0 : Math.round((done / items.length) * 100);
+
+    const run = async (action: () => Promise<unknown>) => {
+        setSaving(true);
+        try {
+            await action();
+            await onChanged();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.saveFailed);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const add = (e: React.FormEvent) => {
+        e.preventDefault();
+        const text = newText.trim();
+        if (!text) return;
+        return run(async () => {
+            await api.addTaskChecklistItem(taskId, { text });
+            setNewText('');
+        });
+    };
+
+    const commitEdit = (item: ChecklistItem) => {
+        const text = editText.trim();
+        setEditingId(null);
+        if (!text || text === item.text) return;
+        return run(() => api.updateTaskChecklistItem(item.id, { text }));
+    };
+
+    // Sends the whole order rather than the swapped pair — a half-applied swap
+    // would leave two items sharing a sort_order and the list would reshuffle.
+    const moveBy = (index: number, delta: number) => {
+        const target = index + delta;
+        if (target < 0 || target >= items.length) return;
+        const next = [...items];
+        [next[index], next[target]] = [next[target], next[index]];
+        return run(() => api.reorderTaskChecklist(taskId, next.map((item) => item.id)));
+    };
+
+    return (
+        <section className="rounded-md border border-gray-200 p-3">
+            <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-medium">{m.title}</h3>
+                {items.length > 0 && (
+                    <span className="text-xs text-gray-500">
+                        {done === items.length
+                            ? m.allDone
+                            : m.progress
+                                  .replace('{done}', String(done))
+                                  .replace('{total}', String(items.length))}
+                    </span>
+                )}
+            </div>
+
+            {items.length > 0 && (
+                <div
+                    className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-200"
+                    role="progressbar"
+                    aria-valuenow={percent}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={m.title}
+                >
+                    <div
+                        className="h-full rounded-full bg-emerald-500 transition-all"
+                        style={{ width: `${percent}%` }}
+                    />
+                </div>
+            )}
+
+            {items.length === 0 ? (
+                <p className="mt-2 text-sm text-gray-500">{m.empty}</p>
+            ) : (
+                <ul className="mt-2 space-y-0.5">
+                    {items.map((item, index) => (
+                        <li key={item.id} className="flex items-center gap-2">
+                            <Checkbox
+                                checked={item.is_done}
+                                disabled={saving}
+                                aria-label={item.text}
+                                onChange={() =>
+                                    run(() =>
+                                        api.updateTaskChecklistItem(item.id, {
+                                            isDone: !item.is_done,
+                                        }),
+                                    )
+                                }
+                            />
+
+                            {editingId === item.id ? (
+                                <Input
+                                    autoFocus
+                                    value={editText}
+                                    className="flex-1"
+                                    onChange={(e) => setEditText(e.target.value)}
+                                    onBlur={() => commitEdit(item)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            commitEdit(item);
+                                        }
+                                        if (e.key === 'Escape') setEditingId(null);
+                                    }}
+                                />
+                            ) : (
+                                <button
+                                    type="button"
+                                    className={`min-h-touch flex-1 text-left text-sm ${
+                                        item.is_done ? 'text-gray-400 line-through' : ''
+                                    }`}
+                                    onClick={() => {
+                                        setEditingId(item.id);
+                                        setEditText(item.text);
+                                    }}
+                                >
+                                    {item.text}
+                                </button>
+                            )}
+
+                            <button
+                                type="button"
+                                aria-label={m.moveUp}
+                                className="px-1 text-gray-400 disabled:opacity-30"
+                                disabled={saving || index === 0}
+                                onClick={() => moveBy(index, -1)}
+                            >
+                                <ArrowUp className="h-4 w-4" />
+                            </button>
+                            <button
+                                type="button"
+                                aria-label={m.moveDown}
+                                className="px-1 text-gray-400 disabled:opacity-30"
+                                disabled={saving || index === items.length - 1}
+                                onClick={() => moveBy(index, 1)}
+                            >
+                                <ArrowDown className="h-4 w-4" />
+                            </button>
+                            <button
+                                type="button"
+                                aria-label={m.deleteItem}
+                                className="px-1 text-red-600"
+                                disabled={saving}
+                                onClick={() => run(() => api.deleteTaskChecklistItem(item.id))}
+                            >
+                                <Trash2 className="h-4 w-4" />
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            <form onSubmit={add} className="mt-2 flex gap-2">
+                <Input
+                    value={newText}
+                    placeholder={m.placeholder}
+                    className="flex-1"
+                    onChange={(e) => setNewText(e.target.value)}
+                />
+                <Button
+                    type="submit"
+                    variant="secondary"
+                    className="min-h-touch"
+                    disabled={saving || newText.trim() === ''}
+                >
+                    {m.add}
+                </Button>
+            </form>
+        </section>
     );
 }
 

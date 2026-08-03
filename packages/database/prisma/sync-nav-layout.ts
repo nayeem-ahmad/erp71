@@ -29,8 +29,8 @@
  * deliberate call, and re-running is a no-op.
  *
  * Usage:
- *   npx tsx prisma/sync-nav-layout.ts --nodes=crm.lead-taxonomy --dry-run
- *   npx tsx prisma/sync-nav-layout.ts --nodes=crm.lead-taxonomy
+ *   npx tsx prisma/sync-nav-layout.ts --nodes=crm.setup --dry-run
+ *   npx tsx prisma/sync-nav-layout.ts --nodes=crm.setup
  *   npx tsx prisma/sync-nav-layout.ts --nodes=crm.follow-ups,crm.campaigns
  */
 import { config } from 'dotenv';

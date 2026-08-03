@@ -60,6 +60,14 @@ export default function StorefrontSignUpPage() {
             }
 
             const payload = 'data' in json ? json.data : json;
+
+            // Signing up with an existing 2FA-protected account: the sign-in page
+            // owns the code step, so hand off rather than duplicating the form.
+            if (payload.requires_2fa) {
+                router.push(`/store/${slug}/auth/signin`);
+                return;
+            }
+
             localStorage.setItem(
                 `storefront_customer_${slug}`,
                 JSON.stringify({ access_token: payload.access_token, customer: payload.customer }),

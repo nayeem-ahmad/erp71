@@ -181,8 +181,12 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'crm.follow-ups': { id: 'crm.follow-ups', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.crmFollowUps', href: '/crm/follow-ups', premiumOnly: true },
   'crm.campaigns': { id: 'crm.campaigns', kind: 'link', icon: 'Megaphone', labelKey: 'sidebar.items.crmCampaigns', href: '/crm/campaigns', premiumOnly: true },
   'crm.customers': { id: 'crm.customers', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.crmCustomers', href: '/crm/customers' },
-  'crm.lead-taxonomy': { id: 'crm.lead-taxonomy', kind: 'link', icon: 'Tags', labelKey: 'sidebar.items.crmLeadTaxonomy', href: '/crm/settings/lead-taxonomy', premiumOnly: true },
-  'crm.custom-fields': { id: 'crm.custom-fields', kind: 'link', icon: 'Settings', labelKey: 'sidebar.items.crmCustomFields', href: '/crm/settings/custom-fields', premiumOnly: true },
+  // Replaces the separate 'crm.lead-taxonomy' and 'crm.custom-fields' nodes — both
+  // lists are now tabs of one page. Layouts a tenant customised before this still
+  // name the old ids; buildNavModulesFromLayout drops ids missing from this
+  // registry, so they simply stop rendering. `sync-nav-layout.ts --nodes=crm.setup`
+  // is what adds the replacement to those customised layouts.
+  'crm.setup': { id: 'crm.setup', kind: 'link', icon: 'Settings', labelKey: 'sidebar.items.crmSetup', href: '/crm/setup', premiumOnly: true },
 
   hr: { id: 'hr', kind: 'module', icon: 'UserCog', labelKey: 'sidebar.modules.hr', moduleKey: 'hr' },
   'hr.overview': { id: 'hr.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/hr', exact: true },
@@ -360,8 +364,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('crm.follow-ups', 'crm', 4),
   layoutNode('crm.campaigns', 'crm', 5),
   layoutNode('crm.customers', 'crm', 6),
-  layoutNode('crm.lead-taxonomy', 'crm', 7),
-  layoutNode('crm.custom-fields', 'crm', 8),
+  layoutNode('crm.setup', 'crm', 7),
 
   layoutNode('projects', null, 7),
   layoutNode('projects.list', 'projects', 0),
