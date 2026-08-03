@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../database/database.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { ProjectsController } from './projects.controller';
 import { ProjectTasksController } from './project-tasks.controller';
 import { ProjectTimeController } from './project-time.controller';
@@ -11,10 +12,12 @@ import { ProjectSettingsService } from './project-settings.service';
 import { RemainingHoursService } from './remaining-hours.service';
 import { SprintsService } from './sprints.service';
 import { SprintSnapshotService } from './sprint-snapshot.service';
+import { ProjectActivityService } from './project-activity.service';
+import { ProjectCommentsService } from './project-comments.service';
 import { ProjectsScheduler } from './projects.scheduler';
 
 @Module({
-    imports: [DatabaseModule],
+    imports: [DatabaseModule, NotificationsModule],
     controllers: [
         ProjectsController,
         ProjectTasksController,
@@ -27,6 +30,8 @@ import { ProjectsScheduler } from './projects.scheduler';
         ProjectTimeService,
         ProjectSettingsService,
         RemainingHoursService,
+        ProjectActivityService,
+        ProjectCommentsService,
         SprintsService,
         SprintSnapshotService,
         ProjectsScheduler,

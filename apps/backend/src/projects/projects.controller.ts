@@ -23,7 +23,9 @@ import {
     CreateMilestoneDto,
     CreateProjectDto,
     CreateProjectTypeDto,
+    CreateLabelDto,
     CreateTaskStatusDto,
+    UpdateLabelDto,
     ListProjectsDto,
     UpdateMilestoneDto,
     UpdateProjectDto,
@@ -102,6 +104,34 @@ export class ProjectsController {
     @RequireStorePermission(StorePermission.MANAGE_PROJECT_SETTINGS)
     removeTaskStatus(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.settings.removeTaskStatus(tenant.tenantId, id);
+    }
+
+    @Get('labels')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
+    listLabels(@Tenant() tenant: TenantContext) {
+        return this.settings.listLabels(tenant.tenantId);
+    }
+
+    @Post('labels')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_SETTINGS)
+    createLabel(@Tenant() tenant: TenantContext, @Body() dto: CreateLabelDto) {
+        return this.settings.createLabel(tenant.tenantId, dto);
+    }
+
+    @Patch('labels/:id')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_SETTINGS)
+    updateLabel(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: UpdateLabelDto,
+    ) {
+        return this.settings.updateLabel(tenant.tenantId, id, dto);
+    }
+
+    @Delete('labels/:id')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_SETTINGS)
+    removeLabel(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.settings.removeLabel(tenant.tenantId, id);
     }
 
     // ── Projects ───────────────────────────────────────────────────────────

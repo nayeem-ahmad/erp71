@@ -2983,6 +2983,22 @@ export const api = {
     deleteProjectTaskStatus: (id: string) =>
         fetchWithAuth(`/projects/task-statuses/${id}`, { method: 'DELETE' }),
 
+    getProjectLabels: () => fetchWithAuth('/projects/labels'),
+    createProjectLabel: (data: { name: string; color?: string }) =>
+        fetchWithAuth('/projects/labels', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateProjectLabel: (id: string, data: Record<string, unknown>) =>
+        fetchWithAuth(`/projects/labels/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteProjectLabel: (id: string) =>
+        fetchWithAuth(`/projects/labels/${id}`, { method: 'DELETE' }),
+
     getProjectTasks: (params: Record<string, string | number | undefined>) => {
         const query = new URLSearchParams();
         for (const [key, value] of Object.entries(params)) {
@@ -3032,6 +3048,36 @@ export const api = {
         }),
     deleteTaskChecklistItem: (itemId: string) =>
         fetchWithAuth(`/project-tasks/checklist/${itemId}`, { method: 'DELETE' }),
+    getTaskComments: (taskId: string) => fetchWithAuth(`/project-tasks/${taskId}/comments`),
+    addTaskComment: (taskId: string, body: string) =>
+        fetchWithAuth(`/project-tasks/${taskId}/comments`, {
+            method: 'POST',
+            body: JSON.stringify({ body }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateTaskComment: (commentId: string, body: string) =>
+        fetchWithAuth(`/project-tasks/comments/${commentId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ body }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteTaskComment: (commentId: string) =>
+        fetchWithAuth(`/project-tasks/comments/${commentId}`, { method: 'DELETE' }),
+
+    getTaskActivity: (taskId: string) => fetchWithAuth(`/project-tasks/${taskId}/activity`),
+    getTaskWatchers: (taskId: string) => fetchWithAuth(`/project-tasks/${taskId}/watchers`),
+    watchTask: (taskId: string) =>
+        fetchWithAuth(`/project-tasks/${taskId}/watch`, { method: 'POST' }),
+    unwatchTask: (taskId: string) =>
+        fetchWithAuth(`/project-tasks/${taskId}/watch`, { method: 'DELETE' }),
+
+    // Sends the whole order, not the moved pair — see ReorderChecklistDto.
+    reorderTaskChecklist: (taskId: string, itemIds: string[]) =>
+        fetchWithAuth(`/project-tasks/${taskId}/checklist/reorder`, {
+            method: 'PATCH',
+            body: JSON.stringify({ itemIds }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
 
     getProjectTimeEntries: (params: Record<string, string | number | undefined>) => {
         const query = new URLSearchParams();
