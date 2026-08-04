@@ -88,8 +88,15 @@ referral hardening work; the reversal state, self-referral guard, payout
 reconciliation and partner notifications described there were built at that time,
 while the one-shot behaviour predates it and was simply undocumented.
 
-**Known open item:** the commission is currently calculated on the plan's **list
-price**, not on the discounted amount the tenant actually paid. With a 10% discount
-and a 10% commission the platform collects 90% and pays out 10% of gross — an 11.1%
-effective rate. Whether the base should be gross or net revenue is a policy decision
-and is tracked in `TODO.md`.
+**Commission base: net revenue collected.** The commission is a percentage of what
+the referred tenant actually paid — plan list price less that referral's own signup
+discount, add-ons excluded. On a ৳10,000 plan with a 10% discount and a 10%
+commission the platform collects ৳9,000 and pays ৳900, an effective 10%.
+
+This was settled on 2026-08-04. Until then the base was the undiscounted list price,
+which paid ৳1,000 on the same sale — an 11.1% effective rate — and appears to have
+been unintended rather than chosen. **Commissions earned before that date keep their
+original list-price figures**; nothing was backfilled, because retroactively reducing
+a commission a partner has already been shown is worse than a one-off inconsistency.
+`ReferralSignup.plan_amount` therefore means net collected revenue on newer rows and
+list price on older ones.

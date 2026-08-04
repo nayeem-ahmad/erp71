@@ -1055,19 +1055,71 @@ describe('BillingService', () => {
         });
 
         /**
-         * Characterises a known gap rather than endorsing it: the commission base is
-         * the plan's list price, not the discounted amount the tenant actually paid.
-         * With a 10% signup discount and a 10% commission the platform collects
-         * 3599.10 and owes 399.90 — an 11.1% effective rate. Switching the base to
-         * net revenue is the follow-up; this assertion is here so that change reads
-         * as a deliberate behaviour flip instead of an accidental one.
+         * The commission is a share of what the tenant actually paid. A 10% signup
+         * discount on a 3999 plan means 3599.10 collected, so a 10% commission is
+         * 359.91 — not the 399.90 that a list-price base would have paid out.
+         *
+         * This assertion replaces one that characterised the old list-price
+         * behaviour; the flip is the point of this change, not a regression.
          */
-        it('bases the commission on list price even when a signup discount applied', async () => {
+        it('bases the commission on revenue actually collected, not list price', async () => {
             db.referralSignup.findUnique.mockResolvedValue({
                 id: 'signup-1',
                 status: 'PENDING',
                 commission_pct: 10,
                 discount_pct: 10,
+            });
+
+            await activatePremium();
+            await new Promise(process.nextTick);
+
+            expect(db.referralSignup.update).toHaveBeenCalledWith({
+                where: { id: 'signup-1' },
+                data: expect.objectContaining({ plan_amount: 3599.1, commission_amount: 359.91 }),
+            });
+        });
+
+        it('uses list price unchanged when the referral carried no discount', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({
+                id: 'signup-1',
+                status: 'PENDING',
+                commission_pct: 10,
+                discount_pct: 0,
+            });
+
+            await activatePremium();
+            await new Promise(process.nextTick);
+
+            expect(db.referralSignup.update).toHaveBeenCalledWith({
+                where: { id: 'signup-1' },
+                data: expect.objectContaining({ plan_amount: 3999, commission_amount: 399.9 }),
+            });
+        });
+
+        it('matches the discount checkout actually applied, to the cent', async () => {
+            // createCheckoutSession computes 3999 * 0.925 = 3699.075 -> 3699.08.
+            // The commission base has to be that same figure, not a re-rounding of it.
+            db.referralSignup.findUnique.mockResolvedValue({
+                id: 'signup-1',
+                status: 'PENDING',
+                commission_pct: 10,
+                discount_pct: 7.5,
+            });
+
+            await activatePremium();
+            await new Promise(process.nextTick);
+
+            expect(db.referralSignup.update).toHaveBeenCalledWith({
+                where: { id: 'signup-1' },
+                data: expect.objectContaining({ plan_amount: 3699.08, commission_amount: 369.91 }),
+            });
+        });
+
+        it('treats a missing discount_pct as no discount rather than NaN', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({
+                id: 'signup-1',
+                status: 'PENDING',
+                commission_pct: 10,
             });
 
             await activatePremium();
