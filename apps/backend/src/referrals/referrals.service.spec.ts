@@ -42,6 +42,8 @@ describe('ReferralsService', () => {
         sendRefereeCommissionEarned: jest.fn(),
         sendRefereePaymentRecorded: jest.fn(),
     } as any;
+    const platformSettings = { getRawGroup: jest.fn() } as any;
+    const accounting = { createVoucher: jest.fn() } as any;
 
     let service: ReferralsService;
 
@@ -65,8 +67,11 @@ describe('ReferralsService', () => {
         jest.resetAllMocks();
         passwordReset.requestRefereeInvite.mockResolvedValue(undefined);
         email.sendRefereePaymentRecorded.mockResolvedValue(undefined);
+        // Off unless a test turns it on — matching the production default.
+        platformSettings.getRawGroup.mockResolvedValue({ enabled: 'false' });
+        accounting.createVoucher.mockResolvedValue({ id: 'voucher-1' });
         db.$transaction.mockImplementation(async (cb: any) => cb(tx));
-        service = new ReferralsService(db, passwordReset, email);
+        service = new ReferralsService(db, passwordReset, email, platformSettings, accounting);
     });
 
     // --- Referee creation and login provisioning ---------------------------------
@@ -310,6 +315,120 @@ describe('ReferralsService', () => {
                 ),
             ).rejects.toThrow(/commission-already-paid/);
             expect(db.$transaction).not.toHaveBeenCalled();
+        });
+
+        // --- Posting to the platform's own books ----------------------------------
+
+        describe('commission expense posting', () => {
+            const configured = {
+                enabled: 'true',
+                house_tenant_id: 'tenant-house',
+                expense_account_id: 'account-expense',
+                payment_account_id: 'account-bank',
+            };
+
+            it('does nothing at all when the feature is off', async () => {
+                db.referralSignup.findMany.mockResolvedValue(threeEarned());
+
+                await service.recordPayment('referee-1', { amount: 650 }, 'admin-1');
+
+                expect(accounting.createVoucher).not.toHaveBeenCalled();
+            });
+
+            it('posts a balanced journal voucher into the configured workspace', async () => {
+                db.referralSignup.findMany.mockResolvedValue(threeEarned());
+                platformSettings.getRawGroup.mockResolvedValue(configured);
+
+                await service.recordPayment(
+                    'referee-1',
+                    { amount: 650, reference: 'TRX1' },
+                    'admin-1',
+                );
+
+                expect(accounting.createVoucher).toHaveBeenCalledWith(
+                    'tenant-house',
+                    expect.objectContaining({
+                        voucherType: 'JOURNAL',
+                        referenceNumber: 'TRX1',
+                        details: [
+                            { accountId: 'account-expense', debitAmount: 650, creditAmount: 0 },
+                            { accountId: 'account-bank', debitAmount: 0, creditAmount: 650 },
+                        ],
+                    }),
+                );
+            });
+
+            it('falls back to the payment id when no external reference was given', async () => {
+                db.referralSignup.findMany.mockResolvedValue(threeEarned());
+                platformSettings.getRawGroup.mockResolvedValue(configured);
+
+                await service.recordPayment('referee-1', { amount: 650 }, 'admin-1');
+
+                expect(accounting.createVoucher).toHaveBeenCalledWith(
+                    'tenant-house',
+                    expect.objectContaining({ referenceNumber: 'referee-payment:payment-1' }),
+                );
+            });
+
+            // Guessing an account is worse than not posting.
+            it('skips and warns when enabled but incompletely configured', async () => {
+                db.referralSignup.findMany.mockResolvedValue(threeEarned());
+                platformSettings.getRawGroup.mockResolvedValue({
+                    ...configured,
+                    expense_account_id: null,
+                });
+                const logWarn = jest
+                    .spyOn((service as any).logger, 'warn')
+                    .mockImplementation(() => undefined);
+
+                await service.recordPayment('referee-1', { amount: 650 }, 'admin-1');
+
+                expect(accounting.createVoucher).not.toHaveBeenCalled();
+                expect(logWarn).toHaveBeenCalledWith(
+                    expect.stringContaining('incompletely configured'),
+                );
+            });
+
+            // Reversing a real money movement because the bookkeeping leg failed
+            // would be worse than a missing journal entry an admin can add by hand.
+            it('still records the payout when the posting fails', async () => {
+                db.referralSignup.findMany.mockResolvedValue(threeEarned());
+                platformSettings.getRawGroup.mockResolvedValue(configured);
+                accounting.createVoucher.mockRejectedValue(new Error('period locked'));
+                const logWarn = jest
+                    .spyOn((service as any).logger, 'warn')
+                    .mockImplementation(() => undefined);
+
+                await expect(
+                    service.recordPayment('referee-1', { amount: 650 }, 'admin-1'),
+                ).resolves.toEqual(expect.objectContaining({ id: 'payment-1' }));
+
+                expect(tx.referralSignup.updateMany).toHaveBeenCalled();
+                expect(logWarn).toHaveBeenCalledWith(
+                    expect.stringContaining('posting it to the platform books failed'),
+                );
+            });
+
+            it('posts the amount actually recorded on a part-payment', async () => {
+                db.referralSignup.findMany.mockResolvedValue(threeEarned());
+                platformSettings.getRawGroup.mockResolvedValue(configured);
+
+                await service.recordPayment(
+                    'referee-1',
+                    { amount: 100, allow_partial: true },
+                    'admin-1',
+                );
+
+                expect(accounting.createVoucher).toHaveBeenCalledWith(
+                    'tenant-house',
+                    expect.objectContaining({
+                        details: [
+                            { accountId: 'account-expense', debitAmount: 100, creditAmount: 0 },
+                            { accountId: 'account-bank', debitAmount: 0, creditAmount: 100 },
+                        ],
+                    }),
+                );
+            });
         });
 
         // --- Notification --------------------------------------------------------
