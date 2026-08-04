@@ -74,6 +74,7 @@ import {
     Database,
     Factory,
     Timer,
+    Warehouse,
 } from 'lucide-react';
 
 const NAV_ICON_MAP: Record<string, LucideIcon> = {
@@ -151,6 +152,7 @@ const NAV_ICON_MAP: Record<string, LucideIcon> = {
     Copy,
     Factory,
     Timer,
+    Warehouse,
 };
 
 export function resolveNavIcon(name: string): LucideIcon {
