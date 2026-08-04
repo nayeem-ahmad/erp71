@@ -102,6 +102,10 @@ describe('BillingService', () => {
         db.billingEvent.upsert.mockResolvedValue({ id: 'event-1' });
         db.tenant.findUnique.mockResolvedValue({ id: 'tenant-1', name: 'Tenant One' });
         db.tenantSubscription.upsert.mockResolvedValue(premiumSubscriptionUpsertResult);
+        // Default: this tenant was not referred. jest.resetAllMocks() above clears the
+        // implementation declared on the mock, so state it explicitly here.
+        db.referralSignup.findUnique.mockResolvedValue(null);
+        db.referralSignup.update.mockResolvedValue({});
     });
 
     it('creates an SSL Wireless hosted checkout session', async () => {
@@ -793,5 +797,216 @@ describe('BillingService', () => {
             3999,
             'BDT',
         );
+    });
+
+    // --- Referral discount and commission --------------------------------------
+
+    describe('referral discount at checkout', () => {
+        const useManualProvider = () => {
+            process.env.BILLING_PROVIDER = 'MANUAL';
+            delete process.env.SSL_WIRELESS_STORE_ID;
+            delete process.env.SSL_WIRELESS_STORE_PASSWORD;
+        };
+
+        beforeEach(useManualProvider);
+
+        it('discounts the plan price for a tenant with a pending referral', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({
+                id: 'signup-1',
+                discount_pct: 10,
+                status: 'PENDING',
+            });
+
+            const result = await service.createCheckoutSession(tenantCtx(), {
+                planCode: 'STANDARD',
+                billingCycle: 'MONTHLY',
+            });
+
+            expect(result.amount).toBe(3599.1);
+        });
+
+        it('charges full price once the referral has already been earned', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({
+                id: 'signup-1',
+                discount_pct: 10,
+                status: 'EARNED',
+            });
+
+            const result = await service.createCheckoutSession(tenantCtx(), {
+                planCode: 'STANDARD',
+                billingCycle: 'MONTHLY',
+            });
+
+            expect(result.amount).toBe(3999);
+        });
+
+        it('charges full price for a tenant that was never referred', async () => {
+            const result = await service.createCheckoutSession(tenantCtx(), {
+                planCode: 'STANDARD',
+                billingCycle: 'MONTHLY',
+            });
+
+            expect(result.amount).toBe(3999);
+        });
+
+        it('discounts the plan but never the add-ons', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({
+                id: 'signup-1',
+                discount_pct: 10,
+                status: 'PENDING',
+            });
+            addonModules.getActiveAddonsByCodes.mockResolvedValue([
+                { id: 'addon-1', code: 'MANUFACTURING', name: 'Manufacturing', monthly_price: 500, yearly_price: 5000 },
+            ]);
+
+            const result = await service.createCheckoutSession(tenantCtx(), {
+                planCode: 'STANDARD',
+                billingCycle: 'MONTHLY',
+                addonCodes: ['MANUFACTURING'],
+            });
+
+            // 3999 less 10% = 3599.10, plus the add-on at its undiscounted 500.
+            expect(result.amount).toBe(4099.1);
+        });
+    });
+
+    describe('referral commission on activation', () => {
+        const activatePremium = () =>
+            service.applySubscriptionChange({
+                tenantId: 'tenant-1',
+                planCode: 'PREMIUM',
+                billingCycle: 'MONTHLY',
+                status: 'ACTIVE',
+            });
+
+        it('moves a pending referral to EARNED and records the commission', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({
+                id: 'signup-1',
+                status: 'PENDING',
+                commission_pct: 10,
+            });
+
+            await activatePremium();
+            await new Promise(process.nextTick);
+
+            expect(db.referralSignup.update).toHaveBeenCalledWith({
+                where: { id: 'signup-1' },
+                data: expect.objectContaining({
+                    status: 'EARNED',
+                    plan_amount: 3999,
+                    commission_amount: 399.9,
+                    earned_at: expect.any(Date),
+                }),
+            });
+        });
+
+        it('does not pay a second commission when the referral is already EARNED', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({
+                id: 'signup-1',
+                status: 'EARNED',
+                commission_pct: 10,
+            });
+
+            await activatePremium();
+            await new Promise(process.nextTick);
+
+            expect(db.referralSignup.update).not.toHaveBeenCalled();
+        });
+
+        it('does nothing for a tenant that was never referred', async () => {
+            await activatePremium();
+            await new Promise(process.nextTick);
+
+            expect(db.referralSignup.update).not.toHaveBeenCalled();
+        });
+
+        it('does not record a commission when the subscription goes PAST_DUE', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({
+                id: 'signup-1',
+                status: 'PENDING',
+                commission_pct: 10,
+            });
+            db.tenantSubscription.upsert.mockResolvedValueOnce({
+                ...premiumSubscriptionUpsertResult,
+                status: 'PAST_DUE',
+            });
+
+            await service.applySubscriptionChange({
+                tenantId: 'tenant-1',
+                planCode: 'PREMIUM',
+                billingCycle: 'MONTHLY',
+                status: 'PAST_DUE',
+            });
+            await new Promise(process.nextTick);
+
+            expect(db.referralSignup.update).not.toHaveBeenCalled();
+        });
+
+        it('uses the yearly price as the commission base for a yearly cycle', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({
+                id: 'signup-1',
+                status: 'PENDING',
+                commission_pct: 10,
+            });
+
+            await service.applySubscriptionChange({
+                tenantId: 'tenant-1',
+                planCode: 'PREMIUM',
+                billingCycle: 'YEARLY',
+                status: 'ACTIVE',
+            });
+            await new Promise(process.nextTick);
+
+            expect(db.referralSignup.update).toHaveBeenCalledWith({
+                where: { id: 'signup-1' },
+                data: expect.objectContaining({ plan_amount: 39990, commission_amount: 3999 }),
+            });
+        });
+
+        /**
+         * Characterises a known gap rather than endorsing it: the commission base is
+         * the plan's list price, not the discounted amount the tenant actually paid.
+         * With a 10% signup discount and a 10% commission the platform collects
+         * 3599.10 and owes 399.90 — an 11.1% effective rate. Switching the base to
+         * net revenue is the follow-up; this assertion is here so that change reads
+         * as a deliberate behaviour flip instead of an accidental one.
+         */
+        it('bases the commission on list price even when a signup discount applied', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({
+                id: 'signup-1',
+                status: 'PENDING',
+                commission_pct: 10,
+                discount_pct: 10,
+            });
+
+            await activatePremium();
+            await new Promise(process.nextTick);
+
+            expect(db.referralSignup.update).toHaveBeenCalledWith({
+                where: { id: 'signup-1' },
+                data: expect.objectContaining({ plan_amount: 3999, commission_amount: 399.9 }),
+            });
+        });
+
+        it('logs a failed commission write instead of swallowing it, and still activates', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({
+                id: 'signup-1',
+                status: 'PENDING',
+                commission_pct: 10,
+            });
+            db.referralSignup.update.mockRejectedValue(new Error('connection reset'));
+            const logError = jest
+                .spyOn((service as any).logger, 'error')
+                .mockImplementation(() => undefined);
+
+            await expect(activatePremium()).resolves.toEqual(
+                expect.objectContaining({ tenant: expect.objectContaining({ id: 'tenant-1' }) }),
+            );
+            await new Promise(process.nextTick);
+
+            expect(logError).toHaveBeenCalledWith(
+                expect.stringContaining('Failed to record referral commission for tenant tenant-1'),
+            );
+        });
     });
 });
