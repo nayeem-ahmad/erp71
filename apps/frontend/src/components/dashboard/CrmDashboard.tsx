@@ -1,20 +1,23 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
-import { previousDateWindow, rangeToDateWindow } from '@/lib/dashboard-range';
-import { periodDelta } from '@/lib/dashboard-delta';
+import { useModuleDashboard } from '@/lib/use-module-dashboard';
 import { routes } from '@/lib/routes';
-import { DashboardHeader, RangeTabs, type DashboardRange } from '@/components/dashboard/DashboardHeader';
-import { HealthKpiTile } from '@/components/dashboard/HealthKpiTile';
-import { AttentionStrip, type AttentionItem } from '@/components/dashboard/AttentionStrip';
+import ModuleDashboard, {
+    AttentionSection,
+    DashboardSection,
+    KpiTileGrid,
+    type DashboardMount,
+    type KpiTileSpec,
+} from '@/components/dashboard/ModuleDashboard';
+import { type AttentionItem } from '@/components/dashboard/AttentionStrip';
 import { PipelineFunnel, type FunnelStage } from '@/components/dashboard/PipelineFunnel';
 import { RankedListPanel, type RankedItem } from '@/components/dashboard/RankedListPanel';
 import { StatusBadge, type StatusBadgeTone } from '@/components/ui';
-import PageShell from '@/components/ui/compact/PageShell';
 import type { DashboardIdentity } from './dashboard-identity';
 
 type OverviewResponse = {
@@ -108,112 +111,71 @@ export default function CrmDashboard({
     greeting,
     tenantName,
     variant = 'page',
-}: Readonly<DashboardIdentity & { variant?: 'page' | 'embedded' }>) {
+}: Readonly<DashboardIdentity & { variant?: DashboardMount }>) {
     const { t, locale } = useI18n();
     const copy = t.dashboardHome;
     const crm = copy.crm;
     const leadStatusLabels = t.crm.leads.statuses as Record<string, string>;
 
-    const [range, setRange] = useState<DashboardRange>('month');
-    const [overview, setOverview] = useState<OverviewResponse | null>(null);
-    const [previous, setPrevious] = useState<OverviewResponse | null>(null);
-    const [trends, setTrends] = useState<TrendPoint[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-
-    useEffect(() => {
-        let cancelled = false;
-
-        const load = async () => {
-            setLoading(true);
-            setError('');
-
-            const window = rangeToDateWindow(range);
-            const prevWindow = previousDateWindow(window);
-
-            const [overviewRes, prevRes, trendRes] = await Promise.allSettled([
-                api.getCrmDashboardOverview(window),
-                api.getCrmDashboardOverview(prevWindow),
-                api.getCrmDashboardTrends(window),
-            ]);
-
-            if (cancelled) return;
-
-            if (overviewRes.status === 'fulfilled') {
-                setOverview(overviewRes.value);
-            } else {
-                setOverview(null);
-                setError(overviewRes.reason instanceof Error ? overviewRes.reason.message : crm.overviewUnavailable);
-            }
-
-            // The comparison window only feeds the deltas, and the trend only the
-            // sparklines; losing either costs a "—", not the dashboard.
-            setPrevious(prevRes.status === 'fulfilled' ? prevRes.value : null);
-            setTrends(trendRes.status === 'fulfilled' ? (trendRes.value?.points ?? []) : []);
-            setLoading(false);
-        };
-
-        void load();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [range, crm.overviewUnavailable]);
+    const {
+        range,
+        setRange,
+        overview,
+        previous: prev,
+        trends,
+        loading,
+        error,
+        deltaContext,
+        compare,
+    } = useModuleDashboard<OverviewResponse, TrendPoint>({
+        fetchOverview: (window) => api.getCrmDashboardOverview(window),
+        fetchTrends: (window) => api.getCrmDashboardTrends(window),
+        unavailableMessage: crm.overviewUnavailable,
+    });
 
     const pipeline = overview?.pipeline;
     const followUps = overview?.follow_ups;
     const activity = overview?.activity;
     const campaigns = overview?.campaigns;
 
-    const DELTA_CONTEXT: Record<DashboardRange, string> = {
-        today: copy.vsPreviousToday,
-        week: copy.vsPreviousWeek,
-        month: copy.vsPreviousMonth,
-    };
-    const deltaContext = DELTA_CONTEXT[range];
-
-    const compare = (current: number | null | undefined, prior: number | null | undefined) =>
-        current == null || prior == null ? { label: '—', positive: true } : periodDelta(current, prior);
-
     // Four small objects — not memoised, because the `compare` closure would have
     // to be hoisted or suppressed to satisfy the dependency rule, and neither is
     // worth it for work this cheap.
-    const prev = previous;
-    const kpiTiles = [
-            {
-                key: 'new-leads',
-                title: crm.kpiNewLeads,
-                value: String(pipeline?.created_in_period ?? 0),
-                series: trends.map((point) => point.leads_created),
-                delta: compare(pipeline?.created_in_period, prev?.pipeline.created_in_period),
-            },
-            {
-                key: 'conversion',
-                title: crm.kpiConversionRate,
-                value: pipeline?.conversion_rate_pct == null ? '—' : `${pipeline.conversion_rate_pct}%`,
-                series: trends.map((point) => point.leads_converted),
-                delta: compare(pipeline?.conversion_rate_pct, prev?.pipeline.conversion_rate_pct),
-                note: formatMessage(crm.helperClosedDeals, {
-                    won: pipeline?.converted_in_period ?? 0,
-                    lost: pipeline?.lost_in_period ?? 0,
-                }),
-            },
-            {
-                key: 'conversations',
-                title: crm.kpiConversations,
-                value: String(activity?.logged_in_period ?? 0),
-                series: trends.map((point) => point.conversations),
-                delta: compare(activity?.logged_in_period, prev?.activity.logged_in_period),
-                note: formatMessage(crm.helperLeadsTouched, { count: activity?.leads_touched ?? 0 }),
-            },
-            {
-                key: 'campaign-revenue',
-                title: crm.kpiCampaignRevenue,
-                value: formatBDT(campaigns?.attributed_revenue ?? 0, { locale }),
-                series: [] as number[],
-                delta: compare(campaigns?.attributed_revenue, prev?.campaigns.attributed_revenue),
-                note: formatMessage(crm.helperAttributedOrders, { count: campaigns?.attributed_orders ?? 0 }),
-            },
+    const kpiTiles: KpiTileSpec[] = [
+        {
+            key: 'new-leads',
+            title: crm.kpiNewLeads,
+            value: String(pipeline?.created_in_period ?? 0),
+            points: trends.map((point) => point.leads_created),
+            delta: compare(pipeline?.created_in_period, prev?.pipeline.created_in_period),
+        },
+        {
+            key: 'conversion',
+            title: crm.kpiConversionRate,
+            value: pipeline?.conversion_rate_pct == null ? '—' : `${pipeline.conversion_rate_pct}%`,
+            points: trends.map((point) => point.leads_converted),
+            delta: compare(pipeline?.conversion_rate_pct, prev?.pipeline.conversion_rate_pct),
+            note: formatMessage(crm.helperClosedDeals, {
+                won: pipeline?.converted_in_period ?? 0,
+                lost: pipeline?.lost_in_period ?? 0,
+            }),
+        },
+        {
+            key: 'conversations',
+            title: crm.kpiConversations,
+            value: String(activity?.logged_in_period ?? 0),
+            points: trends.map((point) => point.conversations),
+            delta: compare(activity?.logged_in_period, prev?.activity.logged_in_period),
+            note: formatMessage(crm.helperLeadsTouched, { count: activity?.leads_touched ?? 0 }),
+        },
+        {
+            key: 'campaign-revenue',
+            title: crm.kpiCampaignRevenue,
+            value: formatBDT(campaigns?.attributed_revenue ?? 0, { locale }),
+            points: [] as number[],
+            delta: compare(campaigns?.attributed_revenue, prev?.campaigns.attributed_revenue),
+            note: formatMessage(crm.helperAttributedOrders, { count: campaigns?.attributed_orders ?? 0 }),
+        },
     ];
 
     const attentionItems = useMemo<AttentionItem[]>(() => {
@@ -333,152 +295,86 @@ export default function CrmDashboard({
         [overview?.activity.by_type, crm],
     );
 
-    const rangeLabels = { today: copy.rangeToday, week: copy.rangeWeek, month: copy.rangeMonth };
+    return (
+        <ModuleDashboard
+            mount={variant}
+            greeting={greeting}
+            tenantName={tenantName}
+            subtitle={crm.subtitle}
+            range={range}
+            onRangeChange={setRange}
+            error={error}
+        >
+            <AttentionSection
+                items={attentionItems}
+                loading={loading}
+                label={copy.sectionAttention}
+                allClearLabel={crm.attnAllClear}
+            />
 
-    const body = (
-            <div className="space-y-4">
-                {variant === 'page' ? (
-                    <DashboardHeader
-                        greeting={greeting}
-                        tenantName={tenantName}
-                        subtitle={crm.subtitle}
-                        range={range}
-                        onRangeChange={setRange}
-                        labels={rangeLabels}
+            <DashboardSection label={crm.sectionHealth}>
+                <KpiTileGrid tiles={kpiTiles} loading={loading} deltaContext={deltaContext} />
+            </DashboardSection>
+
+            <DashboardSection label={crm.sectionPipeline}>
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-[3fr_2fr]">
+                    <PipelineFunnel
+                        title={crm.funnelTitle}
+                        subtitle={crm.funnelSubtitle}
+                        stages={funnelStages}
+                        emptyLabel={crm.funnelEmpty}
+                        formatCount={(count, share) => (share == null
+                            ? formatMessage(crm.funnelCount, { count })
+                            : formatMessage(crm.funnelCountWithShare, { count, share }))}
                     />
-                ) : (
-                    <div className="flex justify-end">
-                        <RangeTabs range={range} onRangeChange={setRange} labels={rangeLabels} />
-                    </div>
-                )}
+                    <RankedListPanel
+                        title={crm.sourcesTitle}
+                        items={sourceItems}
+                        emptyLabel={crm.sourcesEmpty}
+                    />
+                </div>
+            </DashboardSection>
 
-                {error ? (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                        {error}
-                    </div>
-                ) : null}
+            <DashboardSection label={crm.sectionTeam}>
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                    <RankedListPanel title={crm.ownersTitle} items={ownerItems} emptyLabel={crm.ownersEmpty} />
+                    <RankedListPanel title={crm.channelsTitle} items={channelItems} emptyLabel={crm.channelsEmpty} />
 
-                <section>
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">
-                        {crm.sectionHealth}
-                    </p>
-                    {loading ? (
-                        <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
-                            {Array.from({ length: 4 }).map((_, index) => (
-                                <div
-                                    key={index}
-                                    className="animate-pulse rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-                                >
-                                    <div className="h-3 w-16 rounded bg-gray-200" />
-                                    <div className="mt-2 h-6 w-24 rounded bg-gray-200" />
-                                    <div className="mt-2 h-3 w-12 rounded bg-gray-200" />
-                                    <div className="mt-3 h-5 w-full rounded bg-gray-100" />
-                                </div>
-                            ))}
+                    <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                            <h3 className="text-xs font-bold text-gray-900">{crm.campaignsTitle}</h3>
+                            <Link href={routes.crm.campaigns} className="text-[10px] font-bold text-primary hover:underline">
+                                {crm.viewAll}
+                            </Link>
                         </div>
-                    ) : (
-                        <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
-                            {kpiTiles.map((tile) => (
-                                <HealthKpiTile
-                                    key={tile.key}
-                                    title={tile.title}
-                                    value={tile.value}
-                                    delta={tile.delta.label}
-                                    deltaPositive={tile.delta.positive}
-                                    deltaContext={tile.delta.label === '—' ? undefined : deltaContext}
-                                    points={tile.series}
-                                    note={tile.note}
-                                />
-                            ))}
-                        </div>
-                    )}
-                </section>
-
-                <section>
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">
-                        {copy.sectionAttention}
-                    </p>
-                    {loading ? (
-                        <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
-                            {Array.from({ length: 3 }).map((_, index) => (
-                                <div
-                                    key={index}
-                                    className="h-16 animate-pulse rounded-xl border border-gray-100 bg-white p-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-                                />
-                            ))}
-                        </div>
-                    ) : (
-                        <AttentionStrip items={attentionItems} allClearLabel={crm.attnAllClear} />
-                    )}
-                </section>
-
-                <section>
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">
-                        {crm.sectionPipeline}
-                    </p>
-                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-[3fr_2fr]">
-                        <PipelineFunnel
-                            title={crm.funnelTitle}
-                            subtitle={crm.funnelSubtitle}
-                            stages={funnelStages}
-                            emptyLabel={crm.funnelEmpty}
-                            formatCount={(count, share) => (share == null
-                                ? formatMessage(crm.funnelCount, { count })
-                                : formatMessage(crm.funnelCountWithShare, { count, share }))}
-                        />
-                        <RankedListPanel
-                            title={crm.sourcesTitle}
-                            items={sourceItems}
-                            emptyLabel={crm.sourcesEmpty}
-                        />
+                        {(campaigns?.recent ?? []).length === 0 ? (
+                            <p className="py-4 text-center text-[11px] text-gray-400">{crm.campaignsEmpty}</p>
+                        ) : (
+                            <ul>
+                                {campaigns!.recent.map((campaign) => (
+                                    <li
+                                        key={campaign.id}
+                                        className="flex items-center gap-2 border-b border-gray-50 py-1.5 text-[11px] last:border-0"
+                                    >
+                                        <StatusBadge tone={campaignStatusTone[campaign.status] ?? 'neutral'} className="shrink-0">
+                                            {campaign.status}
+                                        </StatusBadge>
+                                        <span className="min-w-0 truncate font-semibold text-gray-900">{campaign.name}</span>
+                                        <span className="ml-auto shrink-0 text-[10px] text-gray-500">
+                                            {campaign.status === 'COMPLETED'
+                                                ? formatMessage(crm.campaignDelivered, {
+                                                    delivered: campaign.delivered_count,
+                                                    total: campaign.recipient_count,
+                                                })
+                                                : formatMessage(crm.campaignRecipients, { count: campaign.recipient_count })}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
                     </div>
-                </section>
-
-                <section>
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">
-                        {crm.sectionTeam}
-                    </p>
-                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                        <RankedListPanel title={crm.ownersTitle} items={ownerItems} emptyLabel={crm.ownersEmpty} />
-                        <RankedListPanel title={crm.channelsTitle} items={channelItems} emptyLabel={crm.channelsEmpty} />
-
-                        <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-                            <div className="mb-2 flex items-center justify-between gap-2">
-                                <h3 className="text-xs font-bold text-gray-900">{crm.campaignsTitle}</h3>
-                                <Link href={routes.crm.campaigns} className="text-[10px] font-bold text-primary hover:underline">
-                                    {crm.viewAll}
-                                </Link>
-                            </div>
-                            {(campaigns?.recent ?? []).length === 0 ? (
-                                <p className="py-4 text-center text-[11px] text-gray-400">{crm.campaignsEmpty}</p>
-                            ) : (
-                                <ul>
-                                    {campaigns!.recent.map((campaign) => (
-                                        <li
-                                            key={campaign.id}
-                                            className="flex items-center gap-2 border-b border-gray-50 py-1.5 text-[11px] last:border-0"
-                                        >
-                                            <StatusBadge tone={campaignStatusTone[campaign.status] ?? 'neutral'} className="shrink-0">
-                                                {campaign.status}
-                                            </StatusBadge>
-                                            <span className="min-w-0 truncate font-semibold text-gray-900">{campaign.name}</span>
-                                            <span className="ml-auto shrink-0 text-[10px] text-gray-500">
-                                                {campaign.status === 'COMPLETED'
-                                                    ? formatMessage(crm.campaignDelivered, {
-                                                        delivered: campaign.delivered_count,
-                                                        total: campaign.recipient_count,
-                                                    })
-                                                    : formatMessage(crm.campaignRecipients, { count: campaign.recipient_count })}
-                                            </span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-                    </div>
-                </section>
-            </div>
+                </div>
+            </DashboardSection>
+        </ModuleDashboard>
     );
-
-    return variant === 'page' ? <PageShell maxWidth="full">{body}</PageShell> : body;
 }

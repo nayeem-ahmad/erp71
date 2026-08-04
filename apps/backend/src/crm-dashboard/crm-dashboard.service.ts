@@ -1,5 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import {
+    formatDate,
+    percent,
+    resolveDateWindow,
+    startOfDay,
+    type DateWindow,
+} from '../common/dashboard-window';
 import { LeadStatus, OPEN_LEAD_STATUSES } from '../crm-leads/crm-leads.dto';
 import { CrmDashboardQueryDto } from './crm-dashboard.dto';
 
@@ -8,42 +15,6 @@ const STALE_AFTER_DAYS = 14;
 /** Ranked panels show a handful of rows; the rest is noise on a dashboard. */
 const RANK_LIMIT = 6;
 const RECENT_CAMPAIGNS = 5;
-
-type DateWindow = { from: string; to: string; fromDate: Date; toDate: Date };
-
-function startOfDay(value: Date): Date {
-    const date = new Date(value);
-    date.setHours(0, 0, 0, 0);
-    return date;
-}
-
-/**
- * `YYYY-MM-DD` in the server's timezone — deliberately not `toISOString()`, which
- * would bucket a Dhaka evening (UTC+6) into the previous day and shift every
- * trend point by one.
- */
-/**
- * Reads a `YYYY-MM-DD` bound as local midnight. `new Date('2026-08-04')` is *UTC*
- * midnight, which lands on the previous day in any negative-offset timezone — the
- * same off-by-one the formatter below avoids, at the other end of the request.
- */
-function parseDateOnly(value: string | undefined): Date | null {
-    if (!value) return null;
-    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-    if (!match) return null;
-    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 0, 0, 0, 0);
-}
-
-function formatDate(value: Date): string {
-    const month = String(value.getMonth() + 1).padStart(2, '0');
-    const day = String(value.getDate()).padStart(2, '0');
-    return `${value.getFullYear()}-${month}-${day}`;
-}
-
-function percent(part: number, whole: number): number | null {
-    if (whole <= 0) return null;
-    return Math.round((part / whole) * 1000) / 10;
-}
 
 /**
  * Aggregates for the CRM dashboard — the pipeline half of CRM, in one request.
@@ -56,21 +27,8 @@ function percent(part: number, whole: number): number | null {
 export class CrmDashboardService {
     constructor(private readonly db: DatabaseService) {}
 
-    /** Defaults to the last 30 days when the client sends no window. */
-    private resolveWindow(query: CrmDashboardQueryDto): DateWindow {
-        const today = startOfDay(new Date());
-        const defaultFrom = new Date(today);
-        defaultFrom.setDate(defaultFrom.getDate() - 29);
-
-        const fromDate = parseDateOnly(query.from) ?? defaultFrom;
-        const toDate = parseDateOnly(query.to) ?? new Date(today);
-        toDate.setHours(23, 59, 59, 999);
-
-        return { from: formatDate(fromDate), to: formatDate(toDate), fromDate, toDate };
-    }
-
     async getOverview(tenantId: string, query: CrmDashboardQueryDto) {
-        const window = this.resolveWindow(query);
+        const window = resolveDateWindow(query);
 
         const [pipeline, followUps, activity, sources, owners, campaigns] = await Promise.all([
             this.getPipeline(tenantId, window),
@@ -395,7 +353,7 @@ export class CrmDashboardService {
      * the row count is small, and it keeps day boundaries on one clock.
      */
     async getTrends(tenantId: string, query: CrmDashboardQueryDto) {
-        const window = this.resolveWindow(query);
+        const window = resolveDateWindow(query);
         const range = { gte: window.fromDate, lte: window.toDate };
 
         const [created, conversations, converted, completedFollowUps] = await Promise.all([

@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import AccountingLedgerExport from '@/components/accounting/AccountingLedgerExport';
 import { CompactLinkGrid } from '@/components/accounting/compact';
 import AccountingPageShell from '@/components/accounting/compact/AccountingPageShell';
+import AccountingDashboard from '@/components/dashboard/AccountingDashboard';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -14,25 +15,21 @@ import {
     ACCOUNTING_REPORT_LINKS,
     ACCOUNTING_SETUP_LINKS,
 } from '@/lib/accounting-nav';
-import { api } from '@/lib/api';
 import { canAccessAccountingAdvancedReports } from '@/lib/plan-entitlements';
+import { hasPermission } from '@/lib/permissions';
 import { useI18n } from '@/lib/i18n';
+import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
 
+/**
+ * Accounting > Overview. The books dashboard for anyone who can read the ledger,
+ * with the link hub kept underneath it; without `VIEW_LEDGER` it stays the plain
+ * hub, since every panel below reads posted balances.
+ */
 export default function AccountingPage() {
     const { t } = useI18n();
-    const [canAccessAdvancedReports, setCanAccessAdvancedReports] = useState(false);
-
-    useEffect(() => {
-        api.getMe()
-            .then((me) => {
-                const tenantId = localStorage.getItem('tenant_id');
-                const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === tenantId) || me?.tenants?.[0];
-                const planCode = tenant?.subscription?.plan?.code || null;
-                const features = (tenant?.subscription?.plan?.features_json || {}) as Record<string, unknown>;
-                setCanAccessAdvancedReports(canAccessAccountingAdvancedReports(planCode, features));
-            })
-            .catch(() => setCanAccessAdvancedReports(false));
-    }, []);
+    const { planCode, features, permissions, ready } = useTenantPlanFeatures();
+    const canAccessAdvancedReports = canAccessAccountingAdvancedReports(planCode, features);
+    const canViewLedger = hasPermission(permissions, 'VIEW_LEDGER');
 
     const mapLinks = (items: typeof ACCOUNTING_DAILY_LINKS) =>
         items
@@ -62,6 +59,15 @@ export default function AccountingPage() {
                     'accounting',
                 )}
             />
+
+            {/* Waits for the permission before deciding: rendering the dashboard
+                and pulling it away is worse than a beat of nothing. */}
+            {ready && canViewLedger ? (
+                <div className="mb-4">
+                    <AccountingDashboard variant="embedded" greeting="" tenantName="" renewalEnd={null} />
+                </div>
+            ) : null}
+
             <CompactLinkGrid label={t.accounting.hub.dailyOperations} links={dailyLinks} />
             <CompactLinkGrid label={t.accounting.hub.financing} links={financingLinks} />
             <CompactLinkGrid label={t.accounting.hub.reconciliation} links={reconciliationLinks} />
