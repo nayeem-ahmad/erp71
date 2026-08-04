@@ -44,7 +44,7 @@ export class HrDashboardService {
             where: {
                 user_id: tenant.userId,
                 store_id: tenant.storeId,
-                permission: StorePermission.VIEW_PAYROLL as any,
+                permission: StorePermission.VIEW_PAYROLL,
             },
             select: { id: true },
         });
