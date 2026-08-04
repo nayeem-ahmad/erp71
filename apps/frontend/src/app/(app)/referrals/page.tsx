@@ -42,7 +42,8 @@ export default function RefereePortalPage() {
 
     const signupUrl = useMemo(() => {
         if (!ledger?.referee.referral_code || typeof window === 'undefined') return '';
-        return `${window.location.origin}/signup?ref=${encodeURIComponent(ledger.referee.referral_code)}`;
+        // /r/<code> records the click, then forwards to /signup?ref=<code>.
+        return `${window.location.origin}/r/${encodeURIComponent(ledger.referee.referral_code)}`;
     }, [ledger?.referee.referral_code]);
 
     const copyText = async (value: string, message: string) => {
@@ -108,6 +109,11 @@ export default function RefereePortalPage() {
 
     const summaryCards = ledger ? [
         { label: m.summary.balanceDue, value: formatBDT(ledger.summary.balance_due), highlight: true },
+        { label: m.summary.clicks, value: String(ledger.summary.clicks) },
+        {
+            label: m.summary.conversionRate,
+            value: ledger.summary.conversion_rate === null ? '—' : `${ledger.summary.conversion_rate}%`,
+        },
         { label: m.summary.totalReferrals, value: String(ledger.summary.total_referrals) },
         { label: m.summary.pending, value: String(ledger.summary.pending) },
         { label: m.summary.earned, value: String(ledger.summary.earned) },

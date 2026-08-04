@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ReferralsController } from './referrals.controller';
 import { RefereePortalController } from './referee-portal.controller';
+import { ReferralTrackingController } from './referral-tracking.controller';
 import { ReferralsService } from './referrals.service';
 import { RefereeGuard } from './referee.guard';
 import { DatabaseModule } from '../database/database.module';
@@ -9,7 +10,7 @@ import { EmailModule } from '../email/email.module';
 
 @Module({
     imports: [DatabaseModule, PasswordResetModule, EmailModule],
-    controllers: [ReferralsController, RefereePortalController],
+    controllers: [ReferralsController, RefereePortalController, ReferralTrackingController],
     providers: [ReferralsService, RefereeGuard],
     exports: [ReferralsService],
 })

@@ -32,6 +32,7 @@ describe('ReferralsService', () => {
             updateMany: jest.fn(),
         },
         refereePayment: { create: jest.fn(), findMany: jest.fn() },
+        referralClick: { create: jest.fn(), count: jest.fn(), groupBy: jest.fn() },
         user: { findUnique: jest.fn(), create: jest.fn() },
         $transaction: jest.fn(),
     } as any;
@@ -413,6 +414,7 @@ describe('ReferralsService', () => {
             db.refereePayment.findMany.mockResolvedValue([
                 { id: 'payment-1', amount: 200, paid_at: new Date('2026-07-05T00:00:00.000Z') },
             ]);
+            db.referralClick.count.mockResolvedValue(0);
 
             const ledger = await service.getLedger('referee-1');
 
@@ -745,6 +747,61 @@ describe('ReferralsService', () => {
         });
     });
 
+    // --- Click tracking ----------------------------------------------------------
+
+    describe('recordClick', () => {
+        it('records a click against the code, upper-casing what the visitor typed', async () => {
+            db.referee.findFirst.mockResolvedValue({ id: 'referee-1' });
+
+            await service.recordClick(' rahma1b2c3 ', { referrer: 'https://fb.com', user_agent: 'UA' });
+
+            expect(db.referee.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ referral_code: 'RAHMA1B2C3' }),
+                }),
+            );
+            expect(db.referralClick.create).toHaveBeenCalledWith({
+                data: {
+                    referee_id: 'referee-1',
+                    code: 'RAHMA1B2C3',
+                    referrer: 'https://fb.com',
+                    user_agent: 'UA',
+                },
+            });
+        });
+
+        // Otherwise the endpoint becomes a way to discover which codes exist.
+        it('silently does nothing for an unknown or inactive code', async () => {
+            db.referee.findFirst.mockResolvedValue(null);
+
+            await expect(service.recordClick('NOPE000000')).resolves.toBeUndefined();
+            expect(db.referralClick.create).not.toHaveBeenCalled();
+        });
+
+        it('truncates caller-supplied text rather than storing whatever arrives', async () => {
+            db.referee.findFirst.mockResolvedValue({ id: 'referee-1' });
+
+            await service.recordClick('RAHMA1B2C3', {
+                referrer: 'x'.repeat(900),
+                user_agent: 'y'.repeat(900),
+            });
+
+            const { data } = db.referralClick.create.mock.calls[0][0];
+            expect(data.referrer).toHaveLength(500);
+            expect(data.user_agent).toHaveLength(500);
+        });
+
+        it('stores null rather than empty strings for absent metadata', async () => {
+            db.referee.findFirst.mockResolvedValue({ id: 'referee-1' });
+
+            await service.recordClick('RAHMA1B2C3', { referrer: '   ' });
+
+            expect(db.referralClick.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ referrer: null, user_agent: null }),
+            });
+        });
+    });
+
     // --- Referee listing ---------------------------------------------------------
 
     describe('listReferees', () => {
@@ -757,6 +814,10 @@ describe('ReferralsService', () => {
             deleted_at: null,
             _count: { referralSignups: 3 },
             ...overrides,
+        });
+
+        beforeEach(() => {
+            db.referralClick.groupBy.mockResolvedValue([]);
         });
 
         it('hides archived referees by default', async () => {
@@ -786,6 +847,9 @@ describe('ReferralsService', () => {
                 { referee_id: 'referee-1', status: 'EARNED', _count: { _all: 1 }, _sum: { commission_amount: 300 } },
                 { referee_id: 'referee-2', status: 'PAID', _count: { _all: 4 }, _sum: { commission_amount: 800 } },
             ]);
+            db.referralClick.groupBy.mockResolvedValue([
+                { referee_id: 'referee-1', _count: { _all: 12 } },
+            ]);
 
             const result = await service.listReferees();
 
@@ -798,6 +862,10 @@ describe('ReferralsService', () => {
             expect(result[1].stats).toEqual(
                 expect.objectContaining({ paid_count: 4, paid_amount: 800 }),
             );
+            // 3 signups from 12 clicks = 25%.
+            expect(result[0].stats).toEqual(expect.objectContaining({ clicks: 12, conversion_rate: 25 }));
+            // No clicks recorded yet reads as "unknown", not "0% — you are failing".
+            expect(result[1].stats).toEqual(expect.objectContaining({ clicks: 0, conversion_rate: null }));
         });
 
         it('reports zeroes for a referee with no signups at all', async () => {
@@ -807,6 +875,8 @@ describe('ReferralsService', () => {
             const result = await service.listReferees();
 
             expect(result[0].stats).toEqual({
+                clicks: 0,
+                conversion_rate: null,
                 pending_signups: 0,
                 earned_count: 0,
                 earned_amount: 0,

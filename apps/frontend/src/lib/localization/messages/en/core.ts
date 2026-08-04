@@ -1525,6 +1525,8 @@ export const coreMessages = {
         copyFailed: 'Could not copy to clipboard',
         summary: {
             balanceDue: 'Balance due',
+            clicks: 'Link clicks',
+            conversionRate: 'Conversion',
             totalReferrals: 'Total signups',
             pending: 'Pending',
             earned: 'Earned',

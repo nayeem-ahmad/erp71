@@ -3641,6 +3641,7 @@ model Referee {
   user            User?    @relation(fields: [user_id], references: [id])
   referralSignups ReferralSignup[]
   payments        RefereePayment[]
+  clicks          ReferralClick[]
 
   @@index([deleted_at])
 }
@@ -3675,6 +3676,27 @@ model ReferralSignup {
 
   @@index([referee_id, status])
   @@index([status])
+}
+
+/// One recorded visit to a partner's tracking link (`/r/<code>`).
+///
+/// Deliberately holds no IP address and no cookie id — a partner's marketing
+/// reach does not justify storing anything that identifies the visitor. `referrer`
+/// and `user_agent` are kept because they are what makes the number interpretable
+/// (bot traffic vs a real campaign), and both are truncated on write.
+model ReferralClick {
+  id          String   @id @default(uuid())
+  referee_id  String
+  /// Snapshot of the code as typed in the link, so a later code change does not
+  /// retro-attribute old clicks.
+  code        String
+  referrer    String?
+  user_agent  String?
+  occurred_at DateTime @default(now())
+
+  referee     Referee  @relation(fields: [referee_id], references: [id], onDelete: Cascade)
+
+  @@index([referee_id, occurred_at])
 }
 
 model RefereePayment {
