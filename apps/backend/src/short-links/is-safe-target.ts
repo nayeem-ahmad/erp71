@@ -72,25 +72,11 @@ function isPrivateHost(rawHost: string): boolean {
         const inner = host.slice(1, -1);
         if (inner === '::1' || inner === '::') return true;
 
-        // fe80::/10 — link-local addresses.
-        if (inner.startsWith('fe80:') || inner.startsWith('fe81:') || inner.startsWith('fe82:') ||
-            inner.startsWith('fe83:') || inner.startsWith('fe84:') || inner.startsWith('fe85:') ||
-            inner.startsWith('fe86:') || inner.startsWith('fe87:') || inner.startsWith('fe88:') ||
-            inner.startsWith('fe89:') || inner.startsWith('fe8a:') || inner.startsWith('fe8b:') ||
-            inner.startsWith('fe8c:') || inner.startsWith('fe8d:') || inner.startsWith('fe8e:') ||
-            inner.startsWith('fe8f:') || inner.startsWith('fe9:') || inner.startsWith('fea:') ||
-            inner.startsWith('feb:') || inner.startsWith('fec:') || inner.startsWith('fed:') ||
-            inner.startsWith('fee:') || inner.startsWith('fef:')) {
-            return true;
-        }
-
-        // fc00::/7 — unique local addresses.
-        if (inner.startsWith('fc') || inner.startsWith('fd')) return true;
-
         // ::ffff: IPv4-mapped IPv6 addresses — extract and check the IPv4 part.
         if (inner.startsWith('::ffff:')) {
             const ipv4Part = inner.slice(7); // After "::ffff:"
-            // Handle both decimal (::ffff:169.254.169.254) and hex (::ffff:a9fe:a9fe) forms.
+            // Node's URL serializer always emits in hex form (::ffff:a9fe:a9fe).
+            // The decimal branch is kept as defensive, but unreachable in practice.
             if (ipv4Part.includes('.')) {
                 return isPrivateIpv4(ipv4Part);
             } else {
@@ -106,6 +92,34 @@ function isPrivateHost(rawHost: string): boolean {
                     return isPrivateIpv4(`${a}.${b}.${c}.${d}`);
                 }
             }
+        }
+
+        // Parse the first hextet numerically to check IPv6 ranges.
+        // Abbreviated forms like :: need special handling.
+        let firstHextet: number | null = null;
+        if (inner.startsWith('::')) {
+            // Compressed form starting with ::; first hextet is 0.
+            firstHextet = 0;
+        } else {
+            // Extract the first hextet (before the first colon).
+            const colonIndex = inner.indexOf(':');
+            if (colonIndex > 0) {
+                const firstPart = inner.substring(0, colonIndex);
+                if (firstPart.length > 0 && firstPart.length <= 4) {
+                    const parsed = parseInt(firstPart, 16);
+                    if (!isNaN(parsed)) {
+                        firstHextet = parsed;
+                    }
+                }
+            }
+        }
+
+        if (firstHextet !== null) {
+            // fe80::/10 — link-local addresses (fe80 through febf).
+            if (firstHextet >= 0xfe80 && firstHextet <= 0xfebf) return true;
+
+            // fc00::/7 — unique local addresses (fc00 through fdff).
+            if (firstHextet >= 0xfc00 && firstHextet <= 0xfdff) return true;
         }
 
         return false;

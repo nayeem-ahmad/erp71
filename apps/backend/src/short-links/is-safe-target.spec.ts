@@ -150,8 +150,16 @@ describe('isSafeTarget', () => {
                 'http://[::ffff:192.168.1.1]/',
                 'http://[::ffff:10.0.0.1]/',
                 'http://[fe80::1]/',
+                'http://[fe90::1]/',
+                'http://[fea0::1]/',
+                'http://[febf::1]/',
+                'http://[fd00::1]/',
             ])('%s', (input) => {
                 expect(isSafeTarget(input)).toMatchObject({ ok: false });
+            });
+
+            it('allows deprecated site-local addresses (fec0::/10 is not in fc00::/7 or fe80::/10)', () => {
+                expect(isSafeTarget('http://[fec0::1]/')).toMatchObject({ ok: true });
             });
         });
 
