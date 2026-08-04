@@ -133,7 +133,11 @@ export default function AdminReferralsPage() {
             header: m.columns.earned,
             cell: (info) => <span className="font-semibold text-emerald-700">৳{Number(info.getValue()).toFixed(2)}</span>,
         }),
-        columnHelper.accessor((row) => Math.max(0, row.stats.earned_amount - row.stats.paid_amount), {
+        // `earned_amount` sums commissions still in EARNED, so it *is* the outstanding
+        // balance; `paid_amount` sums ones already settled. Subtracting the second from
+        // the first double-discounts and disagreed with the detail page's balance_due —
+        // a referee owed 300 with 200 previously settled showed 100 here and 300 there.
+        columnHelper.accessor((row) => row.stats.earned_amount, {
             id: 'balance',
             header: m.columns.balance,
             cell: (info) => <span className="font-semibold text-amber-700">৳{Number(info.getValue()).toFixed(2)}</span>,

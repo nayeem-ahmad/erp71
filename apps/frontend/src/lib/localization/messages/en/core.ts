@@ -1563,6 +1563,7 @@ export const coreMessages = {
             PENDING: 'Pending',
             EARNED: 'Earned',
             PAID: 'Paid',
+            REVERSED: 'Reversed',
         },
         workspace: {
             title: 'Referral Partner Portal',

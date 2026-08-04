@@ -1563,6 +1563,7 @@ export const coreMessages = {
                 PENDING: "অপেক্ষমাণ",
                 EARNED: "অর্জিত",
                 PAID: "পরিশোধিত",
+                REVERSED: "বাতিলকৃত",
             },
             workspace: {
                 title: "রেফারেল পার্টনার পোর্টাল",

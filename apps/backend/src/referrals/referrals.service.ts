@@ -388,9 +388,18 @@ export class ReferralsService {
             }),
         ]);
 
+        // REVERSED is deliberately absent here: a clawed-back commission is not
+        // earned. When it was already paid out, the payment below still counts, so
+        // the difference lands in overpaid_amount and nets against the next payout —
+        // which is the only place that money can honestly go once it has left.
         const totalEarned = this.round2(
             commissions
                 .filter((c) => c.status === 'EARNED' || c.status === 'PAID')
+                .reduce((sum, c) => sum + Number(c.commission_amount ?? 0), 0),
+        );
+        const totalReversed = this.round2(
+            commissions
+                .filter((c) => c.status === 'REVERSED')
                 .reduce((sum, c) => sum + Number(c.commission_amount ?? 0), 0),
         );
         const totalPaid = this.round2(payments.reduce((sum, p) => sum + Number(p.amount), 0));
@@ -402,7 +411,9 @@ export class ReferralsService {
                 pending: commissions.filter((c) => c.status === 'PENDING').length,
                 earned: commissions.filter((c) => c.status === 'EARNED').length,
                 paid: commissions.filter((c) => c.status === 'PAID').length,
+                reversed: commissions.filter((c) => c.status === 'REVERSED').length,
                 total_earned_amount: totalEarned,
+                total_reversed_amount: totalReversed,
                 total_paid_amount: totalPaid,
                 balance_due: Math.max(0, this.round2(totalEarned - totalPaid)),
                 // The mirror image of balance_due. Historically the clamp above was the
@@ -449,6 +460,9 @@ export class ReferralsService {
             signed_up_at: s.signed_up_at,
             earned_at: s.earned_at,
             paid_at: s.paid_at,
+            reversed_at: s.reversed_at ?? null,
+            reversal_reason: s.reversal_reason ?? null,
+            reversed_after_paid: s.reversed_after_paid ?? false,
             referee_payment_id: s.referee_payment_id,
         };
     }

@@ -57,7 +57,13 @@ export default function AdminRefereeDetailPage() {
             header: d.commissionColumns.status,
             cell: (info) => {
                 const status = info.getValue();
-                const tone = status === 'PAID' ? 'success' : status === 'EARNED' ? 'warning' : 'neutral';
+                const tone = status === 'PAID'
+                    ? 'success'
+                    : status === 'EARNED'
+                        ? 'warning'
+                        : status === 'REVERSED'
+                            ? 'danger'
+                            : 'neutral';
                 return <StatusBadge tone={tone}>{d.status[status]}</StatusBadge>;
             },
         }),

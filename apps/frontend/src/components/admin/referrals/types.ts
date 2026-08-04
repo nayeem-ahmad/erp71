@@ -1,3 +1,5 @@
+export type ReferralCommissionStatus = 'PENDING' | 'EARNED' | 'PAID' | 'REVERSED';
+
 export type RefereeStats = {
     pending_signups: number;
     earned_count: number;
@@ -31,10 +33,14 @@ export type ReferralCommission = {
     commission_pct: number;
     plan_amount: number | null;
     commission_amount: number | null;
-    status: 'PENDING' | 'EARNED' | 'PAID';
+    status: ReferralCommissionStatus;
     signed_up_at: string;
     earned_at?: string | null;
     paid_at?: string | null;
+    reversed_at?: string | null;
+    reversal_reason?: string | null;
+    /** The commission had already been paid out when it was reversed. */
+    reversed_after_paid?: boolean;
 };
 
 export type RefereePayment = {
@@ -60,7 +66,9 @@ export type RefereeLedger = {
         pending: number;
         earned: number;
         paid: number;
+        reversed: number;
         total_earned_amount: number;
+        total_reversed_amount: number;
         total_paid_amount: number;
         balance_due: number;
         /** Payments recorded beyond what was earned. Non-zero means the ledger drifted. */

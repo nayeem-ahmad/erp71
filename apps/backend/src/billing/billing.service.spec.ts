@@ -870,6 +870,95 @@ describe('BillingService', () => {
         });
     });
 
+    describe('referral clawback on refund', () => {
+        const refund = (overrides: Record<string, unknown> = {}) => {
+            db.tenantSubscription.findUnique.mockResolvedValueOnce({
+                ...premiumSubscriptionUpsertResult,
+                provider_name: 'ssl-wireless',
+            });
+            return service.processRefund(tenantCtx(), {
+                referenceId: 'bank-ref-1',
+                amount: 3999,
+                reason: 'Customer request',
+                idempotencyKey: 'refund:bank-ref-1',
+                ...overrides,
+            } as any);
+        };
+
+        it('reverses an earned commission when the tenant is refunded', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({ id: 'signup-1', status: 'EARNED' });
+
+            await refund();
+
+            expect(db.referralSignup.update).toHaveBeenCalledWith({
+                where: { id: 'signup-1' },
+                data: expect.objectContaining({
+                    status: 'REVERSED',
+                    reversal_reason: 'Customer request',
+                    reversed_after_paid: false,
+                    reversed_at: expect.any(Date),
+                }),
+            });
+        });
+
+        it('flags a reversal of an already-paid commission so it nets off the next payout', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({ id: 'signup-1', status: 'PAID' });
+
+            await refund();
+
+            expect(db.referralSignup.update).toHaveBeenCalledWith({
+                where: { id: 'signup-1' },
+                data: expect.objectContaining({ status: 'REVERSED', reversed_after_paid: true }),
+            });
+        });
+
+        it('leaves a PENDING referral alone — nothing was earned to claw back', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({ id: 'signup-1', status: 'PENDING' });
+
+            await refund();
+
+            expect(db.referralSignup.update).not.toHaveBeenCalled();
+        });
+
+        it('does not reverse the same commission twice', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({ id: 'signup-1', status: 'REVERSED' });
+
+            await refund();
+
+            expect(db.referralSignup.update).not.toHaveBeenCalled();
+        });
+
+        it('does nothing for a tenant that was never referred', async () => {
+            await refund();
+
+            expect(db.referralSignup.update).not.toHaveBeenCalled();
+        });
+
+        it('falls back to the reference id when no reason was given', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({ id: 'signup-1', status: 'EARNED' });
+
+            await refund({ reason: undefined });
+
+            expect(db.referralSignup.update).toHaveBeenCalledWith({
+                where: { id: 'signup-1' },
+                data: expect.objectContaining({ reversal_reason: 'Refund bank-ref-1' }),
+            });
+        });
+
+        it('still completes the refund when the clawback fails', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({ id: 'signup-1', status: 'EARNED' });
+            db.referralSignup.update.mockRejectedValue(new Error('connection reset'));
+            const logError = jest
+                .spyOn((service as any).logger, 'error')
+                .mockImplementation(() => undefined);
+
+            await expect(refund()).resolves.toMatchObject({ refunded: true });
+            expect(logError).toHaveBeenCalledWith(
+                expect.stringContaining('Failed to reverse referral commission for tenant tenant-1'),
+            );
+        });
+    });
+
     describe('referral commission on activation', () => {
         const activatePremium = () =>
             service.applySubscriptionChange({
@@ -986,6 +1075,19 @@ describe('BillingService', () => {
                 where: { id: 'signup-1' },
                 data: expect.objectContaining({ plan_amount: 3999, commission_amount: 399.9 }),
             });
+        });
+
+        it('does not treat a REVERSED referral as still pending', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({
+                id: 'signup-1',
+                status: 'REVERSED',
+                commission_pct: 10,
+            });
+
+            await activatePremium();
+            await new Promise(process.nextTick);
+
+            expect(db.referralSignup.update).not.toHaveBeenCalled();
         });
 
         it('logs a failed commission write instead of swallowing it, and still activates', async () => {

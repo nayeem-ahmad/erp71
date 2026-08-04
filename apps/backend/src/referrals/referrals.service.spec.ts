@@ -408,6 +408,44 @@ describe('ReferralsService', () => {
             expect(ledger.summary.overpaid_amount).toBe(0);
         });
 
+        it('drops a reversed commission out of the earned total and reports it separately', async () => {
+            db.referralSignup.findMany.mockResolvedValue([
+                signup({ id: 'commission-1', status: 'EARNED', commission_amount: 300 }),
+                signup({ id: 'commission-2', status: 'REVERSED', commission_amount: 200 }),
+            ]);
+            db.refereePayment.findMany.mockResolvedValue([]);
+
+            const ledger = await service.getLedger('referee-1');
+
+            expect(ledger.summary.total_earned_amount).toBe(300);
+            expect(ledger.summary.total_reversed_amount).toBe(200);
+            expect(ledger.summary.reversed).toBe(1);
+            expect(ledger.summary.balance_due).toBe(300);
+        });
+
+        // The money already left the platform, so it cannot be un-sent. Dropping the
+        // commission out of `earned` while the payment still counts turns it into an
+        // overpayment, which is exactly the credit that nets off the next payout.
+        it('nets a commission reversed after payout against what is owed next', async () => {
+            db.referralSignup.findMany.mockResolvedValue([
+                signup({ id: 'commission-1', status: 'EARNED', commission_amount: 300 }),
+                signup({
+                    id: 'commission-2',
+                    status: 'REVERSED',
+                    commission_amount: 200,
+                    reversed_after_paid: true,
+                }),
+            ]);
+            db.refereePayment.findMany.mockResolvedValue([{ id: 'payment-1', amount: 200 }]);
+
+            const ledger = await service.getLedger('referee-1');
+
+            expect(ledger.summary.total_earned_amount).toBe(300);
+            expect(ledger.summary.total_paid_amount).toBe(200);
+            expect(ledger.summary.balance_due).toBe(100);
+            expect(ledger.summary.overpaid_amount).toBe(0);
+        });
+
         it('does not let float drift leak into the ledger totals', async () => {
             db.referralSignup.findMany.mockResolvedValue([
                 signup({ id: 'commission-1', status: 'EARNED', commission_amount: 0.1 }),
