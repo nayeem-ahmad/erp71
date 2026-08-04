@@ -3,9 +3,12 @@ export type ReferralCommissionStatus = 'PENDING' | 'EARNED' | 'PAID' | 'REVERSED
 export type RefereeStats = {
     pending_signups: number;
     earned_count: number;
+    /** Commissions still in EARNED — i.e. the outstanding balance for this referee. */
     earned_amount: number;
     paid_count: number;
     paid_amount: number;
+    reversed_count: number;
+    reversed_amount: number;
 };
 
 export type RefereeRecord = {

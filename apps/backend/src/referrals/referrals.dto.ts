@@ -1,9 +1,29 @@
-import { IsArray, IsBoolean, IsEmail, IsEnum, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsEmail, IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, Min } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ReferralCommissionStatus } from '@prisma/client';
 
 const emptyToUndefined = ({ value }: { value: unknown }) =>
     value === '' || value === null ? undefined : value;
+
+/**
+ * Query strings arrive as text. These coerce before the @IsInt/@IsBoolean checks
+ * run, and deliberately leave anything unrecognisable alone so it fails validation
+ * rather than being silently reinterpreted — `?limit=abc` is a 400, not a default.
+ */
+const toInt = ({ value }: { value: unknown }) => {
+    if (value === '' || value === null || value === undefined) return undefined;
+    if (typeof value === 'number') return value;
+    if (typeof value !== 'string') return value;
+    return /^-?\d+$/.test(value.trim()) ? Number(value.trim()) : value;
+};
+
+const toBoolean = ({ value }: { value: unknown }) => {
+    if (value === '' || value === null || value === undefined) return undefined;
+    if (typeof value === 'boolean') return value;
+    if (value === 'true' || value === '1') return true;
+    if (value === 'false' || value === '0') return false;
+    return value;
+};
 
 export class CreateRefereeDto {
     @IsString()
@@ -123,4 +143,25 @@ export class ListCommissionsQueryDto {
     @Transform(emptyToUndefined)
     @IsEnum(ReferralCommissionStatus)
     status?: ReferralCommissionStatus;
+
+    @IsOptional()
+    @Transform(toInt)
+    @IsInt()
+    @Min(1)
+    @Max(200)
+    limit?: number;
+
+    @IsOptional()
+    @Transform(toInt)
+    @IsInt()
+    @Min(0)
+    offset?: number;
+}
+
+export class ListRefereesQueryDto {
+    /** Archived (soft-deleted) referees are hidden unless this is set. */
+    @IsOptional()
+    @Transform(toBoolean)
+    @IsBoolean()
+    include_archived?: boolean;
 }

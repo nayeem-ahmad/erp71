@@ -27,6 +27,7 @@ describe('ReferralsService', () => {
         referralSignup: {
             count: jest.fn(),
             aggregate: jest.fn(),
+            groupBy: jest.fn(),
             findMany: jest.fn(),
             updateMany: jest.fn(),
         },
@@ -623,9 +624,12 @@ describe('ReferralsService', () => {
     // --- Commission listing ------------------------------------------------------
 
     describe('listCommissions', () => {
-        it('passes both filters through to the query', async () => {
+        beforeEach(() => {
             db.referralSignup.findMany.mockResolvedValue([]);
+            db.referralSignup.count.mockResolvedValue(0);
+        });
 
+        it('passes both filters through to the query', async () => {
             await service.listCommissions({ referee_id: 'referee-1', status: 'EARNED' as any });
 
             expect(db.referralSignup.findMany).toHaveBeenCalledWith(
@@ -634,13 +638,128 @@ describe('ReferralsService', () => {
         });
 
         it('omits absent filters rather than sending undefined keys', async () => {
-            db.referralSignup.findMany.mockResolvedValue([]);
-
             await service.listCommissions({});
 
             expect(db.referralSignup.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({ where: {} }),
             );
+        });
+
+        it('pages by default rather than returning the whole table', async () => {
+            await service.listCommissions({});
+
+            expect(db.referralSignup.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ skip: 0, take: 50 }),
+            );
+        });
+
+        it('honours an explicit page window', async () => {
+            await service.listCommissions({ limit: 10, offset: 20 });
+
+            expect(db.referralSignup.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ skip: 20, take: 10 }),
+            );
+        });
+
+        it('reports how much was left behind instead of truncating silently', async () => {
+            db.referralSignup.findMany.mockResolvedValue([signup({ id: 'commission-1' })]);
+            db.referralSignup.count.mockResolvedValue(120);
+
+            const page = await service.listCommissions({ limit: 1, offset: 0 });
+
+            expect(page).toEqual(
+                expect.objectContaining({ total: 120, limit: 1, offset: 0, has_more: true }),
+            );
+            expect(page.items).toHaveLength(1);
+        });
+
+        it('reports has_more false on the last page', async () => {
+            db.referralSignup.findMany.mockResolvedValue([signup({ id: 'commission-1' })]);
+            db.referralSignup.count.mockResolvedValue(21);
+
+            const page = await service.listCommissions({ limit: 20, offset: 20 });
+
+            expect(page.has_more).toBe(false);
+        });
+    });
+
+    // --- Referee listing ---------------------------------------------------------
+
+    describe('listReferees', () => {
+        const referee = (overrides: Record<string, unknown> = {}) => ({
+            id: 'referee-1',
+            name: 'Rahman Traders',
+            email: 'rahman@example.com',
+            commission_rate: 10,
+            signup_discount: 5,
+            deleted_at: null,
+            _count: { referralSignups: 3 },
+            ...overrides,
+        });
+
+        it('hides archived referees by default', async () => {
+            db.referee.findMany.mockResolvedValue([]);
+
+            await service.listReferees();
+
+            expect(db.referee.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { deleted_at: null } }),
+            );
+        });
+
+        it('includes archived referees on request', async () => {
+            db.referee.findMany.mockResolvedValue([]);
+
+            await service.listReferees({ include_archived: true });
+
+            expect(db.referee.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: {} }),
+            );
+        });
+
+        it('builds every referee stat from a single grouped query', async () => {
+            db.referee.findMany.mockResolvedValue([referee(), referee({ id: 'referee-2' })]);
+            db.referralSignup.groupBy.mockResolvedValue([
+                { referee_id: 'referee-1', status: 'PENDING', _count: { _all: 2 }, _sum: { commission_amount: null } },
+                { referee_id: 'referee-1', status: 'EARNED', _count: { _all: 1 }, _sum: { commission_amount: 300 } },
+                { referee_id: 'referee-2', status: 'PAID', _count: { _all: 4 }, _sum: { commission_amount: 800 } },
+            ]);
+
+            const result = await service.listReferees();
+
+            expect(db.referralSignup.groupBy).toHaveBeenCalledTimes(1);
+            expect(db.referralSignup.aggregate).not.toHaveBeenCalled();
+            expect(db.referralSignup.count).not.toHaveBeenCalled();
+            expect(result[0].stats).toEqual(
+                expect.objectContaining({ pending_signups: 2, earned_count: 1, earned_amount: 300 }),
+            );
+            expect(result[1].stats).toEqual(
+                expect.objectContaining({ paid_count: 4, paid_amount: 800 }),
+            );
+        });
+
+        it('reports zeroes for a referee with no signups at all', async () => {
+            db.referee.findMany.mockResolvedValue([referee({ _count: { referralSignups: 0 } })]);
+            db.referralSignup.groupBy.mockResolvedValue([]);
+
+            const result = await service.listReferees();
+
+            expect(result[0].stats).toEqual({
+                pending_signups: 0,
+                earned_count: 0,
+                earned_amount: 0,
+                paid_count: 0,
+                paid_amount: 0,
+                reversed_count: 0,
+                reversed_amount: 0,
+            });
+        });
+
+        it('does not query for stats when there are no referees', async () => {
+            db.referee.findMany.mockResolvedValue([]);
+
+            await expect(service.listReferees()).resolves.toEqual([]);
+            expect(db.referralSignup.groupBy).not.toHaveBeenCalled();
         });
     });
 });

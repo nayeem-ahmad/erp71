@@ -830,6 +830,7 @@ export const adminMessages = {
             active: "সক্রিয়",
             inactive: "নিষ্ক্রিয়",
             archived: "আর্কাইভ",
+            showArchived: "আর্কাইভ দেখান",
             archivedToast: "{name} আর্কাইভ করা হয়েছে — লেজার ইতিহাস সংরক্ষিত",
             deletedToast: "{name} স্থায়ীভাবে মুছে ফেলা হয়েছে",
             deleteFailed: "রেফারি মুছতে ব্যর্থ",

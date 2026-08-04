@@ -16,6 +16,7 @@ import { ReferralsService } from './referrals.service';
 import {
     CreateRefereeDto,
     ListCommissionsQueryDto,
+    ListRefereesQueryDto,
     RecordPaymentDto,
     UpdateRefereeDto,
 } from './referrals.dto';
@@ -28,8 +29,8 @@ export class ReferralsController {
     // ── Referees ──────────────────────────────────────────────────────────────
 
     @Get('referees')
-    listReferees() {
-        return this.referrals.listReferees();
+    listReferees(@Query() query: ListRefereesQueryDto) {
+        return this.referrals.listReferees(query);
     }
 
     @Post('referees')

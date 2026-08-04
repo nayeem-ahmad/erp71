@@ -1,5 +1,5 @@
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
-import { ListCommissionsQueryDto, RecordPaymentDto } from './referrals.dto';
+import { ListCommissionsQueryDto, ListRefereesQueryDto, RecordPaymentDto } from './referrals.dto';
 
 /**
  * `referee_id` and `status` are interpolated straight into a Prisma `where`, so
@@ -52,6 +52,56 @@ describe('referrals DTO validation', () => {
 
         it('accepts an empty query', async () => {
             await expect(pipe.transform({}, metadata)).resolves.toEqual({});
+        });
+
+        it('coerces the page window out of query strings', async () => {
+            await expect(pipe.transform({ limit: '25', offset: '50' }, metadata)).resolves.toEqual({
+                limit: 25,
+                offset: 50,
+            });
+        });
+
+        it('rejects a non-numeric limit rather than falling back to a default', async () => {
+            await expect(pipe.transform({ limit: 'abc' }, metadata)).rejects.toThrow(
+                BadRequestException,
+            );
+        });
+
+        it('rejects a page size beyond the cap', async () => {
+            await expect(pipe.transform({ limit: '500' }, metadata)).rejects.toThrow(
+                BadRequestException,
+            );
+        });
+
+        it('rejects a negative offset', async () => {
+            await expect(pipe.transform({ offset: '-1' }, metadata)).rejects.toThrow(
+                BadRequestException,
+            );
+        });
+    });
+
+    describe('ListRefereesQueryDto', () => {
+        const metadata = { type: 'query' as const, metatype: ListRefereesQueryDto };
+
+        it.each([
+            ['true', true],
+            ['1', true],
+            ['false', false],
+            ['0', false],
+        ])('coerces include_archived=%s', async (input, expected) => {
+            await expect(pipe.transform({ include_archived: input }, metadata)).resolves.toEqual({
+                include_archived: expected,
+            });
+        });
+
+        it('treats an absent flag as absent rather than false', async () => {
+            await expect(pipe.transform({}, metadata)).resolves.toEqual({});
+        });
+
+        it('rejects a value that is neither boolean nor a recognised string', async () => {
+            await expect(
+                pipe.transform({ include_archived: 'maybe' }, metadata),
+            ).rejects.toThrow(BadRequestException);
         });
     });
 
