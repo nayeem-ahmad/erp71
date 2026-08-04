@@ -935,7 +935,7 @@ export const adminMessages = {
                 confirm: "পেমেন্ট রেকর্ড করুন",
                 saving: "সংরক্ষণ হচ্ছে…",
                 failed: "পেমেন্ট রেকর্ড ব্যর্থ",
-                success: "৳{amount} পেমেন্ট রেকর্ড হয়েছে",
+                success: "{amount} পেমেন্ট রেকর্ড হয়েছে",
                 noEarned: "পরিশোধের জন্য কোনো অর্জিত কমিশন নেই",
             },
             delete: {

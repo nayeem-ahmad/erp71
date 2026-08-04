@@ -91,4 +91,26 @@ describe('addNavNodesToLayout', () => {
         expect(node).toEqual(expect.objectContaining({ parentId: 'crm' }));
         expect(validateNavLayout(defaults)).toEqual({ valid: true });
     });
+
+    /**
+     * admin.referrals was in NAV_REGISTRY but in no layout at all, so the platform
+     * admin referral screens were reachable only through a card on
+     * /admin/platform-settings — registered, rendered, and effectively hidden.
+     */
+    it('ships admin.referrals in the platform admin layout under the admin module', () => {
+        const defaults = getDefaultNavLayout(NavScope.PLATFORM_ADMIN);
+        const node = defaults.find((n) => n.id === 'admin.referrals');
+
+        expect(node).toEqual(expect.objectContaining({ parentId: 'admin', visible: true }));
+        expect(validateNavLayout(defaults)).toEqual({ valid: true });
+    });
+
+    it('does not collide sort order with its siblings under admin', () => {
+        const defaults = getDefaultNavLayout(NavScope.PLATFORM_ADMIN);
+        const orders = defaults
+            .filter((n) => n.parentId === 'admin')
+            .map((n) => n.sortOrder);
+
+        expect(new Set(orders).size).toBe(orders.length);
+    });
 });

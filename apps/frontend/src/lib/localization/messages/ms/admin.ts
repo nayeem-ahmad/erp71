@@ -935,7 +935,7 @@ export const adminMessages = {
                 confirm: "Rekod pembayaran",
                 saving: "Menyimpan…",
                 failed: "Gagal merekod pembayaran",
-                success: "Pembayaran ৳{amount} direkodkan",
+                success: "Pembayaran {amount} direkodkan",
                 noEarned: "Tiada komisen diperoleh untuk dibayar",
             },
             delete: {
