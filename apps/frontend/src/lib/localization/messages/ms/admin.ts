@@ -830,6 +830,7 @@ export const adminMessages = {
             active: "Aktif",
             inactive: "Tidak aktif",
             archived: "Diarkibkan",
+            showArchived: "Tunjukkan diarkibkan",
             archivedToast: "{name} diarkibkan — sejarah lejar dikekalkan",
             deletedToast: "{name} dipadam secara kekal",
             deleteFailed: "Gagal memadam rujukan",

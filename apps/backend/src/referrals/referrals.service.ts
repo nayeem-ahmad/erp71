@@ -1,9 +1,18 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { PasswordResetService } from '../password-reset/password-reset.service';
-import { CreateRefereeDto, ListCommissionsQueryDto, RecordPaymentDto, UpdateRefereeDto } from './referrals.dto';
+import {
+    CreateRefereeDto,
+    ListCommissionsQueryDto,
+    ListRefereesQueryDto,
+    RecordPaymentDto,
+    UpdateRefereeDto,
+} from './referrals.dto';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
+
+/** Matches the cap in ListCommissionsQueryDto; kept here so the service has a default of its own. */
+const DEFAULT_COMMISSION_PAGE_SIZE = 50;
 
 @Injectable()
 export class ReferralsService {
@@ -134,31 +143,65 @@ export class ReferralsService {
         };
     }
 
-    async listReferees() {
+    /**
+     * List referees with their commission totals.
+     *
+     * The totals come from a single `groupBy` rather than three aggregates per
+     * referee. The previous shape issued 1 + 3n queries — 1,501 at 500 partners —
+     * for a page that renders one row each.
+     *
+     * Archived referees are excluded by default. They were previously returned
+     * alongside active ones with no filter and no visual distinction, so a
+     * soft-deleted partner looked like a live one.
+     */
+    async listReferees(query: ListRefereesQueryDto = {}) {
         const referees = await this.db.referee.findMany({
+            where: query.include_archived ? {} : { deleted_at: null },
             orderBy: { created_at: 'desc' },
             include: {
                 _count: { select: { referralSignups: true } },
             },
         });
 
-        return Promise.all(referees.map(async (r) => {
-            const [pending, earned, paid] = await Promise.all([
-                this.db.referralSignup.count({ where: { referee_id: r.id, status: 'PENDING' } }),
-                this.db.referralSignup.aggregate({ where: { referee_id: r.id, status: 'EARNED' }, _sum: { commission_amount: true }, _count: true }),
-                this.db.referralSignup.aggregate({ where: { referee_id: r.id, status: 'PAID' }, _sum: { commission_amount: true }, _count: true }),
-            ]);
+        if (referees.length === 0) return [];
+
+        const grouped = await this.db.referralSignup.groupBy({
+            by: ['referee_id', 'status'],
+            where: { referee_id: { in: referees.map((r) => r.id) } },
+            _count: { _all: true },
+            _sum: { commission_amount: true },
+        });
+
+        const key = (refereeId: string, status: string) => `${refereeId}:${status}`;
+        const totals = new Map(
+            grouped.map((g) => [
+                key(g.referee_id, g.status),
+                {
+                    count: g._count._all,
+                    amount: Number(g._sum.commission_amount ?? 0),
+                },
+            ]),
+        );
+        const totalsFor = (refereeId: string, status: string) =>
+            totals.get(key(refereeId, status)) ?? { count: 0, amount: 0 };
+
+        return referees.map((r) => {
+            const earned = totalsFor(r.id, 'EARNED');
+            const paid = totalsFor(r.id, 'PAID');
+            const reversed = totalsFor(r.id, 'REVERSED');
             return {
                 ...this.mapReferee(r),
                 stats: {
-                    pending_signups: pending,
-                    earned_count: earned._count,
-                    earned_amount: Number(earned._sum.commission_amount ?? 0),
-                    paid_count: paid._count,
-                    paid_amount: Number(paid._sum.commission_amount ?? 0),
+                    pending_signups: totalsFor(r.id, 'PENDING').count,
+                    earned_count: earned.count,
+                    earned_amount: this.round2(earned.amount),
+                    paid_count: paid.count,
+                    paid_amount: this.round2(paid.amount),
+                    reversed_count: reversed.count,
+                    reversed_amount: this.round2(reversed.amount),
                 },
             };
-        }));
+        });
     }
 
     async getReferee(id: string) {
@@ -250,20 +293,41 @@ export class ReferralsService {
 
     // ── Commissions ───────────────────────────────────────────────────────────
 
+    /**
+     * Commissions across every referee. This is the one referral query with no
+     * natural bound — it grows with total signups, not with one partner's history —
+     * so it pages rather than returning the whole table. The response is wrapped
+     * because a bare array cannot say how much was left behind.
+     */
     async listCommissions(query: ListCommissionsQueryDto) {
-        const commissions = await this.db.referralSignup.findMany({
-            where: {
-                ...(query.referee_id && { referee_id: query.referee_id }),
-                ...(query.status && { status: query.status }),
-            },
-            orderBy: { signed_up_at: 'desc' },
-            include: {
-                referee: { select: { id: true, name: true, email: true, referral_code: true } },
-                tenant: { select: { id: true, name: true } },
-            },
-        });
+        const where = {
+            ...(query.referee_id && { referee_id: query.referee_id }),
+            ...(query.status && { status: query.status }),
+        };
+        const limit = query.limit ?? DEFAULT_COMMISSION_PAGE_SIZE;
+        const offset = query.offset ?? 0;
 
-        return commissions.map(this.mapSignup);
+        const [commissions, total] = await Promise.all([
+            this.db.referralSignup.findMany({
+                where,
+                orderBy: { signed_up_at: 'desc' },
+                skip: offset,
+                take: limit,
+                include: {
+                    referee: { select: { id: true, name: true, email: true, referral_code: true } },
+                    tenant: { select: { id: true, name: true } },
+                },
+            }),
+            this.db.referralSignup.count({ where }),
+        ]);
+
+        return {
+            items: commissions.map(this.mapSignup),
+            total,
+            limit,
+            offset,
+            has_more: offset + commissions.length < total,
+        };
     }
 
     // ── Payments ──────────────────────────────────────────────────────────────

@@ -32,19 +32,22 @@ export default function AdminReferralsPage() {
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<RefereeRecord | null>(null);
     const [deleting, setDeleting] = useState(false);
+    // Archived referees are hidden by the API unless asked for. They used to come
+    // back mixed in with live ones, distinguishable only by a badge.
+    const [includeArchived, setIncludeArchived] = useState(false);
 
     const load = useCallback(async () => {
         setIsLoading(true);
         setError('');
         try {
-            const rows = await api.getAdminReferees();
+            const rows = await api.getAdminReferees({ include_archived: includeArchived });
             setReferees(Array.isArray(rows) ? rows : []);
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : m.loadFailed);
         } finally {
             setIsLoading(false);
         }
-    }, [m.loadFailed]);
+    }, [m.loadFailed, includeArchived]);
 
     useEffect(() => {
         void load();
@@ -250,13 +253,24 @@ export default function AdminReferralsPage() {
                 </div>
             )}
 
-            <div className="max-w-md">
-                <input
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder={m.searchPlaceholder}
-                    className="w-full rounded-md border border-gray-100 bg-white px-4 py-3 text-sm outline-none"
-                />
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="w-full max-w-md">
+                    <input
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                        placeholder={m.searchPlaceholder}
+                        className="w-full rounded-md border border-gray-100 bg-white px-4 py-3 text-sm outline-none"
+                    />
+                </div>
+                <label className="flex min-h-touch items-center gap-2 text-sm font-medium text-gray-700">
+                    <input
+                        type="checkbox"
+                        checked={includeArchived}
+                        onChange={(event) => setIncludeArchived(event.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                    />
+                    {m.showArchived}
+                </label>
             </div>
 
             {isLoading ? (

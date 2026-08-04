@@ -65,6 +65,8 @@ describe('AuthService', () => {
         userStorePermission: { createMany: jest.fn() },
         emailVerificationToken: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }), create: jest.fn().mockResolvedValue({}) },
         tenantAddonSubscription: { findMany: jest.fn().mockResolvedValue([]) },
+        referee: { findFirst: jest.fn().mockResolvedValue(null) },
+        referralSignup: { create: jest.fn() },
         $transaction: jest.fn(),
     };
 
@@ -261,6 +263,91 @@ describe('AuthService', () => {
                 ]),
             }),
         );
+    });
+
+    describe('referral code at signup', () => {
+        const signupWithCode = () =>
+            service.signup({
+                email: 'owner@example.com',
+                password: 'password123',
+                name: 'Owner',
+                tenantName: 'Tenant One',
+                storeName: 'Main Store',
+                referralCode: 'rahm1a2b3c',
+            } as any);
+
+        beforeEach(() => {
+            db.user.findUnique
+                .mockResolvedValueOnce(null)                                        // no duplicate email
+                .mockResolvedValueOnce({ email: 'owner@example.com' })              // self-referral check
+                .mockResolvedValue(makeUserWithAccess('store-1', 'tenant-1'));      // auth response
+            db.user.create.mockResolvedValue({ id: 'user-1', email: 'owner@example.com', name: 'Owner' });
+            db.subscriptionPlan.findUnique.mockResolvedValue({ id: 'plan-basic', code: 'BASIC', is_active: true, monthly_price: 499 });
+            db.tenant.create.mockResolvedValue({ id: 'tenant-1' });
+            db.store.create.mockResolvedValue({ id: 'store-1' });
+        });
+
+        it('records the referral, upper-casing the code the user typed', async () => {
+            db.referee.findFirst.mockResolvedValue({
+                id: 'referee-1',
+                email: 'partner@example.com',
+                user_id: 'user-partner',
+                signup_discount: 5,
+                commission_rate: 10,
+            });
+
+            await signupWithCode();
+
+            expect(db.referee.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ referral_code: 'RAHM1A2B3C' }),
+                }),
+            );
+            expect(db.referralSignup.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        referee_id: 'referee-1',
+                        tenant_id: 'tenant-1',
+                        discount_pct: 5,
+                        commission_pct: 10,
+                        status: 'PENDING',
+                    }),
+                }),
+            );
+        });
+
+        it('refuses a partner signing up their own tenant with their own code', async () => {
+            db.referee.findFirst.mockResolvedValue({
+                id: 'referee-1',
+                email: 'OWNER@example.com', // same address, different case
+                user_id: null,
+                signup_discount: 5,
+                commission_rate: 10,
+            });
+
+            await expect(signupWithCode()).rejects.toThrow(/cannot use your own referral code/i);
+            expect(db.referralSignup.create).not.toHaveBeenCalled();
+        });
+
+        it('refuses when the code belongs to a referee already linked to this account', async () => {
+            db.referee.findFirst.mockResolvedValue({
+                id: 'referee-1',
+                email: 'partner@example.com',
+                user_id: 'user-1', // the account being provisioned
+                signup_discount: 5,
+                commission_rate: 10,
+            });
+
+            await expect(signupWithCode()).rejects.toThrow(/cannot use your own referral code/i);
+            expect(db.referralSignup.create).not.toHaveBeenCalled();
+        });
+
+        it('ignores an unknown code without failing the signup', async () => {
+            db.referee.findFirst.mockResolvedValue(null);
+
+            await expect(signupWithCode()).resolves.toBeDefined();
+            expect(db.referralSignup.create).not.toHaveBeenCalled();
+        });
     });
 
     it('provisionTenant creates UserStoreAccess and UserStorePermission for OWNER', async () => {

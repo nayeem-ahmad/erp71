@@ -837,6 +837,7 @@ export const adminMessages = {
         active: 'Active',
         inactive: 'Inactive',
         archived: 'Archived',
+        showArchived: 'Show archived',
         archivedToast: '{name} archived — ledger history is preserved',
         deletedToast: '{name} permanently deleted',
         deleteFailed: 'Failed to delete referee',

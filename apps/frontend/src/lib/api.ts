@@ -6,6 +6,7 @@ import type {
     PlatformFeatures,
     TenantFeatureOverrides,
 } from '@erp71/shared-types';
+import type { ReferralCommissionStatus } from '@/components/admin/referrals/types';
 
 /** Per-tenant feature state: platform defaults, this tenant's overrides, and the result. */
 export type AdminTenantFeatures = {
@@ -2099,7 +2100,11 @@ export const api = {
         }),
     sendPlatformAdminUserResetEmail: (userId: string) =>
         fetchWithAuth(`/admin/users/${userId}/send-reset-email`, { method: 'POST' }),
-    getAdminReferees: () => fetchWithAuth('/admin/referrals/referees'),
+    /** Archived referees are excluded unless `include_archived` is set. */
+    getAdminReferees: (params?: { include_archived?: boolean }) => {
+        const suffix = params?.include_archived ? '?include_archived=true' : '';
+        return fetchWithAuth(`/admin/referrals/referees${suffix}`);
+    },
     createAdminReferee: (data: {
         name: string;
         email: string;
@@ -2147,10 +2152,18 @@ export const api = {
     getRefereePortalLedger: () => fetchWithAuth('/referrals/me/ledger'),
     sendAdminRefereeInvite: (id: string) =>
         fetchWithAuth(`/admin/referrals/referees/${id}/send-invite`, { method: 'POST' }),
-    getAdminReferralCommissions: (params?: { referee_id?: string; status?: 'PENDING' | 'EARNED' | 'PAID' }) => {
+    /** Paged: returns `{ items, total, limit, offset, has_more }`, not a bare array. */
+    getAdminReferralCommissions: (params?: {
+        referee_id?: string;
+        status?: ReferralCommissionStatus;
+        limit?: number;
+        offset?: number;
+    }) => {
         const query = new URLSearchParams();
         if (params?.referee_id) query.set('referee_id', params.referee_id);
         if (params?.status) query.set('status', params.status);
+        if (params?.limit !== undefined) query.set('limit', String(params.limit));
+        if (params?.offset !== undefined) query.set('offset', String(params.offset));
         const suffix = query.toString() ? `?${query.toString()}` : '';
         return fetchWithAuth(`/admin/referrals/commissions${suffix}`);
     },

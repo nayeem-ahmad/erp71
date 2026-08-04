@@ -606,6 +606,24 @@ export class AuthService {
                 where: { referral_code: dto.referralCode.trim().toUpperCase(), is_active: true, deleted_at: null },
             });
             if (referee) {
+                // A partner using their own code would collect commission on their own
+                // subscription and take the signup discount on top of it. Checked both by
+                // account link and by email, because a referee created but not yet linked
+                // to a User has no user_id to match on.
+                const signingUp = await tx.user.findUnique({
+                    where: { id: userId },
+                    select: { email: true },
+                });
+                const isSelfReferral =
+                    referee.user_id === userId ||
+                    referee.email.toLowerCase() === (signingUp?.email ?? '').toLowerCase();
+
+                if (isSelfReferral) {
+                    throw new BadRequestException(
+                        'You cannot use your own referral code. Remove it to continue.',
+                    );
+                }
+
                 await tx.referralSignup.create({
                     data: {
                         referee_id: referee.id,
