@@ -131,4 +131,53 @@ describe('isSafeTarget', () => {
         expect(result.ok).toBe(false);
         if (!result.ok) expect(result.reason.length).toBeGreaterThan(0);
     });
+
+    describe('security regression tests', () => {
+        describe('rejects protocol-relative URLs disguised with control characters', () => {
+            it.each([
+                '/\n/evil.com',
+                '/\t/evil.com',
+                '/\r/evil.com',
+            ])('%s', (input) => {
+                expect(isSafeTarget(input)).toMatchObject({ ok: false });
+            });
+        });
+
+        describe('rejects private hosts in IPv6 forms', () => {
+            it.each([
+                'http://[::ffff:169.254.169.254]/latest/meta-data',
+                'http://[::ffff:127.0.0.1]/',
+                'http://[::ffff:192.168.1.1]/',
+                'http://[::ffff:10.0.0.1]/',
+                'http://[fe80::1]/',
+            ])('%s', (input) => {
+                expect(isSafeTarget(input)).toMatchObject({ ok: false });
+            });
+        });
+
+        describe('rejects percent-encoded auth paths', () => {
+            it.each([
+                '/%6c%6fgin',
+                '/%6C%6Fgin',
+                '/%73%69%67%6e%75%70',
+            ])('%s', (input) => {
+                expect(isSafeTarget(input)).toMatchObject({ ok: false });
+            });
+        });
+
+        describe('still allows non-auth paths and public hosts', () => {
+            it('allows a path that happens to contain blocked-path letters', () => {
+                expect(isSafeTarget('/loginary')).toMatchObject({ ok: true });
+            });
+
+            it('allows public IPv4 addresses outside private ranges', () => {
+                expect(isSafeTarget('http://172.32.0.1')).toMatchObject({ ok: true });
+                expect(isSafeTarget('http://11.0.0.1')).toMatchObject({ ok: true });
+            });
+
+            it('allows public IPv6 addresses', () => {
+                expect(isSafeTarget('http://[2606:4700::1111]/')).toMatchObject({ ok: true });
+            });
+        });
+    });
 });

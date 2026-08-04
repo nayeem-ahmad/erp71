@@ -30,7 +30,15 @@ const BLOCKED_INTERNAL_PREFIXES = [
 ];
 
 function isBlockedInternalPath(pathname: string): boolean {
-    const lower = pathname.toLowerCase();
+    let decodedPath = pathname;
+    try {
+        decodedPath = decodeURIComponent(pathname);
+    } catch {
+        // Malformed percent-encoding is not allowed.
+        return true;
+    }
+
+    const lower = decodedPath.toLowerCase();
     return BLOCKED_INTERNAL_PREFIXES.some(
         // Prefix match on a segment boundary, so `/loginary` stays allowed.
         (prefix) => lower === prefix || lower.startsWith(`${prefix}/`) || lower.startsWith(`${prefix}?`),
@@ -63,8 +71,43 @@ function isPrivateHost(rawHost: string): boolean {
     if (host.startsWith('[') && host.endsWith(']')) {
         const inner = host.slice(1, -1);
         if (inner === '::1' || inner === '::') return true;
+
+        // fe80::/10 — link-local addresses.
+        if (inner.startsWith('fe80:') || inner.startsWith('fe81:') || inner.startsWith('fe82:') ||
+            inner.startsWith('fe83:') || inner.startsWith('fe84:') || inner.startsWith('fe85:') ||
+            inner.startsWith('fe86:') || inner.startsWith('fe87:') || inner.startsWith('fe88:') ||
+            inner.startsWith('fe89:') || inner.startsWith('fe8a:') || inner.startsWith('fe8b:') ||
+            inner.startsWith('fe8c:') || inner.startsWith('fe8d:') || inner.startsWith('fe8e:') ||
+            inner.startsWith('fe8f:') || inner.startsWith('fe9:') || inner.startsWith('fea:') ||
+            inner.startsWith('feb:') || inner.startsWith('fec:') || inner.startsWith('fed:') ||
+            inner.startsWith('fee:') || inner.startsWith('fef:')) {
+            return true;
+        }
+
         // fc00::/7 — unique local addresses.
         if (inner.startsWith('fc') || inner.startsWith('fd')) return true;
+
+        // ::ffff: IPv4-mapped IPv6 addresses — extract and check the IPv4 part.
+        if (inner.startsWith('::ffff:')) {
+            const ipv4Part = inner.slice(7); // After "::ffff:"
+            // Handle both decimal (::ffff:169.254.169.254) and hex (::ffff:a9fe:a9fe) forms.
+            if (ipv4Part.includes('.')) {
+                return isPrivateIpv4(ipv4Part);
+            } else {
+                // Hex form like a9fe:a9fe - convert to decimal IPv4.
+                const hexParts = ipv4Part.split(':');
+                if (hexParts.length === 2) {
+                    const high = parseInt(hexParts[0], 16);
+                    const low = parseInt(hexParts[1], 16);
+                    const a = (high >> 8) & 0xff;
+                    const b = high & 0xff;
+                    const c = (low >> 8) & 0xff;
+                    const d = low & 0xff;
+                    return isPrivateIpv4(`${a}.${b}.${c}.${d}`);
+                }
+            }
+        }
+
         return false;
     }
 
@@ -80,6 +123,12 @@ export function isSafeTarget(raw: string): SafeTargetResult {
     }
 
     if (value.startsWith('/')) {
+        // Reject control characters (tab, CR, LF) that would bypass the protocol-relative check.
+        // new URL strips these before parsing, allowing protocol-relative URLs to sneak through.
+        if (value.includes('\t') || value.includes('\r') || value.includes('\n')) {
+            return { ok: false, reason: 'Control characters are not allowed in URLs.' };
+        }
+
         // `//host` is protocol-relative and `/\host` is the same thing to a
         // browser — both look like paths here and navigate off-site.
         if (value.startsWith('//') || value.startsWith('/\\')) {
