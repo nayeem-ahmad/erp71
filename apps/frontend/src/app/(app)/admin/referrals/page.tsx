@@ -131,6 +131,21 @@ export default function AdminReferralsPage() {
             header: m.columns.referrals,
             cell: (info) => info.getValue(),
         }),
+        columnHelper.accessor((row) => row.stats.clicks, {
+            id: 'clicks',
+            header: m.columns.clicks,
+            cell: (info) => {
+                const rate = info.row.original.stats.conversion_rate;
+                return (
+                    <div className="flex flex-col">
+                        <span>{info.getValue()}</span>
+                        {rate !== null && (
+                            <span className="text-[10px] font-semibold text-gray-500">{rate}%</span>
+                        )}
+                    </div>
+                );
+            },
+        }),
         columnHelper.accessor((row) => row.stats.earned_amount, {
             id: 'earned',
             header: m.columns.earned,

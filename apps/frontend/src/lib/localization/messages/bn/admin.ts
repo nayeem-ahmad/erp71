@@ -841,6 +841,7 @@ export const adminMessages = {
                 discount: "সাইনআপ ছাড়",
                 commission: "কমিশন হার",
                 referrals: "সাইনআপ",
+                clicks: "ক্লিক",
                 earned: "অর্জিত",
                 balance: "বকেয়া",
                 status: "স্ট্যাটাস",
@@ -884,6 +885,8 @@ export const adminMessages = {
                 loadFailed: "লেজার লোড করতে ব্যর্থ",
                 archivedBanner: "এই রেফারি আর্কাইভ করা হয়েছে। কমিশন ও পেমেন্ট ইতিহাস নিচে দেখা যাবে।",
                 summary: {
+                    clicks: "লিংক ক্লিক",
+                    conversionRate: "কনভার্শন",
                     totalReferrals: "মোট সাইনআপ",
                     pending: "অপেক্ষমাণ",
                     earned: "অর্জিত",

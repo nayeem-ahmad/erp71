@@ -848,6 +848,7 @@ export const adminMessages = {
             discount: 'Signup Discount',
             commission: 'Commission Rate',
             referrals: 'Signups',
+            clicks: 'Clicks',
             earned: 'Earned',
             balance: 'Balance Due',
             status: 'Status',
@@ -891,6 +892,8 @@ export const adminMessages = {
             loadFailed: 'Failed to load ledger',
             archivedBanner: 'This referee is archived. Commission and payment history remain available below.',
             summary: {
+                clicks: 'Link clicks',
+                conversionRate: 'Conversion',
                 totalReferrals: 'Total signups',
                 pending: 'Pending',
                 earned: 'Earned',

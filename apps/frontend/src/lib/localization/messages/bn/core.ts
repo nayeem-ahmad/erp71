@@ -1525,6 +1525,8 @@ export const coreMessages = {
             copyFailed: "ক্লিপবোর্ডে কপি করা যায়নি",
             summary: {
                 balanceDue: "বকেয়া",
+                clicks: "লিংক ক্লিক",
+                conversionRate: "কনভার্শন",
                 totalReferrals: "মোট সাইনআপ",
                 pending: "অপেক্ষমাণ",
                 earned: "অর্জিত",

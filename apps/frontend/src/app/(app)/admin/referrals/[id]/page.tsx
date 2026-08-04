@@ -115,6 +115,11 @@ export default function AdminRefereeDetailPage() {
     ], [d]);
 
     const summaryCards = ledger ? [
+        { label: d.summary.clicks, value: String(ledger.summary.clicks) },
+        {
+            label: d.summary.conversionRate,
+            value: ledger.summary.conversion_rate === null ? '—' : `${ledger.summary.conversion_rate}%`,
+        },
         { label: d.summary.totalReferrals, value: String(ledger.summary.total_referrals) },
         { label: d.summary.pending, value: String(ledger.summary.pending) },
         { label: d.summary.earned, value: String(ledger.summary.earned) },

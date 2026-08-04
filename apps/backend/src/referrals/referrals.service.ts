@@ -7,6 +7,7 @@ import {
     ListCommissionsQueryDto,
     ListRefereesQueryDto,
     RecordPaymentDto,
+    TrackClickDto,
     UpdateRefereeDto,
 } from './referrals.dto';
 import * as bcrypt from 'bcrypt';
@@ -169,12 +170,23 @@ export class ReferralsService {
 
         if (referees.length === 0) return [];
 
-        const grouped = await this.db.referralSignup.groupBy({
-            by: ['referee_id', 'status'],
-            where: { referee_id: { in: referees.map((r) => r.id) } },
-            _count: { _all: true },
-            _sum: { commission_amount: true },
-        });
+        const refereeIds = referees.map((r) => r.id);
+        const [grouped, clicksByReferee] = await Promise.all([
+            this.db.referralSignup.groupBy({
+                by: ['referee_id', 'status'],
+                where: { referee_id: { in: refereeIds } },
+                _count: { _all: true },
+                _sum: { commission_amount: true },
+            }),
+            // Second grouped query rather than a per-referee count, for the same
+            // reason the stats above are grouped: this page renders one row each.
+            this.db.referralClick.groupBy({
+                by: ['referee_id'],
+                where: { referee_id: { in: refereeIds } },
+                _count: { _all: true },
+            }),
+        ]);
+        const clickCounts = new Map(clicksByReferee.map((c) => [c.referee_id, c._count._all]));
 
         const key = (refereeId: string, status: string) => `${refereeId}:${status}`;
         const totals = new Map(
@@ -193,9 +205,11 @@ export class ReferralsService {
             const earned = totalsFor(r.id, 'EARNED');
             const paid = totalsFor(r.id, 'PAID');
             const reversed = totalsFor(r.id, 'REVERSED');
+            const clicks = clickCounts.get(r.id) ?? 0;
             return {
                 ...this.mapReferee(r),
                 stats: {
+                    ...this.conversionStats(clicks, r._count.referralSignups),
                     pending_signups: totalsFor(r.id, 'PENDING').count,
                     earned_count: earned.count,
                     earned_amount: this.round2(earned.amount),
@@ -293,6 +307,56 @@ export class ReferralsService {
 
         await this.db.referee.delete({ where: { id } });
         return { id, deleted: true, archived: false };
+    }
+
+    // ── Click tracking ────────────────────────────────────────────────────────
+
+    /**
+     * Record a visit to a partner's tracking link.
+     *
+     * Returns nothing and throws nothing for an unknown or inactive code: the
+     * caller is an anonymous visitor being redirected to signup, and neither a
+     * 404 nor a delay should be observable from outside — otherwise this endpoint
+     * becomes a way to enumerate which referral codes exist.
+     */
+    async recordClick(code: string, meta: TrackClickDto = {}): Promise<void> {
+        const normalized = this.normalizeReferralCode(code);
+        const referee = await this.db.referee.findFirst({
+            where: { referral_code: normalized, is_active: true, deleted_at: null },
+            select: { id: true },
+        });
+        if (!referee) return;
+
+        await this.db.referralClick.create({
+            data: {
+                referee_id: referee.id,
+                code: normalized,
+                referrer: this.truncate(meta.referrer),
+                user_agent: this.truncate(meta.user_agent),
+            },
+        });
+    }
+
+    /** Both columns take arbitrary caller-supplied text; keep them bounded. */
+    private truncate(value?: string | null): string | null {
+        if (!value) return null;
+        const trimmed = value.trim();
+        return trimmed ? trimmed.slice(0, 500) : null;
+    }
+
+    /**
+     * Clicks and conversion rate for one partner.
+     *
+     * `conversion_rate` is null rather than 0 when there are no clicks — "0%" reads
+     * as "nobody converted" when the truth is "nobody has visited yet", and a
+     * partner looking at their own dashboard should not be told they are failing
+     * before they have started.
+     */
+    private conversionStats(clicks: number, signups: number) {
+        return {
+            clicks,
+            conversion_rate: clicks > 0 ? Math.round((signups / clicks) * 1000) / 10 : null,
+        };
     }
 
     // ── Commissions ───────────────────────────────────────────────────────────
@@ -458,7 +522,7 @@ export class ReferralsService {
         });
         if (!referee) throw new NotFoundException('Referee not found');
 
-        const [commissions, payments] = await Promise.all([
+        const [commissions, payments, clicks] = await Promise.all([
             this.db.referralSignup.findMany({
                 where: { referee_id: refereeId },
                 orderBy: { signed_up_at: 'desc' },
@@ -468,6 +532,7 @@ export class ReferralsService {
                 where: { referee_id: refereeId },
                 orderBy: { paid_at: 'desc' },
             }),
+            this.db.referralClick.count({ where: { referee_id: refereeId } }),
         ]);
 
         // REVERSED is deliberately absent here: a clawed-back commission is not
@@ -489,6 +554,7 @@ export class ReferralsService {
         return {
             referee,
             summary: {
+                ...this.conversionStats(clicks, commissions.length),
                 total_referrals: commissions.length,
                 pending: commissions.filter((c) => c.status === 'PENDING').length,
                 earned: commissions.filter((c) => c.status === 'EARNED').length,

@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsEmail, IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsEmail, IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ReferralCommissionStatus } from '@prisma/client';
 
@@ -156,6 +156,24 @@ export class ListCommissionsQueryDto {
     @IsInt()
     @Min(0)
     offset?: number;
+}
+
+/**
+ * Body for the public click-tracking endpoint. Both fields are attacker-controlled
+ * and land in the database, so they are length-capped here as well as truncated in
+ * the service — a `MaxLength` rejection is a clearer signal than a silent trim when
+ * something is sending nonsense.
+ */
+export class TrackClickDto {
+    @IsOptional()
+    @IsString()
+    @MaxLength(500)
+    referrer?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(500)
+    user_agent?: string;
 }
 
 export class ListRefereesQueryDto {

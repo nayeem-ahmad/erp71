@@ -9,6 +9,9 @@ export type RefereeStats = {
     paid_amount: number;
     reversed_count: number;
     reversed_amount: number;
+    clicks: number;
+    /** signups / clicks as a percentage; null when nobody has clicked yet. */
+    conversion_rate: number | null;
 };
 
 export type RefereeRecord = {
@@ -65,6 +68,9 @@ export type RefereeLedger = {
         deleted_at?: string | null;
     };
     summary: {
+        clicks: number;
+        /** signups / clicks as a percentage; null when nobody has clicked yet. */
+        conversion_rate: number | null;
         total_referrals: number;
         pending: number;
         earned: number;

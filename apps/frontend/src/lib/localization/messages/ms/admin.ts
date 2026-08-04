@@ -841,6 +841,7 @@ export const adminMessages = {
                 discount: "Diskaun Daftar",
                 commission: "Kadar Komisen",
                 referrals: "Pendaftaran",
+                clicks: "Klik",
                 earned: "Diperoleh",
                 balance: "Baki Terhutang",
                 status: "Status",
@@ -884,6 +885,8 @@ export const adminMessages = {
                 loadFailed: "Gagal memuatkan lejar",
                 archivedBanner: "Rujukan ini diarkibkan. Sejarah komisen dan pembayaran masih tersedia di bawah.",
                 summary: {
+                    clicks: "Klik pautan",
+                    conversionRate: "Penukaran",
                     totalReferrals: "Jumlah pendaftaran",
                     pending: "Menunggu",
                     earned: "Diperoleh",

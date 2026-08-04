@@ -1526,6 +1526,8 @@ export const coreMessages = {
             copyFailed: "Tidak dapat menyalin ke papan keratan",
             summary: {
                 balanceDue: "Baki terhutang",
+                clicks: "Klik pautan",
+                conversionRate: "Penukaran",
                 totalReferrals: "Jumlah pendaftaran",
                 pending: "Menunggu",
                 earned: "Diperoleh",
