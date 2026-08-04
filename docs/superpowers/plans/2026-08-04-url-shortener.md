@@ -49,6 +49,8 @@
 - `apps/frontend/src/app/store/[slug]/p/[productId]/page.tsx`
 - `apps/frontend/src/components/share/ShareModal.tsx`
 - `apps/frontend/src/components/share/ShareModal.test.tsx`
+- `apps/frontend/src/components/short-links/ShortLinkManager.tsx` — the form and table both shortener pages render.
+- `apps/frontend/src/components/short-links/ShortLinkManager.test.tsx`
 - `apps/frontend/src/app/(app)/admin/url-shortener/page.tsx`
 - `apps/frontend/src/app/(app)/settings/url-shortener/page.tsx`
 
@@ -2324,28 +2326,183 @@ git add packages/shared-types apps/backend/src/navigation apps/frontend/src/lib 
 
 ---
 
-## Task 11: Platform admin shortener page
+## Task 11: Shared short-link manager and the platform admin page
+
+Both shortener pages render the same form and table over different endpoints, so the table lives in one component from the start. The component owns all presentation; each page supplies copy and three callbacks.
 
 **Files:**
+- Create: `apps/frontend/src/components/short-links/ShortLinkManager.tsx`
+- Test: `apps/frontend/src/components/short-links/ShortLinkManager.test.tsx`
 - Create: `apps/frontend/src/app/(app)/admin/url-shortener/page.tsx`
 
 **Interfaces:**
-- Consumes: `api.getAdminShortLinks`, `api.createAdminShortLink`, `api.revokeAdminShortLink` from Task 9.
+- Consumes: `api.getAdminShortLinks`, `api.createAdminShortLink`, `api.revokeAdminShortLink` from Task 9; `routes.admin.urlShortener` from Task 10.
+- Produces:
+  - `type ShortLinkRow = { id: string; code: string; target_url: string; label: string | null; click_count: number; created_at: string; revoked_at: string | null }`
+  - `<ShortLinkManager description? placeholder? fetchLinks createLink revokeLink />` where
+    `fetchLinks: () => Promise<unknown>`,
+    `createLink: (data: { target_url: string; label?: string }) => Promise<unknown>`,
+    `revokeLink: (id: string) => Promise<unknown>`.
+  - Task 12 renders this same component.
 
-- [ ] **Step 1: Write the page**
+- [ ] **Step 1: Write the failing test**
 
-Create `apps/frontend/src/app/(app)/admin/url-shortener/page.tsx`:
+Create `apps/frontend/src/components/short-links/ShortLinkManager.test.tsx`:
+
+```tsx
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import ShortLinkManager from './ShortLinkManager';
+
+const link = (overrides = {}) => ({
+    id: 'link-1',
+    code: 'aB3xK9m',
+    target_url: 'https://example.com/',
+    label: 'Campaign',
+    click_count: 4,
+    created_at: '2026-08-04T00:00:00.000Z',
+    revoked_at: null,
+    ...overrides,
+});
+
+describe('ShortLinkManager', () => {
+    it('lists links returned by fetchLinks', async () => {
+        render(
+            <ShortLinkManager
+                fetchLinks={jest.fn().mockResolvedValue([link()])}
+                createLink={jest.fn()}
+                revokeLink={jest.fn()}
+            />,
+        );
+
+        expect(await screen.findByText('/s/aB3xK9m')).toBeInTheDocument();
+        expect(screen.getByText('4')).toBeInTheDocument();
+    });
+
+    it('unwraps a { data } envelope', async () => {
+        render(
+            <ShortLinkManager
+                fetchLinks={jest.fn().mockResolvedValue({ data: [link()] })}
+                createLink={jest.fn()}
+                revokeLink={jest.fn()}
+            />,
+        );
+
+        expect(await screen.findByText('/s/aB3xK9m')).toBeInTheDocument();
+    });
+
+    it('shows an empty state when there are no links', async () => {
+        render(
+            <ShortLinkManager
+                fetchLinks={jest.fn().mockResolvedValue([])}
+                createLink={jest.fn()}
+                revokeLink={jest.fn()}
+            />,
+        );
+
+        expect(await screen.findByText(/no short links yet/i)).toBeInTheDocument();
+    });
+
+    it('creates a link and reloads the list', async () => {
+        const createLink = jest.fn().mockResolvedValue({});
+        const fetchLinks = jest
+            .fn()
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([link()]);
+
+        render(<ShortLinkManager fetchLinks={fetchLinks} createLink={createLink} revokeLink={jest.fn()} />);
+        await screen.findByText(/no short links yet/i);
+
+        await userEvent.type(screen.getByPlaceholderText(/https/i), 'https://example.com');
+        await userEvent.click(screen.getByRole('button', { name: /shorten/i }));
+
+        await waitFor(() => expect(createLink).toHaveBeenCalledWith({ target_url: 'https://example.com' }));
+        expect(await screen.findByText('/s/aB3xK9m')).toBeInTheDocument();
+    });
+
+    it('shows the rejection reason inline when the target is refused', async () => {
+        // isSafeTarget names the rule it rejected on, and that reason is the only
+        // thing telling the user why a URL they consider fine was refused.
+        const createLink = jest.fn().mockRejectedValue(new Error('Only http and https links are allowed.'));
+
+        render(
+            <ShortLinkManager
+                fetchLinks={jest.fn().mockResolvedValue([])}
+                createLink={createLink}
+                revokeLink={jest.fn()}
+            />,
+        );
+        await screen.findByText(/no short links yet/i);
+
+        await userEvent.type(screen.getByPlaceholderText(/https/i), 'javascript:alert(1)');
+        await userEvent.click(screen.getByRole('button', { name: /shorten/i }));
+
+        expect(await screen.findByText('Only http and https links are allowed.')).toBeInTheDocument();
+    });
+
+    it('revokes a link and reloads', async () => {
+        const revokeLink = jest.fn().mockResolvedValue({});
+        const fetchLinks = jest
+            .fn()
+            .mockResolvedValueOnce([link()])
+            .mockResolvedValueOnce([link({ revoked_at: '2026-08-05T00:00:00.000Z' })]);
+
+        render(<ShortLinkManager fetchLinks={fetchLinks} createLink={jest.fn()} revokeLink={revokeLink} />);
+        await screen.findByText('/s/aB3xK9m');
+
+        await userEvent.click(screen.getByRole('button', { name: /revoke/i }));
+
+        await waitFor(() => expect(revokeLink).toHaveBeenCalledWith('link-1'));
+        expect(await screen.findByText(/revoked/i)).toBeInTheDocument();
+    });
+
+    it('offers no revoke control on an already-revoked link', async () => {
+        render(
+            <ShortLinkManager
+                fetchLinks={jest.fn().mockResolvedValue([link({ revoked_at: '2026-08-05T00:00:00.000Z' })])}
+                createLink={jest.fn()}
+                revokeLink={jest.fn()}
+            />,
+        );
+        await screen.findByText('/s/aB3xK9m');
+
+        expect(screen.queryByRole('button', { name: /revoke/i })).not.toBeInTheDocument();
+    });
+
+    it('renders the description when one is given', async () => {
+        render(
+            <ShortLinkManager
+                description="Shared across your business."
+                fetchLinks={jest.fn().mockResolvedValue([])}
+                createLink={jest.fn()}
+                revokeLink={jest.fn()}
+            />,
+        );
+
+        expect(await screen.findByText('Shared across your business.')).toBeInTheDocument();
+    });
+});
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+```bash
+cd apps/frontend && npx jest src/components/short-links/ShortLinkManager.test.tsx
+```
+
+Expected: FAIL — cannot find `./ShortLinkManager`.
+
+- [ ] **Step 3: Write the component**
+
+Create `apps/frontend/src/components/short-links/ShortLinkManager.tsx`:
 
 ```tsx
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Link2, Trash2 } from 'lucide-react';
-import PageShell from '@/components/ui/compact/PageShell';
-import PageHeader from '@/components/ui/compact/PageHeader';
-import { api } from '@/lib/api';
+import { useCallback, useEffect, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 
-type ShortLink = {
+export type ShortLinkRow = {
     id: string;
     code: string;
     target_url: string;
@@ -2355,33 +2512,55 @@ type ShortLink = {
     revoked_at: string | null;
 };
 
-export default function AdminUrlShortenerPage() {
-    const [links, setLinks] = useState<ShortLink[]>([]);
+type Props = {
+    /** Optional line above the form, e.g. who else can see these links. */
+    description?: string;
+    placeholder?: string;
+    fetchLinks: () => Promise<unknown>;
+    createLink: (data: { target_url: string; label?: string }) => Promise<unknown>;
+    revokeLink: (id: string) => Promise<unknown>;
+};
+
+/**
+ * The form and table behind both shortener pages. The platform-admin page and the
+ * tenant Settings page differ only in which endpoints they call and what the copy
+ * says, so those are props and everything else lives here once.
+ */
+export default function ShortLinkManager({
+    description,
+    placeholder = 'https://example.com/page',
+    fetchLinks,
+    createLink,
+    revokeLink,
+}: Props) {
+    const [links, setLinks] = useState<ShortLinkRow[]>([]);
     const [target, setTarget] = useState('');
     const [label, setLabel] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
 
-    const load = async () => {
-        const result = await api.getAdminShortLinks();
-        setLinks((result?.data ?? result) as ShortLink[]);
-    };
+    const load = useCallback(async () => {
+        const result: any = await fetchLinks();
+        setLinks((result?.data ?? result ?? []) as ShortLinkRow[]);
+    }, [fetchLinks]);
 
     useEffect(() => {
         void load();
-    }, []);
+    }, [load]);
 
     const create = async () => {
         setError(null);
         setSaving(true);
         try {
-            await api.createAdminShortLink({ target_url: target, label: label || undefined });
+            const trimmed = target.trim();
+            await createLink(label.trim() ? { target_url: trimmed, label: label.trim() } : { target_url: trimmed });
             setTarget('');
             setLabel('');
             await load();
         } catch (err: any) {
-            // Validation failures name the rule that rejected the URL, so show
-            // them inline on the field rather than as a toast.
+            // The backend rejection names the rule that refused the URL, and that
+            // reason is the only thing explaining why a link the user considers
+            // fine was turned down. Inline on the field, never a toast.
             setError(err?.message ?? 'Could not create the link.');
         } finally {
             setSaving(false);
@@ -2389,106 +2568,149 @@ export default function AdminUrlShortenerPage() {
     };
 
     const revoke = async (id: string) => {
-        await api.revokeAdminShortLink(id);
+        await revokeLink(id);
         await load();
     };
 
     return (
-        <PageShell>
-            <PageHeader title="URL Shortener" icon={Link2} />
+        <div className="space-y-4">
+            {description && <p className="text-xs text-gray-600">{description}</p>}
 
-            <div className="space-y-4">
-                <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
-                    <div className="flex flex-col gap-2 md:flex-row">
-                        <div className="flex-1">
-                            <input
-                                value={target}
-                                onChange={(e) => setTarget(e.target.value)}
-                                placeholder="https://example.com/page or /settings/branding"
-                                className="min-h-touch w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                            />
-                            {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
-                        </div>
+            <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
+                <div className="flex flex-col gap-2 md:flex-row">
+                    <div className="flex-1">
                         <input
-                            value={label}
-                            onChange={(e) => setLabel(e.target.value)}
-                            placeholder="Label (optional)"
-                            className="min-h-touch rounded-lg border border-gray-200 px-3 py-2 text-sm md:w-56"
+                            value={target}
+                            onChange={(e) => setTarget(e.target.value)}
+                            placeholder={placeholder}
+                            className="min-h-touch w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
                         />
-                        <button
-                            onClick={create}
-                            disabled={saving || !target.trim()}
-                            className="min-h-touch rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-                        >
-                            Shorten
-                        </button>
+                        {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
                     </div>
-                </div>
-
-                <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-                    <table className="w-full text-sm">
-                        <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
-                            <tr>
-                                <th className="p-3">Short link</th>
-                                <th className="p-3">Target</th>
-                                <th className="p-3 text-right">Clicks</th>
-                                <th className="p-3" />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {links.map((link) => (
-                                <tr key={link.id} className="border-t border-gray-100">
-                                    <td className="p-3 font-medium text-gray-900">
-                                        /s/{link.code}
-                                        {link.revoked_at && (
-                                            <span className="ml-2 text-xs text-red-600">revoked</span>
-                                        )}
-                                    </td>
-                                    <td className="p-3 max-w-md truncate text-gray-600">{link.target_url}</td>
-                                    <td className="p-3 text-right text-gray-700">{link.click_count}</td>
-                                    <td className="p-3 text-right">
-                                        {!link.revoked_at && (
-                                            <button
-                                                onClick={() => revoke(link.id)}
-                                                aria-label="Revoke"
-                                                className="text-gray-400 hover:text-red-600"
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </button>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                            {links.length === 0 && (
-                                <tr>
-                                    <td colSpan={4} className="p-6 text-center text-sm text-gray-500">
-                                        No short links yet.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
+                    <input
+                        value={label}
+                        onChange={(e) => setLabel(e.target.value)}
+                        placeholder="Label (optional)"
+                        className="min-h-touch rounded-lg border border-gray-200 px-3 py-2 text-sm md:w-56"
+                    />
+                    <button
+                        onClick={create}
+                        disabled={saving || !target.trim()}
+                        className="min-h-touch rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                    >
+                        Shorten
+                    </button>
                 </div>
             </div>
+
+            <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+                        <tr>
+                            <th className="p-3">Short link</th>
+                            <th className="p-3">Target</th>
+                            <th className="p-3 text-right">Clicks</th>
+                            <th className="p-3" />
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {links.map((link) => (
+                            <tr key={link.id} className="border-t border-gray-100">
+                                <td className="p-3 font-medium text-gray-900">
+                                    /s/{link.code}
+                                    {link.revoked_at && <span className="ml-2 text-xs text-red-600">revoked</span>}
+                                </td>
+                                <td className="p-3 max-w-md truncate text-gray-600">{link.target_url}</td>
+                                <td className="p-3 text-right text-gray-700">{link.click_count}</td>
+                                <td className="p-3 text-right">
+                                    {!link.revoked_at && (
+                                        <button
+                                            onClick={() => revoke(link.id)}
+                                            aria-label="Revoke"
+                                            className="text-gray-400 hover:text-red-600"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </button>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                        {links.length === 0 && (
+                            <tr>
+                                <td colSpan={4} className="p-6 text-center text-sm text-gray-500">
+                                    No short links yet.
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+```
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+```bash
+cd apps/frontend && npx jest src/components/short-links/ShortLinkManager.test.tsx
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: Write the admin page**
+
+Create `apps/frontend/src/app/(app)/admin/url-shortener/page.tsx`:
+
+```tsx
+'use client';
+
+import { useCallback } from 'react';
+import { Link2 } from 'lucide-react';
+import PageShell from '@/components/ui/compact/PageShell';
+import PageHeader from '@/components/ui/compact/PageHeader';
+import ShortLinkManager from '@/components/short-links/ShortLinkManager';
+import { api } from '@/lib/api';
+
+export default function AdminUrlShortenerPage() {
+    const fetchLinks = useCallback(() => api.getAdminShortLinks(), []);
+    const createLink = useCallback(
+        (data: { target_url: string; label?: string }) => api.createAdminShortLink(data),
+        [],
+    );
+    const revokeLink = useCallback((id: string) => api.revokeAdminShortLink(id), []);
+
+    return (
+        <PageShell>
+            <PageHeader title="URL Shortener" icon={Link2} />
+            <ShortLinkManager
+                description="Links created here belong to the platform, not to any tenant. This list spans every tenant."
+                placeholder="https://example.com/page or /settings/branding"
+                fetchLinks={fetchLinks}
+                createLink={createLink}
+                revokeLink={revokeLink}
+            />
         </PageShell>
     );
 }
 ```
 
-Check the real `PageHeader` and `PageShell` prop signatures before writing — open `apps/frontend/src/components/ui/compact/PageHeader.tsx` and match its actual props (it may take `breadcrumbs`, `actions`, or a `subtitle`). Follow a neighbouring admin page such as `/admin/referrals` for the exact shape.
+The `useCallback` wrappers matter: `ShortLinkManager`'s load effect depends on `fetchLinks`, so an inline arrow would give it a new identity every render and re-fetch in a loop.
 
-- [ ] **Step 2: Verify it compiles**
+Check the real `PageHeader` and `PageShell` prop signatures before writing — open `apps/frontend/src/components/ui/compact/PageHeader.tsx` and match its actual props (it may take `breadcrumbs`, `actions`, or a `subtitle`). Follow the neighbouring `/admin/referrals` page for the exact shape.
+
+- [ ] **Step 6: Verify compilation and tests**
 
 ```bash
-cd apps/frontend && npx tsc --noEmit
+cd apps/frontend && npx tsc --noEmit && npx jest src/components/short-links
 ```
 
-Expected: no new errors.
+Expected: no new type errors; tests pass.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add "apps/frontend/src/app/(app)/admin/url-shortener" && git commit -m "feat(admin): add platform URL shortener page"
+git add apps/frontend/src/components/short-links "apps/frontend/src/app/(app)/admin/url-shortener" && git commit -m "feat(admin): add shared short-link manager and platform shortener page"
 ```
 
 ---
@@ -2500,7 +2722,7 @@ git add "apps/frontend/src/app/(app)/admin/url-shortener" && git commit -m "feat
 - Modify: `apps/frontend/src/app/(app)/settings/page.tsx`
 
 **Interfaces:**
-- Consumes: `api.getShortLinks`, `api.createShortLink`, `api.revokeShortLink` from Task 9; `routes.settings.urlShortener` from Task 10.
+- Consumes: `ShortLinkManager` from Task 11; `api.getShortLinks`, `api.createShortLink`, `api.revokeShortLink` from Task 9; `routes.settings.urlShortener` from Task 10.
 
 - [ ] **Step 1: Write the tenant page**
 
@@ -2509,150 +2731,38 @@ Create `apps/frontend/src/app/(app)/settings/url-shortener/page.tsx`:
 ```tsx
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Link2, Trash2 } from 'lucide-react';
+import { useCallback } from 'react';
+import { Link2 } from 'lucide-react';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import ShortLinkManager from '@/components/short-links/ShortLinkManager';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 
-type ShortLink = {
-    id: string;
-    code: string;
-    target_url: string;
-    label: string | null;
-    click_count: number;
-    created_at: string;
-    revoked_at: string | null;
-};
-
 export default function SettingsUrlShortenerPage() {
     const { t } = useI18n();
-    const [links, setLinks] = useState<ShortLink[]>([]);
-    const [target, setTarget] = useState('');
-    const [label, setLabel] = useState('');
-    const [error, setError] = useState<string | null>(null);
-    const [saving, setSaving] = useState(false);
-
-    const load = async () => {
-        const result = await api.getShortLinks();
-        setLinks((result?.data ?? result) as ShortLink[]);
-    };
-
-    useEffect(() => {
-        void load();
-    }, []);
-
-    const create = async () => {
-        setError(null);
-        setSaving(true);
-        try {
-            await api.createShortLink({ target_url: target, label: label || undefined });
-            setTarget('');
-            setLabel('');
-            await load();
-        } catch (err: any) {
-            // Validation failures name the rule that rejected the URL, so show
-            // them inline on the field rather than as a toast.
-            setError(err?.message ?? 'Could not create the link.');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const revoke = async (id: string) => {
-        await api.revokeShortLink(id);
-        await load();
-    };
+    const fetchLinks = useCallback(() => api.getShortLinks(), []);
+    const createLink = useCallback(
+        (data: { target_url: string; label?: string }) => api.createShortLink(data),
+        [],
+    );
+    const revokeLink = useCallback((id: string) => api.revokeShortLink(id), []);
 
     return (
         <PageShell>
             <PageHeader title={t.sidebar.items.urlShortener} icon={Link2} />
-
-            <div className="space-y-4">
-                <p className="text-xs text-gray-600">
-                    Short links are shared across your business — anyone who can manage short links
-                    sees every link created here.
-                </p>
-
-                <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
-                    <div className="flex flex-col gap-2 md:flex-row">
-                        <div className="flex-1">
-                            <input
-                                value={target}
-                                onChange={(e) => setTarget(e.target.value)}
-                                placeholder="https://example.com/page"
-                                className="min-h-touch w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                            />
-                            {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
-                        </div>
-                        <input
-                            value={label}
-                            onChange={(e) => setLabel(e.target.value)}
-                            placeholder="Label (optional)"
-                            className="min-h-touch rounded-lg border border-gray-200 px-3 py-2 text-sm md:w-56"
-                        />
-                        <button
-                            onClick={create}
-                            disabled={saving || !target.trim()}
-                            className="min-h-touch rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-                        >
-                            Shorten
-                        </button>
-                    </div>
-                </div>
-
-                <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-                    <table className="w-full text-sm">
-                        <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
-                            <tr>
-                                <th className="p-3">Short link</th>
-                                <th className="p-3">Target</th>
-                                <th className="p-3 text-right">Clicks</th>
-                                <th className="p-3" />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {links.map((link) => (
-                                <tr key={link.id} className="border-t border-gray-100">
-                                    <td className="p-3 font-medium text-gray-900">
-                                        /s/{link.code}
-                                        {link.revoked_at && (
-                                            <span className="ml-2 text-xs text-red-600">revoked</span>
-                                        )}
-                                    </td>
-                                    <td className="p-3 max-w-md truncate text-gray-600">{link.target_url}</td>
-                                    <td className="p-3 text-right text-gray-700">{link.click_count}</td>
-                                    <td className="p-3 text-right">
-                                        {!link.revoked_at && (
-                                            <button
-                                                onClick={() => revoke(link.id)}
-                                                aria-label="Revoke"
-                                                className="text-gray-400 hover:text-red-600"
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </button>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                            {links.length === 0 && (
-                                <tr>
-                                    <td colSpan={4} className="p-6 text-center text-sm text-gray-500">
-                                        No short links yet.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            <ShortLinkManager
+                description="Short links are shared across your business — anyone who can manage short links sees every link created here."
+                fetchLinks={fetchLinks}
+                createLink={createLink}
+                revokeLink={revokeLink}
+            />
         </PageShell>
     );
 }
 ```
 
-The markup deliberately repeats the admin page rather than sharing a component: the two differ in data source, permission model and copy, and extracting a shared table now would mean designing a props-driven API before either page has settled. Revisit once both exist.
+Match `PageShell`/`PageHeader` props to a neighbouring settings page such as `/settings/discount-codes`.
 
 - [ ] **Step 2: Add the settings hub card**
 
