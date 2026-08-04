@@ -1,7 +1,10 @@
 # Module Overview dashboards — design
 
-Status: **proposed** (2026-08-04). Not started. Supersedes nothing; generalises
-`docs/crm/crm-dashboard-design.md`, which is the one worked example.
+Status: **built** (designed and implemented 2026-08-04, branch
+`feat/module-overview-dashboards`). This document is the design as executed;
+where the build diverged from the plan, the text says so rather than pretending
+the plan was right. Generalises `docs/crm/crm-dashboard-design.md`, which was
+the one worked example.
 
 Every module's **Overview** should answer "what is happening in this module right
 now", the way CRM > Overview does since 2026-08-04. Today six of the seven are a
@@ -231,17 +234,20 @@ Attention/Health band swap.
 
 ## 5. Sequence
 
-| Phase | Work | Notes |
+| Phase | Work | Shipped |
 |---|---|---|
-| 0 | Shared shell + hook; refactor `CrmDashboard` onto it | No user-visible change |
-| 1 | **Accounting** | Component + endpoint exist; pilot for the shell |
-| 2 | **Inventory**, then **Purchases** | Report endpoints exist; thin fan-in |
-| 3 | **Sales** | Largest; new endpoint sized to also serve `RetailDashboard` later |
-| 4 | **HR** | Most new aggregation |
-| 5 | **Admin** | Platform-scoped, separate guard |
+| 0 | Shared shell + hook; refactor `CrmDashboard` onto it | `useModuleDashboard` (7 tests), `ModuleDashboard`/`KpiTileGrid`/`AttentionSection`/`DashboardSection`; CRM's 8 tests green unchanged |
+| 1 | **Accounting** | `variant` prop, embedded behind `VIEW_LEDGER`; no new backend |
+| 2a | **Inventory** | `inventory-dashboard` module (13 tests), component (8 tests) |
+| 2b | **Purchases** | `purchase-dashboard` module (11 tests), component (8 tests) |
+| 3 | **Sales** | `sales-dashboard` module (12 tests), component (10 tests) |
+| 4 | **HR** | `hr-dashboard` module (10 tests), component (9 tests), + two permissions |
+| 5 | **Admin** | `admin-dashboard` module (8 tests), component (8 tests) |
 
-Rough cost after Phase 0: one backend module + spec, one component + test, i18n
-×3 per module — 1–2 days each, Accounting well under, Sales and HR over.
+Verified by unit test, typecheck and lint only. **Still to do: look at all six in a
+running browser at 360px and desktop** — the standing lesson from the accounting
+and CRM dashboards is that jsdom cannot tell you whether six-digit taka figures
+fit a KPI tile or whether the aging bars' three-column row collides at 360px.
 
 ---
 
@@ -268,23 +274,48 @@ Rough cost after Phase 0: one backend module + spec, one component + test, i18n
 
 ---
 
-## 7. Open questions
+## 7. How the open questions resolved
 
-1. **HR gating.** `employees.controller.ts` guards with `JwtAuthGuard` alone —
-   every authenticated user in the tenant can read salary figures today. The HR
-   dashboard surfaces payroll cost prominently, which makes that pre-existing
-   gap much more visible. Either a new `VIEW_HR`/`VIEW_PAYROLL` permission lands
-   first, or the payroll KPI is omitted until it does. **Recommend the former,
-   tracked as its own item — it is a security fix, not dashboard work.**
-2. **Inventory's non-premium subset.** `premiumInventoryReports` gates valuation
-   and aging. Out-of-stock and reorder counts do not need it, so the Inventory
-   Overview should show a reduced dashboard rather than none. Confirm the split
-   when building.
-3. **Where `RetailDashboard` ends up.** Once Sales > Overview exists, the retail
-   landing dashboard and the sales module dashboard overlap by about half.
-   Deliberately unresolved here: different altitude (business vs module) is a
-   defensible reason to keep both, but it should be revisited after Phase 3 with
-   both on screen.
+1. **HR gating — resolved by adding the permissions.** `StorePermission` gained
+   `VIEW_HR` (directory and attendance, granted to MANAGER by default) and
+   `VIEW_PAYROLL` (salary figures, owner-only until an admin grants it).
+   `VIEW_HR` gates the whole HR endpoint; `VIEW_PAYROLL` is checked inside the
+   service, so a user without it gets a shorter dashboard rather than a 403.
+
+   **The underlying gap is still open.** `EmployeesController` still guards with
+   `JwtAuthGuard` alone, so any authenticated user in the tenant can still read
+   salary figures through it. The dashboard is now *stricter* than the endpoints
+   it summarises. Tightening `EmployeesController` would silently revoke the
+   employee list from everyone who has it today, so it stays a separate item.
+
+2. **Inventory's non-premium subset — resolved as a null, not a refusal.** The
+   controller carries no `@RequiresFeature`; the service resolves
+   `premiumInventoryReports` itself and returns `total_value: null`,
+   `aging: null` and empty valuation panels when the plan lacks it. Null rather
+   than 0, because 0 would read as "your stock is worthless". The KPI tile says
+   "Upgrade for stock valuation" in that state.
+
+3. **Where `RetailDashboard` ends up — still open, as planned.**
+   `GET /sales/dashboard/overview` was sized so it can back the retail landing
+   page later, but that page still fires its eight requests. Revisit with both
+   on screen.
+
+### What else the build turned up
+
+- **`PipelineFunnel` was the right form for stock aging.** Its bars became
+  `OrdinalBars` and the funnel is now a naming of it; ordinal is ordinal whether
+  the steps are lead stages or shelf days. The palette gained a fifth step
+  because aging has five buckets. Its 6 tests pass untouched.
+- **The backend needed its own shared helper too.** `common/dashboard-window.ts`
+  holds `resolveDateWindow` / `parseDateOnly` / `formatDate` / `emptyDailyBuckets`,
+  and all six dashboard services use it — including `crm-dashboard`, which was
+  refactored onto it after the fact. Neither end goes through `toISOString()`.
+- **`api.ts` had seven copies of the same query-string builder.** They are one
+  `dashboardWindowFetcher` now.
+- **The sales *reports* bucket by UTC** (`toISOString().slice(0, 10)`), which
+  files every Dhaka evening after 6pm under the previous day. The new sales
+  dashboard does not carry that forward; the report itself is untouched and
+  still wrong.
 
 ---
 

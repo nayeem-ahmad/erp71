@@ -33,6 +33,9 @@ jest.mock('@/lib/api', () => ({
             }],
         }),
         getSalesSettings: jest.fn().mockResolvedValue({ pos_enabled: true }),
+        // The hub now embeds SalesDashboard for any paid plan.
+        getSalesDashboardOverview: jest.fn().mockResolvedValue(null),
+        getSalesDashboardTrends: jest.fn().mockResolvedValue({ points: [] }),
     },
 }));
 

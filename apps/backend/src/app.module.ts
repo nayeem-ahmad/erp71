@@ -85,6 +85,7 @@ import { InventoryDashboardModule } from './inventory-dashboard/inventory-dashbo
 import { PurchaseDashboardModule } from './purchase-dashboard/purchase-dashboard.module';
 import { SalesDashboardModule } from './sales-dashboard/sales-dashboard.module';
 import { HrDashboardModule } from './hr-dashboard/hr-dashboard.module';
+import { AdminDashboardModule } from './admin-dashboard/admin-dashboard.module';
 import { CrmLeadsModule } from './crm-leads/crm-leads.module';
 import { CrmLeadConversationsModule } from './crm-lead-conversations/crm-lead-conversations.module';
 import { CrmLeadTaxonomyModule } from './crm-lead-taxonomy/crm-lead-taxonomy.module';
@@ -186,6 +187,7 @@ import { DemoDataModule } from './demo-data/demo-data.module';
         PurchaseDashboardModule,
         SalesDashboardModule,
         HrDashboardModule,
+        AdminDashboardModule,
         CrmLeadsModule,
         CrmLeadConversationsModule,
         CrmLeadTaxonomyModule,
