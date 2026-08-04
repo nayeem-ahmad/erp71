@@ -28,7 +28,7 @@ export class ShortLinksService {
         dto: { target_url: string; label?: string },
     ): Promise<ShortLinkView> {
         const checked = isSafeTarget(dto.target_url);
-        if (!checked.ok) throw new BadRequestException(checked.reason);
+        if (checked.ok === false) throw new BadRequestException(checked.reason);
 
         return this.insertWithCode({
             tenant_id: tenantId,
@@ -47,7 +47,7 @@ export class ShortLinksService {
         targetUrl: string;
     }): Promise<ShortLinkView> {
         const checked = isSafeTarget(input.targetUrl);
-        if (!checked.ok) throw new BadRequestException(checked.reason);
+        if (checked.ok === false) throw new BadRequestException(checked.reason);
 
         // Idempotent: reopening the share modal must not mint a second code for
         // the same quotation, or every reopen would leave another live link.

@@ -80,6 +80,22 @@ describe('ShortLinksService', () => {
             expect(first).not.toEqual(second);
             expect(result.code).toBe('aB3xK9m');
         });
+
+        it('stores tenant_id: null for platform staff', async () => {
+            db.shortLink.create.mockResolvedValue(row({ tenant_id: null }));
+            await service.createManual(null, 'user-1', { target_url: 'https://example.com' });
+
+            expect(db.shortLink.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        target_url: 'https://example.com/',
+                        kind: 'MANUAL',
+                        tenant_id: null,
+                        created_by: 'user-1',
+                    }),
+                }),
+            );
+        });
     });
 
     describe('createForEntity', () => {
@@ -197,6 +213,22 @@ describe('ShortLinksService', () => {
                     data: expect.objectContaining({ revoked_at: expect.any(Date) }),
                 }),
             );
+        });
+
+        it('revokes an unscoped link for platform staff', async () => {
+            db.shortLink.updateMany.mockResolvedValue({ count: 1 });
+            await service.revoke('link-1', null);
+            expect(db.shortLink.updateMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { id: 'link-1' },
+                    data: expect.objectContaining({ revoked_at: expect.any(Date) }),
+                }),
+            );
+        });
+
+        it('throws 404 when revoking a non-existent link as platform staff', async () => {
+            db.shortLink.updateMany.mockResolvedValue({ count: 0 });
+            await expect(service.revoke('link-1', null)).rejects.toBeInstanceOf(NotFoundException);
         });
     });
 });
