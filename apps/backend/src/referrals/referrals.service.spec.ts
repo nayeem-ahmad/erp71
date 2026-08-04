@@ -37,6 +37,10 @@ describe('ReferralsService', () => {
     } as any;
 
     const passwordReset = { requestRefereeInvite: jest.fn() } as any;
+    const email = {
+        sendRefereeCommissionEarned: jest.fn(),
+        sendRefereePaymentRecorded: jest.fn(),
+    } as any;
 
     let service: ReferralsService;
 
@@ -59,8 +63,9 @@ describe('ReferralsService', () => {
     beforeEach(() => {
         jest.resetAllMocks();
         passwordReset.requestRefereeInvite.mockResolvedValue(undefined);
+        email.sendRefereePaymentRecorded.mockResolvedValue(undefined);
         db.$transaction.mockImplementation(async (cb: any) => cb(tx));
-        service = new ReferralsService(db, passwordReset);
+        service = new ReferralsService(db, passwordReset, email);
     });
 
     // --- Referee creation and login provisioning ---------------------------------
@@ -174,7 +179,12 @@ describe('ReferralsService', () => {
 
     describe('recordPayment', () => {
         beforeEach(() => {
-            db.referee.findUnique.mockResolvedValue({ id: 'referee-1', deleted_at: null });
+            db.referee.findUnique.mockResolvedValue({
+                id: 'referee-1',
+                name: 'Rahman Traders',
+                email: 'rahman@example.com',
+                deleted_at: null,
+            });
             tx.refereePayment.create.mockResolvedValue({
                 id: 'payment-1',
                 referee_id: 'referee-1',
@@ -299,6 +309,58 @@ describe('ReferralsService', () => {
                 ),
             ).rejects.toThrow(/commission-already-paid/);
             expect(db.$transaction).not.toHaveBeenCalled();
+        });
+
+        // --- Notification --------------------------------------------------------
+
+        it('tells the partner a payment was recorded', async () => {
+            db.referralSignup.findMany.mockResolvedValue(threeEarned());
+
+            await service.recordPayment(
+                'referee-1',
+                { amount: 650, method: 'bKash', reference: 'TRX1' },
+                'admin-1',
+            );
+
+            expect(email.sendRefereePaymentRecorded).toHaveBeenCalledWith(
+                'rahman@example.com',
+                'Rahman Traders',
+                650,
+                'bKash',
+                'TRX1',
+            );
+        });
+
+        it('notifies with the amount actually recorded, not the one requested', async () => {
+            db.referralSignup.findMany.mockResolvedValue(threeEarned());
+
+            await service.recordPayment('referee-1', { commission_ids: ['commission-1'] }, 'admin-1');
+
+            expect(email.sendRefereePaymentRecorded).toHaveBeenCalledWith(
+                'rahman@example.com',
+                'Rahman Traders',
+                300,
+                undefined,
+                undefined,
+            );
+        });
+
+        it('still records the payout when the notification fails', async () => {
+            db.referralSignup.findMany.mockResolvedValue(threeEarned());
+            email.sendRefereePaymentRecorded.mockRejectedValue(new Error('smtp down'));
+            const logWarn = jest
+                .spyOn((service as any).logger, 'warn')
+                .mockImplementation(() => undefined);
+
+            await expect(
+                service.recordPayment('referee-1', { amount: 650 }, 'admin-1'),
+            ).resolves.toEqual(expect.objectContaining({ id: 'payment-1' }));
+            await new Promise(process.nextTick);
+
+            expect(tx.referralSignup.updateMany).toHaveBeenCalled();
+            expect(logWarn).toHaveBeenCalledWith(
+                expect.stringContaining('notification email failed'),
+            );
         });
 
         // --- Guards --------------------------------------------------------------

@@ -192,6 +192,9 @@ export default function RefereePortalPage() {
 
                         <div className="space-y-3">
                             <h2 className="text-lg font-bold text-gray-900">{m.commissions.title}</h2>
+                            {/* The one-shot rule is the question partners ask most; saying it
+                                here beats letting them infer it from a renewal that earned nothing. */}
+                            <p className="text-xs text-gray-500">{m.commissionNote}</p>
                             <DataTable
                                 tableId="referee-portal-commissions"
                                 data={ledger.commissions}

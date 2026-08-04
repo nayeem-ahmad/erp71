@@ -27,6 +27,7 @@ describe('BillingService', () => {
     const email = {
         sendBillingInvoice: jest.fn().mockResolvedValue(undefined),
         sendPaymentFailure: jest.fn().mockResolvedValue(undefined),
+        sendRefereeCommissionEarned: jest.fn().mockResolvedValue(undefined),
     } as any;
 
     const notifications = {
@@ -69,6 +70,7 @@ describe('BillingService', () => {
         audit.log.mockResolvedValue(undefined);
         addonModules.getActiveAddonsByCodes.mockResolvedValue([]);
         addonModules.grantOrRenewSubscription.mockResolvedValue(undefined);
+        email.sendRefereeCommissionEarned.mockResolvedValue(undefined);
         service = new BillingService(db, audit, email, notifications, addonModules, new CircuitBreakerRegistry());
         (global as any).fetch = fetchMock;
         process.env.BILLING_PROVIDER = 'SSL_WIRELESS';
@@ -1075,6 +1077,66 @@ describe('BillingService', () => {
                 where: { id: 'signup-1' },
                 data: expect.objectContaining({ plan_amount: 3999, commission_amount: 399.9 }),
             });
+        });
+
+        it('tells the partner they earned a commission', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({
+                id: 'signup-1',
+                status: 'PENDING',
+                commission_pct: 10,
+                referee: { name: 'Rahman Traders', email: 'rahman@example.com' },
+                tenant: { name: 'Dhaka Retail' },
+            });
+
+            await activatePremium();
+            await new Promise(process.nextTick);
+
+            expect(email.sendRefereeCommissionEarned).toHaveBeenCalledWith(
+                'rahman@example.com',
+                'Rahman Traders',
+                'Dhaka Retail',
+                399.9,
+            );
+        });
+
+        it('still records the commission when the partner email fails', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({
+                id: 'signup-1',
+                status: 'PENDING',
+                commission_pct: 10,
+                referee: { name: 'Rahman Traders', email: 'rahman@example.com' },
+                tenant: { name: 'Dhaka Retail' },
+            });
+            email.sendRefereeCommissionEarned.mockRejectedValue(new Error('smtp down'));
+            const logWarn = jest
+                .spyOn((service as any).logger, 'warn')
+                .mockImplementation(() => undefined);
+
+            await activatePremium();
+            await new Promise(process.nextTick);
+
+            expect(db.referralSignup.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ status: 'EARNED' }) }),
+            );
+            expect(logWarn).toHaveBeenCalledWith(
+                expect.stringContaining('partner email failed'),
+            );
+        });
+
+        it('does not email when the referral has no linked partner address', async () => {
+            db.referralSignup.findUnique.mockResolvedValue({
+                id: 'signup-1',
+                status: 'PENDING',
+                commission_pct: 10,
+                referee: null,
+                tenant: { name: 'Dhaka Retail' },
+            });
+
+            await activatePremium();
+            await new Promise(process.nextTick);
+
+            expect(db.referralSignup.update).toHaveBeenCalled();
+            expect(email.sendRefereeCommissionEarned).not.toHaveBeenCalled();
         });
 
         it('does not treat a REVERSED referral as still pending', async () => {

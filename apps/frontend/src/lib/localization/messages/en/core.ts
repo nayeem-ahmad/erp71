@@ -1518,6 +1518,7 @@ export const coreMessages = {
     referralPortal: {
         title: 'Referral Partner — {name}',
         subtitle: 'Track your referrals, commissions, and payouts',
+        commissionNote: 'You earn a commission once, when a business you referred starts its first paid subscription. Renewals are not commissioned.',
         breadcrumb: 'Referrals',
         dashboard: 'Dashboard',
         loadFailed: 'Failed to load your referral dashboard',

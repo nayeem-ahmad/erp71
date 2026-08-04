@@ -1,5 +1,6 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { EmailService } from '../email/email.service';
 import { PasswordResetService } from '../password-reset/password-reset.service';
 import {
     CreateRefereeDto,
@@ -16,9 +17,12 @@ const DEFAULT_COMMISSION_PAGE_SIZE = 50;
 
 @Injectable()
 export class ReferralsService {
+    private readonly logger = new Logger(ReferralsService.name);
+
     constructor(
         private readonly db: DatabaseService,
         private readonly passwordReset: PasswordResetService,
+        private readonly email: EmailService,
     ) {}
 
     // ── Referees ──────────────────────────────────────────────────────────────
@@ -408,6 +412,20 @@ export class ReferralsService {
             });
 
             return newPayment;
+        });
+
+        // Same reasoning as the earned notification in BillingService: the payout is
+        // already recorded, so a failed email is a warning, not a failure.
+        this.email.sendRefereePaymentRecorded(
+            referee.email,
+            referee.name,
+            amount,
+            dto.method,
+            dto.reference,
+        ).catch((err) => {
+            this.logger.warn(
+                `Payment recorded for referee ${refereeId} but the notification email failed: ${err}`,
+            );
         });
 
         return this.mapPayment(payment);

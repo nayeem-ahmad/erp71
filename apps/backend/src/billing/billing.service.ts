@@ -575,6 +575,10 @@ export class BillingService {
     private async earnReferralCommission(tenantId: string, planAmount: number): Promise<void> {
         const signup = await this.db.referralSignup.findUnique({
             where: { tenant_id: tenantId },
+            include: {
+                referee: { select: { name: true, email: true } },
+                tenant: { select: { name: true } },
+            },
         });
         if (!signup || signup.status !== 'PENDING') return;
 
@@ -588,6 +592,22 @@ export class BillingService {
                 commission_amount: commissionAmount,
             },
         });
+
+        // Told, not left to discover it by logging in. Separately caught from the
+        // ledger write above: a bounced notification must not make it look like the
+        // commission failed to record, because by this point it already has.
+        if (signup.referee?.email) {
+            this.email.sendRefereeCommissionEarned(
+                signup.referee.email,
+                signup.referee.name,
+                signup.tenant?.name ?? 'A referred business',
+                commissionAmount,
+            ).catch((err) => {
+                this.logger.warn(
+                    `Referral commission recorded for tenant ${tenantId} but the partner email failed: ${err}`,
+                );
+            });
+        }
     }
 
     /**

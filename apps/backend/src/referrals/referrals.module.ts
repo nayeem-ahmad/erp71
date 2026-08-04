@@ -5,9 +5,10 @@ import { ReferralsService } from './referrals.service';
 import { RefereeGuard } from './referee.guard';
 import { DatabaseModule } from '../database/database.module';
 import { PasswordResetModule } from '../password-reset/password-reset.module';
+import { EmailModule } from '../email/email.module';
 
 @Module({
-    imports: [DatabaseModule, PasswordResetModule],
+    imports: [DatabaseModule, PasswordResetModule, EmailModule],
     controllers: [ReferralsController, RefereePortalController],
     providers: [ReferralsService, RefereeGuard],
     exports: [ReferralsService],
