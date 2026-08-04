@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { formatBDT } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 
@@ -48,7 +49,7 @@ export default function RefereePaymentModal({ open, refereeId, defaultAmount, on
                 reference: reference || undefined,
                 notes: notes || undefined,
             });
-            onSuccess(formatMessage(m.success, { amount: Number(payment.amount).toFixed(2) }));
+            onSuccess(formatMessage(m.success, { amount: formatBDT(Number(payment.amount)) }));
             onClose();
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : m.failed);

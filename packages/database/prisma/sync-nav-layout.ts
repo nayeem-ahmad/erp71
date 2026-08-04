@@ -41,13 +41,21 @@ import { PrismaClient } from '@prisma/client';
 import {
     addNavNodesToLayout,
     validateNavLayout,
+    DEFAULT_TENANT_NAV_LAYOUT,
+    DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT,
+    NAV_LAYOUT_SETTING_KEYS,
+    NAV_REGISTRY,
+    NavScope,
     type NavLayoutNode,
 } from '@erp71/shared-types';
 
 const prisma = new PrismaClient();
 
 const NAVIGATION_GROUP = 'navigation';
-const TENANT_LAYOUT_KEY = 'tenant_layout';
+// Taken from the shared constant rather than re-typed, so a key rename cannot
+// leave this script silently looking up a setting that no longer exists.
+const TENANT_LAYOUT_KEY = NAV_LAYOUT_SETTING_KEYS[NavScope.TENANT];
+const PLATFORM_ADMIN_LAYOUT_KEY = NAV_LAYOUT_SETTING_KEYS[NavScope.PLATFORM_ADMIN];
 
 function parseLayout(raw: unknown): NavLayoutNode[] | null {
     try {
@@ -63,8 +71,9 @@ function merge(
     layout: NavLayoutNode[],
     nodeIds: string[],
     label: string,
+    defaults: NavLayoutNode[] = DEFAULT_TENANT_NAV_LAYOUT,
 ): { layout: NavLayoutNode[] } | { refused: true } | null {
-    const result = addNavNodesToLayout(layout, nodeIds);
+    const result = addNavNodesToLayout(layout, nodeIds, NAV_REGISTRY, defaults);
     for (const s of result.skipped) {
         console.log(`    skipped ${s.id}: ${s.reason}`);
     }
@@ -154,6 +163,42 @@ async function syncTenantOverrides(nodeIds: string[], dryRun: boolean): Promise<
     return tally;
 }
 
+/**
+ * The platform-admin sidebar. Saved only if someone has customised it through the
+ * nav admin; absent means admins are already served the code default. Its nodes
+ * come from a different default layout, so the merge has to be told which one —
+ * passing the tenant defaults would skip every admin node as "not in the default
+ * layout".
+ */
+async function syncPlatformAdminLayout(nodeIds: string[], dryRun: boolean): Promise<Tally> {
+    const setting = await prisma.platformSetting.findFirst({
+        where: { group: NAVIGATION_GROUP, key: PLATFORM_ADMIN_LAYOUT_KEY },
+    });
+    if (!setting) {
+        console.log('  platform_admin_layout: not set — admins already fall back to the code default');
+        return { changed: 0, refused: 0 };
+    }
+
+    const layout = parseLayout(setting.value);
+    if (!layout) {
+        console.error('  platform_admin_layout: unparseable, leaving alone');
+        return { changed: 0, refused: 0 };
+    }
+
+    console.log('  platform_admin_layout:');
+    const merged = merge(layout, nodeIds, 'platform_admin_layout', DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT);
+    if (!merged) return { changed: 0, refused: 0 };
+    if ('refused' in merged) return { changed: 0, refused: 1 };
+
+    if (!dryRun) {
+        await prisma.platformSetting.update({
+            where: { id: setting.id },
+            data: { value: JSON.stringify(merged.layout) },
+        });
+    }
+    return { changed: 1, refused: 0 };
+}
+
 async function main() {
     const dryRun = process.argv.includes('--dry-run');
     const nodesArg = process.argv.find((a) => a.startsWith('--nodes='))?.split('=')[1];
@@ -168,9 +213,10 @@ async function main() {
     );
 
     const platform = await syncPlatformLayout(nodeIds, dryRun);
+    const platformAdmin = await syncPlatformAdminLayout(nodeIds, dryRun);
     const tenants = await syncTenantOverrides(nodeIds, dryRun);
-    const changed = platform.changed + tenants.changed;
-    const refused = platform.refused + tenants.refused;
+    const changed = platform.changed + platformAdmin.changed + tenants.changed;
+    const refused = platform.refused + platformAdmin.refused + tenants.refused;
 
     if (changed > 0) {
         console.log(`\n${dryRun ? 'Would update' : 'Updated'} ${changed} layout(s).`);

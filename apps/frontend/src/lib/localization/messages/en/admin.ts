@@ -942,7 +942,7 @@ export const adminMessages = {
             confirm: 'Record payment',
             saving: 'Saving…',
             failed: 'Failed to record payment',
-            success: 'Payment of ৳{amount} recorded',
+            success: 'Payment of {amount} recorded',
             noEarned: 'No earned commissions to pay',
         },
         delete: {

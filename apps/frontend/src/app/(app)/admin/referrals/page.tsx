@@ -11,7 +11,7 @@ import RefereeFormModal from '@/components/admin/referrals/RefereeFormModal';
 import RefereeDeleteModal from '@/components/admin/referrals/RefereeDeleteModal';
 import type { RefereeRecord } from '@/components/admin/referrals/types';
 import { api } from '@/lib/api';
-import { formatDate } from '@/lib/format';
+import { formatBDT, formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { toast } from '@/lib/toast';
@@ -134,7 +134,7 @@ export default function AdminReferralsPage() {
         columnHelper.accessor((row) => row.stats.earned_amount, {
             id: 'earned',
             header: m.columns.earned,
-            cell: (info) => <span className="font-semibold text-emerald-700">৳{Number(info.getValue()).toFixed(2)}</span>,
+            cell: (info) => <span className="font-semibold text-emerald-700">{formatBDT(Number(info.getValue()))}</span>,
         }),
         // `earned_amount` sums commissions still in EARNED, so it *is* the outstanding
         // balance; `paid_amount` sums ones already settled. Subtracting the second from
@@ -143,7 +143,7 @@ export default function AdminReferralsPage() {
         columnHelper.accessor((row) => row.stats.earned_amount, {
             id: 'balance',
             header: m.columns.balance,
-            cell: (info) => <span className="font-semibold text-amber-700">৳{Number(info.getValue()).toFixed(2)}</span>,
+            cell: (info) => <span className="font-semibold text-amber-700">{formatBDT(Number(info.getValue()))}</span>,
         }),
         columnHelper.accessor('is_active', {
             header: m.columns.status,
