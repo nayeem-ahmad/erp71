@@ -1,6 +1,8 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
+import { AccountingService } from '../accounting/accounting.service';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PasswordResetService } from '../password-reset/password-reset.service';
 import {
     CreateRefereeDto,
@@ -24,6 +26,8 @@ export class ReferralsService {
         private readonly db: DatabaseService,
         private readonly passwordReset: PasswordResetService,
         private readonly email: EmailService,
+        private readonly platformSettings: PlatformSettingsService,
+        private readonly accounting: AccountingService,
     ) {}
 
     // ── Referees ──────────────────────────────────────────────────────────────
@@ -478,6 +482,17 @@ export class ReferralsService {
             return newPayment;
         });
 
+        // Same reasoning as the notification below: the payout is already recorded,
+        // so a failed posting is a warning rather than a rollback. Reversing a real
+        // money movement because the bookkeeping leg failed would be worse than a
+        // missing journal entry that an admin can add by hand.
+        await this.postCommissionExpense(payment.id, referee.name, amount, dto.reference)
+            .catch((err) => {
+                this.logger.warn(
+                    `Payment ${payment.id} recorded but posting it to the platform books failed: ${err}`,
+                );
+            });
+
         // Same reasoning as the earned notification in BillingService: the payout is
         // already recorded, so a failed email is a warning, not a failure.
         this.email.sendRefereePaymentRecorded(
@@ -577,6 +592,47 @@ export class ReferralsService {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Post a referee payout as a journal voucher in the platform's own books.
+     *
+     * `RefereePayment` is a platform-level ledger with no link into the accounting
+     * module, so commission expense never appeared in the operator's P&L. The
+     * accounting module is tenant-scoped and the platform is not a tenant, which is
+     * why the target workspace and both accounts have to be configured rather than
+     * inferred — guessing an account is worse than not posting.
+     *
+     * No-ops unless `referral_accounting` is fully configured, so this is off until
+     * someone deliberately turns it on.
+     */
+    private async postCommissionExpense(
+        paymentId: string,
+        refereeName: string,
+        amount: number,
+        reference?: string,
+    ): Promise<void> {
+        const settings = await this.platformSettings.getRawGroup('referral_accounting');
+        if (settings.enabled !== 'true') return;
+
+        const { house_tenant_id: tenantId, expense_account_id, payment_account_id } = settings;
+        if (!tenantId || !expense_account_id || !payment_account_id) {
+            this.logger.warn(
+                'referral_accounting is enabled but incompletely configured; skipping the posting. '
+                + 'Set house_tenant_id, expense_account_id and payment_account_id.',
+            );
+            return;
+        }
+
+        await this.accounting.createVoucher(tenantId, {
+            voucherType: 'JOURNAL' as any,
+            description: `Referral commission payout — ${refereeName}`,
+            referenceNumber: reference || `referee-payment:${paymentId}`,
+            details: [
+                { accountId: expense_account_id, debitAmount: amount, creditAmount: 0 },
+                { accountId: payment_account_id, debitAmount: 0, creditAmount: amount },
+            ],
+        } as any);
+    }
 
     /** Money is compared and stored to two decimals; float sums drift without this. */
     private round2(value: number): number {
