@@ -3,6 +3,7 @@ import {
     ForbiddenException,
     Injectable,
     InternalServerErrorException,
+    Logger,
     NotFoundException,
     ServiceUnavailableException,
     UnauthorizedException,
@@ -38,6 +39,8 @@ type PlanCode = 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
 
 @Injectable()
 export class BillingService {
+    private readonly logger = new Logger(BillingService.name);
+
     constructor(
         private readonly db: DatabaseService,
         private readonly audit: AuditService,
@@ -531,7 +534,19 @@ export class BillingService {
             }
 
             if (resolvedStatus === 'ACTIVE' && emailAmount > 0) {
-                this.earnReferralCommission(input.tenantId, emailAmount).catch(() => {});
+                // Deliberately not awaited — a referral bookkeeping failure must not
+                // fail the activation that has already been paid for. But it is money
+                // owed to a partner, so it is never swallowed: losing it silently
+                // means the commission simply never appears in anyone's ledger.
+                this.earnReferralCommission(input.tenantId, emailAmount).catch((err) => {
+                    this.logger.error(
+                        `Failed to record referral commission for tenant ${input.tenantId}: ${err}`,
+                    );
+                    Sentry.captureException(err, {
+                        tags: { domain: 'referral' },
+                        extra: { tenantId: input.tenantId, planAmount: emailAmount },
+                    });
+                });
             }
         }
 

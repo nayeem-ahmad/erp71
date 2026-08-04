@@ -1,4 +1,9 @@
-import { IsBoolean, IsEmail, IsNumber, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsEmail, IsEnum, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, Min } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { ReferralCommissionStatus } from '@prisma/client';
+
+const emptyToUndefined = ({ value }: { value: unknown }) =>
+    value === '' || value === null ? undefined : value;
 
 export class CreateRefereeDto {
     @IsString()
@@ -83,16 +88,28 @@ export class RecordPaymentDto {
     notes?: string;
 
     @IsOptional()
-    @IsString({ each: true })
+    @IsArray()
+    @IsUUID(undefined, { each: true })
     commission_ids?: string[];
 }
 
+/**
+ * Query DTO for `GET /admin/referrals/commissions`.
+ *
+ * `status` and `referee_id` are interpolated straight into a Prisma `where`, so
+ * they are validated against the real shapes rather than accepted as bare
+ * strings — an unknown status used to reach Prisma and surface as a 500 instead
+ * of a 400. `status` reuses the Prisma-generated enum rather than re-declaring
+ * the three values, so it cannot drift from the schema.
+ */
 export class ListCommissionsQueryDto {
     @IsOptional()
-    @IsString()
+    @Transform(emptyToUndefined)
+    @IsUUID()
     referee_id?: string;
 
     @IsOptional()
-    @IsString()
-    status?: 'PENDING' | 'EARNED' | 'PAID';
+    @Transform(emptyToUndefined)
+    @IsEnum(ReferralCommissionStatus)
+    status?: ReferralCommissionStatus;
 }
