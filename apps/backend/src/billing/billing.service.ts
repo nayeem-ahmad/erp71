@@ -582,13 +582,30 @@ export class BillingService {
         });
         if (!signup || signup.status !== 'PENDING') return;
 
-        const commissionAmount = Math.round(planAmount * Number(signup.commission_pct)) / 100;
+        // Commission is a share of what the tenant actually paid, not of list price.
+        //
+        // This recomputes the discount rather than being handed the charged amount,
+        // and that is deliberate: it uses the same formula and the same snapshotted
+        // `discount_pct` that createCheckoutSession used, so the two cannot drift.
+        // The statuses line up too — checkout only discounts while PENDING, and this
+        // only earns while PENDING, and status never moves backwards — so if a
+        // discount is applied here it was applied at checkout. Callers that never
+        // saw a checkout (webhooks, manual admin changes) get the right answer for
+        // free instead of needing the amount plumbed through.
+        //
+        // Add-ons are excluded on both sides, so this is exactly the plan revenue.
+        const discountPct = Number(signup.discount_pct ?? 0);
+        const netPlanAmount = discountPct > 0
+            ? Math.round(planAmount * ((100 - discountPct) / 100) * 100) / 100
+            : planAmount;
+
+        const commissionAmount = Math.round(netPlanAmount * Number(signup.commission_pct)) / 100;
         await this.db.referralSignup.update({
             where: { id: signup.id },
             data: {
                 status: 'EARNED',
                 earned_at: new Date(),
-                plan_amount: planAmount,
+                plan_amount: netPlanAmount,
                 commission_amount: commissionAmount,
             },
         });

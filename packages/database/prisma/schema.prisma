@@ -3651,7 +3651,11 @@ model ReferralSignup {
   tenant_id          String                   @unique
   discount_pct       Decimal                  @db.Decimal(5, 2)
   commission_pct     Decimal                  @db.Decimal(5, 2)
-  plan_amount        Decimal?                 @db.Decimal(10, 2)  // gross amount paid by client
+  /// Plan revenue actually collected from the client — list price less this
+  /// referral's signup discount, add-ons excluded. This is the base the
+  /// commission is a percentage of. Rows earned before 2026-08-04 hold the
+  /// undiscounted list price instead; see the backfill note in TODO.md.
+  plan_amount        Decimal?                 @db.Decimal(10, 2)
   commission_amount  Decimal?                 @db.Decimal(10, 2)  // calculated when earned
   status             ReferralCommissionStatus @default(PENDING)
   signed_up_at       DateTime                 @default(now())
