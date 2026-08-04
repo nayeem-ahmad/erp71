@@ -61,7 +61,7 @@ enum ShortLinkKind {
 }
 
 enum ShortLinkEntity {
-  SALES_QUOTATION
+  QUOTATION
   STOREFRONT_PRODUCT
 }
 
@@ -91,7 +91,7 @@ model ShortLink {
 }
 ```
 
-Two columns on `SalesQuotation`:
+Two columns on `Quotation`:
 
 ```prisma
 share_token    String?   @unique
@@ -157,11 +157,13 @@ Both share endpoints require the existing quotation permission, not `MANAGE_SHOR
 
 The highest-risk file in this build. It must be an explicit allow-list of fields, never a spread of the Prisma row.
 
-Included: quotation number, date, validity date, customer name, line items (description, quantity, unit price, line total), subtotal, discount, tax, grand total, terms, and tenant branding.
+Included: quotation number, version, status, issue date, validity date, customer name, seller (store) name, notes, line items (product name, quantity, unit price, line total), and the total amount.
+
+There is no subtotal, discount or tax line: `QuotationItem` carries only `quantity` and `unit_price`, and `Quotation` carries a single `total_amount`. The public view shows what the record actually holds rather than inventing a breakdown.
 
 Excluded: cost price, margin, internal notes, `created_by`, `tenant_id`, and every internal ID.
 
-Its test asserts on the exact key set of the response, so a column added to `SalesQuotation` later fails the test rather than silently leaking to customers.
+Its test asserts on the exact key set of the response, so a column added to `Quotation` later fails the test rather than silently leaking to customers.
 
 ### Frontend
 
@@ -195,7 +197,7 @@ Both must ship in the default layouts, not only in `NAV_REGISTRY`. `apps/backend
 Sharing a quotation:
 
 1. User clicks Share on the quotation detail page.
-2. `POST /sales-quotations/:id/share` ensures `share_token`, then finds or creates a `ShortLink` with `target_url = /q/<token>`, `kind = ENTITY`, `entity_type = SALES_QUOTATION`.
+2. `POST /sales-quotations/:id/share` ensures `share_token`, then finds or creates a `ShortLink` with `target_url = /q/<token>`, `kind = ENTITY`, `entity_type = QUOTATION`.
 3. Response returns `https://app.erp71.com/s/<code>`.
 4. `ShareModal` shows it with Copy and WhatsApp actions.
 
