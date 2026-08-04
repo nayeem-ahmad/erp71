@@ -81,6 +81,10 @@ export const StorePermission = {
   CREATE_LEAD_CONVERSATIONS: "CREATE_LEAD_CONVERSATIONS",
   MANAGE_CRM_SETTINGS: "MANAGE_CRM_SETTINGS",
 
+  // HR
+  VIEW_HR: "VIEW_HR",
+  VIEW_PAYROLL: "VIEW_PAYROLL",
+
   // Loans
   VIEW_LOANS: "VIEW_LOANS",
   MANAGE_LOANS: "MANAGE_LOANS",
@@ -128,6 +132,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.VIEW_LEAD_CONVERSATIONS,
     StorePermission.CREATE_LEAD_CONVERSATIONS,
     StorePermission.MANAGE_CRM_SETTINGS,
+    StorePermission.VIEW_HR,
     StorePermission.VIEW_LOANS,
     StorePermission.MANAGE_LOANS,
     StorePermission.VIEW_PROJECTS,
@@ -214,6 +219,8 @@ export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.VIEW_LEAD_CONVERSATIONS]: "View lead conversations",
   [StorePermission.CREATE_LEAD_CONVERSATIONS]: "Log lead conversations",
   [StorePermission.MANAGE_CRM_SETTINGS]: "Manage CRM custom fields & settings",
+  [StorePermission.VIEW_HR]: "View employees & attendance",
+  [StorePermission.VIEW_PAYROLL]: "View salary & payroll figures",
   [StorePermission.VIEW_LOANS]: "View loans",
   [StorePermission.MANAGE_LOANS]: "Manage loans",
   [StorePermission.VIEW_PROJECTS]: "View projects",
@@ -288,6 +295,13 @@ export const STORE_PERMISSION_GROUPS: { label: string; permissions: StorePermiss
       StorePermission.VIEW_LEAD_CONVERSATIONS,
       StorePermission.CREATE_LEAD_CONVERSATIONS,
       StorePermission.MANAGE_CRM_SETTINGS,
+    ],
+  },
+  {
+    label: "HR & Payroll",
+    permissions: [
+      StorePermission.VIEW_HR,
+      StorePermission.VIEW_PAYROLL,
     ],
   },
   {

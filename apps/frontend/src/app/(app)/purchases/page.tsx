@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
     BarChart3,
     BookOpen,
@@ -14,7 +14,8 @@ import {
     Wallet,
 } from 'lucide-react';
 import ModuleHub, { type HubSectionConfig } from '@/components/ModuleHub';
-import { api } from '@/lib/api';
+import PurchaseDashboard from '@/components/dashboard/PurchaseDashboard';
+import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
 import { canAccessInventoryAdvancedReports } from '@/lib/plan-entitlements';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
@@ -58,21 +59,16 @@ const PURCHASE_HUB_SECTIONS: HubSectionConfig[] = [
     },
 ];
 
+/**
+ * Purchases > Overview. The buying dashboard above the link hub. Gated on the
+ * same `BASIC` floor its endpoint carries — a FREE tenant would get a 403 for
+ * every panel, so it keeps the plain hub.
+ */
 export default function PurchasesHubPage() {
     const { t } = useI18n();
-    const [canAccessAdvancedReports, setCanAccessAdvancedReports] = useState(false);
-
-    useEffect(() => {
-        api.getMe()
-            .then((me) => {
-                const tenantId = localStorage.getItem('tenant_id');
-                const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === tenantId) || me?.tenants?.[0];
-                const planCode = tenant?.subscription?.plan?.code || null;
-                const features = (tenant?.subscription?.plan?.features_json || {}) as Record<string, unknown>;
-                setCanAccessAdvancedReports(canAccessInventoryAdvancedReports(planCode, features));
-            })
-            .catch(() => setCanAccessAdvancedReports(false));
-    }, []);
+    const { planCode, features, ready } = useTenantPlanFeatures();
+    const canAccessAdvancedReports = canAccessInventoryAdvancedReports(planCode, features);
+    const canSeeDashboard = planCode !== null && planCode !== 'FREE';
 
     const hub = t.purchases.hub;
     const sectionLabels = useMemo(() => ({
@@ -95,6 +91,12 @@ export default function PurchasesHubPage() {
             openSectionLabel={t.accountingShared.openSection}
             viewReportLabel={t.accountingShared.viewReport}
             canAccessAdvanced={canAccessAdvancedReports}
-        />
+        >
+            {ready && canSeeDashboard ? (
+                <div className="mb-4">
+                    <PurchaseDashboard variant="embedded" greeting="" tenantName="" renewalEnd={null} />
+                </div>
+            ) : null}
+        </ModuleHub>
     );
 }

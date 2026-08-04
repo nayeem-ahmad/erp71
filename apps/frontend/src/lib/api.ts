@@ -417,6 +417,19 @@ function leadConversationQuery(
     return query ? `?${query}` : '';
 }
 
+/**
+ * Every module dashboard endpoint takes the same optional window and answers in
+ * one payload, so they share one caller rather than seven copies of this.
+ */
+function dashboardWindowFetcher(path: string) {
+    return (params?: { from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        return fetchWithAuth(`${path}${query.toString() ? `?${query.toString()}` : ''}`);
+    };
+}
+
 export const api = {
     /**
      * Every product as a flat array — for pickers, POS and id→product maps.
@@ -1113,18 +1126,19 @@ export const api = {
     deleteCrmFollowUp: (id: string) => fetchWithAuth(`/crm/follow-ups/${id}`, { method: 'DELETE' }),
     // CRM dashboard — one aggregate per paint. The per-page summary endpoints
     // (`/crm/leads/summary` and friends) still serve their own list screens.
-    getCrmDashboardOverview: (params?: { from?: string; to?: string }) => {
-        const query = new URLSearchParams();
-        if (params?.from) query.set('from', params.from);
-        if (params?.to) query.set('to', params.to);
-        return fetchWithAuth(`/crm/dashboard/overview${query.toString() ? `?${query.toString()}` : ''}`);
-    },
-    getCrmDashboardTrends: (params?: { from?: string; to?: string }) => {
-        const query = new URLSearchParams();
-        if (params?.from) query.set('from', params.from);
-        if (params?.to) query.set('to', params.to);
-        return fetchWithAuth(`/crm/dashboard/trends${query.toString() ? `?${query.toString()}` : ''}`);
-    },
+    getCrmDashboardOverview: dashboardWindowFetcher('/crm/dashboard/overview'),
+    getCrmDashboardTrends: dashboardWindowFetcher('/crm/dashboard/trends'),
+    // Module Overview dashboards — same contract, one per module.
+    getInventoryDashboardOverview: dashboardWindowFetcher('/inventory/dashboard/overview'),
+    getInventoryDashboardTrends: dashboardWindowFetcher('/inventory/dashboard/trends'),
+    getPurchaseDashboardOverview: dashboardWindowFetcher('/purchases/dashboard/overview'),
+    getPurchaseDashboardTrends: dashboardWindowFetcher('/purchases/dashboard/trends'),
+    getSalesDashboardOverview: dashboardWindowFetcher('/sales/dashboard/overview'),
+    getSalesDashboardTrends: dashboardWindowFetcher('/sales/dashboard/trends'),
+    getHrDashboardOverview: dashboardWindowFetcher('/hr/dashboard/overview'),
+    getHrDashboardTrends: dashboardWindowFetcher('/hr/dashboard/trends'),
+    getAdminDashboardOverview: dashboardWindowFetcher('/admin/dashboard/overview'),
+    getAdminDashboardTrends: dashboardWindowFetcher('/admin/dashboard/trends'),
     // CRM Campaigns
     getCrmCampaigns: () => fetchAllPages('/crm/campaigns'),
     getCrmCampaign: (id: string) => fetchWithAuth(`/crm/campaigns/${id}`),

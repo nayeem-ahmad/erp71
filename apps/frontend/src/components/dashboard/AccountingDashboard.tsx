@@ -1,23 +1,28 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
-import { previousWindow, rangeToWindow } from '@/lib/dashboard-range';
-import { periodDelta } from '@/lib/dashboard-delta';
+import { useModuleDashboard } from '@/lib/use-module-dashboard';
 import { routes } from '@/lib/routes';
 import FrequentQuickLinks from '@/components/dashboard/FrequentQuickLinks';
-import { DashboardHeader, type DashboardRange } from '@/components/dashboard/DashboardHeader';
-import { HealthKpiTile } from '@/components/dashboard/HealthKpiTile';
-import { AttentionStrip, type AttentionItem } from '@/components/dashboard/AttentionStrip';
+import ModuleDashboard, {
+    AttentionSection,
+    DashboardSection,
+    KpiTileGrid,
+    type DashboardMount,
+    type KpiTileSpec,
+} from '@/components/dashboard/ModuleDashboard';
+import { type AttentionItem } from '@/components/dashboard/AttentionStrip';
 import { AgingPanel, type AgingRow } from '@/components/dashboard/AgingPanel';
 import { SalesByCategoryDonut, type CategoryRow } from '@/components/dashboard/SalesByCategoryDonut';
 import { CashFlowChart } from '@/components/dashboard/CashFlowChart';
 import { RankedListPanel, type RankedItem } from '@/components/dashboard/RankedListPanel';
-import PageShell from '@/components/ui/compact/PageShell';
 import type { DashboardIdentity } from './dashboard-identity';
+
+/** A closing balance has nothing to compare against; it is a stock, not a flow. */
+const NO_DELTA = { label: '—', positive: true } as const;
 
 type Buckets = {
     current: number;
@@ -81,76 +86,47 @@ type TrendPoint = {
 
 type TrendResponse = { points: TrendPoint[] };
 
-export default function AccountingDashboard({ greeting, tenantName, renewalEnd }: DashboardIdentity) {
+export default function AccountingDashboard({
+    greeting,
+    tenantName,
+    renewalEnd,
+    variant = 'page',
+}: Readonly<DashboardIdentity & { variant?: DashboardMount }>) {
     const { t, locale } = useI18n();
     const copy = t.dashboardHome;
     const acc = copy.accounting;
 
-    const [range, setRange] = useState<DashboardRange>('month');
-    const [overview, setOverview] = useState<OverviewResponse | null>(null);
-    const [previousOverview, setPreviousOverview] = useState<OverviewResponse | null>(null);
-    const [trends, setTrends] = useState<TrendPoint[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-
-    useEffect(() => {
-        let cancelled = false;
-
-        const load = async () => {
-            setLoading(true);
-            setError('');
-
-            const win = rangeToWindow(range);
-            const prevWin = previousWindow(win);
-
-            const [overviewRes, prevRes, trendRes] = await Promise.allSettled([
-                api.getAccountingDashboardOverview(win),
-                api.getAccountingDashboardOverview(prevWin),
-                api.getFinancialTrends(win),
-            ]);
-
-            if (cancelled) return;
-
-            if (overviewRes.status === 'fulfilled') {
-                setOverview(overviewRes.value);
-            } else {
-                setOverview(null);
-                setError(overviewRes.reason instanceof Error ? overviewRes.reason.message : acc.overviewUnavailable);
-            }
-
-            // The comparison window only feeds the deltas; losing it costs a "—",
-            // not the dashboard.
-            setPreviousOverview(prevRes.status === 'fulfilled' ? prevRes.value : null);
-            setTrends(trendRes.status === 'fulfilled' ? ((trendRes.value as TrendResponse)?.points ?? []) : []);
-            setLoading(false);
-        };
-
-        void load();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [range, acc.overviewUnavailable]);
+    const {
+        range,
+        setRange,
+        overview,
+        previous: previousOverview,
+        trends,
+        loading,
+        error,
+        deltaContext,
+        compare,
+    } = useModuleDashboard<OverviewResponse, TrendPoint>({
+        fetchOverview: (win) => api.getAccountingDashboardOverview(win),
+        fetchTrends: (win) => api.getFinancialTrends(win) as Promise<TrendResponse>,
+        unavailableMessage: acc.overviewUnavailable,
+        // These endpoints have always taken ISO instants, not calendar days.
+        windowKind: 'instant',
+    });
 
     const money = (value: number) => formatBDT(value, { locale });
     const position = overview?.position;
     const performance = overview?.performance;
     const health = overview?.books_health;
 
-    const deltaContext = range === 'today'
-        ? copy.vsPreviousToday
-        : range === 'week' ? copy.vsPreviousWeek : copy.vsPreviousMonth;
-
-    const compare = (current: number | null | undefined, previous: number | null | undefined) =>
-        current == null || previous == null ? { label: '—', positive: true } : periodDelta(current, previous);
-
     // Balances, not flows — no sparkline and no period delta, because comparing a
     // closing balance against a prior window reads as a trend it is not.
-    const positionTiles = [
+    const positionTiles: KpiTileSpec[] = [
         {
             key: 'cash',
             title: acc.kpiCashAndBank,
             value: money(position?.cash_and_bank ?? 0),
+            delta: NO_DELTA,
             note: undefined as string | undefined,
         },
         {
@@ -159,6 +135,7 @@ export default function AccountingDashboard({ greeting, tenantName, renewalEnd }
             value: position?.accounts_receivable == null
                 ? acc.noAccountConfigured
                 : money(position.accounts_receivable),
+            delta: NO_DELTA,
             note: overview?.aging.receivable && overview.aging.receivable.overdue_90_plus > 0
                 ? formatMessage(acc.overdueOver90, { amount: money(overview.aging.receivable.overdue_90_plus) })
                 : undefined,
@@ -169,6 +146,7 @@ export default function AccountingDashboard({ greeting, tenantName, renewalEnd }
             value: position?.accounts_payable == null
                 ? acc.noAccountConfigured
                 : money(position.accounts_payable),
+            delta: NO_DELTA,
             note: overview?.aging.payable && overview.aging.payable.overdue_90_plus > 0
                 ? formatMessage(acc.overdueOver90, { amount: money(overview.aging.payable.overdue_90_plus) })
                 : undefined,
@@ -177,6 +155,7 @@ export default function AccountingDashboard({ greeting, tenantName, renewalEnd }
             key: 'net-worth',
             title: acc.kpiNetWorth,
             value: money(position?.net_worth ?? 0),
+            delta: NO_DELTA,
             note: acc.assetsMinusLiabilities,
         },
     ];
@@ -186,19 +165,19 @@ export default function AccountingDashboard({ greeting, tenantName, renewalEnd }
     const profitSeries = trends.map((point) => point.net_profit);
     const prev = previousOverview?.performance ?? null;
 
-    const performanceTiles = [
+    const performanceTiles: KpiTileSpec[] = [
         {
             key: 'revenue',
             title: acc.kpiRevenue,
             value: money(performance?.revenue ?? 0),
-            series: revenueSeries,
+            points: revenueSeries,
             delta: compare(performance?.revenue, prev?.revenue),
         },
         {
             key: 'expenses',
             title: acc.kpiExpenses,
             value: money(performance?.expenses ?? 0),
-            series: expenseSeries,
+            points: expenseSeries,
             // Spending more is not an improvement, so the delta's sign is inverted
             // against every other tile on the row.
             delta: (() => {
@@ -210,7 +189,7 @@ export default function AccountingDashboard({ greeting, tenantName, renewalEnd }
             key: 'net-profit',
             title: acc.kpiNetProfit,
             value: money(performance?.net_profit ?? 0),
-            series: profitSeries,
+            points: profitSeries,
             delta: compare(performance?.net_profit, prev?.net_profit),
         },
         {
@@ -219,7 +198,7 @@ export default function AccountingDashboard({ greeting, tenantName, renewalEnd }
             value: performance?.net_margin_pct == null
                 ? '—'
                 : `${performance.net_margin_pct.toFixed(1)}%`,
-            series: [] as number[],
+            points: [] as number[],
             delta: compare(performance?.net_margin_pct, prev?.net_margin_pct),
         },
     ];
@@ -321,195 +300,128 @@ export default function AccountingDashboard({ greeting, tenantName, renewalEnd }
     }));
 
     return (
-        <PageShell maxWidth="full">
-            <div className="space-y-4">
-                <DashboardHeader
-                    greeting={greeting}
-                    tenantName={tenantName}
-                    subtitle={acc.subtitle}
-                    range={range}
-                    onRangeChange={setRange}
-                    labels={{ today: copy.rangeToday, week: copy.rangeWeek, month: copy.rangeMonth }}
-                />
+        <ModuleDashboard
+            mount={variant}
+            greeting={greeting}
+            tenantName={tenantName}
+            subtitle={acc.subtitle}
+            range={range}
+            onRangeChange={setRange}
+            error={error}
+        >
+            {/* Embedded, the module hub's own link grid sits right below this —
+                a second one would be the same links twice. */}
+            {variant === 'page' ? <FrequentQuickLinks accountingOnlyMode /> : null}
 
-                <FrequentQuickLinks accountingOnlyMode />
+            <AttentionSection
+                items={attentionItems}
+                loading={loading}
+                label={acc.sectionBooks}
+                allClearLabel={acc.healthAllClear}
+            />
 
-                {error ? (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                        {error}
+            <DashboardSection label={acc.sectionPosition}>
+                <KpiTileGrid tiles={positionTiles} loading={loading} deltaContext={deltaContext} />
+            </DashboardSection>
+
+            <DashboardSection label={acc.sectionPerformance}>
+                <KpiTileGrid tiles={performanceTiles} loading={loading} deltaContext={deltaContext} />
+            </DashboardSection>
+
+            <DashboardSection label={acc.sectionMovement}>
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-[3fr_2fr]">
+                    <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                        <h3 className="mb-2 text-xs font-bold text-gray-900">{copy.cashFlowMovement}</h3>
+                        {loading ? (
+                            <div className="h-40 animate-pulse rounded-lg bg-gray-100" />
+                        ) : (
+                            <CashFlowChart
+                                points={trends}
+                                locale={locale}
+                                labels={{
+                                    inflow: copy.inflow,
+                                    outflow: copy.outflow,
+                                    net: copy.netFlow,
+                                    empty: copy.noAccountingMovement,
+                                    emptyHint: copy.noCashMovementPeriod,
+                                }}
+                            />
+                        )}
                     </div>
-                ) : null}
 
-                <section>
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">{acc.sectionPosition}</p>
-                    {loading ? (
-                        <TileSkeletons />
-                    ) : (
-                        <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
-                            {positionTiles.map((tile) => (
-                                <HealthKpiTile
-                                    key={tile.key}
-                                    title={tile.title}
-                                    value={tile.value}
-                                    delta="—"
-                                    deltaPositive
-                                    points={[]}
-                                    note={tile.note}
-                                />
-                            ))}
-                        </div>
-                    )}
-                </section>
-
-                <section>
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">{acc.sectionPerformance}</p>
-                    {loading ? (
-                        <TileSkeletons />
-                    ) : (
-                        <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
-                            {performanceTiles.map((tile) => (
-                                <HealthKpiTile
-                                    key={tile.key}
-                                    title={tile.title}
-                                    value={tile.value}
-                                    delta={tile.delta.label}
-                                    deltaPositive={tile.delta.positive}
-                                    deltaContext={tile.delta.label === '—' ? undefined : deltaContext}
-                                    points={tile.series}
-                                />
-                            ))}
-                        </div>
-                    )}
-                </section>
-
-                <section>
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">{acc.sectionBooks}</p>
-                    {loading ? (
-                        <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
-                            {Array.from({ length: 4 }).map((_, index) => (
-                                <div key={index} className="h-16 animate-pulse rounded-xl border border-gray-100 bg-white p-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-                                    <div className="h-5 w-12 rounded bg-gray-200" />
-                                    <div className="mt-2 h-3 w-20 rounded bg-gray-100" />
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <AttentionStrip items={attentionItems} allClearLabel={acc.healthAllClear} />
-                    )}
-                </section>
-
-                <section>
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">{acc.sectionMovement}</p>
-                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-[3fr_2fr]">
-                        <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-                            <h3 className="mb-2 text-xs font-bold text-gray-900">{copy.cashFlowMovement}</h3>
-                            {loading ? (
-                                <div className="h-40 animate-pulse rounded-lg bg-gray-100" />
-                            ) : (
-                                <CashFlowChart
-                                    points={trends}
-                                    locale={locale}
-                                    labels={{
-                                        inflow: copy.inflow,
-                                        outflow: copy.outflow,
-                                        net: copy.netFlow,
-                                        empty: copy.noAccountingMovement,
-                                        emptyHint: copy.noCashMovementPeriod,
-                                    }}
-                                />
-                            )}
-                        </div>
-
-                        <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-                            <h3 className="mb-2 text-xs font-bold text-gray-900">{acc.expenseMix}</h3>
-                            {loading ? (
-                                <div className="h-24 animate-pulse rounded-lg bg-gray-100" />
-                            ) : (
-                                <SalesByCategoryDonut
-                                    rows={expenseRows}
-                                    totalLabel={formatBDT(expenseTotal, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                                    totalTitle={money(expenseTotal)}
-                                    emptyLabel={acc.expenseMixEmpty}
-                                    ariaLabel={`${acc.expenseMix} — ${money(expenseTotal)}`}
-                                />
-                            )}
-                        </div>
+                    <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                        <h3 className="mb-2 text-xs font-bold text-gray-900">{acc.expenseMix}</h3>
+                        {loading ? (
+                            <div className="h-24 animate-pulse rounded-lg bg-gray-100" />
+                        ) : (
+                            <SalesByCategoryDonut
+                                rows={expenseRows}
+                                totalLabel={formatBDT(expenseTotal, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                totalTitle={money(expenseTotal)}
+                                emptyLabel={acc.expenseMixEmpty}
+                                ariaLabel={`${acc.expenseMix} — ${money(expenseTotal)}`}
+                            />
+                        )}
                     </div>
-                </section>
-
-                <section>
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">{acc.sectionLedger}</p>
-                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                        <AgingPanel
-                            title={acc.agingTitle}
-                            rows={agingRows}
-                            columnLabels={{
-                                current: acc.agingCurrent,
-                                d3160: acc.aging3160,
-                                d6190: acc.aging6190,
-                                d90plus: acc.aging90Plus,
-                            }}
-                            formatAmount={money}
-                            emptyLabel={acc.agingEmpty}
-                        />
-                        <RankedListPanel title={acc.topExpenses} items={topExpenses} emptyLabel={acc.expenseMixEmpty} />
-                        <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-                            <h3 className="mb-2 text-xs font-bold text-gray-900">{acc.recentVouchers}</h3>
-                            {(overview?.recent_vouchers ?? []).length === 0 ? (
-                                <p className="py-4 text-center text-[11px] text-gray-400">{acc.noVouchers}</p>
-                            ) : (
-                                <ul>
-                                    {overview!.recent_vouchers.map((voucher) => (
-                                        <li key={voucher.id} className="border-b border-gray-50 py-1.5 last:border-0">
-                                            <Link
-                                                href={routes.accounting.voucherDetail(voucher.id)}
-                                                className="flex items-center gap-2 text-[11px]"
-                                            >
-                                                <span className="min-w-0 flex-1">
-                                                    <span className="block truncate font-semibold text-gray-900">
-                                                        {voucher.voucher_number}
-                                                    </span>
-                                                    <span className="block truncate text-[10px] text-gray-500">
-                                                        {new Date(voucher.date).toLocaleDateString(locale)}
-                                                        {voucher.description ? ` · ${voucher.description}` : ''}
-                                                    </span>
-                                                </span>
-                                                {voucher.approval_status === 'PENDING' ? (
-                                                    <span className="shrink-0 rounded-full bg-warning-light px-1.5 py-0.5 text-[10px] font-bold text-warning-text">
-                                                        {acc.voucherPending}
-                                                    </span>
-                                                ) : voucher.approval_status === 'REJECTED' ? (
-                                                    <span className="shrink-0 rounded-full bg-danger-light px-1.5 py-0.5 text-[10px] font-bold text-danger-text">
-                                                        {acc.voucherRejected}
-                                                    </span>
-                                                ) : null}
-                                                <span className="shrink-0 font-bold tabular-nums text-gray-900">
-                                                    {money(voucher.amount)}
-                                                </span>
-                                            </Link>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-                    </div>
-                </section>
-            </div>
-        </PageShell>
-    );
-}
-
-function TileSkeletons() {
-    return (
-        <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="animate-pulse rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-                    <div className="h-3 w-16 rounded bg-gray-200" />
-                    <div className="mt-2 h-6 w-24 rounded bg-gray-200" />
-                    <div className="mt-2 h-3 w-12 rounded bg-gray-200" />
-                    <div className="mt-3 h-5 w-full rounded bg-gray-100" />
                 </div>
-            ))}
-        </div>
+            </DashboardSection>
+
+            <DashboardSection label={acc.sectionLedger}>
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                    <AgingPanel
+                        title={acc.agingTitle}
+                        rows={agingRows}
+                        columnLabels={{
+                            current: acc.agingCurrent,
+                            d3160: acc.aging3160,
+                            d6190: acc.aging6190,
+                            d90plus: acc.aging90Plus,
+                        }}
+                        formatAmount={money}
+                        emptyLabel={acc.agingEmpty}
+                    />
+                    <RankedListPanel title={acc.topExpenses} items={topExpenses} emptyLabel={acc.expenseMixEmpty} />
+                    <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                        <h3 className="mb-2 text-xs font-bold text-gray-900">{acc.recentVouchers}</h3>
+                        {(overview?.recent_vouchers ?? []).length === 0 ? (
+                            <p className="py-4 text-center text-[11px] text-gray-400">{acc.noVouchers}</p>
+                        ) : (
+                            <ul>
+                                {overview!.recent_vouchers.map((voucher) => (
+                                    <li key={voucher.id} className="border-b border-gray-50 py-1.5 last:border-0">
+                                        <Link
+                                            href={routes.accounting.voucherDetail(voucher.id)}
+                                            className="flex items-center gap-2 text-[11px]"
+                                        >
+                                            <span className="min-w-0 flex-1">
+                                                <span className="block truncate font-semibold text-gray-900">
+                                                    {voucher.voucher_number}
+                                                </span>
+                                                <span className="block truncate text-[10px] text-gray-500">
+                                                    {new Date(voucher.date).toLocaleDateString(locale)}
+                                                    {voucher.description ? ` · ${voucher.description}` : ''}
+                                                </span>
+                                            </span>
+                                            {voucher.approval_status === 'PENDING' ? (
+                                                <span className="shrink-0 rounded-full bg-warning-light px-1.5 py-0.5 text-[10px] font-bold text-warning-text">
+                                                    {acc.voucherPending}
+                                                </span>
+                                            ) : voucher.approval_status === 'REJECTED' ? (
+                                                <span className="shrink-0 rounded-full bg-danger-light px-1.5 py-0.5 text-[10px] font-bold text-danger-text">
+                                                    {acc.voucherRejected}
+                                                </span>
+                                            ) : null}
+                                            <span className="shrink-0 font-bold tabular-nums text-gray-900">
+                                                {money(voucher.amount)}
+                                            </span>
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                </div>
+            </DashboardSection>
+        </ModuleDashboard>
     );
 }

@@ -5,6 +5,10 @@ import {
 import { ROLE_DEFAULT_PERMISSIONS, StorePermission, UserRole } from '@erp71/shared-types';
 
 const PROJECT_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'projects')!.permissions;
+const HR_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'hr')!.permissions;
+/** The subset of a group that MANAGER actually carries in the matrix. */
+const managerShare = (perms: StorePermission[]) =>
+    perms.filter((perm) => ROLE_DEFAULT_PERMISSIONS[UserRole.MANAGER].includes(perm));
 
 type Row = Record<string, any>;
 
@@ -78,10 +82,49 @@ describe('syncRolePermissions', () => {
         );
         expect(result.rolesTouched).toBe(1);
         expect(result.roleGrants).toBe(PROJECT_PERMS.length);
-        expect(tables.tenantRolePermission.map((r) => r.permission).sort()).toEqual(
-            [...PROJECT_PERMS].sort(),
-        );
+        // The table holds every group's grants, not just this one's.
+        expect(
+            tables.tenantRolePermission
+                .map((r) => r.permission)
+                .filter((perm) => PROJECT_PERMS.includes(perm))
+                .sort(),
+        ).toEqual([...PROJECT_PERMS].sort());
         expect(tables.tenantRolePermission.every((r) => r.tenant_role_id === ROLE_IDS.manager)).toBe(true);
+    });
+
+    it('carries VIEW_HR to existing managers but never VIEW_PAYROLL', async () => {
+        const { client, tables } = seedTenant();
+
+        const results = await syncRolePermissions(client);
+        const hr = results.find((r) => r.key === 'hr')!;
+
+        const granted = tables.tenantRolePermission
+            .filter((r) => HR_PERMS.includes(r.permission))
+            .map((r) => r.permission);
+
+        // VIEW_PAYROLL is in the group so the "already reconciled" test stays
+        // honest, but it is in no role's defaults except OWNER's — and OWNER
+        // bypasses the guard entirely rather than holding grants.
+        expect(granted).toEqual([StorePermission.VIEW_HR]);
+        expect(hr.rolesTouched).toBe(1);
+        expect(hr.roleGrants).toBe(managerShare(HR_PERMS).length);
+    });
+
+    it('leaves the HR group alone once a role holds any of it', async () => {
+        // An owner granted VIEW_PAYROLL by hand. VIEW_HR must not then arrive
+        // behind their back on the next deploy.
+        const { client, tables } = seedTenant({
+            tenantRolePermission: [
+                { tenant_role_id: ROLE_IDS.manager, permission: StorePermission.VIEW_PAYROLL },
+            ],
+        });
+
+        const results = await syncRolePermissions(client);
+        const hr = results.find((r) => r.key === 'hr')!;
+
+        expect(hr.roleGrants).toBe(0);
+        expect(hr.rolesAlreadyReconciled).toBe(1);
+        expect(tables.tenantRolePermission.filter((r) => r.permission === StorePermission.VIEW_HR)).toHaveLength(0);
     });
 
     it('materializes onto every store the role-holding member can access', async () => {
