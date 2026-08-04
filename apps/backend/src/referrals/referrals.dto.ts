@@ -71,9 +71,20 @@ export class UpdateRefereeDto {
 }
 
 export class RecordPaymentDto {
+    /**
+     * Optional. Defaults to exactly what the selected commissions are worth, which
+     * is the only amount that keeps the ledger consistent. Supplying a different
+     * figure requires `allow_partial`.
+     */
+    @IsOptional()
     @IsNumber()
     @Min(0.01)
-    amount: number;
+    amount?: number;
+
+    /** Opt in to recording a payout that deliberately does not settle the full amount owed. */
+    @IsOptional()
+    @IsBoolean()
+    allow_partial?: boolean;
 
     @IsOptional()
     @IsString()

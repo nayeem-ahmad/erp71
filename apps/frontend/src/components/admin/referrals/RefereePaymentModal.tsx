@@ -18,6 +18,7 @@ export default function RefereePaymentModal({ open, refereeId, defaultAmount, on
     const { t } = useI18n();
     const m = t.admin.referrals.payment;
     const [amount, setAmount] = useState(defaultAmount ? String(defaultAmount) : '');
+    const [allowPartial, setAllowPartial] = useState(false);
     const [method, setMethod] = useState('');
     const [reference, setReference] = useState('');
     const [notes, setNotes] = useState('');
@@ -27,8 +28,12 @@ export default function RefereePaymentModal({ open, refereeId, defaultAmount, on
     if (!open) return null;
 
     const handleSubmit = async () => {
-        const parsedAmount = parseFloat(amount);
-        if (!parsedAmount || parsedAmount <= 0) {
+        // An empty amount is meaningful: the backend then settles exactly what the
+        // selected commissions are worth, which is more trustworthy than this form
+        // re-deriving the figure. Only a value that is present has to be valid.
+        const trimmed = amount.trim();
+        const parsedAmount = trimmed === '' ? undefined : parseFloat(trimmed);
+        if (parsedAmount !== undefined && (!Number.isFinite(parsedAmount) || parsedAmount <= 0)) {
             setError(m.failed);
             return;
         }
@@ -36,13 +41,14 @@ export default function RefereePaymentModal({ open, refereeId, defaultAmount, on
         setSubmitting(true);
         setError('');
         try {
-            await api.recordAdminRefereePayment(refereeId, {
+            const payment = await api.recordAdminRefereePayment(refereeId, {
                 amount: parsedAmount,
+                allow_partial: allowPartial || undefined,
                 method: method || undefined,
                 reference: reference || undefined,
                 notes: notes || undefined,
             });
-            onSuccess(formatMessage(m.success, { amount: parsedAmount.toFixed(2) }));
+            onSuccess(formatMessage(m.success, { amount: Number(payment.amount).toFixed(2) }));
             onClose();
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : m.failed);
@@ -63,8 +69,16 @@ export default function RefereePaymentModal({ open, refereeId, defaultAmount, on
                 )}
 
                 <div className="space-y-2">
-                    <label className="text-xs font-medium text-gray-500">{m.amountLabel}</label>
-                    <input type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full rounded-md border border-gray-100 bg-gray-50 px-4 py-3 text-sm font-medium outline-none" />
+                    <label htmlFor="referee-payment-amount" className="text-xs font-medium text-gray-500">{m.amountLabel}</label>
+                    <input id="referee-payment-amount" type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full rounded-md border border-gray-100 bg-gray-50 px-4 py-3 text-sm font-medium outline-none" />
+                    <p className="text-xs text-gray-500">{m.amountHint}</p>
+                </div>
+                <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                        <input type="checkbox" checked={allowPartial} onChange={(e) => setAllowPartial(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+                        {m.partialLabel}
+                    </label>
+                    <p className="text-xs text-gray-500">{m.partialHint}</p>
                 </div>
                 <div className="space-y-2">
                     <label className="text-xs font-medium text-gray-500">{m.methodLabel}</label>

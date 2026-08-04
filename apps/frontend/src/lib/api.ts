@@ -2131,7 +2131,10 @@ export const api = {
         fetchWithAuth(`/admin/referrals/referees/${id}`, { method: 'DELETE' }),
     getAdminRefereeLedger: (id: string) => fetchWithAuth(`/admin/referrals/referees/${id}/ledger`),
     recordAdminRefereePayment: (id: string, data: {
-        amount: number;
+        /** Omit to settle exactly what the selected commissions are worth. */
+        amount?: number;
+        /** Required to record a payout that does not settle the full amount owed. */
+        allow_partial?: boolean;
         method?: string;
         reference?: string;
         notes?: string;

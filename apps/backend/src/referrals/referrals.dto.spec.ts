@@ -70,6 +70,22 @@ describe('referrals DTO validation', () => {
             );
         });
 
+        it('accepts a payout with no amount, which settles exactly what is owed', async () => {
+            await expect(pipe.transform({}, metadata)).resolves.toEqual({});
+        });
+
+        it('accepts an explicit part-payment', async () => {
+            await expect(
+                pipe.transform({ amount: 100, allow_partial: true }, metadata),
+            ).resolves.toEqual(expect.objectContaining({ amount: 100, allow_partial: true }));
+        });
+
+        it('rejects a non-boolean allow_partial', async () => {
+            await expect(
+                pipe.transform({ amount: 100, allow_partial: 'yes' }, metadata),
+            ).rejects.toThrow(BadRequestException);
+        });
+
         it('rejects commission ids that are not uuids', async () => {
             await expect(
                 pipe.transform({ amount: 500, commission_ids: ['nope'] }, metadata),
