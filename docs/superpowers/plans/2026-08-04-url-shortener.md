@@ -72,6 +72,18 @@
 
 The security-critical unit. Pure, no dependencies, tested first and heavily. An error here turns `app.erp71.com` into a phishing vector.
 
+> **DONE — and the Step 3 code below is superseded. Read the shipped file, not this plan.**
+>
+> Review found four real bypasses in the reference implementation written here, closed over three fix rounds (`24df6c56`, `177fb556`, `ce4d0575`, `8641007c`). The code below still shows the vulnerable version; `apps/backend/src/short-links/is-safe-target.ts` is the truth. What changed and why it matters to anyone touching this function later:
+>
+> 1. **Control characters.** The protocol-relative guard checked the raw string while validation parsed the URL, and `new URL()` strips ASCII tab/CR/LF first — so `/\n/evil.com` passed as internal and resolved to `https://evil.com/`. Input is now rejected outright if it contains those characters.
+> 2. **Percent-encoding.** `new URL().pathname` does not decode `%XX`, so `/%6c%6fgin` slipped the `/login` blocklist that a router would have decoded and matched. The path is now decoded (failing closed on a malformed escape) before the prefix check.
+> 3. **IPv6, three times.** Enumerating bad forms failed in three successive rounds: `::ffff:` IPv4-mapped, then `fe80::/10` written as impossible 3-hex-digit prefixes, then `::127.0.0.1` / `::ffff:0:7f00:1` reaching an allow-by-default tail. The branch is now an **allow-list** — a bracketed IPv6 literal is accepted only when its first hextet is in `0x2000`–`0x3fff` (global unicast `2000::/3`), everything else rejected. That one rule subsumes all five special cases the earlier rounds accumulated.
+>
+> The lesson for later tasks: a blocklist has to be right about every form that exists, an allow-list only about the one that is safe. Prefer the allow-list wherever this codebase validates untrusted input.
+>
+> Known deferred gap: Teredo (`2001::/32`) sits inside `2000::/3` and can encode a tunneled private IPv4. Obscure; logged for final-review triage.
+
 **Files:**
 - Create: `apps/backend/src/short-links/is-safe-target.ts`
 - Test: `apps/backend/src/short-links/is-safe-target.spec.ts`
