@@ -41,5 +41,55 @@ This epic was implemented directly against production needs (2026-07-02 → 2026
    * **Description:** Auto-provisioned login linked to `Referee.user_id`, dedicated invite email, scoped `/referrals` dashboard (copy code/signup link, balance due, commissions, payments), workspace chooser integration for users who are also referees.
    * Status: Done — `referee.guard.ts`, `referee-portal.controller.ts`, `apps/frontend/src/app/(app)/referrals/page.tsx`.
 
+### Commission rules (as built)
+
+These were implicit in the code and are stated here because they are the questions
+partners actually ask.
+
+**The commission is one-shot, not a recurring revenue share.** Both the signup
+discount and the commission are gated on the referral being `PENDING`. Concretely:
+
+* The discount applies to the referred tenant's **first paid invoice only**. It
+  disappears once the commission is earned, so renewals are charged full price.
+* The commission is earned **once**, when that tenant's first subscription becomes
+  `ACTIVE`. Renewals earn the partner nothing.
+* The discount applies to the **plan price only** — add-ons are always charged in
+  full.
+
+Moving to a recurring revenue share would mean a commission row per billing period
+rather than one per tenant, so it is a data-model change and not a config toggle.
+
+**Commission state machine.**
+
+| State | Set when | Notes |
+|---|---|---|
+| `PENDING` | The referred tenant signs up with the code | Snapshots `discount_pct`/`commission_pct` off the referee, so later rate changes never rewrite history |
+| `EARNED` | That tenant's subscription first becomes `ACTIVE` | Partner is notified by email |
+| `PAID` | A platform admin records a payout that settles it | Partner is notified by email |
+| `REVERSED` | The tenant's payment is refunded or charged back | Terminal — see below |
+
+**Reversal is terminal.** A refunded referral does not return to `PENDING`, because
+the signup discount it granted was already consumed and re-earning would pay the
+same commission twice. If the commission had already been paid out, the reversal is
+flagged `reversed_after_paid` and the amount nets against the partner's next payout
+through the ledger's `overpaid_amount`.
+
+**A partner cannot use their own code.** Self-referral is rejected at signup, checked
+both by linked account and by email address.
+
+**Payouts are reconciled.** A recorded payment defaults to exactly what the selected
+commissions are worth; a different figure requires an explicit `allow_partial`.
+
 ### Notes
 All five stories above were already fully implemented in code before this epic doc was written (see `TODO.md` entries dated 2026-07-02 through 2026-07-04). This file exists to close the documentation gap — no functional changes accompany it.
+
+The **Commission rules** section above was added on 2026-08-04 alongside the
+referral hardening work; the reversal state, self-referral guard, payout
+reconciliation and partner notifications described there were built at that time,
+while the one-shot behaviour predates it and was simply undocumented.
+
+**Known open item:** the commission is currently calculated on the plan's **list
+price**, not on the discounted amount the tenant actually paid. With a 10% discount
+and a 10% commission the platform collects 90% and pays out 10% of gross — an 11.1%
+effective rate. Whether the base should be gross or net revenue is a policy decision
+and is tracked in `TODO.md`.

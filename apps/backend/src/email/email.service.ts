@@ -121,6 +121,55 @@ export class EmailService {
         });
     }
 
+    /** A referred business paid, so the partner has earned a commission. */
+    async sendRefereeCommissionEarned(
+        to: string,
+        name: string,
+        tenantName: string,
+        amount: number,
+    ): Promise<void> {
+        const { frontendUrl } = await this.getTransportConfig();
+        const portalLink = `${frontendUrl}/referrals`;
+        const greeting = name?.trim() ? name.trim() : to;
+        await this.send({
+            to,
+            subject: 'You have earned a new ERP71 referral commission',
+            html: `<h2>You have earned a commission</h2>
+<p>Hi ${greeting},</p>
+<p><strong>${tenantName}</strong> has started a paid ERP71 subscription through your referral.</p>
+<p><strong>Commission earned:</strong> BDT ${amount.toFixed(2)}</p>
+<p>This is now showing as earned on your ledger and will be included in your next payout.</p>
+<p><a href="${portalLink}">View your referral ledger</a></p>`,
+        });
+    }
+
+    /** A payout has been recorded against the partner's earned commissions. */
+    async sendRefereePaymentRecorded(
+        to: string,
+        name: string,
+        amount: number,
+        method?: string | null,
+        reference?: string | null,
+    ): Promise<void> {
+        const { frontendUrl } = await this.getTransportConfig();
+        const portalLink = `${frontendUrl}/referrals`;
+        const greeting = name?.trim() ? name.trim() : to;
+        const details = [
+            method ? `<p><strong>Method:</strong> ${method}</p>` : '',
+            reference ? `<p><strong>Reference:</strong> ${reference}</p>` : '',
+        ].join('');
+        await this.send({
+            to,
+            subject: 'An ERP71 referral payment has been recorded',
+            html: `<h2>Payment recorded</h2>
+<p>Hi ${greeting},</p>
+<p>A payment of <strong>BDT ${amount.toFixed(2)}</strong> has been recorded against your referral commissions.</p>
+${details}
+<p>If you have not received this payment, reply to this email and we will look into it.</p>
+<p><a href="${portalLink}">View your referral ledger</a></p>`,
+        });
+    }
+
     async sendInvitation(to: string, tenantName: string, inviterName: string, token: string): Promise<void> {
         const { frontendUrl } = await this.getTransportConfig();
         const link = `${frontendUrl}/accept-invitation?token=${token}`;

@@ -1519,6 +1519,7 @@ export const coreMessages = {
         referralPortal: {
             title: "Rakan Rujukan — {name}",
             subtitle: "Jejaki rujukan, komisen, dan pembayaran anda",
+            commissionNote: "Anda memperoleh komisen sekali sahaja, apabila perniagaan yang anda rujuk memulakan langganan berbayar pertamanya. Pembaharuan tidak dikomisenkan.",
             breadcrumb: "Rujukan",
             dashboard: "Papan Pemuka",
             loadFailed: "Gagal memuatkan papan pemuka rujukan",
