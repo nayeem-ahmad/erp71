@@ -116,6 +116,11 @@ export default function AdminRefereeDetailPage() {
         { label: d.summary.totalEarned, value: `৳${ledger.summary.total_earned_amount.toFixed(2)}` },
         { label: d.summary.totalPaid, value: `৳${ledger.summary.total_paid_amount.toFixed(2)}` },
         { label: d.summary.balanceDue, value: `৳${ledger.summary.balance_due.toFixed(2)}`, highlight: true },
+        // Only shown when it is non-zero: on a healthy ledger it is noise, and when it
+        // is not zero it is the single most important number on the page.
+        ...(ledger.summary.overpaid_amount > 0
+            ? [{ label: d.summary.overpaid, value: `৳${ledger.summary.overpaid_amount.toFixed(2)}`, highlight: true }]
+            : []),
     ] : [];
 
     return (

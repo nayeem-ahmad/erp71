@@ -897,6 +897,7 @@ export const adminMessages = {
                 totalEarned: 'Total earned',
                 totalPaid: 'Total paid',
                 balanceDue: 'Balance due',
+                overpaid: 'Overpaid',
             },
             recordPayment: 'Record payment',
             commissionsTitle: 'Commissions',
@@ -929,6 +930,9 @@ export const adminMessages = {
         payment: {
             title: 'Record Payment',
             amountLabel: 'Amount (BDT)',
+            amountHint: 'Leave blank to settle the full amount owed.',
+            partialLabel: 'This is a part payment',
+            partialHint: 'Record a payout that deliberately does not settle the full amount owed.',
             methodLabel: 'Method (optional)',
             referenceLabel: 'Reference (optional)',
             notesLabel: 'Notes (optional)',

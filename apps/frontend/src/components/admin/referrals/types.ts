@@ -63,6 +63,8 @@ export type RefereeLedger = {
         total_earned_amount: number;
         total_paid_amount: number;
         balance_due: number;
+        /** Payments recorded beyond what was earned. Non-zero means the ledger drifted. */
+        overpaid_amount: number;
     };
     commissions: ReferralCommission[];
     payments: RefereePayment[];

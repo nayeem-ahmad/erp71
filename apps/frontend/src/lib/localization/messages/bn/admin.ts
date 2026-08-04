@@ -890,6 +890,7 @@ export const adminMessages = {
                     totalEarned: "মোট অর্জিত",
                     totalPaid: "মোট পরিশোধিত",
                     balanceDue: "বকেয়া",
+                    overpaid: "অতিরিক্ত পরিশোধিত",
                 },
                 recordPayment: "পেমেন্ট রেকর্ড করুন",
                 commissionsTitle: "কমিশন",
@@ -922,6 +923,9 @@ export const adminMessages = {
             payment: {
                 title: "পেমেন্ট রেকর্ড করুন",
                 amountLabel: "পরিমাণ (BDT)",
+                amountHint: "সম্পূর্ণ বকেয়া পরিশোধ করতে ফাঁকা রাখুন।",
+                partialLabel: "এটি একটি আংশিক পেমেন্ট",
+                partialHint: "ইচ্ছাকৃতভাবে সম্পূর্ণ বকেয়া পরিশোধ করে না এমন পেমেন্ট রেকর্ড করুন।",
                 methodLabel: "পদ্ধতি (ঐচ্ছিক)",
                 referenceLabel: "রেফারেন্স (ঐচ্ছিক)",
                 notesLabel: "নোট (ঐচ্ছিক)",

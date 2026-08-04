@@ -890,6 +890,7 @@ export const adminMessages = {
                     totalEarned: "Jumlah diperoleh",
                     totalPaid: "Jumlah dibayar",
                     balanceDue: "Baki terhutang",
+                    overpaid: "Terlebih Bayar",
                 },
                 recordPayment: "Rekod pembayaran",
                 commissionsTitle: "Komisen",
@@ -922,6 +923,9 @@ export const adminMessages = {
             payment: {
                 title: "Rekod Pembayaran",
                 amountLabel: "Jumlah (BDT)",
+                amountHint: "Biarkan kosong untuk menjelaskan keseluruhan jumlah terhutang.",
+                partialLabel: "Ini adalah bayaran sebahagian",
+                partialHint: "Rekod pembayaran yang sengaja tidak menjelaskan keseluruhan jumlah terhutang.",
                 methodLabel: "Kaedah (pilihan)",
                 referenceLabel: "Rujukan (pilihan)",
                 notesLabel: "Nota (pilihan)",

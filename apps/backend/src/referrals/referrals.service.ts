@@ -268,6 +268,19 @@ export class ReferralsService {
 
     // ── Payments ──────────────────────────────────────────────────────────────
 
+    /**
+     * Record a payout to a referee and mark the commissions it settles as PAID.
+     *
+     * The amount and the commissions it clears are reconciled rather than tracked
+     * independently. Previously `amount` was free-form and the selected ids were
+     * flipped to PAID regardless of it, so a ৳1 payment could clear ৳50,000 of
+     * earned commission and the resulting drift was then absorbed by the
+     * `balance_due` clamp in `getLedger` instead of surfacing anywhere.
+     *
+     * `amount` is now optional and defaults to exactly what the selected
+     * commissions are worth. A deliberate part-payment is still possible, but it
+     * has to say so via `allow_partial` — silence no longer means "trust me".
+     */
     async recordPayment(refereeId: string, dto: RecordPaymentDto, adminUserId: string) {
         const referee = await this.db.referee.findUnique({ where: { id: refereeId } });
         if (!referee) throw new NotFoundException('Referee not found');
@@ -278,18 +291,42 @@ export class ReferralsService {
         });
         if (earned.length === 0) throw new BadRequestException('No earned commissions to pay');
 
+        const earnedIds = new Set(earned.map((s) => s.id));
         const ids = dto.commission_ids?.length
             ? dto.commission_ids
             : earned.map((s) => s.id);
 
+        // An id that is not payable — already paid, belonging to another referee, or
+        // simply mistyped — used to be dropped on the floor and the payout recorded
+        // as if it had been included. Name it instead.
+        const unknown = ids.filter((id) => !earnedIds.has(id));
+        if (unknown.length > 0) {
+            throw new BadRequestException(
+                `These commissions are not awaiting payment for this referee: ${unknown.join(', ')}`,
+            );
+        }
+
         const toMark = earned.filter((s) => ids.includes(s.id));
         if (toMark.length === 0) throw new BadRequestException('No matching earned commissions found');
+
+        const owed = this.round2(
+            toMark.reduce((sum, s) => sum + Number(s.commission_amount ?? 0), 0),
+        );
+        const amount = dto.amount === undefined ? owed : this.round2(dto.amount);
+
+        if (amount !== owed && !dto.allow_partial) {
+            throw new BadRequestException(
+                `Payment of ${amount} does not match the ${owed} owed on the selected ` +
+                `commission(s). Adjust the amount, change the selection, or set ` +
+                `allow_partial to record a deliberate part-payment.`,
+            );
+        }
 
         const payment = await this.db.$transaction(async (tx) => {
             const newPayment = await tx.refereePayment.create({
                 data: {
                     referee_id: refereeId,
-                    amount: dto.amount,
+                    amount,
                     method: dto.method,
                     reference: dto.reference,
                     notes: dto.notes,
@@ -351,10 +388,12 @@ export class ReferralsService {
             }),
         ]);
 
-        const totalEarned = commissions
-            .filter((c) => c.status === 'EARNED' || c.status === 'PAID')
-            .reduce((sum, c) => sum + Number(c.commission_amount ?? 0), 0);
-        const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+        const totalEarned = this.round2(
+            commissions
+                .filter((c) => c.status === 'EARNED' || c.status === 'PAID')
+                .reduce((sum, c) => sum + Number(c.commission_amount ?? 0), 0),
+        );
+        const totalPaid = this.round2(payments.reduce((sum, p) => sum + Number(p.amount), 0));
 
         return {
             referee,
@@ -365,7 +404,13 @@ export class ReferralsService {
                 paid: commissions.filter((c) => c.status === 'PAID').length,
                 total_earned_amount: totalEarned,
                 total_paid_amount: totalPaid,
-                balance_due: Math.max(0, totalEarned - totalPaid),
+                balance_due: Math.max(0, this.round2(totalEarned - totalPaid)),
+                // The mirror image of balance_due. Historically the clamp above was the
+                // only thing standing between an unreconciled payout and the ledger, so
+                // an overpayment simply read as "৳0 due" and nothing pointed at it.
+                // recordPayment now refuses to create this state, but rows written
+                // before that still exist, so the ledger says so out loud.
+                overpaid_amount: Math.max(0, this.round2(totalPaid - totalEarned)),
             },
             commissions: commissions.map(this.mapSignup),
             payments: payments.map(this.mapPayment),
@@ -373,6 +418,11 @@ export class ReferralsService {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /** Money is compared and stored to two decimals; float sums drift without this. */
+    private round2(value: number): number {
+        return Math.round(value * 100) / 100;
+    }
 
     private normalizeReferralCode(code: string): string {
         return code.trim().toUpperCase();

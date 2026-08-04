@@ -187,16 +187,19 @@ describe('ReferralsService', () => {
             });
         });
 
+        /** Three earned commissions worth 300 + 200 + 150 = 650 in total. */
+        const threeEarned = () => [
+            signup({ id: 'commission-1', status: 'EARNED', commission_amount: 300 }),
+            signup({ id: 'commission-2', status: 'EARNED', commission_amount: 200 }),
+            signup({ id: 'commission-3', status: 'EARNED', commission_amount: 150 }),
+        ];
+
         it('marks only the selected earned commissions as paid and links them to the payment', async () => {
-            db.referralSignup.findMany.mockResolvedValue([
-                signup({ id: 'commission-1', status: 'EARNED' }),
-                signup({ id: 'commission-2', status: 'EARNED' }),
-                signup({ id: 'commission-3', status: 'EARNED' }),
-            ]);
+            db.referralSignup.findMany.mockResolvedValue(threeEarned());
 
             await service.recordPayment(
                 'referee-1',
-                { amount: 500, commission_ids: ['commission-1', 'commission-3'] },
+                { amount: 450, commission_ids: ['commission-1', 'commission-3'] },
                 'admin-1',
             );
 
@@ -207,33 +210,103 @@ describe('ReferralsService', () => {
         });
 
         it('clears every earned commission when no ids are supplied', async () => {
-            db.referralSignup.findMany.mockResolvedValue([
-                signup({ id: 'commission-1', status: 'EARNED' }),
-                signup({ id: 'commission-2', status: 'EARNED' }),
-            ]);
+            db.referralSignup.findMany.mockResolvedValue(threeEarned());
 
-            await service.recordPayment('referee-1', { amount: 500 }, 'admin-1');
+            await service.recordPayment('referee-1', { amount: 650 }, 'admin-1');
 
             expect(tx.referralSignup.updateMany).toHaveBeenCalledWith({
-                where: { id: { in: ['commission-1', 'commission-2'] } },
+                where: { id: { in: ['commission-1', 'commission-2', 'commission-3'] } },
                 data: expect.objectContaining({ status: 'PAID' }),
             });
         });
+
+        // --- Reconciliation ------------------------------------------------------
+
+        it('defaults the amount to exactly what the selected commissions are worth', async () => {
+            db.referralSignup.findMany.mockResolvedValue(threeEarned());
+
+            await service.recordPayment(
+                'referee-1',
+                { commission_ids: ['commission-1', 'commission-2'] },
+                'admin-1',
+            );
+
+            expect(tx.refereePayment.create).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ amount: 500 }) }),
+            );
+        });
+
+        it('defaults to the full outstanding balance when nothing is selected', async () => {
+            db.referralSignup.findMany.mockResolvedValue(threeEarned());
+
+            await service.recordPayment('referee-1', {}, 'admin-1');
+
+            expect(tx.refereePayment.create).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ amount: 650 }) }),
+            );
+        });
+
+        it('refuses an underpayment that would silently clear the full commission', async () => {
+            db.referralSignup.findMany.mockResolvedValue(threeEarned());
+
+            await expect(
+                service.recordPayment('referee-1', { amount: 1 }, 'admin-1'),
+            ).rejects.toThrow(/does not match the 650 owed/);
+            expect(db.$transaction).not.toHaveBeenCalled();
+        });
+
+        it('refuses an overpayment just as firmly', async () => {
+            db.referralSignup.findMany.mockResolvedValue(threeEarned());
+
+            await expect(
+                service.recordPayment('referee-1', { amount: 5000 }, 'admin-1'),
+            ).rejects.toThrow(BadRequestException);
+            expect(db.$transaction).not.toHaveBeenCalled();
+        });
+
+        it('allows a deliberate part-payment when it says so', async () => {
+            db.referralSignup.findMany.mockResolvedValue(threeEarned());
+
+            await service.recordPayment('referee-1', { amount: 100, allow_partial: true }, 'admin-1');
+
+            expect(tx.refereePayment.create).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ amount: 100 }) }),
+            );
+        });
+
+        it('tolerates float drift across many commissions rather than failing on a rounding cent', async () => {
+            db.referralSignup.findMany.mockResolvedValue([
+                signup({ id: 'commission-1', status: 'EARNED', commission_amount: 0.1 }),
+                signup({ id: 'commission-2', status: 'EARNED', commission_amount: 0.2 }),
+            ]);
+
+            await service.recordPayment('referee-1', { amount: 0.3 }, 'admin-1');
+
+            expect(tx.refereePayment.create).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ amount: 0.3 }) }),
+            );
+        });
+
+        it('names a commission id that is not awaiting payment instead of ignoring it', async () => {
+            db.referralSignup.findMany.mockResolvedValue(threeEarned());
+
+            await expect(
+                service.recordPayment(
+                    'referee-1',
+                    { commission_ids: ['commission-1', 'commission-already-paid'] },
+                    'admin-1',
+                ),
+            ).rejects.toThrow(/commission-already-paid/);
+            expect(db.$transaction).not.toHaveBeenCalled();
+        });
+
+        // --- Guards --------------------------------------------------------------
 
         it('rejects a payout when nothing has been earned', async () => {
             db.referralSignup.findMany.mockResolvedValue([]);
 
             await expect(
                 service.recordPayment('referee-1', { amount: 500 }, 'admin-1'),
-            ).rejects.toThrow(BadRequestException);
-            expect(db.$transaction).not.toHaveBeenCalled();
-        });
-
-        it('rejects a payout whose commission ids match nothing earned', async () => {
-            db.referralSignup.findMany.mockResolvedValue([signup({ id: 'commission-1', status: 'EARNED' })]);
-
-            await expect(
-                service.recordPayment('referee-1', { amount: 500, commission_ids: ['commission-9'] }, 'admin-1'),
             ).rejects.toThrow(BadRequestException);
             expect(db.$transaction).not.toHaveBeenCalled();
         });
@@ -305,11 +378,11 @@ describe('ReferralsService', () => {
             expect(ledger.summary.balance_due).toBe(0);
         });
 
-        // Characterises a known gap rather than endorsing it: recordPayment takes a
-        // free-form `amount` that is never reconciled against the commissions it
-        // clears, so an overpayment is absorbed by this clamp instead of surfacing.
-        // Tracked as the payment-reconciliation follow-up.
-        it('clamps balance_due at zero when payments exceed earned commissions', async () => {
+        // recordPayment now refuses to create this state, but rows written before that
+        // still exist. balance_due stays clamped so the partner-facing figure is never
+        // negative, and overpaid_amount carries the difference so it is visible rather
+        // than absorbed.
+        it('surfaces an overpayment instead of absorbing it into a zero balance', async () => {
             db.referralSignup.findMany.mockResolvedValue([
                 signup({ id: 'commission-1', status: 'EARNED', commission_amount: 100 }),
             ]);
@@ -320,6 +393,32 @@ describe('ReferralsService', () => {
             expect(ledger.summary.total_earned_amount).toBe(100);
             expect(ledger.summary.total_paid_amount).toBe(500);
             expect(ledger.summary.balance_due).toBe(0);
+            expect(ledger.summary.overpaid_amount).toBe(400);
+        });
+
+        it('reports no overpayment on a healthy ledger', async () => {
+            db.referralSignup.findMany.mockResolvedValue([
+                signup({ id: 'commission-1', status: 'EARNED', commission_amount: 300 }),
+            ]);
+            db.refereePayment.findMany.mockResolvedValue([{ id: 'payment-1', amount: 100 }]);
+
+            const ledger = await service.getLedger('referee-1');
+
+            expect(ledger.summary.balance_due).toBe(200);
+            expect(ledger.summary.overpaid_amount).toBe(0);
+        });
+
+        it('does not let float drift leak into the ledger totals', async () => {
+            db.referralSignup.findMany.mockResolvedValue([
+                signup({ id: 'commission-1', status: 'EARNED', commission_amount: 0.1 }),
+                signup({ id: 'commission-2', status: 'EARNED', commission_amount: 0.2 }),
+            ]);
+            db.refereePayment.findMany.mockResolvedValue([]);
+
+            const ledger = await service.getLedger('referee-1');
+
+            expect(ledger.summary.total_earned_amount).toBe(0.3);
+            expect(ledger.summary.balance_due).toBe(0.3);
         });
     });
 
