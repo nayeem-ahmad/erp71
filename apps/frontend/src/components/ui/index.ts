@@ -3,6 +3,8 @@ export { Input } from './Input';
 export { Select } from './Select';
 export { Textarea } from './Textarea';
 export { Checkbox } from './Checkbox';
+export { RichTextEditor } from './RichTextEditor';
+export type { RichTextEditorProps } from './RichTextEditor';
 export { Field } from './Field';
 export { FormGrid } from './FormGrid';
 export { FormFooter } from './FormFooter';

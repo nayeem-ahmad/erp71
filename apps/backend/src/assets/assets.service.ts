@@ -61,6 +61,13 @@ export class AssetsService implements OnModuleInit {
         buffer: Buffer,
         folder: string,
         fileName: string,
+        /**
+         * `image` keeps Cloudinary's image pipeline (and its transformations).
+         * `raw` is for anything it should store byte-for-byte — a PDF put
+         * through the image pipeline is rejected or mangled. Defaults to
+         * `image` so existing callers are untouched.
+         */
+        resourceType: 'image' | 'raw' = 'image',
     ): Promise<{ url: string; publicId: string; bytes: number; format?: string }> {
         if (!this.enabled) {
             throw new Error('Cloudinary is not configured');
@@ -71,10 +78,14 @@ export class AssetsService implements OnModuleInit {
                 {
                     folder: `retail/${folder}`,
                     public_id: fileName,
-                    resource_type: 'image',
+                    resource_type: resourceType,
                     unique_filename: true,
                     overwrite: false,
-                    transformation: [{ quality: 'auto', fetch_format: 'auto' }],
+                    // Transformations are an image-pipeline concept; asking for
+                    // them on a raw upload is an error, not a no-op.
+                    ...(resourceType === 'image'
+                        ? { transformation: [{ quality: 'auto', fetch_format: 'auto' }] }
+                        : {}),
                 },
                 (error, result?: UploadApiResponse) => {
                     if (error) return reject(error);
@@ -99,10 +110,12 @@ export class AssetsService implements OnModuleInit {
     /**
      * Delete a Cloudinary asset by its public_id.
      */
-    async deleteFile(publicId: string): Promise<void> {
+    async deleteFile(publicId: string, resourceType: 'image' | 'raw' = 'image'): Promise<void> {
         if (!this.enabled) return;
+        // Cloudinary keys destroy by resource type too — asking for an image
+        // deletes nothing when the asset was stored raw.
         await cloudinary.uploader
-            .destroy(publicId)
+            .destroy(publicId, { resource_type: resourceType })
             .catch((err) => this.logger.error(`Failed to delete ${publicId}: ${err}`));
     }
 

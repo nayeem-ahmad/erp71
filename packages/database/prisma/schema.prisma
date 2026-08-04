@@ -20,6 +20,10 @@ enum ReferralCommissionStatus {
   PENDING
   EARNED
   PAID
+  // Set when the tenant's payment was refunded or charged back. Terminal: the
+  // referral does not return to PENDING, because the discount it granted was
+  // already consumed and re-earning it would pay the commission twice.
+  REVERSED
 }
 
 enum SubscriptionStatus {
@@ -282,6 +286,7 @@ model User {
   projectComments           ProjectComment[]           @relation("ProjectCommentUser")
   projectTaskActivities     ProjectTaskActivity[]      @relation("ProjectTaskActivityActor")
   projectTaskWatching       ProjectTaskWatcher[]       @relation("ProjectTaskWatcherUser")
+  projectAttachments        ProjectAttachment[]        @relation("ProjectAttachmentCreator")
 }
 
 model PasswordResetToken {
@@ -1655,6 +1660,11 @@ model Lead {
   next_step_assigned_to   String?
   assigned_to             String?
   last_contacted_at       DateTime?
+  /// When the lead reached a terminal status (CONVERTED or LOST); null while it is
+  /// still open. `status` says which of the two it was, so one column serves both.
+  /// Written by every path that sets a terminal status and cleared when a lead is
+  /// reopened — `updated_at` cannot stand in for it, because any later edit moves it.
+  closed_at               DateTime?
   converted_customer_id   String?
   created_by              String?
   created_at              DateTime  @default(now())
@@ -1680,6 +1690,11 @@ model Lead {
   @@index([tenant_id, next_step_date])
   @@index([tenant_id, source_id])
   @@index([tenant_id, category_id])
+  // Serves the CRM dashboard's won/lost-in-period counts, which filter on
+  // status + closed_at together.
+  @@index([tenant_id, status, closed_at])
+  // Serves the same dashboard's new-leads-in-period count and daily trend buckets.
+  @@index([tenant_id, created_at])
 }
 
 /// Tenant-editable lead sources. Replaces the `LeadSource` enum.
@@ -3636,6 +3651,7 @@ model Referee {
   user            User?    @relation(fields: [user_id], references: [id])
   referralSignups ReferralSignup[]
   payments        RefereePayment[]
+  clicks          ReferralClick[]
 
   @@index([deleted_at])
 }
@@ -3646,12 +3662,22 @@ model ReferralSignup {
   tenant_id          String                   @unique
   discount_pct       Decimal                  @db.Decimal(5, 2)
   commission_pct     Decimal                  @db.Decimal(5, 2)
-  plan_amount        Decimal?                 @db.Decimal(10, 2)  // gross amount paid by client
+  /// Plan revenue actually collected from the client — list price less this
+  /// referral's signup discount, add-ons excluded. This is the base the
+  /// commission is a percentage of. Rows earned before 2026-08-04 hold the
+  /// undiscounted list price instead; see the backfill note in TODO.md.
+  plan_amount        Decimal?                 @db.Decimal(10, 2)
   commission_amount  Decimal?                 @db.Decimal(10, 2)  // calculated when earned
   status             ReferralCommissionStatus @default(PENDING)
   signed_up_at       DateTime                 @default(now())
   earned_at          DateTime?
   paid_at            DateTime?
+  reversed_at        DateTime?                                    // set when the tenant's payment was refunded
+  reversal_reason    String?
+  /// True when the commission had already been paid out at the time of reversal.
+  /// The money is gone, so it nets against the referee's next payout rather than
+  /// simply vanishing from the ledger.
+  reversed_after_paid Boolean                 @default(false)
   referee_payment_id String?
 
   referee        Referee         @relation(fields: [referee_id], references: [id])
@@ -3660,6 +3686,27 @@ model ReferralSignup {
 
   @@index([referee_id, status])
   @@index([status])
+}
+
+/// One recorded visit to a partner's tracking link (`/r/<code>`).
+///
+/// Deliberately holds no IP address and no cookie id — a partner's marketing
+/// reach does not justify storing anything that identifies the visitor. `referrer`
+/// and `user_agent` are kept because they are what makes the number interpretable
+/// (bot traffic vs a real campaign), and both are truncated on write.
+model ReferralClick {
+  id          String   @id @default(uuid())
+  referee_id  String
+  /// Snapshot of the code as typed in the link, so a later code change does not
+  /// retro-attribute old clicks.
+  code        String
+  referrer    String?
+  user_agent  String?
+  occurred_at DateTime @default(now())
+
+  referee     Referee  @relation(fields: [referee_id], references: [id], onDelete: Cascade)
+
+  @@index([referee_id, occurred_at])
 }
 
 model RefereePayment {
@@ -3771,6 +3818,7 @@ model Project {
   attachments ProjectAttachment[]
   remainingLogs ProjectTaskRemainingLog[]
   taskActivities ProjectTaskActivity[]
+  taskStatuses   ProjectTaskStatus[]
 
   @@unique([tenant_id, code])
   @@index([tenant_id, status, deleted_at])
@@ -3841,21 +3889,41 @@ model ProjectMilestone {
 }
 
 /// Tenant-managed board columns. Ordering here is the ordering on the board.
+/// Board columns. A Trello list belongs to one board, so as of Phase 3L these
+/// belong to one project.
+///
+/// `project_id` NULL marks a **template** row: the tenant's default column set,
+/// managed in Project Setup and copied onto every new project. Non-null rows are
+/// what a board actually renders, and what a task's `status_id` points at.
+///
+/// `category` stays mandatory on every row — Phase 2's tenant-level sprints and
+/// the cross-project Tasks page filter on what a column *means*, never on a
+/// column id, so per-project columns are only safe while every one of them
+/// carries a TODO/IN_PROGRESS/DONE.
 model ProjectTaskStatus {
   id         String                    @id @default(uuid())
   tenant_id  String
+  project_id String?
   name       String
   category   ProjectTaskStatusCategory @default(TODO)
   sort_order Int                       @default(0)
   is_active  Boolean                   @default(true)
   is_default Boolean                   @default(false)
+  /// Cards allowed in this column at once. NULL means no limit. Advisory — the
+  /// board marks the column over-limit, it does not refuse the drop, because a
+  /// WIP limit is a prompt to talk about the queue and not a lock.
+  wip_limit  Int?
   created_at DateTime                  @default(now())
   updated_at DateTime                  @updatedAt
 
-  tenant Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  tasks  ProjectTask[]
+  tenant  Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  project Project?      @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  tasks   ProjectTask[]
 
-  @@unique([tenant_id, name])
+  /// Postgres treats NULLs as distinct, so this does not constrain template
+  /// rows. `ProjectSettingsService` checks those for a name clash instead.
+  @@unique([tenant_id, project_id, name])
+  @@index([tenant_id, project_id, sort_order])
   @@index([tenant_id, is_active, sort_order])
   @@map("project_task_statuses")
 }
@@ -3881,6 +3949,10 @@ model ProjectTask {
   /// blocked, it is simply not due yet.
   start_date      DateTime?       @db.Date
   due_date        DateTime?       @db.Date
+  /// Reuses the label palette rather than adding a near-identical enum: the same
+  /// six colours, and a card whose cover matches a label it carries is a feature
+  /// rather than a coincidence.
+  cover_color     ProjectLabelColor?
   estimate_hours  Decimal?        @db.Decimal(8, 2)
   /// An independent re-estimate, never derived from estimate minus logged.
   /// Written only by RemainingHoursService, always alongside a log row.
@@ -4179,12 +4251,17 @@ model ProjectAttachment {
   file_name  String
   mime_type  String?
   file_size  Int?
+  /// Cloudinary's handle for the stored asset. `file_url` cannot be turned back
+  /// into one, so without this the row could be deleted while the file stayed —
+  /// billed forever. Nullable only because rows predating Phase 3D have none.
+  storage_key String?
   created_by String?
   created_at DateTime @default(now())
 
   tenant  Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   project Project?     @relation(fields: [project_id], references: [id], onDelete: Cascade)
   task    ProjectTask? @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  creator User?        @relation("ProjectAttachmentCreator", fields: [created_by], references: [id])
 
   @@index([tenant_id, project_id])
   @@index([tenant_id, task_id])

@@ -21,9 +21,11 @@ import {
     assigneeNameOf,
     assigneeOptionsFrom,
     countTasks,
+    coverClass,
     dueStateOf,
     hasActiveFilter,
     initialsOf,
+    isOverWip,
     labelClass,
     labelsOf,
     NO_FILTERS,
@@ -321,6 +323,11 @@ export default function ProjectBoardPage() {
                         </div>
                         {/* Planning is tenant-wide now: a sprint pulls from every
                             project, so it lives in Sprints rather than here. */}
+                        <Link href={routes.projects.columns(projectId)}>
+                            <Button variant="secondary" className="min-h-touch">
+                                {m.columns.title}
+                            </Button>
+                        </Link>
                         <Link href={routes.projects.sprints}>
                             <Button variant="secondary" className="min-h-touch">
                                 {m.sprint.sprints}
@@ -381,6 +388,10 @@ export default function ProjectBoardPage() {
                             drag?.active && drag.target?.columnId === column.id
                                 ? drag.target.index
                                 : null;
+                        // Against the whole column, not the filtered view: a
+                        // filter must not make an over-limit column look fine.
+                        const full = columns.find((c) => c.id === column.id);
+                        const overWip = isOverWip(full);
                         return (
                             <div
                                 key={column.id}
@@ -389,9 +400,26 @@ export default function ProjectBoardPage() {
                             >
                                 <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2">
                                     <span className="text-sm font-medium">{column.name}</span>
-                                    <span className="text-xs text-gray-500">
-                                        {column.tasks.length}
-                                        {remaining > 0 ? ` · ${remaining}${m.board.columnTotal}` : ''}
+                                    <span className="flex items-center gap-1.5 text-xs text-gray-500">
+                                        {column.wip_limit ? (
+                                            <StatusBadge
+                                                tone={overWip ? 'danger' : 'neutral'}
+                                                aria-label={
+                                                    overWip
+                                                        ? m.columns.overLimit.replace(
+                                                              '{name}',
+                                                              column.name,
+                                                          )
+                                                        : undefined
+                                                }
+                                            >
+                                                {full?.tasks.length ?? column.tasks.length}/
+                                                {column.wip_limit}
+                                            </StatusBadge>
+                                        ) : (
+                                            <span>{column.tasks.length}</span>
+                                        )}
+                                        {remaining > 0 ? `${remaining}${m.board.columnTotal}` : ''}
                                     </span>
                                 </div>
 
@@ -683,6 +711,7 @@ function TaskCard({
     const c = t.projects.board.card;
 
     const labels = labelsOf(task);
+    const cover = coverClass(task.cover_color);
     const checklist = task.checklistItems ?? [];
     const checklistDone = checklist.filter((item) => item.is_done).length;
     const comments = task._count?.comments ?? 0;
@@ -716,10 +745,13 @@ function TaskCard({
             }}
             // pan-y keeps the column scrollable by finger; the grip below opts
             // out of that so a touch drag can start there.
-            className={`touch-pan-y rounded-md border border-gray-200 bg-white p-2 text-left text-sm shadow-sm hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-600 md:cursor-grab ${
+            className={`touch-pan-y overflow-hidden rounded-md border border-gray-200 bg-white text-left text-sm shadow-sm hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-600 md:cursor-grab ${
                 dragging ? 'opacity-40' : ''
             }`}
         >
+            {cover && <div aria-hidden className={`h-1.5 w-full ${cover}`} />}
+
+            <div className="p-2">
             <div className="flex items-start gap-1">
                 <button
                     type="button"
@@ -810,6 +842,7 @@ function TaskCard({
                 ) : (
                     <span className="ml-auto text-gray-400">{c.unassigned}</span>
                 )}
+            </div>
             </div>
         </article>
     );

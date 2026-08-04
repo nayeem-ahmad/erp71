@@ -100,6 +100,7 @@ describe('CrmLeadsService', () => {
                 data: {
                     status: LeadStatus.CONVERTED,
                     converted_customer_id: 'cust-1',
+                    closed_at: expect.any(Date),
                     score: 100,
                 },
                 include: expect.anything(),
@@ -220,6 +221,57 @@ describe('CrmLeadsService', () => {
                 expect.objectContaining({
                     data: expect.objectContaining({ lost_reason: 'Price too high', score: 0 }),
                 }),
+            );
+        });
+    });
+
+    describe('update() — closed_at', () => {
+        const lost = {
+            id: 'lead-9',
+            tenant_id: 'tenant-1',
+            mobile: '01799999999',
+            status: LeadStatus.LOST,
+            source: 'REFERRAL',
+            priority: 'MEDIUM',
+            last_contacted_at: null,
+            next_step_date: null,
+            lost_reason: 'Price too high',
+        };
+
+        it('stamps the close date when a lead reaches a terminal status', async () => {
+            db.lead.findFirst.mockResolvedValueOnce({ ...lost, status: LeadStatus.QUALIFIED, lost_reason: null });
+            db.lead.update.mockResolvedValueOnce(lost);
+
+            await service.update('tenant-1', 'lead-9', {
+                status: LeadStatus.LOST,
+                lost_reason: 'Price too high',
+            } as any);
+
+            expect(db.lead.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ closed_at: expect.any(Date) }) }),
+            );
+        });
+
+        it('leaves the close date alone when an already-lost lead is edited', async () => {
+            db.lead.findFirst.mockResolvedValueOnce(lost);
+            db.lead.update.mockResolvedValueOnce(lost);
+
+            // No status in the payload — a note edit must not re-date the loss, or
+            // the dashboard would count it again in whatever period this happened.
+            await service.update('tenant-1', 'lead-9', { remarks: 'Called again' } as any);
+
+            const [[call]] = db.lead.update.mock.calls;
+            expect(call.data).not.toHaveProperty('closed_at');
+        });
+
+        it('clears the close date when a closed lead is reopened', async () => {
+            db.lead.findFirst.mockResolvedValueOnce(lost);
+            db.lead.update.mockResolvedValueOnce({ ...lost, status: LeadStatus.CONTACTED });
+
+            await service.update('tenant-1', 'lead-9', { status: LeadStatus.CONTACTED } as any);
+
+            expect(db.lead.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ closed_at: null, lost_reason: null }) }),
             );
         });
     });

@@ -3,6 +3,7 @@ import {
     ForbiddenException,
     Injectable,
     InternalServerErrorException,
+    Logger,
     NotFoundException,
     ServiceUnavailableException,
     UnauthorizedException,
@@ -38,6 +39,8 @@ type PlanCode = 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
 
 @Injectable()
 export class BillingService {
+    private readonly logger = new Logger(BillingService.name);
+
     constructor(
         private readonly db: DatabaseService,
         private readonly audit: AuditService,
@@ -314,6 +317,22 @@ export class BillingService {
             { referenceId: dto.referenceId, amount, currency, reason: dto.reason ?? null },
         ).catch(() => {});
 
+        // Claw the referral commission back before any downgrade runs. The platform
+        // has just given this money back to the tenant, so a commission still owed
+        // against it is a payout for revenue that no longer exists.
+        await this.reverseReferralCommission(
+            ctx.tenantId,
+            dto.reason ?? `Refund ${dto.referenceId}`,
+        ).catch((err) => {
+            this.logger.error(
+                `Failed to reverse referral commission for tenant ${ctx.tenantId}: ${err}`,
+            );
+            Sentry.captureException(err, {
+                tags: { domain: 'referral' },
+                extra: { tenantId: ctx.tenantId, referenceId: dto.referenceId },
+            });
+        });
+
         if (dto.downgradeToFree) {
             await this.applySubscriptionChange({
                 tenantId: ctx.tenantId,
@@ -531,7 +550,19 @@ export class BillingService {
             }
 
             if (resolvedStatus === 'ACTIVE' && emailAmount > 0) {
-                this.earnReferralCommission(input.tenantId, emailAmount).catch(() => {});
+                // Deliberately not awaited — a referral bookkeeping failure must not
+                // fail the activation that has already been paid for. But it is money
+                // owed to a partner, so it is never swallowed: losing it silently
+                // means the commission simply never appears in anyone's ledger.
+                this.earnReferralCommission(input.tenantId, emailAmount).catch((err) => {
+                    this.logger.error(
+                        `Failed to record referral commission for tenant ${input.tenantId}: ${err}`,
+                    );
+                    Sentry.captureException(err, {
+                        tags: { domain: 'referral' },
+                        extra: { tenantId: input.tenantId, planAmount: emailAmount },
+                    });
+                });
             }
         }
 
@@ -544,19 +575,91 @@ export class BillingService {
     private async earnReferralCommission(tenantId: string, planAmount: number): Promise<void> {
         const signup = await this.db.referralSignup.findUnique({
             where: { tenant_id: tenantId },
+            include: {
+                referee: { select: { name: true, email: true } },
+                tenant: { select: { name: true } },
+            },
         });
         if (!signup || signup.status !== 'PENDING') return;
 
-        const commissionAmount = Math.round(planAmount * Number(signup.commission_pct)) / 100;
+        // Commission is a share of what the tenant actually paid, not of list price.
+        //
+        // This recomputes the discount rather than being handed the charged amount,
+        // and that is deliberate: it uses the same formula and the same snapshotted
+        // `discount_pct` that createCheckoutSession used, so the two cannot drift.
+        // The statuses line up too — checkout only discounts while PENDING, and this
+        // only earns while PENDING, and status never moves backwards — so if a
+        // discount is applied here it was applied at checkout. Callers that never
+        // saw a checkout (webhooks, manual admin changes) get the right answer for
+        // free instead of needing the amount plumbed through.
+        //
+        // Add-ons are excluded on both sides, so this is exactly the plan revenue.
+        const discountPct = Number(signup.discount_pct ?? 0);
+        const netPlanAmount = discountPct > 0
+            ? Math.round(planAmount * ((100 - discountPct) / 100) * 100) / 100
+            : planAmount;
+
+        const commissionAmount = Math.round(netPlanAmount * Number(signup.commission_pct)) / 100;
         await this.db.referralSignup.update({
             where: { id: signup.id },
             data: {
                 status: 'EARNED',
                 earned_at: new Date(),
-                plan_amount: planAmount,
+                plan_amount: netPlanAmount,
                 commission_amount: commissionAmount,
             },
         });
+
+        // Told, not left to discover it by logging in. Separately caught from the
+        // ledger write above: a bounced notification must not make it look like the
+        // commission failed to record, because by this point it already has.
+        if (signup.referee?.email) {
+            this.email.sendRefereeCommissionEarned(
+                signup.referee.email,
+                signup.referee.name,
+                signup.tenant?.name ?? 'A referred business',
+                commissionAmount,
+            ).catch((err) => {
+                this.logger.warn(
+                    `Referral commission recorded for tenant ${tenantId} but the partner email failed: ${err}`,
+                );
+            });
+        }
+    }
+
+    /**
+     * Reverse a referral commission after the tenant's payment was refunded.
+     *
+     * PENDING is left alone — nothing was earned, and the tenant may yet pay.
+     * EARNED becomes REVERSED outright. PAID also becomes REVERSED but is flagged
+     * `reversed_after_paid`, because that money has already left the platform: it
+     * cannot be un-sent, so it nets against the referee's next payout via the
+     * ledger's overpaid balance rather than silently disappearing.
+     *
+     * REVERSED is a terminal state. A referral does not return to PENDING, since
+     * the signup discount it granted was already consumed and re-earning would pay
+     * the same commission twice.
+     */
+    private async reverseReferralCommission(tenantId: string, reason: string): Promise<void> {
+        const signup = await this.db.referralSignup.findUnique({
+            where: { tenant_id: tenantId },
+        });
+        if (!signup) return;
+        if (signup.status !== 'EARNED' && signup.status !== 'PAID') return;
+
+        await this.db.referralSignup.update({
+            where: { id: signup.id },
+            data: {
+                status: 'REVERSED',
+                reversed_at: new Date(),
+                reversal_reason: reason,
+                reversed_after_paid: signup.status === 'PAID',
+            },
+        });
+
+        this.logger.log(
+            `Reversed referral commission for tenant ${tenantId} (was ${signup.status}): ${reason}`,
+        );
     }
 
     private async notifyTenantOwner(

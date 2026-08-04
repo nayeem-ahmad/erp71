@@ -2,10 +2,12 @@ import type {
     AiChatConversationDetail,
     AiChatConversationSummary,
     AiChatResponse,
+    DashboardPreference,
     PlatformFeatureKey,
     PlatformFeatures,
     TenantFeatureOverrides,
 } from '@erp71/shared-types';
+import type { ReferralCommissionStatus } from '@/components/admin/referrals/types';
 
 /** Per-tenant feature state: platform defaults, this tenant's overrides, and the result. */
 export type AdminTenantFeatures = {
@@ -1109,6 +1111,20 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteCrmFollowUp: (id: string) => fetchWithAuth(`/crm/follow-ups/${id}`, { method: 'DELETE' }),
+    // CRM dashboard — one aggregate per paint. The per-page summary endpoints
+    // (`/crm/leads/summary` and friends) still serve their own list screens.
+    getCrmDashboardOverview: (params?: { from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        return fetchWithAuth(`/crm/dashboard/overview${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    getCrmDashboardTrends: (params?: { from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        return fetchWithAuth(`/crm/dashboard/trends${query.toString() ? `?${query.toString()}` : ''}`);
+    },
     // CRM Campaigns
     getCrmCampaigns: () => fetchAllPages('/crm/campaigns'),
     getCrmCampaign: (id: string) => fetchWithAuth(`/crm/campaigns/${id}`),
@@ -2099,7 +2115,11 @@ export const api = {
         }),
     sendPlatformAdminUserResetEmail: (userId: string) =>
         fetchWithAuth(`/admin/users/${userId}/send-reset-email`, { method: 'POST' }),
-    getAdminReferees: () => fetchWithAuth('/admin/referrals/referees'),
+    /** Archived referees are excluded unless `include_archived` is set. */
+    getAdminReferees: (params?: { include_archived?: boolean }) => {
+        const suffix = params?.include_archived ? '?include_archived=true' : '';
+        return fetchWithAuth(`/admin/referrals/referees${suffix}`);
+    },
     createAdminReferee: (data: {
         name: string;
         email: string;
@@ -2131,7 +2151,10 @@ export const api = {
         fetchWithAuth(`/admin/referrals/referees/${id}`, { method: 'DELETE' }),
     getAdminRefereeLedger: (id: string) => fetchWithAuth(`/admin/referrals/referees/${id}/ledger`),
     recordAdminRefereePayment: (id: string, data: {
-        amount: number;
+        /** Omit to settle exactly what the selected commissions are worth. */
+        amount?: number;
+        /** Required to record a payout that does not settle the full amount owed. */
+        allow_partial?: boolean;
         method?: string;
         reference?: string;
         notes?: string;
@@ -2144,10 +2167,18 @@ export const api = {
     getRefereePortalLedger: () => fetchWithAuth('/referrals/me/ledger'),
     sendAdminRefereeInvite: (id: string) =>
         fetchWithAuth(`/admin/referrals/referees/${id}/send-invite`, { method: 'POST' }),
-    getAdminReferralCommissions: (params?: { referee_id?: string; status?: 'PENDING' | 'EARNED' | 'PAID' }) => {
+    /** Paged: returns `{ items, total, limit, offset, has_more }`, not a bare array. */
+    getAdminReferralCommissions: (params?: {
+        referee_id?: string;
+        status?: ReferralCommissionStatus;
+        limit?: number;
+        offset?: number;
+    }) => {
         const query = new URLSearchParams();
         if (params?.referee_id) query.set('referee_id', params.referee_id);
         if (params?.status) query.set('status', params.status);
+        if (params?.limit !== undefined) query.set('limit', String(params.limit));
+        if (params?.offset !== undefined) query.set('offset', String(params.offset));
         const suffix = query.toString() ? `?${query.toString()}` : '';
         return fetchWithAuth(`/admin/referrals/commissions${suffix}`);
     },
@@ -2327,7 +2358,9 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     getTenantDashboardSettings: () => fetchWithAuth('/tenants/dashboard-settings'),
-    updateTenantDashboardSettings: (data: { dashboard_preference: 'AUTO' | 'RETAIL' | 'ACCOUNTING' }) =>
+    // Typed off the shared list so a new variant cannot be added on one side only —
+    // the backend DTO validates against the same constant.
+    updateTenantDashboardSettings: (data: { dashboard_preference: DashboardPreference }) =>
         fetchWithAuth('/tenants/dashboard-settings', {
             method: 'PATCH',
             body: JSON.stringify(data),
@@ -2982,6 +3015,33 @@ export const api = {
         }),
     deleteProjectTaskStatus: (id: string) =>
         fetchWithAuth(`/projects/task-statuses/${id}`, { method: 'DELETE' }),
+
+    // Per-project board columns (3L). `getProjectTaskStatuses` above stays the
+    // tenant template that new projects are seeded from.
+    getProjectColumns: (projectId: string, includeInactive = false) =>
+        fetchWithAuth(`/projects/${projectId}/columns?includeInactive=${includeInactive}`),
+    createProjectColumn: (
+        projectId: string,
+        data: { name: string; category: string; wipLimit?: number },
+    ) =>
+        fetchWithAuth(`/projects/${projectId}/columns`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+
+    getTaskAttachments: (taskId: string) => fetchWithAuth(`/project-tasks/${taskId}/attachments`),
+    addTaskAttachment: (
+        taskId: string,
+        data: { fileBase64: string; fileName?: string; mimeType?: string },
+    ) =>
+        fetchWithAuth(`/project-tasks/${taskId}/attachments`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteTaskAttachment: (attachmentId: string) =>
+        fetchWithAuth(`/project-tasks/attachments/${attachmentId}`, { method: 'DELETE' }),
 
     getProjectLabels: () => fetchWithAuth('/projects/labels'),
     createProjectLabel: (data: { name: string; color?: string }) =>

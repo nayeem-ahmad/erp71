@@ -54,6 +54,7 @@ export interface BoardTask {
     description?: string | null;
     priority: string;
     labels?: { label: ProjectLabel }[];
+    cover_color?: ProjectLabelColor | null;
     start_date?: string | null;
     due_date?: string | null;
     completed_at?: string | null;
@@ -73,7 +74,33 @@ export interface BoardColumn {
     id: string;
     name: string;
     category: string;
+    /** Advisory: over-limit is marked, never blocked. NULL means no limit. */
+    wip_limit?: number | null;
     tasks: BoardTask[];
+}
+
+/**
+ * Counted against the *unfiltered* column. A filter narrowing the view to two
+ * cards must not make a column of twelve look within a limit of three.
+ */
+export function isOverWip(column: BoardColumn | undefined): boolean {
+    if (!column?.wip_limit) return false;
+    return column.tasks.length > column.wip_limit;
+}
+
+/** A cover only reads as a cover in the label palette's strong tones. */
+export const COVER_CLASS: Record<ProjectLabelColor, string> = {
+    GRAY: 'bg-gray-400',
+    BLUE: 'bg-blue-500',
+    EMERALD: 'bg-emerald-500',
+    AMBER: 'bg-amber-500',
+    RED: 'bg-red-500',
+    PURPLE: 'bg-purple-500',
+};
+
+export function coverClass(color: string | null | undefined): string | null {
+    if (!color) return null;
+    return COVER_CLASS[color as ProjectLabelColor] ?? null;
 }
 
 /** Local calendar day as YYYY-MM-DD, to compare against a `@db.Date` string. */

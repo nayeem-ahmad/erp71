@@ -90,17 +90,41 @@ export class ProjectTasksService {
      * column, which is what makes a kanban view slow as soon as it is useful.
      */
     async board(tenantId: string, projectId: string, sprintId?: string) {
-        const columns = await this.settings.listTaskStatuses(tenantId, false);
-        const tasks = await this.db.projectTask.findMany({
-            where: {
-                tenant_id: tenantId,
-                project_id: projectId,
-                deleted_at: null,
-                ...(sprintId ? { sprint_id: sprintId } : {}),
-            },
-            orderBy: [{ sort_order: 'asc' }, { created_at: 'asc' }],
+        const where = {
+            tenant_id: tenantId,
+            project_id: projectId,
+            deleted_at: null,
+            ...(sprintId ? { sprint_id: sprintId } : {}),
+        };
+        const order = [{ sort_order: 'asc' as const }, { created_at: 'asc' as const }];
+
+        let columns = await this.settings.listTaskStatuses(tenantId, false, projectId);
+        let tasks = await this.db.projectTask.findMany({
+            where,
+            orderBy: order,
             include: TASK_INCLUDE as never,
         });
+
+        // Self-heal a board whose tasks are still on the tenant template.
+        //
+        // Production applies the schema with `prisma db push`, not
+        // `migrate deploy`, so Phase 3L's data migration never runs there — and
+        // a task left on a template row matches no column, which would render
+        // the whole board empty. The check is free: it is a set lookup over rows
+        // already fetched, and the repair only ever runs once per project.
+        const columnIds = new Set(columns.map((column) => column.id));
+        const orphaned = (tasks as TaskRow[]).some(
+            (task) => task.status_id != null && !columnIds.has(task.status_id),
+        );
+        if (orphaned) {
+            await this.settings.adoptTasksFromTemplate(tenantId, projectId);
+            columns = await this.settings.listTaskStatuses(tenantId, false, projectId);
+            tasks = await this.db.projectTask.findMany({
+                where,
+                orderBy: order,
+                include: TASK_INCLUDE as never,
+            });
+        }
 
         const withLogged = await this.attachLoggedHours(tenantId, tasks as TaskRow[]);
         return {
@@ -134,8 +158,8 @@ export class ProjectTasksService {
     async create(tenantId: string, userId: string, dto: CreateTaskDto) {
         await this.assertProject(tenantId, dto.projectId);
         const statusId = dto.statusId
-            ? (await this.assertStatus(tenantId, dto.statusId)).id
-            : (await this.settings.defaultTaskStatus(tenantId)).id;
+            ? (await this.assertStatus(tenantId, dto.statusId, dto.projectId)).id
+            : (await this.settings.defaultTaskStatus(tenantId, dto.projectId)).id;
 
         if (dto.parentTaskId) {
             const parent = await this.assertTask(tenantId, dto.parentTaskId);
@@ -168,6 +192,7 @@ export class ProjectTasksService {
                 parent_task_id: dto.parentTaskId ?? null,
                 start_date: dto.startDate ? new Date(dto.startDate) : null,
                 due_date: dto.dueDate ? new Date(dto.dueDate) : null,
+                cover_color: (dto.coverColor ?? null) as never,
                 estimate_hours: estimate,
                 sort_order: sortOrder,
                 created_by: userId,
@@ -213,7 +238,7 @@ export class ProjectTasksService {
         let becameUndone = false;
 
         if (dto.statusId && dto.statusId !== task.status_id) {
-            const status = await this.assertStatus(tenantId, dto.statusId);
+            const status = await this.assertStatus(tenantId, dto.statusId, task.project_id);
             statusId = status.id;
             const wasDone = task.status?.category === 'DONE';
             const isDone = status.category === 'DONE';
@@ -242,6 +267,9 @@ export class ProjectTasksService {
                     ? { start_date: dto.startDate ? new Date(dto.startDate) : null }
                     : {}),
                 ...(dto.dueDate !== undefined ? { due_date: dto.dueDate ? new Date(dto.dueDate) : null } : {}),
+                ...(dto.coverColor !== undefined
+                    ? { cover_color: (dto.coverColor || null) as never }
+                    : {}),
                 ...(dto.estimateHours !== undefined ? { estimate_hours: dto.estimateHours ?? null } : {}),
             },
         });
@@ -306,7 +334,7 @@ export class ProjectTasksService {
      */
     async move(tenantId: string, userId: string, taskId: string, dto: MoveTaskDto) {
         const task = await this.assertTask(tenantId, taskId);
-        const status = await this.assertStatus(tenantId, dto.statusId);
+        const status = await this.assertStatus(tenantId, dto.statusId, task.project_id);
         if (dto.sprintId) await this.assertSprint(tenantId, dto.sprintId);
 
         const sprintId = dto.clearSprint ? null : (dto.sprintId ?? task.sprint_id);
@@ -703,12 +731,20 @@ export class ProjectTasksService {
         return project;
     }
 
-    private async assertStatus(tenantId: string, statusId: string) {
+    /**
+     * Columns belong to a project as of Phase 3L, so a status id from another
+     * board is not merely wrong, it would put the card somewhere nobody can see
+     * it. Checked whenever the caller knows which project it should belong to.
+     */
+    private async assertStatus(tenantId: string, statusId: string, projectId?: string) {
         const status = await this.db.projectTaskStatus.findFirst({
             where: { id: statusId, tenant_id: tenantId },
-            select: { id: true, name: true, category: true },
+            select: { id: true, name: true, category: true, project_id: true },
         });
         if (!status) throw new NotFoundException('Board column not found');
+        if (projectId && status.project_id && status.project_id !== projectId) {
+            throw new BadRequestException('That column belongs to a different project.');
+        }
         return status;
     }
 

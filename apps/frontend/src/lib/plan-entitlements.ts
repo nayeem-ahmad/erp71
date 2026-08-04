@@ -48,6 +48,18 @@ export function canChooseAccountingDashboard(
     return hasPlanEntitlement(resolveTenantPlanFeatures(planCode, featuresJson), 'premiumAccounting');
 }
 
+/**
+ * True when the plan or an admin could put this tenant on the CRM dashboard.
+ * The pipeline panels all read `/crm/dashboard/*`, which is `premiumCrm`-gated,
+ * so a plan without it has nothing to render there.
+ */
+export function canChooseCrmDashboard(
+    planCode: string | null | undefined,
+    featuresJson: Record<string, unknown> | null | undefined,
+) {
+    return hasPlanEntitlement(resolveTenantPlanFeatures(planCode, featuresJson), 'premiumCrm');
+}
+
 /** Which dashboard to render — plan default, tenant choice, then what the user can load. */
 export function tenantDashboardVariant(
     planCode: string | null | undefined,

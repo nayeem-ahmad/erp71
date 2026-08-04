@@ -5,6 +5,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRight, Building2, Gift, Loader2, Lock, Mail } from 'lucide-react';
 import { api } from '@/lib/api';
+import { recallReferralCode, rememberReferralCode, clearReferralCode } from '@/lib/referral-attribution';
 import { formatBDT } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { syncLocalePreferenceFromSession } from '@/lib/localization/preference';
@@ -116,7 +117,19 @@ function SignupPageContent() {
     useEffect(() => {
         const referralFromUrl = searchParams.get('ref') || searchParams.get('referral');
         if (referralFromUrl) {
-            setForm((current) => ({ ...current, referralCode: referralFromUrl.trim().toUpperCase() }));
+            const normalized = referralFromUrl.trim().toUpperCase();
+            // Remember it so a visitor who leaves and comes back later is still
+            // attributed to the partner who sent them.
+            rememberReferralCode(normalized);
+            setForm((current) => ({ ...current, referralCode: normalized }));
+            return;
+        }
+
+        const remembered = recallReferralCode();
+        if (remembered) {
+            setForm((current) => (
+                current.referralCode ? current : { ...current, referralCode: remembered }
+            ));
         }
     }, [searchParams]);
 
@@ -186,6 +199,9 @@ function SignupPageContent() {
                 referralCode: form.referralCode.trim() || undefined,
             });
             localStorage.setItem('access_token', signupRes.access_token);
+            // The remembered code has done its job. Leaving it would silently attach
+            // the same partner to an unrelated signup from this browser weeks later.
+            clearReferralCode();
             syncLocalePreferenceFromSession(signupRes, { overwrite: true });
 
             const primaryTenant = signupRes.tenants?.[0];

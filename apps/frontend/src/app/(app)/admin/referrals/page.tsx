@@ -11,7 +11,7 @@ import RefereeFormModal from '@/components/admin/referrals/RefereeFormModal';
 import RefereeDeleteModal from '@/components/admin/referrals/RefereeDeleteModal';
 import type { RefereeRecord } from '@/components/admin/referrals/types';
 import { api } from '@/lib/api';
-import { formatDate } from '@/lib/format';
+import { formatBDT, formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { toast } from '@/lib/toast';
@@ -32,19 +32,22 @@ export default function AdminReferralsPage() {
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<RefereeRecord | null>(null);
     const [deleting, setDeleting] = useState(false);
+    // Archived referees are hidden by the API unless asked for. They used to come
+    // back mixed in with live ones, distinguishable only by a badge.
+    const [includeArchived, setIncludeArchived] = useState(false);
 
     const load = useCallback(async () => {
         setIsLoading(true);
         setError('');
         try {
-            const rows = await api.getAdminReferees();
+            const rows = await api.getAdminReferees({ include_archived: includeArchived });
             setReferees(Array.isArray(rows) ? rows : []);
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : m.loadFailed);
         } finally {
             setIsLoading(false);
         }
-    }, [m.loadFailed]);
+    }, [m.loadFailed, includeArchived]);
 
     useEffect(() => {
         void load();
@@ -128,15 +131,34 @@ export default function AdminReferralsPage() {
             header: m.columns.referrals,
             cell: (info) => info.getValue(),
         }),
+        columnHelper.accessor((row) => row.stats.clicks, {
+            id: 'clicks',
+            header: m.columns.clicks,
+            cell: (info) => {
+                const rate = info.row.original.stats.conversion_rate;
+                return (
+                    <div className="flex flex-col">
+                        <span>{info.getValue()}</span>
+                        {rate !== null && (
+                            <span className="text-[10px] font-semibold text-gray-500">{rate}%</span>
+                        )}
+                    </div>
+                );
+            },
+        }),
         columnHelper.accessor((row) => row.stats.earned_amount, {
             id: 'earned',
             header: m.columns.earned,
-            cell: (info) => <span className="font-semibold text-emerald-700">৳{Number(info.getValue()).toFixed(2)}</span>,
+            cell: (info) => <span className="font-semibold text-emerald-700">{formatBDT(Number(info.getValue()))}</span>,
         }),
-        columnHelper.accessor((row) => Math.max(0, row.stats.earned_amount - row.stats.paid_amount), {
+        // `earned_amount` sums commissions still in EARNED, so it *is* the outstanding
+        // balance; `paid_amount` sums ones already settled. Subtracting the second from
+        // the first double-discounts and disagreed with the detail page's balance_due —
+        // a referee owed 300 with 200 previously settled showed 100 here and 300 there.
+        columnHelper.accessor((row) => row.stats.earned_amount, {
             id: 'balance',
             header: m.columns.balance,
-            cell: (info) => <span className="font-semibold text-amber-700">৳{Number(info.getValue()).toFixed(2)}</span>,
+            cell: (info) => <span className="font-semibold text-amber-700">{formatBDT(Number(info.getValue()))}</span>,
         }),
         columnHelper.accessor('is_active', {
             header: m.columns.status,
@@ -246,13 +268,24 @@ export default function AdminReferralsPage() {
                 </div>
             )}
 
-            <div className="max-w-md">
-                <input
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder={m.searchPlaceholder}
-                    className="w-full rounded-md border border-gray-100 bg-white px-4 py-3 text-sm outline-none"
-                />
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="w-full max-w-md">
+                    <input
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                        placeholder={m.searchPlaceholder}
+                        className="w-full rounded-md border border-gray-100 bg-white px-4 py-3 text-sm outline-none"
+                    />
+                </div>
+                <label className="flex min-h-touch items-center gap-2 text-sm font-medium text-gray-700">
+                    <input
+                        type="checkbox"
+                        checked={includeArchived}
+                        onChange={(event) => setIncludeArchived(event.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                    />
+                    {m.showArchived}
+                </label>
             </div>
 
             {isLoading ? (

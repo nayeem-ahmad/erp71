@@ -74,7 +74,10 @@ export function ModalHeader({
         <div
             className={`px-4 py-3 border-b border-gray-100 flex items-center justify-between ${className}`}
         >
-            <div>
+            {/* Takes the spare width so a title that is itself a control — an
+                inline-editable heading, say — fills the header rather than
+                sitting in a column the width of its own text. */}
+            <div className="min-w-0 flex-1">
                 <h2 className="text-base font-semibold text-gray-900">{title}</h2>
                 {subtitle ? <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p> : null}
             </div>

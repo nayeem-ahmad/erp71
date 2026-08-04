@@ -11,7 +11,7 @@ import { DataTable } from '@/components/data-table';
 import RefereePaymentModal from '@/components/admin/referrals/RefereePaymentModal';
 import type { RefereeLedger, ReferralCommission, RefereePayment } from '@/components/admin/referrals/types';
 import { api } from '@/lib/api';
-import { formatDate } from '@/lib/format';
+import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { toast } from '@/lib/toast';
@@ -57,7 +57,13 @@ export default function AdminRefereeDetailPage() {
             header: d.commissionColumns.status,
             cell: (info) => {
                 const status = info.getValue();
-                const tone = status === 'PAID' ? 'success' : status === 'EARNED' ? 'warning' : 'neutral';
+                const tone = status === 'PAID'
+                    ? 'success'
+                    : status === 'EARNED'
+                        ? 'warning'
+                        : status === 'REVERSED'
+                            ? 'danger'
+                            : 'neutral';
                 return <StatusBadge tone={tone}>{d.status[status]}</StatusBadge>;
             },
         }),
@@ -69,14 +75,14 @@ export default function AdminRefereeDetailPage() {
             header: d.commissionColumns.planAmount,
             cell: (info) => {
                 const value = info.getValue();
-                return value !== null ? `৳${Number(value).toFixed(2)}` : '—';
+                return value !== null ? formatBDT(Number(value)) : '—';
             },
         }),
         commissionHelper.accessor('commission_amount', {
             header: d.commissionColumns.commission,
             cell: (info) => {
                 const value = info.getValue();
-                return value !== null ? <span className="font-semibold text-emerald-700">৳{Number(value).toFixed(2)}</span> : '—';
+                return value !== null ? <span className="font-semibold text-emerald-700">{formatBDT(Number(value))}</span> : '—';
             },
         }),
         commissionHelper.accessor('signed_up_at', {
@@ -92,7 +98,7 @@ export default function AdminRefereeDetailPage() {
         }),
         paymentHelper.accessor('amount', {
             header: d.paymentColumns.amount,
-            cell: (info) => <span className="font-semibold text-emerald-700">৳{Number(info.getValue()).toFixed(2)}</span>,
+            cell: (info) => <span className="font-semibold text-emerald-700">{formatBDT(Number(info.getValue()))}</span>,
         }),
         paymentHelper.accessor('method', {
             header: d.paymentColumns.method,
@@ -109,13 +115,23 @@ export default function AdminRefereeDetailPage() {
     ], [d]);
 
     const summaryCards = ledger ? [
+        { label: d.summary.clicks, value: String(ledger.summary.clicks) },
+        {
+            label: d.summary.conversionRate,
+            value: ledger.summary.conversion_rate === null ? '—' : `${ledger.summary.conversion_rate}%`,
+        },
         { label: d.summary.totalReferrals, value: String(ledger.summary.total_referrals) },
         { label: d.summary.pending, value: String(ledger.summary.pending) },
         { label: d.summary.earned, value: String(ledger.summary.earned) },
         { label: d.summary.paid, value: String(ledger.summary.paid) },
-        { label: d.summary.totalEarned, value: `৳${ledger.summary.total_earned_amount.toFixed(2)}` },
-        { label: d.summary.totalPaid, value: `৳${ledger.summary.total_paid_amount.toFixed(2)}` },
-        { label: d.summary.balanceDue, value: `৳${ledger.summary.balance_due.toFixed(2)}`, highlight: true },
+        { label: d.summary.totalEarned, value: formatBDT(ledger.summary.total_earned_amount) },
+        { label: d.summary.totalPaid, value: formatBDT(ledger.summary.total_paid_amount) },
+        { label: d.summary.balanceDue, value: formatBDT(ledger.summary.balance_due), highlight: true },
+        // Only shown when it is non-zero: on a healthy ledger it is noise, and when it
+        // is not zero it is the single most important number on the page.
+        ...(ledger.summary.overpaid_amount > 0
+            ? [{ label: d.summary.overpaid, value: formatBDT(ledger.summary.overpaid_amount), highlight: true }]
+            : []),
     ] : [];
 
     return (

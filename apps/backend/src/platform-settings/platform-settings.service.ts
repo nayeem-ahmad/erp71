@@ -106,6 +106,25 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
         github_repo:                { isSecret: false, default: 'nayeem-ahmad/erp71' },
         github_base_branch:         { isSecret: false, default: 'dev' },
     },
+    /**
+     * Posting referral commission payouts into the platform's own books.
+     *
+     * The accounting module is tenant-scoped and the platform is not a tenant, so
+     * there is no way to infer where these entries belong — the operator has to
+     * name the workspace and the two accounts. All four keys are required before
+     * anything posts; with any of them unset the payout is recorded in the referral
+     * ledger exactly as before and nothing is written to any chart of accounts.
+     * That is the safe default: guessing an account is worse than not posting.
+     */
+    referral_accounting: {
+        enabled:                    { isSecret: false, default: 'false' },
+        // Tenant whose books receive the entries — the operator's own workspace.
+        house_tenant_id:            { isSecret: false },
+        // Debited: the commission expense account.
+        expense_account_id:         { isSecret: false },
+        // Credited: the cash or bank account the payout leaves from.
+        payment_account_id:         { isSecret: false },
+    },
 };
 
 export const VALID_GROUPS = Object.keys(SETTINGS_SCHEMA);

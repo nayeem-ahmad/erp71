@@ -132,6 +132,17 @@ export const projectsMessages = {
         deleted: 'Task deleted',
         created: 'Task created',
         updated: 'Task updated',
+        editTitle: 'Edit title',
+        renameFailed: 'Could not rename the task',
+    },
+
+    description: {
+        title: 'Description',
+        add: 'Add a description…',
+        edit: 'Edit description',
+        empty: 'No description yet.',
+        placeholder: 'Anything the person doing this needs to know.',
+        saveFailed: 'Could not save the description',
     },
 
     dates: {
@@ -185,6 +196,36 @@ export const projectsMessages = {
             RED: 'Red',
             PURPLE: 'Purple',
         },
+    },
+
+    columns: {
+        title: 'Board columns',
+        subtitle: 'The columns on this project’s board, and how many cards each may hold.',
+        add: 'Add column',
+        empty: 'This board has no columns yet.',
+        loadFailed: 'Could not load the columns.',
+        wip: 'WIP',
+        noLimit: 'None',
+        overLimit: '{name} is over its limit',
+        wipHint: 'A WIP limit is advisory — the column is marked when it is over, never blocked. Editing the tenant defaults in Project Setup changes what new projects start with, not this board.',
+    },
+
+    attachments: {
+        title: 'Attachments',
+        add: 'Attach a file',
+        empty: 'Nothing attached yet.',
+        loadFailed: 'Could not load the attachments.',
+        uploadFailed: 'Could not attach that file',
+        deleteFile: 'Remove attachment',
+        hint: 'JPEG, PNG, WebP or PDF, up to 5 MB.',
+        tooLarge: 'That file is larger than 5 MB.',
+        unsupported: 'Use a JPEG, PNG, WebP or PDF.',
+    },
+
+    cover: {
+        title: 'Cover',
+        none: 'No cover',
+        pick: 'Cover colour {color}',
     },
 
     checklist: {

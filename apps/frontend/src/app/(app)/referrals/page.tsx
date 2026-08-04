@@ -2,15 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { CheckCircle, Copy, Gift, Link2, Loader2 } from 'lucide-react';
+import { Copy, Gift, Link2, Loader2 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { DataTable } from '@/components/data-table';
 import type { RefereeLedger, ReferralCommission, RefereePayment } from '@/components/admin/referrals/types';
 import { api } from '@/lib/api';
-import { formatDate } from '@/lib/format';
+import { formatBDT, formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { buildBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell } from '@/components/ui';
+import { toast } from '@/lib/toast';
+import { PageShell, StatusBadge } from '@/components/ui';
 
 const commissionHelper = createColumnHelper<ReferralCommission>();
 const paymentHelper = createColumnHelper<RefereePayment>();
@@ -20,7 +21,6 @@ export default function RefereePortalPage() {
     const m = t.referralPortal;
     const [ledger, setLedger] = useState<RefereeLedger | null>(null);
     const [error, setError] = useState('');
-    const [toast, setToast] = useState('');
     const [isLoading, setIsLoading] = useState(true);
 
     const load = useCallback(async () => {
@@ -40,20 +40,16 @@ export default function RefereePortalPage() {
         void load();
     }, [load]);
 
-    const showToast = (msg: string) => {
-        setToast(msg);
-        setTimeout(() => setToast(''), 3500);
-    };
-
     const signupUrl = useMemo(() => {
         if (!ledger?.referee.referral_code || typeof window === 'undefined') return '';
-        return `${window.location.origin}/signup?ref=${encodeURIComponent(ledger.referee.referral_code)}`;
+        // /r/<code> records the click, then forwards to /signup?ref=<code>.
+        return `${window.location.origin}/r/${encodeURIComponent(ledger.referee.referral_code)}`;
     }, [ledger?.referee.referral_code]);
 
     const copyText = async (value: string, message: string) => {
         try {
             await navigator.clipboard.writeText(value);
-            showToast(message);
+            toast.success(message);
         } catch {
             setError(m.copyFailed);
         }
@@ -69,19 +65,21 @@ export default function RefereePortalPage() {
             header: m.commissions.columns.status,
             cell: (info) => {
                 const status = info.getValue();
-                const color = status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : status === 'EARNED' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600';
-                return (
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${color}`}>
-                        {m.status[status]}
-                    </span>
-                );
+                const tone = status === 'PAID'
+                    ? 'success'
+                    : status === 'EARNED'
+                        ? 'warning'
+                        : status === 'REVERSED'
+                            ? 'danger'
+                            : 'neutral';
+                return <StatusBadge tone={tone}>{m.status[status]}</StatusBadge>;
             },
         }),
         commissionHelper.accessor('commission_amount', {
             header: m.commissions.columns.commission,
             cell: (info) => {
                 const value = info.getValue();
-                return value !== null ? <span className="font-semibold text-emerald-700">৳{Number(value).toFixed(2)}</span> : '—';
+                return value !== null ? <span className="font-semibold text-emerald-700">{formatBDT(Number(value))}</span> : '—';
             },
         }),
         commissionHelper.accessor('signed_up_at', {
@@ -97,7 +95,7 @@ export default function RefereePortalPage() {
         }),
         paymentHelper.accessor('amount', {
             header: m.payments.columns.amount,
-            cell: (info) => <span className="font-semibold text-emerald-700">৳{Number(info.getValue()).toFixed(2)}</span>,
+            cell: (info) => <span className="font-semibold text-emerald-700">{formatBDT(Number(info.getValue()))}</span>,
         }),
         paymentHelper.accessor('method', {
             header: m.payments.columns.method,
@@ -110,13 +108,18 @@ export default function RefereePortalPage() {
     ], [m]);
 
     const summaryCards = ledger ? [
-        { label: m.summary.balanceDue, value: `৳${ledger.summary.balance_due.toFixed(2)}`, highlight: true },
+        { label: m.summary.balanceDue, value: formatBDT(ledger.summary.balance_due), highlight: true },
+        { label: m.summary.clicks, value: String(ledger.summary.clicks) },
+        {
+            label: m.summary.conversionRate,
+            value: ledger.summary.conversion_rate === null ? '—' : `${ledger.summary.conversion_rate}%`,
+        },
         { label: m.summary.totalReferrals, value: String(ledger.summary.total_referrals) },
         { label: m.summary.pending, value: String(ledger.summary.pending) },
         { label: m.summary.earned, value: String(ledger.summary.earned) },
         { label: m.summary.paid, value: String(ledger.summary.paid) },
-        { label: m.summary.totalEarned, value: `৳${ledger.summary.total_earned_amount.toFixed(2)}` },
-        { label: m.summary.totalPaid, value: `৳${ledger.summary.total_paid_amount.toFixed(2)}` },
+        { label: m.summary.totalEarned, value: formatBDT(ledger.summary.total_earned_amount) },
+        { label: m.summary.totalPaid, value: formatBDT(ledger.summary.total_paid_amount) },
     ] : [];
 
     return (
@@ -126,13 +129,6 @@ export default function RefereePortalPage() {
                     subtitle={m.subtitle}
                     breadcrumbs={buildBreadcrumbs(t.dashboardHome.breadcrumbHome, [{ label: m.dashboard }])}
                 />
-
-                {toast && (
-                    <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
-                        <CheckCircle className="w-4 h-4" />
-                        {toast}
-                    </div>
-                )}
 
                 {error && (
                     <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
@@ -202,6 +198,9 @@ export default function RefereePortalPage() {
 
                         <div className="space-y-3">
                             <h2 className="text-lg font-bold text-gray-900">{m.commissions.title}</h2>
+                            {/* The one-shot rule is the question partners ask most; saying it
+                                here beats letting them infer it from a renewal that earned nothing. */}
+                            <p className="text-xs text-gray-500">{m.commissionNote}</p>
                             <DataTable
                                 tableId="referee-portal-commissions"
                                 data={ledger.commissions}

@@ -20,6 +20,10 @@ const updateTaskComment = jest.fn();
 const deleteTaskComment = jest.fn();
 const watchTask = jest.fn();
 const unwatchTask = jest.fn();
+const getProjectColumns = jest.fn();
+const getTaskAttachments = jest.fn();
+const addTaskAttachment = jest.fn();
+const deleteTaskAttachment = jest.fn();
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -41,6 +45,10 @@ jest.mock('@/lib/api', () => ({
         deleteTaskComment: (...args: unknown[]) => deleteTaskComment(...args),
         watchTask: (...args: unknown[]) => watchTask(...args),
         unwatchTask: (...args: unknown[]) => unwatchTask(...args),
+        getProjectColumns: (...args: unknown[]) => getProjectColumns(...args),
+        getTaskAttachments: (...args: unknown[]) => getTaskAttachments(...args),
+        addTaskAttachment: (...args: unknown[]) => addTaskAttachment(...args),
+        deleteTaskAttachment: (...args: unknown[]) => deleteTaskAttachment(...args),
     },
 }));
 
@@ -57,6 +65,7 @@ const item = (id: string, text: string, isDone = false, sortOrder = 0) => ({
 const withChecklist = (items: ReturnType<typeof item>[]) => ({
     id: 't1',
     title: 'Wire the meter',
+    project: { id: 'project-1', code: 'PRJ-0001', name: 'Fit-out' },
     checklistItems: items,
     timeEntries: [],
 });
@@ -78,6 +87,10 @@ beforeEach(() => {
         deleteTaskComment,
         watchTask,
         unwatchTask,
+        getProjectColumns,
+        getTaskAttachments,
+        addTaskAttachment,
+        deleteTaskAttachment,
     ]) {
         mock.mockReset();
         mock.mockResolvedValue({});
@@ -86,6 +99,8 @@ beforeEach(() => {
     getTaskComments.mockResolvedValue([]);
     getTaskActivity.mockResolvedValue([]);
     getTaskWatchers.mockResolvedValue([]);
+    getProjectColumns.mockResolvedValue([]);
+    getTaskAttachments.mockResolvedValue([]);
     getProjectTask.mockResolvedValue(
         withChecklist([item('c1', 'Pull the cable', true), item('c2', 'Fit the box', false, 1)]),
     );
@@ -331,6 +346,8 @@ describe('TaskDetailPanel labels', () => {
     getTaskComments.mockResolvedValue([]);
     getTaskActivity.mockResolvedValue([]);
     getTaskWatchers.mockResolvedValue([]);
+    getProjectColumns.mockResolvedValue([]);
+    getTaskAttachments.mockResolvedValue([]);
         panel();
 
         await screen.findByText('Pull the cable');
@@ -525,5 +542,295 @@ describe('TaskDetailPanel activity', () => {
     it('says so when there is genuinely nothing yet', async () => {
         panel();
         expect(await screen.findByText('Nothing has happened here yet.')).toBeInTheDocument();
+    });
+});
+
+describe('TaskDetailPanel title', () => {
+    it('turns the heading into an input and saves on Enter', async () => {
+        panel();
+        fireEvent.click(await screen.findByRole('button', { name: 'Edit title: Wire the meter' }));
+
+        const field = screen.getByDisplayValue('Wire the meter');
+        fireEvent.change(field, { target: { value: '  Wire the sub-meter  ' } });
+        fireEvent.keyDown(field, { key: 'Enter' });
+
+        await waitFor(() =>
+            // Trimmed — trailing whitespace is never part of what they meant.
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { title: 'Wire the sub-meter' }),
+        );
+    });
+
+    it('saves when the field loses focus', async () => {
+        panel();
+        fireEvent.click(await screen.findByRole('button', { name: /^Edit title/ }));
+
+        const field = screen.getByDisplayValue('Wire the meter');
+        fireEvent.change(field, { target: { value: 'Wire the riser' } });
+        fireEvent.blur(field);
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { title: 'Wire the riser' }),
+        );
+    });
+
+    it('discards the edit on Escape', async () => {
+        panel();
+        fireEvent.click(await screen.findByRole('button', { name: /^Edit title/ }));
+
+        const field = screen.getByDisplayValue('Wire the meter');
+        fireEvent.change(field, { target: { value: 'Something else' } });
+        fireEvent.keyDown(field, { key: 'Escape' });
+
+        expect(await screen.findByRole('button', { name: /^Edit title/ })).toBeInTheDocument();
+        expect(updateProjectTask).not.toHaveBeenCalled();
+    });
+
+    it('refuses to blank the title', async () => {
+        panel();
+        fireEvent.click(await screen.findByRole('button', { name: /^Edit title/ }));
+
+        const field = screen.getByDisplayValue('Wire the meter');
+        fireEvent.change(field, { target: { value: '   ' } });
+        fireEvent.keyDown(field, { key: 'Enter' });
+
+        expect(updateProjectTask).not.toHaveBeenCalled();
+    });
+});
+
+describe('TaskDetailPanel description', () => {
+    const descriptionSection = (editor: HTMLElement) => editor.closest('section') as HTMLElement;
+
+    const withDescription = (description: string | null) => ({
+        id: 't1',
+        title: 'Wire the meter',
+        description,
+        checklistItems: [],
+        timeEntries: [],
+    });
+
+    it('offers to add one when the task has none', async () => {
+        getProjectTask.mockResolvedValue(withDescription(null));
+        panel();
+
+        expect(await screen.findByRole('button', { name: 'Add a description…' })).toBeInTheDocument();
+    });
+
+    it('renders what is there as markdown rather than as source', async () => {
+        getProjectTask.mockResolvedValue(withDescription('**Isolate** the board first'));
+        panel();
+
+        const bold = await screen.findByText('Isolate');
+        expect(bold.tagName).toBe('STRONG');
+        expect(screen.queryByText('**Isolate** the board first')).not.toBeInTheDocument();
+    });
+
+    it('saves the text the editor holds', async () => {
+        getProjectTask.mockResolvedValue(withDescription(null));
+        panel();
+        fireEvent.click(await screen.findByRole('button', { name: 'Add a description…' }));
+
+        const editor = screen.getByLabelText('Description');
+        fireEvent.change(editor, { target: { value: '  Two circuits, one meter  ' } });
+        // Scoped: the card carries other Save buttons (hours, re-estimate).
+        fireEvent.click(within(descriptionSection(editor)).getByRole('button', { name: 'Save' }));
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', {
+                description: 'Two circuits, one meter',
+            }),
+        );
+    });
+
+    it('clears the description when the text is emptied', async () => {
+        getProjectTask.mockResolvedValue(withDescription('Old detail'));
+        panel();
+        fireEvent.click(await screen.findByRole('button', { name: 'Edit description' }));
+
+        const editor = screen.getByLabelText('Description');
+        fireEvent.change(editor, { target: { value: '' } });
+        fireEvent.click(within(descriptionSection(editor)).getByRole('button', { name: 'Save' }));
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { description: '' }),
+        );
+    });
+
+    it('wraps the selection when a formatting button is used', async () => {
+        getProjectTask.mockResolvedValue(withDescription(null));
+        panel();
+        fireEvent.click(await screen.findByRole('button', { name: 'Add a description…' }));
+
+        const editor = screen.getByLabelText('Description') as HTMLTextAreaElement;
+        fireEvent.change(editor, { target: { value: 'isolate the board' } });
+        editor.setSelectionRange(0, 7);
+        fireEvent.click(screen.getByRole('button', { name: 'Bold' }));
+
+        await waitFor(() => expect(editor).toHaveValue('**isolate** the board'));
+    });
+
+    it('leaves the card open when Escape cancels the edit', async () => {
+        const onClose = jest.fn();
+        getProjectTask.mockResolvedValue(withDescription(null));
+        render(<TaskDetailPanel taskId="t1" onClose={onClose} />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Add a description…' }));
+
+        fireEvent.keyDown(screen.getByLabelText('Description'), { key: 'Escape' });
+
+        expect(await screen.findByRole('button', { name: 'Add a description…' })).toBeInTheDocument();
+        expect(onClose).not.toHaveBeenCalled();
+        expect(updateProjectTask).not.toHaveBeenCalled();
+    });
+});
+
+describe('TaskDetailPanel board columns', () => {
+    // Since Phase 3L the tenant template and a board's columns are different
+    // sets. Offering the template here would let someone move a card into a
+    // column its own board does not have.
+    it('offers the task’s own board columns, not the tenant template', async () => {
+        getProjectColumns.mockResolvedValue([{ id: 's1', name: 'Site visit', category: 'TODO' }]);
+        panel();
+
+        expect(await screen.findByText('Site visit')).toBeInTheDocument();
+        await waitFor(() => expect(getProjectColumns).toHaveBeenCalledWith('project-1'));
+        const { api } = jest.requireMock('@/lib/api');
+        expect(api.getProjectTaskStatuses).not.toHaveBeenCalled();
+    });
+});
+
+describe('TaskDetailPanel cover', () => {
+    it('marks the colour the card is wearing', async () => {
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), cover_color: 'BLUE' });
+        panel();
+
+        expect(await screen.findByLabelText('Cover colour Blue')).toHaveAttribute(
+            'aria-pressed',
+            'true',
+        );
+        expect(screen.getByLabelText('Cover colour Red')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('sets a cover', async () => {
+        panel();
+        fireEvent.click(await screen.findByLabelText('Cover colour Red'));
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { coverColor: 'RED' }),
+        );
+    });
+
+    it('clears it with an empty string, the PATCH-clearing convention', async () => {
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), cover_color: 'BLUE' });
+        panel();
+
+        fireEvent.click(await screen.findByRole('button', { name: 'No cover' }));
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { coverColor: '' }),
+        );
+    });
+
+    it('cannot clear a cover that is not set', async () => {
+        panel();
+        expect(await screen.findByRole('button', { name: 'No cover' })).toBeDisabled();
+    });
+});
+
+describe('TaskDetailPanel attachments', () => {
+    const file = (name: string, type: string, size = 1000) => {
+        const f = new File(['x'], name, { type });
+        Object.defineProperty(f, 'size', { value: size });
+        return f;
+    };
+
+    it('lists what is attached', async () => {
+        getTaskAttachments.mockResolvedValue([
+            {
+                id: 'a1',
+                file_url: 'https://cdn/plan.png',
+                file_name: 'plan.png',
+                file_size: 2048,
+                created_at: '2026-08-03T10:00:00Z',
+            },
+        ]);
+        panel();
+
+        const link = await screen.findByRole('link', { name: 'plan.png' });
+        expect(link).toHaveAttribute('href', 'https://cdn/plan.png');
+    });
+
+    it('uploads a file', async () => {
+        panel();
+        const input = await screen.findByLabelText('Attach a file');
+
+        fireEvent.change(input, { target: { files: [file('plan.png', 'image/png')] } });
+
+        await waitFor(() =>
+            expect(addTaskAttachment).toHaveBeenCalledWith(
+                't1',
+                expect.objectContaining({ fileName: 'plan.png', mimeType: 'image/png' }),
+            ),
+        );
+    });
+
+    // Checked before reading: no point turning 20 MB into base64 to be told no.
+    it('refuses an oversized file without uploading it', async () => {
+        const { toast } = jest.requireMock('@/lib/toast');
+        panel();
+        const input = await screen.findByLabelText('Attach a file');
+
+        fireEvent.change(input, {
+            target: { files: [file('huge.png', 'image/png', 9 * 1024 * 1024)] },
+        });
+
+        await waitFor(() => expect(toast.error).toHaveBeenCalledWith('That file is larger than 5 MB.'));
+        expect(addTaskAttachment).not.toHaveBeenCalled();
+    });
+
+    it('refuses a type that is not allowed', async () => {
+        const { toast } = jest.requireMock('@/lib/toast');
+        panel();
+        const input = await screen.findByLabelText('Attach a file');
+
+        fireEvent.change(input, {
+            target: { files: [file('run.exe', 'application/x-msdownload')] },
+        });
+
+        await waitFor(() =>
+            expect(toast.error).toHaveBeenCalledWith('Use a JPEG, PNG, WebP or PDF.'),
+        );
+        expect(addTaskAttachment).not.toHaveBeenCalled();
+    });
+
+    it('accepts a PDF', async () => {
+        panel();
+        const input = await screen.findByLabelText('Attach a file');
+
+        fireEvent.change(input, { target: { files: [file('spec.pdf', 'application/pdf')] } });
+
+        await waitFor(() => expect(addTaskAttachment).toHaveBeenCalled());
+    });
+
+    it('removes an attachment', async () => {
+        getTaskAttachments.mockResolvedValue([
+            {
+                id: 'a1',
+                file_url: 'https://cdn/plan.png',
+                file_name: 'plan.png',
+                created_at: '2026-08-03T10:00:00Z',
+            },
+        ]);
+        panel();
+
+        fireEvent.click(await screen.findByLabelText('Remove attachment plan.png'));
+
+        await waitFor(() => expect(deleteTaskAttachment).toHaveBeenCalledWith('a1'));
+    });
+
+    it('says the list failed rather than showing it as empty', async () => {
+        getTaskAttachments.mockRejectedValue(new Error('nope'));
+        panel();
+
+        expect(await screen.findByText('Could not load the attachments.')).toBeInTheDocument();
+        expect(screen.queryByText('Nothing attached yet.')).not.toBeInTheDocument();
     });
 });

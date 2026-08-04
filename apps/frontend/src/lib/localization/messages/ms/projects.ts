@@ -132,6 +132,17 @@ export const projectsMessages = {
         deleted: 'Tugasan dipadam',
         created: 'Tugasan dicipta',
         updated: 'Tugasan dikemas kini',
+        editTitle: 'Sunting tajuk',
+        renameFailed: 'Tugasan tidak dapat dinamakan semula',
+    },
+
+    description: {
+        title: 'Penerangan',
+        add: 'Tambah penerangan…',
+        edit: 'Sunting penerangan',
+        empty: 'Tiada penerangan lagi.',
+        placeholder: 'Apa-apa yang perlu diketahui oleh orang yang membuatnya.',
+        saveFailed: 'Penerangan tidak dapat disimpan',
     },
 
     dates: {
@@ -185,6 +196,36 @@ export const projectsMessages = {
             RED: 'Merah',
             PURPLE: 'Ungu',
         },
+    },
+
+    columns: {
+        title: 'Lajur papan',
+        subtitle: 'Lajur pada papan projek ini, dan berapa banyak kad setiap satu boleh pegang.',
+        add: 'Tambah lajur',
+        empty: 'Papan ini belum ada lajur.',
+        loadFailed: 'Lajur tidak dapat dimuatkan.',
+        wip: 'Had',
+        noLimit: 'Tiada',
+        overLimit: '{name} melebihi hadnya',
+        wipHint: 'Had WIP hanya nasihat — lajur ditanda apabila melebihi, tidak pernah disekat. Menyunting lalai di Persediaan Projek mengubah permulaan projek baharu, bukan papan ini.',
+    },
+
+    attachments: {
+        title: 'Lampiran',
+        add: 'Lampirkan fail',
+        empty: 'Tiada lampiran lagi.',
+        loadFailed: 'Lampiran tidak dapat dimuatkan.',
+        uploadFailed: 'Fail itu tidak dapat dilampirkan',
+        deleteFile: 'Buang lampiran',
+        hint: 'JPEG, PNG, WebP atau PDF, sehingga 5 MB.',
+        tooLarge: 'Fail itu lebih besar daripada 5 MB.',
+        unsupported: 'Gunakan JPEG, PNG, WebP atau PDF.',
+    },
+
+    cover: {
+        title: 'Kulit',
+        none: 'Tiada kulit',
+        pick: 'Warna kulit {color}',
     },
 
     checklist: {

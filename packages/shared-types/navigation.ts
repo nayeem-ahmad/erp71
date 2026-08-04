@@ -414,7 +414,8 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.support', 'admin', 3),
   layoutNode('admin.system-health', 'admin', 4),
   layoutNode('admin.status', 'admin', 5),
-  layoutNode('admin.platform-settings', 'admin', 6),
+  layoutNode('admin.referrals', 'admin', 6),
+  layoutNode('admin.platform-settings', 'admin', 7),
   layoutNode('help', null, 1),
 ];
 
