@@ -2,6 +2,41 @@
 
 export type DashboardRange = 'today' | 'week' | 'month';
 
+/**
+ * The today/week/month switcher on its own, so a dashboard embedded under an
+ * existing page header (CRM Overview) can offer the same control without the
+ * greeting block that would duplicate that header.
+ */
+export function RangeTabs({
+    range,
+    onRangeChange,
+    labels,
+}: {
+    range: DashboardRange;
+    onRangeChange: (r: DashboardRange) => void;
+    labels: Record<DashboardRange, string>;
+}) {
+    const ranges: DashboardRange[] = ['today', 'week', 'month'];
+    return (
+        <div className="flex gap-1">
+            {ranges.map((r) => (
+                <button
+                    key={r}
+                    type="button"
+                    onClick={() => onRangeChange(r)}
+                    className={`rounded-lg border px-2.5 py-1 text-[10px] font-bold transition-colors ${
+                        r === range
+                            ? 'border-primary bg-primary text-white'
+                            : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                    }`}
+                >
+                    {labels[r]}
+                </button>
+            ))}
+        </div>
+    );
+}
+
 export function DashboardHeader({
     greeting,
     tenantName,
@@ -17,7 +52,6 @@ export function DashboardHeader({
     onRangeChange: (r: DashboardRange) => void;
     labels: Record<DashboardRange, string>;
 }) {
-    const ranges: DashboardRange[] = ['today', 'week', 'month'];
     return (
         <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
@@ -26,22 +60,7 @@ export function DashboardHeader({
                     {tenantName} · {subtitle}
                 </p>
             </div>
-            <div className="flex gap-1">
-                {ranges.map((r) => (
-                    <button
-                        key={r}
-                        type="button"
-                        onClick={() => onRangeChange(r)}
-                        className={`rounded-lg border px-2.5 py-1 text-[10px] font-bold transition-colors ${
-                            r === range
-                                ? 'border-primary bg-primary text-white'
-                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                        }`}
-                    >
-                        {labels[r]}
-                    </button>
-                ))}
-            </div>
+            <RangeTabs range={range} onRangeChange={onRangeChange} labels={labels} />
         </div>
     );
 }

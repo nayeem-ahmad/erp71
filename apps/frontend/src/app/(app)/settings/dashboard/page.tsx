@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { BarChart3, Loader2 } from 'lucide-react';
-import type { DashboardPreference } from '@erp71/shared-types';
+import type { DashboardPreference, DashboardVariant } from '@erp71/shared-types';
 
 import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import {
     canChooseAccountingDashboard,
+    canChooseCrmDashboard,
     isAccountingOnlyPlan,
     tenantDashboardVariant,
 } from '@/lib/plan-entitlements';
@@ -17,7 +18,7 @@ import { toast } from '@/lib/toast';
 import { Button, PageShell } from '@/components/ui';
 import PageHeader from '@/components/ui/compact/PageHeader';
 
-const OPTIONS: DashboardPreference[] = ['AUTO', 'RETAIL', 'ACCOUNTING'];
+const OPTIONS: DashboardPreference[] = ['AUTO', 'RETAIL', 'ACCOUNTING', 'CRM'];
 
 export default function DashboardSettingsPage() {
     const { t } = useI18n();
@@ -49,7 +50,29 @@ export default function DashboardSettingsPage() {
     }, [copy.saveFailed]);
 
     const accountingOnly = isAccountingOnlyPlan(planCode, features);
-    const canPickAccounting = canChooseAccountingDashboard(planCode, features);
+    const entitled: Record<DashboardPreference, boolean> = {
+        AUTO: true,
+        RETAIL: true,
+        ACCOUNTING: canChooseAccountingDashboard(planCode, features),
+        CRM: canChooseCrmDashboard(planCode, features),
+    };
+    // Four options is where a ternary chain stops being readable, so the labels,
+    // help text and the unavailable hint are all keyed off the option itself.
+    const labels: Record<DashboardPreference, { label: string; help: string; unavailable?: string }> = {
+        AUTO: { label: copy.optionAuto, help: copy.optionAutoHelp },
+        RETAIL: { label: copy.optionRetail, help: copy.optionRetailHelp },
+        ACCOUNTING: {
+            label: copy.optionAccounting,
+            help: copy.optionAccountingHelp,
+            unavailable: copy.accountingUnavailable,
+        },
+        CRM: { label: copy.optionCrm, help: copy.optionCrmHelp, unavailable: copy.crmUnavailable },
+    };
+    const variantNames: Record<DashboardVariant, string> = {
+        RETAIL: copy.variantRetail,
+        ACCOUNTING: copy.variantAccounting,
+        CRM: copy.variantCrm,
+    };
     // Shows the resolved answer for the option currently selected, not the saved
     // one, so the consequence of a choice is visible before saving it.
     const resolved = tenantDashboardVariant(planCode, features, preference, permissions);
@@ -109,13 +132,8 @@ export default function DashboardSettingsPage() {
 
                 <div className="space-y-2">
                     {OPTIONS.map((option) => {
-                        const label = option === 'AUTO'
-                            ? copy.optionAuto
-                            : option === 'RETAIL' ? copy.optionRetail : copy.optionAccounting;
-                        const help = option === 'AUTO'
-                            ? copy.optionAutoHelp
-                            : option === 'RETAIL' ? copy.optionRetailHelp : copy.optionAccountingHelp;
-                        const disabled = accountingOnly || (option === 'ACCOUNTING' && !canPickAccounting);
+                        const { label, help, unavailable } = labels[option];
+                        const disabled = accountingOnly || !entitled[option];
 
                         return (
                             <label
@@ -138,9 +156,9 @@ export default function DashboardSettingsPage() {
                                 <span className="min-w-0">
                                     <span className="block text-sm font-semibold text-gray-900">{label}</span>
                                     <span className="mt-0.5 block text-xs text-gray-500">{help}</span>
-                                    {option === 'ACCOUNTING' && !canPickAccounting && !accountingOnly ? (
+                                    {unavailable && !entitled[option] && !accountingOnly ? (
                                         <span className="mt-1 block text-xs font-semibold text-amber-700">
-                                            {copy.accountingUnavailable}
+                                            {unavailable}
                                         </span>
                                     ) : null}
                                 </span>
@@ -150,9 +168,7 @@ export default function DashboardSettingsPage() {
                 </div>
 
                 <p className="text-xs font-semibold text-gray-600">
-                    {formatMessage(copy.currentlyShowing, {
-                        variant: resolved === 'ACCOUNTING' ? copy.variantAccounting : copy.variantRetail,
-                    })}
+                    {formatMessage(copy.currentlyShowing, { variant: variantNames[resolved] })}
                 </p>
 
                 <Button onClick={save} disabled={saving || accountingOnly} loading={saving}>

@@ -558,6 +558,19 @@ Spec: `docs/superpowers/specs/2026-07-16-six-month-demo-data-design.md` (approac
 - [ ] Campaign recipient preview (`GET /crm/campaigns/:id/preview`) only shows name/phone in the sample list — add email for EMAIL-channel campaigns
 - [ ] CRM analytics dashboard (Epic 84 Stories 1–2: top customers, retention rate, loyalty liability) still not built — only the AR aging report (Story 3) shipped
 
+### CRM dashboard for CRM-focused tenants — LANDED 2026-08-04 (`docs/crm/crm-dashboard-design.md`)
+A CRM-first tenant landed on `RetailDashboard` — sales, stock, top products — none of which is their work. `/crm` (what CRM > Overview opens, `navigation.ts:177`) is now the pipeline dashboard with the link hub kept below it, and `CRM` is a third dashboard variant so those tenants can land on it at `/dashboard` too.
+- [x] Write the design — routing decision, entitlement model, endpoint contract, layout — done 2026-08-04
+- [x] shared-types: `crmDashboard` plan feature, `'CRM'` in `DASHBOARD_PREFERENCES`/`DashboardVariant`, the `resolveDashboardVariant` branch (`premiumCrm` + `VIEW_LEADS` or fall back to RETAIL; accounting still wins when a plan carries both), cases in `plan-entitlements.test.ts` — done 2026-08-04
+- [x] `Lead.closed_at` + migration `20260804140000_add_lead_closed_at` — won/lost-in-period needed a real close date (`updated_at` re-dates a June win on any August edit). Stamped by create/update/convert, only on a *transition*, cleared on reopen; historical rows backfilled from `updated_at` — done 2026-08-04
+- [x] backend: `crm-dashboard` module — `GET /crm/dashboard/overview` and `/trends`, aggregating leads / follow-ups / conversations / campaigns behind one request each; `VIEW_LEADS` + `premiumCrm` guarded — done 2026-08-04
+- [x] frontend: `PipelineFunnel` (ordinal blue stage bars, won emerald, LOST gray, no tapered polygon) + `CrmDashboard`, reusing `DashboardHeader`/`AttentionStrip`/`HealthKpiTile`/`RankedListPanel` — done 2026-08-04
+- [x] rewire `/crm/page.tsx` — dashboard above the hub for `premiumCrm` tenants, hub alone otherwise; `variant="embedded"` drops the duplicate shell/greeting, `RangeTabs` split out of `DashboardHeader`. Its three `FinancialKpiTile`s are gone, leaving `manufacturing/page.tsx` as the only call site blocking the KPI-tile collapse item above — done 2026-08-04
+- [x] wire the `/dashboard` variant switch + a fourth radio in `settings/dashboard/page.tsx` (label/help/entitlement ternaries replaced by keyed lookups), i18n in en/bn/ms — done 2026-08-04
+- [ ] **Look at it in a running browser at 360px and desktop** — verified only by unit test, typecheck and lint. The two things jsdom cannot check are whether the funnel's label · bar · count row collides at 360px and whether the KPI tiles fit.
+- [ ] Import's upsert path deliberately does not stamp `closed_at` (a bulk sync is not a deal closing, and it re-runs over unchanged rows), so a lead moved to CONVERTED by CSV counts in the all-time totals but not in won-this-period. Revisit if anyone imports closed backlogs regularly.
+- [ ] Source mix is scoped to leads *created* in the window, so a lead that arrived in June and converted in July does not credit its source in July. That is the honest read of "where did this month's pipeline come from", but a second close-based view may be worth adding.
+
 ---
 
 ## AI Credits (LLM-powered features)

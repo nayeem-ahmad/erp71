@@ -1660,6 +1660,11 @@ model Lead {
   next_step_assigned_to   String?
   assigned_to             String?
   last_contacted_at       DateTime?
+  /// When the lead reached a terminal status (CONVERTED or LOST); null while it is
+  /// still open. `status` says which of the two it was, so one column serves both.
+  /// Written by every path that sets a terminal status and cleared when a lead is
+  /// reopened — `updated_at` cannot stand in for it, because any later edit moves it.
+  closed_at               DateTime?
   converted_customer_id   String?
   created_by              String?
   created_at              DateTime  @default(now())
@@ -1685,6 +1690,11 @@ model Lead {
   @@index([tenant_id, next_step_date])
   @@index([tenant_id, source_id])
   @@index([tenant_id, category_id])
+  // Serves the CRM dashboard's won/lost-in-period counts, which filter on
+  // status + closed_at together.
+  @@index([tenant_id, status, closed_at])
+  // Serves the same dashboard's new-leads-in-period count and daily trend buckets.
+  @@index([tenant_id, created_at])
 }
 
 /// Tenant-editable lead sources. Replaces the `LeadSource` enum.

@@ -2,6 +2,7 @@ import type {
     AiChatConversationDetail,
     AiChatConversationSummary,
     AiChatResponse,
+    DashboardPreference,
     PlatformFeatureKey,
     PlatformFeatures,
     TenantFeatureOverrides,
@@ -1110,6 +1111,20 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteCrmFollowUp: (id: string) => fetchWithAuth(`/crm/follow-ups/${id}`, { method: 'DELETE' }),
+    // CRM dashboard — one aggregate per paint. The per-page summary endpoints
+    // (`/crm/leads/summary` and friends) still serve their own list screens.
+    getCrmDashboardOverview: (params?: { from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        return fetchWithAuth(`/crm/dashboard/overview${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    getCrmDashboardTrends: (params?: { from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        return fetchWithAuth(`/crm/dashboard/trends${query.toString() ? `?${query.toString()}` : ''}`);
+    },
     // CRM Campaigns
     getCrmCampaigns: () => fetchAllPages('/crm/campaigns'),
     getCrmCampaign: (id: string) => fetchWithAuth(`/crm/campaigns/${id}`),
@@ -2343,7 +2358,9 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     getTenantDashboardSettings: () => fetchWithAuth('/tenants/dashboard-settings'),
-    updateTenantDashboardSettings: (data: { dashboard_preference: 'AUTO' | 'RETAIL' | 'ACCOUNTING' }) =>
+    // Typed off the shared list so a new variant cannot be added on one side only —
+    // the backend DTO validates against the same constant.
+    updateTenantDashboardSettings: (data: { dashboard_preference: DashboardPreference }) =>
         fetchWithAuth('/tenants/dashboard-settings', {
             method: 'PATCH',
             body: JSON.stringify(data),

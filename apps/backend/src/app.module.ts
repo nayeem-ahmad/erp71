@@ -80,6 +80,7 @@ import { CrmFollowUpsModule } from './crm-follow-ups/crm-follow-ups.module';
 import { ProjectsModule } from './projects/projects.module';
 import { CrmCampaignsModule } from './crm-campaigns/crm-campaigns.module';
 import { CrmContactsModule } from './crm-contacts/crm-contacts.module';
+import { CrmDashboardModule } from './crm-dashboard/crm-dashboard.module';
 import { CrmLeadsModule } from './crm-leads/crm-leads.module';
 import { CrmLeadConversationsModule } from './crm-lead-conversations/crm-lead-conversations.module';
 import { CrmLeadTaxonomyModule } from './crm-lead-taxonomy/crm-lead-taxonomy.module';
@@ -176,6 +177,7 @@ import { DemoDataModule } from './demo-data/demo-data.module';
         ProjectsModule,
         CrmCampaignsModule,
         CrmContactsModule,
+        CrmDashboardModule,
         CrmLeadsModule,
         CrmLeadConversationsModule,
         CrmLeadTaxonomyModule,

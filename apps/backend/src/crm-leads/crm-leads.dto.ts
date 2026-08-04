@@ -10,6 +10,18 @@ export enum LeadStatus {
     CONVERTED = 'CONVERTED',
 }
 
+/** Stages a lead is still being worked in — the open pipeline. */
+export const OPEN_LEAD_STATUSES = [
+    LeadStatus.NEW,
+    LeadStatus.CONTACTED,
+    LeadStatus.QUALIFIED,
+] as const;
+
+/** True for the two terminal statuses, which are the ones that stamp `closed_at`. */
+export function isClosedStatus(status: LeadStatus | string): boolean {
+    return status === LeadStatus.CONVERTED || status === LeadStatus.LOST;
+}
+
 export enum LeadPriority {
     LOW = 'LOW',
     MEDIUM = 'MEDIUM',

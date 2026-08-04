@@ -1,6 +1,11 @@
-import { canChooseAccountingDashboard, tenantDashboardVariant } from './plan-entitlements';
+import {
+    canChooseAccountingDashboard,
+    canChooseCrmDashboard,
+    tenantDashboardVariant,
+} from './plan-entitlements';
 
 const LEDGER = ['VIEW_LEDGER'];
+const PIPELINE = ['VIEW_LEADS'];
 
 describe('tenantDashboardVariant', () => {
     it('reads the plan default out of a raw features_json bag', () => {
@@ -49,6 +54,44 @@ describe('tenantDashboardVariant', () => {
         expect(tenantDashboardVariant(null, null, null)).toBe('RETAIL');
         expect(tenantDashboardVariant(undefined, undefined, undefined)).toBe('RETAIL');
     });
+
+    it('reads the CRM plan default and honours an opt-in on a retail plan', () => {
+        expect(
+            tenantDashboardVariant('STANDARD', { premiumCrm: true, crmDashboard: true }, 'AUTO', PIPELINE),
+        ).toBe('CRM');
+        expect(tenantDashboardVariant('STANDARD', { premiumCrm: true }, 'CRM', PIPELINE)).toBe('CRM');
+        expect(tenantDashboardVariant('STANDARD', { premiumCrm: true }, 'AUTO', PIPELINE)).toBe('RETAIL');
+    });
+
+    it('falls back to retail without the CRM module or the leads permission', () => {
+        expect(tenantDashboardVariant('BASIC', {}, 'CRM', PIPELINE)).toBe('RETAIL');
+        expect(
+            tenantDashboardVariant('STANDARD', { premiumCrm: true }, 'CRM', ['CREATE_SALE']),
+        ).toBe('RETAIL');
+    });
+
+    it('honours a tenant that opted out of a CRM-default plan', () => {
+        expect(
+            tenantDashboardVariant('STANDARD', { premiumCrm: true, crmDashboard: true }, 'RETAIL', PIPELINE),
+        ).toBe('RETAIL');
+    });
+
+    it('prefers accounting when a plan somehow carries both dashboard defaults', () => {
+        const features = {
+            premiumAccounting: true,
+            accountingDashboard: true,
+            premiumCrm: true,
+            crmDashboard: true,
+        };
+        expect(tenantDashboardVariant('PREMIUM', features, 'AUTO', [...LEDGER, ...PIPELINE])).toBe('ACCOUNTING');
+        // The preference is still the tenant's to override.
+        expect(tenantDashboardVariant('PREMIUM', features, 'CRM', [...LEDGER, ...PIPELINE])).toBe('CRM');
+    });
+
+    it('pins accounting-only tenants even when they ask for CRM', () => {
+        const features = { premiumAccounting: true, accountingOnly: true };
+        expect(tenantDashboardVariant('ACCOUNTING', features, 'CRM', PIPELINE)).toBe('ACCOUNTING');
+    });
 });
 
 describe('canChooseAccountingDashboard', () => {
@@ -56,5 +99,13 @@ describe('canChooseAccountingDashboard', () => {
         expect(canChooseAccountingDashboard('STANDARD', { premiumAccounting: true })).toBe(true);
         expect(canChooseAccountingDashboard('BASIC', {})).toBe(false);
         expect(canChooseAccountingDashboard(null, null)).toBe(false);
+    });
+});
+
+describe('canChooseCrmDashboard', () => {
+    it('is true only when the premium CRM module is entitled', () => {
+        expect(canChooseCrmDashboard('STANDARD', { premiumCrm: true })).toBe(true);
+        expect(canChooseCrmDashboard('BASIC', {})).toBe(false);
+        expect(canChooseCrmDashboard(null, null)).toBe(false);
     });
 });
