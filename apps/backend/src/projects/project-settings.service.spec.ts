@@ -34,7 +34,10 @@ describe('ProjectSettingsService', () => {
                 count: jest.fn().mockResolvedValue(0),
             },
             project: { count: jest.fn().mockResolvedValue(0) },
-            projectTask: { count: jest.fn().mockResolvedValue(0) },
+            projectTask: {
+                count: jest.fn().mockResolvedValue(0),
+                updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+            },
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -121,6 +124,154 @@ describe('ProjectSettingsService', () => {
                 expect.objectContaining({
                     where: expect.objectContaining({ tenant_id: 'tenant-1' }),
                 }),
+            );
+        });
+    });
+
+    // Phase 3L: columns belong to a project. `project_id IS NULL` is the tenant
+    // template a new project is seeded from, not a board anyone renders.
+    describe('per-project columns', () => {
+        it('reads the template when no project is named', async () => {
+            db.projectTaskStatus.findMany.mockResolvedValue(seeded);
+
+            await service.listTaskStatuses('tenant-1');
+
+            expect(db.projectTaskStatus.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ project_id: null }),
+                }),
+            );
+        });
+
+        it('reads a project’s own columns when one is named', async () => {
+            db.projectTaskStatus.findMany.mockResolvedValue(seeded);
+
+            await service.listTaskStatuses('tenant-1', false, 'project-1');
+
+            expect(db.projectTaskStatus.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ project_id: 'project-1' }),
+                }),
+            );
+        });
+
+        it('seeds a project from the template on first read', async () => {
+            // Empty for the project, then the template, then the copies.
+            db.projectTaskStatus.findMany
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce(seeded)
+                .mockResolvedValueOnce(seeded);
+
+            await service.listTaskStatuses('tenant-1', false, 'project-1');
+
+            expect(db.projectTaskStatus.createMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.arrayContaining([
+                        expect.objectContaining({ project_id: 'project-1', name: 'To Do' }),
+                    ]),
+                    // Two concurrent first-loads of a board must not double the
+                    // columns.
+                    skipDuplicates: true,
+                }),
+            );
+        });
+
+        it('creates a column against the project it was asked for', async () => {
+            db.projectTaskStatus.findMany.mockResolvedValue(seeded);
+            db.projectTaskStatus.findFirst.mockResolvedValue(null);
+
+            await service.createTaskStatus(
+                'tenant-1',
+                { name: 'Blocked', category: 'TODO', wipLimit: 3 } as never,
+                'project-1',
+            );
+
+            expect(db.projectTaskStatus.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ project_id: 'project-1', wip_limit: 3 }),
+                }),
+            );
+        });
+
+        // Two projects may each have a "Blocked". The clash check has to be
+        // scoped or the second one is refused.
+        it('checks the name clash within the project, not the tenant', async () => {
+            db.projectTaskStatus.findMany.mockResolvedValue(seeded);
+            db.projectTaskStatus.findFirst.mockResolvedValue(null);
+
+            await service.createTaskStatus(
+                'tenant-1',
+                { name: 'Blocked', category: 'TODO' } as never,
+                'project-1',
+            );
+
+            expect(db.projectTaskStatus.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        project_id: 'project-1',
+                        name: 'Blocked',
+                    }),
+                }),
+            );
+        });
+
+        it('clears the default within the board, not across the tenant', async () => {
+            db.projectTaskStatus.findFirst.mockResolvedValue({
+                ...seeded[1],
+                project_id: 'project-1',
+            });
+
+            await service.updateTaskStatus('tenant-1', 's2', { isDefault: true } as never);
+
+            expect(db.projectTaskStatus.updateMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ project_id: 'project-1' }),
+                }),
+            );
+        });
+
+        // Production applies the schema with `prisma db push`, never
+        // `migrate deploy`, so the data migration under prisma/migrations never
+        // runs there. Without this the columns arrive and every task stays on a
+        // template row, matching no column — every board renders empty.
+        it('moves the project’s tasks off the template onto its own copies', async () => {
+            db.projectTaskStatus.findMany
+                .mockResolvedValueOnce([]) // the project has none yet
+                .mockResolvedValueOnce(seeded) // the template to copy
+                .mockResolvedValueOnce([{ id: 's1', name: 'To Do' }]) // adopt: templates
+                .mockResolvedValueOnce([{ id: 'copy-1', name: 'To Do' }]) // adopt: this board's
+                .mockResolvedValueOnce(seeded); // the re-read that returns
+
+            await service.listTaskStatuses('tenant-1', false, 'project-1');
+
+            expect(db.projectTask.updateMany).toHaveBeenCalledWith({
+                where: { tenant_id: 'tenant-1', project_id: 'project-1', status_id: 's1' },
+                data: { status_id: 'copy-1' },
+            });
+        });
+
+        it('leaves a task alone when this board has no column of that name', async () => {
+            db.projectTaskStatus.findMany
+                .mockResolvedValueOnce([{ id: 's9', name: 'Retired' }]) // templates
+                .mockResolvedValueOnce([{ id: 'copy-1', name: 'To Do' }]); // this board's
+
+            await service.adoptTasksFromTemplate('tenant-1', 'project-1');
+
+            // A visible gap beats a silent reassignment to the wrong column.
+            expect(db.projectTask.updateMany).not.toHaveBeenCalled();
+        });
+
+        it('stores a WIP limit and lets it be removed', async () => {
+            db.projectTaskStatus.findFirst.mockResolvedValue(seeded[0]);
+
+            await service.updateTaskStatus('tenant-1', 's1', { wipLimit: 5 } as never);
+            expect(db.projectTaskStatus.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ wip_limit: 5 }) }),
+            );
+
+            await service.updateTaskStatus('tenant-1', 's1', { wipLimit: null } as never);
+            expect(db.projectTaskStatus.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ wip_limit: null }) }),
             );
         });
     });

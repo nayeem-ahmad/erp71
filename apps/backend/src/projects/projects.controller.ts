@@ -106,6 +106,32 @@ export class ProjectsController {
         return this.settings.removeTaskStatus(tenant.tenantId, id);
     }
 
+    // Per-project columns (Phase 3L). The `task-statuses` routes above stay the
+    // tenant *template* — the default set a new project is seeded from.
+    @Get(':projectId/columns')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
+    listProjectColumns(
+        @Tenant() tenant: TenantContext,
+        @Param('projectId') projectId: string,
+        @Query('includeInactive') includeInactive?: string,
+    ) {
+        return this.settings.listTaskStatuses(
+            tenant.tenantId,
+            includeInactive === 'true',
+            projectId,
+        );
+    }
+
+    @Post(':projectId/columns')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_SETTINGS)
+    createProjectColumn(
+        @Tenant() tenant: TenantContext,
+        @Param('projectId') projectId: string,
+        @Body() dto: CreateTaskStatusDto,
+    ) {
+        return this.settings.createTaskStatus(tenant.tenantId, dto, projectId);
+    }
+
     @Get('labels')
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     listLabels(@Tenant() tenant: TenantContext) {

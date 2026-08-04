@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
-import { ArrowDown, ArrowUp, Eye, EyeOff, Pencil, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Eye, EyeOff, Paperclip, Pencil, Trash2 } from 'lucide-react';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import {
     Button,
@@ -13,7 +13,14 @@ import {
     Field,
     StatusBadge,
 } from '@/components/ui';
-import { labelClass, labelsOf, type ProjectLabel } from '@/components/projects/board-tasks';
+import {
+    coverClass,
+    labelClass,
+    labelsOf,
+    LABEL_COLORS,
+    type ProjectLabel,
+    type ProjectLabelColor,
+} from '@/components/projects/board-tasks';
 import {
     actorName,
     describeActivity,
@@ -59,10 +66,12 @@ interface Task {
     logged_hours?: number;
     start_date?: string | null;
     due_date?: string | null;
+    project?: { id: string; code: string; name: string } | null;
     status?: { id: string; name: string; category: string };
     assignee?: { id: string; name?: string | null; email: string } | null;
     labels?: { label: ProjectLabel }[];
     checklistItems?: ChecklistItem[];
+    cover_color?: ProjectLabelColor | null;
     timeEntries?: TimeEntry[];
 }
 
@@ -104,16 +113,22 @@ export default function TaskDetailPanel({
     const [allLabels, setAllLabels] = useState<ProjectLabel[]>([]);
 
     const load = useCallback(async () => {
-        const [detail, log, cols, labels] = await Promise.all([
+        const [detail, log, labels] = await Promise.all([
             api.getProjectTask(taskId),
             api.getTaskRemainingHistory(taskId),
-            api.getProjectTaskStatuses(),
             api.getProjectLabels(),
         ]);
-        setTask(detail as Task);
+        const loaded = detail as Task;
+        setTask(loaded);
         setHistory(Array.isArray(log) ? log : []);
-        setStatuses(Array.isArray(cols) ? cols : []);
         setAllLabels(Array.isArray(labels) ? labels : []);
+
+        // The task's own board, not the tenant template. Since Phase 3L those
+        // are different sets, and offering the template here would let someone
+        // move a card into a column its board does not have.
+        const projectId = loaded?.project?.id;
+        const cols = projectId ? await api.getProjectColumns(projectId) : [];
+        setStatuses(Array.isArray(cols) ? cols : []);
     }, [taskId]);
 
     useEffect(() => {
@@ -239,6 +254,8 @@ export default function TaskDetailPanel({
                             </Select>
                         </Field>
 
+                        <CoverSection task={task} taskId={taskId} onChanged={refresh} />
+
                         <DatesSection task={task} taskId={taskId} onChanged={refresh} />
 
                         {allLabels.length > 0 && (
@@ -255,6 +272,8 @@ export default function TaskDetailPanel({
                             items={task.checklistItems ?? []}
                             onChanged={refresh}
                         />
+
+                        <AttachmentsSection taskId={taskId} />
 
                         <ActivitySection taskId={taskId} onChanged={onChanged} />
 
@@ -643,6 +662,212 @@ function DescriptionSection({
                 >
                     {m.add}
                 </button>
+            )}
+        </section>
+    );
+}
+
+/**
+ * A strip of colour across the top of the card. Purely visual — nothing reads
+ * it but the board.
+ */
+function CoverSection({
+    task,
+    taskId,
+    onChanged,
+}: {
+    task: Task;
+    taskId: string;
+    onChanged: () => Promise<void>;
+}) {
+    const { t } = useI18n();
+    const m = t.projects;
+    const [saving, setSaving] = useState(false);
+
+    const pick = async (color: ProjectLabelColor | '') => {
+        setSaving(true);
+        try {
+            // '' clears it, the same PATCH convention the dates use.
+            await api.updateProjectTask(taskId, { coverColor: color });
+            await onChanged();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.task.updated);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <section className="rounded-md border border-gray-200 p-3">
+            <h3 className="mb-2 text-sm font-medium">{m.cover.title}</h3>
+            <div className="flex flex-wrap items-center gap-1.5">
+                {LABEL_COLORS.map((color) => (
+                    <button
+                        key={color}
+                        type="button"
+                        disabled={saving}
+                        aria-pressed={task.cover_color === color}
+                        aria-label={m.cover.pick.replace('{color}', m.labels.colors[color])}
+                        onClick={() => pick(color)}
+                        className={`h-7 w-10 rounded disabled:opacity-60 ${coverClass(color)} ${
+                            task.cover_color === color ? 'ring-2 ring-blue-600 ring-offset-1' : ''
+                        }`}
+                    />
+                ))}
+                <Button
+                    type="button"
+                    variant="ghost"
+                    className="min-h-touch"
+                    disabled={saving || !task.cover_color}
+                    onClick={() => pick('')}
+                >
+                    {m.cover.none}
+                </Button>
+            </div>
+        </section>
+    );
+}
+
+interface Attachment {
+    id: string;
+    file_url: string;
+    file_name: string;
+    mime_type?: string | null;
+    file_size?: number | null;
+    created_at: string;
+    creator?: { id: string; name?: string | null; email: string } | null;
+}
+
+const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+/** Matches the server's cap; checked here too so a 5 MB upload is not started. */
+const MAX_BYTES = 5 * 1024 * 1024;
+
+const readAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error('read failed'));
+        reader.readAsDataURL(file);
+    });
+
+/**
+ * `ProjectAttachment` has had a model since Phase 1 and no API. This is the
+ * first UI over it.
+ *
+ * Loads independently of the panel, like the activity feed: a failure here must
+ * not cost the hours form above it, and an empty list has to be
+ * distinguishable from a broken one.
+ */
+function AttachmentsSection({ taskId }: { taskId: string }) {
+    const { t } = useI18n();
+    const m = t.projects.attachments;
+
+    const [items, setItems] = useState<Attachment[]>([]);
+    const [busy, setBusy] = useState(false);
+    const [failed, setFailed] = useState(false);
+
+    const load = useCallback(async () => {
+        try {
+            const list = await api.getTaskAttachments(taskId);
+            setItems(Array.isArray(list) ? list : []);
+            setFailed(false);
+        } catch {
+            setFailed(true);
+        }
+    }, [taskId]);
+
+    useEffect(() => {
+        load();
+    }, [load]);
+
+    const upload = async (file: File | undefined) => {
+        if (!file) return;
+        // Checked before reading: no point turning 20 MB into base64 to be told
+        // no, and the message is clearer than a 400 from the server.
+        if (!ACCEPTED_TYPES.includes(file.type)) return toast.error(m.unsupported);
+        if (file.size > MAX_BYTES) return toast.error(m.tooLarge);
+
+        setBusy(true);
+        try {
+            const fileBase64 = await readAsDataUrl(file);
+            await api.addTaskAttachment(taskId, {
+                fileBase64,
+                fileName: file.name,
+                mimeType: file.type,
+            });
+            await load();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.uploadFailed);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const remove = async (id: string) => {
+        setBusy(true);
+        try {
+            await api.deleteTaskAttachment(id);
+            await load();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.uploadFailed);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <section className="rounded-md border border-gray-200 p-3">
+            <h3 className="text-sm font-medium">{m.title}</h3>
+            <p className="mt-0.5 text-xs text-gray-500">{m.hint}</p>
+
+            <label className="mt-2 inline-flex min-h-touch cursor-pointer items-center gap-1.5 rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+                <Paperclip className="h-4 w-4" />
+                {m.add}
+                <input
+                    type="file"
+                    className="sr-only"
+                    aria-label={m.add}
+                    accept={ACCEPTED_TYPES.join(',')}
+                    disabled={busy}
+                    onChange={(e) => {
+                        upload(e.target.files?.[0]);
+                        // Clear it, or picking the same file twice fires nothing.
+                        e.target.value = '';
+                    }}
+                />
+            </label>
+
+            {failed ? (
+                <p className="mt-2 text-sm text-danger">{m.loadFailed}</p>
+            ) : items.length === 0 ? (
+                <p className="mt-2 text-sm text-gray-500">{m.empty}</p>
+            ) : (
+                <ul className="mt-2 divide-y divide-gray-200 text-sm">
+                    {items.map((item) => (
+                        <li key={item.id} className="flex items-center gap-2 py-1.5">
+                            <a
+                                href={item.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="min-w-0 flex-1 truncate text-blue-600 hover:underline"
+                            >
+                                {item.file_name}
+                            </a>
+                            <span className="shrink-0 text-xs text-gray-400">
+                                {Math.max(1, Math.round((item.file_size ?? 0) / 1024))} KB
+                            </span>
+                            <button
+                                type="button"
+                                aria-label={`${m.deleteFile} ${item.file_name}`}
+                                className="min-h-touch px-2 text-red-600 disabled:opacity-40"
+                                disabled={busy}
+                                onClick={() => remove(item.id)}
+                            >
+                                <Trash2 className="h-4 w-4" />
+                            </button>
+                        </li>
+                    ))}
+                </ul>
             )}
         </section>
     );

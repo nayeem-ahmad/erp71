@@ -20,6 +20,10 @@ const updateTaskComment = jest.fn();
 const deleteTaskComment = jest.fn();
 const watchTask = jest.fn();
 const unwatchTask = jest.fn();
+const getProjectColumns = jest.fn();
+const getTaskAttachments = jest.fn();
+const addTaskAttachment = jest.fn();
+const deleteTaskAttachment = jest.fn();
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -41,6 +45,10 @@ jest.mock('@/lib/api', () => ({
         deleteTaskComment: (...args: unknown[]) => deleteTaskComment(...args),
         watchTask: (...args: unknown[]) => watchTask(...args),
         unwatchTask: (...args: unknown[]) => unwatchTask(...args),
+        getProjectColumns: (...args: unknown[]) => getProjectColumns(...args),
+        getTaskAttachments: (...args: unknown[]) => getTaskAttachments(...args),
+        addTaskAttachment: (...args: unknown[]) => addTaskAttachment(...args),
+        deleteTaskAttachment: (...args: unknown[]) => deleteTaskAttachment(...args),
     },
 }));
 
@@ -57,6 +65,7 @@ const item = (id: string, text: string, isDone = false, sortOrder = 0) => ({
 const withChecklist = (items: ReturnType<typeof item>[]) => ({
     id: 't1',
     title: 'Wire the meter',
+    project: { id: 'project-1', code: 'PRJ-0001', name: 'Fit-out' },
     checklistItems: items,
     timeEntries: [],
 });
@@ -78,6 +87,10 @@ beforeEach(() => {
         deleteTaskComment,
         watchTask,
         unwatchTask,
+        getProjectColumns,
+        getTaskAttachments,
+        addTaskAttachment,
+        deleteTaskAttachment,
     ]) {
         mock.mockReset();
         mock.mockResolvedValue({});
@@ -86,6 +99,8 @@ beforeEach(() => {
     getTaskComments.mockResolvedValue([]);
     getTaskActivity.mockResolvedValue([]);
     getTaskWatchers.mockResolvedValue([]);
+    getProjectColumns.mockResolvedValue([]);
+    getTaskAttachments.mockResolvedValue([]);
     getProjectTask.mockResolvedValue(
         withChecklist([item('c1', 'Pull the cable', true), item('c2', 'Fit the box', false, 1)]),
     );
@@ -331,6 +346,8 @@ describe('TaskDetailPanel labels', () => {
     getTaskComments.mockResolvedValue([]);
     getTaskActivity.mockResolvedValue([]);
     getTaskWatchers.mockResolvedValue([]);
+    getProjectColumns.mockResolvedValue([]);
+    getTaskAttachments.mockResolvedValue([]);
         panel();
 
         await screen.findByText('Pull the cable');
@@ -662,5 +679,158 @@ describe('TaskDetailPanel description', () => {
         expect(await screen.findByRole('button', { name: 'Add a description…' })).toBeInTheDocument();
         expect(onClose).not.toHaveBeenCalled();
         expect(updateProjectTask).not.toHaveBeenCalled();
+    });
+});
+
+describe('TaskDetailPanel board columns', () => {
+    // Since Phase 3L the tenant template and a board's columns are different
+    // sets. Offering the template here would let someone move a card into a
+    // column its own board does not have.
+    it('offers the task’s own board columns, not the tenant template', async () => {
+        getProjectColumns.mockResolvedValue([{ id: 's1', name: 'Site visit', category: 'TODO' }]);
+        panel();
+
+        expect(await screen.findByText('Site visit')).toBeInTheDocument();
+        await waitFor(() => expect(getProjectColumns).toHaveBeenCalledWith('project-1'));
+        const { api } = jest.requireMock('@/lib/api');
+        expect(api.getProjectTaskStatuses).not.toHaveBeenCalled();
+    });
+});
+
+describe('TaskDetailPanel cover', () => {
+    it('marks the colour the card is wearing', async () => {
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), cover_color: 'BLUE' });
+        panel();
+
+        expect(await screen.findByLabelText('Cover colour Blue')).toHaveAttribute(
+            'aria-pressed',
+            'true',
+        );
+        expect(screen.getByLabelText('Cover colour Red')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('sets a cover', async () => {
+        panel();
+        fireEvent.click(await screen.findByLabelText('Cover colour Red'));
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { coverColor: 'RED' }),
+        );
+    });
+
+    it('clears it with an empty string, the PATCH-clearing convention', async () => {
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), cover_color: 'BLUE' });
+        panel();
+
+        fireEvent.click(await screen.findByRole('button', { name: 'No cover' }));
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { coverColor: '' }),
+        );
+    });
+
+    it('cannot clear a cover that is not set', async () => {
+        panel();
+        expect(await screen.findByRole('button', { name: 'No cover' })).toBeDisabled();
+    });
+});
+
+describe('TaskDetailPanel attachments', () => {
+    const file = (name: string, type: string, size = 1000) => {
+        const f = new File(['x'], name, { type });
+        Object.defineProperty(f, 'size', { value: size });
+        return f;
+    };
+
+    it('lists what is attached', async () => {
+        getTaskAttachments.mockResolvedValue([
+            {
+                id: 'a1',
+                file_url: 'https://cdn/plan.png',
+                file_name: 'plan.png',
+                file_size: 2048,
+                created_at: '2026-08-03T10:00:00Z',
+            },
+        ]);
+        panel();
+
+        const link = await screen.findByRole('link', { name: 'plan.png' });
+        expect(link).toHaveAttribute('href', 'https://cdn/plan.png');
+    });
+
+    it('uploads a file', async () => {
+        panel();
+        const input = await screen.findByLabelText('Attach a file');
+
+        fireEvent.change(input, { target: { files: [file('plan.png', 'image/png')] } });
+
+        await waitFor(() =>
+            expect(addTaskAttachment).toHaveBeenCalledWith(
+                't1',
+                expect.objectContaining({ fileName: 'plan.png', mimeType: 'image/png' }),
+            ),
+        );
+    });
+
+    // Checked before reading: no point turning 20 MB into base64 to be told no.
+    it('refuses an oversized file without uploading it', async () => {
+        const { toast } = jest.requireMock('@/lib/toast');
+        panel();
+        const input = await screen.findByLabelText('Attach a file');
+
+        fireEvent.change(input, {
+            target: { files: [file('huge.png', 'image/png', 9 * 1024 * 1024)] },
+        });
+
+        await waitFor(() => expect(toast.error).toHaveBeenCalledWith('That file is larger than 5 MB.'));
+        expect(addTaskAttachment).not.toHaveBeenCalled();
+    });
+
+    it('refuses a type that is not allowed', async () => {
+        const { toast } = jest.requireMock('@/lib/toast');
+        panel();
+        const input = await screen.findByLabelText('Attach a file');
+
+        fireEvent.change(input, {
+            target: { files: [file('run.exe', 'application/x-msdownload')] },
+        });
+
+        await waitFor(() =>
+            expect(toast.error).toHaveBeenCalledWith('Use a JPEG, PNG, WebP or PDF.'),
+        );
+        expect(addTaskAttachment).not.toHaveBeenCalled();
+    });
+
+    it('accepts a PDF', async () => {
+        panel();
+        const input = await screen.findByLabelText('Attach a file');
+
+        fireEvent.change(input, { target: { files: [file('spec.pdf', 'application/pdf')] } });
+
+        await waitFor(() => expect(addTaskAttachment).toHaveBeenCalled());
+    });
+
+    it('removes an attachment', async () => {
+        getTaskAttachments.mockResolvedValue([
+            {
+                id: 'a1',
+                file_url: 'https://cdn/plan.png',
+                file_name: 'plan.png',
+                created_at: '2026-08-03T10:00:00Z',
+            },
+        ]);
+        panel();
+
+        fireEvent.click(await screen.findByLabelText('Remove attachment plan.png'));
+
+        await waitFor(() => expect(deleteTaskAttachment).toHaveBeenCalledWith('a1'));
+    });
+
+    it('says the list failed rather than showing it as empty', async () => {
+        getTaskAttachments.mockRejectedValue(new Error('nope'));
+        panel();
+
+        expect(await screen.findByText('Could not load the attachments.')).toBeInTheDocument();
+        expect(screen.queryByText('Nothing attached yet.')).not.toBeInTheDocument();
     });
 });

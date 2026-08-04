@@ -161,6 +161,7 @@ export const routes = {
         new: '/projects/new' as const,
         detail: (id: string) => `/projects/${id}` as const,
         board: (id: string) => `/projects/${id}/board` as const,
+        columns: (id: string) => `/projects/${id}/columns` as const,
         edit: (id: string) => `/projects/${id}/edit` as const,
         tasks: '/projects/tasks',
         sprints: '/projects/sprints',

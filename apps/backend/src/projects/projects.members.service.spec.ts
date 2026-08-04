@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
+import { ProjectSettingsService } from './project-settings.service';
 import { DatabaseService } from '../database/database.service';
 
 /**
@@ -27,7 +28,14 @@ describe('ProjectsService — members and deletion', () => {
         };
 
         const module: TestingModule = await Test.createTestingModule({
-            providers: [ProjectsService, { provide: DatabaseService, useValue: db }],
+            providers: [
+                ProjectsService,
+                { provide: DatabaseService, useValue: db },
+                {
+                    provide: ProjectSettingsService,
+                    useValue: { seedProjectColumns: jest.fn().mockResolvedValue(undefined) },
+                },
+            ],
         }).compile();
         service = module.get(ProjectsService);
     });

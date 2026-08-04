@@ -198,7 +198,22 @@ describe('AssetsService', () => {
 
                 await service.deleteFile('retail/tenant-1/image123');
 
-                expect(mockDestroy).toHaveBeenCalledWith('retail/tenant-1/image123');
+                expect(mockDestroy).toHaveBeenCalledWith('retail/tenant-1/image123', {
+                    resource_type: 'image',
+                });
+            });
+
+            // Cloudinary keys destroy by resource type: asking for an image
+            // deletes nothing when the asset was stored raw, which is how a PDF
+            // would linger after its row was gone.
+            it('deletes a raw asset as raw', async () => {
+                mockDestroy.mockResolvedValue({ result: 'ok' } as any);
+
+                await service.deleteFile('retail/tenant-1/doc123', 'raw');
+
+                expect(mockDestroy).toHaveBeenCalledWith('retail/tenant-1/doc123', {
+                    resource_type: 'raw',
+                });
             });
 
             it('should not throw when cloudinary destroy fails (logs error)', async () => {
