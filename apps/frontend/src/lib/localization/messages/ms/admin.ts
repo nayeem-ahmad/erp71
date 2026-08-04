@@ -918,6 +918,7 @@ export const adminMessages = {
                     PENDING: "Menunggu",
                     EARNED: "Diperoleh",
                     PAID: "Dibayar",
+                    REVERSED: "Diterbalikkan",
                 },
             },
             payment: {

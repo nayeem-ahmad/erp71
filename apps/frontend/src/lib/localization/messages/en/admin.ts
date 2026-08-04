@@ -925,6 +925,7 @@ export const adminMessages = {
                 PENDING: 'Pending',
                 EARNED: 'Earned',
                 PAID: 'Paid',
+                REVERSED: 'Reversed',
             },
         },
         payment: {

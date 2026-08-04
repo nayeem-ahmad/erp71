@@ -317,6 +317,22 @@ export class BillingService {
             { referenceId: dto.referenceId, amount, currency, reason: dto.reason ?? null },
         ).catch(() => {});
 
+        // Claw the referral commission back before any downgrade runs. The platform
+        // has just given this money back to the tenant, so a commission still owed
+        // against it is a payout for revenue that no longer exists.
+        await this.reverseReferralCommission(
+            ctx.tenantId,
+            dto.reason ?? `Refund ${dto.referenceId}`,
+        ).catch((err) => {
+            this.logger.error(
+                `Failed to reverse referral commission for tenant ${ctx.tenantId}: ${err}`,
+            );
+            Sentry.captureException(err, {
+                tags: { domain: 'referral' },
+                extra: { tenantId: ctx.tenantId, referenceId: dto.referenceId },
+            });
+        });
+
         if (dto.downgradeToFree) {
             await this.applySubscriptionChange({
                 tenantId: ctx.tenantId,
@@ -572,6 +588,41 @@ export class BillingService {
                 commission_amount: commissionAmount,
             },
         });
+    }
+
+    /**
+     * Reverse a referral commission after the tenant's payment was refunded.
+     *
+     * PENDING is left alone — nothing was earned, and the tenant may yet pay.
+     * EARNED becomes REVERSED outright. PAID also becomes REVERSED but is flagged
+     * `reversed_after_paid`, because that money has already left the platform: it
+     * cannot be un-sent, so it nets against the referee's next payout via the
+     * ledger's overpaid balance rather than silently disappearing.
+     *
+     * REVERSED is a terminal state. A referral does not return to PENDING, since
+     * the signup discount it granted was already consumed and re-earning would pay
+     * the same commission twice.
+     */
+    private async reverseReferralCommission(tenantId: string, reason: string): Promise<void> {
+        const signup = await this.db.referralSignup.findUnique({
+            where: { tenant_id: tenantId },
+        });
+        if (!signup) return;
+        if (signup.status !== 'EARNED' && signup.status !== 'PAID') return;
+
+        await this.db.referralSignup.update({
+            where: { id: signup.id },
+            data: {
+                status: 'REVERSED',
+                reversed_at: new Date(),
+                reversal_reason: reason,
+                reversed_after_paid: signup.status === 'PAID',
+            },
+        });
+
+        this.logger.log(
+            `Reversed referral commission for tenant ${tenantId} (was ${signup.status}): ${reason}`,
+        );
     }
 
     private async notifyTenantOwner(

@@ -918,6 +918,7 @@ export const adminMessages = {
                     PENDING: "অপেক্ষমাণ",
                     EARNED: "অর্জিত",
                     PAID: "পরিশোধিত",
+                    REVERSED: "বাতিলকৃত",
                 },
             },
             payment: {

@@ -20,6 +20,10 @@ enum ReferralCommissionStatus {
   PENDING
   EARNED
   PAID
+  // Set when the tenant's payment was refunded or charged back. Terminal: the
+  // referral does not return to PENDING, because the discount it granted was
+  // already consumed and re-earning it would pay the commission twice.
+  REVERSED
 }
 
 enum SubscriptionStatus {
@@ -3653,6 +3657,12 @@ model ReferralSignup {
   signed_up_at       DateTime                 @default(now())
   earned_at          DateTime?
   paid_at            DateTime?
+  reversed_at        DateTime?                                    // set when the tenant's payment was refunded
+  reversal_reason    String?
+  /// True when the commission had already been paid out at the time of reversal.
+  /// The money is gone, so it nets against the referee's next payout rather than
+  /// simply vanishing from the ledger.
+  reversed_after_paid Boolean                 @default(false)
   referee_payment_id String?
 
   referee        Referee         @relation(fields: [referee_id], references: [id])

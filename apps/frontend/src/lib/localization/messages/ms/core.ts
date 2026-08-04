@@ -1564,6 +1564,7 @@ export const coreMessages = {
                 PENDING: "Menunggu",
                 EARNED: "Diperoleh",
                 PAID: "Dibayar",
+                REVERSED: "Diterbalikkan",
             },
             workspace: {
                 title: "Portal Rakan Rujukan",
