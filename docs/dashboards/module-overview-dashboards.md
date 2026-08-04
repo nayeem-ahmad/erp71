@@ -312,6 +312,28 @@ fit a KPI tile or whether the aging bars' three-column row collides at 360px.
   refactored onto it after the fact. Neither end goes through `toISOString()`.
 - **`api.ts` had seven copies of the same query-string builder.** They are one
   `dashboardWindowFetcher` now.
+- **Adding a `StorePermission` is three edits, not one.** Putting `VIEW_HR` and
+  `VIEW_PAYROLL` in `packages/shared-types` typechecked and passed every spec,
+  because the specs mock Prisma. It was still broken twice over, and both were
+  caught only by checking what the deploy would actually do:
+  1. `UserStorePermission.permission` is the Prisma **enum** `StorePermission`.
+     Without the values in `schema.prisma`, `canViewPayroll`'s filter throws at
+     runtime and no grant can be written at all. An `as any` on that filter is
+     what hid it from the compiler; it is gone now, so the generated client
+     checks the value.
+  2. `ROLE_DEFAULT_PERMISSIONS` is read only at tenant creation and role
+     assignment, so a permission added later reaches nobody who already exists.
+     `prisma/sync-role-permissions.ts` is the deploy-time backfill for exactly
+     that, and its header says adding a group is a deliberate act. Without the
+     `hr` group the dashboard would have shipped to zero managers platform-wide
+     while looking correct to every owner — `StorePermissionGuard`
+     short-circuits on OWNER, and owners are who try a new module first. That is
+     verbatim how Projects shipped with zero grants.
+
+  Neither failure is visible from unit tests, a typecheck or a lint. The checklist
+  for the next permission: shared-types → `schema.prisma` + migration → a group in
+  `sync-role-permissions.ts`.
+
 - **The sales *reports* bucket by UTC** (`toISOString().slice(0, 10)`), which
   files every Dhaka evening after 6pm under the previous day. The new sales
   dashboard does not carry that forward; the report itself is untouched and
