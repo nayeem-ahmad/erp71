@@ -70,32 +70,9 @@ function isPrivateHost(rawHost: string): boolean {
     // URL keeps IPv6 literals in brackets.
     if (host.startsWith('[') && host.endsWith(']')) {
         const inner = host.slice(1, -1);
-        if (inner === '::1' || inner === '::') return true;
 
-        // ::ffff: IPv4-mapped IPv6 addresses — extract and check the IPv4 part.
-        if (inner.startsWith('::ffff:')) {
-            const ipv4Part = inner.slice(7); // After "::ffff:"
-            // Node's URL serializer always emits in hex form (::ffff:a9fe:a9fe).
-            // The decimal branch is kept as defensive, but unreachable in practice.
-            if (ipv4Part.includes('.')) {
-                return isPrivateIpv4(ipv4Part);
-            } else {
-                // Hex form like a9fe:a9fe - convert to decimal IPv4.
-                const hexParts = ipv4Part.split(':');
-                if (hexParts.length === 2) {
-                    const high = parseInt(hexParts[0], 16);
-                    const low = parseInt(hexParts[1], 16);
-                    const a = (high >> 8) & 0xff;
-                    const b = high & 0xff;
-                    const c = (low >> 8) & 0xff;
-                    const d = low & 0xff;
-                    return isPrivateIpv4(`${a}.${b}.${c}.${d}`);
-                }
-            }
-        }
-
-        // Parse the first hextet numerically to check IPv6 ranges.
-        // Abbreviated forms like :: need special handling.
+        // Parse the first hextet to validate against 2000::/3 (global unicast).
+        // Abbreviated forms like :: start with first hextet = 0.
         let firstHextet: number | null = null;
         if (inner.startsWith('::')) {
             // Compressed form starting with ::; first hextet is 0.
@@ -114,15 +91,12 @@ function isPrivateHost(rawHost: string): boolean {
             }
         }
 
-        if (firstHextet !== null) {
-            // fe80::/10 — link-local addresses (fe80 through febf).
-            if (firstHextet >= 0xfe80 && firstHextet <= 0xfebf) return true;
-
-            // fc00::/7 — unique local addresses (fc00 through fdff).
-            if (firstHextet >= 0xfc00 && firstHextet <= 0xfdff) return true;
+        // Fail closed: only allow IPv6 addresses in 2000::/3 (global unicast).
+        // Reject everything else: loopback, link-local, ULA, IPv4-mapped, IPv4-compatible, etc.
+        if (firstHextet !== null && firstHextet >= 0x2000 && firstHextet <= 0x3fff) {
+            return false; // Global unicast, allow.
         }
-
-        return false;
+        return true; // Not global unicast, reject.
     }
 
     return isPrivateIpv4(host);

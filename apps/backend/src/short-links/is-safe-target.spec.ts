@@ -154,12 +154,21 @@ describe('isSafeTarget', () => {
                 'http://[fea0::1]/',
                 'http://[febf::1]/',
                 'http://[fd00::1]/',
+                'http://[fec0::1]/',
             ])('%s', (input) => {
                 expect(isSafeTarget(input)).toMatchObject({ ok: false });
             });
+        });
 
-            it('allows deprecated site-local addresses (fec0::/10 is not in fc00::/7 or fe80::/10)', () => {
-                expect(isSafeTarget('http://[fec0::1]/')).toMatchObject({ ok: true });
+        describe('rejects IPv4-compatible and IPv4-translated addresses', () => {
+            it.each([
+                'http://[::127.0.0.1]/',
+                'http://[::169.254.169.254]/',
+                'http://[::ffff:0:7f00:1]/',
+                'http://[::ffff:1:2:3]/',
+                'http://[64:ff9b::7f00:1]/',
+            ])('%s', (input) => {
+                expect(isSafeTarget(input)).toMatchObject({ ok: false });
             });
         });
 
@@ -183,8 +192,9 @@ describe('isSafeTarget', () => {
                 expect(isSafeTarget('http://11.0.0.1')).toMatchObject({ ok: true });
             });
 
-            it('allows public IPv6 addresses', () => {
+            it('allows public IPv6 addresses in 2000::/3', () => {
                 expect(isSafeTarget('http://[2606:4700::1111]/')).toMatchObject({ ok: true });
+                expect(isSafeTarget('http://[2001:4860:4860::8888]/')).toMatchObject({ ok: true });
             });
         });
     });
