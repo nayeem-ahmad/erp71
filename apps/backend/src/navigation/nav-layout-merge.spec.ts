@@ -113,4 +113,21 @@ describe('addNavNodesToLayout', () => {
 
         expect(new Set(orders).size).toBe(orders.length);
     });
+
+    /**
+     * admin.referrals was in NAV_REGISTRY but in no layout at all, which left the
+     * platform referral screens registered, rendered, and reachable only by typing
+     * the URL. These two assertions exist so the shortener does not repeat it.
+     */
+    it('ships admin.url-shortener in the platform admin layout under the admin module', () => {
+        const defaults = getDefaultNavLayout(NavScope.PLATFORM_ADMIN);
+        const node = defaults.find((n) => n.id === 'admin.url-shortener');
+        expect(node).toEqual(expect.objectContaining({ parentId: 'admin', visible: true }));
+    });
+
+    it('does not collide sort order with its siblings under admin', () => {
+        const defaults = getDefaultNavLayout(NavScope.PLATFORM_ADMIN);
+        const siblings = defaults.filter((n) => n.parentId === 'admin').map((n) => n.sortOrder);
+        expect(new Set(siblings).size).toBe(siblings.length);
+    });
 });

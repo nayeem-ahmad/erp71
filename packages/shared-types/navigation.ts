@@ -215,6 +215,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'account-settings.print-templates': { id: 'account-settings.print-templates', kind: 'link', icon: 'Printer', labelKey: 'sidebar.items.printTemplates', href: '/settings/print-templates' },
   'account-settings.payment-methods': { id: 'account-settings.payment-methods', kind: 'link', icon: 'CreditCard', labelKey: 'sidebar.items.paymentMethods', href: '/settings/payment-methods' },
   'account-settings.discount-codes': { id: 'account-settings.discount-codes', kind: 'link', icon: 'Tag', labelKey: 'sidebar.items.discountCodes', href: '/settings/discount-codes' },
+  'account-settings.url-shortener': { id: 'account-settings.url-shortener', kind: 'link', icon: 'Link2', labelKey: 'sidebar.items.urlShortener', href: '/settings/url-shortener' },
   'account-settings.data': { id: 'account-settings.data', kind: 'link', icon: 'Database', labelKey: 'sidebar.items.dataManagement', href: '/settings/data' },
   'account-settings.billing': { id: 'account-settings.billing', kind: 'link', icon: 'Wallet', labelKey: 'sidebar.modules.billing', href: '/billing', billingGated: true },
   'account-settings.sms-credits': { id: 'account-settings.sms-credits', kind: 'link', icon: 'MessageSquare', labelKey: 'sidebar.items.smsCredits', href: '/sms-credits' },
@@ -229,6 +230,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'admin.tenant-management.reminders': { id: 'admin.tenant-management.reminders', kind: 'link', icon: 'BellRing', labelKey: 'sidebar.items.tenantReminders', href: '/admin/tenants/reminders' },
   'admin.users': { id: 'admin.users', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.users', href: '/admin/users' },
   'admin.referrals': { id: 'admin.referrals', kind: 'link', icon: 'Gift', labelKey: 'sidebar.items.referrals', href: '/admin/referrals' },
+  'admin.url-shortener': { id: 'admin.url-shortener', kind: 'link', icon: 'Link2', labelKey: 'sidebar.items.urlShortener', href: '/admin/url-shortener' },
   'admin.feedback': { id: 'admin.feedback', kind: 'link', icon: 'MessageSquare', labelKey: 'sidebar.items.feedback', href: '/admin/feedback' },
   'admin.support': { id: 'admin.support', kind: 'link', icon: 'Headset', labelKey: 'sidebar.items.adminSupport', href: '/admin/support' },
   'admin.system-health': { id: 'admin.system-health', kind: 'link', icon: 'Activity', labelKey: 'sidebar.items.systemHealth', href: '/admin/system-health' },
@@ -399,6 +401,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.users', 'admin', 2),
   layoutNode('admin.feedback', 'admin', 3),
   layoutNode('admin.support', 'admin', 4),
+  layoutNode('admin.url-shortener', 'admin', 5),
   layoutNode('help', null, 13),
 ];
 
@@ -415,7 +418,8 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.system-health', 'admin', 4),
   layoutNode('admin.status', 'admin', 5),
   layoutNode('admin.referrals', 'admin', 6),
-  layoutNode('admin.platform-settings', 'admin', 7),
+  layoutNode('admin.url-shortener', 'admin', 7),
+  layoutNode('admin.platform-settings', 'admin', 8),
   layoutNode('help', null, 1),
 ];
 
