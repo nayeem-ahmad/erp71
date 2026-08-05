@@ -1684,6 +1684,26 @@ export const api = {
     convertQuotation: (id: string) => fetchWithAuth(`/sales-quotations/${id}/convert`, {
         method: 'POST',
     }),
+    /** Idempotent — calling this again returns the same live code rather than minting a new one. */
+    shareQuotation: (id: string) => fetchWithAuth(`/sales-quotations/${id}/share`, { method: 'POST' }),
+    /** Clears the share token, killing every link ever sent for this quotation. */
+    revokeQuotationShare: (id: string) => fetchWithAuth(`/sales-quotations/${id}/share`, { method: 'DELETE' }),
+    getShortLinks: () => fetchWithAuth('/short-links'),
+    createShortLink: (data: { target_url: string; label?: string }) =>
+        fetchWithAuth('/short-links', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    revokeShortLink: (id: string) => fetchWithAuth(`/short-links/${id}`, { method: 'DELETE' }),
+    getAdminShortLinks: () => fetchWithAuth('/admin/short-links'),
+    createAdminShortLink: (data: { target_url: string; label?: string }) =>
+        fetchWithAuth('/admin/short-links', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    revokeAdminShortLink: (id: string) => fetchWithAuth(`/admin/short-links/${id}`, { method: 'DELETE' }),
     // Sales detail
     getSale: (id: string) => fetchWithAuth(`/sales/${id}`),
     getSaleInvoice: (id: string) => fetchWithAuth(`/sales/${id}/invoice`),

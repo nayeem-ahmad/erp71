@@ -43,6 +43,7 @@ jest.mock('@/lib/api', () => ({
         updateQuotationStatus: jest.fn(),
         getCustomers: jest.fn(),
         getProducts: jest.fn(),
+        shareQuotation: jest.fn(),
     },
 }));
 
@@ -110,6 +111,7 @@ describe('QuoteDetailsPage', () => {
         api.getProducts.mockResolvedValue([
             { id: 'prod-2', name: 'Product Beta', sku: 'SKU-002', price: '750' },
         ]);
+        api.shareQuotation.mockResolvedValue({ code: 'aB3xK9m', path: '/s/aB3xK9m' });
     });
 
     it('shows loading state initially', () => {
@@ -236,6 +238,54 @@ describe('QuoteDetailsPage', () => {
         await waitFor(() => screen.getByRole('button', { name: /print pdf/i }));
         fireEvent.click(screen.getByRole('button', { name: /print pdf/i }));
         expect(window.print).toHaveBeenCalled();
+    });
+
+    it('opens the share modal with the absolute short link when Share is clicked', async () => {
+        const api = getApi();
+        render(<QuoteDetailsPage />);
+        await waitFor(() => screen.getByRole('button', { name: /^share$/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^share$/i }));
+        await waitFor(() => {
+            expect(api.shareQuotation).toHaveBeenCalledWith('quote-1');
+        });
+        await waitFor(() => {
+            expect(screen.getByDisplayValue(`${window.location.origin}/s/aB3xK9m`)).toBeInTheDocument();
+        });
+    });
+
+    it('calling share again after closing the modal does not re-mint a link', async () => {
+        const api = getApi();
+        render(<QuoteDetailsPage />);
+        await waitFor(() => screen.getByRole('button', { name: /^share$/i }));
+
+        fireEvent.click(screen.getByRole('button', { name: /^share$/i }));
+        await waitFor(() => screen.getByDisplayValue(`${window.location.origin}/s/aB3xK9m`));
+        fireEvent.click(screen.getByLabelText(/close/i));
+
+        fireEvent.click(screen.getByRole('button', { name: /^share$/i }));
+        await waitFor(() => {
+            expect(api.shareQuotation).toHaveBeenCalledTimes(2);
+        });
+        // The backend endpoint is idempotent, so a second call still resolves to the same code.
+        expect(screen.getByDisplayValue(`${window.location.origin}/s/aB3xK9m`)).toBeInTheDocument();
+    });
+
+    it('shows a toast (not an alert) when creating the share link fails', async () => {
+        const { toast } = require('@/lib/toast');
+        const toastErrorSpy = jest.spyOn(toast, 'error').mockImplementation(() => '');
+        const api = getApi();
+        api.shareQuotation.mockRejectedValue(new Error('Could not create share link'));
+
+        render(<QuoteDetailsPage />);
+        await waitFor(() => screen.getByRole('button', { name: /^share$/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^share$/i }));
+
+        await waitFor(() => {
+            expect(toastErrorSpy).toHaveBeenCalledWith('Could not create share link');
+        });
+        expect(window.alert).not.toHaveBeenCalled();
+
+        toastErrorSpy.mockRestore();
     });
 
     describe('Edit mode', () => {
