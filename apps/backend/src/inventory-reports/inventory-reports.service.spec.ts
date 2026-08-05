@@ -13,6 +13,9 @@ describe('InventoryReportsService', () => {
             warehouseTransferItem: { findMany: jest.fn() },
             inventoryShrinkage: { findMany: jest.fn() },
             inventoryMovement: { groupBy: jest.fn().mockResolvedValue([]) },
+            warehouse: { findMany: jest.fn().mockResolvedValue([]) },
+            productPrice: { findMany: jest.fn().mockResolvedValue([]) },
+            $queryRaw: jest.fn().mockResolvedValue([]),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -206,6 +209,166 @@ describe('InventoryReportsService', () => {
 
             expect(result.summary.totalStockValue).toBe(1000);
             expect(result.summary.slowMovingShareOfValuePct).toBe(100);
+        });
+    });
+
+    describe('getStockOnHand', () => {
+        const warehouses = [
+            { id: 'wh-1', name: 'Dhaka Main', code: 'WH-1', is_default: true },
+            { id: 'wh-2', name: 'Chattogram', code: 'WH-2', is_default: false },
+        ];
+
+        const product = (id: string, name: string, stocks: { warehouse_id: string; quantity: number }[]) => ({
+            id,
+            name,
+            sku: `SKU-${id}`,
+            unit_type: 'none',
+            price: 100,
+            brand: null,
+            group: null,
+            subgroup: null,
+            stocks,
+        });
+
+        beforeEach(() => {
+            db.warehouse.findMany.mockResolvedValue(warehouses);
+        });
+
+        it('splits quantity into one column per warehouse and values it at weighted average purchase cost', async () => {
+            db.product.findMany.mockResolvedValue([
+                product('p1', 'Rice', [
+                    { warehouse_id: 'wh-1', quantity: 6 },
+                    { warehouse_id: 'wh-2', quantity: 4 },
+                ]),
+            ]);
+            // 10 @ 50 + 10 @ 70 = 1200 over 20 units => 60 each.
+            db.$queryRaw.mockResolvedValue([{ product_id: 'p1', cost_total: 1200, quantity_total: 20 }]);
+
+            const result = await service.getStockOnHand('tenant-1', {});
+
+            const [row] = result.rows;
+            expect(row.quantityByWarehouse).toEqual({ 'wh-1': 6, 'wh-2': 4 });
+            expect(row.totalQuantity).toBe(10);
+            expect(row.averageUnitCost).toBe(60);
+            expect(row.costBasis).toBe('WEIGHTED_AVERAGE');
+            expect(row.totalStockValue).toBe(600);
+            expect(result.summary.totalStockValue).toBe(600);
+        });
+
+        it('reports zero for a warehouse the product has no stock row in', async () => {
+            db.product.findMany.mockResolvedValue([product('p1', 'Rice', [{ warehouse_id: 'wh-1', quantity: 5 }])]);
+
+            const result = await service.getStockOnHand('tenant-1', {});
+
+            expect(result.rows[0].quantityByWarehouse['wh-2']).toBe(0);
+        });
+
+        it('per-warehouse value totals add up to the report total', async () => {
+            db.product.findMany.mockResolvedValue([
+                product('p1', 'Rice', [
+                    { warehouse_id: 'wh-1', quantity: 3 },
+                    { warehouse_id: 'wh-2', quantity: 7 },
+                ]),
+            ]);
+            db.$queryRaw.mockResolvedValue([{ product_id: 'p1', cost_total: 250, quantity_total: 10 }]);
+
+            const result = await service.getStockOnHand('tenant-1', {});
+
+            const warehouseSum = result.warehouses.reduce((sum, warehouse) => sum + warehouse.stockValue, 0);
+            expect(warehouseSum).toBeCloseTo(result.summary.totalStockValue, 6);
+        });
+
+        it('falls back to the latest recorded cost when nothing was purchased through the ledger', async () => {
+            db.product.findMany.mockResolvedValue([product('p1', 'Rice', [{ warehouse_id: 'wh-1', quantity: 2 }])]);
+            db.$queryRaw.mockResolvedValue([]);
+            db.productPrice.findMany.mockResolvedValue([{ product_id: 'p1', cost: 45 }]);
+
+            const result = await service.getStockOnHand('tenant-1', {});
+
+            expect(result.rows[0].averageUnitCost).toBe(45);
+            expect(result.rows[0].costBasis).toBe('LATEST_COST');
+            expect(result.rows[0].totalStockValue).toBe(90);
+        });
+
+        it('flags products with no cost basis instead of quietly valuing them at zero', async () => {
+            db.product.findMany.mockResolvedValue([product('p1', 'Rice', [{ warehouse_id: 'wh-1', quantity: 8 }])]);
+
+            const result = await service.getStockOnHand('tenant-1', {});
+
+            expect(result.rows[0].costBasis).toBe('UNCOSTED');
+            expect(result.rows[0].averageUnitCost).toBeNull();
+            expect(result.summary.uncostedProductCount).toBe(1);
+            expect(result.summary.uncostedQuantity).toBe(8);
+        });
+
+        it('ignores a purchase pool that nets to zero or less rather than emitting an absurd cost', async () => {
+            db.product.findMany.mockResolvedValue([product('p1', 'Rice', [{ warehouse_id: 'wh-1', quantity: 1 }])]);
+            // Everything bought was returned, so the average is undefined.
+            db.$queryRaw.mockResolvedValue([{ product_id: 'p1', cost_total: 0, quantity_total: 0 }]);
+            db.productPrice.findMany.mockResolvedValue([{ product_id: 'p1', cost: 12 }]);
+
+            const result = await service.getStockOnHand('tenant-1', {});
+
+            expect(result.rows[0].costBasis).toBe('LATEST_COST');
+            expect(result.rows[0].averageUnitCost).toBe(12);
+        });
+
+        it('drops zero-stock products by default and keeps them when asked', async () => {
+            db.product.findMany.mockResolvedValue([
+                product('p1', 'Rice', [{ warehouse_id: 'wh-1', quantity: 4 }]),
+                product('p2', 'Dal', []),
+            ]);
+
+            const withoutZeros = await service.getStockOnHand('tenant-1', {});
+            expect(withoutZeros.rows.map((row) => row.product.id)).toEqual(['p1']);
+
+            const withZeros = await service.getStockOnHand('tenant-1', { includeZeroStock: true });
+            expect(withZeros.rows.map((row) => row.product.id)).toEqual(['p1', 'p2']);
+        });
+
+        it('narrows to a single warehouse column when one is selected', async () => {
+            db.warehouse.findMany.mockResolvedValue([warehouses[1]]);
+            db.product.findMany.mockResolvedValue([
+                product('p1', 'Rice', [
+                    { warehouse_id: 'wh-1', quantity: 6 },
+                    { warehouse_id: 'wh-2', quantity: 4 },
+                ]),
+            ]);
+
+            const result = await service.getStockOnHand('tenant-1', { warehouseId: 'wh-2' });
+
+            expect(result.warehouses.map((warehouse) => warehouse.id)).toEqual(['wh-2']);
+            expect(result.rows[0].totalQuantity).toBe(4);
+            expect(db.product.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    select: expect.objectContaining({
+                        stocks: expect.objectContaining({ where: { warehouse_id: { in: ['wh-2'] } } }),
+                    }),
+                }),
+            );
+        });
+
+        it('returns an empty report rather than the whole tenant when the warehouse filter matches nothing', async () => {
+            db.warehouse.findMany.mockResolvedValue([]);
+
+            const result = await service.getStockOnHand('tenant-1', { warehouseId: 'missing' });
+
+            expect(result.rows).toEqual([]);
+            expect(result.warehouses).toEqual([]);
+            expect(result.summary.totalStockValue).toBe(0);
+            expect(db.product.findMany).not.toHaveBeenCalled();
+        });
+
+        it('excludes service products, which are never stock-tracked', async () => {
+            db.product.findMany.mockResolvedValue([]);
+
+            await service.getStockOnHand('tenant-1', {});
+
+            expect(db.product.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ type: { not: 'SERVICE' } }),
+                }),
+            );
         });
     });
 });

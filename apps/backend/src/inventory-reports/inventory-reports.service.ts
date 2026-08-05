@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
-import { GetInventoryValuationDto, GetReorderSuggestionsDto, GetShrinkageSummaryDto, GetStockAgingDto } from './inventory-reports.dto';
+import {
+    GetInventoryValuationDto,
+    GetReorderSuggestionsDto,
+    GetShrinkageSummaryDto,
+    GetStockAgingDto,
+    GetStockOnHandDto,
+} from './inventory-reports.dto';
 
 /** Buckets stock is sorted into by how long it has sat without moving. */
 const AGING_BUCKETS = [
@@ -145,6 +152,209 @@ export class InventoryReportsService {
             },
             rows,
         };
+    }
+
+    /**
+     * On-hand quantity per warehouse — one column per warehouse — valued at each
+     * product's weighted average purchase cost.
+     *
+     * Distinct from getInventoryValuation above, which values stock at the
+     * current *selling* price and collapses every warehouse into a single
+     * total. This one answers "what is sitting where, and what did it cost us".
+     *
+     * Cost basis, in priority order per product:
+     *   1. WEIGHTED_AVERAGE — SUM(unit_cost x qty) / SUM(qty) over the product's
+     *      purchase movements. Purchase returns carry a negative delta and their
+     *      own unit_cost, so they fall out of both sums naturally; no special case.
+     *   2. LATEST_COST — the newest ProductPrice.cost, the same field sales uses
+     *      for unit_cost_at_sale. Covers products bought before the ledger
+     *      existed, or stocked by transfer/manufacturing only.
+     *   3. UNCOSTED — no basis at all. Valued at zero and counted separately, so
+     *      a low total reads as "some stock has no cost on file" rather than
+     *      silently understating the whole report.
+     *
+     * INITIAL_STOCK movements are deliberately excluded from step 1 even though
+     * they carry a unit_cost: products.service.ts stamps the *selling* price
+     * there on the create path, so folding them in would drag every average
+     * toward retail and quietly overstate inventory value.
+     */
+    async getStockOnHand(tenantId: string, query: GetStockOnHandDto) {
+        const warehouses = await this.db.warehouse.findMany({
+            where: {
+                tenant_id: tenantId,
+                is_active: true,
+                ...(query.warehouseId ? { id: query.warehouseId } : {}),
+            },
+            select: { id: true, name: true, code: true, is_default: true },
+            orderBy: [{ is_default: 'desc' }, { name: 'asc' }],
+        });
+
+        const warehouseIds = warehouses.map((warehouse) => warehouse.id);
+
+        // An unknown or inactive warehouseId leaves no columns to report on.
+        // Returning empty totals beats reporting the whole tenant as if no
+        // filter had been asked for.
+        if (warehouseIds.length === 0) {
+            return {
+                summary: {
+                    valuationBasis: 'WEIGHTED_AVERAGE_PURCHASE_COST',
+                    totalQuantity: 0,
+                    totalStockValue: 0,
+                    productCount: 0,
+                    uncostedProductCount: 0,
+                    uncostedQuantity: 0,
+                },
+                warehouses: [],
+                rows: [],
+            };
+        }
+
+        const products = await this.db.product.findMany({
+            where: {
+                tenant_id: tenantId,
+                deleted_at: null,
+                // Services are never stock-tracked (applyInventoryMovement skips
+                // them outright), so they would only add permanent zero rows.
+                type: { not: 'SERVICE' },
+                ...(query.groupId ? { group_id: query.groupId } : {}),
+                ...(query.subgroupId ? { subgroup_id: query.subgroupId } : {}),
+                ...(query.brandId ? { brand_id: query.brandId } : {}),
+            },
+            select: {
+                id: true,
+                name: true,
+                sku: true,
+                unit_type: true,
+                price: true,
+                brand: { select: { id: true, name: true } },
+                group: { select: { id: true, name: true } },
+                subgroup: { select: { id: true, name: true } },
+                stocks: {
+                    where: { warehouse_id: { in: warehouseIds } },
+                    select: { warehouse_id: true, quantity: true },
+                },
+            },
+            orderBy: { name: 'asc' },
+        });
+
+        const [averageCostByProduct, latestCostByProduct] = await Promise.all([
+            this.getWeightedAveragePurchaseCosts(tenantId, query.warehouseId),
+            this.getLatestRecordedCosts(tenantId),
+        ]);
+
+        const rows = products
+            .map((product) => {
+                const quantityByWarehouse: Record<string, number> = {};
+                for (const id of warehouseIds) quantityByWarehouse[id] = 0;
+                for (const stock of product.stocks) {
+                    quantityByWarehouse[stock.warehouse_id] = (quantityByWarehouse[stock.warehouse_id] ?? 0) + stock.quantity;
+                }
+
+                const totalQuantity = warehouseIds.reduce((sum, id) => sum + quantityByWarehouse[id], 0);
+                const averageCost = averageCostByProduct.get(product.id);
+                const latestCost = latestCostByProduct.get(product.id);
+                const unitCost = averageCost ?? latestCost ?? null;
+                const costBasis = averageCost != null ? 'WEIGHTED_AVERAGE' : latestCost != null ? 'LATEST_COST' : 'UNCOSTED';
+
+                return {
+                    product: {
+                        id: product.id,
+                        name: product.name,
+                        sku: product.sku,
+                        unitType: product.unit_type,
+                        sellingPrice: Number(product.price || 0),
+                        brand: product.brand,
+                        group: product.group,
+                        subgroup: product.subgroup,
+                    },
+                    quantityByWarehouse,
+                    totalQuantity,
+                    averageUnitCost: unitCost,
+                    costBasis,
+                    // Value follows quantity column for column: the per-warehouse
+                    // values below always add up to totalStockValue exactly.
+                    totalStockValue: unitCost != null ? totalQuantity * unitCost : 0,
+                };
+            })
+            .filter((row) => query.includeZeroStock || row.totalQuantity !== 0);
+
+        const warehouseTotals = warehouses.map((warehouse) => {
+            const quantity = rows.reduce((sum, row) => sum + row.quantityByWarehouse[warehouse.id], 0);
+            const stockValue = rows.reduce(
+                (sum, row) => sum + (row.averageUnitCost != null ? row.quantityByWarehouse[warehouse.id] * row.averageUnitCost : 0),
+                0,
+            );
+            return { ...warehouse, quantity, stockValue };
+        });
+
+        const uncosted = rows.filter((row) => row.averageUnitCost == null);
+
+        return {
+            summary: {
+                valuationBasis: 'WEIGHTED_AVERAGE_PURCHASE_COST',
+                totalQuantity: rows.reduce((sum, row) => sum + row.totalQuantity, 0),
+                totalStockValue: rows.reduce((sum, row) => sum + row.totalStockValue, 0),
+                productCount: rows.length,
+                // Surfaced so the page can warn that the total is understated
+                // rather than presenting it as complete.
+                uncostedProductCount: uncosted.length,
+                uncostedQuantity: uncosted.reduce((sum, row) => sum + row.totalQuantity, 0),
+            },
+            warehouses: warehouseTotals,
+            rows,
+        };
+    }
+
+    /**
+     * Weighted average cost per product across purchase receipts, netted of
+     * purchase returns. One grouped query for the whole catalogue — the
+     * per-product version turns this report into a timeout on a real ledger.
+     */
+    private async getWeightedAveragePurchaseCosts(tenantId: string, warehouseId?: string) {
+        // No ::uuid casts — Prisma maps `String @id @default(uuid())` to a text
+        // column, so casting the parameter breaks the comparison outright.
+        const warehouseFilter = warehouseId ? Prisma.sql`AND warehouse_id = ${warehouseId}` : Prisma.empty;
+
+        const rows = await this.db.$queryRaw<{ product_id: string; cost_total: number; quantity_total: number }[]>`
+            SELECT
+                product_id,
+                SUM(unit_cost::float8 * quantity_delta::float8) AS cost_total,
+                SUM(quantity_delta::float8)                     AS quantity_total
+            FROM "InventoryMovement"
+            WHERE tenant_id = ${tenantId}
+              AND movement_type IN ('PURCHASE', 'PURCHASE_RECEIPT', 'PURCHASE_RETURN')
+              AND unit_cost IS NOT NULL
+              ${warehouseFilter}
+            GROUP BY product_id
+        `;
+
+        const costs = new Map<string, number>();
+        for (const row of rows) {
+            const quantity = Number(row.quantity_total);
+            const cost = Number(row.cost_total);
+            // A non-positive net quantity means everything bought was returned
+            // (or the ledger is odd). Dividing there yields a negative or
+            // infinite cost, so skip it and let the latest-cost fallback answer.
+            if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(cost)) continue;
+            costs.set(row.product_id, cost / quantity);
+        }
+        return costs;
+    }
+
+    /** Newest ProductPrice.cost per product — the fallback when nothing was ever purchased through the ledger. */
+    private async getLatestRecordedCosts(tenantId: string) {
+        const prices = await this.db.productPrice.findMany({
+            where: { tenant_id: tenantId, cost: { not: null } },
+            select: { product_id: true, cost: true },
+            orderBy: { effective_from: 'desc' },
+        });
+
+        const costs = new Map<string, number>();
+        for (const price of prices) {
+            // findMany is ordered newest-first, so the first row wins.
+            if (!costs.has(price.product_id)) costs.set(price.product_id, Number(price.cost));
+        }
+        return costs;
     }
 
     /**
