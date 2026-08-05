@@ -197,6 +197,44 @@ exactly the shop-owner-is-also-an-investor case, and it must not fail.
 
 ---
 
+### What the investor actually sees
+
+Four screens, preceded by the account chooser only when they hold more than one
+context (investor at two shops, or investor plus staff at their own).
+
+**1. Overview.** Their own row through the existing `withTotals`
+(`investors.service.ts:631-645`): net capital (contributions − withdrawals),
+agreed share %, profit accrued to date, profit paid to date, **outstanding**,
+loss carry-forward (shown only when non-zero), status, joined date, and the
+branch name when they back one store rather than the company. Outstanding is
+money the business owes them and is probably why they logged in — it leads.
+
+**2. Capital ledger.** Their `InvestorCapitalTxn` rows: date, contribution or
+withdrawal, amount, method, reference, notes.
+
+**3. Monthly profit shares.** Their `InvestorProfitShare` rows joined to each
+run: month, `share_pct_snapshot`, amount, `loss_applied`, `ACCRUED`/`PAID`,
+paid amount. **Show the snapshot percentage, not the investor's current one** —
+renegotiating a partner's share today must not silently rewrite what they were
+told last March.
+
+**4. Statement.** `buildPartyLedger` on Investor Profit Payable: opening
+balance, every accrual and payout with voucher number and date, running balance,
+closing balance. GL-derived, so it reconciles to the outstanding tile by
+construction rather than by a second calculation. Date range, PDF/CSV.
+
+**A loss month renders as a zero, and must not be left as one.** The row shows
+`amount = 0` with a positive `loss_applied`, which reads as a bug to a partner
+expecting a payment. It needs plain language — "no share this month; ৳X carried
+forward, recovered from future profits" — in all three locales, not a blank cell.
+
+**Explicitly not exposed:** any other investor's name, percentage or amount, or
+even the count of them. Note that `GET /investors/summary` is **tenant-wide**
+(`activeCount`, `totalSharePct`, `capitalInvested` across everyone), so the
+portal must not reuse it — it reuses `withTotals` on the caller's own row. The
+only figure about the business as a whole that the portal discloses is
+`profit_basis_amount`, which is decision 1 in §9.
+
 ## 6. Frontend
 
 Following the referee wiring end to end:
