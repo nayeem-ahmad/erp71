@@ -36,7 +36,10 @@ afterAll(() => {
 });
 
 async function callGet(code: string) {
-    const request = new NextRequest(`http://app.erp71.com/r/${code}`);
+    // Origin the standalone server actually reports — see the note in
+    // src/app/s/[code]/route.test.ts. Using a real hostname here hid the fact
+    // that every referral link emitted `https://0.0.0.0:3000/signup`.
+    const request = new NextRequest(`http://0.0.0.0:3000/r/${code}`);
     return GET(request, { params: Promise.resolve({ code }) });
 }
 
@@ -67,7 +70,7 @@ describe('GET /r/[code]', () => {
         const response = await callGet('partner1');
 
         expect(response.status).toBe(302);
-        expect(response.headers.get('location')).toBe('http://app.erp71.com/signup?ref=PARTNER1');
+        expect(response.headers.get('location')).toBe('/signup?ref=PARTNER1');
     });
 
     it('still redirects when the tracking call fails', async () => {
@@ -76,13 +79,13 @@ describe('GET /r/[code]', () => {
         const response = await callGet('partner1');
 
         expect(response.status).toBe(302);
-        expect(response.headers.get('location')).toBe('http://app.erp71.com/signup?ref=PARTNER1');
+        expect(response.headers.get('location')).toBe('/signup?ref=PARTNER1');
     });
 
     it('skips tracking and the ref param entirely for an empty code', async () => {
         const response = await callGet('');
 
         expect(mockFetch).not.toHaveBeenCalled();
-        expect(response.headers.get('location')).toBe('http://app.erp71.com/signup');
+        expect(response.headers.get('location')).toBe('/signup');
     });
 });

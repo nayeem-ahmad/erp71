@@ -198,6 +198,75 @@ describe('ShortLinkManager', () => {
         expect(screen.queryByRole('button', { name: /revoke/i })).not.toBeInTheDocument();
     });
 
+    /**
+     * The row shows the bare path, so without this button there is no way to get
+     * a pasteable link off this screen at all — selecting the text by hand still
+     * yields `/s/<code>` with no domain.
+     */
+    describe('copy link', () => {
+        const writeText = jest.fn();
+
+        beforeEach(() => {
+            writeText.mockReset().mockResolvedValue(undefined);
+            Object.defineProperty(navigator, 'clipboard', {
+                configurable: true,
+                value: { writeText },
+            });
+        });
+
+        const renderOne = (overrides = {}) =>
+            render(
+                <ShortLinkManager
+                    fetchLinks={jest.fn().mockResolvedValue([link(overrides)])}
+                    createLink={jest.fn()}
+                    revokeLink={jest.fn()}
+                />,
+            );
+
+        it('copies the full URL including the origin, not the bare path', async () => {
+            renderOne();
+            await screen.findByText('/s/aB3xK9m');
+
+            fireEvent.click(screen.getByRole('button', { name: /copy/i }));
+
+            await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+            expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/s/aB3xK9m`);
+        });
+
+        it('confirms the copy so the user knows it landed', async () => {
+            renderOne();
+            await screen.findByText('/s/aB3xK9m');
+
+            fireEvent.click(screen.getByRole('button', { name: /copy/i }));
+
+            expect(await screen.findByRole('button', { name: /copied/i })).toBeInTheDocument();
+        });
+
+        it('offers no copy control on a revoked link', async () => {
+            // A revoked link 404s — handing someone a dead URL is worse than
+            // making them retype one.
+            renderOne({ revoked_at: '2026-08-05T00:00:00.000Z' });
+            await screen.findByText('/s/aB3xK9m');
+
+            expect(screen.queryByRole('button', { name: /copy/i })).not.toBeInTheDocument();
+        });
+
+        it('surfaces a toast when the clipboard write is refused', async () => {
+            // navigator.clipboard is undefined in an insecure context; an
+            // uncaught rejection would leave the user believing they copied.
+            const { toast } = jest.requireMock('@/lib/toast');
+            writeText.mockRejectedValueOnce(new Error('Denied'));
+
+            renderOne();
+            await screen.findByText('/s/aB3xK9m');
+
+            fireEvent.click(screen.getByRole('button', { name: /copy/i }));
+
+            await waitFor(() => expect(toast.error).toHaveBeenCalled());
+            expect(screen.queryByRole('button', { name: /copied/i })).not.toBeInTheDocument();
+        });
+    });
+
     it('renders the description when one is given', async () => {
         render(
             <ShortLinkManager
