@@ -5,6 +5,7 @@ import {
 import { ROLE_DEFAULT_PERMISSIONS, StorePermission, UserRole } from '@erp71/shared-types';
 
 const PROJECT_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'projects')!.permissions;
+const SHORT_LINKS_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'short-links')!.permissions;
 const HR_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'hr')!.permissions;
 /** The subset of a group that MANAGER actually carries in the matrix. */
 const managerShare = (perms: StorePermission[]) =>
@@ -82,7 +83,8 @@ describe('syncRolePermissions', () => {
         );
         expect(result.rolesTouched).toBe(1);
         expect(result.roleGrants).toBe(PROJECT_PERMS.length);
-        // The table holds every group's grants, not just this one's.
+        // The table holds every group's grants, not just this one's — short-links
+        // and hr also write to it in the same run.
         expect(
             tables.tenantRolePermission
                 .map((r) => r.permission)
@@ -90,6 +92,23 @@ describe('syncRolePermissions', () => {
                 .sort(),
         ).toEqual([...PROJECT_PERMS].sort());
         expect(tables.tenantRolePermission.every((r) => r.tenant_role_id === ROLE_IDS.manager)).toBe(true);
+    });
+
+    it('also backfills the short-links group in the same run', async () => {
+        const { client, tables } = seedTenant();
+
+        const results = await syncRolePermissions(client);
+        // Found by key, not position — another group landing later must not
+        // silently break this by shifting array indices.
+        const shortLinks = results.find((r) => r.key === 'short-links')!;
+
+        expect(shortLinks.rolesTouched).toBe(1);
+        expect(shortLinks.roleGrants).toBe(SHORT_LINKS_PERMS.length);
+        expect(
+            tables.tenantRolePermission
+                .filter((r) => (SHORT_LINKS_PERMS as string[]).includes(r.permission))
+                .map((r) => r.permission),
+        ).toEqual(SHORT_LINKS_PERMS);
     });
 
     it('carries VIEW_HR to existing managers but never VIEW_PAYROLL', async () => {

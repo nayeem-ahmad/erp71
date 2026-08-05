@@ -478,6 +478,10 @@ export const salesMessages = {
             statusLabel: 'STATUS: {status}',
             saving: 'Saving...',
             saveChanges: 'Save Changes',
+            // The subject line the share modal builds its title and WhatsApp
+            // message from — it goes out to a customer, so it is localized.
+            shareSubject: 'Quotation {number}',
+            shareError: 'Could not create the share link. Please try again.',
         },
     },
     returns: {

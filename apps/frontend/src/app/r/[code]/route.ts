@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { publicApiBase } from '@/lib/api-base';
 
 /**
  * Referral tracking link: `/r/<code>` records the visit and forwards to signup.
@@ -18,12 +19,6 @@ export const dynamic = 'force-dynamic';
 
 const TRACKING_TIMEOUT_MS = 2000;
 
-function apiBase(): string {
-    const configured = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL;
-    if (configured) return configured.replace(/\/+$/, '');
-    return 'http://localhost:4000/api/v1';
-}
-
 export async function GET(
     request: NextRequest,
     context: { params: Promise<{ code: string }> },
@@ -39,7 +34,7 @@ export async function GET(
             // Don't hold the redirect hostage to the tracking write.
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), TRACKING_TIMEOUT_MS);
-            await fetch(`${apiBase()}/referrals/clicks/${encodeURIComponent(normalized)}`, {
+            await fetch(`${publicApiBase()}/referrals/clicks/${encodeURIComponent(normalized)}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

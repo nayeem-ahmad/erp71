@@ -66,6 +66,12 @@ export class StorefrontController {
         return this.storefrontService.getStorefront(slug, req.user?.userId);
     }
 
+    /** Public: one product, for a shareable product page. */
+    @Get(':slug/products/:productId')
+    getPublicProduct(@Param('slug') slug: string, @Param('productId') productId: string) {
+        return this.storefrontService.getPublicProduct(slug, productId);
+    }
+
     /** Public (optional auth): place an order — attaches customerUserId if signed in */
     @Post(':slug/orders')
     @UseGuards(OptionalJwtAuthGuard)
