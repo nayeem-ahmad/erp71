@@ -170,6 +170,44 @@ export class StorefrontService {
         };
     }
 
+    /**
+     * Public single-product read, for a shareable product page. Selected
+     * field-by-field, never a spread of the Prisma row: `Product` also carries
+     * `reorder_level`, `safety_stock` and `lead_time_days`, which are internal
+     * planning data and none of a shopper's business.
+     */
+    async getPublicProduct(slug: string, productId: string) {
+        const tenant = await this.findEnabledTenant(slug);
+
+        const product = await this.db.product.findFirst({
+            where: { id: productId, tenant_id: tenant.id, deleted_at: null },
+            select: {
+                id: true,
+                name: true,
+                sku: true,
+                price: true,
+                compare_at_price: true,
+                description: true,
+                image_url: true,
+                images_gallery: true,
+                unit_type: true,
+            },
+        });
+        if (!product) throw new NotFoundException('Product not found');
+
+        return {
+            id: product.id,
+            name: product.name,
+            sku: product.sku,
+            price: Number(product.price),
+            compare_at_price: product.compare_at_price != null ? Number(product.compare_at_price) : null,
+            description: product.description,
+            image_url: product.image_url,
+            images_gallery: product.images_gallery,
+            unit_type: product.unit_type,
+        };
+    }
+
     async placeOrder(slug: string, dto: PlaceOrderDto, userId?: string) {
         const tenant = await this.findEnabledTenant(slug);
 
