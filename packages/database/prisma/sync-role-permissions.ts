@@ -84,6 +84,12 @@ export const PERMISSION_BACKFILL_GROUPS: PermissionGroup[] = [
             StorePermission.MANAGE_PROJECT_SETTINGS,
         ],
     },
+    {
+        key: 'short-links',
+        permissions: [
+            StorePermission.MANAGE_SHORT_LINKS,
+        ],
+    },
 ];
 
 export interface GroupResult {

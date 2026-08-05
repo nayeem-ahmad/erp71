@@ -150,6 +150,9 @@ enum StorePermission {
   LOG_PROJECT_TIME
   MANAGE_SPRINTS
   MANAGE_PROJECT_SETTINGS
+
+  // Short Links
+  MANAGE_SHORT_LINKS
 }
 
 enum EmployeeStatus {

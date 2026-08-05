@@ -78,9 +78,14 @@ describe('syncRolePermissions', () => {
         );
         expect(result.rolesTouched).toBe(1);
         expect(result.roleGrants).toBe(PROJECT_PERMS.length);
-        expect(tables.tenantRolePermission.map((r) => r.permission).sort()).toEqual(
-            [...PROJECT_PERMS].sort(),
-        );
+        // Scoped to the projects group's own permissions: other backfill groups
+        // (e.g. short-links) also write to this table in the same run.
+        expect(
+            tables.tenantRolePermission
+                .filter((r) => (PROJECT_PERMS as string[]).includes(r.permission))
+                .map((r) => r.permission)
+                .sort(),
+        ).toEqual([...PROJECT_PERMS].sort());
         expect(tables.tenantRolePermission.every((r) => r.tenant_role_id === ROLE_IDS.manager)).toBe(true);
     });
 

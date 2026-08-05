@@ -92,6 +92,9 @@ export const StorePermission = {
   LOG_PROJECT_TIME: "LOG_PROJECT_TIME",
   MANAGE_SPRINTS: "MANAGE_SPRINTS",
   MANAGE_PROJECT_SETTINGS: "MANAGE_PROJECT_SETTINGS",
+
+  // Short Links
+  MANAGE_SHORT_LINKS: "MANAGE_SHORT_LINKS",
 } as const;
 export type StorePermission = (typeof StorePermission)[keyof typeof StorePermission];
 
@@ -136,6 +139,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.LOG_PROJECT_TIME,
     StorePermission.MANAGE_SPRINTS,
     StorePermission.MANAGE_PROJECT_SETTINGS,
+    StorePermission.MANAGE_SHORT_LINKS,
   ],
   [UserRole.CASHIER]: [
     StorePermission.VIEW_PRODUCT_CATALOG,
@@ -222,6 +226,7 @@ export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.LOG_PROJECT_TIME]: "Log time on tasks",
   [StorePermission.MANAGE_SPRINTS]: "Plan & run sprints",
   [StorePermission.MANAGE_PROJECT_SETTINGS]: "Manage project types & board columns",
+  [StorePermission.MANAGE_SHORT_LINKS]: "Manage short links",
 };
 
 /** Store permissions grouped by feature area — drives the per-branch permission matrix UI. */
