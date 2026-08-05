@@ -46,6 +46,8 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     { model: 'SupplierCreditTransaction', postsVia: 'supplier_payment', note: 'PAYMENT/PAYOUT rows post; a CREDIT_PURCHASE row mirrors the Purchase, which posts' },
 
     { model: 'FixedAsset', postsVia: 'asset_acquisition', note: 'acquisition posts Dr Fixed Assets / Cr <mode>; depreciation posts separately via AssetDepreciationEntry' },
+    { model: 'InvestorCapitalTxn', postsVia: 'investor_contribution', note: 'CONTRIBUTION rows post investor_contribution, WITHDRAWAL rows investor_withdrawal — both equity vs cash' },
+    { model: 'InvestorProfitShare', postsVia: 'investor_profit_accrual', note: 'accrual on run post (Dr Investor Profit Distribution / Cr Investor Profit Payable, tagged per investor); the payout posts investor_profit_payout' },
 
     // ── Gaps: should post, not yet wired ─────────────────────────────────────
     { model: 'OrderDeposit', gap: 'Sales-order deposit takes customer cash but posts nothing; needs Customer Advances + the SalesOrder→Sale conversion. TODO Phase 4/5.' },
@@ -106,6 +108,8 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
 
     // ── Exempt: employee/asset registers (posted elsewhere) ──────────────────
     { model: 'Employee', exempt: 'basic_salary is the pay rate (config); SalaryAccrual posts it monthly.' },
+    { model: 'Investor', exempt: 'profit_share_pct is the agreed rate (config); loss_carry_forward is a derived balance the profit run maintains. Capital and shares post through their own models.' },
+    { model: 'InvestorProfitRun', exempt: 'Snapshot of the month P&L that the run allocated from — a reporting basis, not money moved. Its InvestorProfitShare rows post.' },
 
     // ── Exempt: platform billing / SaaS revenue (not the tenant GL) ──────────
     { model: 'BillingEvent', exempt: 'Platform SaaS billing, not a tenant ledger entry.' },

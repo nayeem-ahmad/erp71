@@ -26,6 +26,9 @@ function LoginPageContent() {
         const redirect = searchParams.get('redirect');
         return redirect && redirect.startsWith('/') ? redirect : '/dashboard';
     })();
+    // Set when an expired token bounced the user out of the app, so the login
+    // screen explains why they are here instead of looking like a random logout.
+    const sessionExpired = searchParams.get('reason') === 'expired';
 
     // The auth helper tells us where to land (a shop dashboard, the admin
     // console, or the account chooser). Preserve any ?redirect= the user came
@@ -122,6 +125,12 @@ function LoginPageContent() {
                         <h1 className="text-2xl font-bold tracking-tight">{t.auth.login.title}</h1>
                         <p className="text-gray-500 mt-2 text-sm">{t.auth.login.description}</p>
                     </div>
+
+                    {sessionExpired && !error && (
+                        <output className="block mb-6 p-3 bg-amber-50 border border-amber-100 text-amber-700 text-sm rounded-xl text-center">
+                            {t.auth.login.sessionExpired}
+                        </output>
+                    )}
 
                     {error && (
                         <div className="mb-6 p-3 bg-red-50 border border-red-100 text-red-600 text-sm rounded-xl text-center animate-in fade-in slide-in-from-top-1">

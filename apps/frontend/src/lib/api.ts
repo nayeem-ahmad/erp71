@@ -8,6 +8,7 @@ import type {
     TenantFeatureOverrides,
 } from '@erp71/shared-types';
 import type { ReferralCommissionStatus } from '@/components/admin/referrals/types';
+import { handleExpiredSession } from './session-expiry';
 
 /** Per-tenant feature state: platform defaults, this tenant's overrides, and the result. */
 export type AdminTenantFeatures = {
@@ -75,6 +76,10 @@ export async function fetchBlobWithAuth(endpoint: string, options: RequestInit =
     });
 
     if (!response.ok) {
+        // Only authenticated endpoints reach here, so a 401 means the session died.
+        if (response.status === 401) {
+            handleExpiredSession();
+        }
         let message = `API error: ${response.statusText}`;
         try {
             const errorBody = await response.json();
@@ -129,6 +134,11 @@ async function requestWithAuth(endpoint: string, options: RequestInit = {}): Pro
     });
 
     if (!response.ok) {
+        // Only authenticated endpoints reach here, so a 401 means the session died.
+        if (response.status === 401) {
+            handleExpiredSession();
+        }
+
         let message = `API error: ${response.statusText}`;
 
         try {
@@ -642,6 +652,15 @@ export const api = {
         if (params?.groupId) query.set('groupId', params.groupId);
         if (params?.subgroupId) query.set('subgroupId', params.subgroupId);
         return fetchWithAuth(`/inventory-reports/reorder-suggestions${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    getStockOnHand: (params?: { warehouseId?: string; groupId?: string; subgroupId?: string; brandId?: string; includeZeroStock?: boolean }) => {
+        const query = new URLSearchParams();
+        if (params?.warehouseId) query.set('warehouseId', params.warehouseId);
+        if (params?.groupId) query.set('groupId', params.groupId);
+        if (params?.subgroupId) query.set('subgroupId', params.subgroupId);
+        if (params?.brandId) query.set('brandId', params.brandId);
+        if (params?.includeZeroStock) query.set('includeZeroStock', 'true');
+        return fetchWithAuth(`/inventory-reports/stock-on-hand${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getInventoryValuation: (params?: { warehouseId?: string; groupId?: string; subgroupId?: string }) => {
         const query = new URLSearchParams();
@@ -2781,6 +2800,59 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteLoanPayment: (id: string, paymentId: string) => fetchWithAuth(`/loans/${id}/payments/${paymentId}`, { method: 'DELETE' }),
+    // Investors & profit sharing
+    getInvestors: (params?: { status?: string; storeId?: string; search?: string }) => {
+        const q = new URLSearchParams();
+        if (params?.status) q.set('status', params.status);
+        if (params?.storeId) q.set('storeId', params.storeId);
+        if (params?.search) q.set('search', params.search);
+        return fetchAllPages(`/investors${q.toString() ? `?${q}` : ''}`);
+    },
+    getInvestorSummary: () => fetchWithAuth('/investors/summary'),
+    getInvestor: (id: string) => fetchWithAuth(`/investors/${id}`),
+    createInvestor: (data: any) => fetchWithAuth('/investors', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateInvestor: (id: string, data: any) => fetchWithAuth(`/investors/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteInvestor: (id: string) => fetchWithAuth(`/investors/${id}`, { method: 'DELETE' }),
+    addInvestorCapital: (id: string, data: any) => fetchWithAuth(`/investors/${id}/capital`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteInvestorCapital: (id: string, txnId: string) =>
+        fetchWithAuth(`/investors/${id}/capital/${txnId}`, { method: 'DELETE' }),
+    getInvestorProfitRuns: (params?: { year?: number; storeId?: string }) => {
+        const q = new URLSearchParams();
+        if (params?.year) q.set('year', String(params.year));
+        if (params?.storeId) q.set('storeId', params.storeId);
+        return fetchAllPages(`/investors/profit-runs${q.toString() ? `?${q}` : ''}`);
+    },
+    getInvestorProfitRun: (id: string) => fetchWithAuth(`/investors/profit-runs/${id}`),
+    previewInvestorProfitRun: (data: any) => fetchWithAuth('/investors/profit-runs/preview', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    createInvestorProfitRun: (data: any) => fetchWithAuth('/investors/profit-runs', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteInvestorProfitRun: (id: string) =>
+        fetchWithAuth(`/investors/profit-runs/${id}`, { method: 'DELETE' }),
+    payInvestorProfitShare: (shareId: string, data: any) =>
+        fetchWithAuth(`/investors/shares/${shareId}/pay`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     // Salary Payments
     getSalaryPayments: (params?: { employeeId?: string; payPeriod?: string; from?: string; to?: string }) => {
         const q = new URLSearchParams();

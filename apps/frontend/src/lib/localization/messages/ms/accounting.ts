@@ -150,6 +150,7 @@ export const accountingMessages = {
             expenseCategories: { title: 'Kategori Perbelanjaan', description: 'Susun perbelanjaan ke dalam kategori untuk pelaporan dan penjejakan belanjawan.' },
             expenseReports: { title: 'Laporan Perbelanjaan', description: 'Pecahan perbelanjaan, trend bulanan, dan nisbah perbelanjaan kepada hasil.' },
             loans: { title: 'Pinjaman', description: 'Jejaki wang dipinjam atau dipinjamkan dengan jadual bayaran balik dan baki tertunggak.' },
+            investors: { title: 'Pelabur', description: 'Modal pelabur dan bahagian keuntungan bulanan yang dipersetujui setiap rakan kongsi.' },
             fundTransfers: { title: 'Pemindahan Dana', description: 'Pindahkan tunai antara cawangan.' },
         },
         reports: {

@@ -147,6 +147,10 @@ enum StorePermission {
   VIEW_LOANS
   MANAGE_LOANS
 
+  // Investors & profit sharing
+  VIEW_INVESTORS
+  MANAGE_INVESTORS
+
   // Projects
   VIEW_PROJECTS
   MANAGE_PROJECTS
@@ -193,16 +197,21 @@ enum PostingRuleEventType {
   salary_payment
   asset_acquisition
   fund_transfer
+  investor_contribution
+  investor_withdrawal
+  investor_profit_accrual
+  investor_profit_payout
 }
 
 /// A subsidiary-ledger party. Marks a control account (Accounts Receivable,
-/// Purchase Payable, Salary Payable) as one whose balance is the sum of
+/// Purchase Payable, Salary Payable, Investor Profit Payable) as one whose balance is the sum of
 /// per-party balances, and tags each voucher line on such an account with the
 /// party it belongs to. See Account.party_type and VoucherDetail.party_id.
 enum PartyType {
   CUSTOMER
   SUPPLIER
   EMPLOYEE
+  INVESTOR
 }
 
 enum PostingRuleConditionKey {
@@ -540,6 +549,10 @@ model Tenant {
   expenseEntries    ExpenseEntry[]
   loans             Loan[]
   loanPayments      LoanPayment[]
+  investors            Investor[]
+  investorCapitalTxns  InvestorCapitalTxn[]
+  investorProfitRuns   InvestorProfitRun[]
+  investorProfitShares InvestorProfitShare[]
   salaryPayments    SalaryPayment[]
   salaryAccruals    SalaryAccrual[]
   smsTransactions   SmsTransaction[]
@@ -814,6 +827,8 @@ model Store {
   posCounters     PosCounter[]
   expenseEntries  ExpenseEntry[]
   loans           Loan[]
+  investors          Investor[]
+  investorProfitRuns InvestorProfitRun[]
   externalSyncConnections ExternalSyncConnection[]
   projects        Project[]
 }
@@ -3497,6 +3512,145 @@ model LoanPayment {
   loan           Loan     @relation(fields: [loan_id], references: [id], onDelete: Cascade)
   @@index([tenant_id, loan_id])
   @@index([tenant_id, payment_date])
+}
+
+// ── Investors & Profit Sharing ──────────────────────────────────────────────
+//
+// An investor puts capital into the business and takes an agreed percentage of
+// each month's profit. That is EQUITY, not debt — which is why this is a
+// separate module from Loan rather than a flavour of it:
+//
+//   capital in      Dr Cash                          / Cr Investor Capital (equity)
+//   monthly share   Dr Investor Profit Distribution  / Cr Investor Profit Payable
+//   payout          Dr Investor Profit Payable       / Cr Cash
+//
+// The accrual deliberately hits an equity-contra account rather than an expense.
+// If the share were an expense it would land inside net profit — so re-running a
+// month's calculation would read a profit figure its own previous run had already
+// reduced, and the number would drift downward on every recompute. Keeping it in
+// equity makes the profit basis stable no matter how many times a run is redone.
+
+model Investor {
+  id        String  @id @default(uuid())
+  tenant_id String
+  // Set when the investor backs one branch rather than the whole company. The
+  // monthly run then computes profit scoped to that store's vouchers.
+  store_id    String?
+  name        String
+  phone       String?
+  email       String?
+  national_id String?
+  /// Agreed share of monthly profit, in percent. The sum across ACTIVE
+  /// investors is validated to stay <= 100.
+  profit_share_pct Decimal @db.Decimal(5, 2)
+  // ACTIVE | EXITED
+  status    String    @default("ACTIVE")
+  joined_on DateTime  @db.Date
+  exited_on DateTime? @db.Date
+  /// Unrecovered losses carried forward, as a positive number. A loss month
+  /// accrues nothing and adds the investor's share of the loss here; later
+  /// profitable months pay down this balance before any cash share is accrued.
+  /// Investors are never billed for a loss.
+  loss_carry_forward Decimal  @default(0) @db.Decimal(14, 2)
+  notes              String?
+  created_by         String?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  tenant       Tenant                @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store        Store?                @relation(fields: [store_id], references: [id])
+  capitalTxns  InvestorCapitalTxn[]
+  profitShares InvestorProfitShare[]
+
+  @@index([tenant_id, status])
+  @@index([tenant_id, store_id])
+}
+
+model InvestorCapitalTxn {
+  id          String @id @default(uuid())
+  tenant_id   String
+  investor_id String
+  // CONTRIBUTION = capital in, WITHDRAWAL = capital returned to the investor.
+  // Neither is a profit payout — those live on InvestorProfitShare.
+  direction      String   @default("CONTRIBUTION")
+  amount         Decimal  @db.Decimal(14, 2)
+  txn_date       DateTime @db.Date
+  payment_method String   @default("CASH")
+  reference      String?
+  notes          String?
+  created_by     String?
+  created_at     DateTime @default(now())
+
+  tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  investor Investor @relation(fields: [investor_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, investor_id])
+  @@index([tenant_id, txn_date])
+}
+
+model InvestorProfitRun {
+  id        String  @id @default(uuid())
+  tenant_id String
+  store_id  String?
+  /// store_id, or the literal 'COMPANY' for a company-wide run — the non-null
+  /// half of the uniqueness key below. A nullable store_id cannot carry it:
+  /// Postgres treats NULLs as distinct in a unique index, so two company-wide
+  /// runs for the same month would both be accepted and the month would accrue
+  /// twice. Always written as `storeId ?? 'COMPANY'`.
+  scope_key String  @default("COMPANY")
+  year      Int
+  month     Int
+  /// Net profit for the month AS READ AT RUN TIME. Snapshotted rather than
+  /// recomputed on display, so a voucher back-dated into a closed month cannot
+  /// silently rewrite shares that have already been accrued or paid out.
+  profit_basis_amount Decimal @db.Decimal(14, 2)
+  // NET_PROFIT (revenue - expenses). Room for GROSS_PROFIT later.
+  basis_type String @default("NET_PROFIT")
+  // DRAFT | POSTED
+  status     String    @default("DRAFT")
+  posted_at  DateTime?
+  notes      String?
+  created_by String?
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  tenant Tenant                @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store  Store?                @relation(fields: [store_id], references: [id])
+  shares InvestorProfitShare[]
+
+  // One run per tenant per month per scope — this is what makes "run July
+  // again" safe rather than double-accruing.
+  @@unique([tenant_id, year, month, scope_key])
+  @@index([tenant_id, status])
+}
+
+model InvestorProfitShare {
+  id          String @id @default(uuid())
+  tenant_id   String
+  run_id      String
+  investor_id String
+  /// The percentage as it stood when the run posted. Snapshotted so changing an
+  /// investor's agreed share later does not rewrite settled history.
+  share_pct_snapshot Decimal @db.Decimal(5, 2)
+  /// Cash share accrued this month. Zero on a loss month, or when the month's
+  /// profit only offsets carried-forward losses.
+  amount             Decimal @db.Decimal(14, 2)
+  /// Movement in the investor's loss carry-forward this run: positive when a
+  /// loss month adds to it, negative when a profitable month pays it down.
+  loss_applied Decimal @default(0) @db.Decimal(14, 2)
+  // ACCRUED | PAID
+  status       String   @default("ACCRUED")
+  paid_amount  Decimal  @default(0) @db.Decimal(14, 2)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  tenant   Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  run      InvestorProfitRun @relation(fields: [run_id], references: [id], onDelete: Cascade)
+  investor Investor          @relation(fields: [investor_id], references: [id], onDelete: Cascade)
+
+  @@unique([run_id, investor_id])
+  @@index([tenant_id, investor_id])
+  @@index([tenant_id, status])
 }
 
 // ── Salary Payments ─────────────────────────────────────────────────────────

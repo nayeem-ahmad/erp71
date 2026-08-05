@@ -234,6 +234,39 @@ export const inventoryExtrasMessages = {
                     leadTimeDays: "লিড টাইম (দিন)",
                 },
             },
+            stockOnHand: {
+                title: "স্টক অন হ্যান্ড",
+                subtitle: "ওয়্যারহাউস অনুযায়ী পরিমাণ, ভারিত গড় ক্রয়মূল্যে মূল্যায়িত",
+                allWarehouses: "সব গুদাম",
+                allGroups: "সব গ্রুপ",
+                allSubgroups: "সব সাবগ্রুপ",
+                allBrands: "সব ব্র্যান্ড",
+                showZeroStock: "শূন্য স্টকের পণ্যও দেখান",
+                uncategorized: "শ্রেণিবিহীন",
+                emptyMessage: "বর্তমান ফিল্টারে কোনো স্টক নেই",
+                searchPlaceholder: "পণ্য খুঁজুন...",
+                totalStockValue: "মোট স্টক মূল্য",
+                totalQuantity: "মোট পরিমাণ",
+                productsInStock: "স্টকে থাকা পণ্য",
+                warehousesCounted: "গুদাম",
+                valuationBasisNote: "ক্রয় ফেরত বাদ দিয়ে ভারিত গড় ক্রয়মূল্যে মূল্যায়িত। লেজারের মাধ্যমে কখনো কেনা হয়নি এমন পণ্যের জন্য সর্বশেষ রেকর্ড করা খরচ ব্যবহার করা হয়।",
+                uncostedWarning: "{count}টি পণ্যের ({quantity} ইউনিট) কোনো ক্রয়মূল্য নেই, তাই শূন্য ধরা হয়েছে — নিচের মোট কম দেখাচ্ছে।",
+                costBasis: {
+                    WEIGHTED_AVERAGE: "ভারিত গড়",
+                    LATEST_COST: "সর্বশেষ রেকর্ড করা খরচ",
+                    UNCOSTED: "খরচ নেই"
+                },
+                columns: {
+                    product: "পণ্য",
+                    sku: "এসকেইউ",
+                    group: "গ্রুপ",
+                    brand: "ব্র্যান্ড",
+                    avgUnitCost: "গড় একক খরচ",
+                    costBasis: "খরচের ভিত্তি",
+                    totalQuantity: "মোট পরিমাণ",
+                    totalValue: "স্টক মূল্য"
+                }
+            },
             valuation: {
                 title: "ইনভেন্টরি মূল্যায়ন",
                 subtitle: "বর্তমান হাতে থাকা পরিমাণ ব্যবহার করে পণ্য ও গুদামভিত্তিক স্টক মূল্য",
