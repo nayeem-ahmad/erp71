@@ -750,6 +750,14 @@ export const coreMessages = {
                     details: "Butiran",
                 },
             },
+            urlShortener: {
+                title: "Pemendek URL",
+                subtitle: "Cipta dan urus pautan pendek untuk sebut harga, halaman produk, dan apa sahaja yang anda kongsi.",
+                description: "Pautan pendek dikongsi merentasi keseluruhan perniagaan anda — sesiapa yang boleh mengurus pautan pendek akan melihat setiap pautan yang dicipta di sini.",
+                placeholder: "https://example.com/page atau /quotations/123",
+                forbiddenTitle: "Pemendek URL terhad",
+                forbiddenDescription: "Hanya pemilik dan kakitangan yang mempunyai kebenaran pautan pendek boleh melihat atau mencipta pautan pendek.",
+            },
             storeSettings: {
                 title: "Kedai",
                 description: "Tukar nama kedai anda.",

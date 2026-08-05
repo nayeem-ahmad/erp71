@@ -749,6 +749,14 @@ export const coreMessages = {
                 details: 'Details',
             },
         },
+        urlShortener: {
+            title: 'URL Shortener',
+            subtitle: 'Create and manage short links for quotations, product pages, and anything else you share.',
+            description: 'Short links are shared across your business — anyone who can manage short links sees every link created here.',
+            placeholder: 'https://example.com/page or /quotations/123',
+            forbiddenTitle: 'URL shortener restricted',
+            forbiddenDescription: 'Only owners and staff with short-link permission can view or create short links.',
+        },
         storeSettings: {
             title: 'Stores',
             description: 'Rename your stores.',
