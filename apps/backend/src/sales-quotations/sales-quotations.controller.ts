@@ -47,6 +47,18 @@ export class SalesQuotationsController {
         return this.quotationsService.convertToOrder(tenant.tenantId, tenant.userId, id);
     }
 
+    @Post(':id/share')
+    share(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.quotationsService.share(tenant.tenantId, tenant.userId, id);
+    }
+
+    // Declared before the general `:id` delete route below, or that route would
+    // capture `/share` too and revoking a share would delete the quotation.
+    @Delete(':id/share')
+    revokeShare(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.quotationsService.revokeShare(tenant.tenantId, id);
+    }
+
     @Delete(':id')
     async remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.quotationsService.remove(tenant.tenantId, id);

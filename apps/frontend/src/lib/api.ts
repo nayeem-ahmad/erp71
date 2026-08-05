@@ -8,6 +8,7 @@ import type {
     TenantFeatureOverrides,
 } from '@erp71/shared-types';
 import type { ReferralCommissionStatus } from '@/components/admin/referrals/types';
+import { normalizeApiBase } from './api-base';
 import { handleExpiredSession } from './session-expiry';
 
 /** Per-tenant feature state: platform defaults, this tenant's overrides, and the result. */
@@ -35,16 +36,10 @@ const DEFAULT_PROD_API_BASE = 'https://erp71-backend.onrender.com';
 // In dev (remote container) use a relative path so browser calls go to the
 // Next.js dev server which proxies them to the backend via next.config rewrites.
 // In production keep the explicit backend URL.
-function normalizeApiBase(rawBase?: string) {
-    const base = rawBase?.trim().replace(/\/$/, '');
-
-    if (!base) {
-        return null;
-    }
-
-    return base.endsWith('/api/v1') ? base : `${base}/api/v1`;
-}
-
+//
+// `normalizeApiBase` lives in ./api-base so the server-side public routes
+// (/s, /q, /store/../p, /r) apply the identical `/api/v1` rule instead of each
+// re-deriving it — see that file for why that mattered.
 const API_BASE = normalizeApiBase(process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL)
     || (process.env.NODE_ENV === 'production' ? `${DEFAULT_PROD_API_BASE}/api/v1` : '/api/v1');
 
@@ -1732,6 +1727,26 @@ export const api = {
     convertQuotation: (id: string) => fetchWithAuth(`/sales-quotations/${id}/convert`, {
         method: 'POST',
     }),
+    /** Idempotent — calling this again returns the same live code rather than minting a new one. */
+    shareQuotation: (id: string) => fetchWithAuth(`/sales-quotations/${id}/share`, { method: 'POST' }),
+    /** Clears the share token, killing every link ever sent for this quotation. */
+    revokeQuotationShare: (id: string) => fetchWithAuth(`/sales-quotations/${id}/share`, { method: 'DELETE' }),
+    getShortLinks: () => fetchWithAuth('/short-links'),
+    createShortLink: (data: { target_url: string; label?: string }) =>
+        fetchWithAuth('/short-links', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    revokeShortLink: (id: string) => fetchWithAuth(`/short-links/${id}`, { method: 'DELETE' }),
+    getAdminShortLinks: () => fetchWithAuth('/admin/short-links'),
+    createAdminShortLink: (data: { target_url: string; label?: string }) =>
+        fetchWithAuth('/admin/short-links', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    revokeAdminShortLink: (id: string) => fetchWithAuth(`/admin/short-links/${id}`, { method: 'DELETE' }),
     // Sales detail
     getSale: (id: string) => fetchWithAuth(`/sales/${id}`),
     getSaleInvoice: (id: string) => fetchWithAuth(`/sales/${id}/invoice`),

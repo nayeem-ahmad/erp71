@@ -478,6 +478,8 @@ export const salesMessages = {
                 statusLabel: "অবস্থা: {status}",
                 saving: "Saving...",
                 saveChanges: "সংরক্ষণ Changes",
+                shareSubject: "কোটেশন {number}",
+                shareError: "শেয়ার লিংক তৈরি করা যায়নি। আবার চেষ্টা করুন।",
             },
         },
         returns: {

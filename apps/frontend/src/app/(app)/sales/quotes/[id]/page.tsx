@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { Package, FileText, ClipboardList, PlusCircle, Printer, Pencil, Save, X, Search, Trash2 } from 'lucide-react';
+import { Package, FileText, ClipboardList, PlusCircle, Printer, Pencil, Save, Share2, X, Search, Trash2 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
@@ -10,6 +10,8 @@ import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { PageShell } from '@/components/ui';
+import { toast } from '@/lib/toast';
+import ShareModal from '@/components/share/ShareModal';
 
 interface EditQuoteItem {
     productId: string;
@@ -38,6 +40,7 @@ function QuoteDetailsPageContent() {
     const [editItems, setEditItems] = useState<EditQuoteItem[]>([]);
     const [productSearch, setProductSearch] = useState('');
     const [showProductDropdown, setShowProductDropdown] = useState(false);
+    const [sharePath, setSharePath] = useState<string | null>(null);
 
     useEffect(() => {
         loadQuote();
@@ -194,6 +197,30 @@ function QuoteDetailsPageContent() {
         }
     };
 
+    const handleShare = async () => {
+        setActionLoading(true);
+        try {
+            const result = await api.shareQuotation(id as string);
+            setSharePath((result?.data ?? result).path);
+        } catch (error: any) {
+            toast.error(error.message || t.quotes.detail.shareError);
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    /**
+     * Deliberately lets the rejection through rather than catching it here: the
+     * modal owns the confirm/failure UI, and swallowing it would let the modal
+     * report a successful revocation that never happened. Reloading afterwards
+     * keeps the page honest about the quotation's share state.
+     */
+    const handleRevokeShare = async () => {
+        await api.revokeQuotationShare(id as string);
+        setSharePath(null);
+        await loadQuote();
+    };
+
     if (loading) {
         return <div className="p-8 font-bold text-gray-400">{t.shared.loading.quote}</div>;
     }
@@ -274,6 +301,14 @@ function QuoteDetailsPageContent() {
                                 <button onClick={() => window.print()} className="bg-white border border-gray-200 text-gray-900 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center hover:bg-gray-50 shadow-sm transition-all">
                                     <Printer className="w-4 h-4 mr-2 text-gray-400" />
                                     {t.quotes.detail.printPdf}
+                                </button>
+                                <button
+                                    onClick={handleShare}
+                                    disabled={actionLoading}
+                                    className="bg-white border border-gray-200 text-gray-900 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center hover:bg-gray-50 shadow-sm transition-all disabled:opacity-50"
+                                >
+                                    <Share2 className="w-4 h-4 mr-2 text-gray-400" />
+                                    Share
                                 </button>
                                 <button
                                     onClick={() => router.push(`/sales/quotes/${quote.id}?edit=true`)}
@@ -512,6 +547,15 @@ function QuoteDetailsPageContent() {
                     </div>
                 </div>
             </div>
+
+            {sharePath && (
+                <ShareModal
+                    subject={formatMessage(t.quotes.detail.shareSubject, { number: quote.quote_number })}
+                    shortPath={sharePath}
+                    onRevoke={handleRevokeShare}
+                    onClose={() => setSharePath(null)}
+                />
+            )}
         </PageShell>
     );
 }

@@ -113,4 +113,42 @@ describe('addNavNodesToLayout', () => {
 
         expect(new Set(orders).size).toBe(orders.length);
     });
+
+    /**
+     * admin.referrals was in NAV_REGISTRY but in no layout at all, which left the
+     * platform referral screens registered, rendered, and reachable only by typing
+     * the URL. This assertion exists so the shortener does not repeat it. (The
+     * sort-order-collision property for this same layout's admin block is already
+     * covered by the preceding test — no need to duplicate it here.)
+     */
+    it('ships admin.url-shortener in the platform admin layout under the admin module', () => {
+        const defaults = getDefaultNavLayout(NavScope.PLATFORM_ADMIN);
+        const node = defaults.find((n) => n.id === 'admin.url-shortener');
+
+        expect(node).toEqual(expect.objectContaining({ parentId: 'admin', visible: true }));
+        expect(validateNavLayout(defaults)).toEqual({ valid: true });
+    });
+
+    /**
+     * admin.url-shortener ships in *two* layouts, not one: the platform admin
+     * console above, and the separate `admin` block inside the tenant default
+     * layout (a tenant admin sees a trimmed admin menu). Only the platform half
+     * was pinned above — without this, the tenant-layout entry could be dropped
+     * or collided and every test would still pass, repeating the admin.referrals
+     * incident on the half nobody was watching.
+     */
+    it('ships admin.url-shortener in the tenant default layout under the admin module', () => {
+        const defaults = getDefaultNavLayout(NavScope.TENANT);
+        const node = defaults.find((n) => n.id === 'admin.url-shortener');
+
+        expect(node).toEqual(expect.objectContaining({ parentId: 'admin', visible: true }));
+        expect(validateNavLayout(defaults)).toEqual({ valid: true });
+    });
+
+    it('does not collide sort order with its siblings under admin in the tenant default layout', () => {
+        const defaults = getDefaultNavLayout(NavScope.TENANT);
+        const siblings = defaults.filter((n) => n.parentId === 'admin').map((n) => n.sortOrder);
+
+        expect(new Set(siblings).size).toBe(siblings.length);
+    });
 });

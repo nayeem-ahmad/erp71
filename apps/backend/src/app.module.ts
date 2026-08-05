@@ -99,6 +99,7 @@ import { AiModule } from './ai/ai.module';
 import { SupportModule } from './support/support.module';
 import { ReferralsModule } from './referrals/referrals.module';
 import { DemoDataModule } from './demo-data/demo-data.module';
+import { ShortLinksModule } from './short-links/short-links.module';
 
 @Module({
     imports: [
@@ -202,6 +203,7 @@ import { DemoDataModule } from './demo-data/demo-data.module';
         SupportModule,
         ReferralsModule,
         DemoDataModule,
+        ShortLinksModule,
     ],
     controllers: [],
     providers: [

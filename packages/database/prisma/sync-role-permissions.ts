@@ -85,6 +85,12 @@ export const PERMISSION_BACKFILL_GROUPS: PermissionGroup[] = [
         ],
     },
     {
+        key: 'short-links',
+        permissions: [
+            StorePermission.MANAGE_SHORT_LINKS,
+        ],
+    },
+    {
         // VIEW_PAYROLL is in the group but not in any role's defaults except
         // OWNER's, so this carries VIEW_HR to existing managers and leaves the
         // salary figures to a deliberate grant. Listing it anyway is what makes

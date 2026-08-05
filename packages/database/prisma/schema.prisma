@@ -158,6 +158,9 @@ enum StorePermission {
   LOG_PROJECT_TIME
   MANAGE_SPRINTS
   MANAGE_PROJECT_SETTINGS
+
+  // Short Links
+  MANAGE_SHORT_LINKS
 }
 
 enum EmployeeStatus {
@@ -584,6 +587,7 @@ model Tenant {
   sprintSnapshots         SprintSnapshot[]
   projectComments         ProjectComment[]
   projectAttachments      ProjectAttachment[]
+  shortLinks              ShortLink[]
 
   @@index([deleted_at])
 }
@@ -2442,8 +2446,12 @@ model Quotation {
   version           Int      @default(1)
   original_quote_id String?
   notes             String?
+  /// Unguessable secret authorizing the public view. Clearing it revokes every
+  /// link ever shared for this quotation, short or long.
+  share_token       String?  @unique
+  share_token_at    DateTime?
   created_at        DateTime @default(now())
-  
+
   // Relations
   tenant            Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   store             Store    @relation(fields: [store_id], references: [id])
@@ -4424,4 +4432,41 @@ model ProjectAttachment {
   @@index([tenant_id, project_id])
   @@index([tenant_id, task_id])
   @@map("project_attachments")
+}
+
+enum ShortLinkKind {
+  ENTITY
+  MANUAL
+}
+
+enum ShortLinkEntity {
+  QUOTATION
+  STOREFRONT_PRODUCT
+}
+
+/// A code-to-URL alias. For entity links the token in `target_url` is the real
+/// authority; this row is only an alias, which is why revoking a quotation's
+/// token kills every link to it without touching this table.
+model ShortLink {
+  id            String    @id @default(uuid())
+  /// Null for links minted by platform staff, who sit outside any tenant.
+  tenant_id     String?
+  code          String    @unique
+  /// Internal path or absolute http(s) URL. Always validated by isSafeTarget().
+  target_url    String
+  /// Human label for the shortener list. Manual links only.
+  label         String?
+  kind          ShortLinkKind
+  entity_type   ShortLinkEntity?
+  entity_id     String?
+  click_count   Int       @default(0)
+  last_click_at DateTime?
+  created_by    String?
+  created_at    DateTime  @default(now())
+  revoked_at    DateTime?
+
+  tenant Tenant? @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, created_at])
+  @@index([entity_type, entity_id])
 }

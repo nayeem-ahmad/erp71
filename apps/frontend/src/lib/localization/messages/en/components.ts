@@ -173,4 +173,36 @@ export const componentsMessages = {
         numberedList: 'Numbered list',
         link: 'Link',
     },
+    // Deliberately generic: the same modal is meant to serve storefront products
+    // and anything else shareable, so the copy says "this link", never "the
+    // quotation". The subject name arrives as {subject} from the caller.
+    shareModal: {
+        title: 'Share {subject}',
+        description: 'Anyone with this link can open it. No login required.',
+        copy: 'Copy',
+        copied: 'Copied',
+        whatsapp: 'Share on WhatsApp',
+        close: 'Close',
+        revoke: 'Revoke link',
+        revokePrompt: 'Revoke this link? Anyone you already sent it to will lose access.',
+        revokeConfirm: 'Yes, revoke',
+        revokeCancel: 'Keep link',
+        revokeSuccess: 'Link revoked.',
+        revokeError: 'Could not revoke the link. Please try again.',
+    },
+    shortLinkManager: {
+        shortLinkColumn: 'Short link',
+        targetColumn: 'Target',
+        clicksColumn: 'Clicks',
+        labelPlaceholder: 'Label (optional)',
+        shorten: 'Shorten',
+        empty: 'No short links yet.',
+        revoked: 'revoked',
+        revokeAria: 'Revoke',
+        defaultPlaceholder: 'https://example.com/page',
+        createError: 'Could not create the link.',
+        revokeError: 'Could not revoke the link. Please try again.',
+        loadError: 'Could not load your short links.',
+        retry: 'Try again',
+    },
 } as const;

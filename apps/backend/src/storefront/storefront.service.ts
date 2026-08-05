@@ -170,6 +170,70 @@ export class StorefrontService {
         };
     }
 
+    /**
+     * Public single-product read, for a shareable product page. Selected
+     * field-by-field, never a spread of the Prisma row: `Product` also carries
+     * `reorder_level`, `safety_stock` and `lead_time_days`, which are internal
+     * planning data and none of a shopper's business.
+     *
+     * The price goes through the same resolver `getStorefront` uses, against the
+     * same anonymous-visitor price list. Reading `product.price` directly meant a
+     * tenant running any price list had a shareable URL quoting a different
+     * number than their own shop page for the same item.
+     *
+     * `in_stock` is a boolean, never the quantity: the shop page lists only
+     * in-stock products, so a shared link can outlive availability, and a shopper
+     * deserves to know before they order. How many units are left is inventory
+     * data, not shopfront data.
+     */
+    async getPublicProduct(slug: string, productId: string) {
+        const tenant = await this.findEnabledTenant(slug);
+
+        const product = await this.db.product.findFirst({
+            where: { id: productId, tenant_id: tenant.id, deleted_at: null },
+            select: {
+                id: true,
+                name: true,
+                sku: true,
+                price: true,
+                compare_at_price: true,
+                description: true,
+                image_url: true,
+                images_gallery: true,
+                unit_type: true,
+                stocks: { select: { quantity: true } },
+            },
+        });
+        if (!product) throw new NotFoundException('Product not found');
+
+        // No userId: this endpoint is unauthenticated, so the visitor gets the
+        // storefront's default price list — the same one an anonymous shopper
+        // sees on the shop page.
+        const priceList = await this.resolvePriceListForUser(tenant.id);
+        const resolved = await this.priceListsService.getResolvedPricesForProducts(
+            tenant.id,
+            [product.id],
+            priceList?.id,
+        );
+        const resolvedPrice = resolved.get(product.id);
+
+        const fallbackCompareAt =
+            product.compare_at_price != null ? Number(product.compare_at_price) : null;
+
+        return {
+            id: product.id,
+            name: product.name,
+            sku: product.sku,
+            price: resolvedPrice?.sellingPrice ?? Number(product.price),
+            compare_at_price: resolvedPrice?.compareAtPrice ?? fallbackCompareAt,
+            description: product.description,
+            image_url: product.image_url,
+            images_gallery: product.images_gallery,
+            unit_type: product.unit_type,
+            in_stock: (product.stocks ?? []).some((s) => s.quantity > 0),
+        };
+    }
+
     async placeOrder(slug: string, dto: PlaceOrderDto, userId?: string) {
         const tenant = await this.findEnabledTenant(slug);
 

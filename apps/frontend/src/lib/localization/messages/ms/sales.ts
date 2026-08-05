@@ -478,6 +478,8 @@ export const salesMessages = {
                 statusLabel: "STATUS: {status}",
                 saving: "Saving...",
                 saveChanges: "Simpan Changes",
+                shareSubject: "Sebut Harga {number}",
+                shareError: "Tidak dapat mencipta pautan kongsi. Sila cuba lagi.",
             },
         },
         returns: {
