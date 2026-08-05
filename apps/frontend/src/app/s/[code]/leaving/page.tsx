@@ -4,6 +4,8 @@ import { ExternalLink, ShieldAlert } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
+const RESOLVE_TIMEOUT_MS = 3000;
+
 function apiBase(): string {
     const configured = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL;
     if (configured) return configured.replace(/\/+$/, '');
@@ -18,17 +20,34 @@ function apiBase(): string {
 export default async function LeavingPage({ params }: { params: Promise<{ code: string }> }) {
     const { code } = await params;
 
-    const response = await fetch(`${apiBase()}/short-links/resolve/${encodeURIComponent(code)}`, {
-        cache: 'no-store',
-    });
-    if (!response.ok) notFound();
+    let target: string;
+    let host: string;
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), RESOLVE_TIMEOUT_MS);
+        const response = await fetch(`${apiBase()}/short-links/resolve/${encodeURIComponent(code)}`, {
+            cache: 'no-store',
+            signal: controller.signal,
+        });
+        clearTimeout(timeout);
 
-    const body = await response.json();
-    const data = body?.data ?? body;
-    if (data?.kind !== 'external') notFound();
+        if (!response.ok) notFound();
 
-    const target: string = data.target_url;
-    const host = new URL(target).host;
+        const body = await response.json();
+        const data = body?.data ?? body;
+        if (data?.kind !== 'external') notFound();
+
+        target = data.target_url;
+        host = new URL(target).host;
+    } catch (err) {
+        // Re-throw Next.js's own not-found signal; anything else (timeout,
+        // network failure, malformed target_url) also lands on not-found —
+        // never leak why, and never hang the page on a slow/dead backend.
+        if (err && typeof err === 'object' && 'digest' in err && String(err.digest).startsWith('NEXT_NOT_FOUND')) {
+            throw err;
+        }
+        notFound();
+    }
 
     return (
         <main className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
