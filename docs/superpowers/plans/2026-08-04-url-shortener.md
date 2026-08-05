@@ -19,6 +19,7 @@
 - After editing `packages/shared-types/`, rebuild it or the backend and frontend will not see the change: `cd packages/shared-types && npm run build`.
 - Adding any key to `apps/frontend/src/lib/localization/messages/en/` **requires** the same key in `bn/` and `ms/`. `catalog.test.ts` asserts all three catalogs have an identical key set and will fail otherwise.
 - Backend tests: `cd apps/backend && npx jest <path>`. Frontend tests: `cd apps/frontend && npx jest <path>`.
+- **`@testing-library/user-event` is not installed.** Only `@testing-library/{dom,jest-dom,react}` are. The house pattern for interaction is `fireEvent` from `@testing-library/react`. Do not add the dependency. (`apps/frontend/src/app/contact/page.test.tsx` imports the missing package and is broken as a result — pre-existing, not yours to fix.)
 - **A green Jest run is not evidence that the backend compiles.** `apps/backend/jest.config.js` configures ts-jest with `diagnostics: { warnOnly: true }`, so type errors are printed as warnings and never fail the suite. Separately, `apps/backend/tsconfig.json` sets `"strictNullChecks": false`, which defeats discriminated-union narrowing on a negated discriminant — `if (!result.ok) { result.reason }` does **not** type-check, even though it reads as obviously correct and Jest goes green. Every backend task must therefore run `cd apps/backend && npx tsc --noEmit -p tsconfig.build.json` (the config `nest build` uses) and report its output before committing. Several unrelated files have pre-existing errors; note them, don't fix them.
 - UI rules are non-negotiable: `PageShell` + `PageHeader` on every `(app)` page, `ModalShell` for every modal, `blue-600` as the only accent, `formatBDT()` for money, no `rounded-2xl`/`rounded-3xl`, no arbitrary hex classes. See `CLAUDE.md`.
 - Backend code style is 4-space indent, `@Injectable()` services taking `DatabaseService` as `db`. Follow `apps/backend/src/crm-lead-taxonomy/` as the reference for a tenant-scoped module.
@@ -2363,8 +2364,10 @@ Both shortener pages render the same form and table over different endpoints, so
 Create `apps/frontend/src/components/short-links/ShortLinkManager.test.tsx`:
 
 ```tsx
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+// `@testing-library/user-event` is NOT installed in this repo — the house pattern
+// is fireEvent from @testing-library/react. Do not add the dependency.
 import ShortLinkManager from './ShortLinkManager';
 
 const link = (overrides = {}) => ({
@@ -2426,8 +2429,10 @@ describe('ShortLinkManager', () => {
         render(<ShortLinkManager fetchLinks={fetchLinks} createLink={createLink} revokeLink={jest.fn()} />);
         await screen.findByText(/no short links yet/i);
 
-        await userEvent.type(screen.getByPlaceholderText(/https/i), 'https://example.com');
-        await userEvent.click(screen.getByRole('button', { name: /shorten/i }));
+        fireEvent.change(screen.getByPlaceholderText(/https/i), {
+            target: { value: 'https://example.com' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: /shorten/i }));
 
         await waitFor(() => expect(createLink).toHaveBeenCalledWith({ target_url: 'https://example.com' }));
         expect(await screen.findByText('/s/aB3xK9m')).toBeInTheDocument();
@@ -2447,8 +2452,10 @@ describe('ShortLinkManager', () => {
         );
         await screen.findByText(/no short links yet/i);
 
-        await userEvent.type(screen.getByPlaceholderText(/https/i), 'javascript:alert(1)');
-        await userEvent.click(screen.getByRole('button', { name: /shorten/i }));
+        fireEvent.change(screen.getByPlaceholderText(/https/i), {
+            target: { value: 'javascript:alert(1)' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: /shorten/i }));
 
         expect(await screen.findByText('Only http and https links are allowed.')).toBeInTheDocument();
     });
@@ -2463,7 +2470,7 @@ describe('ShortLinkManager', () => {
         render(<ShortLinkManager fetchLinks={fetchLinks} createLink={jest.fn()} revokeLink={revokeLink} />);
         await screen.findByText('/s/aB3xK9m');
 
-        await userEvent.click(screen.getByRole('button', { name: /revoke/i }));
+        fireEvent.click(screen.getByRole('button', { name: /revoke/i }));
 
         await waitFor(() => expect(revokeLink).toHaveBeenCalledWith('link-1'));
         expect(await screen.findByText(/revoked/i)).toBeInTheDocument();
