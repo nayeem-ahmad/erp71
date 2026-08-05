@@ -20,7 +20,11 @@ export type PostingEventType =
     | 'salary_accrual'
     | 'salary_payment'
     | 'asset_acquisition'
-    | 'fund_transfer';
+    | 'fund_transfer'
+    | 'investor_contribution'
+    | 'investor_withdrawal'
+    | 'investor_profit_accrual'
+    | 'investor_profit_payout';
 
 export interface AutoPostInput {
     tx: Prisma.TransactionClient;
@@ -121,6 +125,14 @@ const VOUCHER_TYPE_BY_EVENT: Record<PostingEventType, string> = {
     asset_acquisition: VoucherType.CASH_PAYMENT,
     // Inter-branch cash movement (Due from/to Branches vs Cash) — a fund transfer.
     fund_transfer: VoucherType.FUND_TRANSFER,
+    // Investor capital in / out — cash crosses the counter either way.
+    investor_contribution: VoucherType.CASH_RECEIVE,
+    investor_withdrawal: VoucherType.CASH_PAYMENT,
+    // Declaring the monthly share moves no cash (Dr Investor Profit Distribution
+    // / Cr Investor Profit Payable) — a journal voucher. The payout that settles
+    // it is the cash event.
+    investor_profit_accrual: VoucherType.JOURNAL,
+    investor_profit_payout: VoucherType.CASH_PAYMENT,
 };
 
 function resolveVoucherType(

@@ -92,6 +92,7 @@ import { CrmLeadTaxonomyModule } from './crm-lead-taxonomy/crm-lead-taxonomy.mod
 import { CustomFieldsModule } from './custom-fields/custom-fields.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { LoansModule } from './loans/loans.module';
+import { InvestorsModule } from './investors/investors.module';
 import { FundTransfersModule } from './fund-transfers/fund-transfers.module';
 import { SalaryPaymentsModule } from './salary-payments/salary-payments.module';
 import { AiModule } from './ai/ai.module';
@@ -194,6 +195,7 @@ import { DemoDataModule } from './demo-data/demo-data.module';
         CustomFieldsModule,
         ExpensesModule,
         LoansModule,
+        InvestorsModule,
         FundTransfersModule,
         SalaryPaymentsModule,
         AiModule,

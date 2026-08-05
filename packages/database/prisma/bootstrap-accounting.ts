@@ -198,6 +198,23 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                     },
                 ],
             },
+            {
+                name: 'Investor Payable',
+                code: '2105',
+                accounts: [
+                    // Profit share declared to investors but not yet paid out.
+                    // A control account: its balance is the sum of what each
+                    // individual investor is owed, so buildPartyLedger can serve
+                    // a per-investor statement straight from the GL.
+                    {
+                        name: 'Investor Profit Payable',
+                        code: '210501',
+                        type: AccountType.LIABILITY,
+                        category: AccountCategory.GENERAL,
+                        party_type: PartyType.INVESTOR,
+                    },
+                ],
+            },
         ],
     },
     {
@@ -212,6 +229,29 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                     {
                         name: "Owner's Equity",
                         code: '310101',
+                        type: AccountType.EQUITY,
+                        category: AccountCategory.GENERAL,
+                    },
+                ],
+            },
+            {
+                name: 'Investor Capital',
+                code: '3102',
+                accounts: [
+                    // Capital the investors have put in and not withdrawn.
+                    {
+                        name: 'Investor Capital',
+                        code: '310201',
+                        type: AccountType.EQUITY,
+                        category: AccountCategory.GENERAL,
+                    },
+                    // Contra-equity: profit declared out to investors. NOT an
+                    // expense — see the Investor model comment in schema.prisma
+                    // for why keeping this out of the P&L is what makes a
+                    // monthly run re-runnable.
+                    {
+                        name: 'Investor Profit Distribution',
+                        code: '310202',
                         type: AccountType.EQUITY,
                         category: AccountCategory.GENERAL,
                     },
@@ -380,6 +420,25 @@ export const DEFAULT_POSTING_RULES: DefaultPostingRuleDefinition[] = [
     { event_type: 'loan_disbursement', condition_key: 'loan_direction', condition_value: 'RECEIVABLE', debit_account: 'Loans Receivable', credit_account: 'Cash in Hand', priority: 20 },
     { event_type: 'loan_repayment', condition_key: 'loan_direction', condition_value: 'PAYABLE', debit_account: 'Loans Payable', credit_account: 'Cash in Hand', priority: 10 },
     { event_type: 'loan_repayment', condition_key: 'loan_direction', condition_value: 'RECEIVABLE', debit_account: 'Cash in Hand', credit_account: 'Loans Receivable', priority: 20 },
+
+    // ── Investors ────────────────────────────────────────────────────────────
+    // Capital in/out is an equity movement against cash, keyed on payment_mode so
+    // a bank or wallet contribution lands on the right cash account. The monthly
+    // profit share is an equity DISTRIBUTION (not an expense) against a payable,
+    // which the payout then settles in cash.
+    { event_type: 'investor_contribution', condition_key: 'payment_mode', condition_value: 'cash', debit_account: 'Cash in Hand', credit_account: 'Investor Capital', priority: 10 },
+    { event_type: 'investor_contribution', condition_key: 'payment_mode', condition_value: 'bank', debit_account: 'Main Bank Account', credit_account: 'Investor Capital', priority: 20 },
+    { event_type: 'investor_contribution', condition_key: 'payment_mode', condition_value: 'bkash', debit_account: 'bKash Account', credit_account: 'Investor Capital', priority: 30 },
+    { event_type: 'investor_contribution', condition_key: 'payment_mode', condition_value: 'nagad', debit_account: 'Nagad Account', credit_account: 'Investor Capital', priority: 40 },
+    { event_type: 'investor_withdrawal', condition_key: 'payment_mode', condition_value: 'cash', debit_account: 'Investor Capital', credit_account: 'Cash in Hand', priority: 10 },
+    { event_type: 'investor_withdrawal', condition_key: 'payment_mode', condition_value: 'bank', debit_account: 'Investor Capital', credit_account: 'Main Bank Account', priority: 20 },
+    { event_type: 'investor_withdrawal', condition_key: 'payment_mode', condition_value: 'bkash', debit_account: 'Investor Capital', credit_account: 'bKash Account', priority: 30 },
+    { event_type: 'investor_withdrawal', condition_key: 'payment_mode', condition_value: 'nagad', debit_account: 'Investor Capital', credit_account: 'Nagad Account', priority: 40 },
+    { event_type: 'investor_profit_accrual', condition_key: 'none', condition_value: null, debit_account: 'Investor Profit Distribution', credit_account: 'Investor Profit Payable', priority: 10 },
+    { event_type: 'investor_profit_payout', condition_key: 'payment_mode', condition_value: 'cash', debit_account: 'Investor Profit Payable', credit_account: 'Cash in Hand', priority: 10 },
+    { event_type: 'investor_profit_payout', condition_key: 'payment_mode', condition_value: 'bank', debit_account: 'Investor Profit Payable', credit_account: 'Main Bank Account', priority: 20 },
+    { event_type: 'investor_profit_payout', condition_key: 'payment_mode', condition_value: 'bkash', debit_account: 'Investor Profit Payable', credit_account: 'bKash Account', priority: 30 },
+    { event_type: 'investor_profit_payout', condition_key: 'payment_mode', condition_value: 'nagad', debit_account: 'Investor Profit Payable', credit_account: 'Nagad Account', priority: 40 },
 
     // ── Cashier cash-out ─────────────────────────────────────────────────────
     // A till PAYOUT is a petty expense; a LOAN is cash advanced to staff. Keyed

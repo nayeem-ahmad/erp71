@@ -89,6 +89,10 @@ export const StorePermission = {
   VIEW_LOANS: "VIEW_LOANS",
   MANAGE_LOANS: "MANAGE_LOANS",
 
+  // Investors & profit sharing
+  VIEW_INVESTORS: "VIEW_INVESTORS",
+  MANAGE_INVESTORS: "MANAGE_INVESTORS",
+
   // Projects
   VIEW_PROJECTS: "VIEW_PROJECTS",
   MANAGE_PROJECTS: "MANAGE_PROJECTS",
@@ -135,6 +139,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.VIEW_HR,
     StorePermission.VIEW_LOANS,
     StorePermission.MANAGE_LOANS,
+    StorePermission.VIEW_INVESTORS,
     StorePermission.VIEW_PROJECTS,
     StorePermission.MANAGE_PROJECTS,
     StorePermission.MANAGE_PROJECT_TASKS,
@@ -159,6 +164,8 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.VIEW_CONSOLIDATED_REPORTS,
     StorePermission.VIEW_LOANS,
     StorePermission.MANAGE_LOANS,
+    StorePermission.VIEW_INVESTORS,
+    StorePermission.MANAGE_INVESTORS,
   ],
 };
 
@@ -223,6 +230,8 @@ export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.VIEW_PAYROLL]: "View salary & payroll figures",
   [StorePermission.VIEW_LOANS]: "View loans",
   [StorePermission.MANAGE_LOANS]: "Manage loans",
+  [StorePermission.VIEW_INVESTORS]: "View investors & profit shares",
+  [StorePermission.MANAGE_INVESTORS]: "Manage investors, capital & profit runs",
   [StorePermission.VIEW_PROJECTS]: "View projects",
   [StorePermission.MANAGE_PROJECTS]: "Create & edit projects",
   [StorePermission.MANAGE_PROJECT_TASKS]: "Manage project tasks",
@@ -273,6 +282,8 @@ export const STORE_PERMISSION_GROUPS: { label: string; permissions: StorePermiss
       StorePermission.APPROVE_FUND_TRANSFER,
       StorePermission.VIEW_LOANS,
       StorePermission.MANAGE_LOANS,
+      StorePermission.VIEW_INVESTORS,
+      StorePermission.MANAGE_INVESTORS,
     ],
   },
   {
@@ -494,6 +505,10 @@ export const PostingRuleEventType = {
   FUND_MOVEMENT: 'fund_movement',
   LOAN_DISBURSEMENT: 'loan_disbursement',
   LOAN_REPAYMENT: 'loan_repayment',
+  INVESTOR_CONTRIBUTION: 'investor_contribution',
+  INVESTOR_WITHDRAWAL: 'investor_withdrawal',
+  INVESTOR_PROFIT_ACCRUAL: 'investor_profit_accrual',
+  INVESTOR_PROFIT_PAYOUT: 'investor_profit_payout',
 } as const;
 export type PostingRuleEventType = (typeof PostingRuleEventType)[keyof typeof PostingRuleEventType];
 

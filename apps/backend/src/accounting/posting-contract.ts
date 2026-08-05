@@ -110,6 +110,24 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     { eventType: 'loan_repayment', conditionKey: 'loan_direction', conditionValue: 'PAYABLE', emittedBy: 'loans.service.ts:175', expectation: 'rule' },
     { eventType: 'loan_repayment', conditionKey: 'loan_direction', conditionValue: 'RECEIVABLE', emittedBy: 'loans.service.ts:175', expectation: 'rule' },
 
+    // ── investors ────────────────────────────────────────────────────────────
+    // Capital in/out and the profit payout all carry a payment method, so they key
+    // on payment_mode exactly like salary_payment does. The monthly accrual moves
+    // no cash, so it has a single condition_key:'none' rule.
+    { eventType: 'investor_contribution', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'investors.service.ts:addCapitalTxn', expectation: 'rule' },
+    { eventType: 'investor_contribution', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'investors.service.ts:addCapitalTxn', expectation: 'rule' },
+    { eventType: 'investor_contribution', conditionKey: 'payment_mode', conditionValue: 'bkash', emittedBy: 'investors.service.ts:addCapitalTxn', expectation: 'rule' },
+    { eventType: 'investor_contribution', conditionKey: 'payment_mode', conditionValue: 'nagad', emittedBy: 'investors.service.ts:addCapitalTxn', expectation: 'rule' },
+    { eventType: 'investor_withdrawal', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'investors.service.ts:addCapitalTxn', expectation: 'rule' },
+    { eventType: 'investor_withdrawal', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'investors.service.ts:addCapitalTxn', expectation: 'rule' },
+    { eventType: 'investor_withdrawal', conditionKey: 'payment_mode', conditionValue: 'bkash', emittedBy: 'investors.service.ts:addCapitalTxn', expectation: 'rule' },
+    { eventType: 'investor_withdrawal', conditionKey: 'payment_mode', conditionValue: 'nagad', emittedBy: 'investors.service.ts:addCapitalTxn', expectation: 'rule' },
+    { eventType: 'investor_profit_accrual', conditionKey: 'none', conditionValue: null, emittedBy: 'investors.service.ts:postProfitRun', expectation: 'rule' },
+    { eventType: 'investor_profit_payout', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'investors.service.ts:payShare', expectation: 'rule' },
+    { eventType: 'investor_profit_payout', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'investors.service.ts:payShare', expectation: 'rule' },
+    { eventType: 'investor_profit_payout', conditionKey: 'payment_mode', conditionValue: 'bkash', emittedBy: 'investors.service.ts:payShare', expectation: 'rule' },
+    { eventType: 'investor_profit_payout', conditionKey: 'payment_mode', conditionValue: 'nagad', emittedBy: 'investors.service.ts:payShare', expectation: 'rule' },
+
     // ── PERIODIC INVENTORY: these MUST post nothing ──────────────────────────
     { eventType: 'fund_movement', conditionKey: 'transfer_scope', conditionValue: 'inter_store', emittedBy: 'warehouse-transfers.service.ts:131', expectation: 'skip', skipReason: 'Periodic inventory: moving own stock between own warehouses is not an economic event. A none-fallback here fabricated Dr Bank / Cr Cash vouchers.' },
     { eventType: 'fund_movement', conditionKey: 'transfer_scope', conditionValue: 'intra_store', emittedBy: 'warehouse-transfers.service.ts:131', expectation: 'skip', skipReason: 'Periodic inventory: moving own stock between own warehouses is not an economic event. A none-fallback here fabricated Dr Bank / Cr Cash vouchers.' },
