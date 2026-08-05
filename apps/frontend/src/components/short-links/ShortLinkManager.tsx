@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Check, Copy, Trash2 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
 
@@ -61,6 +61,28 @@ export default function ShortLinkManager({
     const [error, setError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
+    /** Row id whose link was just copied, so only that row shows the tick. */
+    const [copiedId, setCopiedId] = useState<string | null>(null);
+
+    /**
+     * The table shows the bare `/s/<code>` path, so the clipboard is the only
+     * route to a pasteable link from this screen. Copy the origin-qualified URL
+     * rather than what's rendered.
+     *
+     * `navigator.clipboard` is undefined in an insecure context and can be
+     * refused outright, so the failure is surfaced instead of leaving the user
+     * believing they hold a link they don't.
+     */
+    const copyLink = async (row: ShortLinkRow) => {
+        try {
+            await navigator.clipboard.writeText(`${window.location.origin}/s/${row.code}`);
+        } catch {
+            toast.error(m.copyError);
+            return;
+        }
+        setCopiedId(row.id);
+        setTimeout(() => setCopiedId((current) => (current === row.id ? null : current)), 2000);
+    };
 
     // Deliberately swallows its own failure rather than rejecting: this runs
     // unattended on mount and after every create/revoke, so an uncaught rejection
@@ -171,7 +193,24 @@ export default function ShortLinkManager({
                         {links.map((row) => (
                             <tr key={row.id} className="border-t border-gray-100">
                                 <td className="p-3 font-medium text-gray-900">
-                                    /s/{row.code}
+                                    <span className="inline-flex items-center gap-1.5">
+                                        <span>/s/{row.code}</span>
+                                        {!row.revoked_at && (
+                                            <button
+                                                type="button"
+                                                onClick={() => void copyLink(row)}
+                                                aria-label={copiedId === row.id ? m.copiedAria : m.copyAria}
+                                                title={copiedId === row.id ? m.copiedAria : m.copyAria}
+                                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-blue-600"
+                                            >
+                                                {copiedId === row.id ? (
+                                                    <Check className="h-4 w-4 text-emerald-600" />
+                                                ) : (
+                                                    <Copy className="h-4 w-4" />
+                                                )}
+                                            </button>
+                                        )}
+                                    </span>
                                     {row.revoked_at && <span className="ml-2 text-xs text-red-600">{m.revoked}</span>}
                                 </td>
                                 <td className="p-3 max-w-md truncate text-gray-600">{row.target_url}</td>
