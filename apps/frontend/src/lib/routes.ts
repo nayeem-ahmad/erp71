@@ -135,6 +135,7 @@ export const routes = {
             reorder: '/inventory/reports/reorder',
             shrinkage: '/inventory/reports/shrinkage',
             valuation: '/inventory/reports/valuation',
+            stockOnHand: '/inventory/reports/stock-on-hand',
         },
     },
 

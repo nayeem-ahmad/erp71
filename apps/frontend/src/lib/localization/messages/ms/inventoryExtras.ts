@@ -234,6 +234,39 @@ export const inventoryExtrasMessages = {
                     leadTimeDays: "Masa Pendahuluan (Hari)",
                 },
             },
+            stockOnHand: {
+                title: "Stok Ada",
+                subtitle: "Kuantiti mengikut gudang dinilai pada kos belian purata berwajaran",
+                allWarehouses: "Semua Gudang",
+                allGroups: "Semua Kumpulan",
+                allSubgroups: "Semua Subkumpulan",
+                allBrands: "Semua Jenama",
+                showZeroStock: "Sertakan produk tanpa stok",
+                uncategorized: "Tanpa Kategori",
+                emptyMessage: "Tiada stok untuk penapis semasa",
+                searchPlaceholder: "Cari produk...",
+                totalStockValue: "Jumlah Nilai Stok",
+                totalQuantity: "Jumlah Kuantiti",
+                productsInStock: "Produk Berstok",
+                warehousesCounted: "Gudang",
+                valuationBasisNote: "Dinilai pada kos belian purata berwajaran, ditolak pulangan belian. Produk yang tidak pernah dibeli melalui lejar menggunakan kos terakhir yang direkodkan.",
+                uncostedWarning: "{count} produk memegang {quantity} unit tiada kos belian dalam rekod dan dinilai sifar — jumlah di bawah adalah kurang nilai.",
+                costBasis: {
+                    WEIGHTED_AVERAGE: "Purata berwajaran",
+                    LATEST_COST: "Kos terakhir direkod",
+                    UNCOSTED: "Tiada kos"
+                },
+                columns: {
+                    product: "Produk",
+                    sku: "SKU",
+                    group: "Kumpulan",
+                    brand: "Jenama",
+                    avgUnitCost: "Kos Unit Purata",
+                    costBasis: "Asas Kos",
+                    totalQuantity: "Jumlah Kuantiti",
+                    totalValue: "Nilai Stok"
+                }
+            },
             valuation: {
                 title: "Penilaian Inventori",
                 subtitle: "Nilai stok mengikut produk dan gudang menggunakan kuantiti semasa",

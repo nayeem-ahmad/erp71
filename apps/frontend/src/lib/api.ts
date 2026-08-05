@@ -643,6 +643,15 @@ export const api = {
         if (params?.subgroupId) query.set('subgroupId', params.subgroupId);
         return fetchWithAuth(`/inventory-reports/reorder-suggestions${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    getStockOnHand: (params?: { warehouseId?: string; groupId?: string; subgroupId?: string; brandId?: string; includeZeroStock?: boolean }) => {
+        const query = new URLSearchParams();
+        if (params?.warehouseId) query.set('warehouseId', params.warehouseId);
+        if (params?.groupId) query.set('groupId', params.groupId);
+        if (params?.subgroupId) query.set('subgroupId', params.subgroupId);
+        if (params?.brandId) query.set('brandId', params.brandId);
+        if (params?.includeZeroStock) query.set('includeZeroStock', 'true');
+        return fetchWithAuth(`/inventory-reports/stock-on-hand${query.toString() ? `?${query.toString()}` : ''}`);
+    },
     getInventoryValuation: (params?: { warehouseId?: string; groupId?: string; subgroupId?: string }) => {
         const query = new URLSearchParams();
         if (params?.warehouseId) query.set('warehouseId', params.warehouseId);
