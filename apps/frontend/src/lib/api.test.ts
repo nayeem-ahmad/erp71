@@ -62,8 +62,15 @@ function errorJson(status: number, statusText: string, body?: unknown) {
     });
 }
 
+// The expired-session handler navigates the browser, so stub it and assert the
+// call instead.
+jest.mock('./session-expiry', () => ({
+    handleExpiredSession: jest.fn(),
+}));
+
 /** The API module under test (imported after mocks are wired). */
 import { fetchWithAuth, fetchBlobWithAuth, fetchPaginated, fetchAllPages, fetchAllCursorPages, api } from './api';
+import { handleExpiredSession } from './session-expiry';
 
 // ---------------------------------------------------------------------------
 // Shared beforeEach
@@ -117,6 +124,47 @@ describe('fetchWithAuth', () => {
         mockFetch.mockReturnValue(errorJson(404, 'Not Found', null));
 
         await expect(fetchWithAuth('/missing')).rejects.toThrow('API error: Not Found');
+    });
+});
+
+// ===========================================================================
+// Expired-session handling
+//
+// Every unauthenticated endpoint (login, signup, demo, invitations, storefront)
+// uses raw fetch — so a 401 out of the authenticated helpers can only mean the
+// token expired or was revoked. It must bounce the user to /login instead of
+// leaving a dead shell on screen.
+// ===========================================================================
+
+describe('401 handling', () => {
+    it('triggers the expired-session redirect on a 401', async () => {
+        mockFetch.mockReturnValue(errorJson(401, 'Unauthorized', { message: 'Unauthorized' }));
+
+        await expect(fetchWithAuth('/auth/me')).rejects.toThrow('Unauthorized');
+        expect(handleExpiredSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('still rejects, so callers awaiting the promise do not proceed with no data', async () => {
+        mockFetch.mockReturnValue(errorJson(401, 'Unauthorized', { message: 'jwt expired' }));
+
+        await expect(fetchWithAuth('/products')).rejects.toThrow('jwt expired');
+    });
+
+    it('triggers the redirect for blob downloads too', async () => {
+        mockFetch.mockReturnValue(errorJson(401, 'Unauthorized', { message: 'Unauthorized' }));
+
+        await expect(fetchBlobWithAuth('/reports/export')).rejects.toThrow('Unauthorized');
+        expect(handleExpiredSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves other error statuses alone — a 403 or 500 is not an expired session', async () => {
+        mockFetch.mockReturnValue(errorJson(403, 'Forbidden', { message: 'Forbidden resource' }));
+        await expect(fetchWithAuth('/admin/tenants')).rejects.toThrow('Forbidden resource');
+
+        mockFetch.mockReturnValue(errorJson(500, 'Internal Server Error', null));
+        await expect(fetchWithAuth('/products')).rejects.toThrow('API error: Internal Server Error');
+
+        expect(handleExpiredSession).not.toHaveBeenCalled();
     });
 });
 

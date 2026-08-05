@@ -407,6 +407,7 @@ export const coreMessages = {
             version: 'ERP71 Platform v0.1',
             defaultError: 'Login failed. Please check your credentials.',
             demoFailed: 'Demo login failed. Please try again.',
+            sessionExpired: 'Your session has expired. Please sign in again.',
         },
         signup: {
             title: 'Create your ERP71 workspace',

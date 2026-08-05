@@ -407,6 +407,7 @@ export const coreMessages = {
                 version: "Platform ERP71 v0.1",
                 defaultError: "Log masuk gagal. Sila semak kelayakan anda.",
                 demoFailed: "Log masuk demo gagal. Sila cuba lagi.",
+                sessionExpired: "Sesi anda telah tamat. Sila log masuk semula.",
             },
             signup: {
                 title: "Cipta ruang kerja ERP71 anda",

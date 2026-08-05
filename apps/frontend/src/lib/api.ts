@@ -8,6 +8,7 @@ import type {
     TenantFeatureOverrides,
 } from '@erp71/shared-types';
 import type { ReferralCommissionStatus } from '@/components/admin/referrals/types';
+import { handleExpiredSession } from './session-expiry';
 
 /** Per-tenant feature state: platform defaults, this tenant's overrides, and the result. */
 export type AdminTenantFeatures = {
@@ -75,6 +76,10 @@ export async function fetchBlobWithAuth(endpoint: string, options: RequestInit =
     });
 
     if (!response.ok) {
+        // Only authenticated endpoints reach here, so a 401 means the session died.
+        if (response.status === 401) {
+            handleExpiredSession();
+        }
         let message = `API error: ${response.statusText}`;
         try {
             const errorBody = await response.json();
@@ -129,6 +134,11 @@ async function requestWithAuth(endpoint: string, options: RequestInit = {}): Pro
     });
 
     if (!response.ok) {
+        // Only authenticated endpoints reach here, so a 401 means the session died.
+        if (response.status === 401) {
+            handleExpiredSession();
+        }
+
         let message = `API error: ${response.statusText}`;
 
         try {
