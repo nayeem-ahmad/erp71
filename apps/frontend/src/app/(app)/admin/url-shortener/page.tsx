@@ -10,6 +10,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
 export default function AdminUrlShortenerPage() {
     const { t } = useI18n();
+    const m = t.admin.urlShortener;
 
     const fetchLinks = useCallback(() => api.getAdminShortLinks(), []);
     const createLink = useCallback(
@@ -18,25 +19,23 @@ export default function AdminUrlShortenerPage() {
     );
     const revokeLink = useCallback((id: string) => api.revokeAdminShortLink(id), []);
 
-    const title = t.sidebar.items.urlShortener;
-
     return (
         <PageShell>
             <div className="space-y-4">
                 <PageHeader
-                    title={title}
-                    subtitle="Platform-owned short links, visible across every tenant."
+                    title={m.title}
+                    subtitle={m.subtitle}
                     breadcrumbs={modulePageBreadcrumbs(
                         t.dashboardHome.breadcrumbHome,
                         t.sidebar.modules.admin,
-                        title,
+                        m.title,
                         'admin',
                     )}
                 />
 
                 <ShortLinkManager
-                    description="Links created here belong to the platform, not to any tenant. This list spans every tenant."
-                    placeholder="https://example.com/page or /settings/branding"
+                    description={m.description}
+                    placeholder={m.placeholder}
                     fetchLinks={fetchLinks}
                     createLink={createLink}
                     revokeLink={revokeLink}

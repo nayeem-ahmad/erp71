@@ -826,6 +826,12 @@ export const adminMessages = {
             description: 'Live dependency, cron-job, and runtime status with alerting.',
         },
     },
+    urlShortener: {
+        title: 'URL Shortener',
+        subtitle: 'Platform-owned short links, visible across every tenant.',
+        description: 'Links created here belong to the platform, not to any tenant. This list spans every tenant.',
+        placeholder: 'https://example.com/page or /settings/branding',
+    },
     referrals: {
         title: 'Referrals',
         subtitle: 'Manage referees, referral codes, commissions, and payouts',

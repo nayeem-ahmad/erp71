@@ -173,4 +173,17 @@ export const componentsMessages = {
             numberedList: "নম্বরযুক্ত তালিকা",
             link: "লিংক",
         },
+        shortLinkManager: {
+            shortLinkColumn: "শর্ট লিংক",
+            targetColumn: "গন্তব্য",
+            clicksColumn: "ক্লিক",
+            labelPlaceholder: "লেবেল (ঐচ্ছিক)",
+            shorten: "শর্ট করুন",
+            empty: "এখনো কোনো শর্ট লিংক নেই।",
+            revoked: "বাতিল",
+            revokeAria: "বাতিল করুন",
+            defaultPlaceholder: "https://example.com/page",
+            createError: "লিংক তৈরি করা যায়নি।",
+            revokeError: "লিংক বাতিল করা যায়নি। আবার চেষ্টা করুন।",
+        },
 } as const;

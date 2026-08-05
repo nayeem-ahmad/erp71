@@ -819,6 +819,12 @@ export const adminMessages = {
                 description: "Status langsung kebergantungan, kerja cron, dan masa jalan dengan amaran.",
             },
         },
+        urlShortener: {
+            title: "Pemendek URL",
+            subtitle: "Pautan pendek milik platform, kelihatan merentasi setiap penyewa.",
+            description: "Pautan yang dicipta di sini milik platform, bukan mana-mana penyewa. Senarai ini merangkumi setiap penyewa.",
+            placeholder: "https://example.com/page atau /settings/branding",
+        },
         referrals: {
             title: "Rujukan",
             subtitle: "Urus rujukan, kod rujukan, komisen, dan pembayaran",

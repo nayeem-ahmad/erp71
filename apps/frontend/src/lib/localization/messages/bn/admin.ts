@@ -819,6 +819,12 @@ export const adminMessages = {
                 description: "নির্ভরতা, ক্রন-জব ও রানটাইমের লাইভ অবস্থা এবং সতর্কতা।",
             },
         },
+        urlShortener: {
+            title: "ইউআরএল শর্টনার",
+            subtitle: "প্ল্যাটফর্মের নিজস্ব শর্ট লিংক, প্রতিটি টেন্যান্টে দৃশ্যমান।",
+            description: "এখানে তৈরি লিংকগুলো প্ল্যাটফর্মের, কোনো টেন্যান্টের নয়। এই তালিকা সব টেন্যান্ট জুড়ে বিস্তৃত।",
+            placeholder: "https://example.com/page অথবা /settings/branding",
+        },
         referrals: {
             title: "রেফারেল",
             subtitle: "রেফারি, রেফারেল কোড, কমিশন ও পেমেন্ট পরিচালনা",

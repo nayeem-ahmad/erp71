@@ -4,6 +4,13 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 // is fireEvent from @testing-library/react. Do not add the dependency.
 import ShortLinkManager from './ShortLinkManager';
 
+// Revoke failures go through the global Toaster, not an inline field error (see
+// ShortLinkManager.tsx's revoke()). Mocking @/lib/toast to assert on it is the house
+// pattern — see components/projects/TaskDetailPanel.test.tsx.
+jest.mock('@/lib/toast', () => ({
+    toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
+}));
+
 const link = (overrides = {}) => ({
     id: 'link-1',
     code: 'aB3xK9m',
@@ -108,6 +115,29 @@ describe('ShortLinkManager', () => {
 
         await waitFor(() => expect(revokeLink).toHaveBeenCalledWith('link-1'));
         expect(await screen.findByText(/revoked/i)).toBeInTheDocument();
+    });
+
+    it('surfaces a failed revoke via toast and leaves the list unchanged', async () => {
+        const { toast } = jest.requireMock('@/lib/toast');
+        const revokeLink = jest.fn().mockRejectedValue(new Error('That link belongs to another tenant.'));
+        // Only ever resolved once: a failed revoke must not trigger a reload, since
+        // reloading after an unconfirmed failure risks showing a state that doesn't
+        // match what actually happened on the backend.
+        const fetchLinks = jest.fn().mockResolvedValue([link()]);
+
+        render(<ShortLinkManager fetchLinks={fetchLinks} createLink={jest.fn()} revokeLink={revokeLink} />);
+        await screen.findByText('/s/aB3xK9m');
+
+        fireEvent.click(screen.getByRole('button', { name: /revoke/i }));
+
+        await waitFor(() =>
+            expect(toast.error).toHaveBeenCalledWith('That link belongs to another tenant.'),
+        );
+        // The row must still read as active — not silently dropped, not marked revoked.
+        expect(screen.getByText('/s/aB3xK9m')).toBeInTheDocument();
+        expect(screen.queryByText(/revoked/i)).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /revoke/i })).toBeInTheDocument();
+        expect(fetchLinks).toHaveBeenCalledTimes(1);
     });
 
     it('offers no revoke control on an already-revoked link', async () => {

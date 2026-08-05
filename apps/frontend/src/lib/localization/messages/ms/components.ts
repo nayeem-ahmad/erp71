@@ -173,4 +173,17 @@ export const componentsMessages = {
             numberedList: "Senarai bernombor",
             link: "Pautan",
         },
+        shortLinkManager: {
+            shortLinkColumn: "Pautan pendek",
+            targetColumn: "Sasaran",
+            clicksColumn: "Klik",
+            labelPlaceholder: "Label (pilihan)",
+            shorten: "Pendekkan",
+            empty: "Tiada pautan pendek lagi.",
+            revoked: "dibatalkan",
+            revokeAria: "Batalkan",
+            defaultPlaceholder: "https://example.com/page",
+            createError: "Tidak dapat mencipta pautan.",
+            revokeError: "Tidak dapat membatalkan pautan. Sila cuba lagi.",
+        },
 } as const;

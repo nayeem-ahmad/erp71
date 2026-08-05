@@ -173,4 +173,17 @@ export const componentsMessages = {
         numberedList: 'Numbered list',
         link: 'Link',
     },
+    shortLinkManager: {
+        shortLinkColumn: 'Short link',
+        targetColumn: 'Target',
+        clicksColumn: 'Clicks',
+        labelPlaceholder: 'Label (optional)',
+        shorten: 'Shorten',
+        empty: 'No short links yet.',
+        revoked: 'revoked',
+        revokeAria: 'Revoke',
+        defaultPlaceholder: 'https://example.com/page',
+        createError: 'Could not create the link.',
+        revokeError: 'Could not revoke the link. Please try again.',
+    },
 } as const;
