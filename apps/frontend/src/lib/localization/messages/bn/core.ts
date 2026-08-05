@@ -756,6 +756,9 @@ export const coreMessages = {
                 placeholder: "https://example.com/page অথবা /quotations/123",
                 forbiddenTitle: "ইউআরএল শর্টনার সীমাবদ্ধ",
                 forbiddenDescription: "শুধুমাত্র মালিক এবং শর্ট-লিংক অনুমতিপ্রাপ্ত কর্মীরা শর্ট লিংক দেখতে বা তৈরি করতে পারেন।",
+                checkFailedTitle: "অনুমতি যাচাই করা যায়নি",
+                checkFailedDescription: "এই মুহূর্তে আপনার অনুমতি নিশ্চিত করা যায়নি — এটি সংযোগজনিত সমস্যা হতে পারে, বিধিনিষেধ নয়। আবার চেষ্টা করুন।",
+                retry: "আবার চেষ্টা করুন",
             },
             storeSettings: {
                 title: "দোকানসমূহ",

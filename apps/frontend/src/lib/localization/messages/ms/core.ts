@@ -757,6 +757,9 @@ export const coreMessages = {
                 placeholder: "https://example.com/page atau /quotations/123",
                 forbiddenTitle: "Pemendek URL terhad",
                 forbiddenDescription: "Hanya pemilik dan kakitangan yang mempunyai kebenaran pautan pendek boleh melihat atau mencipta pautan pendek.",
+                checkFailedTitle: "Tidak dapat mengesahkan akses",
+                checkFailedDescription: "Kami tidak dapat mengesahkan kebenaran anda sekarang — ini mungkin masalah sambungan, bukan sekatan. Cuba lagi.",
+                retry: "Cuba lagi",
             },
             storeSettings: {
                 title: "Kedai",

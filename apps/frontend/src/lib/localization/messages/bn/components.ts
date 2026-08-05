@@ -185,5 +185,7 @@ export const componentsMessages = {
             defaultPlaceholder: "https://example.com/page",
             createError: "লিংক তৈরি করা যায়নি।",
             revokeError: "লিংক বাতিল করা যায়নি। আবার চেষ্টা করুন।",
+            loadError: "আপনার শর্ট লিংকগুলো লোড করা যায়নি।",
+            retry: "আবার চেষ্টা করুন",
         },
 } as const;

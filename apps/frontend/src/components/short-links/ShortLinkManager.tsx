@@ -60,11 +60,25 @@ export default function ShortLinkManager({
     const [label, setLabel] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
+    // Deliberately swallows its own failure rather than rejecting: this runs
+    // unattended on mount and after every create/revoke, so an uncaught rejection
+    // here was an unhandled-promise-rejection with nothing on screen to explain it
+    // — and a caller like revoke() awaiting this would have mislabeled "the revoke
+    // worked but the reload failed" as a revoke failure. `loadError` is the single
+    // place that failure surfaces; it doesn't clear `links`, so a transient reload
+    // failure after a successful load keeps showing the last known-good list
+    // instead of wiping it out from under the user.
     const load = useCallback(async () => {
-        const result = await fetchLinks();
-        setLinks(extractRows(result));
-    }, [fetchLinks]);
+        try {
+            const result = await fetchLinks();
+            setLinks(extractRows(result));
+            setLoadError(null);
+        } catch (err: unknown) {
+            setLoadError(err instanceof Error ? err.message : m.loadError);
+        }
+    }, [fetchLinks, m.loadError]);
 
     useEffect(() => {
         void load();
@@ -92,17 +106,24 @@ export default function ShortLinkManager({
     const revoke = async (id: string) => {
         try {
             await revokeLink(id);
-            await load();
         } catch (err: unknown) {
             // Unlike create()'s rejection, this isn't about a form field the user is
             // looking at — it's a row-level action failure, so it goes through the
             // global Toaster (per the house rule: field errors inline, everything
             // else through Toaster) rather than being swallowed or misrouted into the
-            // create form's error slot. Deliberately does not call load(): if the
-            // revoke didn't happen, the list must keep showing the link as still
-            // active rather than silently drifting out of sync with the backend.
+            // create form's error slot. Deliberately returns without calling load():
+            // if the revoke didn't happen, the list must keep showing the link as
+            // still active rather than silently drifting out of sync with the backend.
             toast.error(err instanceof Error ? err.message : m.revokeError);
+            return;
         }
+        // Split from the try above on purpose: revokeLink() succeeding and the
+        // follow-up reload failing are different failures. load() surfaces its own
+        // failure via the inline `loadError` banner (it no longer throws), so a
+        // reload hiccup right after a successful revoke no longer shows a
+        // misleading "could not revoke the link" toast next to a row that actually
+        // was revoked.
+        await load();
     };
 
     return (
@@ -168,7 +189,25 @@ export default function ShortLinkManager({
                                 </td>
                             </tr>
                         ))}
-                        {links.length === 0 && (
+                        {/* A failed load and "you have no links yet" both render an
+                            empty-looking table unless they're told apart — this row
+                            always wins over the empty-state row below when a load has
+                            failed, even if some rows from a prior successful load are
+                            still showing above it. */}
+                        {loadError && (
+                            <tr>
+                                <td colSpan={4} className="p-6 text-center text-sm text-red-600">
+                                    <p>{loadError}</p>
+                                    <button
+                                        onClick={() => void load()}
+                                        className="mt-2 text-xs font-semibold text-blue-600 hover:underline"
+                                    >
+                                        {m.retry}
+                                    </button>
+                                </td>
+                            </tr>
+                        )}
+                        {!loadError && links.length === 0 && (
                             <tr>
                                 <td colSpan={4} className="p-6 text-center text-sm text-gray-500">
                                     {m.empty}

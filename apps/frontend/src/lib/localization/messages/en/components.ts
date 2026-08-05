@@ -185,5 +185,7 @@ export const componentsMessages = {
         defaultPlaceholder: 'https://example.com/page',
         createError: 'Could not create the link.',
         revokeError: 'Could not revoke the link. Please try again.',
+        loadError: 'Could not load your short links.',
+        retry: 'Try again',
     },
 } as const;

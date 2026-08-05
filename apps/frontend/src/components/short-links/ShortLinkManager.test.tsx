@@ -60,6 +60,51 @@ describe('ShortLinkManager', () => {
         expect(await screen.findByText(/no short links yet/i)).toBeInTheDocument();
     });
 
+    it('surfaces a failed initial load and lets the user retry', async () => {
+        // A failed load renders an empty-looking table exactly like "you have no
+        // links yet" unless it says why — this pins that the two are told apart,
+        // and that retrying re-runs fetchLinks rather than being a dead button.
+        const fetchLinks = jest
+            .fn()
+            .mockRejectedValueOnce(new Error('Network error, please try again.'))
+            .mockResolvedValueOnce([link()]);
+
+        render(<ShortLinkManager fetchLinks={fetchLinks} createLink={jest.fn()} revokeLink={jest.fn()} />);
+
+        expect(await screen.findByText('Network error, please try again.')).toBeInTheDocument();
+        expect(screen.queryByText(/no short links yet/i)).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+
+        expect(await screen.findByText('/s/aB3xK9m')).toBeInTheDocument();
+        expect(screen.queryByText('Network error, please try again.')).not.toBeInTheDocument();
+        expect(fetchLinks).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps showing the last known-good list when a reload fails', async () => {
+        // create()/revoke() both call load() again afterward; a reload failure at
+        // that point must not wipe out rows the user already saw succeed.
+        const createLink = jest.fn().mockResolvedValue({});
+        const fetchLinks = jest
+            .fn()
+            .mockResolvedValueOnce([link()])
+            .mockRejectedValueOnce(new Error('Could not load your short links.'));
+
+        render(<ShortLinkManager fetchLinks={fetchLinks} createLink={createLink} revokeLink={jest.fn()} />);
+        await screen.findByText('/s/aB3xK9m');
+
+        fireEvent.change(screen.getByPlaceholderText(/https/i), {
+            target: { value: 'https://example.com/new' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: /shorten/i }));
+
+        await waitFor(() => expect(createLink).toHaveBeenCalled());
+        expect(await screen.findByText('Could not load your short links.')).toBeInTheDocument();
+        // The row from the first successful load is still there, not wiped out by
+        // the failed reload.
+        expect(screen.getByText('/s/aB3xK9m')).toBeInTheDocument();
+    });
+
     it('creates a link and reloads the list', async () => {
         const createLink = jest.fn().mockResolvedValue({});
         const fetchLinks = jest

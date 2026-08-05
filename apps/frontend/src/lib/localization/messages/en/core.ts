@@ -756,6 +756,9 @@ export const coreMessages = {
             placeholder: 'https://example.com/page or /quotations/123',
             forbiddenTitle: 'URL shortener restricted',
             forbiddenDescription: 'Only owners and staff with short-link permission can view or create short links.',
+            checkFailedTitle: 'Could not verify access',
+            checkFailedDescription: 'We couldn’t confirm your permissions just now — this may be a connection issue, not a restriction. Try again.',
+            retry: 'Try again',
         },
         storeSettings: {
             title: 'Stores',

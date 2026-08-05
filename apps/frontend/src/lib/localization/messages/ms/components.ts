@@ -185,5 +185,7 @@ export const componentsMessages = {
             defaultPlaceholder: "https://example.com/page",
             createError: "Tidak dapat mencipta pautan.",
             revokeError: "Tidak dapat membatalkan pautan. Sila cuba lagi.",
+            loadError: "Tidak dapat memuatkan pautan pendek anda.",
+            retry: "Cuba lagi",
         },
 } as const;
