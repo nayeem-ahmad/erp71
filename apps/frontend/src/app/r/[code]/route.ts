@@ -26,8 +26,14 @@ export async function GET(
     const { code } = await context.params;
     const normalized = (code ?? '').trim().toUpperCase();
 
-    const signupUrl = new URL('/signup', request.nextUrl.origin);
-    if (normalized) signupUrl.searchParams.set('ref', normalized);
+    // Relative `Location` (RFC 7231 §7.1.2), resolved by the browser against the
+    // URL it requested. Not `new URL('/signup', request.nextUrl.origin)`: inside
+    // the standalone server that origin is the process's own bind address
+    // (`HOSTNAME=0.0.0.0`, `PORT=3000`) and ignores `Host`/`X-Forwarded-Host`, so
+    // every referral link pointed at `https://0.0.0.0:3000/signup` — unreachable.
+    const signupPath = normalized
+        ? `/signup?ref=${encodeURIComponent(normalized)}`
+        : '/signup';
 
     if (normalized) {
         try {
@@ -50,5 +56,5 @@ export async function GET(
         }
     }
 
-    return NextResponse.redirect(signupUrl, { status: 302 });
+    return new NextResponse(null, { status: 302, headers: { Location: signupPath } });
 }

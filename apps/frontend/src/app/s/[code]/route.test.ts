@@ -61,8 +61,18 @@ function malformedJson() {
     });
 }
 
-async function callGet(code: string) {
-    const request = new NextRequest(`http://app.erp71.com/s/${code}`);
+/**
+ * Drive the handler from the origin the standalone server actually reports.
+ *
+ * Next's `request.nextUrl.origin` inside a container is built from the server's
+ * own bind address (`HOSTNAME=0.0.0.0`, `PORT=3000` — see apps/frontend/Dockerfile),
+ * NOT the public host: it ignores both `Host` and `X-Forwarded-Host`. Fabricating
+ * a request from `http://app.erp71.com` — as these tests used to — hides the only
+ * condition that matters, which is how every `/s/` link shipped emitting
+ * `https://0.0.0.0:3000/...` while the suite stayed green.
+ */
+async function callGet(code: string, origin = 'http://0.0.0.0:3000') {
+    const request = new NextRequest(`${origin}/s/${code}`);
     return GET(request, { params: Promise.resolve({ code }) });
 }
 
@@ -73,7 +83,7 @@ describe('GET /s/[code]', () => {
         const response = await callGet('abc123');
 
         expect(response.status).toBe(302);
-        expect(response.headers.get('location')).toBe('http://app.erp71.com/q/abc123');
+        expect(response.headers.get('location')).toBe('/q/abc123');
     });
 
     it('redirects an external target to the interstitial with no query string', async () => {
@@ -85,12 +95,12 @@ describe('GET /s/[code]', () => {
 
         expect(response.status).toBe(302);
         const location = response.headers.get('location')!;
-        expect(location).toBe('http://app.erp71.com/s/ext123/leaving');
+        expect(location).toBe('/s/ext123/leaving');
         // The anti-phishing property under test: the destination must never
         // travel in the URL the browser is handed. If it did, anyone could
         // craft an app.erp71.com link that displays one host and sends the
         // visitor to another.
-        expect(new URL(location).search).toBe('');
+        expect(new URL(location, 'https://app.erp71.com').search).toBe('');
         expect(location).not.toContain('evil.example.com');
     });
 
@@ -103,7 +113,7 @@ describe('GET /s/[code]', () => {
 
         expect(response.status).toBe(302);
         const location = response.headers.get('location')!;
-        expect(location).toBe('http://app.erp71.com/not-found');
+        expect(location).toBe('/not-found');
         expect(location).not.toContain('evil.example.com');
         expect(location).not.toContain('/leaving');
     });
@@ -114,7 +124,7 @@ describe('GET /s/[code]', () => {
         const response = await callGet('missing');
 
         expect(response.status).toBe(302);
-        expect(response.headers.get('location')).toBe('http://app.erp71.com/not-found');
+        expect(response.headers.get('location')).toBe('/not-found');
     });
 
     it('falls back to not-found when the response body is not valid JSON', async () => {
@@ -123,7 +133,7 @@ describe('GET /s/[code]', () => {
         const response = await callGet('bad-json');
 
         expect(response.status).toBe(302);
-        expect(response.headers.get('location')).toBe('http://app.erp71.com/not-found');
+        expect(response.headers.get('location')).toBe('/not-found');
     });
 
     it('falls back to not-found for a 200 with an empty body', async () => {
@@ -132,7 +142,7 @@ describe('GET /s/[code]', () => {
         const response = await callGet('empty');
 
         expect(response.status).toBe(302);
-        expect(response.headers.get('location')).toBe('http://app.erp71.com/not-found');
+        expect(response.headers.get('location')).toBe('/not-found');
     });
 
     it('falls back to not-found when an internal target_url is not a same-origin path', async () => {
@@ -147,7 +157,7 @@ describe('GET /s/[code]', () => {
 
         expect(response.status).toBe(302);
         const location = response.headers.get('location')!;
-        expect(location).toBe('http://app.erp71.com/not-found');
+        expect(location).toBe('/not-found');
         expect(location).not.toContain('evil.example.com');
     });
 
@@ -160,7 +170,7 @@ describe('GET /s/[code]', () => {
 
         expect(response.status).toBe(302);
         const location = response.headers.get('location')!;
-        expect(location).toBe('http://app.erp71.com/not-found');
+        expect(location).toBe('/not-found');
         expect(location).not.toContain('evil.example.com');
     });
 
@@ -237,7 +247,7 @@ describe('GET /s/[code]', () => {
         const response = await callGet('neterr');
 
         expect(response.status).toBe(302);
-        expect(response.headers.get('location')).toBe('http://app.erp71.com/not-found');
+        expect(response.headers.get('location')).toBe('/not-found');
     });
 
     it('falls back to not-found when fetch times out (abort)', async () => {
@@ -252,7 +262,7 @@ describe('GET /s/[code]', () => {
         const response = await callGet('slow1');
 
         expect(response.status).toBe(302);
-        expect(response.headers.get('location')).toBe('http://app.erp71.com/not-found');
+        expect(response.headers.get('location')).toBe('/not-found');
     });
 
     it('passes an AbortSignal to fetch so a hung backend is actually cancelled', async () => {
@@ -269,7 +279,46 @@ describe('GET /s/[code]', () => {
         const response = await GET(request, { params: Promise.resolve({ code: '' }) });
 
         expect(response.status).toBe(302);
-        expect(response.headers.get('location')).toBe('http://app.erp71.com/not-found');
+        expect(response.headers.get('location')).toBe('/not-found');
         expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Regression: every `/s/` link in production emitted
+     * `https://0.0.0.0:3000/...`, which no browser can reach
+     * (ERR_SSL_PROTOCOL_ERROR). The handler had built absolute URLs from
+     * `request.nextUrl.origin`, which in a standalone container is the bind
+     * address rather than the public host.
+     *
+     * A relative `Location` (RFC 7231 §7.1.2) is resolved by the browser against
+     * the URL it actually requested, so the public origin never has to be
+     * guessed or reconstructed from proxy headers.
+     */
+    describe('Location is origin-independent', () => {
+        it.each([
+            ['internal', { kind: 'internal', target_url: '/q/abc123' }, '/q/abc123'],
+            ['external', { kind: 'external', target_url: 'https://example.com/x' }, '/s/code99/leaving'],
+            ['unknown kind', { kind: 'nope' }, '/not-found'],
+        ])('emits a host-less Location for a %s target', async (_label, payload, expected) => {
+            mockFetch.mockReturnValueOnce(okJson({ data: payload }));
+
+            const response = await callGet('code99');
+            const location = response.headers.get('location')!;
+
+            expect(location).toBe(expected);
+            expect(location.startsWith('/')).toBe(true);
+            expect(location).not.toContain('0.0.0.0');
+            expect(location).not.toContain('://');
+        });
+
+        it('never leaks the bind address regardless of the origin the server reports', async () => {
+            mockFetch.mockReturnValueOnce(okJson({ data: { kind: 'internal', target_url: '/q/abc' } }));
+
+            // Whatever origin the standalone server reports — bind address,
+            // container hostname, anything — must not reach the browser.
+            const response = await callGet('abc', 'http://erp71-frontend:3000');
+
+            expect(response.headers.get('location')).toBe('/q/abc');
+        });
     });
 });
