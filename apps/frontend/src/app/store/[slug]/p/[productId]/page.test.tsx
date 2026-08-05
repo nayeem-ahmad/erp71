@@ -103,3 +103,57 @@ describe('PublicProductPage — Unavailable indistinguishability', () => {
         expect(unknownProduct).toContain("This product isn&#x27;t available");
     });
 });
+
+describe('PublicProductPage — availability', () => {
+    function product(overrides: Record<string, unknown> = {}) {
+        return {
+            id: 'prod-1',
+            name: 'Premium Rice 5kg',
+            sku: 'RICE-5KG',
+            price: 650,
+            compare_at_price: null,
+            description: null,
+            image_url: null,
+            in_stock: true,
+            ...overrides,
+        };
+    }
+
+    // The shop listing filters to in-stock products, so a shared product link can
+    // outlive availability. The page showed nothing about stock at all, which let
+    // a shopper arrive at a live-looking page for something that is not there.
+    it('says the product is in stock', async () => {
+        mockFetch.mockReturnValueOnce(okJson({ data: product() }));
+        expect(await renderPage('a-real-store', 'prod-1')).toContain('In stock');
+    });
+
+    it('says the product is out of stock rather than hiding it', async () => {
+        mockFetch.mockReturnValueOnce(okJson({ data: product({ in_stock: false }) }));
+        const markup = await renderPage('a-real-store', 'prod-1');
+        expect(markup).toContain('Out of stock');
+        expect(markup).toContain('Premium Rice 5kg');
+    });
+});
+
+describe('PublicProductPage — API base', () => {
+    const originalApiBase = process.env.NEXT_PUBLIC_API_BASE;
+
+    afterEach(() => {
+        if (originalApiBase === undefined) delete process.env.NEXT_PUBLIC_API_BASE;
+        else process.env.NEXT_PUBLIC_API_BASE = originalApiBase;
+    });
+
+    it('calls the backend under /api/v1 exactly once when the configured base omits it', async () => {
+        // The deploy script sets a bare origin; the backend mounts everything under
+        // api/v1. Without this, every shared product link 404s in production and
+        // fails closed to "This product isn't available".
+        process.env.NEXT_PUBLIC_API_BASE = 'https://api.erp71.com';
+        mockFetch.mockReturnValueOnce(errorResponse(404));
+
+        await renderPage('a-real-store', 'prod-1');
+
+        const url = String(mockFetch.mock.calls[0][0]);
+        expect(url).toBe('https://api.erp71.com/api/v1/storefront/a-real-store/products/prod-1');
+        expect(url.match(/\/api\/v1(\/|$)/g)?.length ?? 0).toBe(1);
+    });
+});

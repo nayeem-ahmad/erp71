@@ -7,6 +7,7 @@ import type {
     TenantFeatureOverrides,
 } from '@erp71/shared-types';
 import type { ReferralCommissionStatus } from '@/components/admin/referrals/types';
+import { normalizeApiBase } from './api-base';
 
 /** Per-tenant feature state: platform defaults, this tenant's overrides, and the result. */
 export type AdminTenantFeatures = {
@@ -33,16 +34,10 @@ const DEFAULT_PROD_API_BASE = 'https://erp71-backend.onrender.com';
 // In dev (remote container) use a relative path so browser calls go to the
 // Next.js dev server which proxies them to the backend via next.config rewrites.
 // In production keep the explicit backend URL.
-function normalizeApiBase(rawBase?: string) {
-    const base = rawBase?.trim().replace(/\/$/, '');
-
-    if (!base) {
-        return null;
-    }
-
-    return base.endsWith('/api/v1') ? base : `${base}/api/v1`;
-}
-
+//
+// `normalizeApiBase` lives in ./api-base so the server-side public routes
+// (/s, /q, /store/../p, /r) apply the identical `/api/v1` rule instead of each
+// re-deriving it — see that file for why that mattered.
 const API_BASE = normalizeApiBase(process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL)
     || (process.env.NODE_ENV === 'production' ? `${DEFAULT_PROD_API_BASE}/api/v1` : '/api/v1');
 

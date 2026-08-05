@@ -1,12 +1,24 @@
+import type { Metadata } from 'next';
+import { publicApiBase } from '@/lib/api-base';
 import PublicQuotationView, { type PublicQuotation } from './PublicQuotationView';
 
 export const dynamic = 'force-dynamic';
 
-function apiBase(): string {
-    const configured = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL;
-    if (configured) return configured.replace(/\/+$/, '');
-    return 'http://localhost:4000/api/v1';
-}
+/**
+ * A shared quotation carries the customer's name, every line item and the full
+ * pricing, on a permanent unguessable URL. Nothing about it is meant for a
+ * search index, and a crawler that finds one link in a WhatsApp forward or a
+ * referrer header must not publish it. `follow: false` matters as much as
+ * `index: false` — the page links back to the storefront, and following those
+ * is how the quotation URL itself would end up in a crawl log.
+ *
+ * Belt and braces with `app/robots.ts`, which disallows `/q/` at the crawler
+ * level: this header still applies to a crawler that ignores robots.txt but
+ * honours the meta tag, and it survives anyone editing the robots route.
+ */
+export const metadata: Metadata = {
+    robots: { index: false, follow: false },
+};
 
 /**
  * A missing token and a revoked one render the same message on purpose. Telling
@@ -40,7 +52,7 @@ export default async function PublicQuotationPage({ params }: { params: Promise<
 
     let quotation: PublicQuotation | undefined;
     try {
-        const response = await fetch(`${apiBase()}/public/quotations/${encodeURIComponent(token)}`, {
+        const response = await fetch(`${publicApiBase()}/public/quotations/${encodeURIComponent(token)}`, {
             cache: 'no-store',
         });
         if (!response.ok) return <Unavailable />;

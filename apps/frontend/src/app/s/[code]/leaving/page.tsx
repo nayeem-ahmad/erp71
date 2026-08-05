@@ -1,16 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ExternalLink, ShieldAlert } from 'lucide-react';
+import { publicApiBase } from '@/lib/api-base';
 
 export const dynamic = 'force-dynamic';
 
 const RESOLVE_TIMEOUT_MS = 3000;
-
-function apiBase(): string {
-    const configured = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL;
-    if (configured) return configured.replace(/\/+$/, '');
-    return 'http://localhost:4000/api/v1';
-}
 
 /**
  * Shown before leaving app.erp71.com for a third-party site. The destination is
@@ -25,7 +20,7 @@ export default async function LeavingPage({ params }: { params: Promise<{ code: 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), RESOLVE_TIMEOUT_MS);
     try {
-        const response = await fetch(`${apiBase()}/short-links/resolve/${encodeURIComponent(code)}`, {
+        const response = await fetch(`${publicApiBase()}/short-links/resolve/${encodeURIComponent(code)}`, {
             cache: 'no-store',
             signal: controller.signal,
         });

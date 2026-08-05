@@ -109,3 +109,35 @@ describe('PublicQuotationPage — Unavailable indistinguishability', () => {
         expect(unknownToken).toContain('This link is no longer available');
     });
 });
+
+describe('PublicQuotationPage — API base', () => {
+    const originalApiBase = process.env.NEXT_PUBLIC_API_BASE;
+
+    afterEach(() => {
+        if (originalApiBase === undefined) delete process.env.NEXT_PUBLIC_API_BASE;
+        else process.env.NEXT_PUBLIC_API_BASE = originalApiBase;
+    });
+
+    it('calls the backend under /api/v1 exactly once when the configured base omits it', async () => {
+        // The deploy script sets NEXT_PUBLIC_API_BASE to a bare origin while the
+        // backend mounts everything under api/v1. Because this page fails closed,
+        // the resulting 404 surfaced as "This link is no longer available" — every
+        // shared quotation looked revoked rather than misconfigured.
+        process.env.NEXT_PUBLIC_API_BASE = 'https://api.erp71.com';
+        mockFetch.mockReturnValueOnce(errorResponse(404));
+
+        await renderPage('some-token');
+
+        const url = String(mockFetch.mock.calls[0][0]);
+        expect(url).toBe('https://api.erp71.com/api/v1/public/quotations/some-token');
+        expect(url.match(/\/api\/v1(\/|$)/g)?.length ?? 0).toBe(1);
+    });
+});
+
+describe('PublicQuotationPage — crawler policy', () => {
+    it('tells crawlers not to index or follow', async () => {
+        // A permanent URL carrying a customer's name, line items and pricing.
+        const { metadata } = require('./page');
+        expect(metadata.robots).toEqual({ index: false, follow: false });
+    });
+});

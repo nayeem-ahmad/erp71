@@ -1,13 +1,14 @@
 import Link from 'next/link';
+import { publicApiBase } from '@/lib/api-base';
 import { formatBDT } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
-function apiBase(): string {
-    const configured = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL;
-    if (configured) return configured.replace(/\/+$/, '');
-    return 'http://localhost:4000/api/v1';
-}
+/**
+ * Deliberately *not* marked `noindex`, unlike the quotation page: this is a shop
+ * owner's marketing page for a product they are actively trying to sell, and it
+ * carries nothing a shopper on the storefront cannot already see.
+ */
 
 type PublicProduct = {
     id: string;
@@ -17,6 +18,7 @@ type PublicProduct = {
     compare_at_price: number | null;
     description: string | null;
     image_url: string | null;
+    in_stock: boolean;
 };
 
 /**
@@ -56,7 +58,7 @@ export default async function PublicProductPage({
     let product: PublicProduct | undefined;
     try {
         const response = await fetch(
-            `${apiBase()}/storefront/${encodeURIComponent(slug)}/products/${encodeURIComponent(productId)}`,
+            `${publicApiBase()}/storefront/${encodeURIComponent(slug)}/products/${encodeURIComponent(productId)}`,
             { cache: 'no-store' },
         );
         if (!response.ok) return <Unavailable />;
@@ -94,6 +96,19 @@ export default async function PublicProductPage({
                                 </span>
                             ) : null}
                         </div>
+                        {/* The shop page only lists in-stock products, so a shared
+                            link can outlive its product's availability. Showing
+                            the state beats both alternatives: hiding the page
+                            entirely (a dead link for something that still exists)
+                            and saying nothing (a shopper who orders and then
+                            finds out). */}
+                        <p
+                            className={`mt-2 text-xs font-semibold ${
+                                product.in_stock ? 'text-emerald-600' : 'text-amber-600'
+                            }`}
+                        >
+                            {product.in_stock ? 'In stock' : 'Out of stock'}
+                        </p>
                         {product.description && (
                             <p className="mt-3 text-sm text-gray-600">{product.description}</p>
                         )}

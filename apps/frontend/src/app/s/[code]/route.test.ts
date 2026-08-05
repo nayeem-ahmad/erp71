@@ -18,8 +18,20 @@ import { GET } from './route';
 const mockFetch = jest.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
 
+const originalApiBase = process.env.NEXT_PUBLIC_API_BASE;
+const originalApiUrl = process.env.NEXT_PUBLIC_API_URL;
+
 beforeEach(() => {
     mockFetch.mockReset();
+    delete process.env.NEXT_PUBLIC_API_BASE;
+    delete process.env.NEXT_PUBLIC_API_URL;
+});
+
+afterAll(() => {
+    if (originalApiBase === undefined) delete process.env.NEXT_PUBLIC_API_BASE;
+    else process.env.NEXT_PUBLIC_API_BASE = originalApiBase;
+    if (originalApiUrl === undefined) delete process.env.NEXT_PUBLIC_API_URL;
+    else process.env.NEXT_PUBLIC_API_URL = originalApiUrl;
 });
 
 function okJson(body: unknown) {
@@ -163,8 +175,60 @@ describe('GET /s/[code]', () => {
         expect(String(url)).toMatch(/\/short-links\/resolve\/abc123$/);
         const occurrences = String(url).split('/short-links/resolve/').length - 1;
         expect(occurrences).toBe(1);
-        // Guards against a future accidental double `api/v1` prefix.
-        expect(String(url).match(/\/api\/v1\//g)?.length ?? 0).toBeLessThanOrEqual(1);
+        // Exactly one `/api/v1`, not "at most one". The previous `toBeLessThanOrEqual(1)`
+        // was satisfied by *zero* prefixes, which is precisely the production bug it
+        // was supposed to be guarding: with NEXT_PUBLIC_API_BASE set to a bare origin
+        // every request went to https://api.erp71.com/short-links/... and 404'd.
+        expect(String(url).match(/\/api\/v1(\/|$)/g)?.length ?? 0).toBe(1);
+    });
+
+    describe('API base resolution', () => {
+        // The deploy script writes NEXT_PUBLIC_API_BASE=https://api.erp71.com — the
+        // bare origin — while the backend mounts everything under api/v1. Any
+        // handler that trusts the configured value verbatim is dead on deploy while
+        // passing locally, where the fallback happens to carry the prefix.
+        it('appends /api/v1 to a configured base that lacks it', async () => {
+            process.env.NEXT_PUBLIC_API_BASE = 'https://api.erp71.com';
+            mockFetch.mockReturnValueOnce(okJson({ data: { kind: 'internal', target_url: '/q/abc123' } }));
+
+            await callGet('abc123');
+
+            const url = String(mockFetch.mock.calls[0][0]);
+            expect(url).toBe('https://api.erp71.com/api/v1/short-links/resolve/abc123');
+            expect(url.match(/\/api\/v1(\/|$)/g)?.length ?? 0).toBe(1);
+        });
+
+        it('does not double the prefix when the configured base already carries it', async () => {
+            process.env.NEXT_PUBLIC_API_BASE = 'https://api.erp71.com/api/v1';
+            mockFetch.mockReturnValueOnce(okJson({ data: { kind: 'internal', target_url: '/q/abc123' } }));
+
+            await callGet('abc123');
+
+            const url = String(mockFetch.mock.calls[0][0]);
+            expect(url).toBe('https://api.erp71.com/api/v1/short-links/resolve/abc123');
+        });
+
+        it('tolerates a trailing slash on the configured base', async () => {
+            process.env.NEXT_PUBLIC_API_BASE = 'https://api.erp71.com/';
+            mockFetch.mockReturnValueOnce(okJson({ data: { kind: 'internal', target_url: '/q/abc123' } }));
+
+            await callGet('abc123');
+
+            expect(String(mockFetch.mock.calls[0][0])).toBe(
+                'https://api.erp71.com/api/v1/short-links/resolve/abc123',
+            );
+        });
+
+        it('falls back to NEXT_PUBLIC_API_URL when NEXT_PUBLIC_API_BASE is unset', async () => {
+            process.env.NEXT_PUBLIC_API_URL = 'https://api.erp71.com';
+            mockFetch.mockReturnValueOnce(okJson({ data: { kind: 'internal', target_url: '/q/abc123' } }));
+
+            await callGet('abc123');
+
+            expect(String(mockFetch.mock.calls[0][0])).toBe(
+                'https://api.erp71.com/api/v1/short-links/resolve/abc123',
+            );
+        });
     });
 
     it('falls back to not-found when fetch rejects (e.g. network error)', async () => {

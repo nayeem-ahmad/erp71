@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { publicApiBase } from '@/lib/api-base';
 
 /**
  * Short link: `/s/<code>` counts the click and forwards to the target.
@@ -17,12 +18,6 @@ import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
 const RESOLVE_TIMEOUT_MS = 3000;
-
-function apiBase(): string {
-    const configured = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL;
-    if (configured) return configured.replace(/\/+$/, '');
-    return 'http://localhost:4000/api/v1';
-}
 
 /**
  * True only for a path that `new URL(path, origin)` is guaranteed to resolve
@@ -50,7 +45,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ cod
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), RESOLVE_TIMEOUT_MS);
     try {
-        const response = await fetch(`${apiBase()}/short-links/resolve/${encodeURIComponent(code)}`, {
+        const response = await fetch(`${publicApiBase()}/short-links/resolve/${encodeURIComponent(code)}`, {
             method: 'POST',
             signal: controller.signal,
             cache: 'no-store',
