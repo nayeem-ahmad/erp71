@@ -1,15 +1,19 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { DatabaseService } from '../database/database.service';
 import { CreateQuotationDto, UpdateQuotationDto, UpdateQuotationStatusDto } from './sales-quotations.dto';
 import { SalesOrdersService } from '../sales-orders/sales-orders.service';
+import { ShortLinksService } from '../short-links/short-links.service';
+import { toPublicQuotation } from './public-quotation.dto';
 
 @Injectable()
 export class SalesQuotationsService {
     constructor(
         private db: DatabaseService,
-        private ordersService: SalesOrdersService
+        private ordersService: SalesOrdersService,
+        private readonly shortLinks: ShortLinksService
     ) {}
 
     async create(tenantId: string, dto: CreateQuotationDto) {
@@ -225,5 +229,79 @@ export class SalesQuotationsService {
 
             return { deleted: true };
         });
+    }
+
+    /**
+     * Mints (or reuses) the public link for a quotation.
+     *
+     * The token is the authority and the short code is only an alias, so this is
+     * safe to call repeatedly: a second call returns the same link rather than
+     * leaving another live URL behind every time someone opens the share modal.
+     */
+    async share(tenantId: string, userId: string, id: string) {
+        const quote = await this.db.quotation.findFirst({ where: { id, tenant_id: tenantId } });
+        if (!quote) throw new NotFoundException('Quotation not found');
+
+        let token = quote.share_token;
+        if (!token) {
+            token = randomBytes(16).toString('base64url'); // ~22 chars, URL-safe
+            await this.db.quotation.update({
+                where: { id },
+                data: { share_token: token, share_token_at: new Date() },
+            });
+        }
+
+        const link = await this.shortLinks.createForEntity({
+            tenantId,
+            userId,
+            entityType: 'QUOTATION',
+            entityId: id,
+            targetUrl: `/q/${token}`,
+        });
+
+        return { code: link.code, path: `/s/${link.code}` };
+    }
+
+    /**
+     * Clearing the token is the whole revocation. Every link ever sent for this
+     * quotation resolves through it, so short and long URLs die together.
+     */
+    async revokeShare(tenantId: string, id: string) {
+        const result = await this.db.quotation.updateMany({
+            where: { id, tenant_id: tenantId },
+            data: { share_token: null, share_token_at: null },
+        });
+        if (result.count === 0) throw new NotFoundException('Quotation not found');
+        return { success: true };
+    }
+
+    /** Public read by token. No tenant context — the token is the authorization. */
+    async findByShareToken(token: string) {
+        // select, not include, on every relation: Product carries reorder_level,
+        // safety_stock and lead_time_days, and Customer carries contact details,
+        // neither of which a public quotation page should ever pull into memory.
+        const quote = await this.db.quotation.findFirst({
+            where: { share_token: token },
+            select: {
+                quote_number: true,
+                version: true,
+                status: true,
+                created_at: true,
+                valid_until: true,
+                notes: true,
+                total_amount: true,
+                customer: { select: { name: true } },
+                store: { select: { name: true } },
+                items: {
+                    select: {
+                        quantity: true,
+                        unit_price: true,
+                        product: { select: { name: true } },
+                    },
+                },
+            },
+        });
+        if (!quote) throw new NotFoundException('This link is no longer available');
+        return toPublicQuotation(quote);
     }
 }

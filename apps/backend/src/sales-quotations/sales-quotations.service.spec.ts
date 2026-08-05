@@ -2,12 +2,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SalesQuotationsService } from './sales-quotations.service';
 import { DatabaseService } from '../database/database.service';
 import { SalesOrdersService } from '../sales-orders/sales-orders.service';
+import { ShortLinksService } from '../short-links/short-links.service';
 import { BadRequestException } from '@nestjs/common';
 
 describe('SalesQuotationsService', () => {
   let service: SalesQuotationsService;
   let db: any;
   let ordersService: any;
+  let shortLinks: any;
 
   beforeEach(async () => {
     db = {
@@ -20,6 +22,7 @@ describe('SalesQuotationsService', () => {
         count: jest.fn(),
         findFirst: jest.fn(),
         deleteMany: jest.fn(),
+        updateMany: jest.fn(),
       },
       quotationItem: {
         deleteMany: jest.fn(),
@@ -30,11 +33,16 @@ describe('SalesQuotationsService', () => {
         create: jest.fn()
     };
 
+    shortLinks = {
+        createForEntity: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SalesQuotationsService,
         { provide: DatabaseService, useValue: db },
-        { provide: SalesOrdersService, useValue: ordersService }
+        { provide: SalesOrdersService, useValue: ordersService },
+        { provide: ShortLinksService, useValue: shortLinks }
       ],
     }).compile();
 
@@ -178,5 +186,95 @@ describe('SalesQuotationsService', () => {
     db.quotation.findFirst.mockResolvedValue({ id: 'q-1', status: 'CONVERTED' });
 
     await expect(service.remove('tenant-1', 'q-1')).rejects.toThrow(BadRequestException);
+  });
+
+  describe('share()', () => {
+    it('mints a token and short link when the quotation has none yet', async () => {
+      db.quotation.findFirst.mockResolvedValue({ id: 'q-1', share_token: null });
+      shortLinks.createForEntity.mockResolvedValue({ code: 'abc123' });
+
+      const result = await service.share('tenant-1', 'user-1', 'q-1');
+
+      expect(db.quotation.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'q-1' },
+          data: expect.objectContaining({ share_token: expect.any(String) }),
+        }),
+      );
+      expect(shortLinks.createForEntity).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          userId: 'user-1',
+          entityType: 'QUOTATION',
+          entityId: 'q-1',
+        }),
+      );
+      expect(result).toEqual({ code: 'abc123', path: '/s/abc123' });
+    });
+
+    it('reuses an existing token instead of minting a new one (idempotent)', async () => {
+      db.quotation.findFirst.mockResolvedValue({ id: 'q-1', share_token: 'existing-token' });
+      shortLinks.createForEntity.mockResolvedValue({ code: 'xyz789' });
+
+      const result = await service.share('tenant-1', 'user-1', 'q-1');
+
+      expect(db.quotation.update).not.toHaveBeenCalled();
+      expect(shortLinks.createForEntity).toHaveBeenCalledWith(
+        expect.objectContaining({ targetUrl: '/q/existing-token' }),
+      );
+      expect(result).toEqual({ code: 'xyz789', path: '/s/xyz789' });
+    });
+
+    it('throws if the quotation does not belong to the tenant', async () => {
+      db.quotation.findFirst.mockResolvedValue(null);
+      await expect(service.share('tenant-1', 'user-1', 'missing')).rejects.toThrow('Quotation not found');
+    });
+  });
+
+  describe('revokeShare()', () => {
+    it('clears the share token', async () => {
+      db.quotation.updateMany.mockResolvedValue({ count: 1 });
+      const result = await service.revokeShare('tenant-1', 'q-1');
+      expect(db.quotation.updateMany).toHaveBeenCalledWith({
+        where: { id: 'q-1', tenant_id: 'tenant-1' },
+        data: { share_token: null, share_token_at: null },
+      });
+      expect(result).toEqual({ success: true });
+    });
+
+    it('throws if no row matched (wrong tenant or missing quotation)', async () => {
+      db.quotation.updateMany.mockResolvedValue({ count: 0 });
+      await expect(service.revokeShare('tenant-1', 'q-1')).rejects.toThrow('Quotation not found');
+    });
+  });
+
+  describe('findByShareToken()', () => {
+    it('returns the sanitized public view for a valid token', async () => {
+      db.quotation.findFirst.mockResolvedValue({
+        quote_number: 'Q-1',
+        version: 1,
+        status: 'SENT',
+        created_at: new Date('2026-08-01'),
+        valid_until: null,
+        notes: null,
+        total_amount: '100.00',
+        customer: { name: 'Rahim Traders' },
+        store: { name: 'Main Branch' },
+        items: [{ quantity: 2, unit_price: '50.00', product: { name: 'Fan' } }],
+      });
+
+      const result = await service.findByShareToken('some-token');
+
+      expect(db.quotation.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { share_token: 'some-token' } }),
+      );
+      expect(result.customer_name).toBe('Rahim Traders');
+      expect(result.items[0]).toMatchObject({ product_name: 'Fan', quantity: 2, unit_price: 50, line_total: 100 });
+    });
+
+    it('throws the same not-found error whether the token is missing or revoked', async () => {
+      db.quotation.findFirst.mockResolvedValue(null);
+      await expect(service.findByShareToken('nonexistent')).rejects.toThrow('This link is no longer available');
+    });
   });
 });
