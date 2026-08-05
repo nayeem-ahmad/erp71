@@ -828,8 +828,8 @@ export const adminMessages = {
     },
     urlShortener: {
         title: 'URL Shortener',
-        subtitle: 'Platform-owned short links, visible across every tenant.',
-        description: 'Links created here belong to the platform, not to any tenant. This list spans every tenant.',
+        subtitle: 'Short links owned by the platform itself.',
+        description: 'Links created here belong to the platform, not to any tenant. Tenants manage their own links from their Settings.',
         placeholder: 'https://example.com/page or /settings/branding',
     },
     referrals: {

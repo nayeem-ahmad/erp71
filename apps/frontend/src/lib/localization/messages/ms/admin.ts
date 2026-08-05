@@ -821,8 +821,8 @@ export const adminMessages = {
         },
         urlShortener: {
             title: "Pemendek URL",
-            subtitle: "Pautan pendek milik platform, kelihatan merentasi setiap penyewa.",
-            description: "Pautan yang dicipta di sini milik platform, bukan mana-mana penyewa. Senarai ini merangkumi setiap penyewa.",
+            subtitle: "Pautan pendek milik platform itu sendiri.",
+            description: "Pautan yang dicipta di sini milik platform, bukan mana-mana penyewa. Penyewa menguruskan pautan mereka sendiri dari Tetapan mereka.",
             placeholder: "https://example.com/page atau /settings/branding",
         },
         referrals: {

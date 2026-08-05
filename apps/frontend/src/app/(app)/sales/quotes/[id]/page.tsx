@@ -203,10 +203,22 @@ function QuoteDetailsPageContent() {
             const result = await api.shareQuotation(id as string);
             setSharePath((result?.data ?? result).path);
         } catch (error: any) {
-            toast.error(error.message || 'Failed to create share link');
+            toast.error(error.message || t.quotes.detail.shareError);
         } finally {
             setActionLoading(false);
         }
+    };
+
+    /**
+     * Deliberately lets the rejection through rather than catching it here: the
+     * modal owns the confirm/failure UI, and swallowing it would let the modal
+     * report a successful revocation that never happened. Reloading afterwards
+     * keeps the page honest about the quotation's share state.
+     */
+    const handleRevokeShare = async () => {
+        await api.revokeQuotationShare(id as string);
+        setSharePath(null);
+        await loadQuote();
     };
 
     if (loading) {
@@ -538,8 +550,9 @@ function QuoteDetailsPageContent() {
 
             {sharePath && (
                 <ShareModal
-                    title={`Quotation ${quote.quote_number}`}
+                    subject={formatMessage(t.quotes.detail.shareSubject, { number: quote.quote_number })}
                     shortPath={sharePath}
+                    onRevoke={handleRevokeShare}
                     onClose={() => setSharePath(null)}
                 />
             )}

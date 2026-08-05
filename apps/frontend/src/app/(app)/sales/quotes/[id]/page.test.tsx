@@ -44,6 +44,7 @@ jest.mock('@/lib/api', () => ({
         getCustomers: jest.fn(),
         getProducts: jest.fn(),
         shareQuotation: jest.fn(),
+        revokeQuotationShare: jest.fn(),
     },
 }));
 
@@ -112,6 +113,7 @@ describe('QuoteDetailsPage', () => {
             { id: 'prod-2', name: 'Product Beta', sku: 'SKU-002', price: '750' },
         ]);
         api.shareQuotation.mockResolvedValue({ code: 'aB3xK9m', path: '/s/aB3xK9m' });
+        api.revokeQuotationShare.mockResolvedValue({ success: true });
     });
 
     it('shows loading state initially', () => {
@@ -286,6 +288,66 @@ describe('QuoteDetailsPage', () => {
         expect(window.alert).not.toHaveBeenCalled();
 
         toastErrorSpy.mockRestore();
+    });
+
+    describe('revoking the share link', () => {
+        // The backend DELETE endpoint shipped working and tested but with no call
+        // site anywhere in the app: with no expiry on the token, a shared
+        // quotation was permanently public and the shop owner had no way to take
+        // it back.
+        async function openShareModal() {
+            render(<QuoteDetailsPage />);
+            await waitFor(() => screen.getByRole('button', { name: /^share$/i }));
+            fireEvent.click(screen.getByRole('button', { name: /^share$/i }));
+            await waitFor(() => screen.getByDisplayValue(`${window.location.origin}/s/aB3xK9m`));
+        }
+
+        const m = enMessages.components.shareModal;
+
+        it('calls revokeQuotationShare once the confirmation is accepted', async () => {
+            const api = getApi();
+            await openShareModal();
+
+            fireEvent.click(screen.getByRole('button', { name: m.revoke }));
+            fireEvent.click(screen.getByRole('button', { name: m.revokeConfirm }));
+
+            await waitFor(() => {
+                expect(api.revokeQuotationShare).toHaveBeenCalledWith('quote-1');
+            });
+            // Modal closed, so the now-dead link is no longer on screen.
+            await waitFor(() => {
+                expect(
+                    screen.queryByDisplayValue(`${window.location.origin}/s/aB3xK9m`),
+                ).not.toBeInTheDocument();
+            });
+        });
+
+        it('does not revoke on the first click alone', async () => {
+            const api = getApi();
+            await openShareModal();
+
+            fireEvent.click(screen.getByRole('button', { name: m.revoke }));
+
+            expect(api.revokeQuotationShare).not.toHaveBeenCalled();
+            expect(screen.getByText(m.revokePrompt)).toBeInTheDocument();
+        });
+
+        it('keeps the link on screen and toasts when revoking fails', async () => {
+            const { toast } = require('@/lib/toast');
+            const toastErrorSpy = jest.spyOn(toast, 'error').mockImplementation(() => '');
+            const api = getApi();
+            api.revokeQuotationShare.mockRejectedValue(new Error('Quotation not found'));
+
+            await openShareModal();
+            fireEvent.click(screen.getByRole('button', { name: m.revoke }));
+            fireEvent.click(screen.getByRole('button', { name: m.revokeConfirm }));
+
+            await waitFor(() => expect(toastErrorSpy).toHaveBeenCalledWith('Quotation not found'));
+            expect(screen.getByDisplayValue(`${window.location.origin}/s/aB3xK9m`)).toBeInTheDocument();
+            expect(window.alert).not.toHaveBeenCalled();
+
+            toastErrorSpy.mockRestore();
+        });
     });
 
     describe('Edit mode', () => {
