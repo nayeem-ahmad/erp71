@@ -90,6 +90,19 @@ export const PERMISSION_BACKFILL_GROUPS: PermissionGroup[] = [
             StorePermission.MANAGE_SHORT_LINKS,
         ],
     },
+    {
+        // VIEW_PAYROLL is in the group but not in any role's defaults except
+        // OWNER's, so this carries VIEW_HR to existing managers and leaves the
+        // salary figures to a deliberate grant. Listing it anyway is what makes
+        // the group's "already reconciled" test honest: a role that was given
+        // VIEW_PAYROLL by hand must not then be handed VIEW_HR behind the
+        // owner's back.
+        key: 'hr',
+        permissions: [
+            StorePermission.VIEW_HR,
+            StorePermission.VIEW_PAYROLL,
+        ],
+    },
 ];
 
 export interface GroupResult {

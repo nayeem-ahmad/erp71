@@ -174,6 +174,16 @@ export const PLAN_ENTITLEMENT_REGISTRY: PlanEntitlementDefinition[] = [
     group: 'modules',
   },
   {
+    // Same add-on caveat as `accountingDashboard` above: an add-on carrying this
+    // would replace a retail tenant's dashboard rather than add anything.
+    key: 'crmDashboard',
+    type: 'boolean',
+    label: 'CRM dashboard',
+    description: 'Lands on the pipeline dashboard instead of the retail one.',
+    defaultValue: false,
+    group: 'modules',
+  },
+  {
     key: 'premiumAccountingAdvanced',
     type: 'boolean',
     label: 'Advanced accounting reports',
@@ -475,12 +485,12 @@ export function hasPlanEntitlement(
 }
 
 /** Stored in `Tenant.dashboard_preference`. AUTO defers to the plan. */
-export const DASHBOARD_PREFERENCES = ['AUTO', 'RETAIL', 'ACCOUNTING'] as const;
+export const DASHBOARD_PREFERENCES = ['AUTO', 'RETAIL', 'ACCOUNTING', 'CRM'] as const;
 
 export type DashboardPreference = (typeof DASHBOARD_PREFERENCES)[number];
 
 /** What the dashboard page actually renders once the preference is resolved. */
-export type DashboardVariant = 'RETAIL' | 'ACCOUNTING';
+export type DashboardVariant = 'RETAIL' | 'ACCOUNTING' | 'CRM';
 
 export function isDashboardPreference(value: unknown): value is DashboardPreference {
   return typeof value === 'string' && (DASHBOARD_PREFERENCES as readonly string[]).includes(value);
@@ -488,12 +498,13 @@ export function isDashboardPreference(value: unknown): value is DashboardPrefere
 
 /**
  * Which dashboard a given user in a given tenant lands on, resolved from three
- * layers: the plan's `accountingDashboard` default, the tenant's own choice, and
- * what the user can actually load.
+ * layers: the plan's `accountingDashboard`/`crmDashboard` default, the tenant's
+ * own choice, and what the user can actually load.
  *
- * The two fallbacks are not cosmetic. Every accounting panel reads from
+ * The fallbacks are not cosmetic. Every accounting panel reads from
  * `AccountingController`, which is gated on both `premiumAccounting` and the
  * `VIEW_LEDGER` *store* permission — send a cashier there and every tile 403s.
+ * `CrmDashboardController` is the same story with `premiumCrm` + `VIEW_LEADS`.
  * In the other direction an `accountingOnly` tenant has no retail routes to fall
  * back to, so the plan stays the floor and the choice cannot escape it.
  */
@@ -502,15 +513,20 @@ export function resolveDashboardVariant(
   features: Record<string, boolean | number>,
   permissions: readonly string[] = [],
 ): DashboardVariant {
-  // An accounting-only workspace has no retail modules, routes or data, so
-  // neither a preference nor a missing permission can move it elsewhere.
+  // An accounting-only workspace has no retail or CRM modules, routes or data,
+  // so neither a preference nor a missing permission can move it elsewhere.
   if (hasPlanEntitlement(features, 'accountingOnly')) {
     return 'ACCOUNTING';
   }
 
-  const planDefault: DashboardVariant = hasPlanEntitlement(features, 'accountingDashboard')
-    ? 'ACCOUNTING'
-    : 'RETAIL';
+  // Accounting wins the plan default when a plan somehow carries both, because
+  // an accounting-flavoured plan is the narrower claim.
+  let planDefault: DashboardVariant = 'RETAIL';
+  if (hasPlanEntitlement(features, 'accountingDashboard')) {
+    planDefault = 'ACCOUNTING';
+  } else if (hasPlanEntitlement(features, 'crmDashboard')) {
+    planDefault = 'CRM';
+  }
 
   const chosen = isDashboardPreference(preference) && preference !== 'AUTO'
     ? (preference as DashboardVariant)
@@ -518,6 +534,12 @@ export function resolveDashboardVariant(
 
   if (chosen === 'RETAIL') {
     return 'RETAIL';
+  }
+
+  if (chosen === 'CRM') {
+    const canReadPipeline =
+      hasPlanEntitlement(features, 'premiumCrm') && permissions.includes('VIEW_LEADS');
+    return canReadPipeline ? 'CRM' : 'RETAIL';
   }
 
   const canReadLedger =

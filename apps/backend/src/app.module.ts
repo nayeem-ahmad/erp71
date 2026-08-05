@@ -80,12 +80,19 @@ import { CrmFollowUpsModule } from './crm-follow-ups/crm-follow-ups.module';
 import { ProjectsModule } from './projects/projects.module';
 import { CrmCampaignsModule } from './crm-campaigns/crm-campaigns.module';
 import { CrmContactsModule } from './crm-contacts/crm-contacts.module';
+import { CrmDashboardModule } from './crm-dashboard/crm-dashboard.module';
+import { InventoryDashboardModule } from './inventory-dashboard/inventory-dashboard.module';
+import { PurchaseDashboardModule } from './purchase-dashboard/purchase-dashboard.module';
+import { SalesDashboardModule } from './sales-dashboard/sales-dashboard.module';
+import { HrDashboardModule } from './hr-dashboard/hr-dashboard.module';
+import { AdminDashboardModule } from './admin-dashboard/admin-dashboard.module';
 import { CrmLeadsModule } from './crm-leads/crm-leads.module';
 import { CrmLeadConversationsModule } from './crm-lead-conversations/crm-lead-conversations.module';
 import { CrmLeadTaxonomyModule } from './crm-lead-taxonomy/crm-lead-taxonomy.module';
 import { CustomFieldsModule } from './custom-fields/custom-fields.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { LoansModule } from './loans/loans.module';
+import { InvestorsModule } from './investors/investors.module';
 import { FundTransfersModule } from './fund-transfers/fund-transfers.module';
 import { SalaryPaymentsModule } from './salary-payments/salary-payments.module';
 import { AiModule } from './ai/ai.module';
@@ -177,12 +184,19 @@ import { ShortLinksModule } from './short-links/short-links.module';
         ProjectsModule,
         CrmCampaignsModule,
         CrmContactsModule,
+        CrmDashboardModule,
+        InventoryDashboardModule,
+        PurchaseDashboardModule,
+        SalesDashboardModule,
+        HrDashboardModule,
+        AdminDashboardModule,
         CrmLeadsModule,
         CrmLeadConversationsModule,
         CrmLeadTaxonomyModule,
         CustomFieldsModule,
         ExpensesModule,
         LoansModule,
+        InvestorsModule,
         FundTransfersModule,
         SalaryPaymentsModule,
         AiModule,

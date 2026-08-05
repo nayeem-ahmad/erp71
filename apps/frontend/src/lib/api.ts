@@ -2,12 +2,14 @@ import type {
     AiChatConversationDetail,
     AiChatConversationSummary,
     AiChatResponse,
+    DashboardPreference,
     PlatformFeatureKey,
     PlatformFeatures,
     TenantFeatureOverrides,
 } from '@erp71/shared-types';
 import type { ReferralCommissionStatus } from '@/components/admin/referrals/types';
 import { normalizeApiBase } from './api-base';
+import { handleExpiredSession } from './session-expiry';
 
 /** Per-tenant feature state: platform defaults, this tenant's overrides, and the result. */
 export type AdminTenantFeatures = {
@@ -69,6 +71,10 @@ export async function fetchBlobWithAuth(endpoint: string, options: RequestInit =
     });
 
     if (!response.ok) {
+        // Only authenticated endpoints reach here, so a 401 means the session died.
+        if (response.status === 401) {
+            handleExpiredSession();
+        }
         let message = `API error: ${response.statusText}`;
         try {
             const errorBody = await response.json();
@@ -123,6 +129,11 @@ async function requestWithAuth(endpoint: string, options: RequestInit = {}): Pro
     });
 
     if (!response.ok) {
+        // Only authenticated endpoints reach here, so a 401 means the session died.
+        if (response.status === 401) {
+            handleExpiredSession();
+        }
+
         let message = `API error: ${response.statusText}`;
 
         try {
@@ -411,6 +422,19 @@ function leadConversationQuery(
     return query ? `?${query}` : '';
 }
 
+/**
+ * Every module dashboard endpoint takes the same optional window and answers in
+ * one payload, so they share one caller rather than seven copies of this.
+ */
+function dashboardWindowFetcher(path: string) {
+    return (params?: { from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        return fetchWithAuth(`${path}${query.toString() ? `?${query.toString()}` : ''}`);
+    };
+}
+
 export const api = {
     /**
      * Every product as a flat array — for pickers, POS and id→product maps.
@@ -623,6 +647,15 @@ export const api = {
         if (params?.groupId) query.set('groupId', params.groupId);
         if (params?.subgroupId) query.set('subgroupId', params.subgroupId);
         return fetchWithAuth(`/inventory-reports/reorder-suggestions${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    getStockOnHand: (params?: { warehouseId?: string; groupId?: string; subgroupId?: string; brandId?: string; includeZeroStock?: boolean }) => {
+        const query = new URLSearchParams();
+        if (params?.warehouseId) query.set('warehouseId', params.warehouseId);
+        if (params?.groupId) query.set('groupId', params.groupId);
+        if (params?.subgroupId) query.set('subgroupId', params.subgroupId);
+        if (params?.brandId) query.set('brandId', params.brandId);
+        if (params?.includeZeroStock) query.set('includeZeroStock', 'true');
+        return fetchWithAuth(`/inventory-reports/stock-on-hand${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getInventoryValuation: (params?: { warehouseId?: string; groupId?: string; subgroupId?: string }) => {
         const query = new URLSearchParams();
@@ -1105,6 +1138,21 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteCrmFollowUp: (id: string) => fetchWithAuth(`/crm/follow-ups/${id}`, { method: 'DELETE' }),
+    // CRM dashboard — one aggregate per paint. The per-page summary endpoints
+    // (`/crm/leads/summary` and friends) still serve their own list screens.
+    getCrmDashboardOverview: dashboardWindowFetcher('/crm/dashboard/overview'),
+    getCrmDashboardTrends: dashboardWindowFetcher('/crm/dashboard/trends'),
+    // Module Overview dashboards — same contract, one per module.
+    getInventoryDashboardOverview: dashboardWindowFetcher('/inventory/dashboard/overview'),
+    getInventoryDashboardTrends: dashboardWindowFetcher('/inventory/dashboard/trends'),
+    getPurchaseDashboardOverview: dashboardWindowFetcher('/purchases/dashboard/overview'),
+    getPurchaseDashboardTrends: dashboardWindowFetcher('/purchases/dashboard/trends'),
+    getSalesDashboardOverview: dashboardWindowFetcher('/sales/dashboard/overview'),
+    getSalesDashboardTrends: dashboardWindowFetcher('/sales/dashboard/trends'),
+    getHrDashboardOverview: dashboardWindowFetcher('/hr/dashboard/overview'),
+    getHrDashboardTrends: dashboardWindowFetcher('/hr/dashboard/trends'),
+    getAdminDashboardOverview: dashboardWindowFetcher('/admin/dashboard/overview'),
+    getAdminDashboardTrends: dashboardWindowFetcher('/admin/dashboard/trends'),
     // CRM Campaigns
     getCrmCampaigns: () => fetchAllPages('/crm/campaigns'),
     getCrmCampaign: (id: string) => fetchWithAuth(`/crm/campaigns/${id}`),
@@ -2358,7 +2406,9 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     getTenantDashboardSettings: () => fetchWithAuth('/tenants/dashboard-settings'),
-    updateTenantDashboardSettings: (data: { dashboard_preference: 'AUTO' | 'RETAIL' | 'ACCOUNTING' }) =>
+    // Typed off the shared list so a new variant cannot be added on one side only —
+    // the backend DTO validates against the same constant.
+    updateTenantDashboardSettings: (data: { dashboard_preference: DashboardPreference }) =>
         fetchWithAuth('/tenants/dashboard-settings', {
             method: 'PATCH',
             body: JSON.stringify(data),
@@ -2765,6 +2815,59 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteLoanPayment: (id: string, paymentId: string) => fetchWithAuth(`/loans/${id}/payments/${paymentId}`, { method: 'DELETE' }),
+    // Investors & profit sharing
+    getInvestors: (params?: { status?: string; storeId?: string; search?: string }) => {
+        const q = new URLSearchParams();
+        if (params?.status) q.set('status', params.status);
+        if (params?.storeId) q.set('storeId', params.storeId);
+        if (params?.search) q.set('search', params.search);
+        return fetchAllPages(`/investors${q.toString() ? `?${q}` : ''}`);
+    },
+    getInvestorSummary: () => fetchWithAuth('/investors/summary'),
+    getInvestor: (id: string) => fetchWithAuth(`/investors/${id}`),
+    createInvestor: (data: any) => fetchWithAuth('/investors', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateInvestor: (id: string, data: any) => fetchWithAuth(`/investors/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteInvestor: (id: string) => fetchWithAuth(`/investors/${id}`, { method: 'DELETE' }),
+    addInvestorCapital: (id: string, data: any) => fetchWithAuth(`/investors/${id}/capital`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteInvestorCapital: (id: string, txnId: string) =>
+        fetchWithAuth(`/investors/${id}/capital/${txnId}`, { method: 'DELETE' }),
+    getInvestorProfitRuns: (params?: { year?: number; storeId?: string }) => {
+        const q = new URLSearchParams();
+        if (params?.year) q.set('year', String(params.year));
+        if (params?.storeId) q.set('storeId', params.storeId);
+        return fetchAllPages(`/investors/profit-runs${q.toString() ? `?${q}` : ''}`);
+    },
+    getInvestorProfitRun: (id: string) => fetchWithAuth(`/investors/profit-runs/${id}`),
+    previewInvestorProfitRun: (data: any) => fetchWithAuth('/investors/profit-runs/preview', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    createInvestorProfitRun: (data: any) => fetchWithAuth('/investors/profit-runs', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteInvestorProfitRun: (id: string) =>
+        fetchWithAuth(`/investors/profit-runs/${id}`, { method: 'DELETE' }),
+    payInvestorProfitShare: (shareId: string, data: any) =>
+        fetchWithAuth(`/investors/shares/${shareId}/pay`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     // Salary Payments
     getSalaryPayments: (params?: { employeeId?: string; payPeriod?: string; from?: string; to?: string }) => {
         const q = new URLSearchParams();

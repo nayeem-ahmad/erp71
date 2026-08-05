@@ -1,6 +1,7 @@
 import { api } from './api';
 import { syncLocalePreferenceFromSession } from './localization/preference';
 import { routes } from './routes';
+import { clearStoredSession } from './session-expiry';
 
 /**
  * A "login context" is one of the workspaces a signed-in identity can act as:
@@ -179,21 +180,9 @@ export async function storeAuthResponse(res: any, rememberMe = false): Promise<S
 }
 
 export function clearAuthSession() {
-    // Clear both storage backends to ensure full logout.
-    const keys = [
-        'access_token',
-        'tenant_id',
-        'last_tenant_id',
-        'store_id',
-        'subscription_plan_code',
-        'demo_session',
-        'onboarding_complete',
-        'active_context',
-    ];
-    for (const key of keys) {
-        localStorage.removeItem(key);
-        sessionStorage.removeItem(key);
-    }
+    // Shares one key list with the expired-session path so an explicit sign-out
+    // and an expiry can never clear different things.
+    clearStoredSession();
 }
 
 /** True when the path belongs to a shop workspace (not the platform admin console). */

@@ -7,6 +7,7 @@ import { useI18n } from '@/lib/i18n';
 import { extractTenantPlan } from '@/lib/nav-visibility';
 import { tenantDashboardVariant } from '@/lib/plan-entitlements';
 import AccountingDashboard from '@/components/dashboard/AccountingDashboard';
+import CrmDashboard from '@/components/dashboard/CrmDashboard';
 import RetailDashboard from '@/components/dashboard/RetailDashboard';
 import PageShell from '@/components/ui/compact/PageShell';
 
@@ -20,10 +21,10 @@ type Resolved = {
 /**
  * Picks a dashboard and gets out of the way. Which one a tenant sees comes from
  * `resolveDashboardVariant` — the plan's default, the workspace's own choice in
- * settings, then whether this user can actually read the ledger.
+ * settings, then whether this user can actually read the ledger (or the pipeline).
  *
- * The two variants are separate components on purpose: the previous single page
- * carried six `!accountingOnlyMode` guards, and every panel added to either side
+ * The variants are separate components on purpose: the previous single page
+ * carried six `!accountingOnlyMode` guards, and every panel added to any side
  * made that worse.
  */
 export default function DashboardPage() {
@@ -91,7 +92,7 @@ export default function DashboardPage() {
         renewalEnd: resolved.renewalEnd,
     };
 
-    return resolved.variant === 'ACCOUNTING'
-        ? <AccountingDashboard {...identity} />
-        : <RetailDashboard {...identity} />;
+    if (resolved.variant === 'ACCOUNTING') return <AccountingDashboard {...identity} />;
+    if (resolved.variant === 'CRM') return <CrmDashboard {...identity} />;
+    return <RetailDashboard {...identity} />;
 }

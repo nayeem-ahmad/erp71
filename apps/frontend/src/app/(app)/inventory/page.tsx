@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
     AlertTriangle,
     BarChart3,
@@ -15,7 +15,8 @@ import {
     TrendingUp,
 } from 'lucide-react';
 import ModuleHub, { type HubSectionConfig } from '@/components/ModuleHub';
-import { api } from '@/lib/api';
+import InventoryDashboard from '@/components/dashboard/InventoryDashboard';
+import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
 import { canAccessInventoryAdvancedReports } from '@/lib/plan-entitlements';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
@@ -50,21 +51,15 @@ const INVENTORY_HUB_SECTIONS: HubSectionConfig[] = [
     },
 ];
 
+/**
+ * Inventory > Overview. The stock dashboard sits above the link hub for every
+ * plan: valuation and aging are the premium half and the server withholds them
+ * on its own, so there is nothing here to gate the whole page on.
+ */
 export default function InventoryHubPage() {
     const { t } = useI18n();
-    const [canAccessAdvancedReports, setCanAccessAdvancedReports] = useState(false);
-
-    useEffect(() => {
-        api.getMe()
-            .then((me) => {
-                const tenantId = localStorage.getItem('tenant_id');
-                const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === tenantId) || me?.tenants?.[0];
-                const planCode = tenant?.subscription?.plan?.code || null;
-                const features = (tenant?.subscription?.plan?.features_json || {}) as Record<string, unknown>;
-                setCanAccessAdvancedReports(canAccessInventoryAdvancedReports(planCode, features));
-            })
-            .catch(() => setCanAccessAdvancedReports(false));
-    }, []);
+    const { planCode, features, ready } = useTenantPlanFeatures();
+    const canAccessAdvancedReports = canAccessInventoryAdvancedReports(planCode, features);
 
     const hub = t.inventory.hub;
     const sectionLabels = useMemo(() => ({
@@ -85,6 +80,12 @@ export default function InventoryHubPage() {
             openSectionLabel={t.accountingShared.openSection}
             viewReportLabel={t.accountingShared.viewReport}
             canAccessAdvanced={canAccessAdvancedReports}
-        />
+        >
+            {ready ? (
+                <div className="mb-4">
+                    <InventoryDashboard variant="embedded" greeting="" tenantName="" renewalEnd={null} />
+                </div>
+            ) : null}
+        </ModuleHub>
     );
 }

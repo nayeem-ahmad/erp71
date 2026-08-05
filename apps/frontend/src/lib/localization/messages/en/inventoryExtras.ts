@@ -234,6 +234,39 @@ export const inventoryExtrasMessages = {
                 "leadTimeDays": "Lead Time (Days)"
             }
         },
+        "stockOnHand": {
+            "title": "Stock on Hand",
+            "subtitle": "Quantity per warehouse valued at weighted average purchase cost",
+            "allWarehouses": "All Warehouses",
+            "allGroups": "All Groups",
+            "allSubgroups": "All Subgroups",
+            "allBrands": "All Brands",
+            "showZeroStock": "Include zero-stock products",
+            "uncategorized": "Uncategorized",
+            "emptyMessage": "No stock on hand for the current filters",
+            "searchPlaceholder": "Search products...",
+            "totalStockValue": "Total Stock Value",
+            "totalQuantity": "Total Quantity",
+            "productsInStock": "Products In Stock",
+            "warehousesCounted": "Warehouses",
+            "valuationBasisNote": "Valued at weighted average purchase cost, net of purchase returns. Products never purchased through the ledger fall back to their last recorded cost.",
+            "uncostedWarning": "{count} product(s) holding {quantity} unit(s) have no purchase cost on file and are valued at zero — the total below is understated.",
+            "costBasis": {
+                "WEIGHTED_AVERAGE": "Weighted average",
+                "LATEST_COST": "Last recorded cost",
+                "UNCOSTED": "No cost on file"
+            },
+            "columns": {
+                "product": "Product",
+                "sku": "SKU",
+                "group": "Group",
+                "brand": "Brand",
+                "avgUnitCost": "Avg Unit Cost",
+                "costBasis": "Cost Basis",
+                "totalQuantity": "Total Qty",
+                "totalValue": "Stock Value"
+            }
+        },
         "valuation": {
             "title": "Inventory Valuation",
             "subtitle": "Stock value by product and warehouse using current on-hand quantities",

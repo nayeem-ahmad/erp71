@@ -8,7 +8,15 @@ import { CustomFieldEntity } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { CustomersService } from '../customers/customers.service';
 import { CustomFieldsService } from '../custom-fields/custom-fields.service';
-import { BulkLeadActionDto, CreateLeadDto, LeadBulkAction, LeadPriority, LeadStatus, UpdateLeadDto } from './crm-leads.dto';
+import {
+    BulkLeadActionDto,
+    CreateLeadDto,
+    isClosedStatus,
+    LeadBulkAction,
+    LeadPriority,
+    LeadStatus,
+    UpdateLeadDto,
+} from './crm-leads.dto';
 import { paginate } from '../common/pagination.dto';
 import { computeLeadScore, DEFAULT_SOURCE_WEIGHT } from './lead-scoring.util';
 import { runImport, ImportResult } from '../common/import.util';
@@ -192,6 +200,9 @@ export class CrmLeadsService {
                 source: coerceLegacySource(sourceRow?.code),
                 status,
                 lost_reason: status === LeadStatus.LOST ? dto.lost_reason : undefined,
+                // A lead can be filed already-lost (a walk-in who bought elsewhere),
+                // in which case it closed the moment it was created.
+                closed_at: isClosedStatus(status) ? new Date() : undefined,
                 score,
                 linkedin_url: dto.linkedin_url,
                 fb_url: dto.fb_url,
@@ -278,6 +289,40 @@ export class CrmLeadsService {
         return lead;
     }
 
+    /**
+     * Folds a status change into the update payload: the lost reason it requires,
+     * and the close timestamp the CRM dashboard counts periods by.
+     *
+     * Only a *transition* stamps `closed_at` — re-saving an already-lost lead must
+     * not move it, or won/lost-in-period would follow whoever edited the row last.
+     * Reopening a closed lead clears it.
+     */
+    private applyStatusTransition(
+        // `status` is typed loosely because the row comes back carrying Prisma's
+        // own LeadStatus enum, which is structurally identical but nominally
+        // distinct from the DTO's.
+        existing: { status: string; lost_reason: string | null },
+        dto: UpdateLeadDto,
+        data: Record<string, unknown>,
+    ) {
+        const changed = Boolean(dto.status) && dto.status !== existing.status;
+        const nextStatus = dto.status ?? existing.status;
+
+        if (nextStatus === LeadStatus.LOST) {
+            const reason = dto.lost_reason ?? existing.lost_reason;
+            if (!reason) {
+                throw new BadRequestException('lost_reason is required when marking a lead as LOST.');
+            }
+            data.lost_reason = reason;
+        } else if (changed) {
+            data.lost_reason = null;
+        }
+
+        if (changed) {
+            data.closed_at = isClosedStatus(nextStatus) ? new Date() : null;
+        }
+    }
+
     async update(tenantId: string, id: string, dto: UpdateLeadDto) {
         const existing = await this.db.lead.findFirst({ where: { id, tenant_id: tenantId } });
         if (!existing) throw new NotFoundException('Lead not found');
@@ -309,15 +354,7 @@ export class CrmLeadsService {
         }
 
         const nextStatus = dto.status ?? existing.status;
-        if (nextStatus === LeadStatus.LOST) {
-            const reason = dto.lost_reason ?? existing.lost_reason;
-            if (!reason) {
-                throw new BadRequestException('lost_reason is required when marking a lead as LOST.');
-            }
-            data.lost_reason = reason;
-        } else if (dto.status && dto.status !== existing.status) {
-            data.lost_reason = null;
-        }
+        this.applyStatusTransition(existing, dto, data);
 
         // Weight comes from the lead's (possibly just-changed) source row; an
         // unbackfilled lead has no row yet and scores at the default.
@@ -522,6 +559,9 @@ export class CrmLeadsService {
                         source_id: source?.id ?? null,
                         source: coerceLegacySource(source?.code),
                         status: row.status ?? LeadStatus.NEW,
+                        // Import can carry CONVERTED (a backlog of already-won deals);
+                        // LOST is rejected upstream for want of a reason.
+                        closed_at: isClosedStatus(row.status ?? LeadStatus.NEW) ? new Date() : undefined,
                         linkedin_url: row.linkedin_url ?? undefined,
                         fb_url: row.fb_url ?? undefined,
                         x_url: row.x_url ?? undefined,
@@ -557,6 +597,12 @@ export class CrmLeadsService {
                                 source: coerceLegacySource(row.source.code),
                             }
                             : {}),
+                        // `closed_at` is deliberately not touched here. An upsert
+                        // import is a bulk sync, not a deal being closed, and it
+                        // re-runs over unchanged rows — stamping would re-date every
+                        // won deal on every import. A lead moved to CONVERTED this
+                        // way still counts in the all-time totals, just not in
+                        // won-this-period until someone edits it for real.
                         ...(row.status   !== undefined ? { status: row.status }     : {}),
                         ...(row.linkedin_url !== null ? { linkedin_url: row.linkedin_url } : {}),
                         ...(row.fb_url       !== null ? { fb_url: row.fb_url }             : {}),
@@ -603,6 +649,7 @@ export class CrmLeadsService {
             data: {
                 status: LeadStatus.CONVERTED,
                 converted_customer_id: customer.id,
+                closed_at: new Date(),
                 score: 100,
             },
             include: leadIncludes,
