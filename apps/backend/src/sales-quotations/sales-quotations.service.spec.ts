@@ -27,6 +27,9 @@ describe('SalesQuotationsService', () => {
       quotationItem: {
         deleteMany: jest.fn(),
       },
+      shortLink: {
+        updateMany: jest.fn(),
+      },
     };
 
     ordersService = {
@@ -80,7 +83,7 @@ describe('SalesQuotationsService', () => {
     const result = await service.revise('tenant-1', 'quote-1');
     expect(db.quotation.update).toHaveBeenCalledWith({
         where: { id: 'quote-1' },
-        data: { status: 'REVISED' }
+        data: { status: 'REVISED', share_token: null, share_token_at: null }
     });
     expect(db.quotation.create).toHaveBeenCalled();
     expect(result.version).toEqual(2);
@@ -89,6 +92,148 @@ describe('SalesQuotationsService', () => {
   it('revise() should throw if quote is already accepted or converted', async () => {
       db.quotation.findUnique.mockResolvedValue({ status: 'ACCEPTED' });
       await expect(service.revise('t1', 'q1')).rejects.toThrow(BadRequestException);
+  });
+
+  describe('revise() share token handling', () => {
+    it('moves the share token to the new row', async () => {
+      const oldQuote = {
+          id: 'quote-1',
+          version: 1,
+          status: 'SENT',
+          share_token: 'tok-abc',
+          share_token_at: new Date('2026-08-01'),
+          items: [{ product_id: 'prod-1', quantity: 1, unit_price: 100 }]
+      };
+
+      db.quotation.findUnique.mockResolvedValue(oldQuote);
+      db.quotation.create.mockResolvedValue({ id: 'quote-2', version: 2 });
+
+      await service.revise('tenant-1', 'quote-1');
+
+      expect(db.quotation.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+              data: expect.objectContaining({
+                  share_token: 'tok-abc',
+                  share_token_at: oldQuote.share_token_at,
+              }),
+          }),
+      );
+    });
+
+    it('clears the share token on the old row', async () => {
+      const oldQuote = {
+          id: 'quote-1',
+          version: 1,
+          status: 'SENT',
+          share_token: 'tok-abc',
+          share_token_at: new Date('2026-08-01'),
+          items: [{ product_id: 'prod-1', quantity: 1, unit_price: 100 }]
+      };
+
+      db.quotation.findUnique.mockResolvedValue(oldQuote);
+      db.quotation.create.mockResolvedValue({ id: 'quote-2', version: 2 });
+
+      await service.revise('tenant-1', 'quote-1');
+
+      expect(db.quotation.update).toHaveBeenCalledWith({
+          where: { id: 'quote-1' },
+          data: { status: 'REVISED', share_token: null, share_token_at: null }
+      });
+    });
+
+    it('clears the old token before creating the new row', async () => {
+      const oldQuote = {
+          id: 'quote-1',
+          version: 1,
+          status: 'SENT',
+          share_token: 'tok-abc',
+          share_token_at: new Date('2026-08-01'),
+          items: [{ product_id: 'prod-1', quantity: 1, unit_price: 100 }]
+      };
+
+      db.quotation.findUnique.mockResolvedValue(oldQuote);
+      db.quotation.create.mockResolvedValue({ id: 'quote-2', version: 2 });
+
+      await service.revise('tenant-1', 'quote-1');
+
+      const updateOrder = db.quotation.update.mock.invocationCallOrder[0];
+      const createOrder = db.quotation.create.mock.invocationCallOrder[0];
+      expect(updateOrder).toBeLessThan(createOrder);
+    });
+
+    it('leaves an unshared quotation unaffected', async () => {
+      const oldQuote = {
+          id: 'quote-1',
+          version: 1,
+          status: 'DRAFT',
+          share_token: null,
+          share_token_at: null,
+          items: [{ product_id: 'prod-1', quantity: 1, unit_price: 100 }]
+      };
+
+      db.quotation.findUnique.mockResolvedValue(oldQuote);
+      db.quotation.create.mockResolvedValue({ id: 'quote-2', version: 2 });
+
+      await service.revise('tenant-1', 'quote-1');
+
+      expect(db.quotation.update).toHaveBeenCalledWith({
+          where: { id: 'quote-1' },
+          data: { status: 'REVISED', share_token: null, share_token_at: null }
+      });
+      expect(db.quotation.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+              data: expect.objectContaining({
+                  share_token: null,
+                  share_token_at: null,
+              }),
+          }),
+      );
+    });
+
+    it('re-points the live short link at the new quotation id', async () => {
+      const oldQuote = {
+          id: 'quote-1',
+          version: 1,
+          status: 'SENT',
+          share_token: 'tok-abc',
+          share_token_at: new Date('2026-08-01'),
+          items: [{ product_id: 'prod-1', quantity: 1, unit_price: 100 }]
+      };
+
+      db.quotation.findUnique.mockResolvedValue(oldQuote);
+      db.quotation.create.mockResolvedValue({ id: 'quote-2', version: 2 });
+
+      await service.revise('tenant-1', 'quote-1');
+
+      expect(db.shortLink.updateMany).toHaveBeenCalledWith({
+          where: {
+              tenant_id: 'tenant-1',
+              entity_type: 'QUOTATION',
+              entity_id: 'quote-1',
+              revoked_at: null,
+          },
+          data: { entity_id: 'quote-2' },
+      });
+    });
+
+    it('succeeds when no live short link matches', async () => {
+      const oldQuote = {
+          id: 'quote-1',
+          version: 1,
+          status: 'SENT',
+          share_token: 'tok-abc',
+          share_token_at: new Date('2026-08-01'),
+          items: [{ product_id: 'prod-1', quantity: 1, unit_price: 100 }]
+      };
+
+      db.quotation.findUnique.mockResolvedValue(oldQuote);
+      db.quotation.create.mockResolvedValue({ id: 'quote-2', version: 2 });
+      db.shortLink.updateMany.mockResolvedValue({ count: 0 });
+
+      const result = await service.revise('tenant-1', 'quote-1');
+
+      expect(result).toEqual({ id: 'quote-2', version: 2 });
+    });
   });
 
   it('convertToOrder() should pipe items to SalesOrdersService', async () => {

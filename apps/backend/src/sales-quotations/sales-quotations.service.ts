@@ -54,10 +54,11 @@ export class SalesQuotationsService {
                 throw new BadRequestException('Cannot revise a quotation that is already processed.');
             }
 
-            // Mark old as REVISED
+            // Mark old as REVISED and clear its share token so the token can
+            // move to the new row without violating the @unique constraint.
             await tx.quotation.update({
                 where: { id },
-                data: { status: 'REVISED' }
+                data: { status: 'REVISED', share_token: null, share_token_at: null }
             });
 
             // Create new version
@@ -70,7 +71,7 @@ export class SalesQuotationsService {
                 unit_price: item.unit_price
             }));
 
-            return tx.quotation.create({
+            const newQuote = await tx.quotation.create({
                 data: {
                     tenant_id: tenantId,
                     store_id: oldQuote.store_id,
@@ -81,10 +82,26 @@ export class SalesQuotationsService {
                     notes: oldQuote.notes,
                     version: newVersion,
                     original_quote_id: originalQuoteId,
+                    share_token: oldQuote.share_token,
+                    share_token_at: oldQuote.share_token_at,
                     items: { create: itemsData }
                 },
                 include: { items: true }
             });
+
+            // Re-point any live short link at the new quotation id so
+            // re-sharing finds it instead of minting a redundant code.
+            await tx.shortLink.updateMany({
+                where: {
+                    tenant_id: tenantId,
+                    entity_type: 'QUOTATION',
+                    entity_id: id,
+                    revoked_at: null,
+                },
+                data: { entity_id: newQuote.id },
+            });
+
+            return newQuote;
         });
     }
 
