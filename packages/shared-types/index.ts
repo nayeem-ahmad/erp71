@@ -313,6 +313,7 @@ export const STORE_PERMISSION_GROUPS: { label: string; permissions: StorePermiss
       StorePermission.MANAGE_USER_STORE_ACCESS,
       StorePermission.MANAGE_STORES,
       StorePermission.MANAGE_COUNTERS,
+      StorePermission.MANAGE_SHORT_LINKS,
     ],
   },
 ];

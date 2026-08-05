@@ -5,6 +5,7 @@ import {
 import { ROLE_DEFAULT_PERMISSIONS, StorePermission, UserRole } from '@erp71/shared-types';
 
 const PROJECT_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'projects')!.permissions;
+const SHORT_LINKS_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'short-links')!.permissions;
 
 type Row = Record<string, any>;
 
@@ -87,6 +88,23 @@ describe('syncRolePermissions', () => {
                 .sort(),
         ).toEqual([...PROJECT_PERMS].sort());
         expect(tables.tenantRolePermission.every((r) => r.tenant_role_id === ROLE_IDS.manager)).toBe(true);
+    });
+
+    it('also backfills the short-links group in the same run', async () => {
+        const { client, tables } = seedTenant();
+
+        const results = await syncRolePermissions(client);
+        // Found by key, not position — a third group landing later must not
+        // silently break this by shifting array indices.
+        const shortLinks = results.find((r) => r.key === 'short-links')!;
+
+        expect(shortLinks.rolesTouched).toBe(1);
+        expect(shortLinks.roleGrants).toBe(SHORT_LINKS_PERMS.length);
+        expect(
+            tables.tenantRolePermission
+                .filter((r) => (SHORT_LINKS_PERMS as string[]).includes(r.permission))
+                .map((r) => r.permission),
+        ).toEqual(SHORT_LINKS_PERMS);
     });
 
     it('materializes onto every store the role-holding member can access', async () => {
