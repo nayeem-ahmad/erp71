@@ -22,14 +22,13 @@ export default async function LeavingPage({ params }: { params: Promise<{ code: 
 
     let target: string;
     let host: string;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), RESOLVE_TIMEOUT_MS);
     try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), RESOLVE_TIMEOUT_MS);
         const response = await fetch(`${apiBase()}/short-links/resolve/${encodeURIComponent(code)}`, {
             cache: 'no-store',
             signal: controller.signal,
         });
-        clearTimeout(timeout);
 
         if (!response.ok) notFound();
 
@@ -47,6 +46,10 @@ export default async function LeavingPage({ params }: { params: Promise<{ code: 
             throw err;
         }
         notFound();
+    } finally {
+        // Always release the timer — a rejected/aborted fetch would otherwise
+        // skip past the clearTimeout that used to sit right after the await.
+        clearTimeout(timeout);
     }
 
     return (

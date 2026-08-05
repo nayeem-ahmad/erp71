@@ -1,19 +1,27 @@
 import '@testing-library/jest-dom';
 import React from 'react';
 
-Object.defineProperty(window, 'matchMedia', {
-    writable: true,
-    value: jest.fn().mockImplementation((query: string) => ({
-        matches: false,
-        media: query,
-        onchange: null,
-        addListener: jest.fn(),
-        removeListener: jest.fn(),
-        addEventListener: jest.fn(),
-        removeEventListener: jest.fn(),
-        dispatchEvent: jest.fn(),
-    })),
-});
+// Route handler tests (e.g. src/app/s/[code]/route.test.ts) opt into the
+// `node` Jest environment via an `@jest-environment node` docblock, since
+// `next/server`'s NextRequest needs the real Web Fetch API globals that jsdom
+// doesn't provide. This file still runs first in that environment, so guard
+// every window-only setup step the same way the PointerEvent polyfill below
+// already does.
+if (typeof window !== 'undefined') {
+    Object.defineProperty(window, 'matchMedia', {
+        writable: true,
+        value: jest.fn().mockImplementation((query: string) => ({
+            matches: false,
+            media: query,
+            onchange: null,
+            addListener: jest.fn(),
+            removeListener: jest.fn(),
+            addEventListener: jest.fn(),
+            removeEventListener: jest.fn(),
+            dispatchEvent: jest.fn(),
+        })),
+    });
+}
 
 jest.mock('@/lib/i18n', () => {
     const { enMessages } = require('@/lib/localization/messages/en');
