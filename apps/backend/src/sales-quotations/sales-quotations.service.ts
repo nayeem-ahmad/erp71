@@ -280,16 +280,40 @@ export class SalesQuotationsService {
     }
 
     /**
-     * Clearing the token is the whole revocation. Every link ever sent for this
-     * quotation resolves through it, so short and long URLs die together.
+     * Revokes the public link for a quotation.
+     *
+     * Clearing the token kills the destination — every URL ever sent resolves
+     * through it — but the ShortLink row has to die with it. Left alive, `/s/<code>`
+     * keeps resolving and counting clicks onto a page that no longer exists, the
+     * tenant's own shortener list still shows the link as active with a Revoke
+     * button next to it (contradicting the revocation the user just performed),
+     * and re-sharing mints a fresh token and therefore a fresh code, leaving the
+     * orphan behind for good.
+     *
+     * Both writes go in one transaction: a half-applied revocation — token gone,
+     * code still live and counting — is exactly the state this method exists to
+     * prevent.
      */
     async revokeShare(tenantId: string, id: string) {
-        const result = await this.db.quotation.updateMany({
-            where: { id, tenant_id: tenantId },
-            data: { share_token: null, share_token_at: null },
+        return this.db.$transaction(async (tx) => {
+            const result = await tx.quotation.updateMany({
+                where: { id, tenant_id: tenantId },
+                data: { share_token: null, share_token_at: null },
+            });
+            if (result.count === 0) throw new NotFoundException('Quotation not found');
+
+            await tx.shortLink.updateMany({
+                where: {
+                    tenant_id: tenantId,
+                    entity_type: 'QUOTATION',
+                    entity_id: id,
+                    revoked_at: null,
+                },
+                data: { revoked_at: new Date() },
+            });
+
+            return { success: true };
         });
-        if (result.count === 0) throw new NotFoundException('Quotation not found');
-        return { success: true };
     }
 
     /** Public read by token. No tenant context — the token is the authorization. */
@@ -310,6 +334,12 @@ export class SalesQuotationsService {
                 customer: { select: { name: true } },
                 store: { select: { name: true } },
                 items: {
+                    // QuotationItem has no sort column, so `id` is the only stable
+                    // order available. Without it Postgres is free to return rows
+                    // in any order, which on a customer-facing document means the
+                    // printed line order can differ between two loads of the same
+                    // link — and from the internal page the shop owner is reading.
+                    orderBy: { id: 'asc' },
                     select: {
                         quantity: true,
                         unit_price: true,

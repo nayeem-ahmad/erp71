@@ -3,8 +3,11 @@ import { toPublicQuotation } from './public-quotation.dto';
 /**
  * This DTO is the boundary between a tenant's internal record and a page any
  * stranger with a link can open. The key-set assertions below are the point of
- * the file: a column added to Quotation later must fail this test rather than
- * silently appear on a customer-facing page.
+ * the file: they pin the exact output key set, so widening the allow-list in
+ * `toPublicQuotation` fails here and has to be argued for. A new column on
+ * Quotation on its own does not fail this test and is not meant to — the
+ * allow-list means it never reaches the output at all. The `row()` fixture
+ * carries internal ids and planning fields precisely to prove that.
  */
 describe('toPublicQuotation', () => {
     const row = () => ({

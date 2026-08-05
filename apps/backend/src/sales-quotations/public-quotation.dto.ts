@@ -2,10 +2,13 @@
  * The customer-facing shape of a quotation.
  *
  * Built as an explicit allow-list, never a spread of the Prisma row: this object
- * is served to anyone holding the link, so a column added to Quotation later must
- * fail the accompanying test rather than quietly appear on a public page. That is
- * also why no internal identifier is included — a customer needs to read a quote,
- * not to learn our tenant, store, product or customer ids.
+ * is served to anyone holding the link, so a column added to Quotation later
+ * cannot reach a public page — it is simply not copied across, and the
+ * accompanying test stays green because the output is unchanged. What that test
+ * pins is the exact output key set, so it fails the moment someone *adds a key
+ * here*, which is the only way a new field can ever get out. That is also why no
+ * internal identifier is included — a customer needs to read a quote, not to
+ * learn our tenant, store, product or customer ids.
  */
 
 export type PublicQuotationItem = {

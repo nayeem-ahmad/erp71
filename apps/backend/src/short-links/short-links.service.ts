@@ -92,9 +92,22 @@ export class ShortLinksService {
         return { target_url: checked.url, kind: checked.kind };
     }
 
+    /**
+     * Lists one owner's links. `null` means the platform, not "everyone".
+     *
+     * `where: {}` here used to mean no filter at all, which made the
+     * platform-admin page a viewer for every tenant's links — including the
+     * auto-created `/q/<share_token>` targets behind customer quotations, the
+     * exact data the sanitized public DTO exists to gate. It also drowned the
+     * platform's own campaign links: `take: 200` ordered by newest first fills
+     * up with tenant quotation shares within a few hundred shares.
+     *
+     * A null `tenant_id` is the data model's marker for a platform-owned link,
+     * so that is what the platform lists.
+     */
     async list(tenantId: string | null): Promise<ShortLinkView[]> {
         const rows = await this.db.shortLink.findMany({
-            where: tenantId ? { tenant_id: tenantId } : {},
+            where: { tenant_id: tenantId },
             orderBy: { created_at: 'desc' },
             take: 200,
         });

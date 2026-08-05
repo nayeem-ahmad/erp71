@@ -253,10 +253,11 @@ describe('StorefrontService', () => {
         const slug = 'my-store';
         const productId = 'prod-1';
 
-        // Nine fields the endpoint is permitted to expose — kept as one list so
-        // every assertion below (select args, returned keys) checks against the
-        // same source of truth instead of independently-drifting literals.
-        const permittedFields = [
+        // The fields the endpoint is permitted to expose. Two lists, not one,
+        // because they legitimately differ: `stocks` is read from Prisma but
+        // never returned (only the derived `in_stock` boolean is — a shopper
+        // gets availability, not the tenant's inventory levels).
+        const permittedSelectFields = [
             'id',
             'name',
             'sku',
@@ -266,6 +267,20 @@ describe('StorefrontService', () => {
             'image_url',
             'images_gallery',
             'unit_type',
+            'stocks',
+        ];
+
+        const permittedOutputFields = [
+            'id',
+            'name',
+            'sku',
+            'price',
+            'compare_at_price',
+            'description',
+            'image_url',
+            'images_gallery',
+            'unit_type',
+            'in_stock',
         ];
 
         const mockProductRow = {
@@ -278,6 +293,7 @@ describe('StorefrontService', () => {
             image_url: 'rice.jpg',
             images_gallery: ['rice-1.jpg', 'rice-2.jpg'],
             unit_type: 'kg',
+            stocks: [{ quantity: 4 }],
         };
 
         it('throws NotFoundException when tenant not found', async () => {
@@ -346,23 +362,105 @@ describe('StorefrontService', () => {
             await expect(promise).rejects.toThrow(NotFoundException);
         });
 
-        it('selects only the nine permitted fields from Prisma', async () => {
+        it('selects only the permitted fields from Prisma', async () => {
             db.tenant.findFirst.mockResolvedValue(mockTenant);
             db.product.findFirst.mockResolvedValue(mockProductRow);
 
             await service.getPublicProduct(slug, productId);
 
             const call = db.product.findFirst.mock.calls[0][0];
-            expect(Object.keys(call.select).sort()).toEqual([...permittedFields].sort());
+            expect(Object.keys(call.select).sort()).toEqual([...permittedSelectFields].sort());
         });
 
-        it('returns exactly the nine permitted fields — nothing more, nothing less', async () => {
+        it('returns exactly the permitted fields — nothing more, nothing less', async () => {
             db.tenant.findFirst.mockResolvedValue(mockTenant);
             db.product.findFirst.mockResolvedValue(mockProductRow);
 
             const result = await service.getPublicProduct(slug, productId);
 
-            expect(Object.keys(result).sort()).toEqual([...permittedFields].sort());
+            expect(Object.keys(result).sort()).toEqual([...permittedOutputFields].sort());
+        });
+
+        it('exposes availability as a boolean, never the stock quantity', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.product.findFirst.mockResolvedValue({ ...mockProductRow, stocks: [{ quantity: 4 }, { quantity: 9 }] });
+
+            const result = await service.getPublicProduct(slug, productId);
+
+            expect(result.in_stock).toBe(true);
+            expect(result).not.toHaveProperty('stocks');
+            expect(result).not.toHaveProperty('stock_quantity');
+            expect(JSON.stringify(result)).not.toContain('quantity');
+        });
+
+        it('reports out of stock rather than hiding the product', async () => {
+            // The shop listing filters to in-stock products, so a shared product
+            // link can outlive availability. 404ing it would make a live product
+            // look deleted; saying nothing would let a shopper order something
+            // that is not there.
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.product.findFirst.mockResolvedValue({ ...mockProductRow, stocks: [{ quantity: 0 }] });
+
+            const result = await service.getPublicProduct(slug, productId);
+
+            expect(result.in_stock).toBe(false);
+            expect(result.id).toBe(productId);
+        });
+
+        it('treats a product with no stock rows as out of stock', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.product.findFirst.mockResolvedValue({ ...mockProductRow, stocks: [] });
+
+            const result = await service.getPublicProduct(slug, productId);
+
+            expect(result.in_stock).toBe(false);
+        });
+
+        describe('price resolution', () => {
+            // The shareable product page quoted `product.price` raw while the shop
+            // page resolved every listed price through the storefront's active
+            // price list. A tenant running any price list therefore had a
+            // shareable URL advertising a different number than their own shop.
+            it('returns the price-list price, not the raw product price', async () => {
+                db.tenant.findFirst.mockResolvedValue(mockTenant);
+                db.product.findFirst.mockResolvedValue(mockProductRow);
+                priceListsService.resolvePriceListForCustomer.mockResolvedValue({ id: 'pl-1' });
+                priceListsService.getResolvedPricesForProducts.mockResolvedValue(
+                    new Map([[productId, { sellingPrice: 599, compareAtPrice: 720 }]]),
+                );
+
+                const result = await service.getPublicProduct(slug, productId);
+
+                expect(result.price).toBe(599);
+                expect(result.compare_at_price).toBe(720);
+            });
+
+            it('resolves against the same anonymous-visitor price list the shop page uses', async () => {
+                db.tenant.findFirst.mockResolvedValue(mockTenant);
+                db.product.findFirst.mockResolvedValue(mockProductRow);
+                priceListsService.resolvePriceListForCustomer.mockResolvedValue({ id: 'pl-1' });
+                priceListsService.getResolvedPricesForProducts.mockResolvedValue(new Map());
+
+                await service.getPublicProduct(slug, productId);
+
+                expect(priceListsService.resolvePriceListForCustomer).toHaveBeenCalledWith(mockTenant.id, null);
+                expect(priceListsService.getResolvedPricesForProducts).toHaveBeenCalledWith(
+                    mockTenant.id,
+                    [productId],
+                    'pl-1',
+                );
+            });
+
+            it('falls back to the product price when the resolver has no entry', async () => {
+                db.tenant.findFirst.mockResolvedValue(mockTenant);
+                db.product.findFirst.mockResolvedValue(mockProductRow);
+                priceListsService.getResolvedPricesForProducts.mockResolvedValue(new Map());
+
+                const result = await service.getPublicProduct(slug, productId);
+
+                expect(result.price).toBe(650);
+                expect(result.compare_at_price).toBe(700);
+            });
         });
 
         it('never leaks internal planning fields, even if a widened select put them on the row', async () => {

@@ -143,7 +143,7 @@ The click write is best-effort and must never block or break the redirect. This 
   - `POST /short-links` — `JwtAuthGuard` + `TenantInterceptor` + `MANAGE_SHORT_LINKS`. Tenant-scoped manual links.
   - `GET /short-links` — as above; lists the tenant's own links.
   - `DELETE /short-links/:id` — as above; sets `revoked_at`.
-- `short-links-admin.controller.ts` — `JwtAuthGuard` + `PlatformAdminGuard`, at `admin/short-links`. Lists and creates across all tenants; no `TenantInterceptor`.
+- `short-links-admin.controller.ts` — `JwtAuthGuard` + `PlatformAdminGuard`, at `admin/short-links`. Lists and creates platform-owned links only (`tenant_id: null`), never another tenant's; no `TenantInterceptor`. Revoke stays unscoped, so support can kill an abusive link anywhere.
 
 `apps/backend/src/sales-quotations/`
 
@@ -163,7 +163,7 @@ There is no subtotal, discount or tax line: `QuotationItem` carries only `quanti
 
 Excluded: cost price, margin, internal notes, `created_by`, `tenant_id`, and every internal ID.
 
-Its test asserts on the exact key set of the response, so a column added to `Quotation` later fails the test rather than silently leaking to customers.
+Its test asserts on the exact key set of the response. A column added to `Quotation` later cannot leak — the allow-list simply does not copy it, and the test stays green because the output is unchanged. What the test catches is someone widening the allow-list itself, which is the only path a new field has to a customer-facing page.
 
 ### Frontend
 
@@ -219,7 +219,7 @@ A customer opening the link:
 ## Testing
 
 - `isSafeTarget()` — the bulk of the tests, weighted to hostile input: `javascript:`, `data:`, protocol-relative `//evil.com`, loopback and private hosts, embedded credentials, and case and whitespace variants.
-- Sanitized DTO — asserts the exact key set, so new columns fail the test rather than leaking.
+- Sanitized DTO — asserts the exact key set, so widening the allow-list fails the test; unlisted new columns never reach the output at all.
 - Code generation — retries on collision.
 - Resolver — increments the click count; returns 404 for revoked links; internal targets 302 while off-domain targets route to the interstitial.
 - Share endpoint — idempotent; a second call returns the same code.

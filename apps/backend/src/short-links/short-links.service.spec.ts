@@ -189,12 +189,60 @@ describe('ShortLinksService', () => {
             );
         });
 
-        it('lists every tenant for platform staff', async () => {
-            db.shortLink.findMany.mockResolvedValue([row()]);
+        it('lists only platform-owned links for platform staff', async () => {
+            db.shortLink.findMany.mockResolvedValue([row({ tenant_id: null })]);
             await service.list(null);
             expect(db.shortLink.findMany).toHaveBeenCalledWith(
-                expect.objectContaining({ where: {} }),
+                expect.objectContaining({ where: { tenant_id: null } }),
             );
+        });
+
+        it('never issues an unfiltered query', async () => {
+            // `where: {}` is what made the platform-admin page a viewer for every
+            // tenant's links, quotation share targets included. Both callers must
+            // carry a tenant_id clause — one for a real tenant, one for null.
+            db.shortLink.findMany.mockResolvedValue([]);
+
+            await service.list('tenant-1');
+            await service.list(null);
+
+            for (const [args] of db.shortLink.findMany.mock.calls) {
+                expect(Object.keys(args.where)).toEqual(['tenant_id']);
+            }
+        });
+
+        it('does not return another tenant\'s rows to platform staff', async () => {
+            // A `where` assertion alone would not have caught the original bug —
+            // `{}` is a perfectly valid `where`. So this one runs the filter for
+            // real against a mixed table and checks what comes back.
+            const table = [
+                row({ id: 'platform-1', tenant_id: null, code: 'plat001', target_url: 'https://erp71.com/pricing' }),
+                row({ id: 'tenant-quote', tenant_id: 'tenant-1', code: 'quot001', target_url: '/q/secret-token' }),
+                row({ id: 'other-tenant', tenant_id: 'tenant-2', code: 'othr001' }),
+            ];
+            db.shortLink.findMany.mockImplementation(async ({ where }: any) =>
+                table.filter((r) => r.tenant_id === where.tenant_id),
+            );
+
+            const result = await service.list(null);
+
+            expect(result.map((r) => r.id)).toEqual(['platform-1']);
+            expect(JSON.stringify(result)).not.toContain('secret-token');
+        });
+
+        it('does not return platform links to a tenant', async () => {
+            const table = [
+                row({ id: 'platform-1', tenant_id: null }),
+                row({ id: 'mine', tenant_id: 'tenant-1' }),
+                row({ id: 'theirs', tenant_id: 'tenant-2' }),
+            ];
+            db.shortLink.findMany.mockImplementation(async ({ where }: any) =>
+                table.filter((r) => r.tenant_id === where.tenant_id),
+            );
+
+            const result = await service.list('tenant-1');
+
+            expect(result.map((r) => r.id)).toEqual(['mine']);
         });
     });
 

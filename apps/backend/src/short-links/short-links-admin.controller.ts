@@ -6,7 +6,13 @@ import { CreateShortLinkDto } from './short-links.dto';
 
 /**
  * Platform staff sit outside any tenant, so these links are stored with a null
- * tenant_id and the list is deliberately unscoped.
+ * `tenant_id` — and the list is scoped to exactly those. Platform-owned, not
+ * "all tenants": a staffer has no business reading the shortener rows behind
+ * another company's customer quotations.
+ *
+ * `revoke` stays deliberately unscoped by tenant. Killing an abusive or
+ * mistaken link anywhere on the platform is a support action these accounts are
+ * meant to have, and it destroys access rather than granting it.
  */
 @Controller('admin/short-links')
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)

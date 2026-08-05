@@ -391,6 +391,53 @@ describe('SalesQuotationsService', () => {
       db.quotation.updateMany.mockResolvedValue({ count: 0 });
       await expect(service.revokeShare('tenant-1', 'q-1')).rejects.toThrow('Quotation not found');
     });
+
+    // Clearing the token alone left the ShortLink row alive: /s/<code> kept
+    // resolving and counting clicks onto a dead /q/<token>, the tenant's own
+    // shortener page still offered a Revoke button for a link that was supposedly
+    // already revoked, and re-sharing minted a fresh code on top of the orphan.
+    it('revokes the matching short links too', async () => {
+      db.quotation.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.revokeShare('tenant-1', 'q-1');
+
+      expect(db.shortLink.updateMany).toHaveBeenCalledWith({
+        where: {
+          tenant_id: 'tenant-1',
+          entity_type: 'QUOTATION',
+          entity_id: 'q-1',
+          revoked_at: null,
+        },
+        data: { revoked_at: expect.any(Date) },
+      });
+    });
+
+    it('leaves already-revoked short links alone rather than restamping them', async () => {
+      db.quotation.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.revokeShare('tenant-1', 'q-1');
+
+      expect(db.shortLink.updateMany.mock.calls[0][0].where.revoked_at).toBeNull();
+    });
+
+    it('does not touch short links when the quotation did not match', async () => {
+      db.quotation.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.revokeShare('tenant-1', 'q-1')).rejects.toThrow('Quotation not found');
+      expect(db.shortLink.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('does both writes inside one transaction', async () => {
+      // A half-applied revocation — token gone, short code still live and
+      // counting clicks — is the state this method exists to prevent.
+      db.quotation.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.revokeShare('tenant-1', 'q-1');
+
+      expect(db.$transaction).toHaveBeenCalledTimes(1);
+      const txClient = db.$transaction.mock.calls[0][0];
+      expect(typeof txClient).toBe('function');
+    });
   });
 
   describe('findByShareToken()', () => {
@@ -420,6 +467,35 @@ describe('SalesQuotationsService', () => {
     it('throws the same not-found error whether the token is missing or revoked', async () => {
       db.quotation.findFirst.mockResolvedValue(null);
       await expect(service.findByShareToken('nonexistent')).rejects.toThrow('This link is no longer available');
+    });
+
+    it('orders line items deterministically', async () => {
+      // Without an orderBy, Postgres may return rows in any order, so the same
+      // customer-facing document can print its lines differently between two
+      // loads — and differently from the internal page. QuotationItem has no sort
+      // column, so id is the only stable option.
+      db.quotation.findFirst.mockResolvedValue({
+        quote_number: 'Q-1',
+        version: 1,
+        status: 'SENT',
+        created_at: new Date('2026-08-01'),
+        valid_until: null,
+        notes: null,
+        total_amount: '100.00',
+        customer: { name: 'Rahim Traders' },
+        store: { name: 'Main Branch' },
+        items: [],
+      });
+
+      await service.findByShareToken('some-token');
+
+      expect(db.quotation.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          select: expect.objectContaining({
+            items: expect.objectContaining({ orderBy: { id: 'asc' } }),
+          }),
+        }),
+      );
     });
   });
 });
