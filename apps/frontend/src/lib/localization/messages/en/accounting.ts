@@ -150,6 +150,7 @@ export const accountingMessages = {
             expenseCategories: { title: 'Expense Categories', description: 'Organise expenses into categories for reporting and budget tracking.' },
             expenseReports: { title: 'Expense Reports', description: 'Expense breakdown, monthly trends, and expense-to-revenue ratio.' },
             loans: { title: 'Loans', description: 'Track money borrowed or lent with repayment schedules and outstanding balances.' },
+            investors: { title: 'Investors', description: 'Investor capital and the monthly profit share each partner has agreed to.' },
             fundTransfers: { title: 'Fund Transfers', description: 'Move cash between branches with paired inter-branch clearing entries.' },
         },
         reports: {

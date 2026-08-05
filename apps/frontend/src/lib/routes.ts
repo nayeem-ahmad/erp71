@@ -100,6 +100,7 @@ export const routes = {
         expenseCategories: '/accounting/expenses/categories',
         expenseReports: '/accounting/expenses/reports',
         loans: '/accounting/loans',
+        investors: '/accounting/investors',
         interBranchFundTransfers: '/accounting/inter-branch/fund-transfers',
         reports: {
             pl: '/accounting/reports/pl',

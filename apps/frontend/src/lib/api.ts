@@ -2781,6 +2781,59 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteLoanPayment: (id: string, paymentId: string) => fetchWithAuth(`/loans/${id}/payments/${paymentId}`, { method: 'DELETE' }),
+    // Investors & profit sharing
+    getInvestors: (params?: { status?: string; storeId?: string; search?: string }) => {
+        const q = new URLSearchParams();
+        if (params?.status) q.set('status', params.status);
+        if (params?.storeId) q.set('storeId', params.storeId);
+        if (params?.search) q.set('search', params.search);
+        return fetchAllPages(`/investors${q.toString() ? `?${q}` : ''}`);
+    },
+    getInvestorSummary: () => fetchWithAuth('/investors/summary'),
+    getInvestor: (id: string) => fetchWithAuth(`/investors/${id}`),
+    createInvestor: (data: any) => fetchWithAuth('/investors', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateInvestor: (id: string, data: any) => fetchWithAuth(`/investors/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteInvestor: (id: string) => fetchWithAuth(`/investors/${id}`, { method: 'DELETE' }),
+    addInvestorCapital: (id: string, data: any) => fetchWithAuth(`/investors/${id}/capital`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteInvestorCapital: (id: string, txnId: string) =>
+        fetchWithAuth(`/investors/${id}/capital/${txnId}`, { method: 'DELETE' }),
+    getInvestorProfitRuns: (params?: { year?: number; storeId?: string }) => {
+        const q = new URLSearchParams();
+        if (params?.year) q.set('year', String(params.year));
+        if (params?.storeId) q.set('storeId', params.storeId);
+        return fetchAllPages(`/investors/profit-runs${q.toString() ? `?${q}` : ''}`);
+    },
+    getInvestorProfitRun: (id: string) => fetchWithAuth(`/investors/profit-runs/${id}`),
+    previewInvestorProfitRun: (data: any) => fetchWithAuth('/investors/profit-runs/preview', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    createInvestorProfitRun: (data: any) => fetchWithAuth('/investors/profit-runs', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteInvestorProfitRun: (id: string) =>
+        fetchWithAuth(`/investors/profit-runs/${id}`, { method: 'DELETE' }),
+    payInvestorProfitShare: (shareId: string, data: any) =>
+        fetchWithAuth(`/investors/shares/${shareId}/pay`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     // Salary Payments
     getSalaryPayments: (params?: { employeeId?: string; payPeriod?: string; from?: string; to?: string }) => {
         const q = new URLSearchParams();
