@@ -22,7 +22,8 @@ export type PrintDocType =
     | 'SALES_RETURN'
     | 'PURCHASE_ORDER'
     | 'PURCHASE_RETURN'
-    | 'LIST_REPORT';
+    | 'LIST_REPORT'
+    | 'PAYSLIP';
 
 export type HeaderLayout =
     | 'logo-left'      // logo + company on the left, document block on the right

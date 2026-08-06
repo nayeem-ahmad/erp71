@@ -11,6 +11,7 @@ import {
     LayoutDashboard,
     Package,
     Search,
+    UserRound,
     Users,
     Wallet,
     X,
@@ -158,6 +159,7 @@ export default function Sidebar({
     canManageTeam = false,
     platformAdminMode = false,
     refereeMode = false,
+    employeeMode = false,
     helpEnabled = false,
     supportEnabled = false,
     activePlanCode,
@@ -181,6 +183,7 @@ export default function Sidebar({
     platformAdminMode?: boolean;
     /** When true, hide shop/admin modules and show only the referee portal. */
     refereeMode?: boolean;
+    employeeMode?: boolean;
     helpEnabled?: boolean;
     supportEnabled?: boolean;
     activePlanCode?: string | null;
@@ -210,11 +213,31 @@ export default function Sidebar({
     // unlike other modules it starts expanded — collapsing it would hide the
     // entire nav behind an extra click.
     const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(
-        () => (refereeMode ? { referrals: true } : {}),
+        () => (refereeMode ? { referrals: true } : employeeMode ? { my: true } : {}),
     );
     const [searchQuery, setSearchQuery] = useState('');
     const searchInputRef = useRef<HTMLInputElement>(null);
     const modules = useMemo(() => {
+        // The employee portal is a single page. It still gets a nav entry so the
+        // shell does not render an empty sidebar, and so "where am I" is
+        // answerable at a glance — the same reason the referee portal has one.
+        if (employeeMode) {
+            const portal = (t as { employeePortal?: { breadcrumb?: string } }).employeePortal;
+            return [{
+                key: 'my',
+                label: portal?.breadcrumb ?? 'My workspace',
+                icon: UserRound,
+                children: [
+                    {
+                        href: routes.employeePortal.root,
+                        label: portal?.breadcrumb ?? 'My workspace',
+                        icon: LayoutDashboard,
+                        exact: true,
+                    },
+                ],
+            }] as NavModule[];
+        }
+
         if (refereeMode) {
             const portal = (t as { referralPortal?: {
                 breadcrumb?: string;
@@ -325,6 +348,7 @@ export default function Sidebar({
             .filter((module) => !module.children || module.children.length > 0);
     }, [
         refereeMode,
+        employeeMode,
         platformAdminMode,
         platformAdminLayout,
         tenantLayout,

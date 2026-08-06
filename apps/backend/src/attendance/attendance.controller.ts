@@ -18,7 +18,13 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { RequiresPlan } from '../auth/subscription-access.decorator';
 import { AttendanceService } from './attendance.service';
+import { AttendanceCaptureService } from './attendance-capture.service';
+import { OvertimeService } from './overtime.service';
 import {
+    MonthQueryDto,
+    OvertimeQueryDto,
+    ReviewOvertimeDto,
+    UpdateAttendanceSettingsDto,
     UpsertAttendanceDto,
     CreateLeaveTypeDto,
     UpdateLeaveTypeDto,
@@ -32,7 +38,99 @@ import {
 @RequiresPlan('STANDARD')
 @UseInterceptors(TenantInterceptor)
 export class AttendanceController {
-    constructor(private svc: AttendanceService) {}
+    constructor(
+        private svc: AttendanceService,
+        private capture: AttendanceCaptureService,
+        private overtime: OvertimeService,
+    ) {}
+
+    // ── Overtime & monthly snapshot ───────────────────────────────────────────
+
+    @Get('overtime')
+    listOvertime(@Tenant() tenant: TenantContext, @Query() query: OvertimeQueryDto) {
+        return this.overtime.list(tenant.tenantId, query);
+    }
+
+    @Post('overtime/generate')
+    @HttpCode(HttpStatus.OK)
+    generateOvertime(@Tenant() tenant: TenantContext, @Body() dto: MonthQueryDto) {
+        return this.overtime.generateForMonth(tenant.tenantId, dto.year, dto.month);
+    }
+
+    @Patch('overtime/:id/review')
+    reviewOvertime(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: ReviewOvertimeDto,
+    ) {
+        return this.overtime.review(tenant.tenantId, id, tenant.userId, dto);
+    }
+
+    @Get('month-snapshot')
+    listSnapshots(@Tenant() tenant: TenantContext, @Query() query: MonthQueryDto) {
+        return this.overtime.listSnapshots(tenant.tenantId, query.year, query.month);
+    }
+
+    @Post('month-snapshot/build')
+    @HttpCode(HttpStatus.OK)
+    buildSnapshots(@Tenant() tenant: TenantContext, @Body() dto: MonthQueryDto) {
+        return this.overtime.buildSnapshots(tenant.tenantId, dto.year, dto.month);
+    }
+
+    @Post('month-snapshot/freeze')
+    @HttpCode(HttpStatus.OK)
+    freezeMonth(@Tenant() tenant: TenantContext, @Body() dto: MonthQueryDto) {
+        return this.overtime.freezeMonth(tenant.tenantId, dto.year, dto.month);
+    }
+
+    @Post('month-snapshot/unfreeze')
+    @HttpCode(HttpStatus.OK)
+    unfreezeMonth(@Tenant() tenant: TenantContext, @Body() dto: MonthQueryDto) {
+        return this.overtime.unfreezeMonth(tenant.tenantId, dto.year, dto.month);
+    }
+
+    // ── Leave calendar & carry-forward (Phase 11) ─────────────────────────────
+
+    /**
+     * Who might be off between two dates. Approved and pending both — the
+     * question a manager is asking is not "who is definitely off".
+     */
+    @Get('leave-calendar')
+    leaveCalendar(
+        @Tenant() tenant: TenantContext,
+        @Query('from') from: string,
+        @Query('to') to: string,
+    ) {
+        return this.svc.getLeaveCalendar(tenant.tenantId, from, to);
+    }
+
+    /**
+     * Roll unused balances into next year, capped per leave type.
+     *
+     * Safe to re-run: the carried figure is set, not incremented.
+     */
+    @Post('leave-carry-forward')
+    @HttpCode(HttpStatus.OK)
+    carryForward(@Tenant() tenant: TenantContext, @Body() body: { year: number }) {
+        return this.svc.runCarryForward(tenant.tenantId, body.year);
+    }
+
+    // ── Settings ──────────────────────────────────────────────────────────────
+
+    /**
+     * Attendance policy for the tenant. Readable by anyone who can reach this
+     * controller — an employee needs to know whether self check-in is on to
+     * render the button, and none of these fields are sensitive.
+     */
+    @Get('settings')
+    getSettings(@Tenant() tenant: TenantContext) {
+        return this.capture.getSettings(tenant.tenantId);
+    }
+
+    @Patch('settings')
+    updateSettings(@Tenant() tenant: TenantContext, @Body() dto: UpdateAttendanceSettingsDto) {
+        return this.capture.updateSettings(tenant.tenantId, dto);
+    }
 
     // ── Leave Types ───────────────────────────────────────────────────────────
 

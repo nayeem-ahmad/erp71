@@ -96,12 +96,21 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
 
     // ── payroll accrual ──────────────────────────────────────────────────────
     { eventType: 'salary_accrual', conditionKey: 'none', conditionValue: null, emittedBy: 'salary-payments.service.ts:runMonthlyAccrual', expectation: 'rule' },
+    // HRIS Phase 7: the payroll run emits the same two events per line, so a
+    // tenant can accrue either by the month-wide sweep or by running payroll.
+    // Both are idempotent on (employee, period) through SalaryAccrual's unique
+    // key, so using both does not double the expense.
+    { eventType: 'salary_accrual', conditionKey: 'none', conditionValue: null, emittedBy: 'payroll-disbursement.service.ts:disburse', expectation: 'rule' },
 
     // ── payroll payment ──────────────────────────────────────────────────────
     { eventType: 'salary_payment', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'salary-payments.service.ts:create', expectation: 'rule' },
     { eventType: 'salary_payment', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'salary-payments.service.ts:create', expectation: 'rule' },
     { eventType: 'salary_payment', conditionKey: 'payment_mode', conditionValue: 'bkash', emittedBy: 'salary-payments.service.ts:create', expectation: 'rule' },
     { eventType: 'salary_payment', conditionKey: 'payment_mode', conditionValue: 'nagad', emittedBy: 'salary-payments.service.ts:create', expectation: 'rule' },
+    { eventType: 'salary_payment', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'payroll-disbursement.service.ts:disburse', expectation: 'rule' },
+    { eventType: 'salary_payment', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'payroll-disbursement.service.ts:disburse', expectation: 'rule' },
+    { eventType: 'salary_payment', conditionKey: 'payment_mode', conditionValue: 'bkash', emittedBy: 'payroll-disbursement.service.ts:disburse', expectation: 'rule' },
+    { eventType: 'salary_payment', conditionKey: 'payment_mode', conditionValue: 'nagad', emittedBy: 'payroll-disbursement.service.ts:disburse', expectation: 'rule' },
 
     // ── loans ────────────────────────────────────────────────────────────────
     // Now plain DEFAULT_POSTING_RULES entries (formerly lazy ensureLoanPostingSetup).

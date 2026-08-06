@@ -2486,6 +2486,103 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteEmployee: (id: string) => fetchWithAuth(`/employees/${id}`, { method: 'DELETE' }),
+    grantEmployeePortalAccess: (id: string) =>
+        fetchWithAuth(`/employees/${id}/portal-access`, { method: 'POST' }),
+    revokeEmployeePortalAccess: (id: string) =>
+        fetchWithAuth(`/employees/${id}/portal-access/revoke`, { method: 'PATCH' }),
+
+    // Holidays & work schedules (HRIS Phase 2)
+    getHolidays: (year?: number) =>
+        fetchWithAuth(`/hr/holidays${year ? `?year=${year}` : ''}`),
+    createHoliday: (data: { date: string; name: string }) => fetchWithAuth('/hr/holidays', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateHoliday: (id: string, data: { date?: string; name?: string }) =>
+        fetchWithAuth(`/hr/holidays/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteHoliday: (id: string) => fetchWithAuth(`/hr/holidays/${id}`, { method: 'DELETE' }),
+
+    getWorkSchedules: () => fetchWithAuth('/hr/work-schedules'),
+    getWorkSchedule: (id: string) => fetchWithAuth(`/hr/work-schedules/${id}`),
+    createWorkSchedule: (data: any) => fetchWithAuth('/hr/work-schedules', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateWorkSchedule: (id: string, data: any) => fetchWithAuth(`/hr/work-schedules/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteWorkSchedule: (id: string) => fetchWithAuth(`/hr/work-schedules/${id}`, { method: 'DELETE' }),
+    assignWorkSchedule: (data: { employee_id: string; schedule_id: string; effective_from: string }) =>
+        fetchWithAuth('/hr/work-schedules/assign', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    getEmployeeSchedules: (employeeId: string) =>
+        fetchWithAuth(`/hr/employees/${employeeId}/schedules`),
+
+    // Employee self-service portal. Every endpoint resolves the employee from
+    // the token, so none of these take an employee id.
+    getMyProfile: () => fetchWithAuth('/employee-portal/me'),
+    getMySummary: (params?: { year?: number; month?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.year) query.set('year', String(params.year));
+        if (params?.month) query.set('month', String(params.month));
+        return fetchWithAuth(`/employee-portal/summary${query.toString() ? `?${query}` : ''}`);
+    },
+    getMyAttendance: (params?: { year?: number; month?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.year) query.set('year', String(params.year));
+        if (params?.month) query.set('month', String(params.month));
+        return fetchWithAuth(`/employee-portal/attendance${query.toString() ? `?${query}` : ''}`);
+    },
+    getMyToday: () => fetchWithAuth('/employee-portal/attendance/today'),
+    checkIn: (location?: { latitude: number; longitude: number }) =>
+        fetchWithAuth('/employee-portal/attendance/check-in', {
+            method: 'POST',
+            body: JSON.stringify(location ?? {}),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    checkOut: (location?: { latitude: number; longitude: number }) =>
+        fetchWithAuth('/employee-portal/attendance/check-out', {
+            method: 'POST',
+            body: JSON.stringify(location ?? {}),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+
+    getAttendanceSettings: () => fetchWithAuth('/attendance/settings'),
+    updateAttendanceSettings: (data: {
+        self_service_enabled?: boolean;
+        geofence_enabled?: boolean;
+        geofence_radius_m?: number;
+        grace_minutes?: number;
+    }) => fetchWithAuth('/attendance/settings', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+
+    getMyLeaveBalances: (year?: number) =>
+        fetchWithAuth(`/employee-portal/leave-balances${year ? `?year=${year}` : ''}`),
+    getMyLeaveRequests: () => fetchWithAuth('/employee-portal/leave-requests'),
+    applyForLeave: (data: {
+        leave_type_id: string; start_date: string; end_date: string; days: number; reason?: string;
+    }) => fetchWithAuth('/employee-portal/leave-requests', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    cancelMyLeaveRequest: (id: string) =>
+        fetchWithAuth(`/employee-portal/leave-requests/${id}/cancel`, { method: 'PATCH' }),
+    getMySalaryPayments: () => fetchWithAuth('/employee-portal/salary-payments'),
     importEmployees: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert') =>
         fetchWithAuth('/employees/import', {
             method: 'POST',

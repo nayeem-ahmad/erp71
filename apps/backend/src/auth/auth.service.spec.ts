@@ -66,6 +66,7 @@ describe('AuthService', () => {
         emailVerificationToken: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }), create: jest.fn().mockResolvedValue({}) },
         tenantAddonSubscription: { findMany: jest.fn().mockResolvedValue([]) },
         referee: { findFirst: jest.fn().mockResolvedValue(null) },
+        employee: { findFirst: jest.fn().mockResolvedValue(null) },
         referralSignup: { create: jest.fn() },
         $transaction: jest.fn(),
     };

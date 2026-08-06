@@ -30,6 +30,10 @@ export enum PrintDocType {
     PURCHASE_ORDER = 'PURCHASE_ORDER',
     PURCHASE_RETURN = 'PURCHASE_RETURN',
     LIST_REPORT = 'LIST_REPORT',
+    /// HRIS Phase 6. A payslip carries the same tenant letterhead as an
+    /// invoice, so it belongs in the existing template family rather than
+    /// getting a print path of its own.
+    PAYSLIP = 'PAYSLIP',
 }
 
 export enum PaperSize {

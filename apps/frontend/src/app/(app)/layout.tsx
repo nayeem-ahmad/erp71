@@ -37,6 +37,7 @@ import { useI18n } from '@/lib/i18n';
 import {
     applyPlatformAdminContext,
     applyRefereeContext,
+    applyEmployeeContext,
     applyTenantContext,
     getLoginContexts,
     isShopWorkspacePath,
@@ -92,9 +93,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         if (!hasResolvedUser || !user) return;
         if (localStorage.getItem('active_context')) return;
 
-        const { isReferee, isPlatformAdmin, tenants, count } = getLoginContexts(user);
+        const { isReferee, isPlatformAdmin, isEmployee, tenants, count } = getLoginContexts(user);
         if (count !== 1) return;
 
+        // Checked before the referee branch and before the single-tenant one:
+        // an employee is also a tenant member, so `tenants.length === 1` is true
+        // for them too and would otherwise drop them into the staff app they
+        // have no permissions for.
+        if (isEmployee) {
+            applyEmployeeContext(user.employee);
+            setWorkspaceEpoch((epoch) => epoch + 1);
+            if (!pathname.startsWith(routes.employeePortal.root)) {
+                router.replace(routes.employeePortal.root);
+            }
+            return;
+        }
         if (isReferee) {
             applyRefereeContext();
             setWorkspaceEpoch((epoch) => epoch + 1);
@@ -152,7 +165,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     // shows only platform-admin options.
     const inPlatformAdminMode = Boolean(user?.is_platform_admin) && activeContext === 'platform-admin';
     const inRefereeMode = Boolean(user?.referee?.is_active) && activeContext === 'referee';
-    const loginContexts = user ? getLoginContexts(user) : { isPlatformAdmin: false, isReferee: false, tenants: [], count: 0 };
+    // `activeContext` alone is not enough: it is a localStorage value a user can
+    // set by hand. Pairing it with `user.employee` — which only the server can
+    // populate — means faking the context yields an employee shell with no data
+    // rather than any access they did not already have.
+    const inEmployeeMode = Boolean(user?.employee?.id) && activeContext === 'employee';
+    const loginContexts = user
+        ? getLoginContexts(user)
+        : { isPlatformAdmin: false, isReferee: false, isEmployee: false, tenants: [], count: 0 };
     const canSwitchAccount = loginContexts.count > 1;
     const activeTenant = (inPlatformAdminMode || inRefereeMode)
         ? null
@@ -383,7 +403,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         ? 'Platform Admin'
         : inRefereeMode
             ? t.referralPortal.workspace.title
-            : activeStore?.name ?? activeTenant?.name ?? t.dashboardLayout.defaultPageTitle;
+            : inEmployeeMode
+                ? t.employeePortal.workspace.title
+                : activeStore?.name ?? activeTenant?.name ?? t.dashboardLayout.defaultPageTitle;
 
     const handleStoreChange = (storeId: string) => {
         setActiveStoreId(storeId);
@@ -415,6 +437,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 canManageTeam={canManageTeam}
                 platformAdminMode={inPlatformAdminMode}
                 refereeMode={inRefereeMode}
+                employeeMode={inEmployeeMode}
                 helpEnabled={platformFeatures.help}
                 supportEnabled={platformFeatures.support}
                 activePlanCode={activePlanCode}

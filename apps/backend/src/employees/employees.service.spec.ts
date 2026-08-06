@@ -46,6 +46,9 @@ describe('EmployeesService', () => {
       tenantUser: {
         findFirst: jest.fn(),
       },
+      userStorePermission: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       $transaction: jest.fn().mockImplementation(async (cb: any) => cb(db)),
     };
 
@@ -668,6 +671,122 @@ describe('EmployeesService', () => {
       expect(result.created).toBe(1);
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0]).toContain('DB connection lost');
+    });
+  });
+  /**
+   * Phase 0 of the HRIS plan. `basic_salary` is readable only with
+   * VIEW_PAYROLL; every other employee field stays visible to VIEW_HR.
+   */
+  describe('salary visibility', () => {
+    const row = {
+      id: 'emp-1',
+      name: 'Alice',
+      employee_code: 'EMP-00001',
+      basic_salary: 50000,
+      nid: 'enc:123',
+    };
+
+    const viewer = (opts: { role?: string; storeId?: string } = {}) => ({
+      tenantId: 't1',
+      userId: 'user-1',
+      storeId: opts.storeId === undefined ? 'store-1' : opts.storeId,
+      userRole: opts.role,
+    });
+
+    beforeEach(() => {
+      db.employee.findMany.mockResolvedValue([row]);
+      db.employee.count.mockResolvedValue(1);
+      db.employee.findFirst.mockResolvedValue(row);
+    });
+
+    it('strips basic_salary when the viewer lacks VIEW_PAYROLL', async () => {
+      db.userStorePermission.findFirst.mockResolvedValue(null);
+
+      const list = await service.findAll('t1', undefined, viewer());
+      expect(list.items[0]).not.toHaveProperty('basic_salary');
+      expect(list.items[0].name).toBe('Alice');
+
+      const one = await service.findOne('t1', 'emp-1', viewer());
+      expect(one).not.toHaveProperty('basic_salary');
+    });
+
+    it('keeps basic_salary when the viewer holds VIEW_PAYROLL', async () => {
+      db.userStorePermission.findFirst.mockResolvedValue({ id: 'grant-1' });
+
+      const list = await service.findAll('t1', undefined, viewer());
+      expect(list.items[0].basic_salary).toBe(50000);
+
+      const one = await service.findOne('t1', 'emp-1', viewer());
+      expect(one.basic_salary).toBe(50000);
+    });
+
+    it('keeps basic_salary for an OWNER without checking grants', async () => {
+      const one = await service.findOne('t1', 'emp-1', viewer({ role: 'OWNER' }));
+      expect(one.basic_salary).toBe(50000);
+      expect(db.userStorePermission.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('strips basic_salary when no viewer is passed at all', async () => {
+      // The fail-safe default: a call site that forgets to thread the viewer
+      // through loses the field rather than leaking every salary in the tenant.
+      const one = await service.findOne('t1', 'emp-1');
+      expect(one).not.toHaveProperty('basic_salary');
+    });
+
+    it('strips basic_salary when the viewer has no store context', async () => {
+      const one = await service.findOne('t1', 'emp-1', viewer({ storeId: undefined }));
+      expect(one).not.toHaveProperty('basic_salary');
+    });
+
+    it('deletes the key rather than nulling it', async () => {
+      // A null basic_salary is a real state ("none recorded"); nulling on an
+      // unpermitted read would be indistinguishable from it, and an edit form
+      // would save that null back over a real figure.
+      const one = await service.findOne('t1', 'emp-1', viewer());
+      expect('basic_salary' in one).toBe(false);
+    });
+    it('drops basic_salary on update when the viewer lacks VIEW_PAYROLL', async () => {
+      // The regression this exists for: the edit form posts `basic_salary` on
+      // every save, so a stripped read round-tripping back as null would wipe
+      // a real figure.
+      db.userStorePermission.findFirst.mockResolvedValue(null);
+      db.employee.update.mockResolvedValue(row);
+
+      await service.update('t1', 'emp-1', { name: 'Alice B', basic_salary: null } as any, viewer());
+
+      const data = db.employee.update.mock.calls[0][0].data;
+      expect(data).not.toHaveProperty('basic_salary');
+      expect(data.name).toBe('Alice B');
+    });
+
+    it('writes basic_salary on update when the viewer holds VIEW_PAYROLL', async () => {
+      db.userStorePermission.findFirst.mockResolvedValue({ id: 'grant-1' });
+      db.employee.update.mockResolvedValue(row);
+
+      await service.update('t1', 'emp-1', { basic_salary: 60000 } as any, viewer());
+
+      expect(db.employee.update.mock.calls[0][0].data.basic_salary).toBe(60000);
+    });
+
+    it('lets a permitted viewer clear the salary to null deliberately', async () => {
+      // `undefined` means "not supplied"; an explicit null is a real edit and
+      // must survive, or the field becomes unclearable.
+      db.userStorePermission.findFirst.mockResolvedValue({ id: 'grant-1' });
+      db.employee.update.mockResolvedValue(row);
+
+      await service.update('t1', 'emp-1', { basic_salary: null } as any, viewer());
+
+      expect(db.employee.update.mock.calls[0][0].data).toHaveProperty('basic_salary', null);
+    });
+
+    it('drops basic_salary on create when the viewer lacks VIEW_PAYROLL', async () => {
+      db.userStorePermission.findFirst.mockResolvedValue(null);
+      db.employee.findFirst.mockResolvedValue(null);
+      db.employee.create.mockResolvedValue(row);
+
+      await service.create('t1', { name: 'Bob', phone: '01900000000', basic_salary: 99999 } as any, viewer());
+
+      expect(db.employee.create.mock.calls[0][0].data).not.toHaveProperty('basic_salary');
     });
   });
 });
