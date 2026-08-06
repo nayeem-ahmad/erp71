@@ -1921,5 +1921,30 @@ export const coreMessages = {
                     close: 'Tutup',
                 },
             },
+            charts: {
+                activity: {
+                    title: 'Aktiviti mengikut masa',
+                    clicks: 'Klik pautan',
+                    signups: 'Pendaftaran',
+                    empty: 'Tiada aktiviti dalam 12 bulan lalu.',
+                    emptyHint: 'Kongsi pautan rujukan anda untuk mula melihat trafik di sini.',
+                },
+                earnings: {
+                    title: 'Pendapatan dan pembayaran',
+                    earned: 'Komisen diperoleh',
+                    paid: 'Dibayar',
+                    empty: 'Tiada pendapatan lagi.',
+                    emptyHint: 'Komisen muncul di sini apabila perniagaan yang dirujuk melanggan.',
+                },
+                funnel: {
+                    title: 'Corong rujukan',
+                    clicks: 'Klik pautan',
+                    signups: 'Pendaftaran',
+                    earned: 'Diperoleh',
+                    paid: 'Dibayar',
+                    dropOff: 'susut {pct}%',
+                    empty: 'Tiada aktiviti lagi.',
+                },
+            },
         },
     } as const;

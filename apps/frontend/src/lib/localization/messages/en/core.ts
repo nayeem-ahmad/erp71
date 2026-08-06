@@ -1920,5 +1920,30 @@ export const coreMessages = {
                 close: 'Close',
             },
         },
+        charts: {
+            activity: {
+                title: 'Activity over time',
+                clicks: 'Link clicks',
+                signups: 'Signups',
+                empty: 'No activity in the last 12 months.',
+                emptyHint: 'Share your referral link to start seeing traffic here.',
+            },
+            earnings: {
+                title: 'Earnings and payouts',
+                earned: 'Commission earned',
+                paid: 'Paid out',
+                empty: 'No earnings yet.',
+                emptyHint: 'Commission appears here once a referred business subscribes.',
+            },
+            funnel: {
+                title: 'Referral funnel',
+                clicks: 'Link clicks',
+                signups: 'Signups',
+                earned: 'Earned',
+                paid: 'Paid',
+                dropOff: '{pct}% drop-off',
+                empty: 'No activity yet.',
+            },
+        },
     },
 } as const;
