@@ -23,6 +23,14 @@ jest.mock('@/lib/i18n', () => {
 
 jest.mock('lucide-react', () => new Proxy({}, { get: () => () => <span data-testid="icon" /> }));
 
+// DataTable hides `hideOnMobile` columns when this reports a narrow viewport.
+// The global matchMedia mock always reports non-matching, so without this the
+// status-badge/font-black scan below would run over a column set that never
+// matches what a real desktop viewport renders.
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useIsMdUp: () => true,
+}));
+
 const ledger = {
     referee: {
         id: 'referee-1',
@@ -110,5 +118,23 @@ describe('SignupsPage', () => {
 
         await waitFor(() => expect(screen.getByText('Dhaka Retail')).toBeInTheDocument());
         expect(container.textContent).toContain('Renewals are not commissioned');
+    });
+
+    it('renders the commission status through the shared badge, not a bespoke pill', async () => {
+        const { container } = render(<SignupsPage />);
+
+        await waitFor(() => expect(getRefereePortalLedger).toHaveBeenCalled());
+        await waitFor(() => expect(screen.getAllByText('Earned').length).toBeGreaterThan(0));
+
+        // The hand-rolled pill was `font-black uppercase tracking-widest`, all three
+        // of which CLAUDE.md bans in app code. Scoped to body cells on purpose: the
+        // shared DataTable's own <th> still carries those classes, which is a
+        // separate, app-wide violation and not this page's to fix.
+        const cells = Array.from(container.querySelectorAll('td'));
+        expect(cells.length).toBeGreaterThan(0);
+        for (const cell of cells) {
+            expect(cell.querySelector('.font-black')).toBeNull();
+            expect(cell.querySelector('.tracking-widest')).toBeNull();
+        }
     });
 });
