@@ -1,44 +1,34 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
+import { useMemo } from 'react';
+import Link from 'next/link';
 import { Copy, Gift, Link2, Loader2 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { DataTable } from '@/components/data-table';
-import type { RefereeLedger, ReferralCommission, RefereePayment } from '@/components/admin/referrals/types';
-import { api } from '@/lib/api';
-import { formatBDT, formatDate } from '@/lib/format';
+import { PageShell } from '@/components/ui';
+import ActivityChart from '@/components/referrals/ActivityChart';
+import EarningsChart from '@/components/referrals/EarningsChart';
+import FunnelChart from '@/components/referrals/FunnelChart';
+import { buildFunnel } from '@/components/referrals/funnel-model';
+import { useIsMdUp } from '@/hooks/useMediaQuery';
+import { formatBDT } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { buildBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
-import { PageShell, StatusBadge } from '@/components/ui';
-
-const commissionHelper = createColumnHelper<ReferralCommission>();
-const paymentHelper = createColumnHelper<RefereePayment>();
+import { useRefereeLedger } from './use-referee-ledger';
 
 export default function RefereePortalPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const m = t.referralPortal;
-    const [ledger, setLedger] = useState<RefereeLedger | null>(null);
-    const [error, setError] = useState('');
-    const [isLoading, setIsLoading] = useState(true);
+    const isMdUp = useIsMdUp();
+    const { ledger, error, isLoading } = useRefereeLedger();
 
-    const load = useCallback(async () => {
-        setIsLoading(true);
-        setError('');
-        try {
-            const data = await api.getRefereePortalLedger();
-            setLedger(data);
-        } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : m.loadFailed);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [m.loadFailed]);
-
-    useEffect(() => {
-        void load();
-    }, [load]);
+    // Twelve month labels collide below ~500px. Narrowing to six is the honest
+    // fix; squeezing or rotating the labels is not.
+    const activityPoints = useMemo(
+        () => (isMdUp ? ledger?.activity ?? [] : (ledger?.activity ?? []).slice(-6)),
+        [ledger?.activity, isMdUp],
+    );
 
     const signupUrl = useMemo(() => {
         if (!ledger?.referee.referral_code || typeof window === 'undefined') return '';
@@ -46,66 +36,22 @@ export default function RefereePortalPage() {
         return `${window.location.origin}/r/${encodeURIComponent(ledger.referee.referral_code)}`;
     }, [ledger?.referee.referral_code]);
 
+    const funnel = useMemo(() => buildFunnel({
+        clicks: ledger?.summary.clicks ?? 0,
+        signups: ledger?.summary.total_referrals ?? 0,
+        // Cumulative: a paid commission was earned first, so it still counts here.
+        earned: (ledger?.summary.earned ?? 0) + (ledger?.summary.paid ?? 0),
+        paid: ledger?.summary.paid ?? 0,
+    }), [ledger?.summary]);
+
     const copyText = async (value: string, message: string) => {
         try {
             await navigator.clipboard.writeText(value);
             toast.success(message);
         } catch {
-            setError(m.copyFailed);
+            toast.error(m.copyFailed);
         }
     };
-
-    const commissionColumns: ColumnDef<ReferralCommission, unknown>[] = useMemo(() => [
-        commissionHelper.accessor((row) => row.tenant?.name ?? row.tenant_id, {
-            id: 'tenant',
-            header: m.commissions.columns.tenant,
-            cell: (info) => <span className="font-medium text-gray-900">{info.getValue()}</span>,
-        }),
-        commissionHelper.accessor('status', {
-            header: m.commissions.columns.status,
-            cell: (info) => {
-                const status = info.getValue();
-                const tone = status === 'PAID'
-                    ? 'success'
-                    : status === 'EARNED'
-                        ? 'warning'
-                        : status === 'REVERSED'
-                            ? 'danger'
-                            : 'neutral';
-                return <StatusBadge tone={tone}>{m.status[status]}</StatusBadge>;
-            },
-        }),
-        commissionHelper.accessor('commission_amount', {
-            header: m.commissions.columns.commission,
-            cell: (info) => {
-                const value = info.getValue();
-                return value !== null ? <span className="font-semibold text-emerald-700">{formatBDT(Number(value))}</span> : '—';
-            },
-        }),
-        commissionHelper.accessor('signed_up_at', {
-            header: m.commissions.columns.signedUp,
-            cell: (info) => formatDate(info.getValue()),
-        }),
-    ], [m]);
-
-    const paymentColumns: ColumnDef<RefereePayment, unknown>[] = useMemo(() => [
-        paymentHelper.accessor('paid_at', {
-            header: m.payments.columns.date,
-            cell: (info) => formatDate(info.getValue()),
-        }),
-        paymentHelper.accessor('amount', {
-            header: m.payments.columns.amount,
-            cell: (info) => <span className="font-semibold text-emerald-700">{formatBDT(Number(info.getValue()))}</span>,
-        }),
-        paymentHelper.accessor('method', {
-            header: m.payments.columns.method,
-            cell: (info) => info.getValue() ?? '—',
-        }),
-        paymentHelper.accessor('reference', {
-            header: m.payments.columns.reference,
-            cell: (info) => info.getValue() ?? '—',
-        }),
-    ], [m]);
 
     const summaryCards = ledger ? [
         { label: m.summary.balanceDue, value: formatBDT(ledger.summary.balance_due), highlight: true },
@@ -196,29 +142,37 @@ export default function RefereePortalPage() {
                             ))}
                         </div>
 
-                        <div className="space-y-3">
-                            <h2 className="text-lg font-bold text-gray-900">{m.commissions.title}</h2>
-                            {/* The one-shot rule is the question partners ask most; saying it
-                                here beats letting them infer it from a renewal that earned nothing. */}
-                            <p className="text-xs text-gray-500">{m.commissionNote}</p>
-                            <DataTable
-                                tableId="referee-portal-commissions"
-                                data={ledger.commissions}
-                                columns={commissionColumns}
-                                title={m.commissions.title}
-                                emptyMessage={m.commissions.empty}
-                            />
+                        <div className="rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
+                            <div className="mb-3 flex items-center justify-between">
+                                <h2 className="text-sm font-semibold text-gray-900">{m.charts.activity.title}</h2>
+                                <Link
+                                    href={routes.referralsPortal.signups}
+                                    className="text-xs font-semibold text-blue-600 hover:underline"
+                                >
+                                    {m.signupsPage.title}
+                                </Link>
+                            </div>
+                            <ActivityChart points={activityPoints} labels={m.charts.activity} />
                         </div>
 
-                        <div className="space-y-3">
-                            <h2 className="text-lg font-bold text-gray-900">{m.payments.title}</h2>
-                            <DataTable
-                                tableId="referee-portal-payments"
-                                data={ledger.payments}
-                                columns={paymentColumns}
-                                title={m.payments.title}
-                                emptyMessage={m.payments.empty}
-                            />
+                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                            <div className="rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
+                                <div className="mb-3 flex items-center justify-between">
+                                    <h2 className="text-sm font-semibold text-gray-900">{m.charts.earnings.title}</h2>
+                                    <Link
+                                        href={routes.referralsPortal.payments}
+                                        className="text-xs font-semibold text-blue-600 hover:underline"
+                                    >
+                                        {m.paymentsPage.title}
+                                    </Link>
+                                </div>
+                                <EarningsChart points={ledger.activity} locale={locale} labels={m.charts.earnings} />
+                            </div>
+
+                            <div className="rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
+                                <h2 className="mb-3 text-sm font-semibold text-gray-900">{m.charts.funnel.title}</h2>
+                                <FunnelChart stages={funnel} labels={m.charts.funnel} />
+                            </div>
                         </div>
                     </>
                 ) : null}
