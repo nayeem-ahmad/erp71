@@ -6,13 +6,14 @@ import { SalaryStructuresController } from './salary-structures.controller';
 import { SalaryStructuresService } from './salary-structures.service';
 import { PayrollRunsController } from './payroll-runs.controller';
 import { PayrollRunsService } from './payroll-runs.service';
+import { PayrollDisbursementService } from './payroll-disbursement.service';
 
 @Module({
     // AttendanceModule for OvertimeService: the payroll run freezes the month
     // and reads its snapshot.
     imports: [DatabaseModule, CommonModule, AttendanceModule],
     controllers: [SalaryStructuresController, PayrollRunsController],
-    providers: [SalaryStructuresService, PayrollRunsService],
-    exports: [SalaryStructuresService, PayrollRunsService],
+    providers: [SalaryStructuresService, PayrollRunsService, PayrollDisbursementService],
+    exports: [SalaryStructuresService, PayrollRunsService, PayrollDisbursementService],
 })
 export class PayrollModule {}

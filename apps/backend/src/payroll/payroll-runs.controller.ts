@@ -9,8 +9,10 @@ import { RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { PayrollRunsService } from './payroll-runs.service';
+import { PayrollDisbursementService } from './payroll-disbursement.service';
 import {
-    CreatePayrollAdjustmentDto, CreatePayrollRunDto, PayrollPeriodDto, PayrollRunQueryDto,
+    CreatePayrollAdjustmentDto, CreatePayrollRunDto, DisbursePayrollDto,
+    PayrollPeriodDto, PayrollRunQueryDto,
 } from './payroll.dto';
 
 /**
@@ -22,7 +24,10 @@ import {
 @RequireStorePermission(StorePermission.VIEW_PAYROLL)
 @UseInterceptors(TenantInterceptor)
 export class PayrollRunsController {
-    constructor(private readonly service: PayrollRunsService) {}
+    constructor(
+        private readonly service: PayrollRunsService,
+        private readonly disbursement: PayrollDisbursementService,
+    ) {}
 
     @Get()
     list(@Tenant() tenant: TenantContext, @Query() query: PayrollRunQueryDto) {
@@ -84,6 +89,22 @@ export class PayrollRunsController {
     @RequireStorePermission(StorePermission.MANAGE_HR)
     reopen(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.service.reopen(tenant.tenantId, id);
+    }
+
+    @Get(':id/disbursement-file')
+    disbursementFile(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.disbursement.buildDisbursementFile(tenant.tenantId, id);
+    }
+
+    @Post(':id/disburse')
+    @RequireStorePermission(StorePermission.MANAGE_HR)
+    @HttpCode(HttpStatus.OK)
+    disburse(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: DisbursePayrollDto,
+    ) {
+        return this.disbursement.disburse(tenant.tenantId, id, tenant.userId, dto);
     }
 
     @Patch(':id/cancel')

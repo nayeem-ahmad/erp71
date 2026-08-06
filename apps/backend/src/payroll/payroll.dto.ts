@@ -125,3 +125,13 @@ export class CreatePayrollAdjustmentDto {
 
     @IsOptional() @IsString() note?: string;
 }
+
+export class DisbursePayrollDto {
+    @IsOptional()
+    @IsDateString()
+    payment_date?: string;
+
+    @IsOptional()
+    @IsEnum(['CASH', 'BANK', 'BKASH', 'NAGAD'] as any)
+    payment_method?: string;
+}
