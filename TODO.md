@@ -685,6 +685,8 @@ A CRM-first tenant landed on `RetailDashboard` — sales, stock, top products �
 
 #### HRIS gap analysis vs Shomvob HR (recorded 2026-08-06)
 
+**Phased plan covering every item below: `docs/superpowers/specs/2026-08-06-hris-completion-design.md`** (5 tracks, 14 phases; critical path is Phase 0 → 1 → 2 → 3).
+
 Comparison against the Shomvob HR feature set (Employee Master, Attendance, Leave Management, Payroll, Expense & Reimbursement, Policy Management, Asset Management, plus an employee mobile app paired with an admin dashboard). `shomvob.com` is blocked by this environment's outbound proxy, so the feature list came from public listings rather than the page itself — re-verify before treating any single line as their exact scope. Ordered by how much of ERP71 is missing, not by effort.
 
 - [ ] **No employee self-service surface at all — the single biggest gap.** Every HR screen in the app is an admin screen: `/hr/attendance` upserts *someone else's* record, `/hr/leaves` reviews requests, `/hr/salary-payments` pays people. `Employee.user_id` links an employee to a login and nothing reads it from the employee's side. Shomvob's entire product shape is the reverse — the employee opens an app, sees their own attendance, applies for leave, downloads a payslip — and the admin dashboard is the secondary surface. This is a whole new authenticated context (`active_context === 'employee'`), and the investor-portal plan above is the closest precedent for the shape it should take. **Prerequisite:** `EmployeesController` still guards with `JwtAuthGuard` alone (see the HR-dashboard follow-ups above), so today any authenticated tenant user can already read every salary figure; an ESS scope must not be built on top of that.
