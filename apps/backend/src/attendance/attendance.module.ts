@@ -7,5 +7,8 @@ import { AttendanceService } from './attendance.service';
     imports: [DatabaseModule],
     controllers: [AttendanceController],
     providers: [AttendanceService],
+    // Exported so the employee portal can apply for and cancel leave through
+    // the same validation the admin screens use.
+    exports: [AttendanceService],
 })
 export class AttendanceModule {}

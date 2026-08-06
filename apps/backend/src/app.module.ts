@@ -75,6 +75,7 @@ import { DiscountCodesModule } from './discount-codes/discount-codes.module';
 import { EmployeesModule } from './employees/employees.module';
 import { CountersModule } from './counters/counters.module';
 import { AttendanceModule } from './attendance/attendance.module';
+import { EmployeePortalModule } from './employee-portal/employee-portal.module';
 import { BrandsModule } from './brands/brands.module';
 import { CrmInteractionsModule } from './crm-interactions/crm-interactions.module';
 import { CrmFollowUpsModule } from './crm-follow-ups/crm-follow-ups.module';
@@ -179,6 +180,7 @@ import { ShortLinksModule } from './short-links/short-links.module';
         EmployeesModule,
         CountersModule,
         AttendanceModule,
+        EmployeePortalModule,
         BrandsModule,
         CrmInteractionsModule,
         CrmFollowUpsModule,

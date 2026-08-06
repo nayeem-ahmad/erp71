@@ -3094,6 +3094,11 @@ model Employee {
   user_id         String?        @unique
   basic_salary    Decimal?       @db.Decimal(12, 2)
   status          EmployeeStatus @default(ACTIVE)
+  /// Whether this employee may use the self-service portal. Distinct from
+  /// `user_id`: linking a login is how staff get an ERP account, and most
+  /// linked employees are staff who should keep using the admin screens.
+  /// Portal access is a deliberate, separately revocable grant on top.
+  portal_access   Boolean        @default(false)
   created_at      DateTime       @default(now())
   updated_at      DateTime       @updatedAt
   deleted_at      DateTime?

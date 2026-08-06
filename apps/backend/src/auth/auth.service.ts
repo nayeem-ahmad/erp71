@@ -392,6 +392,15 @@ export class AuthService {
         const platformFeatures = await this.platformSettings.getPlatformFeatures().catch(() => DEFAULT_PLATFORM_FEATURES);
         const referee = await this.referrals.resolveActiveRefereeForUser(userId, user.email);
 
+        // The employee self-service portal. Unlike a referee, an employee is a
+        // real tenant member, so this does not add a *new* identity — it tells
+        // the client that one of their tenants can also be entered as "me the
+        // employee" rather than as staff.
+        const employee = await this.db.employee.findFirst({
+            where: { user_id: userId, portal_access: true, status: 'ACTIVE', deleted_at: null },
+            select: { id: true, tenant_id: true, employee_code: true, name: true },
+        });
+
         return {
             id: user.id,
             email: user.email,
@@ -413,6 +422,14 @@ export class AuthService {
                     commission_rate: Number(referee.commission_rate),
                     is_active: referee.is_active,
                     has_login: !!referee.user_id,
+                }
+                : null,
+            employee: employee
+                ? {
+                    id: employee.id,
+                    tenant_id: employee.tenant_id,
+                    employee_code: employee.employee_code,
+                    name: employee.name,
                 }
                 : null,
             tenants: await Promise.all(

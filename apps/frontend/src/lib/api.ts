@@ -2486,6 +2486,39 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteEmployee: (id: string) => fetchWithAuth(`/employees/${id}`, { method: 'DELETE' }),
+    grantEmployeePortalAccess: (id: string) =>
+        fetchWithAuth(`/employees/${id}/portal-access`, { method: 'POST' }),
+    revokeEmployeePortalAccess: (id: string) =>
+        fetchWithAuth(`/employees/${id}/portal-access/revoke`, { method: 'PATCH' }),
+
+    // Employee self-service portal. Every endpoint resolves the employee from
+    // the token, so none of these take an employee id.
+    getMyProfile: () => fetchWithAuth('/employee-portal/me'),
+    getMySummary: (params?: { year?: number; month?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.year) query.set('year', String(params.year));
+        if (params?.month) query.set('month', String(params.month));
+        return fetchWithAuth(`/employee-portal/summary${query.toString() ? `?${query}` : ''}`);
+    },
+    getMyAttendance: (params?: { year?: number; month?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.year) query.set('year', String(params.year));
+        if (params?.month) query.set('month', String(params.month));
+        return fetchWithAuth(`/employee-portal/attendance${query.toString() ? `?${query}` : ''}`);
+    },
+    getMyLeaveBalances: (year?: number) =>
+        fetchWithAuth(`/employee-portal/leave-balances${year ? `?year=${year}` : ''}`),
+    getMyLeaveRequests: () => fetchWithAuth('/employee-portal/leave-requests'),
+    applyForLeave: (data: {
+        leave_type_id: string; start_date: string; end_date: string; days: number; reason?: string;
+    }) => fetchWithAuth('/employee-portal/leave-requests', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    cancelMyLeaveRequest: (id: string) =>
+        fetchWithAuth(`/employee-portal/leave-requests/${id}/cancel`, { method: 'PATCH' }),
+    getMySalaryPayments: () => fetchWithAuth('/employee-portal/salary-payments'),
     importEmployees: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert') =>
         fetchWithAuth('/employees/import', {
             method: 'POST',
