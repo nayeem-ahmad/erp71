@@ -23,7 +23,7 @@ const months = ['2025-09', '2025-10', '2025-11', '2025-12', '2026-01', '2026-02'
 describe('ActivityChart', () => {
     it('renders both panels with a legend, so identity is never colour-alone', () => {
         const points = months.map((m, i) => point(m, i * 3, i % 2));
-        render(<ActivityChart points={points} labels={labels} />);
+        render(<ActivityChart points={points} locale="en" labels={labels} />);
 
         expect(screen.getByText('Link clicks')).toBeInTheDocument();
         expect(screen.getByText('Signups')).toBeInTheDocument();
@@ -32,14 +32,14 @@ describe('ActivityChart', () => {
     });
 
     it('shows an empty state when every bucket is zero', () => {
-        render(<ActivityChart points={months.map((m) => point(m, 0, 0))} labels={labels} />);
+        render(<ActivityChart points={months.map((m) => point(m, 0, 0))} locale="en" labels={labels} />);
 
         expect(screen.getByText('No activity in the last 12 months.')).toBeInTheDocument();
         expect(screen.queryByTestId('activity-clicks-line')).not.toBeInTheDocument();
     });
 
     it('shows the empty state rather than crashing on an empty array', () => {
-        render(<ActivityChart points={[]} labels={labels} />);
+        render(<ActivityChart points={[]} locale="en" labels={labels} />);
 
         expect(screen.getByText('No activity in the last 12 months.')).toBeInTheDocument();
     });

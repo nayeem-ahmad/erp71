@@ -24,7 +24,6 @@ const VIEW_W = 620;
 const VIEW_H = 260;
 const PAD_L = 40;
 const PAD_R = 10;
-const PAD_B = 24;
 /** Vertical gap between the two panels. */
 const PANEL_GAP = 18;
 const TOP_H = 120;
@@ -34,9 +33,9 @@ const BOTTOM_Y = TOP_Y + TOP_H + PANEL_GAP;
 const PLOT_W = VIEW_W - PAD_L - PAD_R;
 const TICK_COUNT = 3;
 
-function monthLabel(month: string): string {
+function monthLabel(month: string, locale: string): string {
     const [year, m] = month.split('-');
-    return new Date(Number(year), Number(m) - 1, 1).toLocaleDateString('en', { month: 'short' });
+    return new Date(Number(year), Number(m) - 1, 1).toLocaleDateString(locale, { month: 'short' });
 }
 
 /**
@@ -50,9 +49,11 @@ function monthLabel(month: string): string {
  */
 export default function ActivityChart({
     points,
+    locale,
     labels,
 }: {
     points: ReferralActivityPoint[];
+    locale: string;
     labels: ActivityLabels;
 }) {
     const [hovered, setHovered] = useState<number | null>(null);
@@ -192,7 +193,7 @@ export default function ActivityChart({
                             fontSize={9}
                             fill={CHART_AXIS_TEXT}
                         >
-                            {monthLabel(point.month)}
+                            {monthLabel(point.month, locale)}
                         </text>
                     ))}
 
@@ -229,7 +230,7 @@ export default function ActivityChart({
                             top: `${(model.clickY(active.clicks) / VIEW_H) * 100}%`,
                         }}
                     >
-                        <p className="font-bold">{monthLabel(active.month)}</p>
+                        <p className="font-bold">{monthLabel(active.month, locale)}</p>
                         <p>{labels.clicks}: {active.clicks}</p>
                         <p>{labels.signups}: {active.signups}</p>
                     </div>

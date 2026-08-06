@@ -1846,26 +1846,6 @@ export const coreMessages = {
                 codeCopied: "রেফারেল কোড কপি হয়েছে",
                 linkCopied: "সাইনআপ লিংক কপি হয়েছে",
             },
-            commissions: {
-                title: "আপনার সাইনআপ",
-                empty: "এখনও কোনো সাইনআপ নেই। শুরু করতে রেফারেল কোড শেয়ার করুন।",
-                columns: {
-                    tenant: "ব্যবসা",
-                    status: "স্ট্যাটাস",
-                    commission: "কমিশন",
-                    signedUp: "সাইনআপ",
-                },
-            },
-            payments: {
-                title: "পেমেন্ট ইতিহাস",
-                empty: "এখনও কোনো পেমেন্ট রেকর্ড নেই।",
-                columns: {
-                    date: "তারিখ",
-                    amount: "পরিমাণ",
-                    method: "পদ্ধতি",
-                    reference: "রেফারেন্স",
-                },
-            },
             status: {
                 PENDING: "অপেক্ষমাণ",
                 EARNED: "অর্জিত",
@@ -1939,7 +1919,7 @@ export const coreMessages = {
                     title: 'রেফারেল ফানেল',
                     clicks: 'লিঙ্ক ক্লিক',
                     signups: 'সাইনআপ',
-                    earned: 'অর্জিত',
+                    earned: 'অর্জিত (পরিশোধিত সহ)',
                     paid: 'পরিশোধিত',
                     dropOff: '{pct}% হ্রাস',
                     empty: 'এখনও কোনো কার্যকলাপ নেই।',

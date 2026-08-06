@@ -152,7 +152,7 @@ export default function RefereePortalPage() {
                                     {m.signupsPage.title}
                                 </Link>
                             </div>
-                            <ActivityChart points={activityPoints} labels={m.charts.activity} />
+                            <ActivityChart points={activityPoints} locale={locale} labels={m.charts.activity} />
                         </div>
 
                         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -166,7 +166,7 @@ export default function RefereePortalPage() {
                                         {m.paymentsPage.title}
                                     </Link>
                                 </div>
-                                <EarningsChart points={ledger.activity} locale={locale} labels={m.charts.earnings} />
+                                <EarningsChart points={activityPoints} locale={locale} labels={m.charts.earnings} />
                             </div>
 
                             <div className="rounded-lg border border-gray-100 bg-white p-4 shadow-sm">

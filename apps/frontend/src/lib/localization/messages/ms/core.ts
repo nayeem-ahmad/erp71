@@ -1847,26 +1847,6 @@ export const coreMessages = {
                 codeCopied: "Kod rujukan disalin",
                 linkCopied: "Pautan pendaftaran disalin",
             },
-            commissions: {
-                title: "Pendaftaran anda",
-                empty: "Tiada pendaftaran lagi. Kongsi kod rujukan anda untuk bermula.",
-                columns: {
-                    tenant: "Perniagaan",
-                    status: "Status",
-                    commission: "Komisen",
-                    signedUp: "Daftar",
-                },
-            },
-            payments: {
-                title: "Sejarah pembayaran",
-                empty: "Tiada pembayaran direkodkan lagi.",
-                columns: {
-                    date: "Tarikh",
-                    amount: "Jumlah",
-                    method: "Kaedah",
-                    reference: "Rujukan",
-                },
-            },
             status: {
                 PENDING: "Menunggu",
                 EARNED: "Diperoleh",
@@ -1940,7 +1920,7 @@ export const coreMessages = {
                     title: 'Corong rujukan',
                     clicks: 'Klik pautan',
                     signups: 'Pendaftaran',
-                    earned: 'Diperoleh',
+                    earned: 'Diperoleh (termasuk dibayar)',
                     paid: 'Dibayar',
                     dropOff: 'susut {pct}%',
                     empty: 'Tiada aktiviti lagi.',

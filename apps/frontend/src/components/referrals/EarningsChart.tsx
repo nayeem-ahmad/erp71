@@ -31,10 +31,10 @@ const TICK_COUNT = 4;
 /** 2px of surface between the paired columns, per the mark spec. */
 const PAIR_GAP = 2;
 
-function monthLabel(month: string): string {
+function monthLabel(month: string, locale: string): string {
     const [year, m] = month.split('-');
     const date = new Date(Number(year), Number(m) - 1, 1);
-    return date.toLocaleDateString('en', { month: 'short' });
+    return date.toLocaleDateString(locale, { month: 'short' });
 }
 
 /**
@@ -161,7 +161,7 @@ export default function EarningsChart({
                             fontSize={9.5}
                             fill={CHART_AXIS_TEXT}
                         >
-                            {monthLabel(point.month)}
+                            {monthLabel(point.month, locale)}
                         </text>
                     ))}
 
@@ -187,7 +187,7 @@ export default function EarningsChart({
                             top: `${(model.toY(Math.max(active.earned_amount, active.paid_amount)) / VIEW_H) * 100}%`,
                         }}
                     >
-                        <p className="font-bold">{monthLabel(active.month)}</p>
+                        <p className="font-bold">{monthLabel(active.month, locale)}</p>
                         <p>{labels.earned}: {money(active.earned_amount)}</p>
                         <p>{labels.paid}: {money(active.paid_amount)}</p>
                     </div>

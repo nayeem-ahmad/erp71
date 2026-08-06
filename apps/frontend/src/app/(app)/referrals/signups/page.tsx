@@ -10,6 +10,7 @@ import type { ReferralCommission } from '@/components/admin/referrals/types';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { buildBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { routes } from '@/lib/routes';
 import { useRefereeLedger } from '../use-referee-ledger';
 
 const helper = createColumnHelper<ReferralCommission>();
@@ -89,7 +90,7 @@ export default function SignupsPage() {
                 title={page.title}
                 subtitle={page.subtitle}
                 breadcrumbs={buildBreadcrumbs(t.dashboardHome.breadcrumbHome, [
-                    { label: m.breadcrumb, href: '/referrals' },
+                    { label: m.breadcrumb, href: routes.referralsPortal.root },
                     { label: page.title },
                 ])}
             />

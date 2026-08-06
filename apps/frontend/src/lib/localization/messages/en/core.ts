@@ -1846,26 +1846,6 @@ export const coreMessages = {
             codeCopied: 'Referral code copied',
             linkCopied: 'Signup link copied',
         },
-        commissions: {
-            title: 'Your signups',
-            empty: 'No signups yet. Share your referral code to get started.',
-            columns: {
-                tenant: 'Business',
-                status: 'Status',
-                commission: 'Commission',
-                signedUp: 'Signed up',
-            },
-        },
-        payments: {
-            title: 'Payment history',
-            empty: 'No payments recorded yet.',
-            columns: {
-                date: 'Date',
-                amount: 'Amount',
-                method: 'Method',
-                reference: 'Reference',
-            },
-        },
         status: {
             PENDING: 'Pending',
             EARNED: 'Earned',
@@ -1939,7 +1919,7 @@ export const coreMessages = {
                 title: 'Referral funnel',
                 clicks: 'Link clicks',
                 signups: 'Signups',
-                earned: 'Earned',
+                earned: 'Earned (incl. paid)',
                 paid: 'Paid',
                 dropOff: '{pct}% drop-off',
                 empty: 'No activity yet.',
