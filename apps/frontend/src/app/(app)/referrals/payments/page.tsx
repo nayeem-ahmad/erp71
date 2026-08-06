@@ -39,6 +39,7 @@ export default function PaymentsPage() {
         }),
         helper.accessor('reference', {
             header: page.columns.reference,
+            meta: { hideOnMobile: true },
             cell: (info) => info.getValue() ?? '—',
         }),
         helper.accessor('notes', {

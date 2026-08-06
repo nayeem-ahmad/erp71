@@ -23,6 +23,13 @@ jest.mock('@/lib/i18n', () => {
 
 jest.mock('lucide-react', () => new Proxy({}, { get: () => () => <span data-testid="icon" /> }));
 
+// DataTable hides `hideOnMobile` columns (reference, notes) when this reports a
+// narrow viewport. The global matchMedia mock always reports non-matching, so
+// without this the reference column this suite asserts on never renders.
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useIsMdUp: () => true,
+}));
+
 const base = {
     referee: {
         id: 'referee-1',
