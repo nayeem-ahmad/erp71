@@ -10,7 +10,7 @@ import { TenantInterceptor } from '../database/tenant.interceptor';
 import { UseInterceptors } from '@nestjs/common';
 import { EmployeeGuard } from './employee.guard';
 import { EmployeePortalService } from './employee-portal.service';
-import { ApplyForLeaveDto, PortalPeriodQueryDto } from './employee-portal.dto';
+import { ApplyForLeaveDto, ClockDto, PortalPeriodQueryDto } from './employee-portal.dto';
 
 /**
  * The employee's own screens. Every handler reads `req.employee`, populated by
@@ -31,6 +31,23 @@ export class EmployeePortalController {
         return this.service.getSummary(
             req.employee.tenant_id, req.employee.id, query.year, query.month,
         );
+    }
+
+    @Get('attendance/today')
+    today(@Request() req: any) {
+        return this.service.today(req.employee.tenant_id, req.employee.id);
+    }
+
+    @Post('attendance/check-in')
+    @HttpCode(HttpStatus.OK)
+    checkIn(@Request() req: any, @Body() dto: ClockDto) {
+        return this.service.checkIn(req.employee.tenant_id, req.employee.id, dto);
+    }
+
+    @Post('attendance/check-out')
+    @HttpCode(HttpStatus.OK)
+    checkOut(@Request() req: any, @Body() dto: ClockDto) {
+        return this.service.checkOut(req.employee.tenant_id, req.employee.id, dto);
     }
 
     @Get('attendance')

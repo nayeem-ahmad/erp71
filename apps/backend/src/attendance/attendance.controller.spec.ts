@@ -4,6 +4,7 @@ import request from 'supertest';
 import { Reflector } from '@nestjs/core';
 import { AttendanceController } from './attendance.controller';
 import { AttendanceService } from './attendance.service';
+import { AttendanceCaptureService } from './attendance-capture.service';
 import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
@@ -25,6 +26,11 @@ describe('AttendanceController — subscription guard', () => {
         cancelLeaveRequest: jest.fn().mockResolvedValue({}),
         upsertAttendance: jest.fn().mockResolvedValue({}),
         getAttendanceSummary: jest.fn().mockResolvedValue({}),
+    } as any;
+
+    const captureService = {
+        getSettings: jest.fn().mockResolvedValue({}),
+        updateSettings: jest.fn().mockResolvedValue({}),
     } as any;
 
     const db = {
@@ -49,6 +55,7 @@ describe('AttendanceController — subscription guard', () => {
             controllers: [AttendanceController],
             providers: [
                 { provide: AttendanceService, useValue: attendanceService },
+                { provide: AttendanceCaptureService, useValue: captureService },
                 { provide: DatabaseService, useValue: db },
                 Reflector,
                 SubscriptionAccessGuard,

@@ -18,7 +18,9 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { RequiresPlan } from '../auth/subscription-access.decorator';
 import { AttendanceService } from './attendance.service';
+import { AttendanceCaptureService } from './attendance-capture.service';
 import {
+    UpdateAttendanceSettingsDto,
     UpsertAttendanceDto,
     CreateLeaveTypeDto,
     UpdateLeaveTypeDto,
@@ -32,7 +34,27 @@ import {
 @RequiresPlan('STANDARD')
 @UseInterceptors(TenantInterceptor)
 export class AttendanceController {
-    constructor(private svc: AttendanceService) {}
+    constructor(
+        private svc: AttendanceService,
+        private capture: AttendanceCaptureService,
+    ) {}
+
+    // ── Settings ──────────────────────────────────────────────────────────────
+
+    /**
+     * Attendance policy for the tenant. Readable by anyone who can reach this
+     * controller — an employee needs to know whether self check-in is on to
+     * render the button, and none of these fields are sensitive.
+     */
+    @Get('settings')
+    getSettings(@Tenant() tenant: TenantContext) {
+        return this.capture.getSettings(tenant.tenantId);
+    }
+
+    @Patch('settings')
+    updateSettings(@Tenant() tenant: TenantContext, @Body() dto: UpdateAttendanceSettingsDto) {
+        return this.capture.updateSettings(tenant.tenantId, dto);
+    }
 
     // ── Leave Types ───────────────────────────────────────────────────────────
 

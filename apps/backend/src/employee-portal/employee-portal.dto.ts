@@ -24,6 +24,23 @@ export class PortalPeriodQueryDto {
     month?: number;
 }
 
+/**
+ * A check-in or check-out. Location is optional in the DTO and required by the
+ * *service* when the tenant has geofencing on — the requirement is a tenant
+ * policy, not a wire-format one, so it does not belong here.
+ */
+export class ClockDto {
+    @IsOptional()
+    @IsNumber()
+    @Type(() => Number)
+    latitude?: number;
+
+    @IsOptional()
+    @IsNumber()
+    @Type(() => Number)
+    longitude?: number;
+}
+
 export class ApplyForLeaveDto {
     @IsUUID()
     leave_type_id: string;

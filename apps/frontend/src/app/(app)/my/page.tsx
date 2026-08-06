@@ -9,6 +9,7 @@ import { useToastStore } from '@/lib/toast';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { PageShell, Button, Field, Input, Select, FormFooter, Alert } from '@/components/ui';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
+import CheckInCard, { type TodayState } from './CheckInCard';
 
 /**
  * Employee self-service. Phase 1 of the HRIS plan.
@@ -107,6 +108,7 @@ export default function MyWorkspacePage() {
     const [requests, setRequests] = useState<LeaveRequest[]>([]);
     const [payments, setPayments] = useState<SalaryPayment[]>([]);
     const [leaveTypes, setLeaveTypes] = useState<{ id: string; name: string }[]>([]);
+    const [today, setToday] = useState<TodayState | null>(null);
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -119,15 +121,17 @@ export default function MyWorkspacePage() {
         setLoading(true);
         setError('');
         try {
-            const [me, sum, att, bal, reqs, pays] = await Promise.all([
+            const [me, sum, att, bal, reqs, pays, todayState] = await Promise.all([
                 api.getMyProfile(),
                 api.getMySummary(),
                 api.getMyAttendance(),
                 api.getMyLeaveBalances(),
                 api.getMyLeaveRequests(),
                 api.getMySalaryPayments(),
+                api.getMyToday(),
             ]);
             setProfile(me.employee);
+            setToday(todayState);
             setSummary(sum);
             setAttendance(att.records ?? []);
             setBalances(bal ?? []);
@@ -243,6 +247,7 @@ export default function MyWorkspacePage() {
                 <>
                     {tab === 'overview' && (
                         <div className="space-y-4">
+                            <CheckInCard today={today} onChanged={load} />
                             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                                 <StatTile label={copy.summary.presentDays} value={summary?.attendance?.summary?.PRESENT ?? 0} />
                                 <StatTile label={copy.summary.absentDays} value={summary?.attendance?.summary?.ABSENT ?? 0} />

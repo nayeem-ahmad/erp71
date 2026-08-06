@@ -2,12 +2,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { EmployeePortalService } from './employee-portal.service';
 import { AttendanceService } from '../attendance/attendance.service';
+import { AttendanceCaptureService } from '../attendance/attendance-capture.service';
 import { DatabaseService } from '../database/database.service';
 
 describe('EmployeePortalService', () => {
     let service: EmployeePortalService;
     let db: any;
     let attendance: any;
+    let capture: any;
 
     beforeEach(async () => {
         db = {
@@ -22,12 +24,18 @@ describe('EmployeePortalService', () => {
             createLeaveRequest: jest.fn().mockResolvedValue({ id: 'req-1' }),
             cancelLeaveRequest: jest.fn().mockResolvedValue({ id: 'req-1', status: 'CANCELLED' }),
         };
+        capture = {
+            today: jest.fn().mockResolvedValue({}),
+            checkIn: jest.fn().mockResolvedValue({}),
+            checkOut: jest.fn().mockResolvedValue({}),
+        };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 EmployeePortalService,
                 { provide: DatabaseService, useValue: db },
                 { provide: AttendanceService, useValue: attendance },
+                { provide: AttendanceCaptureService, useValue: capture },
             ],
         }).compile();
 

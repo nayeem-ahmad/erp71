@@ -10,10 +10,18 @@ import {
     ReviewLeaveRequestDto,
     LeaveRequestStatusDto,
 } from './attendance.dto';
+import { AttendanceCaptureService } from './attendance-capture.service';
 
 @Injectable()
 export class AttendanceService {
-    constructor(private db: DatabaseService) {}
+    constructor(
+        private db: DatabaseService,
+        /**
+         * Leave approval writes attendance rows through this. No cycle: the
+         * capture service knows about schedules and holidays, not about leave.
+         */
+        private readonly capture: AttendanceCaptureService,
+    ) {}
 
     // ── Leave Types ───────────────────────────────────────────────────────────
 
@@ -167,11 +175,17 @@ export class AttendanceService {
             select: { status: true },
         });
 
+        // Every status gets a bucket, including the three Phase 2 added. A
+        // missing key would still be counted by the loop below but would read
+        // as absent from the summary — worse than a zero.
         const summary: Record<string, number> = {
             PRESENT: 0,
             ABSENT: 0,
             HALF_DAY: 0,
             HOLIDAY: 0,
+            LATE: 0,
+            EARLY_LEAVE: 0,
+            ON_LEAVE: 0,
         };
 
         for (const record of records) {
@@ -367,6 +381,14 @@ export class AttendanceService {
                     used_days: { increment: request.days },
                 },
             });
+
+            // Write the attendance side of the approval. Before this the two
+            // models shared no data at all, so an approved leave left the
+            // attendance report showing the employee absent — the same fact
+            // recorded two contradictory ways.
+            await this.capture.markLeaveDays(
+                tenantId, request.employee_id, request.start_date, request.end_date,
+            );
         }
 
         return this.db.leaveRequest.update({
@@ -391,8 +413,12 @@ export class AttendanceService {
             throw new BadRequestException('Leave request is already cancelled.');
         }
 
-        // If it was approved, restore the used days
+        // If it was approved, restore the used days — and take back the
+        // attendance rows the approval wrote.
         if (request.status === 'APPROVED') {
+            await this.capture.unmarkLeaveDays(
+                tenantId, request.employee_id, request.start_date, request.end_date,
+            );
             const year = new Date(request.start_date).getFullYear();
             await this.db.leaveBalance.updateMany({
                 where: {

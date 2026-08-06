@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { AttendanceService } from '../attendance/attendance.service';
-import { ApplyForLeaveDto } from './employee-portal.dto';
+import { AttendanceCaptureService } from '../attendance/attendance-capture.service';
+import { ApplyForLeaveDto, ClockDto } from './employee-portal.dto';
 
 /**
  * The employee's own view of themselves.
@@ -19,7 +20,26 @@ export class EmployeePortalService {
     constructor(
         private readonly db: DatabaseService,
         private readonly attendance: AttendanceService,
+        private readonly capture: AttendanceCaptureService,
     ) {}
+
+    /**
+     * Today's attendance state, for the check-in button.
+     *
+     * Returned even on a rest day or a holiday — the portal shows *why* the
+     * button is unavailable rather than just hiding it.
+     */
+    today(tenantId: string, employeeId: string) {
+        return this.capture.today(tenantId, employeeId);
+    }
+
+    checkIn(tenantId: string, employeeId: string, dto: ClockDto) {
+        return this.capture.checkIn(tenantId, employeeId, dto);
+    }
+
+    checkOut(tenantId: string, employeeId: string, dto: ClockDto) {
+        return this.capture.checkOut(tenantId, employeeId, dto);
+    }
 
     /** Recent months are what an employee actually looks at; the rest is history. */
     private static readonly RECENT_PAYMENTS = 6;

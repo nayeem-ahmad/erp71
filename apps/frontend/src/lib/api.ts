@@ -2544,6 +2544,32 @@ export const api = {
         if (params?.month) query.set('month', String(params.month));
         return fetchWithAuth(`/employee-portal/attendance${query.toString() ? `?${query}` : ''}`);
     },
+    getMyToday: () => fetchWithAuth('/employee-portal/attendance/today'),
+    checkIn: (location?: { latitude: number; longitude: number }) =>
+        fetchWithAuth('/employee-portal/attendance/check-in', {
+            method: 'POST',
+            body: JSON.stringify(location ?? {}),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    checkOut: (location?: { latitude: number; longitude: number }) =>
+        fetchWithAuth('/employee-portal/attendance/check-out', {
+            method: 'POST',
+            body: JSON.stringify(location ?? {}),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+
+    getAttendanceSettings: () => fetchWithAuth('/attendance/settings'),
+    updateAttendanceSettings: (data: {
+        self_service_enabled?: boolean;
+        geofence_enabled?: boolean;
+        geofence_radius_m?: number;
+        grace_minutes?: number;
+    }) => fetchWithAuth('/attendance/settings', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+
     getMyLeaveBalances: (year?: number) =>
         fetchWithAuth(`/employee-portal/leave-balances${year ? `?year=${year}` : ''}`),
     getMyLeaveRequests: () => fetchWithAuth('/employee-portal/leave-requests'),

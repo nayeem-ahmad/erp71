@@ -1,4 +1,4 @@
-import { IsString, IsDateString, IsOptional, IsEnum, IsNumber, IsPositive, IsUUID, Min } from 'class-validator';
+import { IsString, IsDateString, IsOptional, IsEnum, IsNumber, IsPositive, IsUUID, IsBoolean, IsInt, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum AttendanceStatusDto {
@@ -36,6 +36,31 @@ export class UpsertAttendanceDto {
     @IsOptional()
     @IsString()
     notes?: string;
+}
+
+export class UpdateAttendanceSettingsDto {
+    @IsOptional()
+    @IsBoolean()
+    self_service_enabled?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
+    geofence_enabled?: boolean;
+
+    /** Metres. Below 20 is inside phone GPS error; above 5km is not a fence. */
+    @IsOptional()
+    @IsInt()
+    @Min(20)
+    @Max(5000)
+    @Type(() => Number)
+    geofence_radius_m?: number;
+
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    @Max(240)
+    @Type(() => Number)
+    grace_minutes?: number;
 }
 
 export class CreateLeaveTypeDto {

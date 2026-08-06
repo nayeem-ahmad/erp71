@@ -9,6 +9,9 @@ jest.mock('@/lib/api', () => ({
         getMyLeaveBalances: jest.fn(),
         getMyLeaveRequests: jest.fn(),
         getMySalaryPayments: jest.fn(),
+        getMyToday: jest.fn(),
+        checkIn: jest.fn(),
+        checkOut: jest.fn(),
         applyForLeave: jest.fn(),
         cancelMyLeaveRequest: jest.fn(),
     },
@@ -35,6 +38,16 @@ const seed = (overrides: Record<string, any> = {}) => {
     api.getMyLeaveBalances.mockResolvedValue(overrides.balances ?? []);
     api.getMyLeaveRequests.mockResolvedValue(overrides.requests ?? []);
     api.getMySalaryPayments.mockResolvedValue(overrides.payments ?? []);
+    api.getMyToday.mockResolvedValue(overrides.today ?? {
+        date: '2026-08-10',
+        record: null,
+        isHoliday: false,
+        isWorkingDay: true,
+        scheduledStartMinute: 540,
+        scheduledEndMinute: 1080,
+        selfServiceEnabled: true,
+        geofenceEnabled: false,
+    });
 };
 
 describe('MyWorkspacePage', () => {
@@ -79,6 +92,7 @@ describe('MyWorkspacePage', () => {
         api.getMyLeaveBalances.mockResolvedValue([]);
         api.getMyLeaveRequests.mockResolvedValue([]);
         api.getMySalaryPayments.mockResolvedValue([]);
+        api.getMyToday.mockResolvedValue(null);
 
         render(<MyWorkspacePage />);
         await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
@@ -140,5 +154,94 @@ describe('MyWorkspacePage', () => {
         fireEvent.click(screen.getByRole('button', { name: /^pay$/i }));
         expect(screen.getByText('2026-07')).toBeInTheDocument();
         expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
+    });
+    describe('check in', () => {
+        it('offers check-in on a working day and records it', async () => {
+            seed();
+            api.checkIn.mockResolvedValue({});
+            render(<MyWorkspacePage />);
+            await waitFor(() => expect(api.getMyToday).toHaveBeenCalled());
+
+            fireEvent.click(screen.getByRole('button', { name: /^check in$/i }));
+            await waitFor(() => expect(api.checkIn).toHaveBeenCalled());
+            // Geofencing off — no coordinates are sent at all.
+            expect(api.checkIn).toHaveBeenCalledWith(undefined);
+        });
+
+        it('switches to check-out once clocked in', async () => {
+            seed({ today: {
+                date: '2026-08-10',
+                record: { clock_in: '2026-08-10T09:00:00.000Z', clock_out: null },
+                isHoliday: false, isWorkingDay: true,
+                scheduledStartMinute: 540, scheduledEndMinute: 1080,
+                selfServiceEnabled: true, geofenceEnabled: false,
+            } });
+            render(<MyWorkspacePage />);
+            await waitFor(() => expect(api.getMyToday).toHaveBeenCalled());
+
+            expect(screen.getByRole('button', { name: /check out/i })).toBeInTheDocument();
+        });
+
+        it('says why rather than hiding the control on a rest day', async () => {
+            // A missing button reads as a broken app.
+            seed({ today: {
+                date: '2026-08-14', record: null,
+                isHoliday: false, isWorkingDay: false,
+                scheduledStartMinute: null, scheduledEndMinute: null,
+                selfServiceEnabled: true, geofenceEnabled: false,
+            } });
+            render(<MyWorkspacePage />);
+            await waitFor(() => expect(api.getMyToday).toHaveBeenCalled());
+
+            expect(screen.getByText(/rest day/i)).toBeInTheDocument();
+            expect(screen.queryByRole('button', { name: /^check in$/i })).not.toBeInTheDocument();
+        });
+
+        it('says why on a holiday', async () => {
+            seed({ today: {
+                date: '2026-04-14', record: null,
+                isHoliday: true, isWorkingDay: true,
+                scheduledStartMinute: 540, scheduledEndMinute: 1080,
+                selfServiceEnabled: true, geofenceEnabled: false,
+            } });
+            render(<MyWorkspacePage />);
+            await waitFor(() => expect(api.getMyToday).toHaveBeenCalled());
+            expect(screen.getByText(/holiday/i)).toBeInTheDocument();
+        });
+
+        it('says why when the business turned self check-in off', async () => {
+            seed({ today: {
+                date: '2026-08-10', record: null,
+                isHoliday: false, isWorkingDay: true,
+                scheduledStartMinute: 540, scheduledEndMinute: 1080,
+                selfServiceEnabled: false, geofenceEnabled: false,
+            } });
+            render(<MyWorkspacePage />);
+            await waitFor(() => expect(api.getMyToday).toHaveBeenCalled());
+            expect(screen.getByText(/turned off/i)).toBeInTheDocument();
+        });
+
+        it('shows the day as done once clocked out', async () => {
+            seed({ today: {
+                date: '2026-08-10',
+                record: { clock_in: '2026-08-10T09:00:00.000Z', clock_out: '2026-08-10T18:00:00.000Z' },
+                isHoliday: false, isWorkingDay: true,
+                scheduledStartMinute: 540, scheduledEndMinute: 1080,
+                selfServiceEnabled: true, geofenceEnabled: false,
+            } });
+            render(<MyWorkspacePage />);
+            await waitFor(() => expect(api.getMyToday).toHaveBeenCalled());
+            expect(screen.getByText(/done for today/i)).toBeInTheDocument();
+        });
+
+        it('surfaces a rejected check-in instead of failing silently', async () => {
+            seed();
+            api.checkIn.mockRejectedValue(new Error('You appear to be 4000m from Gulshan.'));
+            render(<MyWorkspacePage />);
+            await waitFor(() => expect(api.getMyToday).toHaveBeenCalled());
+
+            fireEvent.click(screen.getByRole('button', { name: /^check in$/i }));
+            await waitFor(() => expect(screen.getByText(/4000m from Gulshan/)).toBeInTheDocument());
+        });
     });
 });

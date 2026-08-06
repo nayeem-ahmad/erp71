@@ -601,6 +601,7 @@ model Tenant {
   projectComments            ProjectComment[]
   projectAttachments         ProjectAttachment[]
   shortLinks                 ShortLink[]
+  AttendanceSettings         AttendanceSettings?
 
   @@index([deleted_at])
 }
@@ -819,6 +820,11 @@ model Store {
   tenant_id  String
   name       String
   address    String?
+  /// Decimal degrees. Set only when a tenant turns on geofenced attendance —
+  /// a store with no coordinates cannot be the anchor for a check-in, which is
+  /// why `AttendanceSettings.geofence_enabled` is off until one is configured.
+  latitude   Float?
+  longitude  Float?
   created_at DateTime @default(now())
 
   // Relations
@@ -835,6 +841,7 @@ model Store {
   warehouses               Warehouse[]
   userStoreAccess          UserStoreAccess[]
   userStorePermissions     UserStorePermission[]
+  attendanceRecords        AttendanceRecord[]
   productPrices            ProductPrice[]
   fundTransfersSource      FundTransfer[]           @relation("FundTransferSourceStore")
   fundTransfersDestination FundTransfer[]           @relation("FundTransferDestinationStore")
@@ -3179,15 +3186,69 @@ model AttendanceRecord {
   clock_out   DateTime?
   status      AttendanceStatus @default(PRESENT)
   notes       String?
-  created_at  DateTime         @default(now())
-  updated_at  DateTime         @updatedAt
+
+  /// Derived from the employee's schedule when the row is written, not on read.
+  /// Stored rather than computed because the schedule can change afterwards and
+  /// a past day must keep the figures it earned at the time.
+  late_minutes        Int @default(0)
+  early_leave_minutes Int @default(0)
+  worked_minutes      Int @default(0)
+  /// Raw minutes past the scheduled end. Becoming *payable* overtime needs an
+  /// approval, which is Phase 4 — this is only the observation.
+  overtime_minutes    Int @default(0)
+
+  /// Where the row came from: ADMIN (typed by staff), SELF (the employee's own
+  /// check-in), LEAVE (written by a leave approval) or IMPORT. Worth storing
+  /// because "who says you were here" is the first question asked of any
+  /// attendance dispute.
+  source String @default("ADMIN")
+
+  /// Captured only when geofencing is on. Null on every row where it is off,
+  /// which is the majority — this is deliberately not a required field.
+  clock_in_lat  Float?
+  clock_in_lng  Float?
+  clock_out_lat Float?
+  clock_out_lng Float?
+  /// The store the check-in was matched to, when geofencing resolved one.
+  store_id      String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   employee Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  store    Store?   @relation(fields: [store_id], references: [id])
 
   @@unique([tenant_id, employee_id, date])
   @@index([tenant_id, date])
   @@index([tenant_id, employee_id, date])
+}
+
+/// Per-tenant attendance policy.
+///
+/// One row per tenant, mirroring `SalesSettings`. Everything here has a working
+/// default, so a tenant that never opens the screen still gets sane behaviour —
+/// the row exists to be *changed*, not to make the feature work.
+model AttendanceSettings {
+  id                   String   @id @default(uuid())
+  tenant_id            String   @unique
+  /// Whether employees may clock themselves in and out at all. On by default:
+  /// the portal is the point, and an admin can still type a row either way.
+  self_service_enabled Boolean  @default(true)
+  /// Off by default. Location capture is a deliberate act, not something a
+  /// tenant should discover they enabled by upgrading.
+  geofence_enabled     Boolean  @default(false)
+  /// How far from a store a check-in may be, in metres. 200m is generous
+  /// enough for phone GPS drift in a dense city without covering the next block.
+  geofence_radius_m    Int      @default(200)
+  /// Minutes after the scheduled start before an arrival counts as late.
+  grace_minutes        Int      @default(15)
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@map("attendance_settings")
 }
 
 model LeaveRequest {
