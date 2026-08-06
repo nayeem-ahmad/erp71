@@ -70,6 +70,7 @@ import { NavigationModule } from './navigation/navigation.module';
 import { SubscriptionPlansModule } from './subscription-plans/subscription-plans.module';
 import { SmsModule } from './sms/sms.module';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
+import { TenantMessagingModule } from './tenant-messaging/tenant-messaging.module';
 import { DiscountCodesModule } from './discount-codes/discount-codes.module';
 import { EmployeesModule } from './employees/employees.module';
 import { CountersModule } from './counters/counters.module';
@@ -115,6 +116,7 @@ import { ShortLinksModule } from './short-links/short-links.module';
         PlatformSettingsModule,
         NavigationModule,
         SubscriptionPlansModule,
+        TenantMessagingModule,
         EmailModule,
         SmsModule,
         WhatsAppModule,

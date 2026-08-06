@@ -588,8 +588,53 @@ model Tenant {
   projectComments         ProjectComment[]
   projectAttachments      ProjectAttachment[]
   shortLinks              ShortLink[]
+  messagingIdentity       TenantMessagingIdentity?
 
   @@index([deleted_at])
+}
+
+/// Platform-admin managed sender identity for one tenant's outbound messages.
+///
+/// The platform sender (PlatformSetting `email.email_from`, `whatsapp.*`) is the
+/// default for every workspace and stays that way — a row here exists only for
+/// the handful of tenants that have been onboarded onto their own from-address
+/// or their own WhatsApp Business number. Each channel has its own `*_enabled`
+/// switch, so a tenant can brand email while still sending WhatsApp from the
+/// platform number, and turning a channel off falls straight back to the
+/// platform sender without losing the stored values.
+///
+/// Deliberately platform-admin-only: a from-address has to be verified at the
+/// email provider and a phone_number_id has to belong to an onboarded WABA, so
+/// letting a tenant type its own would be a spoofing hole, not a feature.
+model TenantMessagingIdentity {
+  id        String @id @default(uuid())
+  tenant_id String @unique
+
+  /// When false the tenant sends from the platform address, whatever is stored below.
+  email_enabled   Boolean @default(false)
+  /// Bare address (no display name) — must be a sender the provider accepts.
+  email_from      String?
+  /// Optional display name shown next to the address.
+  email_from_name String?
+  /// Where replies go, when that differs from the from-address.
+  email_reply_to  String?
+
+  whatsapp_enabled         Boolean @default(false)
+  /// Meta Cloud API phone number id — identifies which WABA number sends.
+  whatsapp_phone_number_id String?
+  /// AES-256-GCM ciphertext from platform-settings/crypto.util — never stored plain.
+  whatsapp_access_token    String?
+  /// Blank falls back to the platform's configured Graph API version.
+  whatsapp_api_version     String?
+
+  /// Free-text note for the operator (verification ticket, WABA owner, etc.).
+  notes      String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  /// Platform-admin user id of the last editor.
+  updated_by String?
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 }
 
 /// Platform-admin managed link between a tenant and a third-party ERP we pull

@@ -15,6 +15,7 @@ import { formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import type { DiscountType, PlanCode, SecondaryLocale, TenantRecord } from './types';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
+import TenantMessagingIdentityCard from './TenantMessagingIdentityCard';
 
 type Props = {
     tenantId: string | null;
@@ -701,6 +702,12 @@ export default function TenantDetailModal({ tenantId, onClose, onChanged, onToas
                                     {fc.save}
                                 </button>
                             </div>
+
+                            <TenantMessagingIdentityCard
+                                tenantId={tenant.id}
+                                onToast={onToast}
+                                onError={setError}
+                            />
 
                             <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-5 space-y-4">
                                 <div>
