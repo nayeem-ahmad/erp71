@@ -1,5 +1,5 @@
 import {
-    Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Request, UseGuards,
+    Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Request, UseGuards,
 } from '@nestjs/common';
 import { StorePermission } from '@erp71/shared-types';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -10,7 +10,10 @@ import { TenantInterceptor } from '../database/tenant.interceptor';
 import { UseInterceptors } from '@nestjs/common';
 import { EmployeeGuard } from './employee.guard';
 import { EmployeePortalService } from './employee-portal.service';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { UploadedFile } from '@nestjs/common';
 import { ApplyForLeaveDto, ClockDto, PortalPeriodQueryDto } from './employee-portal.dto';
+import { CreateExpenseClaimDto, UpdateExpenseClaimDto } from '../expense-claims/expense-claims.dto';
 
 /**
  * The employee's own screens. Every handler reads `req.employee`, populated by
@@ -85,6 +88,54 @@ export class EmployeePortalController {
     @Get('payslips/:runId')
     getPayslip(@Request() req: any, @Param('runId') runId: string) {
         return this.service.getPayslip(req.employee.tenant_id, req.employee.id, runId);
+    }
+
+    // ── Expense claims ────────────────────────────────────────────────────────
+
+    @Get('expense-claims')
+    listClaims(@Request() req: any) {
+        return this.service.listClaims(req.employee.tenant_id, req.employee.id);
+    }
+
+    @Get('expense-claims/:id')
+    getClaim(@Request() req: any, @Param('id') id: string) {
+        return this.service.getClaim(req.employee.tenant_id, req.employee.id, id);
+    }
+
+    @Post('expense-claims')
+    createClaim(@Request() req: any, @Body() dto: CreateExpenseClaimDto) {
+        return this.service.createClaim(req.employee.tenant_id, req.employee.id, dto);
+    }
+
+    @Patch('expense-claims/:id')
+    updateClaim(@Request() req: any, @Param('id') id: string, @Body() dto: UpdateExpenseClaimDto) {
+        return this.service.updateClaim(req.employee.tenant_id, req.employee.id, id, dto);
+    }
+
+    @Patch('expense-claims/:id/submit')
+    submitClaim(@Request() req: any, @Param('id') id: string) {
+        return this.service.submitClaim(req.employee.tenant_id, req.employee.id, id);
+    }
+
+    @Patch('expense-claims/:id/cancel')
+    cancelClaim(@Request() req: any, @Param('id') id: string) {
+        return this.service.cancelClaim(req.employee.tenant_id, req.employee.id, id);
+    }
+
+    @Post('expense-claims/:id/attachments')
+    @UseInterceptors(FileInterceptor('file'))
+    addClaimAttachment(@Request() req: any, @Param('id') id: string, @UploadedFile() file: any) {
+        return this.service.addClaimAttachment(
+            req.employee.tenant_id, req.employee.id, id, file, req.user?.userId,
+        );
+    }
+
+    @Delete('expense-claims/attachments/:attachmentId')
+    @HttpCode(HttpStatus.NO_CONTENT)
+    removeClaimAttachment(@Request() req: any, @Param('attachmentId') attachmentId: string) {
+        return this.service.removeClaimAttachment(
+            req.employee.tenant_id, req.employee.id, attachmentId,
+        );
     }
 
     @Get('salary-payments')

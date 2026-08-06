@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { DatabaseService } from '../database/database.service';
 import { AttendanceService } from '../attendance/attendance.service';
 import { AttendanceCaptureService } from '../attendance/attendance-capture.service';
+import { ExpenseClaimsService } from '../expense-claims/expense-claims.service';
 import { ApplyForLeaveDto, ClockDto } from './employee-portal.dto';
 
 /**
@@ -21,7 +22,45 @@ export class EmployeePortalService {
         private readonly db: DatabaseService,
         private readonly attendance: AttendanceService,
         private readonly capture: AttendanceCaptureService,
+        private readonly claims: ExpenseClaimsService,
     ) {}
+
+    // ── Expense claims ────────────────────────────────────────────────────────
+    //
+    // Every method passes the token's employee id as the scope, so a claim
+    // belonging to someone else is a 404 rather than a leak.
+
+    listClaims(tenantId: string, employeeId: string) {
+        return this.claims.list(tenantId, { employeeId });
+    }
+
+    getClaim(tenantId: string, employeeId: string, id: string) {
+        return this.claims.get(tenantId, id, employeeId);
+    }
+
+    createClaim(tenantId: string, employeeId: string, dto: any) {
+        return this.claims.create(tenantId, employeeId, dto);
+    }
+
+    updateClaim(tenantId: string, employeeId: string, id: string, dto: any) {
+        return this.claims.update(tenantId, id, employeeId, dto);
+    }
+
+    submitClaim(tenantId: string, employeeId: string, id: string) {
+        return this.claims.submit(tenantId, id, employeeId);
+    }
+
+    cancelClaim(tenantId: string, employeeId: string, id: string) {
+        return this.claims.cancel(tenantId, id, employeeId);
+    }
+
+    addClaimAttachment(tenantId: string, employeeId: string, claimId: string, file: any, userId?: string) {
+        return this.claims.addAttachment(tenantId, claimId, employeeId, file, userId);
+    }
+
+    removeClaimAttachment(tenantId: string, employeeId: string, attachmentId: string) {
+        return this.claims.removeAttachment(tenantId, attachmentId, employeeId);
+    }
 
     /**
      * Today's attendance state, for the check-in button.

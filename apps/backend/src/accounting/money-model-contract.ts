@@ -126,6 +126,17 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     { model: 'PayrollLine', postsVia: 'salary_accrual', note: 'disbursement emits salary_accrual then salary_payment per line; accrues net pay — see the limitation above' },
     { model: 'PayrollAdjustment', exempt: 'One-off earning/deduction; it lands in the PayrollLine total, which posts.' },
     { model: 'PayrollLineItem', exempt: 'Payslip presentation line; the PayrollLine carries the totals.' },
+
+    // ── HRIS expense claims ──────────────────────────────────────────────────
+    // A claim is a request, not an economic event: nothing is owed until it is
+    // approved, and nothing moves until it is reimbursed. Settlement takes one
+    // of two routes that both already post — PAYROLL creates a PayrollAdjustment
+    // that lands in a PayrollLine (which posts salary_accrual/salary_payment),
+    // and DIRECT is recorded through the existing ExpenseEntry flow. Neither
+    // needs a third path to the GL, which is why this is exempt rather than a
+    // gap.
+    { model: 'ExpenseClaim', exempt: 'Reimbursement request; settles through PayrollAdjustment→PayrollLine or through the existing ExpenseEntry flow, both of which post.' },
+    { model: 'ExpenseClaimLine', exempt: 'Line item of ExpenseClaim, which carries the total.' },
     { model: 'Investor', exempt: 'profit_share_pct is the agreed rate (config); loss_carry_forward is a derived balance the profit run maintains. Capital and shares post through their own models.' },
     { model: 'InvestorProfitRun', exempt: 'Snapshot of the month P&L that the run allocated from — a reporting basis, not money moved. Its InvestorProfitShare rows post.' },
 

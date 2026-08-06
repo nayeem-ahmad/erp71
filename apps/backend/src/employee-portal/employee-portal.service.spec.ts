@@ -3,6 +3,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { EmployeePortalService } from './employee-portal.service';
 import { AttendanceService } from '../attendance/attendance.service';
 import { AttendanceCaptureService } from '../attendance/attendance-capture.service';
+import { ExpenseClaimsService } from '../expense-claims/expense-claims.service';
 import { DatabaseService } from '../database/database.service';
 
 describe('EmployeePortalService', () => {
@@ -10,6 +11,7 @@ describe('EmployeePortalService', () => {
     let db: any;
     let attendance: any;
     let capture: any;
+    let claims: any;
 
     beforeEach(async () => {
         db = {
@@ -33,6 +35,16 @@ describe('EmployeePortalService', () => {
             checkIn: jest.fn().mockResolvedValue({}),
             checkOut: jest.fn().mockResolvedValue({}),
         };
+        claims = {
+            list: jest.fn().mockResolvedValue([]),
+            get: jest.fn().mockResolvedValue({}),
+            create: jest.fn().mockResolvedValue({}),
+            update: jest.fn().mockResolvedValue({}),
+            submit: jest.fn().mockResolvedValue({}),
+            cancel: jest.fn().mockResolvedValue({}),
+            addAttachment: jest.fn().mockResolvedValue({}),
+            removeAttachment: jest.fn().mockResolvedValue({}),
+        };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -40,6 +52,7 @@ describe('EmployeePortalService', () => {
                 { provide: DatabaseService, useValue: db },
                 { provide: AttendanceService, useValue: attendance },
                 { provide: AttendanceCaptureService, useValue: capture },
+                { provide: ExpenseClaimsService, useValue: claims },
             ],
         }).compile();
 
@@ -196,6 +209,36 @@ describe('EmployeePortalService', () => {
             expect(db.payrollLine.findFirst.mock.calls[0][0].where).toMatchObject({
                 tenant_id: 't1', employee_id: 'emp-1', run_id: 'run-1',
             });
+        });
+    });
+    describe('expense claims', () => {
+        it('scopes the claim list to the token employee', async () => {
+            await service.listClaims('t1', 'emp-1');
+            expect(claims.list).toHaveBeenCalledWith('t1', { employeeId: 'emp-1' });
+        });
+
+        it('passes the employee scope when reading one claim', async () => {
+            // The scope is the authorisation check — a claim belonging to
+            // somebody else must 404, not 403.
+            await service.getClaim('t1', 'emp-1', 'claim-9');
+            expect(claims.get).toHaveBeenCalledWith('t1', 'claim-9', 'emp-1');
+        });
+
+        it('creates a claim for the token employee, not a supplied id', async () => {
+            await service.createClaim('t1', 'emp-1', { title: 'X' });
+            expect(claims.create).toHaveBeenCalledWith('t1', 'emp-1', { title: 'X' });
+        });
+
+        it('passes the scope on every mutation', async () => {
+            await service.updateClaim('t1', 'emp-1', 'c1', {});
+            await service.submitClaim('t1', 'emp-1', 'c1');
+            await service.cancelClaim('t1', 'emp-1', 'c1');
+            await service.removeClaimAttachment('t1', 'emp-1', 'att-1');
+
+            expect(claims.update).toHaveBeenCalledWith('t1', 'c1', 'emp-1', {});
+            expect(claims.submit).toHaveBeenCalledWith('t1', 'c1', 'emp-1');
+            expect(claims.cancel).toHaveBeenCalledWith('t1', 'c1', 'emp-1');
+            expect(claims.removeAttachment).toHaveBeenCalledWith('t1', 'att-1', 'emp-1');
         });
     });
 });

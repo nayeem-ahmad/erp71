@@ -610,6 +610,8 @@ model Tenant {
   PayrollRun                 PayrollRun[]
   PayrollLine                PayrollLine[]
   PayrollAdjustment          PayrollAdjustment[]
+  ExpenseClaim               ExpenseClaim[]
+  ExpenseClaimAttachment     ExpenseClaimAttachment[]
 
   @@index([deleted_at])
 }
@@ -3148,6 +3150,7 @@ model Employee {
   EmployeeBankAccount     EmployeeBankAccount?
   PayrollLine             PayrollLine[]
   PayrollAdjustment       PayrollAdjustment[]
+  ExpenseClaim            ExpenseClaim[]
 
   @@unique([tenant_id, employee_code])
   @@unique([tenant_id, phone])
@@ -3236,6 +3239,92 @@ model AttendanceRecord {
   @@unique([tenant_id, employee_id, date])
   @@index([tenant_id, date])
   @@index([tenant_id, employee_id, date])
+}
+
+/// An employee's expense claim.
+///
+/// Distinct from `ExpenseEntry`, which is a company-level accounting row with
+/// no employee and no lifecycle. This is the employee-facing side: they submit
+/// it, someone approves it, and it is reimbursed.
+///
+/// The approval fields mirror `LeaveRequest` field for field. That is
+/// deliberate — two approval flows that look different to a manager for no
+/// reason is worse than a little duplication.
+model ExpenseClaim {
+  id           String   @id @default(uuid())
+  tenant_id    String
+  employee_id  String
+  title        String
+  /// DRAFT | SUBMITTED | APPROVED | REJECTED | REIMBURSED | CANCELLED
+  status       String   @default("DRAFT")
+  claim_date   DateTime @db.Date
+  total_amount Decimal  @default(0) @db.Decimal(12, 2)
+  notes        String?
+
+  approved_by   String?
+  approved_at   DateTime?
+  approver_note String?
+
+  /// How it was settled: DIRECT (its own payment) or PAYROLL (an earning
+  /// adjustment on a run). Null until reimbursed.
+  reimbursed_via String?
+  reimbursed_at  DateTime?
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  tenant      Tenant                   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employee    Employee                 @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  lines       ExpenseClaimLine[]
+  attachments ExpenseClaimAttachment[]
+
+  @@index([tenant_id, status])
+  @@index([tenant_id, employee_id, status])
+  @@map("expense_claims")
+}
+
+model ExpenseClaimLine {
+  id          String   @id @default(uuid())
+  claim_id    String
+  category_id String?
+  description String
+  amount      Decimal  @db.Decimal(12, 2)
+  spent_on    DateTime @db.Date
+
+  claim    ExpenseClaim     @relation(fields: [claim_id], references: [id], onDelete: Cascade)
+  category ExpenseCategory? @relation(fields: [category_id], references: [id])
+
+  @@index([claim_id])
+  @@map("expense_claim_lines")
+}
+
+/// A receipt.
+///
+/// `storage_key` is mandatory in spirit: the older `uploadFile()` path returns
+/// only a URL, which cannot be turned back into a Cloudinary handle, so a row
+/// deleted without one strands the file and bills forever. This model exists on
+/// the `uploadBuffer()` side of that split from the start — same shape as
+/// `CrmContactAttachment`.
+model ExpenseClaimAttachment {
+  id        String @id @default(uuid())
+  tenant_id String
+  claim_id  String
+
+  file_url    String
+  file_name   String
+  mime_type   String?
+  file_size   Int?
+  storage_key String?
+
+  uploaded_by String?
+  created_at  DateTime @default(now())
+
+  tenant Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  claim  ExpenseClaim @relation(fields: [claim_id], references: [id], onDelete: Cascade)
+
+  @@index([claim_id])
+  @@map("expense_claim_attachments")
 }
 
 /// A month's payroll, from draft to paid.
@@ -3924,14 +4013,15 @@ model PlatformSetting {
 }
 
 model ExpenseCategory {
-  id          String         @id @default(uuid())
+  id          String             @id @default(uuid())
   tenant_id   String
   name        String
   description String?
-  created_at  DateTime       @default(now())
-  updated_at  DateTime       @updatedAt
-  tenant      Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  created_at  DateTime           @default(now())
+  updated_at  DateTime           @updatedAt
+  tenant      Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   entries     ExpenseEntry[]
+  claimLines  ExpenseClaimLine[]
 
   @@unique([tenant_id, name])
   @@index([tenant_id])
