@@ -2491,6 +2491,44 @@ export const api = {
     revokeEmployeePortalAccess: (id: string) =>
         fetchWithAuth(`/employees/${id}/portal-access/revoke`, { method: 'PATCH' }),
 
+    // Holidays & work schedules (HRIS Phase 2)
+    getHolidays: (year?: number) =>
+        fetchWithAuth(`/hr/holidays${year ? `?year=${year}` : ''}`),
+    createHoliday: (data: { date: string; name: string }) => fetchWithAuth('/hr/holidays', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateHoliday: (id: string, data: { date?: string; name?: string }) =>
+        fetchWithAuth(`/hr/holidays/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteHoliday: (id: string) => fetchWithAuth(`/hr/holidays/${id}`, { method: 'DELETE' }),
+
+    getWorkSchedules: () => fetchWithAuth('/hr/work-schedules'),
+    getWorkSchedule: (id: string) => fetchWithAuth(`/hr/work-schedules/${id}`),
+    createWorkSchedule: (data: any) => fetchWithAuth('/hr/work-schedules', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateWorkSchedule: (id: string, data: any) => fetchWithAuth(`/hr/work-schedules/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteWorkSchedule: (id: string) => fetchWithAuth(`/hr/work-schedules/${id}`, { method: 'DELETE' }),
+    assignWorkSchedule: (data: { employee_id: string; schedule_id: string; effective_from: string }) =>
+        fetchWithAuth('/hr/work-schedules/assign', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    getEmployeeSchedules: (employeeId: string) =>
+        fetchWithAuth(`/hr/employees/${employeeId}/schedules`),
+
     // Employee self-service portal. Every endpoint resolves the employee from
     // the token, so none of these take an employee id.
     getMyProfile: () => fetchWithAuth('/employee-portal/me'),
