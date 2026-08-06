@@ -17,6 +17,10 @@ describe('EmployeePortalService', () => {
             leaveBalance: { findMany: jest.fn().mockResolvedValue([]) },
             leaveRequest: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
             salaryPayment: { findMany: jest.fn().mockResolvedValue([]) },
+            payrollLine: {
+                findMany: jest.fn().mockResolvedValue([]),
+                findFirst: jest.fn().mockResolvedValue(null),
+            },
             employee: { findFirst: jest.fn(), update: jest.fn() },
         };
         attendance = {
@@ -162,6 +166,36 @@ describe('EmployeePortalService', () => {
         it('counts only pending requests as pending', async () => {
             await service.getSummary('t1', 'emp-1');
             expect(db.leaveRequest.count.mock.calls[0][0].where.status).toBe('PENDING');
+        });
+    });
+    describe('payslips', () => {
+        it('shows only payslips from approved or paid runs', async () => {
+            // A draft is a working figure HR is still editing; showing it would
+            // have people asking why their pay changed between two visits.
+            await service.listPayslips('t1', 'emp-1');
+            expect(db.payrollLine.findMany.mock.calls[0][0].where.run.status)
+                .toEqual({ in: ['APPROVED', 'PAID'] });
+        });
+
+        it('scopes the list to the one employee', async () => {
+            await service.listPayslips('t1', 'emp-1');
+            expect(db.payrollLine.findMany.mock.calls[0][0].where).toMatchObject({
+                tenant_id: 't1', employee_id: 'emp-1',
+            });
+        });
+
+        it('refuses a payslip from a draft run', async () => {
+            db.payrollLine.findFirst.mockResolvedValue(null);
+            await expect(service.getPayslip('t1', 'emp-1', 'run-1'))
+                .rejects.toThrow(NotFoundException);
+        });
+
+        it('scopes a single payslip to the token employee', async () => {
+            db.payrollLine.findFirst.mockResolvedValue({ id: 'line-1' });
+            await service.getPayslip('t1', 'emp-1', 'run-1');
+            expect(db.payrollLine.findFirst.mock.calls[0][0].where).toMatchObject({
+                tenant_id: 't1', employee_id: 'emp-1', run_id: 'run-1',
+            });
         });
     });
 });

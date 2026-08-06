@@ -90,3 +90,38 @@ export class PayrollPeriodDto {
     @IsInt() @Min(1) @Max(12) @Type(() => Number)
     month: number;
 }
+
+export class CreatePayrollRunDto {
+    @IsInt() @Min(2000) @Max(2200) @Type(() => Number)
+    year: number;
+
+    @IsInt() @Min(1) @Max(12) @Type(() => Number)
+    month: number;
+
+    @IsOptional()
+    @IsEnum(['REGULAR', 'BONUS', 'FINAL_SETTLEMENT'] as any)
+    kind?: string;
+
+    @IsOptional() @IsString() label?: string;
+}
+
+export class PayrollRunQueryDto {
+    @IsOptional() @IsInt() @Min(2000) @Max(2200) @Type(() => Number) year?: number;
+    @IsOptional() @IsString() status?: string;
+}
+
+export class CreatePayrollAdjustmentDto {
+    @IsUUID() employee_id: string;
+
+    @IsInt() @Min(2000) @Max(2200) @Type(() => Number) year: number;
+    @IsInt() @Min(1) @Max(12) @Type(() => Number) month: number;
+
+    @IsEnum(['EARNING', 'DEDUCTION'] as any)
+    kind: string;
+
+    @IsString() name: string;
+
+    @IsNumber() @Min(0) @Type(() => Number) amount: number;
+
+    @IsOptional() @IsString() note?: string;
+}

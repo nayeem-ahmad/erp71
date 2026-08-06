@@ -142,6 +142,52 @@ export class EmployeePortalService {
         return this.attendance.cancelLeaveRequest(tenantId, requestId, employeeId);
     }
 
+    /**
+     * The employee's own payslips.
+     *
+     * Only from APPROVED or PAID runs: a draft is a working figure that HR is
+     * still editing, and showing it would have people asking why their pay
+     * changed between two visits to the same screen.
+     */
+    async listPayslips(tenantId: string, employeeId: string) {
+        return this.db.payrollLine.findMany({
+            where: {
+                tenant_id: tenantId,
+                employee_id: employeeId,
+                run: { status: { in: ['APPROVED', 'PAID'] } },
+            },
+            include: {
+                run: { select: { id: true, year: true, month: true, kind: true, status: true, label: true } },
+            },
+            orderBy: [{ run: { year: 'desc' } }, { run: { month: 'desc' } }],
+            take: EmployeePortalService.RECENT_PAYMENTS,
+        });
+    }
+
+    async getPayslip(tenantId: string, employeeId: string, runId: string) {
+        const line = await this.db.payrollLine.findFirst({
+            where: {
+                tenant_id: tenantId,
+                employee_id: employeeId,
+                run_id: runId,
+                run: { status: { in: ['APPROVED', 'PAID'] } },
+            },
+            include: {
+                items: { orderBy: { sort_order: 'asc' } },
+                run: { select: { id: true, year: true, month: true, kind: true, status: true, label: true } },
+                employee: {
+                    select: {
+                        id: true, name: true, employee_code: true,
+                        department: { select: { name: true } },
+                        designation: { select: { name: true } },
+                    },
+                },
+            },
+        });
+        if (!line) throw new NotFoundException('Payslip not found.');
+        return line;
+    }
+
     async listSalaryPayments(tenantId: string, employeeId: string) {
         return this.db.salaryPayment.findMany({
             where: { tenant_id: tenantId, employee_id: employeeId },

@@ -108,6 +108,18 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
 
     // ── Exempt: employee/asset registers (posted elsewhere) ──────────────────
     { model: 'Employee', exempt: 'basic_salary is the pay rate (config); SalaryAccrual posts it monthly.' },
+    { model: 'EmployeeSalaryStructureLine', exempt: 'Pay-rate composition (config), the same category as Employee.basic_salary that replaced it. SalaryAccrual posts the monthly figure.' },
+
+    // ── Gaps: HRIS Phase 6 payroll ───────────────────────────────────────────
+    // The payroll run computes what to pay; settling it still goes through the
+    // existing SalaryAccrual / SalaryPayment path, which does post. So the money
+    // does reach the GL — but by a route that does not know the run exists, and
+    // nothing yet drives an accrual FROM an approved run. Phase 7 closes this by
+    // making disbursement emit the accrual and payment per line.
+    { model: 'PayrollLine', gap: 'An approved payroll line is a payable that posts nothing on its own; the SalaryAccrual/SalaryPayment path is still driven by hand. Wire the run to emit salary_accrual per line — HRIS plan Phase 7.' },
+    { model: 'PayrollAdjustment', gap: 'A one-off earning or deduction; reaches the GL only through the PayrollLine it lands on, which is itself a tracked gap above.' },
+
+    { model: 'PayrollLineItem', exempt: 'Payslip presentation line; the PayrollLine carries the totals.' },
     { model: 'Investor', exempt: 'profit_share_pct is the agreed rate (config); loss_carry_forward is a derived balance the profit run maintains. Capital and shares post through their own models.' },
     { model: 'InvestorProfitRun', exempt: 'Snapshot of the month P&L that the run allocated from — a reporting basis, not money moved. Its InvestorProfitShare rows post.' },
 

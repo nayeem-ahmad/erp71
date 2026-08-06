@@ -89,6 +89,12 @@ describe('money-model contract — known gaps are the ones we expect', () => {
     // look at the list. Update deliberately as gaps are wired.
     it('lists exactly the tracked gaps', () => {
         const gaps = MONEY_MODEL_CONTRACT.filter(isGap).map(modelOf).sort();
-        expect(gaps).toEqual(['OrderDeposit']);
+        // PayrollLine / PayrollAdjustment added deliberately with HRIS Phase 6.
+        // The money does reach the GL — settling a payroll run still goes
+        // through SalaryAccrual/SalaryPayment, which post — but by a route that
+        // does not know the run exists, and nothing drives an accrual FROM an
+        // approved run. Phase 7 closes both by making disbursement emit the
+        // accrual and payment per line; remove them here when it does.
+        expect(gaps).toEqual(['OrderDeposit', 'PayrollAdjustment', 'PayrollLine']);
     });
 });

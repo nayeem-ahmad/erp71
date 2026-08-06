@@ -20,6 +20,7 @@ const DOC_TYPES: PrintDocType[] = [
     'PURCHASE_ORDER',
     'PURCHASE_RETURN',
     'LIST_REPORT',
+    'PAYSLIP',
 ];
 
 interface HeaderEditorProps {

@@ -607,6 +607,9 @@ model Tenant {
   SalaryComponent            SalaryComponent[]
   EmployeeSalaryStructure    EmployeeSalaryStructure[]
   EmployeeBankAccount        EmployeeBankAccount[]
+  PayrollRun                 PayrollRun[]
+  PayrollLine                PayrollLine[]
+  PayrollAdjustment          PayrollAdjustment[]
 
   @@index([deleted_at])
 }
@@ -3143,6 +3146,8 @@ model Employee {
   AttendanceMonthSnapshot AttendanceMonthSnapshot[]
   EmployeeSalaryStructure EmployeeSalaryStructure[]
   EmployeeBankAccount     EmployeeBankAccount?
+  PayrollLine             PayrollLine[]
+  PayrollAdjustment       PayrollAdjustment[]
 
   @@unique([tenant_id, employee_code])
   @@unique([tenant_id, phone])
@@ -3231,6 +3236,130 @@ model AttendanceRecord {
   @@unique([tenant_id, employee_id, date])
   @@index([tenant_id, date])
   @@index([tenant_id, employee_id, date])
+}
+
+/// A month's payroll, from draft to paid.
+///
+/// `kind` separates the regular monthly run from off-cycle ones (a festival
+/// bonus, a final settlement) so both can exist for the same month without
+/// colliding on the unique key.
+model PayrollRun {
+  id          String    @id @default(uuid())
+  tenant_id   String
+  year        Int
+  month       Int
+  /// REGULAR | BONUS | FINAL_SETTLEMENT
+  kind        String    @default("REGULAR")
+  /// DRAFT | APPROVED | PAID | CANCELLED
+  /// DRAFT is recomputable; APPROVED is frozen; PAID has been disbursed.
+  status      String    @default("DRAFT")
+  label       String?
+  notes       String?
+  approved_by String?
+  approved_at DateTime?
+  paid_at     DateTime?
+  created_by  String?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  tenant Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  lines  PayrollLine[]
+
+  @@unique([tenant_id, year, month, kind])
+  @@index([tenant_id, status])
+  @@map("payroll_runs")
+}
+
+/// One employee's pay for one run.
+///
+/// Every input is **copied onto the line**, not referenced: the attendance
+/// figures, the structure amounts, the rates. A payslip issued in August must
+/// still render in December even after the employee's structure changed, and a
+/// line that reaches back into live tables cannot promise that.
+model PayrollLine {
+  id          String @id @default(uuid())
+  run_id      String
+  tenant_id   String
+  employee_id String
+
+  /// Attendance inputs, copied from the frozen month snapshot.
+  scheduled_days            Int   @default(0)
+  present_days              Float @default(0)
+  absent_days               Int   @default(0)
+  leave_days                Int   @default(0)
+  approved_overtime_minutes Int   @default(0)
+
+  gross_earnings        Decimal @default(0) @db.Decimal(12, 2)
+  overtime_amount       Decimal @default(0) @db.Decimal(12, 2)
+  absence_deduction     Decimal @default(0) @db.Decimal(12, 2)
+  structure_deductions  Decimal @default(0) @db.Decimal(12, 2)
+  adjustment_earnings   Decimal @default(0) @db.Decimal(12, 2)
+  adjustment_deductions Decimal @default(0) @db.Decimal(12, 2)
+  total_deductions      Decimal @default(0) @db.Decimal(12, 2)
+  net_pay               Decimal @default(0) @db.Decimal(12, 2)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  run      PayrollRun        @relation(fields: [run_id], references: [id], onDelete: Cascade)
+  tenant   Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employee Employee          @relation(fields: [employee_id], references: [id])
+  items    PayrollLineItem[]
+
+  @@unique([run_id, employee_id])
+  @@index([tenant_id, employee_id])
+  @@map("payroll_lines")
+}
+
+/// A single row on the payslip.
+model PayrollLineItem {
+  id         String  @id @default(uuid())
+  line_id    String
+  /// EARNING | DEDUCTION
+  kind       String
+  name       String
+  amount     Decimal @db.Decimal(12, 2)
+  /// How it was arrived at — "50% of basic", "3 days absent". The payslip's
+  /// whole job is answering "why this number".
+  note       String?
+  sort_order Int     @default(0)
+
+  line PayrollLine @relation(fields: [line_id], references: [id], onDelete: Cascade)
+
+  @@index([line_id])
+  @@map("payroll_line_items")
+}
+
+/// A one-off addition or deduction for an employee in a period.
+///
+/// Covers advance recovery, a fine, a spot bonus — anything that is not part of
+/// the standing structure. Deliberately not an instalment engine: a staff
+/// advance recovered over four months is four adjustments, which is honest
+/// about what the system knows rather than pretending to a schedule it does
+/// not have.
+model PayrollAdjustment {
+  id             String   @id @default(uuid())
+  tenant_id      String
+  employee_id    String
+  year           Int
+  month          Int
+  /// EARNING | DEDUCTION
+  kind           String
+  name           String
+  amount         Decimal  @db.Decimal(12, 2)
+  note           String?
+  /// Set once a run has consumed it, so it cannot be applied twice.
+  applied_run_id String?
+  created_by     String?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, year, month])
+  @@index([tenant_id, employee_id])
+  @@map("payroll_adjustments")
 }
 
 /// A named earning or deduction a tenant can put on a salary structure.

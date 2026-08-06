@@ -77,6 +77,16 @@ export class EmployeePortalController {
         return this.service.cancelLeaveRequest(req.employee.tenant_id, req.employee.id, id);
     }
 
+    @Get('payslips')
+    listPayslips(@Request() req: any) {
+        return this.service.listPayslips(req.employee.tenant_id, req.employee.id);
+    }
+
+    @Get('payslips/:runId')
+    getPayslip(@Request() req: any, @Param('runId') runId: string) {
+        return this.service.getPayslip(req.employee.tenant_id, req.employee.id, runId);
+    }
+
     @Get('salary-payments')
     listSalaryPayments(@Request() req: any) {
         return this.service.listSalaryPayments(req.employee.tenant_id, req.employee.id);
