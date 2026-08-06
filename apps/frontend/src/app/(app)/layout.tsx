@@ -98,8 +98,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         if (isReferee) {
             applyRefereeContext();
             setWorkspaceEpoch((epoch) => epoch + 1);
-            if (!pathname.startsWith(routes.referralsPortal)) {
-                router.replace(routes.referralsPortal);
+            if (!pathname.startsWith(routes.referralsPortal.root)) {
+                router.replace(routes.referralsPortal.root);
             }
             return;
         }
@@ -213,7 +213,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             return;
         }
         if (inRefereeMode) {
-            if (pathname === routes.home) router.replace(routes.referralsPortal);
+            if (pathname === routes.home) router.replace(routes.referralsPortal.root);
             return;
         }
         const done = onboardingDismissed || localStorage.getItem('onboarding_complete');
@@ -273,7 +273,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     useEffect(() => {
         if (!hasResolvedUser || !user?.referee?.is_active) return;
-        if (!pathname.startsWith(routes.referralsPortal)) return;
+        if (!pathname.startsWith(routes.referralsPortal.root)) return;
         if (localStorage.getItem('active_context') === 'referee') return;
         applyRefereeContext();
         setWorkspaceEpoch((epoch) => epoch + 1);
@@ -327,7 +327,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         if (!isPlatformAdmin && pathname.startsWith(routes.admin.root)) {
             router.replace(routes.home);
         }
-        if (!user?.referee?.is_active && pathname.startsWith(routes.referralsPortal)) {
+        if (!user?.referee?.is_active && pathname.startsWith(routes.referralsPortal.root)) {
             router.replace(routes.home);
         }
         if (!user?.is_platform_admin && pathname === routes.status) {

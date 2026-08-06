@@ -165,7 +165,7 @@ export async function storeAuthResponse(res: any, rememberMe = false): Promise<S
     // Referee with no shop of their own → referral portal.
     if (isReferee) {
         applyRefereeContext();
-        return { redirectTo: routes.referralsPortal };
+        return { redirectTo: routes.referralsPortal.root };
     }
 
     // Platform admin with no shop of their own → straight to the admin console.
@@ -188,7 +188,7 @@ export function clearAuthSession() {
 /** True when the path belongs to a shop workspace (not the platform admin console). */
 export function isShopWorkspacePath(pathname: string) {
     if (pathname.startsWith(routes.admin.root)) return false;
-    if (pathname.startsWith(routes.referralsPortal)) return false;
+    if (pathname.startsWith(routes.referralsPortal.root)) return false;
     const shopPrefixes = [
         routes.home,
         routes.onboarding,

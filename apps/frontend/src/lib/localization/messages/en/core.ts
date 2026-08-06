@@ -1821,6 +1821,10 @@ export const coreMessages = {
         commissionNote: 'You earn a commission once, when a business you referred starts its first paid subscription. Renewals are not commissioned.',
         breadcrumb: 'Referrals',
         dashboard: 'Dashboard',
+        nav: {
+            signups: 'Signups',
+            payments: 'Payment history',
+        },
         loadFailed: 'Failed to load your referral dashboard',
         copyFailed: 'Could not copy to clipboard',
         summary: {

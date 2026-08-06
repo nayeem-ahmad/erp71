@@ -1821,6 +1821,10 @@ export const coreMessages = {
             commissionNote: "আপনি একবার কমিশন পাবেন — আপনার রেফার করা ব্যবসা যখন প্রথম সাবস্ক্রিপশন কেনে। নবায়নে কোনো কমিশন নেই।",
             breadcrumb: "রেফারেল",
             dashboard: "ড্যাশবোর্ড",
+            nav: {
+                signups: "সাইনআপ",
+                payments: "পেমেন্ট ইতিহাস",
+            },
             loadFailed: "রেফারেল ড্যাশবোর্ড লোড করতে ব্যর্থ",
             copyFailed: "ক্লিপবোর্ডে কপি করা যায়নি",
             summary: {

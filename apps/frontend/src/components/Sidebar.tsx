@@ -11,6 +11,8 @@ import {
     LayoutDashboard,
     Package,
     Search,
+    Users,
+    Wallet,
     X,
     type LucideIcon,
 } from 'lucide-react';
@@ -204,21 +206,43 @@ export default function Sidebar({
     const [collapsed, setCollapsed] = useState(false);
     const [width, setWidth] = useState<number>(defaultWidth);
     const [isResizing, setIsResizing] = useState(false);
-    const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+    // The referee portal has exactly one module holding all of its navigation, so
+    // unlike other modules it starts expanded — collapsing it would hide the
+    // entire nav behind an extra click.
+    const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(
+        () => (refereeMode ? { referrals: true } : {}),
+    );
     const [searchQuery, setSearchQuery] = useState('');
     const searchInputRef = useRef<HTMLInputElement>(null);
     const modules = useMemo(() => {
         if (refereeMode) {
+            const portal = (t as { referralPortal?: {
+                breadcrumb?: string;
+                dashboard?: string;
+                nav?: { signups?: string; payments?: string };
+            } }).referralPortal;
             return [{
                 key: 'referrals',
-                label: (t as { referralPortal?: { breadcrumb?: string } }).referralPortal?.breadcrumb ?? 'Referrals',
+                label: portal?.breadcrumb ?? 'Referrals',
                 icon: Gift,
-                children: [{
-                    href: routes.referralsPortal,
-                    label: (t as { referralPortal?: { dashboard?: string } }).referralPortal?.dashboard ?? 'Dashboard',
-                    icon: LayoutDashboard,
-                    exact: true,
-                }],
+                children: [
+                    {
+                        href: routes.referralsPortal.root,
+                        label: portal?.dashboard ?? 'Dashboard',
+                        icon: LayoutDashboard,
+                        exact: true,
+                    },
+                    {
+                        href: routes.referralsPortal.signups,
+                        label: portal?.nav?.signups ?? 'Signups',
+                        icon: Users,
+                    },
+                    {
+                        href: routes.referralsPortal.payments,
+                        label: portal?.nav?.payments ?? 'Payment history',
+                        icon: Wallet,
+                    },
+                ],
             }] as NavModule[];
         }
 

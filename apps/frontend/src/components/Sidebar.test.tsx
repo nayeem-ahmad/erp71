@@ -367,6 +367,20 @@ describe('Sidebar — Story 30.1', () => {
         expect(screen.queryByText('Inventory Reports')).not.toBeInTheDocument();
     });
 
+    it('shows the three referee portal destinations in referee mode', () => {
+        render(<Sidebar refereeMode />);
+
+        expect(screen.getByText('Dashboard')).toBeInTheDocument();
+        expect(screen.getByText('Signups')).toBeInTheDocument();
+        expect(screen.getByText('Payment history')).toBeInTheDocument();
+    });
+
+    it('hides the referee portal destinations outside referee mode', () => {
+        render(<Sidebar canAccessAccounting />);
+
+        expect(screen.queryByText('Payment history')).not.toBeInTheDocument();
+    });
+
     it('persists the single open subgroup to localStorage', async () => {
         render(<Sidebar canAccessAccounting canAccessInventoryReports canAccessAccountingAdvanced />);
 

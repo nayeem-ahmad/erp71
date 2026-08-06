@@ -233,7 +233,11 @@ export const routes = {
         },
     },
 
-    referralsPortal: '/referrals',
+    referralsPortal: {
+        root: '/referrals',
+        signups: '/referrals/signups',
+        payments: '/referrals/payments',
+    },
     billing: '/billing',
     team: '/team',
     help: '/help',

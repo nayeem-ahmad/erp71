@@ -1822,6 +1822,10 @@ export const coreMessages = {
             commissionNote: "Anda memperoleh komisen sekali sahaja, apabila perniagaan yang anda rujuk memulakan langganan berbayar pertamanya. Pembaharuan tidak dikomisenkan.",
             breadcrumb: "Rujukan",
             dashboard: "Papan Pemuka",
+            nav: {
+                signups: "Pendaftaran",
+                payments: "Sejarah pembayaran",
+            },
             loadFailed: "Gagal memuatkan papan pemuka rujukan",
             copyFailed: "Tidak dapat menyalin ke papan keratan",
             summary: {
