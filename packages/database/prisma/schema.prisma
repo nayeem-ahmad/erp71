@@ -616,6 +616,8 @@ model Tenant {
   Policy                     Policy[]
   PolicyAcknowledgement      PolicyAcknowledgement[]
   EmployeeDocument           EmployeeDocument[]
+  LeaveRequestApproval       LeaveRequestApproval[]
+  LeaveRequestAttachment     LeaveRequestAttachment[]
 
   @@index([deleted_at])
 }
@@ -3167,12 +3169,41 @@ model Employee {
 }
 
 model LeaveType {
-  id            String    @id @default(uuid())
+  id            String @id @default(uuid())
   tenant_id     String
   name          String
-  days_per_year Float     @default(0)
-  created_at    DateTime  @default(now())
-  deleted_at    DateTime?
+  days_per_year Float  @default(0)
+
+  /// ANNUAL_GRANT gives the whole entitlement on 1 January.
+  /// MONTHLY_ACCRUAL gives `days_per_year / 12` each month, which is what
+  /// stops a January joiner taking a full year's leave in February.
+  accrual_mode String @default("ANNUAL_GRANT")
+
+  /// Unused days that survive into next year, capped. Null means none carry.
+  /// A cap rather than a boolean because "carry everything forever" is how a
+  /// tenant ends up owing somebody 90 days.
+  carry_forward_max_days Float?
+
+  /// Whether unused days can be paid out instead of carried. Informational
+  /// today — the payout itself is a payroll adjustment, deliberately not
+  /// automated, because encashing leave is a money decision.
+  allows_encashment Boolean @default(false)
+
+  /// Half-day leave. `LeaveRequest.days` has always been a float; nothing
+  /// treated 0.5 as meaningful, so this makes the intent explicit and lets a
+  /// type refuse it.
+  allows_half_day Boolean @default(true)
+
+  /// A medical certificate on sick leave, for example. Enforced on submission.
+  requires_attachment Boolean @default(false)
+
+  /// How many approvals a request of this type needs. 1 is the current
+  /// behaviour and stays the default.
+  approval_levels Int @default(1)
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
 
   tenant   Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   balances LeaveBalance[]
@@ -3802,13 +3833,67 @@ model LeaveRequest {
   updated_at    DateTime           @updatedAt
   deleted_at    DateTime?
 
-  tenant     Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  employee   Employee  @relation(fields: [employee_id], references: [id], onDelete: Cascade)
-  leave_type LeaveType @relation(fields: [leave_type_id], references: [id])
-  approver   User?     @relation("LeaveApprover", fields: [approved_by], references: [id])
+  /// How far through the approval chain it is. 0 until the first approval.
+  /// Compared against `LeaveType.approval_levels` to decide whether one more
+  /// signature is needed or the request is done.
+  approvals_given Int @default(0)
+
+  tenant      Tenant                   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employee    Employee                 @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  leave_type  LeaveType                @relation(fields: [leave_type_id], references: [id])
+  approver    User?                    @relation("LeaveApprover", fields: [approved_by], references: [id])
+  approvals   LeaveRequestApproval[]
+  attachments LeaveRequestAttachment[]
 
   @@index([tenant_id, employee_id, status])
   @@index([tenant_id, status, start_date])
+}
+
+/// One signature on a leave request.
+///
+/// `LeaveRequest.approved_by` is a single user and stays as the *final*
+/// approver for compatibility; this table is the chain behind it. A row per
+/// level rather than a status column, so "who signed, when, and what they said"
+/// survives a later rejection.
+model LeaveRequestApproval {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  request_id  String
+  level       Int
+  /// APPROVED | REJECTED
+  decision    String
+  approver_id String
+  note        String?
+  decided_at  DateTime @default(now())
+
+  tenant  Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  request LeaveRequest @relation(fields: [request_id], references: [id], onDelete: Cascade)
+
+  @@unique([request_id, level])
+  @@index([tenant_id, request_id])
+  @@map("leave_request_approvals")
+}
+
+/// A medical certificate or similar, attached to a leave request.
+model LeaveRequestAttachment {
+  id         String @id @default(uuid())
+  tenant_id  String
+  request_id String
+
+  file_url    String
+  file_name   String
+  mime_type   String?
+  file_size   Int?
+  storage_key String?
+
+  uploaded_by String?
+  created_at  DateTime @default(now())
+
+  tenant  Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  request LeaveRequest @relation(fields: [request_id], references: [id], onDelete: Cascade)
+
+  @@index([request_id])
+  @@map("leave_request_attachments")
 }
 
 /// A non-working day for the whole tenant.

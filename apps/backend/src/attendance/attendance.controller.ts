@@ -89,6 +89,32 @@ export class AttendanceController {
         return this.overtime.unfreezeMonth(tenant.tenantId, dto.year, dto.month);
     }
 
+    // ── Leave calendar & carry-forward (Phase 11) ─────────────────────────────
+
+    /**
+     * Who might be off between two dates. Approved and pending both — the
+     * question a manager is asking is not "who is definitely off".
+     */
+    @Get('leave-calendar')
+    leaveCalendar(
+        @Tenant() tenant: TenantContext,
+        @Query('from') from: string,
+        @Query('to') to: string,
+    ) {
+        return this.svc.getLeaveCalendar(tenant.tenantId, from, to);
+    }
+
+    /**
+     * Roll unused balances into next year, capped per leave type.
+     *
+     * Safe to re-run: the carried figure is set, not incremented.
+     */
+    @Post('leave-carry-forward')
+    @HttpCode(HttpStatus.OK)
+    carryForward(@Tenant() tenant: TenantContext, @Body() body: { year: number }) {
+        return this.svc.runCarryForward(tenant.tenantId, body.year);
+    }
+
     // ── Settings ──────────────────────────────────────────────────────────────
 
     /**
