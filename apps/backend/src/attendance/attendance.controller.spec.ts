@@ -5,6 +5,7 @@ import { Reflector } from '@nestjs/core';
 import { AttendanceController } from './attendance.controller';
 import { AttendanceService } from './attendance.service';
 import { AttendanceCaptureService } from './attendance-capture.service';
+import { OvertimeService } from './overtime.service';
 import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
@@ -33,6 +34,16 @@ describe('AttendanceController — subscription guard', () => {
         updateSettings: jest.fn().mockResolvedValue({}),
     } as any;
 
+    const overtimeService = {
+        list: jest.fn().mockResolvedValue([]),
+        generateForMonth: jest.fn().mockResolvedValue({}),
+        review: jest.fn().mockResolvedValue({}),
+        listSnapshots: jest.fn().mockResolvedValue([]),
+        buildSnapshots: jest.fn().mockResolvedValue({}),
+        freezeMonth: jest.fn().mockResolvedValue({}),
+        unfreezeMonth: jest.fn().mockResolvedValue({}),
+    } as any;
+
     const db = {
         tenantUser: { findUnique: jest.fn() },
         tenantSubscription: { findUnique: jest.fn() },
@@ -56,6 +67,7 @@ describe('AttendanceController — subscription guard', () => {
             providers: [
                 { provide: AttendanceService, useValue: attendanceService },
                 { provide: AttendanceCaptureService, useValue: captureService },
+                { provide: OvertimeService, useValue: overtimeService },
                 { provide: DatabaseService, useValue: db },
                 Reflector,
                 SubscriptionAccessGuard,

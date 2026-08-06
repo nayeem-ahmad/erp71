@@ -602,6 +602,8 @@ model Tenant {
   projectAttachments         ProjectAttachment[]
   shortLinks                 ShortLink[]
   AttendanceSettings         AttendanceSettings?
+  OvertimeRecord             OvertimeRecord[]
+  AttendanceMonthSnapshot    AttendanceMonthSnapshot[]
 
   @@index([deleted_at])
 }
@@ -3121,19 +3123,21 @@ model Employee {
   updated_at      DateTime       @updatedAt
   deleted_at      DateTime?
 
-  tenant               Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  department           Department?        @relation(fields: [department_id], references: [id])
-  designation          Designation?       @relation(fields: [designation_id], references: [id])
-  user                 User?              @relation(fields: [user_id], references: [id])
-  attendanceRecords    AttendanceRecord[]
-  leaveBalances        LeaveBalance[]
-  leaveRequests        LeaveRequest[]
-  salaryPayments       SalaryPayment[]
-  salaryAccruals       SalaryAccrual[]
-  projectTimeEntries   ProjectTimeEntry[]
-  projectMemberships   ProjectMember[]    @relation("ProjectMemberEmployee")
-  projectTasksAssigned ProjectTask[]      @relation("ProjectTaskAssigneeEmployee")
-  EmployeeSchedule     EmployeeSchedule[]
+  tenant                  Tenant                    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  department              Department?               @relation(fields: [department_id], references: [id])
+  designation             Designation?              @relation(fields: [designation_id], references: [id])
+  user                    User?                     @relation(fields: [user_id], references: [id])
+  attendanceRecords       AttendanceRecord[]
+  leaveBalances           LeaveBalance[]
+  leaveRequests           LeaveRequest[]
+  salaryPayments          SalaryPayment[]
+  salaryAccruals          SalaryAccrual[]
+  projectTimeEntries      ProjectTimeEntry[]
+  projectMemberships      ProjectMember[]           @relation("ProjectMemberEmployee")
+  projectTasksAssigned    ProjectTask[]             @relation("ProjectTaskAssigneeEmployee")
+  EmployeeSchedule        EmployeeSchedule[]
+  OvertimeRecord          OvertimeRecord[]
+  AttendanceMonthSnapshot AttendanceMonthSnapshot[]
 
   @@unique([tenant_id, employee_code])
   @@unique([tenant_id, phone])
@@ -3222,6 +3226,75 @@ model AttendanceRecord {
   @@unique([tenant_id, employee_id, date])
   @@index([tenant_id, date])
   @@index([tenant_id, employee_id, date])
+}
+
+/// Overtime worked on a day, and whether anyone has agreed to pay for it.
+///
+/// Separate from the `overtime_minutes` already on `AttendanceRecord`: that
+/// column is the *observation* (they were still clocked in at 8pm), this is the
+/// *decision*. Unapproved overtime must never reach payroll, and conflating the
+/// two would mean staying late was self-authorising.
+model OvertimeRecord {
+  id          String    @id @default(uuid())
+  tenant_id   String
+  employee_id String
+  date        DateTime  @db.Date
+  minutes     Int
+  /// PENDING | APPROVED | REJECTED
+  status      String    @default("PENDING")
+  approved_by String?
+  approved_at DateTime?
+  note        String?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, employee_id, date])
+  @@index([tenant_id, status])
+  @@index([tenant_id, employee_id, date])
+  @@map("overtime_records")
+}
+
+/// A month of attendance, reduced to the numbers payroll needs.
+///
+/// The point of storing this rather than aggregating on demand is `frozen_at`.
+/// A payroll run reads a frozen snapshot, so re-running it next week cannot
+/// silently produce different pay because someone corrected an attendance row
+/// in the meantime. Until it is frozen it is a cache and is rebuilt freely.
+model AttendanceMonthSnapshot {
+  id          String @id @default(uuid())
+  tenant_id   String
+  employee_id String
+  year        Int
+  month       Int
+
+  present_days   Float @default(0)
+  absent_days    Int   @default(0)
+  half_days      Int   @default(0)
+  leave_days     Int   @default(0)
+  holiday_days   Int   @default(0)
+  late_days      Int   @default(0)
+  /// Days the employee was scheduled to work, holidays excluded.
+  scheduled_days Int   @default(0)
+
+  worked_minutes            Int @default(0)
+  late_minutes              Int @default(0)
+  /// Approved only. The raw observation stays on the attendance rows.
+  approved_overtime_minutes Int @default(0)
+
+  /// Set when a payroll run consumes this month. Non-null means immutable.
+  frozen_at  DateTime?
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, employee_id, year, month])
+  @@index([tenant_id, year, month])
+  @@map("attendance_month_snapshots")
 }
 
 /// Per-tenant attendance policy.

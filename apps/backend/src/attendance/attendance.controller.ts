@@ -19,7 +19,11 @@ import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { RequiresPlan } from '../auth/subscription-access.decorator';
 import { AttendanceService } from './attendance.service';
 import { AttendanceCaptureService } from './attendance-capture.service';
+import { OvertimeService } from './overtime.service';
 import {
+    MonthQueryDto,
+    OvertimeQueryDto,
+    ReviewOvertimeDto,
     UpdateAttendanceSettingsDto,
     UpsertAttendanceDto,
     CreateLeaveTypeDto,
@@ -37,7 +41,53 @@ export class AttendanceController {
     constructor(
         private svc: AttendanceService,
         private capture: AttendanceCaptureService,
+        private overtime: OvertimeService,
     ) {}
+
+    // ── Overtime & monthly snapshot ───────────────────────────────────────────
+
+    @Get('overtime')
+    listOvertime(@Tenant() tenant: TenantContext, @Query() query: OvertimeQueryDto) {
+        return this.overtime.list(tenant.tenantId, query);
+    }
+
+    @Post('overtime/generate')
+    @HttpCode(HttpStatus.OK)
+    generateOvertime(@Tenant() tenant: TenantContext, @Body() dto: MonthQueryDto) {
+        return this.overtime.generateForMonth(tenant.tenantId, dto.year, dto.month);
+    }
+
+    @Patch('overtime/:id/review')
+    reviewOvertime(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: ReviewOvertimeDto,
+    ) {
+        return this.overtime.review(tenant.tenantId, id, tenant.userId, dto);
+    }
+
+    @Get('month-snapshot')
+    listSnapshots(@Tenant() tenant: TenantContext, @Query() query: MonthQueryDto) {
+        return this.overtime.listSnapshots(tenant.tenantId, query.year, query.month);
+    }
+
+    @Post('month-snapshot/build')
+    @HttpCode(HttpStatus.OK)
+    buildSnapshots(@Tenant() tenant: TenantContext, @Body() dto: MonthQueryDto) {
+        return this.overtime.buildSnapshots(tenant.tenantId, dto.year, dto.month);
+    }
+
+    @Post('month-snapshot/freeze')
+    @HttpCode(HttpStatus.OK)
+    freezeMonth(@Tenant() tenant: TenantContext, @Body() dto: MonthQueryDto) {
+        return this.overtime.freezeMonth(tenant.tenantId, dto.year, dto.month);
+    }
+
+    @Post('month-snapshot/unfreeze')
+    @HttpCode(HttpStatus.OK)
+    unfreezeMonth(@Tenant() tenant: TenantContext, @Body() dto: MonthQueryDto) {
+        return this.overtime.unfreezeMonth(tenant.tenantId, dto.year, dto.month);
+    }
 
     // ── Settings ──────────────────────────────────────────────────────────────
 
