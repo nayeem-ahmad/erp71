@@ -95,4 +95,11 @@ ENV GIT_SHA=$GIT_SHA
 # have no row to edit, so their hours would be whatever the code assumed. Skips
 # any tenant that already has a schedule and any employee that already has an
 # assignment, so it never overrides a deliberate change.
-CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
+#
+# sync:salary-components seeds the standard Bangladeshi salary split (HRIS
+# Phase 5) for tenants that have none, so the structure screen opens with
+# something recognisable rather than blank. It deliberately does NOT backfill
+# per-employee structures — resolveStructure already falls back to
+# Employee.basic_salary, and stamping a structure nobody chose would silently
+# stop that field affecting pay. See prisma/sync-salary-components.ts.
+CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && node apps/backend/dist/src/main.js"]

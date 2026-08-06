@@ -1,0 +1,92 @@
+import {
+    IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNumber, IsOptional,
+    IsString, IsUUID, Max, Min, ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class CreateSalaryComponentDto {
+    @IsString()
+    name: string;
+
+    @IsEnum(['EARNING', 'DEDUCTION'] as any)
+    kind: string;
+
+    @IsOptional()
+    @IsEnum(['FIXED', 'PERCENT_OF_BASIC'] as any)
+    calculation?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    is_taxable?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
+    is_basic?: boolean;
+
+    @IsOptional()
+    @IsInt()
+    @Type(() => Number)
+    sort_order?: number;
+}
+
+export class UpdateSalaryComponentDto {
+    @IsOptional() @IsString() name?: string;
+    @IsOptional() @IsEnum(['EARNING', 'DEDUCTION'] as any) kind?: string;
+    @IsOptional() @IsEnum(['FIXED', 'PERCENT_OF_BASIC'] as any) calculation?: string;
+    @IsOptional() @IsBoolean() is_taxable?: boolean;
+    @IsOptional() @IsBoolean() is_basic?: boolean;
+    @IsOptional() @IsInt() @Type(() => Number) sort_order?: number;
+}
+
+export class StructureLineDto {
+    @IsUUID()
+    component_id: string;
+
+    @IsNumber()
+    @Min(0)
+    @Type(() => Number)
+    value: number;
+}
+
+export class SetSalaryStructureDto {
+    @IsUUID()
+    employee_id: string;
+
+    @IsDateString()
+    effective_from: string;
+
+    @IsOptional()
+    @IsString()
+    note?: string;
+
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => StructureLineDto)
+    lines: StructureLineDto[];
+}
+
+export class SetBankAccountDto {
+    @IsEnum(['BANK', 'BKASH', 'NAGAD', 'CASH'] as any)
+    method: string;
+
+    @IsOptional() @IsString() bank_name?: string;
+    @IsOptional() @IsString() branch_name?: string;
+    @IsOptional() @IsString() account_number?: string;
+    @IsOptional() @IsString() account_name?: string;
+    @IsOptional() @IsString() routing_number?: string;
+    @IsOptional() @IsString() wallet_number?: string;
+}
+
+export class ResolveStructureQueryDto {
+    @IsOptional()
+    @IsDateString()
+    on?: string;
+}
+
+export class PayrollPeriodDto {
+    @IsInt() @Min(2000) @Max(2200) @Type(() => Number)
+    year: number;
+
+    @IsInt() @Min(1) @Max(12) @Type(() => Number)
+    month: number;
+}

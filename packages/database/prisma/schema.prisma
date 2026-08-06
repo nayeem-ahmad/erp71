@@ -604,6 +604,9 @@ model Tenant {
   AttendanceSettings         AttendanceSettings?
   OvertimeRecord             OvertimeRecord[]
   AttendanceMonthSnapshot    AttendanceMonthSnapshot[]
+  SalaryComponent            SalaryComponent[]
+  EmployeeSalaryStructure    EmployeeSalaryStructure[]
+  EmployeeBankAccount        EmployeeBankAccount[]
 
   @@index([deleted_at])
 }
@@ -3138,6 +3141,8 @@ model Employee {
   EmployeeSchedule        EmployeeSchedule[]
   OvertimeRecord          OvertimeRecord[]
   AttendanceMonthSnapshot AttendanceMonthSnapshot[]
+  EmployeeSalaryStructure EmployeeSalaryStructure[]
+  EmployeeBankAccount     EmployeeBankAccount?
 
   @@unique([tenant_id, employee_code])
   @@unique([tenant_id, phone])
@@ -3226,6 +3231,108 @@ model AttendanceRecord {
   @@unique([tenant_id, employee_id, date])
   @@index([tenant_id, date])
   @@index([tenant_id, employee_id, date])
+}
+
+/// A named earning or deduction a tenant can put on a salary structure.
+///
+/// Tenant-level definitions, seeded with the standard Bangladeshi split (basic,
+/// house rent, medical, conveyance) so a new tenant does not start from an
+/// empty screen.
+model SalaryComponent {
+  id          String    @id @default(uuid())
+  tenant_id   String
+  name        String
+  /// EARNING | DEDUCTION
+  kind        String
+  /// FIXED = a taka amount; PERCENT_OF_BASIC = a percentage of the structure's
+  /// basic line. Percentages are the norm here — house rent is conventionally
+  /// 50% of basic — and storing the intent rather than the computed figure is
+  /// what makes a salary revision one edit instead of five.
+  calculation String    @default("FIXED")
+  /// Whether this earning counts toward taxable income. Phase 13 reads it.
+  is_taxable  Boolean   @default(true)
+  /// The one component every structure needs. Exactly one per tenant, enforced
+  /// by the service — Prisma cannot express a partial unique index and
+  /// `db push` would not create a raw one.
+  is_basic    Boolean   @default(false)
+  sort_order  Int       @default(0)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  deleted_at  DateTime?
+
+  tenant Tenant                        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  lines  EmployeeSalaryStructureLine[]
+
+  @@unique([tenant_id, name])
+  @@index([tenant_id, deleted_at])
+  @@map("salary_components")
+}
+
+/// An employee's pay composition, from a date.
+///
+/// A revision is a new row, not an edit: recomputing March must use March's
+/// structure. Same reasoning as `EmployeeSchedule`, and for the same reason —
+/// payroll re-runs.
+model EmployeeSalaryStructure {
+  id             String   @id @default(uuid())
+  tenant_id      String
+  employee_id    String
+  effective_from DateTime @db.Date
+  note           String?
+  created_by     String?
+  created_at     DateTime @default(now())
+
+  tenant   Tenant                        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employee Employee                      @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  lines    EmployeeSalaryStructureLine[]
+
+  @@unique([tenant_id, employee_id, effective_from])
+  @@index([tenant_id, employee_id])
+  @@map("employee_salary_structures")
+}
+
+model EmployeeSalaryStructureLine {
+  id           String  @id @default(uuid())
+  structure_id String
+  component_id String
+  /// A taka amount when the component is FIXED, a percentage when it is
+  /// PERCENT_OF_BASIC. Which one is decided by the component, not stored twice.
+  value        Decimal @db.Decimal(12, 2)
+
+  structure EmployeeSalaryStructure @relation(fields: [structure_id], references: [id], onDelete: Cascade)
+  component SalaryComponent         @relation(fields: [component_id], references: [id])
+
+  @@unique([structure_id, component_id])
+  @@map("employee_salary_structure_lines")
+}
+
+/// Where an employee's pay is sent.
+///
+/// Split from `Employee` because it is the most sensitive thing the HR module
+/// holds and it wants its own read path: an account number is needed by the
+/// disbursement export and by nobody else.
+model EmployeeBankAccount {
+  id             String   @id @default(uuid())
+  tenant_id      String
+  employee_id    String   @unique
+  /// BANK | BKASH | NAGAD | CASH
+  method         String   @default("CASH")
+  bank_name      String?
+  branch_name    String?
+  /// Encrypted at rest through `EncryptionService`, same as NID.
+  account_number String?
+  account_name   String?
+  routing_number String?
+  /// Encrypted. The bKash/Nagad wallet number.
+  wallet_number  String?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@map("employee_bank_accounts")
 }
 
 /// Overtime worked on a day, and whether anyone has agreed to pay for it.
