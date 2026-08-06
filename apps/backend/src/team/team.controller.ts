@@ -16,6 +16,7 @@ import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { PaginationDto } from '../common/pagination.dto';
 import { TeamService } from './team.service';
+import { NoAudit } from '../audit/no-audit.decorator';
 import {
     CreateTenantRoleDto,
     GrantStoreAccessDto,
@@ -26,6 +27,8 @@ import {
 } from './team.dto';
 
 @Controller('team')
+// Every mutating handler here writes its own richer `team.*` audit row.
+@NoAudit()
 @UseGuards(JwtAuthGuard)
 @UseInterceptors(TenantInterceptor)
 export class TeamController {

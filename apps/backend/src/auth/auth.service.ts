@@ -4,6 +4,7 @@ import { DatabaseService } from '../database/database.service';
 import { JwtService } from '@nestjs/jwt';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
+import { AuditRequestMeta } from '../audit/audit-route.util';
 import { AssetsService } from '../assets/assets.service';
 import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate, seedDefaultLeadTaxonomy, seedDefaultPaymentMethods, seedDefaultTenantRoles } from '@erp71/database';
 import * as bcrypt from 'bcrypt';
@@ -51,7 +52,7 @@ export class AuthService {
         private readonly planEntitlements: PlanEntitlementsService,
     ) { }
 
-    async signup(dto: SignupDto) {
+    async signup(dto: SignupDto, meta: AuditRequestMeta = {}) {
         const existingUser = await this.db.user.findUnique({
             where: { email: dto.email },
         });
@@ -106,7 +107,11 @@ export class AuthService {
         this.sendVerificationEmail(user.id).catch((err) => {
             console.warn(`[AuthService] Verification email failed for ${user.email}:`, err?.message);
         });
-        this.audit.log('USER_SIGNUP', 'User', { userId: user.id }, user.id, { email: user.email }).catch(() => {});
+        this.audit
+            .logForUserTenants('USER_SIGNUP', 'User', { userId: user.id, ...meta }, user.id, {
+                email: user.email,
+            })
+            .catch(() => {});
         const auth = await this.generateAuthResponse(user.id);
         return {
             ...auth,
@@ -114,11 +119,16 @@ export class AuthService {
         };
     }
 
-    async completeTwoFactorLogin(userId: string) {
+    async completeTwoFactorLogin(userId: string, meta: AuditRequestMeta = {}) {
+        // `login()` returns early for 2FA users, so this is the only place a
+        // second-factor sign-in can be recorded.
+        this.audit
+            .logForUserTenants('USER_LOGIN', 'User', { userId, ...meta }, userId, { two_factor: true })
+            .catch(() => {});
         return this.generateAuthResponse(userId);
     }
 
-    async login(dto: LoginDto) {
+    async login(dto: LoginDto, meta: AuditRequestMeta = {}) {
         const user = await this.db.user.findUnique({
             where: { email: dto.email },
         });
@@ -140,7 +150,11 @@ export class AuthService {
         }
 
         if (!isPasswordValid) {
-            this.audit.log('LOGIN_FAILED', 'User', { userId: user.id }, user.id, { email: dto.email }).catch(() => {});
+            this.audit
+                .logForUserTenants('LOGIN_FAILED', 'User', { userId: user.id, ...meta }, user.id, {
+                    email: dto.email,
+                })
+                .catch(() => {});
             throw new UnauthorizedException('Invalid credentials');
         }
 
@@ -160,11 +174,13 @@ export class AuthService {
             };
         }
 
-        this.audit.log('USER_LOGIN', 'User', { userId: user.id }, user.id).catch(() => {});
+        this.audit
+            .logForUserTenants('USER_LOGIN', 'User', { userId: user.id, ...meta }, user.id)
+            .catch(() => {});
         return this.generateAuthResponse(user.id);
     }
 
-    async logout(userId: string): Promise<void> {
+    async logout(userId: string, meta: AuditRequestMeta = {}): Promise<void> {
         // Increment token_version to invalidate all existing app JWTs for this user.
         // `storefront_token_version` is deliberately untouched: signing out of the
         // workspace should not also sign the same person out of the shops they buy from.
@@ -172,7 +188,9 @@ export class AuthService {
             where: { id: userId },
             data: { token_version: { increment: 1 } },
         });
-        this.audit.log('USER_LOGOUT', 'User', { userId }, userId).catch(() => {});
+        this.audit
+            .logForUserTenants('USER_LOGOUT', 'User', { userId, ...meta }, userId)
+            .catch(() => {});
     }
 
     async sendVerificationEmail(userId: string): Promise<void> {
@@ -442,7 +460,7 @@ export class AuthService {
         return { avatarUrl: user.avatar_url };
     }
 
-    async changePassword(userId: string, dto: ChangePasswordDto) {
+    async changePassword(userId: string, dto: ChangePasswordDto, meta: AuditRequestMeta = {}) {
         const user = await this.db.user.findUnique({
             where: { id: userId },
             select: { passwordHash: true },
@@ -472,7 +490,9 @@ export class AuthService {
                 storefront_token_version: { increment: 1 },
             },
         });
-        this.audit.log('PASSWORD_CHANGED', 'User', { userId }, userId).catch(() => {});
+        this.audit
+            .logForUserTenants('PASSWORD_CHANGED', 'User', { userId, ...meta }, userId)
+            .catch(() => {});
     }
 
     async setupStore(userId: string, dto: { name: string; address?: string; planCode?: 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM' }) {

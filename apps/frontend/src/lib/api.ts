@@ -43,6 +43,20 @@ const DEFAULT_PROD_API_BASE = 'https://erp71-backend.onrender.com';
 const API_BASE = normalizeApiBase(process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL)
     || (process.env.NODE_ENV === 'production' ? `${DEFAULT_PROD_API_BASE}/api/v1` : '/api/v1');
 
+/**
+ * An API failure that keeps its HTTP status.
+ *
+ * Callers used to branch on substrings of the server's message, which silently
+ * stops working the moment that copy is reworded. Extends `Error`, so existing
+ * `error.message` handling is unaffected.
+ */
+export class ApiError extends Error {
+    constructor(message: string, public readonly status: number) {
+        super(message);
+        this.name = 'ApiError';
+    }
+}
+
 /** Read an auth token from localStorage first, falling back to sessionStorage. */
 function getAccessToken(): string | null {
     if (typeof window === 'undefined') return null;
@@ -87,7 +101,7 @@ export async function fetchBlobWithAuth(endpoint: string, options: RequestInit =
         } catch {
             // Fall back to the response status text when no JSON error payload is available.
         }
-        throw new Error(message);
+        throw new ApiError(message, response.status);
     }
 
     const disposition = response.headers.get('Content-Disposition') ?? '';
@@ -156,7 +170,7 @@ async function requestWithAuth(endpoint: string, options: RequestInit = {}): Pro
             // Fall back to the response status text when no JSON error payload is available.
         }
 
-        throw new Error(message);
+        throw new ApiError(message, response.status);
     }
 
     return response.json();

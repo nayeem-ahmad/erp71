@@ -70,7 +70,7 @@ export default function AuditLogsPage() {
             setTotal(Number(data?.total ?? 0));
             setForbidden(false);
         } catch (error: any) {
-            if (error?.message?.includes('OWNER or MANAGER')) {
+            if (error?.status === 403) {
                 setForbidden(true);
                 setRows([]);
                 setTotal(0);

@@ -108,7 +108,7 @@ describe('AccountingService — voucher approval', () => {
             providers: [
                 AccountingService,
                 { provide: DatabaseService, useValue: db },
-                { provide: AuditService, useValue: { log: auditLog } },
+                { provide: AuditService, useValue: { log: auditLog, logForUserTenants: auditLog } },
                 { provide: JobTrackerService, useValue: { track: (_n: string, fn: () => any) => fn() } },
             ],
         }).compile();
