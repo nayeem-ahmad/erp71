@@ -376,7 +376,7 @@ export class AdminTenantsService {
                 data: { discount_type: nextType, discount_value: nextValue },
             });
 
-            await this.auditService.log('tenant.subscription.discount', 'TenantSubscription', {}, tenantId, {
+            await this.auditService.log('tenant.subscription.discount', 'TenantSubscription', { tenantId }, tenantId, {
                 discount_type: nextType,
                 discount_value: nextValue,
             });
@@ -437,7 +437,7 @@ export class AdminTenantsService {
         await this.auditService.log(
             'tenant.features.update',
             'Tenant',
-            { userId: adminUserId },
+            { userId: adminUserId, tenantId },
             tenantId,
             { feature_overrides: overrides },
         );
@@ -484,7 +484,7 @@ export class AdminTenantsService {
         await this.auditService.log(
             'tenant.localization.update',
             'Tenant',
-            { userId: adminUserId },
+            { userId: adminUserId, tenantId },
             tenantId,
             {
                 localization_enabled: updated.localization_enabled,
@@ -517,7 +517,7 @@ export class AdminTenantsService {
         await this.auditService.log(
             'tenant.business_type.set',
             'Tenant',
-            { userId: adminUserId },
+            { userId: adminUserId, tenantId },
             tenantId,
             {
                 business_type: updated.business_type,
@@ -559,7 +559,7 @@ export class AdminTenantsService {
         await this.auditService.log(
             'tenant.catalog.import',
             'Tenant',
-            { userId: adminUserId },
+            { userId: adminUserId, tenantId },
             tenantId,
             { business_type: tenant.business_type, ...summary },
         );
@@ -573,7 +573,7 @@ export class AdminTenantsService {
         await this.auditService.log(
             'tenant.demo_data.load',
             'Tenant',
-            { userId: adminUserId },
+            { userId: adminUserId, tenantId },
             tenantId,
             { batchId: result.batchId, batchNumber: result.batchNumber },
         );
@@ -607,7 +607,7 @@ export class AdminTenantsService {
             data: { status: 'CANCELLED' },
         });
 
-        await this.auditService.log('tenant.suspend', 'Tenant', { userId: adminUserId }, tenantId, {
+        await this.auditService.log('tenant.suspend', 'Tenant', { userId: adminUserId, tenantId }, tenantId, {
             reason: dto.reason ?? null,
         });
 
@@ -638,7 +638,7 @@ export class AdminTenantsService {
 
         const token = this.jwtService.sign(payload, { expiresIn: '1h' });
 
-        await this.auditService.log('tenant.impersonate', 'Tenant', { userId: adminUserId }, tenantId, {
+        await this.auditService.log('tenant.impersonate', 'Tenant', { userId: adminUserId, tenantId }, tenantId, {
             impersonated_user_id: tenant.owner.id,
             impersonated_user_email: tenant.owner.email,
         });
@@ -685,7 +685,7 @@ export class AdminTenantsService {
             }
         });
 
-        await this.auditService.log('tenant.delete', 'Tenant', { userId: adminUserId }, tenantId, {
+        await this.auditService.log('tenant.delete', 'Tenant', { userId: adminUserId, tenantId }, tenantId, {
             reason: dto.reason ?? null,
             tenant_name: tenant.name,
             previous_storefront_slug: tenant.storefront_slug,
@@ -868,7 +868,7 @@ export class AdminTenantsService {
             }
         }
 
-        await this.auditService.log('tenant.admin_create', 'Tenant', { userId: adminUserId }, tenant.id, {
+        await this.auditService.log('tenant.admin_create', 'Tenant', { userId: adminUserId, tenantId: tenant.id }, tenant.id, {
             owner_email: ownerEmail,
             owner_mode: dto.ownerMode,
         });
@@ -1302,7 +1302,7 @@ export class AdminTenantsService {
             });
         }
 
-        await this.auditService.log('tenant.payment.record', 'Tenant', { userId: adminUserId }, tenantId, {
+        await this.auditService.log('tenant.payment.record', 'Tenant', { userId: adminUserId, tenantId }, tenantId, {
             amount: dto.amount,
             method: dto.method ?? null,
             event_id: event.id,
@@ -1343,7 +1343,7 @@ export class AdminTenantsService {
             },
         });
 
-        await this.auditService.log('tenant.refund.record', 'Tenant', { userId: adminUserId }, tenantId, {
+        await this.auditService.log('tenant.refund.record', 'Tenant', { userId: adminUserId, tenantId }, tenantId, {
             amount: dto.amount,
             event_id: event.id,
         });
@@ -1376,7 +1376,7 @@ export class AdminTenantsService {
             eventType: 'sms_credit_sale_payment',
         });
 
-        await this.auditService.log('tenant.sms_credits.sell', 'Tenant', { userId: adminUserId }, tenantId, {
+        await this.auditService.log('tenant.sms_credits.sell', 'Tenant', { userId: adminUserId, tenantId }, tenantId, {
             credits: dto.credits,
             amount: dto.amount ?? null,
             balance: grant.balance,
@@ -1408,7 +1408,7 @@ export class AdminTenantsService {
             eventType: 'ai_credit_sale_payment',
         });
 
-        await this.auditService.log('tenant.ai_credits.sell', 'Tenant', { userId: adminUserId }, tenantId, {
+        await this.auditService.log('tenant.ai_credits.sell', 'Tenant', { userId: adminUserId, tenantId }, tenantId, {
             credits: dto.credits,
             amount: dto.amount ?? null,
             ai_credits_bonus: updated.ai_credits_bonus,
@@ -1454,7 +1454,7 @@ export class AdminTenantsService {
             providerSubscriptionRef: `admin_grant_${tenantId}`,
         });
 
-        await this.auditService.log('tenant.addon.grant', 'Tenant', { userId: adminUserId }, tenantId, {
+        await this.auditService.log('tenant.addon.grant', 'Tenant', { userId: adminUserId, tenantId }, tenantId, {
             addonCode: addon.code,
             durationDays,
             notes: dto.notes ?? null,
@@ -1473,7 +1473,7 @@ export class AdminTenantsService {
 
         await this.addonModules.revokeSubscriptionNow(tenantId, addonCode);
 
-        await this.auditService.log('tenant.addon.revoke', 'Tenant', { userId: adminUserId }, tenantId, {
+        await this.auditService.log('tenant.addon.revoke', 'Tenant', { userId: adminUserId, tenantId }, tenantId, {
             addonCode,
         });
 

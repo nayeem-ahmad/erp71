@@ -45,6 +45,43 @@ export class AuditService {
         });
     }
 
+    /**
+     * Record an account-level event once per tenant the user belongs to.
+     *
+     * Sign-in, sign-out and password events are not tenant scoped, but the
+     * reader (`GET /audit-logs`) filters strictly on `tenant_id` — a row
+     * written without one is invisible to every tenant admin. Fanning out
+     * across memberships is what makes "who signed in, and from where"
+     * answerable by the people who need it. A user in two tenants produces two
+     * rows; each tenant only ever sees its own.
+     *
+     * Users with no membership still get a single unscoped row so the platform
+     * view keeps a complete record.
+     */
+    async logForUserTenants(
+        action: string,
+        entity: string,
+        ctx: AuditContext & { userId: string },
+        entityId?: string,
+        payload?: Record<string, unknown>,
+    ): Promise<void> {
+        const memberships = await this.db.tenantUser.findMany({
+            where: { user_id: ctx.userId, tenant: { deleted_at: null } },
+            select: { tenant_id: true },
+        });
+
+        if (!memberships.length) {
+            await this.log(action, entity, ctx, entityId, payload);
+            return;
+        }
+
+        await Promise.all(
+            memberships.map((membership) =>
+                this.log(action, entity, { ...ctx, tenantId: membership.tenant_id }, entityId, payload),
+            ),
+        );
+    }
+
     async query(options: AuditQueryOptions) {
         const limit = Math.min(options.limit ?? 50, 200);
         const offset = options.offset ?? 0;

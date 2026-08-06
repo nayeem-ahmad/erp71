@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Header, Param, Patch, Post, Query, Res, 
 import { Response } from 'express';
 import { StorePermission } from '@erp71/shared-types';
 import { AccountingService } from './accounting.service';
+import { NoAudit } from '../audit/no-audit.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { hasStorePermission } from '../auth/permission.util';
 import { RequiresAdditionalFeature, RequiresFeature } from '../auth/subscription-access.decorator';
@@ -243,16 +244,19 @@ export class AccountingController {
     }
 
     @Post('vouchers')
+    @NoAudit()
     createVoucher(@Tenant() tenant: TenantContext, @Body() dto: CreateVoucherDto) {
         return this.accountingService.createVoucher(tenant.tenantId, dto, 1, tenant.userId);
     }
 
     @Patch('vouchers/:id')
+    @NoAudit()
     updateVoucher(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateVoucherDto) {
         return this.accountingService.updateVoucher(tenant.tenantId, id, dto, tenant.userId);
     }
 
     @Delete('vouchers/:id')
+    @NoAudit()
     deleteVoucher(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.accountingService.deleteVoucher(tenant.tenantId, id, tenant.userId);
     }
@@ -327,6 +331,7 @@ export class AccountingController {
     }
 
     @Patch('settings/posting-rules/:id')
+    @NoAudit()
     @TenantRoles('OWNER', 'ACCOUNTANT')
     updatePostingRule(
         @Tenant() tenant: TenantContext,

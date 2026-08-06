@@ -30,7 +30,10 @@ const db = {
     userInvitation: { findMany: jest.fn(), deleteMany: jest.fn() },
     $transaction: jest.fn(),
 };
-const audit = { log: jest.fn().mockResolvedValue(undefined) };
+const audit = {
+    log: jest.fn().mockResolvedValue(undefined),
+    logForUserTenants: jest.fn().mockResolvedValue(undefined),
+};
 const invitations = { invite: jest.fn().mockResolvedValue(undefined) };
 
 const owner: TenantContext = { tenantId: 't1', userId: 'owner', userRole: UserRole.OWNER, storeId: 's1' };

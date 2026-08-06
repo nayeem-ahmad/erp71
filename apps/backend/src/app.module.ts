@@ -10,6 +10,7 @@ import { SentryModule } from '@sentry/nestjs/setup';
 import { DatabaseModule } from './database/database.module';
 import { EmailModule } from './email/email.module';
 import { AuditModule } from './audit/audit.module';
+import { AuditInterceptor } from './audit/audit.interceptor';
 import { HealthModule } from './health/health.module';
 import { SystemHealthModule } from './system-health/system-health.module';
 import { JobsModule } from './system-health/jobs/jobs.module';
@@ -209,6 +210,9 @@ import { ShortLinksModule } from './short-links/short-links.module';
     providers: [
         { provide: APP_GUARD, useClass: ThrottlerGuard },
         { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
+        // Must stay after TransformInterceptor: it needs to sit inside the
+        // response envelope so it can read the raw controller result.
+        { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
     ],
 })
 export class AppModule implements NestModule {
