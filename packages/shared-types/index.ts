@@ -84,6 +84,7 @@ export const StorePermission = {
   // HR
   VIEW_HR: "VIEW_HR",
   VIEW_PAYROLL: "VIEW_PAYROLL",
+  MANAGE_HR: "MANAGE_HR",
 
   // Loans
   VIEW_LOANS: "VIEW_LOANS",
@@ -140,6 +141,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.CREATE_LEAD_CONVERSATIONS,
     StorePermission.MANAGE_CRM_SETTINGS,
     StorePermission.VIEW_HR,
+    StorePermission.MANAGE_HR,
     StorePermission.VIEW_LOANS,
     StorePermission.MANAGE_LOANS,
     StorePermission.VIEW_INVESTORS,
@@ -232,6 +234,7 @@ export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.MANAGE_CRM_SETTINGS]: "Manage CRM custom fields & settings",
   [StorePermission.VIEW_HR]: "View employees & attendance",
   [StorePermission.VIEW_PAYROLL]: "View salary & payroll figures",
+  [StorePermission.MANAGE_HR]: "Create & edit employees, departments & designations",
   [StorePermission.VIEW_LOANS]: "View loans",
   [StorePermission.MANAGE_LOANS]: "Manage loans",
   [StorePermission.VIEW_INVESTORS]: "View investors & profit shares",

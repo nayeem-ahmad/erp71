@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { StorePermission } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { TenantContext } from '../database/tenant.decorator';
+import { canViewPayroll } from '../common/payroll-visibility';
 import {
     emptyDailyBuckets,
     formatDate,
@@ -33,22 +33,12 @@ export class HrDashboardService {
     constructor(private readonly db: DatabaseService) {}
 
     /**
-     * Whether this user may see money. Owners bypass permissions everywhere else
-     * in the app, so they do here too; everyone else needs the explicit grant.
+     * Whether this user may see money. Shared with `EmployeesService` so the
+     * dashboard and the rows it summarises can never disagree — see
+     * `common/payroll-visibility.ts`.
      */
-    private async canViewPayroll(tenant: TenantContext): Promise<boolean> {
-        if (tenant.userRole === 'OWNER') return true;
-        if (!tenant.storeId) return false;
-
-        const grant = await this.db.userStorePermission.findFirst({
-            where: {
-                user_id: tenant.userId,
-                store_id: tenant.storeId,
-                permission: StorePermission.VIEW_PAYROLL,
-            },
-            select: { id: true },
-        });
-        return Boolean(grant);
+    private canViewPayroll(tenant: TenantContext): Promise<boolean> {
+        return canViewPayroll(this.db, tenant);
     }
 
     async getOverview(tenant: TenantContext, query: HrDashboardQueryDto) {

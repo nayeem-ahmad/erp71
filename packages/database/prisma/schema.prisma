@@ -142,6 +142,7 @@ enum StorePermission {
   // HR
   VIEW_HR
   VIEW_PAYROLL
+  MANAGE_HR
 
   // Loans
   VIEW_LOANS

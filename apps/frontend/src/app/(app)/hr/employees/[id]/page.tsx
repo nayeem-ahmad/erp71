@@ -39,6 +39,7 @@ export default function EmployeeDetailPage() {
     const params = useParams();
     const id = params.id as string;
     const [employee, setEmployee] = useState<Employee | null>(null);
+    const [canSeeSalary, setCanSeeSalary] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -62,6 +63,11 @@ export default function EmployeeDetailPage() {
             fetchTenantUsers(),
         ]).then(([emp, depts, desigs]) => {
             setEmployee(emp);
+            // The API omits `basic_salary` entirely for a viewer without
+            // VIEW_PAYROLL — absent means "not allowed to see", where null
+            // means "none recorded". Hide the field rather than render an empty
+            // box the user cannot meaningfully fill.
+            setCanSeeSalary('basic_salary' in (emp as Record<string, unknown>));
             setDepartments(depts as Department[]);
             setDesignations(desigs as Designation[]);
             setForm({
@@ -109,7 +115,12 @@ export default function EmployeeDetailPage() {
             else payload.department_id = null;
             if (form.designation_id) payload.designation_id = form.designation_id;
             else payload.designation_id = null;
-            payload.basic_salary = form.basic_salary !== '' ? Number(form.basic_salary) : null;
+            // Only send the salary if this user can see it. The server drops it
+            // from an unpermitted caller anyway; not sending it keeps the
+            // request honest rather than relying on that.
+            if (canSeeSalary) {
+                payload.basic_salary = form.basic_salary !== '' ? Number(form.basic_salary) : null;
+            }
 
             const updated = await api.updateEmployee(id, payload);
             setEmployee(updated);
@@ -281,12 +292,14 @@ export default function EmployeeDetailPage() {
                             </select>
                         </div>
 
+                        {canSeeSalary && (
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.employees.modal.basicSalary}</label>
                             <input type="number" min="0" step="0.01" value={form.basic_salary} onChange={set('basic_salary')}
                                 className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-bold text-gray-600 text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
                                 placeholder="0.00" />
                         </div>
+                        )}
 
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.common.status}</label>

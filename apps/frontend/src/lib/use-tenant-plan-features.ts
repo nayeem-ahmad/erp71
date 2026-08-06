@@ -11,6 +11,13 @@ type TenantPlanState = {
   dashboardPreference: string;
   /** Store permissions the user holds in this tenant, unioned across stores. */
   permissions: string[];
+  /**
+   * The user's role in this tenant. Needed alongside `permissions` because an
+   * OWNER bypasses `StorePermissionGuard` server-side and so may hold no
+   * explicit grant rows at all — checking permissions alone would hide
+   * capabilities from the one user who definitely has them.
+   */
+  role: string | null;
   ready: boolean;
 };
 
@@ -19,6 +26,7 @@ const EMPTY: TenantPlanState = {
   features: {},
   dashboardPreference: 'AUTO',
   permissions: [],
+  role: null,
   ready: true,
 };
 
