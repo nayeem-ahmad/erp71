@@ -166,6 +166,17 @@ enum StorePermission {
 
 enum EmployeeStatus {
   ACTIVE
+  /// On probation. Still active for payroll and attendance; separated so a
+  /// report can find them and a confirmation can be a real event.
+  PROBATION
+  /// Left of their own accord.
+  RESIGNED
+  /// Dismissed.
+  TERMINATED
+  /// A fixed-term contract that ran out.
+  CONTRACT_ENDED
+  /// The pre-existing catch-all. Kept because rows already carry it and
+  /// rewriting them would be guessing at why each person left.
   INACTIVE
 }
 
@@ -618,6 +629,8 @@ model Tenant {
   EmployeeDocument           EmployeeDocument[]
   LeaveRequestApproval       LeaveRequestApproval[]
   LeaveRequestAttachment     LeaveRequestAttachment[]
+  ChecklistTemplate          ChecklistTemplate[]
+  EmployeeChecklistItem      EmployeeChecklistItem[]
 
   @@index([deleted_at])
 }
@@ -3115,27 +3128,35 @@ model Designation {
 }
 
 model Employee {
-  id              String         @id @default(uuid())
-  tenant_id       String
-  employee_code   String
-  name            String
-  phone           String
-  email           String?
-  nid             String?
-  date_of_joining DateTime?
-  department_id   String?
-  designation_id  String?
-  user_id         String?        @unique
-  basic_salary    Decimal?       @db.Decimal(12, 2)
-  status          EmployeeStatus @default(ACTIVE)
+  id               String         @id @default(uuid())
+  tenant_id        String
+  employee_code    String
+  name             String
+  phone            String
+  email            String?
+  nid              String?
+  date_of_joining  DateTime?
+  department_id    String?
+  designation_id   String?
+  user_id          String?        @unique
+  basic_salary     Decimal?       @db.Decimal(12, 2)
+  status           EmployeeStatus @default(ACTIVE)
+  /// Why they left, in the tenant's own words. The status says which category;
+  /// this says what happened. Nothing recorded either of them before Phase 12.
+  exit_reason      String?
+  /// The last day they were on the payroll. Distinct from the status change
+  /// date: someone can resign in March to leave in May.
+  last_working_day DateTime?      @db.Date
+  exit_notes       String?
+
   /// Whether this employee may use the self-service portal. Distinct from
   /// `user_id`: linking a login is how staff get an ERP account, and most
   /// linked employees are staff who should keep using the admin screens.
   /// Portal access is a deliberate, separately revocable grant on top.
-  portal_access   Boolean        @default(false)
-  created_at      DateTime       @default(now())
-  updated_at      DateTime       @updatedAt
-  deleted_at      DateTime?
+  portal_access Boolean   @default(false)
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  deleted_at    DateTime?
 
   tenant                  Tenant                    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   department              Department?               @relation(fields: [department_id], references: [id])
@@ -3160,6 +3181,7 @@ model Employee {
   AssetAssignment         AssetAssignment[]
   PolicyAcknowledgement   PolicyAcknowledgement[]
   EmployeeDocument        EmployeeDocument[]
+  EmployeeChecklistItem   EmployeeChecklistItem[]
 
   @@unique([tenant_id, employee_code])
   @@unique([tenant_id, phone])
@@ -3277,6 +3299,53 @@ model AttendanceRecord {
   @@unique([tenant_id, employee_id, date])
   @@index([tenant_id, date])
   @@index([tenant_id, employee_id, date])
+}
+
+/// A reusable onboarding or offboarding step for the tenant.
+model ChecklistTemplate {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  /// ONBOARDING | OFFBOARDING
+  kind        String
+  title       String
+  description String?
+  sort_order  Int      @default(0)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, kind, title])
+  @@index([tenant_id, kind])
+  @@map("checklist_templates")
+}
+
+/// One step for one employee.
+///
+/// The title is **copied** from the template rather than referenced, so
+/// renaming or retiring a template does not rewrite the history of everyone
+/// who already completed it.
+model EmployeeChecklistItem {
+  id           String    @id @default(uuid())
+  tenant_id    String
+  employee_id  String
+  /// ONBOARDING | OFFBOARDING
+  kind         String
+  title        String
+  description  String?
+  sort_order   Int       @default(0)
+  completed_at DateTime?
+  completed_by String?
+  notes        String?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, employee_id, kind])
+  @@map("employee_checklist_items")
 }
 
 /// Something the business handed an employee and expects back.
