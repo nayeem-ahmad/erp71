@@ -39,9 +39,9 @@ referralsPortal: {
 },
 ```
 
-Every existing reference to `routes.referralsPortal` becomes `routes.referralsPortal.root`. The known call sites are the sidebar, the `(app)` layout redirect, and `select-account/page.tsx`; the implementation must grep for the rest rather than trust this list.
+Every existing reference to `routes.referralsPortal` becomes `routes.referralsPortal.root`. There are eight, in three files: [`layout.tsx`](../../../apps/frontend/src/app/(app)/layout.tsx) lines 101, 102, 216, 276 and 330; [`Sidebar.tsx`](../../../apps/frontend/src/components/Sidebar.tsx) line 217; [`auth-session.ts`](../../../apps/frontend/src/lib/auth-session.ts) lines 168 and 191. `select-account/page.tsx` uses the literal string `'/referrals'` twice and is unaffected.
 
-The layout's non-referee guard at [`layout.tsx:330`](../../../apps/frontend/src/app/(app)/layout.tsx#L330) tests `pathname.startsWith(routes.referralsPortal)`. Against `routes.referralsPortal.root` it keeps working and covers both new sub-routes, so no new gating is needed — but the `startsWith` argument must be updated to `.root` or it silently compares against an object.
+Four of those call sites are `startsWith` or equality tests that gate access. Against `routes.referralsPortal.root` they keep working and cover both new sub-routes, so no new gating logic is needed — but each argument must become `.root`, or it silently compares a path against an object and the guard stops firing.
 
 The sidebar's `refereeMode` branch ([`Sidebar.tsx:211`](../../../apps/frontend/src/components/Sidebar.tsx#L211)) gains two children beside Dashboard:
 
@@ -85,7 +85,9 @@ Bucketing rules, one per series:
 
 `earned_amount` sums `commission_amount` over rows with `status` in `EARNED` or `PAID`, matching the `total_earned_amount` rule already in `getLedger` — a `REVERSED` commission is not earned. Reversals are deliberately absent from the chart; the summary tiles and the signups list carry them.
 
-Signups and payments are bucketed in the service from rows `getLedger` already loads — no new query. Clicks need one: the existing `referralClick.count` stays, because `summary.clicks` is an all-time total and the buckets only cover twelve months, and a second grouped query is added for the buckets. `ReferralClick` already has `@@index([referee_id, occurred_at])`, so both are indexed.
+Signups and payments are bucketed in the service from rows `getLedger` already loads — no new query. Clicks need one: the existing `referralClick.count` stays, because `summary.clicks` is an all-time total and the buckets only cover twelve months, and a second query fetches just the `occurred_at` of clicks inside the window.
+
+That second query is a `findMany` selecting one column, not a `groupBy`. Prisma's `groupBy` can only group by a stored column, and grouping on a raw `DateTime` yields one group per distinct timestamp — useless for months. The alternative, `$queryRaw` with `date_trunc`, buys efficiency this workload does not need and costs testability against the mocked `db` object the existing specs use. Bucketing all four series in JS from fetched rows also means one shared helper covers them all. `ReferralClick` already has `@@index([referee_id, occurred_at])`, so both queries are indexed and the window is bounded.
 
 Month boundaries use the server's local timezone, consistent with the rest of the platform's date handling.
 
@@ -139,11 +141,11 @@ When `clicks` is zero the drop-off percentages are undefined — render an em da
 
 ### Interaction and responsiveness
 
-All three charts get hover tooltips: a crosshair with a shared tooltip on Chart A, per-mark tooltips on B and C. Hit targets are wider than the marks.
+Charts A and B get hover tooltips — a crosshair with a shared month tooltip on A, a per-month tooltip on B — with hit targets wider than the marks. Chart C does not: every bar already carries its count and its drop-off as visible text, so a tooltip would only repeat what is on screen.
 
 Each chart renders an empty state rather than empty axes when it has no data — a partner who has just joined sees a sentence explaining what will appear here, not three blank frames.
 
-At 360px, Chart A narrows to the last six months and Charts B and C stack full width. No horizontal body scroll at any width.
+Below the `md` breakpoint, Chart A narrows to the last six months — twelve month labels collide at that width, and squeezing or rotating them is not an honest fix. Charts B and C stack full width. No horizontal body scroll at any width.
 
 ## Signups page
 
@@ -165,7 +167,9 @@ Search, sorting, pagination, column preferences and CSV/Excel/PDF export come fr
 
 Columns: Date · Amount · Method · Reference · Notes. `mapPayment` already returns `notes` and the `RefereePayment` type already declares it, so only the expand panel needs new data.
 
-Each row expands to a panel listing the commissions that payout settled — business name, commission amount, date signed up — from the new `payments[].commissions`. A payment with no linked commissions (possible for rows written before the link existed) expands to a short explanatory line rather than an empty panel.
+A trailing action column opens a details modal listing the commissions that payout settled — business name, commission amount, date signed up — from the new `payments[].commissions`. A payment with no linked commissions (possible for rows written before the link existed) shows a short explanatory line rather than an empty panel.
+
+The modal is deliberate: `DataTable` has no row-expansion support, and adding it to a component shared by every list screen in the product is far more change than this page justifies. `ModalShell` is the established pattern for detail panels here, including on the admin side of this same module.
 
 `hideOnMobile` on Reference and Notes.
 
