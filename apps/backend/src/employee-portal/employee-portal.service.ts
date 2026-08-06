@@ -3,6 +3,7 @@ import { DatabaseService } from '../database/database.service';
 import { AttendanceService } from '../attendance/attendance.service';
 import { AttendanceCaptureService } from '../attendance/attendance-capture.service';
 import { ExpenseClaimsService } from '../expense-claims/expense-claims.service';
+import { EmployeeRecordsService } from '../employee-records/employee-records.service';
 import { ApplyForLeaveDto, ClockDto } from './employee-portal.dto';
 
 /**
@@ -23,7 +24,30 @@ export class EmployeePortalService {
         private readonly attendance: AttendanceService,
         private readonly capture: AttendanceCaptureService,
         private readonly claims: ExpenseClaimsService,
+        private readonly records: EmployeeRecordsService,
     ) {}
+
+    // ── Assets and policies the employee holds ────────────────────────────────
+
+    listMyAssets(tenantId: string, employeeId: string) {
+        return this.records.listAssignments(tenantId, { employeeId, outstandingOnly: true });
+    }
+
+    acknowledgeAsset(tenantId: string, employeeId: string, id: string) {
+        return this.records.acknowledgeAssignment(tenantId, employeeId, id);
+    }
+
+    listMyPolicies(tenantId: string, employeeId: string) {
+        return this.records.policiesForEmployee(tenantId, employeeId);
+    }
+
+    acknowledgePolicy(tenantId: string, employeeId: string, policyId: string) {
+        return this.records.acknowledgePolicy(tenantId, employeeId, policyId);
+    }
+
+    listMyDocuments(tenantId: string, employeeId: string) {
+        return this.records.listDocuments(tenantId, employeeId);
+    }
 
     // ── Expense claims ────────────────────────────────────────────────────────
     //

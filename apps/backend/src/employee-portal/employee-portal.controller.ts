@@ -138,6 +138,33 @@ export class EmployeePortalController {
         );
     }
 
+    // ── Assets, policies and documents ────────────────────────────────────────
+
+    @Get('assets')
+    listMyAssets(@Request() req: any) {
+        return this.service.listMyAssets(req.employee.tenant_id, req.employee.id);
+    }
+
+    @Patch('assets/:id/acknowledge')
+    acknowledgeAsset(@Request() req: any, @Param('id') id: string) {
+        return this.service.acknowledgeAsset(req.employee.tenant_id, req.employee.id, id);
+    }
+
+    @Get('policies')
+    listMyPolicies(@Request() req: any) {
+        return this.service.listMyPolicies(req.employee.tenant_id, req.employee.id);
+    }
+
+    @Patch('policies/:id/acknowledge')
+    acknowledgePolicy(@Request() req: any, @Param('id') id: string) {
+        return this.service.acknowledgePolicy(req.employee.tenant_id, req.employee.id, id);
+    }
+
+    @Get('documents')
+    listMyDocuments(@Request() req: any) {
+        return this.service.listMyDocuments(req.employee.tenant_id, req.employee.id);
+    }
+
     @Get('salary-payments')
     listSalaryPayments(@Request() req: any) {
         return this.service.listSalaryPayments(req.employee.tenant_id, req.employee.id);

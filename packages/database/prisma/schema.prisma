@@ -612,6 +612,10 @@ model Tenant {
   PayrollAdjustment          PayrollAdjustment[]
   ExpenseClaim               ExpenseClaim[]
   ExpenseClaimAttachment     ExpenseClaimAttachment[]
+  AssetAssignment            AssetAssignment[]
+  Policy                     Policy[]
+  PolicyAcknowledgement      PolicyAcknowledgement[]
+  EmployeeDocument           EmployeeDocument[]
 
   @@index([deleted_at])
 }
@@ -3151,6 +3155,9 @@ model Employee {
   PayrollLine             PayrollLine[]
   PayrollAdjustment       PayrollAdjustment[]
   ExpenseClaim            ExpenseClaim[]
+  AssetAssignment         AssetAssignment[]
+  PolicyAcknowledgement   PolicyAcknowledgement[]
+  EmployeeDocument        EmployeeDocument[]
 
   @@unique([tenant_id, employee_code])
   @@unique([tenant_id, phone])
@@ -3239,6 +3246,135 @@ model AttendanceRecord {
   @@unique([tenant_id, employee_id, date])
   @@index([tenant_id, date])
   @@index([tenant_id, employee_id, date])
+}
+
+/// Something the business handed an employee and expects back.
+///
+/// Not `FixedAsset`-only, and that is the load-bearing decision here: most
+/// assigned things — a SIM, a uniform, a set of keys — are below any
+/// capitalisation threshold and will never be a `FixedAsset`. So `item_name` is
+/// always present and `fixed_asset_id` is the optional link, rather than the
+/// other way round.
+///
+/// The accounting side of `FixedAsset` needs nothing from this: depreciation is
+/// unaffected by who is holding the laptop.
+model AssetAssignment {
+  id             String  @id @default(uuid())
+  tenant_id      String
+  employee_id    String
+  /// Set when the item is a capitalised asset. Null for a SIM or a uniform.
+  fixed_asset_id String?
+
+  item_name     String
+  serial_number String?
+  quantity      Int     @default(1)
+
+  assigned_on   DateTime  @db.Date
+  returned_on   DateTime? @db.Date
+  condition_out String?
+  condition_in  String?
+
+  /// When the employee confirmed they hold it, from the portal. The whole
+  /// point of the acknowledgement: an unacknowledged handover is one person's
+  /// word, which is exactly the situation this model exists to end.
+  acknowledged_at DateTime?
+
+  notes      String?
+  created_by String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant     Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employee   Employee    @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  fixedAsset FixedAsset? @relation(fields: [fixed_asset_id], references: [id])
+
+  @@index([tenant_id, employee_id])
+  @@index([tenant_id, returned_on])
+  @@map("asset_assignments")
+}
+
+/// A company policy or notice published to employees.
+model Policy {
+  id                       String    @id @default(uuid())
+  tenant_id                String
+  title                    String
+  /// POLICY | NOTICE — a handbook section versus a one-off announcement.
+  kind                     String    @default("POLICY")
+  body                     String
+  /// Null while a draft. Employees only ever see published ones.
+  published_at             DateTime?
+  /// Whether every employee must acknowledge it. Acknowledgement is the part
+  /// with actual value — a PDF on a shared drive already solves distribution.
+  requires_acknowledgement Boolean   @default(false)
+  effective_from           DateTime? @db.Date
+
+  created_by String?
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  tenant           Tenant                  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  acknowledgements PolicyAcknowledgement[]
+
+  @@index([tenant_id, published_at])
+  @@map("policies")
+}
+
+model PolicyAcknowledgement {
+  id              String   @id @default(uuid())
+  tenant_id       String
+  policy_id       String
+  employee_id     String
+  acknowledged_at DateTime @default(now())
+
+  tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  policy   Policy   @relation(fields: [policy_id], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@unique([policy_id, employee_id])
+  @@index([tenant_id, employee_id])
+  @@map("policy_acknowledgements")
+}
+
+/// A document held on an employee's file — contract, NID scan, certificate.
+///
+/// `Employee` stores an encrypted NID *string* and no files at all. This is
+/// what HR actually spends its filing time on.
+///
+/// Same `uploadBuffer()` + `storage_key` rule as expense receipts: without the
+/// key the file cannot be purged and bills forever.
+model EmployeeDocument {
+  id          String @id @default(uuid())
+  tenant_id   String
+  employee_id String
+
+  /// CONTRACT | OFFER_LETTER | NID | PASSPORT | CERTIFICATE | OTHER. A plain
+  /// string rather than an enum so a new kind does not need a migration.
+  kind  String @default("OTHER")
+  title String
+
+  file_url    String
+  file_name   String
+  mime_type   String?
+  file_size   Int?
+  storage_key String?
+
+  /// Drives the expiry reminder. Null for a document that does not expire.
+  expires_on         DateTime? @db.Date
+  /// Set when a reminder has been sent, so the cron does not send it daily.
+  expiry_notified_at DateTime?
+
+  uploaded_by String?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  deleted_at  DateTime?
+
+  tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, employee_id])
+  @@index([tenant_id, expires_on])
+  @@map("employee_documents")
 }
 
 /// An employee's expense claim.
@@ -3839,6 +3975,7 @@ model FixedAsset {
 
   tenant              Tenant                   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   depreciationEntries AssetDepreciationEntry[]
+  AssetAssignment     AssetAssignment[]
 
   @@unique([tenant_id, asset_code])
   @@index([tenant_id])

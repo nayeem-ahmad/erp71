@@ -4,6 +4,7 @@ import { EmployeePortalService } from './employee-portal.service';
 import { AttendanceService } from '../attendance/attendance.service';
 import { AttendanceCaptureService } from '../attendance/attendance-capture.service';
 import { ExpenseClaimsService } from '../expense-claims/expense-claims.service';
+import { EmployeeRecordsService } from '../employee-records/employee-records.service';
 import { DatabaseService } from '../database/database.service';
 
 describe('EmployeePortalService', () => {
@@ -12,6 +13,7 @@ describe('EmployeePortalService', () => {
     let attendance: any;
     let capture: any;
     let claims: any;
+    let records: any;
 
     beforeEach(async () => {
         db = {
@@ -45,6 +47,13 @@ describe('EmployeePortalService', () => {
             addAttachment: jest.fn().mockResolvedValue({}),
             removeAttachment: jest.fn().mockResolvedValue({}),
         };
+        records = {
+            listAssignments: jest.fn().mockResolvedValue([]),
+            acknowledgeAssignment: jest.fn().mockResolvedValue({}),
+            policiesForEmployee: jest.fn().mockResolvedValue([]),
+            acknowledgePolicy: jest.fn().mockResolvedValue({}),
+            listDocuments: jest.fn().mockResolvedValue([]),
+        };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -53,6 +62,7 @@ describe('EmployeePortalService', () => {
                 { provide: AttendanceService, useValue: attendance },
                 { provide: AttendanceCaptureService, useValue: capture },
                 { provide: ExpenseClaimsService, useValue: claims },
+                { provide: EmployeeRecordsService, useValue: records },
             ],
         }).compile();
 
@@ -239,6 +249,30 @@ describe('EmployeePortalService', () => {
             expect(claims.submit).toHaveBeenCalledWith('t1', 'c1', 'emp-1');
             expect(claims.cancel).toHaveBeenCalledWith('t1', 'c1', 'emp-1');
             expect(claims.removeAttachment).toHaveBeenCalledWith('t1', 'att-1', 'emp-1');
+        });
+    });
+    describe('assets, policies and documents', () => {
+        it('shows only assets the employee still holds', async () => {
+            // A returned laptop is not something to acknowledge.
+            await service.listMyAssets('t1', 'emp-1');
+            expect(records.listAssignments).toHaveBeenCalledWith('t1', {
+                employeeId: 'emp-1', outstandingOnly: true,
+            });
+        });
+
+        it('acknowledges an asset as the token employee', async () => {
+            await service.acknowledgeAsset('t1', 'emp-1', 'a-1');
+            expect(records.acknowledgeAssignment).toHaveBeenCalledWith('t1', 'emp-1', 'a-1');
+        });
+
+        it('acknowledges a policy as the token employee', async () => {
+            await service.acknowledgePolicy('t1', 'emp-1', 'pol-1');
+            expect(records.acknowledgePolicy).toHaveBeenCalledWith('t1', 'emp-1', 'pol-1');
+        });
+
+        it('scopes documents to the token employee', async () => {
+            await service.listMyDocuments('t1', 'emp-1');
+            expect(records.listDocuments).toHaveBeenCalledWith('t1', 'emp-1');
         });
     });
 });

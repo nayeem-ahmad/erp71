@@ -79,6 +79,7 @@ import { EmployeePortalModule } from './employee-portal/employee-portal.module';
 import { WorkSchedulesModule } from './work-schedules/work-schedules.module';
 import { PayrollModule } from './payroll/payroll.module';
 import { ExpenseClaimsModule } from './expense-claims/expense-claims.module';
+import { EmployeeRecordsModule } from './employee-records/employee-records.module';
 import { BrandsModule } from './brands/brands.module';
 import { CrmInteractionsModule } from './crm-interactions/crm-interactions.module';
 import { CrmFollowUpsModule } from './crm-follow-ups/crm-follow-ups.module';
@@ -187,6 +188,7 @@ import { ShortLinksModule } from './short-links/short-links.module';
         WorkSchedulesModule,
         PayrollModule,
         ExpenseClaimsModule,
+        EmployeeRecordsModule,
         BrandsModule,
         CrmInteractionsModule,
         CrmFollowUpsModule,
