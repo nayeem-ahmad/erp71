@@ -18,6 +18,26 @@ export type AdminTenantFeatures = {
     effective: PlatformFeatures;
 };
 
+/**
+ * One tenant's own outbound sender, as a platform admin sees it. Everything
+ * blank plus both switches off means "this tenant sends from the platform
+ * sender", which is the state every workspace starts in. The access token comes
+ * back masked — sending the mask straight back leaves the stored value alone.
+ */
+export type AdminTenantMessagingIdentity = {
+    email_enabled: boolean;
+    email_from: string;
+    email_from_name: string;
+    email_reply_to: string;
+    whatsapp_enabled: boolean;
+    whatsapp_phone_number_id: string;
+    whatsapp_access_token: string;
+    whatsapp_api_version: string;
+    notes: string;
+    updated_at: string | null;
+    updated_by: string | null;
+};
+
 /** A tenant's active/trialing add-on subscription, as shown to a platform admin. */
 export type AdminTenantAddonSubscription = {
     addon: {
@@ -1939,6 +1959,36 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    getAdminTenantMessagingIdentity: (tenantId: string): Promise<AdminTenantMessagingIdentity> =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/messaging-identity`),
+    /** Omit a field to keep it; send an empty string to clear it. */
+    updateAdminTenantMessagingIdentity: (
+        tenantId: string,
+        data: Partial<Omit<AdminTenantMessagingIdentity, 'updated_at' | 'updated_by'>>,
+    ): Promise<AdminTenantMessagingIdentity> =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/messaging-identity`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    testAdminTenantMessagingEmail: (
+        tenantId: string,
+        to: string,
+    ): Promise<{ sender: 'tenant' | 'platform'; from: string | null }> =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/messaging-identity/test-email`, {
+            method: 'POST',
+            body: JSON.stringify({ to }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    testAdminTenantMessagingWhatsApp: (
+        tenantId: string,
+        to: string,
+    ): Promise<{ sender: 'tenant' | 'platform'; phone_number_id: string | null }> =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/messaging-identity/test-whatsapp`, {
+            method: 'POST',
+            body: JSON.stringify({ to }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     setAdminTenantBusinessType: (tenantId: string, businessType: string) => fetchWithAuth(`/admin/tenants/${tenantId}/business-type`, {
         method: 'PATCH',
         body: JSON.stringify({ businessType }),

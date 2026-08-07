@@ -245,7 +245,7 @@ export class CrmCampaignsService {
                         throw new Error('Insufficient SMS credits');
                     }
                 } else if (channel === 'WHATSAPP') {
-                    await this.whatsapp.sendMessage(customer.phone, message);
+                    await this.whatsapp.sendMessage(customer.phone, message, { tenantId });
                 } else if (channel === 'EMAIL') {
                     if (!customer.email) {
                         throw new Error('Customer has no email address on file');
@@ -254,6 +254,7 @@ export class CrmCampaignsService {
                         customer.email,
                         subject ?? '',
                         message.replace(/\n/g, '<br>'),
+                        { tenantId },
                     );
                 }
                 await this.db.crmCampaignRecipient.updateMany({

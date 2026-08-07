@@ -112,6 +112,9 @@ describe('CrmCampaignsService', () => {
             await runDispatch(null, 'WHATSAPP');
 
             expect(whatsapp.sendMessage).toHaveBeenCalledTimes(2);
+            expect(whatsapp.sendMessage).toHaveBeenCalledWith('01700000001', 'Hello there', {
+                tenantId: 'tenant-1',
+            });
             expect(db.crmCampaign.update).toHaveBeenCalledWith({
                 where: { id: 'camp-1' },
                 data: expect.objectContaining({ delivered_count: 2, failed_count: 0 }),
@@ -123,8 +126,14 @@ describe('CrmCampaignsService', () => {
 
             await runDispatch('Big Sale', 'EMAIL');
 
-            expect(email.sendCustom).toHaveBeenCalledWith('c1@example.com', 'Big Sale', 'Hello there');
-            expect(email.sendCustom).toHaveBeenCalledWith('c2@example.com', 'Big Sale', 'Hello there');
+            // The tenant id rides along so the send picks up that tenant's own
+            // sender identity when a platform admin has configured one.
+            expect(email.sendCustom).toHaveBeenCalledWith('c1@example.com', 'Big Sale', 'Hello there', {
+                tenantId: 'tenant-1',
+            });
+            expect(email.sendCustom).toHaveBeenCalledWith('c2@example.com', 'Big Sale', 'Hello there', {
+                tenantId: 'tenant-1',
+            });
             expect(db.crmCampaign.update).toHaveBeenCalledWith({
                 where: { id: 'camp-1' },
                 data: expect.objectContaining({ delivered_count: 2, failed_count: 0 }),
