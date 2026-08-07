@@ -62,6 +62,8 @@ type TenantResult = {
     productsWithoutBasis: number;
     saleLinesRestated: number;
     saleLinesStillUncosted: number;
+    returnLinesCosted: number;
+    returnLinesStillUncosted: number;
 };
 
 async function backfillTenant(tenantId: string, tenantName: string): Promise<TenantResult> {
@@ -162,6 +164,43 @@ async function backfillTenant(tenantId: string, tenantName: string): Promise<Ten
         }
     }
 
+    // Returns recorded before `unit_cost_at_return` existed carry no cost, so a
+    // refund reduces revenue while leaving COGS untouched. Fill them from the
+    // sale line the goods came off — after the restatement above, so they
+    // inherit the corrected cost rather than the old standard one.
+    //
+    // Only lines tied to a sale can be filled. A parentless return has nothing
+    // to inherit from and stays null: the pool's average today is not what
+    // those goods cost whenever they were actually sold.
+    const returnLines = await prisma.salesReturnItem.findMany({
+        where: {
+            return: { tenant_id: tenantId },
+            unit_cost_at_return: null,
+            sale_item_id: { not: null },
+        },
+        select: { id: true, sale_item_id: true },
+    });
+    const saleItemCosts = new Map<string, number>();
+    if (returnLines.length > 0) {
+        const items = await prisma.saleItem.findMany({
+            where: { id: { in: returnLines.map((l) => l.sale_item_id!) }, unit_cost_at_sale: { not: null } },
+            select: { id: true, unit_cost_at_sale: true },
+        });
+        for (const item of items) {
+            saleItemCosts.set(item.id, Number(item.unit_cost_at_sale));
+        }
+    }
+    const fillableReturnLines = returnLines.filter((l) => saleItemCosts.has(l.sale_item_id!));
+
+    if (APPLY) {
+        for (const line of fillableReturnLines) {
+            await prisma.salesReturnItem.update({
+                where: { id: line.id },
+                data: { unit_cost_at_return: saleItemCosts.get(line.sale_item_id!) },
+            });
+        }
+    }
+
     // What the replay could not cost — the honest measure of how far this
     // tenant's gross-profit reports can be trusted afterwards. Counted against
     // the restatement map rather than the database so a dry run reports the
@@ -186,6 +225,8 @@ async function backfillTenant(tenantId: string, tenantName: string): Promise<Ten
         productsWithoutBasis: withoutBasis,
         saleLinesRestated: restatements.size,
         saleLinesStillUncosted: stillUncosted,
+        returnLinesCosted: fillableReturnLines.length,
+        returnLinesStillUncosted: returnLines.length - fillableReturnLines.length,
     };
 }
 
@@ -219,6 +260,8 @@ async function main() {
         console.log(`  products with no basis    : ${r.productsWithoutBasis}`);
         console.log(`  sale lines restated       : ${r.saleLinesRestated}`);
         console.log(`  sale lines left uncosted  : ${r.saleLinesStillUncosted}`);
+        console.log(`  return lines costed       : ${r.returnLinesCosted}`);
+        console.log(`  return lines left uncosted: ${r.returnLinesStillUncosted}`);
         console.log('');
     }
 

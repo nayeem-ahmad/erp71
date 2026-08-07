@@ -49,6 +49,11 @@ export const routes = {
             customers: '/sales/reports/customers',
             consolidated: '/sales/reports/consolidated',
             branchReport: '/sales/reports/branch-report',
+            grossProfit: '/sales/reports/gross-profit',
+            grossProfitExceptions: '/sales/reports/gross-profit/exceptions',
+            grossProfitSalespeople: '/sales/reports/gross-profit/salespeople',
+            grossProfitBridge: '/sales/reports/gross-profit/bridge',
+            grossProfitCoverage: '/sales/reports/gross-profit/coverage',
         },
     },
 

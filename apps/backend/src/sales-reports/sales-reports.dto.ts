@@ -247,3 +247,96 @@ export class GetCustomerRetentionDto {
     @Max(730)
     lapsedAfterDays?: number;
 }
+
+/** How the salesperson margin report attributes a sale. */
+export const SALESPERSON_GROUPINGS = ['user', 'counter'] as const;
+export type SalespersonGrouping = (typeof SALESPERSON_GROUPINGS)[number];
+
+export class GetMarginExceptionsDto {
+    @IsOptional()
+    @IsUUID()
+    storeId?: string;
+
+    @IsOptional()
+    @IsString()
+    from?: string;
+
+    @IsOptional()
+    @IsString()
+    to?: string;
+
+    /**
+     * Lines whose margin comes in under this percentage are reported. Defaults
+     * to 0, i.e. only goods sold at or below cost — the floor nobody has to
+     * justify. Negative values are allowed so a reader can ask for the truly
+     * bad lines only ("worse than −20%") on a catalog where thin margins are
+     * normal.
+     */
+    @IsOptional()
+    @Type(() => Number)
+    @Min(-100)
+    @Max(100)
+    marginFloorPct?: number;
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    @Max(500)
+    limit?: number;
+}
+
+export class GetGrossProfitBySalespersonDto {
+    @IsOptional()
+    @IsUUID()
+    storeId?: string;
+
+    @IsOptional()
+    @IsString()
+    from?: string;
+
+    @IsOptional()
+    @IsString()
+    to?: string;
+
+    @IsOptional()
+    @IsIn(SALESPERSON_GROUPINGS)
+    groupBy?: SalespersonGrouping;
+}
+
+export class GetMarginBridgeDto {
+    @IsOptional()
+    @IsUUID()
+    storeId?: string;
+
+    @IsString()
+    from: string;
+
+    @IsString()
+    to: string;
+
+    /**
+     * The period being compared against. Explicit rather than derived: a
+     * like-for-like comparison is often not the immediately preceding window —
+     * Ramadan against Ramadan, not Ramadan against the month before it.
+     */
+    @IsString()
+    compareFrom: string;
+
+    @IsString()
+    compareTo: string;
+}
+
+export class GetCostCoverageDto {
+    @IsOptional()
+    @IsUUID()
+    storeId?: string;
+
+    @IsOptional()
+    @IsString()
+    from?: string;
+
+    @IsOptional()
+    @IsString()
+    to?: string;
+}

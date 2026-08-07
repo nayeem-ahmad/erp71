@@ -2511,14 +2511,23 @@ model SalesReturn {
 }
 
 model SalesReturnItem {
-  id            String  @id @default(uuid())
-  return_id     String
+  id                  String   @id @default(uuid())
+  return_id           String
   /// Null when the return has no parent sale; `product_id` then identifies the
   /// goods and `refund_amount` carries the agreed value.
-  sale_item_id  String?
-  product_id    String
-  quantity      Int
-  refund_amount Decimal @db.Decimal(12, 2)
+  sale_item_id        String?
+  product_id          String
+  quantity            Int
+  refund_amount       Decimal  @db.Decimal(12, 2)
+  /// What the returned goods cost, snapshotted when the return is recorded —
+  /// the original sale line's `unit_cost_at_sale` where there is one, otherwise
+  /// the cost pool's average at the time of return.
+  ///
+  /// Without it a return reduced revenue while leaving COGS untouched, so every
+  /// refund overstated gross profit by the whole cost of the goods coming back.
+  /// Nullable because a return of stock nobody ever costed still has to be
+  /// recordable, and zero would claim the goods were free.
+  unit_cost_at_return Decimal? @db.Decimal(12, 2)
 
   // Relations
   return    SalesReturn @relation(fields: [return_id], references: [id], onDelete: Cascade)
