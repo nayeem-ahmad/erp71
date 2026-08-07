@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { COSTING_METHODS } from '../database/product-cost.utils';
 
 export class UpdateInventorySettingsDto {
     @IsOptional()
@@ -45,6 +46,15 @@ export class UpdateInventorySettingsDto {
     @IsInt()
     @Min(0)
     discrepancyApprovalThreshold?: number;
+
+    /**
+     * Which cost a sale snapshots, and therefore what every gross-profit report
+     * is computed from. Changing it affects new sales only — past sales keep
+     * the cost they were recorded with.
+     */
+    @IsOptional()
+    @IsIn(COSTING_METHODS as unknown as string[])
+    costingMethod?: string;
 }
 
 export class CreateInventoryReasonDto {

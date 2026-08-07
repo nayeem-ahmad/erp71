@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, Logger } from '@nes
 import { DatabaseService } from '../database/database.service';
 import { CreateSaleDto, FinalizeSaleDto, UpdateSaleDto } from './sale.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
+import { resolveProductCosts } from '../database/product-cost.utils';
 import { autoPostFromRules, voidAutoPostedVoucher, type AutoPostResult } from '../accounting/posting.utils';
 import { classifyPaymentMode } from './classify-payment-mode';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
@@ -107,30 +108,16 @@ export class SalesService {
         const warehouseId = await resolveWarehouseId(tx, tenantId, dto.storeId, dto.warehouseId, 'sale');
         const productIds = dto.items.map((item) => item.productId);
 
-        const [saleProducts, productPrices] = await Promise.all([
+        const [saleProducts, costByProductId] = await Promise.all([
             tx.product.findMany({
                 where: { tenant_id: tenantId, id: { in: productIds } },
                 select: { id: true, name: true, warranty_enabled: true },
             }),
-            tx.productPrice.findMany({
-                where: {
-                    tenant_id: tenantId,
-                    product_id: { in: productIds },
-                    cost: { not: null },
-                    OR: [{ store_id: dto.storeId }, { store_id: null }],
-                },
-                orderBy: { effective_from: 'desc' },
-                select: { product_id: true, store_id: true, cost: true },
-            }),
+            // Weighted average by default, price-list cost if the tenant chose
+            // LATEST_COST. Resolved before any stock moves, so the cost
+            // snapshotted here is the one the goods actually leave at.
+            resolveProductCosts(tx, { tenantId, storeId: dto.storeId, productIds }),
         ]);
-
-        // Build cost map — store-specific price overrides global
-        const costByProductId = new Map<string, number>();
-        for (const pp of productPrices) {
-            if (!costByProductId.has(pp.product_id) || pp.store_id === dto.storeId) {
-                costByProductId.set(pp.product_id, Number(pp.cost));
-            }
-        }
 
         const productById = new Map<string, { id: string; name: string; warranty_enabled: boolean }>(
             saleProducts.map((product: any) => [product.id, product]),
@@ -260,7 +247,10 @@ export class SalesService {
                 movementType: 'SALE',
                 referenceType: 'SALE',
                 referenceId: sale.id,
-                unitCost: unitCostAtSale ?? item.priceAtSale,
+                // No unitCost: a sale is a quantity-only movement, stamped by the
+                // pool with the average the goods left at. This used to fall back
+                // to the selling price, recording a sale of uncosted stock as if
+                // it had cost full retail.
             });
 
             if (product?.warranty_enabled) {
@@ -776,24 +766,14 @@ export class SalesService {
                 // Delete old items
                 await tx.saleItem.deleteMany({ where: { sale_id: id } });
 
-                // Fetch current cost for new items
-                const editProductIds = dto.items.map((i) => i.productId);
-                const editPrices = await tx.productPrice.findMany({
-                    where: {
-                        tenant_id: tenantId,
-                        product_id: { in: editProductIds },
-                        cost: { not: null },
-                        OR: [{ store_id: sale.store_id }, { store_id: null }],
-                    },
-                    orderBy: { effective_from: 'desc' },
-                    select: { product_id: true, store_id: true, cost: true },
+                // Re-cost the replacement lines. This runs after the reversal
+                // movements above have already put the old quantities back, so
+                // the pool it reads is the one the edited sale really draws on.
+                const editCostMap = await resolveProductCosts(tx, {
+                    tenantId,
+                    storeId: sale.store_id,
+                    productIds: dto.items.map((i) => i.productId),
                 });
-                const editCostMap = new Map<string, number>();
-                for (const pp of editPrices) {
-                    if (!editCostMap.has(pp.product_id) || pp.store_id === sale.store_id) {
-                        editCostMap.set(pp.product_id, Number(pp.cost));
-                    }
-                }
 
                 // Create new items and decrement stock
                 for (const item of dto.items) {
@@ -818,7 +798,10 @@ export class SalesService {
                             movementType: 'SALE_EDIT',
                             referenceType: 'SALE',
                             referenceId: id,
-                            unitCost: unitCostAtSale ?? item.priceAtSale,
+                            // No unitCost: a sale is a quantity-only movement, stamped by the
+                            // pool with the average the goods left at. This used to fall back
+                            // to the selling price, recording a sale of uncosted stock as if
+                            // it had cost full retail.
                         });
                     }
                 }
