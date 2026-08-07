@@ -18,6 +18,8 @@ export function extractTenantPlan(
   features: Record<string, unknown>;
   dashboardPreference: string;
   permissions: string[];
+  /** The user's role in this tenant — OWNER bypasses permission checks. */
+  role: string | null;
 } {
   const tenants = me?.tenants ?? [];
   const tenant = tenants.find((entry: { id: string }) => entry.id === tenantId) ?? tenants[0];
@@ -26,5 +28,6 @@ export function extractTenantPlan(
     features: (tenant?.subscription?.plan?.features_json ?? {}) as Record<string, unknown>,
     dashboardPreference: tenant?.dashboard_preference ?? 'AUTO',
     permissions: Array.isArray(tenant?.permissions) ? tenant.permissions : [],
+    role: tenant?.role ?? null,
   };
 }

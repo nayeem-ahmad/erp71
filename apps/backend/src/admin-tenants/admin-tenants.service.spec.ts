@@ -129,6 +129,7 @@ describe('AdminTenantsService', () => {
 
     auditService = {
       log: jest.fn().mockResolvedValue(undefined),
+      logForUserTenants: jest.fn().mockResolvedValue(undefined),
     };
 
     passwordResetService = {
@@ -465,7 +466,7 @@ describe('AdminTenantsService', () => {
       expect(auditService.log).toHaveBeenCalledWith(
         'tenant.suspend',
         'Tenant',
-        { userId: 'admin-1' },
+        { userId: 'admin-1', tenantId: 't-1' },
         't-1',
         { reason: 'Abuse' },
       );
@@ -550,7 +551,7 @@ describe('AdminTenantsService', () => {
       expect(auditService.log).toHaveBeenCalledWith(
         'tenant.impersonate',
         'Tenant',
-        { userId: 'admin-1' },
+        { userId: 'admin-1', tenantId: 't-1' },
         't-1',
         expect.objectContaining({
           impersonated_user_id: 'u-owner',
@@ -581,7 +582,7 @@ describe('AdminTenantsService', () => {
       expect(auditService.log).toHaveBeenCalledWith(
         'tenant.demo_data.load',
         'Tenant',
-        { userId: 'admin-1' },
+        { userId: 'admin-1', tenantId: 't-1' },
         't-1',
         expect.objectContaining({ batchId: 'batch-1', batchNumber: 1 }),
       );
@@ -629,7 +630,7 @@ describe('AdminTenantsService', () => {
       expect(auditService.log).toHaveBeenCalledWith(
         'tenant.delete',
         'Tenant',
-        { userId: 'admin-1' },
+        { userId: 'admin-1', tenantId: 't-1' },
         't-1',
         expect.objectContaining({
           reason: 'Cleanup',
@@ -1080,7 +1081,7 @@ describe('AdminTenantsService', () => {
           expect(auditService.log).toHaveBeenCalledWith(
               'tenant.business_type.set',
               'Tenant',
-              { userId: 'admin1' },
+              { userId: 'admin1', tenantId: 't1' },
               't1',
               { business_type: 'SURGICAL_MEDICAL', previous_business_type: null },
           );
@@ -1159,7 +1160,7 @@ describe('AdminTenantsService', () => {
           expect(auditService.log).toHaveBeenCalledWith(
               'tenant.features.update',
               'Tenant',
-              { userId: 'admin1' },
+              { userId: 'admin1', tenantId: 't1' },
               't1',
               { feature_overrides: { voice: true } },
           );
@@ -1218,7 +1219,7 @@ describe('AdminTenantsService', () => {
           expect(auditService.log).toHaveBeenCalledWith(
               'tenant.catalog.import',
               'Tenant',
-              { userId: 'admin1' },
+              { userId: 'admin1', tenantId: 't1' },
               't1',
               { business_type: 'SURGICAL_MEDICAL', created: 1173, skipped: 0, groups: 24, subgroups: 103, brands: 42 },
           );
@@ -1277,7 +1278,7 @@ describe('AdminTenantsService', () => {
         expect.objectContaining({ tenantId: 't1', addonId: 'addon-1', status: 'ACTIVE', providerName: 'manual' }),
       );
       expect(auditService.log).toHaveBeenCalledWith(
-        'tenant.addon.grant', 'Tenant', { userId: 'admin1' }, 't1',
+        'tenant.addon.grant', 'Tenant', { userId: 'admin1', tenantId: 't1' }, 't1',
         expect.objectContaining({ addonCode: 'AI_ASSISTANT', durationDays: 30 }),
       );
       expect(result).toEqual([{ addon: { id: 'addon-1', code: 'AI_ASSISTANT' } }]);
@@ -1300,7 +1301,7 @@ describe('AdminTenantsService', () => {
 
       expect(addonModulesService.revokeSubscriptionNow).toHaveBeenCalledWith('t1', 'AI_ASSISTANT');
       expect(auditService.log).toHaveBeenCalledWith(
-        'tenant.addon.revoke', 'Tenant', { userId: 'admin1' }, 't1',
+        'tenant.addon.revoke', 'Tenant', { userId: 'admin1', tenantId: 't1' }, 't1',
         expect.objectContaining({ addonCode: 'AI_ASSISTANT' }),
       );
       expect(result).toEqual([]);

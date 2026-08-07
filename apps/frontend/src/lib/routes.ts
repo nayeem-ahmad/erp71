@@ -233,7 +233,20 @@ export const routes = {
         },
     },
 
-    referralsPortal: '/referrals',
+    referralsPortal: {
+        root: '/referrals',
+        signups: '/referrals/signups',
+        payments: '/referrals/payments',
+    },
+
+    /**
+     * Employee self-service. Short path because employees type it. One route
+     * with tabs rather than four — this is a phone screen and a tab strip beats
+     * a back button for four small views.
+     */
+    employeePortal: {
+        root: '/my',
+    },
     billing: '/billing',
     team: '/team',
     help: '/help',

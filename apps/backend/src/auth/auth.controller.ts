@@ -5,6 +5,7 @@ import { AuthService } from './auth.service';
 import { SignupDto, LoginDto, CreateStoreDto, UpdateProfileDto, ChangePasswordDto } from './auth.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { TotpService } from './totp.service';
+import { extractRequestMeta } from '../audit/audit-route.util';
 
 @Controller('auth')
 export class AuthController {
@@ -15,21 +16,21 @@ export class AuthController {
 
     @Throttle({ default: { ttl: 60_000, limit: 5 } })
     @Post('signup')
-    async signup(@Body() dto: SignupDto) {
-        return this.authService.signup(dto);
+    async signup(@Body() dto: SignupDto, @Request() req) {
+        return this.authService.signup(dto, extractRequestMeta(req));
     }
 
     @Throttle({ default: { ttl: 60_000, limit: 10 } })
     @Post('login')
-    async login(@Body() dto: LoginDto) {
-        return this.authService.login(dto);
+    async login(@Body() dto: LoginDto, @Request() req) {
+        return this.authService.login(dto, extractRequestMeta(req));
     }
 
     @UseGuards(JwtAuthGuard)
     @HttpCode(HttpStatus.NO_CONTENT)
     @Post('logout')
     async logout(@Request() req) {
-        await this.authService.logout(req.user.userId);
+        await this.authService.logout(req.user.userId, extractRequestMeta(req));
     }
 
     @Throttle({ default: { ttl: 60_000, limit: 10 } })
@@ -94,7 +95,7 @@ export class AuthController {
     @Throttle({ default: { ttl: 60_000, limit: 5 } })
     @Post('change-password')
     async changePassword(@Request() req, @Body() dto: ChangePasswordDto) {
-        await this.authService.changePassword(req.user.userId, dto);
+        await this.authService.changePassword(req.user.userId, dto, extractRequestMeta(req));
         return { message: 'Password changed successfully' };
     }
 
@@ -147,8 +148,8 @@ export class AuthController {
 
     @Throttle({ default: { ttl: 60_000, limit: 10 } })
     @Post('2fa/verify')
-    async totpVerify(@Body() body: { userId: string; code: string }) {
+    async totpVerify(@Body() body: { userId: string; code: string }, @Request() req) {
         await this.totpService.verifyTotpForLogin(body.userId, body.code);
-        return this.authService.completeTwoFactorLogin(body.userId);
+        return this.authService.completeTwoFactorLogin(body.userId, extractRequestMeta(req));
     }
 }

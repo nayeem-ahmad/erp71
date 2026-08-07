@@ -31,7 +31,9 @@ export class PasswordResetService {
 
         // Fire-and-forget — don't block the HTTP response on SMTP delivery
         this.email.sendPasswordReset(user.email, rawToken);
-        this.audit.log('PASSWORD_RESET_REQUESTED', 'User', { userId: user.id }, user.id).catch(() => {});
+        this.audit
+            .logForUserTenants('PASSWORD_RESET_REQUESTED', 'User', { userId: user.id }, user.id)
+            .catch(() => {});
     }
 
     async resetPassword(rawToken: string, newPassword: string): Promise<void> {
@@ -67,7 +69,9 @@ export class PasswordResetService {
                 await tx.emailVerificationToken.deleteMany({ where: { user_id: record.user_id } });
             }
         });
-        this.audit.log('PASSWORD_RESET_COMPLETED', 'User', { userId: record.user_id }, record.user_id).catch(() => {});
+        this.audit
+            .logForUserTenants('PASSWORD_RESET_COMPLETED', 'User', { userId: record.user_id }, record.user_id)
+            .catch(() => {});
     }
 
     async requestRefereeInvite(emailAddress: string, name: string, referralCode: string): Promise<void> {
@@ -85,6 +89,10 @@ export class PasswordResetService {
         });
 
         this.email.sendRefereeLoginInvite(user.email, name, rawToken, referralCode);
-        this.audit.log('REFEREE_LOGIN_INVITE_SENT', 'Referee', { userId: user.id }, user.id, { email: user.email }).catch(() => {});
+        this.audit
+            .logForUserTenants('REFEREE_LOGIN_INVITE_SENT', 'Referee', { userId: user.id }, user.id, {
+                email: user.email,
+            })
+            .catch(() => {});
     }
 }

@@ -2,12 +2,13 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ShieldCheck, Store, ChevronRight, Loader2, LogOut, Gift } from 'lucide-react';
+import { ShieldCheck, Store, ChevronRight, Loader2, LogOut, Gift, UserRound } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import {
     applyPlatformAdminContext,
     applyRefereeContext,
+    applyEmployeeContext,
     applyTenantContext,
     getLoginContexts,
     clearAuthSession,
@@ -29,12 +30,15 @@ function SelectAccountContent() {
     useEffect(() => {
         api.getMe()
             .then((data: any) => {
-                const { isPlatformAdmin, isReferee, tenants, count } = getLoginContexts(data);
+                const { isPlatformAdmin, isReferee, isEmployee, tenants, count } = getLoginContexts(data);
                 // Nothing ambiguous to choose — resolve automatically.
                 if (count <= 1) {
                     if (tenants.length === 1) {
                         applyTenantContext(tenants[0]);
                         router.replace(shopRedirect);
+                    } else if (isEmployee) {
+                        applyEmployeeContext(data.employee);
+                        router.replace('/my');
                     } else if (isReferee) {
                         applyRefereeContext();
                         router.replace('/referrals');
@@ -66,6 +70,11 @@ function SelectAccountContent() {
         router.replace('/referrals');
     };
 
+    const chooseEmployee = () => {
+        applyEmployeeContext(me?.employee);
+        router.replace('/my');
+    };
+
     const chooseTenant = (tenant: any) => {
         applyTenantContext(tenant);
         router.replace(shopRedirect);
@@ -84,7 +93,7 @@ function SelectAccountContent() {
         );
     }
 
-    const { isPlatformAdmin, isReferee, tenants } = getLoginContexts(me);
+    const { isPlatformAdmin, isReferee, isEmployee, tenants } = getLoginContexts(me);
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-canvas p-4 font-sans text-gray-900">
@@ -105,6 +114,23 @@ function SelectAccountContent() {
                     )}
 
                     <div className="space-y-3">
+                        {isEmployee && (
+                            <button
+                                type="button"
+                                onClick={chooseEmployee}
+                                className="w-full flex items-center gap-3 p-4 rounded-xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all duration-150 text-left group"
+                            >
+                                <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
+                                    <UserRound className="w-5 h-5" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="font-semibold text-sm tracking-tight">{t.employeePortal.workspace.title}</p>
+                                    <p className="text-xs text-gray-500">{t.employeePortal.workspace.description}</p>
+                                </div>
+                                <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                            </button>
+                        )}
+
                         {isReferee && (
                             <button
                                 type="button"

@@ -5,6 +5,8 @@ import { User, Phone, Mail, Calendar, Briefcase } from 'lucide-react';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
+import { hasPermission, isOwner } from '@/lib/permissions';
 import { Button, Field, Input, Select, FormGrid, Alert } from '@/components/ui';
 
 interface AddEmployeeModalProps {
@@ -21,6 +23,10 @@ const emptyForm = {
 
 export default function AddEmployeeModal({ isOpen, onClose, onAdd }: AddEmployeeModalProps) {
     const { t } = useI18n();
+    // The server drops `basic_salary` from a caller without VIEW_PAYROLL, so
+    // showing the field to one would silently discard whatever they typed.
+    const { permissions, role } = useTenantPlanFeatures();
+    const canSeeSalary = isOwner(role) || hasPermission(permissions, 'VIEW_PAYROLL');
     const [formData, setFormData] = useState({ ...emptyForm });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -47,7 +53,7 @@ export default function AddEmployeeModal({ isOpen, onClose, onAdd }: AddEmployee
             if (formData.date_of_joining) payload.date_of_joining = formData.date_of_joining;
             if (formData.department_id) payload.department_id = formData.department_id;
             if (formData.designation_id) payload.designation_id = formData.designation_id;
-            if (formData.basic_salary) payload.basic_salary = Number(formData.basic_salary);
+            if (canSeeSalary && formData.basic_salary) payload.basic_salary = Number(formData.basic_salary);
 
             await onAdd(payload);
             setFormData({ ...emptyForm });
@@ -128,10 +134,12 @@ export default function AddEmployeeModal({ isOpen, onClose, onAdd }: AddEmployee
                             </Select>
                         </Field>
 
+                        {canSeeSalary && (
                         <Field label={t.employees.modal.basicSalary} hint={`(${t.common.optional})`}>
                             <Input type="number" min="0" step="0.01" value={formData.basic_salary} onChange={set('basic_salary')}
                                 placeholder="0.00" />
                         </Field>
+                        )}
 
                         <Field label={t.employees.modal.status}>
                             <Select value={formData.status} onChange={set('status')}>

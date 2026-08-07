@@ -14,6 +14,8 @@
     "sync:accounting": "tsx prisma/sync-accounting.ts",
     "sync:lead-taxonomy": "tsx prisma/sync-lead-taxonomy.ts",
     "sync:role-permissions": "tsx prisma/sync-role-permissions.ts",
+    "sync:work-schedules": "tsx prisma/sync-work-schedules.ts",
+    "sync:salary-components": "tsx prisma/sync-salary-components.ts",
     "reconcile:balances": "tsx prisma/reconcile-party-balances.ts",
     "retag:parties": "tsx prisma/retag-party-ledger.ts",
     "sync:nav-layout": "tsx prisma/sync-nav-layout.ts"

@@ -2,6 +2,32 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { CircuitBreakerRegistry } from '../system-health/resilience/circuit-breaker.registry';
+import { TenantMessagingIdentityService } from '../tenant-messaging/tenant-messaging-identity.service';
+import { formatEmailAddress, parseEmailAddress } from './address.util';
+
+interface TransportConfig {
+    from: string;
+    fromEmail: string;
+    fromName: string | null;
+    replyTo: string | null;
+}
+
+function escapeHtml(value: string): string {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+export interface SendEmailOptions {
+    throwOnError?: boolean;
+    /**
+     * Sends under this tenant's own sender identity when a platform admin has
+     * configured and enabled one. Omit for platform mail (password resets,
+     * billing, verification) — those must stay on the platform address.
+     */
+    tenantId?: string | null;
+}
 
 @Injectable()
 export class EmailService {
@@ -10,6 +36,7 @@ export class EmailService {
     constructor(
         private readonly platformSettings: PlatformSettingsService,
         private readonly breakers: CircuitBreakerRegistry,
+        private readonly tenantIdentity: TenantMessagingIdentityService,
     ) {}
 
     /** Prefer an explicit DB value; otherwise fall back to env, then schema default. */
@@ -35,7 +62,7 @@ export class EmailService {
         return null;
     }
 
-    private async getTransportConfig() {
+    private async getTransportConfig(tenantId?: string | null) {
         const rawEmail = await this.platformSettings.getRawGroup('email');
 
         const host = this.pickEmailSetting(rawEmail, 'smtp_host', process.env.SMTP_HOST, 'smtp-relay.brevo.com');
@@ -50,12 +77,25 @@ export class EmailService {
             'http://localhost:3000',
         );
 
+        // The platform address is the default for every workspace; only a tenant
+        // a platform admin has explicitly onboarded overrides it.
+        const platformSender = parseEmailAddress(from!);
+        const identity = await this.tenantIdentity.resolveEmailIdentity(tenantId);
+        const sender = identity
+            ? { email: identity.from, name: identity.fromName }
+            : platformSender;
+
         return {
             host: host!,
             port: parseInt(portRaw ?? '587', 10),
             user,
             pass,
-            from: from!,
+            /** Header-ready value, e.g. `Shop Name <hello@shop.com>`. */
+            from: formatEmailAddress(sender.email, sender.name),
+            /** Bare address, for providers that take the name separately. */
+            fromEmail: sender.email,
+            fromName: sender.name,
+            replyTo: identity?.replyTo ?? null,
             frontendUrl: frontendUrl!,
         };
     }
@@ -312,24 +352,30 @@ ${page ? `<p><strong>Page:</strong> ${page}</p>` : ''}
     }
 
     /** Sends an arbitrary subject/body email, e.g. a CRM campaign blast. Surfaces send failures to the caller. */
-    async sendCustom(to: string, subject: string, html: string): Promise<void> {
-        await this.send({ to, subject, html }, { throwOnError: true });
+    async sendCustom(
+        to: string,
+        subject: string,
+        html: string,
+        options?: { tenantId?: string | null },
+    ): Promise<void> {
+        await this.send({ to, subject, html }, { throwOnError: true, tenantId: options?.tenantId });
     }
 
     /** Sends a test message and surfaces SMTP errors to the caller (admin UI). */
-    async sendTestEmail(to: string): Promise<void> {
+    async sendTestEmail(to: string, options?: { tenantId?: string | null }): Promise<void> {
+        const { from } = await this.getTransportConfig(options?.tenantId);
         await this.send(
             {
                 to,
                 subject: 'ERP71 test email',
-                html: '<p>If you received this, SMTP is configured correctly for <strong>notify@erp71.com</strong>.</p>',
+                html: `<p>If you received this, outbound email is configured correctly for <strong>${escapeHtml(from)}</strong>.</p>`,
             },
-            { throwOnError: true },
+            { throwOnError: true, tenantId: options?.tenantId },
         );
     }
 
     private async sendViaResend(
-        config: { from: string },
+        config: TransportConfig,
         opts: { to: string; subject: string; html: string },
     ): Promise<void> {
         const apiKey = process.env.RESEND_API_KEY?.trim();
@@ -346,6 +392,7 @@ ${page ? `<p><strong>Page:</strong> ${page}</p>` : ''}
             body: JSON.stringify({
                 from: config.from,
                 to: [opts.to],
+                ...(config.replyTo ? { reply_to: config.replyTo } : {}),
                 subject: opts.subject,
                 html: opts.html,
             }),
@@ -358,7 +405,7 @@ ${page ? `<p><strong>Page:</strong> ${page}</p>` : ''}
     }
 
     private async sendViaBrevoApi(
-        config: { from: string },
+        config: TransportConfig,
         opts: { to: string; subject: string; html: string },
         apiKey: string,
     ): Promise<void> {
@@ -369,8 +416,9 @@ ${page ? `<p><strong>Page:</strong> ${page}</p>` : ''}
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                sender: { email: config.from, name: 'ERP71' },
+                sender: { email: config.fromEmail, name: config.fromName ?? 'ERP71' },
                 to: [{ email: opts.to }],
+                ...(config.replyTo ? { replyTo: { email: config.replyTo } } : {}),
                 subject: opts.subject,
                 htmlContent: opts.html,
             }),
@@ -384,9 +432,9 @@ ${page ? `<p><strong>Page:</strong> ${page}</p>` : ''}
 
     private async send(
         opts: { to: string; subject: string; html: string },
-        options?: { throwOnError?: boolean },
+        options?: SendEmailOptions,
     ): Promise<void> {
-        const config = await this.getTransportConfig();
+        const config = await this.getTransportConfig(options?.tenantId);
         const resendKey = process.env.RESEND_API_KEY?.trim();
         const brevoKey = this.resolveBrevoApiKey(config.pass);
         const hasSmtpCredentials = Boolean(config.user && config.pass && !brevoKey);
@@ -426,7 +474,13 @@ ${page ? `<p><strong>Page:</strong> ${page}</p>` : ''}
             });
             await this.breakers
                 .get('email-smtp', { timeoutMs: 35_000 })
-                .execute(() => transporter.sendMail({ from: config.from, ...opts }));
+                .execute(() =>
+                    transporter.sendMail({
+                        from: config.from,
+                        ...(config.replyTo ? { replyTo: config.replyTo } : {}),
+                        ...opts,
+                    }),
+                );
         } catch (err) {
             this.logger.error(`Failed to send email to ${opts.to}: ${err}`);
             if (options?.throwOnError) {

@@ -108,6 +108,35 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
 
     // ── Exempt: employee/asset registers (posted elsewhere) ──────────────────
     { model: 'Employee', exempt: 'basic_salary is the pay rate (config); SalaryAccrual posts it monthly.' },
+    { model: 'EmployeeSalaryStructureLine', exempt: 'Pay-rate composition (config), the same category as Employee.basic_salary that replaced it. SalaryAccrual posts the monthly figure.' },
+
+    // ── HRIS payroll: posts through the existing salary events ───────────────
+    // Disbursing an approved run (Phase 7) emits a `salary_accrual` and a
+    // `salary_payment` per line, both tagged with the employee party, so Salary
+    // Payable stays a per-employee ledger. Idempotent on (employee, period) via
+    // SalaryAccrual's unique key.
+    //
+    // Known limitation, deliberately not approximated: the accrual is **net**
+    // pay, not gross. The textbook entry splits gross into net payable plus one
+    // liability per deduction, and autoPostFromRules writes exactly two
+    // VoucherDetail rows — the same multi-leg limit logged against perpetual
+    // inventory. Net keeps Salary Payable reconciling to zero after payment
+    // instead of carrying a phantom balance; the employer's separate obligation
+    // for withheld PF and tax is not modelled. See TODO.md.
+    { model: 'PayrollLine', postsVia: 'salary_accrual', note: 'disbursement emits salary_accrual then salary_payment per line; accrues net pay — see the limitation above' },
+    { model: 'PayrollAdjustment', exempt: 'One-off earning/deduction; it lands in the PayrollLine total, which posts.' },
+    { model: 'PayrollLineItem', exempt: 'Payslip presentation line; the PayrollLine carries the totals.' },
+
+    // ── HRIS expense claims ──────────────────────────────────────────────────
+    // A claim is a request, not an economic event: nothing is owed until it is
+    // approved, and nothing moves until it is reimbursed. Settlement takes one
+    // of two routes that both already post — PAYROLL creates a PayrollAdjustment
+    // that lands in a PayrollLine (which posts salary_accrual/salary_payment),
+    // and DIRECT is recorded through the existing ExpenseEntry flow. Neither
+    // needs a third path to the GL, which is why this is exempt rather than a
+    // gap.
+    { model: 'ExpenseClaim', exempt: 'Reimbursement request; settles through PayrollAdjustment→PayrollLine or through the existing ExpenseEntry flow, both of which post.' },
+    { model: 'ExpenseClaimLine', exempt: 'Line item of ExpenseClaim, which carries the total.' },
     { model: 'Investor', exempt: 'profit_share_pct is the agreed rate (config); loss_carry_forward is a derived balance the profit run maintains. Capital and shares post through their own models.' },
     { model: 'InvestorProfitRun', exempt: 'Snapshot of the month P&L that the run allocated from — a reporting basis, not money moved. Its InvestorProfitShare rows post.' },
 

@@ -18,7 +18,10 @@ const db = {
     $transaction: jest.fn(),
 };
 const emailService = { sendPasswordReset: jest.fn().mockResolvedValue(undefined) };
-const auditService = { log: jest.fn().mockResolvedValue(undefined) };
+const auditService = {
+    log: jest.fn().mockResolvedValue(undefined),
+    logForUserTenants: jest.fn().mockResolvedValue(undefined),
+};
 
 describe('PasswordResetService', () => {
     let service: PasswordResetService;

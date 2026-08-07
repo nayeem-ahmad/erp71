@@ -88,4 +88,18 @@ ENV GIT_SHA=$GIT_SHA
 # bypass in StorePermissionGuard hides that from whoever tests the new module.
 # It grants by explicit group and skips a role that already holds part of one, so
 # re-running never undoes an owner's later edit (see prisma/sync-role-permissions.ts).
-CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
+#
+# sync:work-schedules gives every tenant a default work schedule and every
+# employee an assignment to it (HRIS Phase 2). Attendance still works without it
+# — resolveScheduleDays falls back to an in-code default — but the tenant would
+# have no row to edit, so their hours would be whatever the code assumed. Skips
+# any tenant that already has a schedule and any employee that already has an
+# assignment, so it never overrides a deliberate change.
+#
+# sync:salary-components seeds the standard Bangladeshi salary split (HRIS
+# Phase 5) for tenants that have none, so the structure screen opens with
+# something recognisable rather than blank. It deliberately does NOT backfill
+# per-employee structures — resolveStructure already falls back to
+# Employee.basic_salary, and stamping a structure nobody chose would silently
+# stop that field affecting pay. See prisma/sync-salary-components.ts.
+CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && node apps/backend/dist/src/main.js"]

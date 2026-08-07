@@ -103,6 +103,23 @@ export const PERMISSION_BACKFILL_GROUPS: PermissionGroup[] = [
             StorePermission.VIEW_PAYROLL,
         ],
     },
+    {
+        // MANAGE_HR cannot join the `hr` group above: that group has already
+        // reconciled onto every existing role, so the "holds none of its
+        // permissions" test would skip it forever and the grant would reach
+        // nobody. A permission added after a group has landed always needs a
+        // new group — that is the cost of the non-destructive rule, not a bug
+        // in it.
+        //
+        // Shipped with Phase 0 of the HRIS plan, which put `EmployeesController`
+        // behind VIEW_HR/MANAGE_HR for the first time. Without this backfill a
+        // manager keeps the employee list (VIEW_HR, carried by `hr`) but
+        // silently loses the ability to add an employee.
+        key: 'hr-manage',
+        permissions: [
+            StorePermission.MANAGE_HR,
+        ],
+    },
 ];
 
 export interface GroupResult {

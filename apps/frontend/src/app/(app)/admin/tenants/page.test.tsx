@@ -39,6 +39,10 @@ jest.mock('@/lib/api', () => ({
         loadAdminTenantDemoData: jest.fn(),
         importAdminTenantCatalog: jest.fn(),
         setAdminTenantBusinessType: jest.fn(),
+        getAdminTenantMessagingIdentity: jest.fn(),
+        updateAdminTenantMessagingIdentity: jest.fn(),
+        testAdminTenantMessagingEmail: jest.fn(),
+        testAdminTenantMessagingWhatsApp: jest.fn(),
     },
 }));
 
@@ -100,6 +104,21 @@ describe('AdminTenantsPage', () => {
         api.grantAdminTenantAddon.mockResolvedValue([]);
         api.revokeAdminTenantAddon.mockResolvedValue([]);
         api.getAdminTenantDemoDataStatus.mockResolvedValue({ has_demo_data: false });
+        // No identity row: the tenant sends from the platform sender, which is
+        // the state every workspace is in until an admin onboards it.
+        api.getAdminTenantMessagingIdentity.mockResolvedValue({
+            email_enabled: false,
+            email_from: '',
+            email_from_name: '',
+            email_reply_to: '',
+            whatsapp_enabled: false,
+            whatsapp_phone_number_id: '',
+            whatsapp_access_token: '',
+            whatsapp_api_version: '',
+            notes: '',
+            updated_at: null,
+            updated_by: null,
+        });
     });
 
     it('renders the tenants list heading', async () => {

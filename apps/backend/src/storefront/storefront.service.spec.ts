@@ -129,6 +129,7 @@ describe('StorefrontService', () => {
 
         auditService = {
             log: jest.fn().mockResolvedValue(undefined),
+            logForUserTenants: jest.fn().mockResolvedValue(undefined),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -1081,6 +1082,7 @@ describe('StorefrontService', () => {
     describe('customerLogout', () => {
         it('bumps storefront_token_version only, leaving the app session alive', async () => {
             db.user.update.mockResolvedValue({ id: 'user-1' });
+            db.customer.findMany.mockResolvedValue([{ id: 'cust-1', tenant_id: 'tenant-1' }]);
 
             const result = await service.customerLogout('user-1');
 
@@ -1089,6 +1091,43 @@ describe('StorefrontService', () => {
                 data: { storefront_token_version: { increment: 1 } },
             });
             expect(result).toEqual({ success: true });
+        });
+
+        it('scopes the audit row to each shop the customer belongs to', async () => {
+            db.user.update.mockResolvedValue({ id: 'user-1' });
+            db.customer.findMany.mockResolvedValue([
+                { id: 'cust-1', tenant_id: 'tenant-1' },
+                { id: 'cust-2', tenant_id: 'tenant-2' },
+            ]);
+
+            await service.customerLogout('user-1');
+
+            expect(auditService.log).toHaveBeenCalledWith(
+                'STOREFRONT_CUSTOMER_LOGOUT',
+                'Customer',
+                { userId: 'user-1', tenantId: 'tenant-1' },
+                'cust-1',
+            );
+            expect(auditService.log).toHaveBeenCalledWith(
+                'STOREFRONT_CUSTOMER_LOGOUT',
+                'Customer',
+                { userId: 'user-1', tenantId: 'tenant-2' },
+                'cust-2',
+            );
+        });
+
+        it('still records a logout for a shopper with no customer record', async () => {
+            db.user.update.mockResolvedValue({ id: 'user-1' });
+            db.customer.findMany.mockResolvedValue([]);
+
+            await service.customerLogout('user-1');
+
+            expect(auditService.log).toHaveBeenCalledWith(
+                'STOREFRONT_CUSTOMER_LOGOUT',
+                'Customer',
+                { userId: 'user-1' },
+                'user-1',
+            );
         });
     });
 

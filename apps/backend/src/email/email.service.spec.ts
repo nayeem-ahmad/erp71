@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { EmailService } from './email.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { CircuitBreakerRegistry } from '../system-health/resilience/circuit-breaker.registry';
+import { TenantMessagingIdentityService } from '../tenant-messaging/tenant-messaging-identity.service';
 
 describe('EmailService', () => {
     let service: EmailService;
@@ -18,6 +19,10 @@ describe('EmailService', () => {
         })),
     };
 
+    const tenantIdentity = {
+        resolveEmailIdentity: jest.fn().mockResolvedValue(null),
+    };
+
     beforeEach(async () => {
         process.env = { ...originalEnv };
         global.fetch = jest.fn();
@@ -27,6 +32,7 @@ describe('EmailService', () => {
                 EmailService,
                 { provide: PlatformSettingsService, useValue: platformSettings },
                 { provide: CircuitBreakerRegistry, useValue: breakers },
+                { provide: TenantMessagingIdentityService, useValue: tenantIdentity },
             ],
         }).compile();
 
@@ -73,5 +79,42 @@ describe('EmailService', () => {
         await expect(
             service.sendEmailVerification('user@example.com', 'raw-token', { throwOnError: true }),
         ).rejects.toThrow('Brevo API 401');
+    });
+
+    describe('tenant sender identity', () => {
+        const brevoBody = () => JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+
+        beforeEach(() => {
+            process.env.BREVO_API_KEY = 'xkeysib-test-key';
+            process.env.EMAIL_FROM = 'notify@erp71.com';
+            (global.fetch as jest.Mock).mockResolvedValue({ ok: true, status: 201, text: async () => '' });
+        });
+
+        it('sends from the platform address when the tenant has no identity', async () => {
+            await service.sendCustom('c@example.com', 'Hi', '<p>Hi</p>', { tenantId: 'tenant-1' });
+
+            expect(brevoBody().sender).toEqual({ email: 'notify@erp71.com', name: 'ERP71' });
+            expect(brevoBody().replyTo).toBeUndefined();
+        });
+
+        it('sends from the tenant address, name and reply-to when one is configured', async () => {
+            tenantIdentity.resolveEmailIdentity.mockResolvedValueOnce({
+                from: 'hello@shop.com',
+                fromName: 'Shop BD',
+                replyTo: 'support@shop.com',
+            });
+
+            await service.sendCustom('c@example.com', 'Hi', '<p>Hi</p>', { tenantId: 'tenant-1' });
+
+            expect(brevoBody().sender).toEqual({ email: 'hello@shop.com', name: 'Shop BD' });
+            expect(brevoBody().replyTo).toEqual({ email: 'support@shop.com' });
+        });
+
+        it('never asks for a tenant identity on platform mail', async () => {
+            await service.sendPasswordReset('user@example.com', 'raw-token');
+
+            expect(tenantIdentity.resolveEmailIdentity).toHaveBeenCalledWith(undefined);
+            expect(brevoBody().sender).toEqual({ email: 'notify@erp71.com', name: 'ERP71' });
+        });
     });
 });

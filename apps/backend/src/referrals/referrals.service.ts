@@ -14,6 +14,7 @@ import {
 } from './referrals.dto';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
+import { buildActivity, activityWindowStart } from './referral-activity';
 
 /** Matches the cap in ListCommissionsQueryDto; kept here so the service has a default of its own. */
 const DEFAULT_COMMISSION_PAGE_SIZE = 50;
@@ -537,7 +538,8 @@ export class ReferralsService {
         });
         if (!referee) throw new NotFoundException('Referee not found');
 
-        const [commissions, payments, clicks] = await Promise.all([
+        const now = new Date();
+        const [commissions, payments, clicks, windowedClicks] = await Promise.all([
             this.db.referralSignup.findMany({
                 where: { referee_id: refereeId },
                 orderBy: { signed_up_at: 'desc' },
@@ -546,8 +548,19 @@ export class ReferralsService {
             this.db.refereePayment.findMany({
                 where: { referee_id: refereeId },
                 orderBy: { paid_at: 'desc' },
+                // The portal's payment page shows what each payout settled; this is the
+                // same join listPayments already performs.
+                include: {
+                    commissions: { include: { tenant: { select: { id: true, name: true } } } },
+                },
             }),
             this.db.referralClick.count({ where: { referee_id: refereeId } }),
+            // summary.clicks above is all-time. The chart buckets only span twelve
+            // months, so they get their own bounded query rather than reusing it.
+            this.db.referralClick.findMany({
+                where: { referee_id: refereeId, occurred_at: { gte: activityWindowStart(now) } },
+                select: { occurred_at: true },
+            }),
         ]);
 
         // REVERSED is deliberately absent here: a clawed-back commission is not
@@ -586,8 +599,15 @@ export class ReferralsService {
                 // before that still exist, so the ledger says so out loud.
                 overpaid_amount: Math.max(0, this.round2(totalPaid - totalEarned)),
             },
+            activity: buildActivity(
+                { clicks: windowedClicks, signups: commissions, payments },
+                now,
+            ),
             commissions: commissions.map(this.mapSignup),
-            payments: payments.map(this.mapPayment),
+            payments: payments.map((p) => ({
+                ...this.mapPayment(p),
+                commissions: (p.commissions ?? []).map(this.mapSignup),
+            })),
         };
     }
 

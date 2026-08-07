@@ -66,6 +66,7 @@ describe('AuthService', () => {
         emailVerificationToken: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }), create: jest.fn().mockResolvedValue({}) },
         tenantAddonSubscription: { findMany: jest.fn().mockResolvedValue([]) },
         referee: { findFirst: jest.fn().mockResolvedValue(null) },
+        employee: { findFirst: jest.fn().mockResolvedValue(null) },
         referralSignup: { create: jest.fn() },
         $transaction: jest.fn(),
     };
@@ -81,6 +82,7 @@ describe('AuthService', () => {
 
     const auditService = {
         log: jest.fn().mockResolvedValue(undefined),
+        logForUserTenants: jest.fn().mockResolvedValue(undefined),
     };
 
     const platformSettings = {
@@ -157,6 +159,7 @@ describe('AuthService', () => {
         db.emailVerificationToken.create.mockResolvedValue({});
         jwtService.sign.mockReturnValue('jwt-token');
         auditService.log.mockResolvedValue(undefined);
+        auditService.logForUserTenants.mockResolvedValue(undefined);
         db.user.findFirst.mockResolvedValue(null);
         db.tenantAddonSubscription.findMany.mockResolvedValue([]);
         db.tenantSubscription.findUnique.mockResolvedValue(null);
@@ -572,6 +575,7 @@ describe('AuthService', () => {
             db.user.findUnique.mockResolvedValue({ passwordHash: hashedCurrent });
             db.user.update.mockResolvedValue({});
             auditService.log.mockResolvedValue(undefined);
+            auditService.logForUserTenants.mockResolvedValue(undefined);
         });
 
         it('increments both token versions alongside the password hash on a successful change', async () => {
@@ -635,10 +639,29 @@ describe('AuthService', () => {
 
             await new Promise(process.nextTick);
 
-            expect(auditService.log).toHaveBeenCalledWith(
+            // Fans out across the user's tenants — a row written without a
+            // tenant_id is invisible to every tenant admin.
+            expect(auditService.logForUserTenants).toHaveBeenCalledWith(
                 'PASSWORD_CHANGED',
                 'User',
                 { userId },
+                userId,
+            );
+        });
+
+        it('carries the caller IP and user agent onto the audit row', async () => {
+            await service.changePassword(
+                userId,
+                { currentPassword, newPassword },
+                { ipAddress: '203.0.113.9', userAgent: 'Safari' },
+            );
+
+            await new Promise(process.nextTick);
+
+            expect(auditService.logForUserTenants).toHaveBeenCalledWith(
+                'PASSWORD_CHANGED',
+                'User',
+                { userId, ipAddress: '203.0.113.9', userAgent: 'Safari' },
                 userId,
             );
         });
@@ -676,7 +699,7 @@ describe('AuthService.signup', () => {
         $transaction: jest.fn(async (cb: any) => cb(tx)),
     };
     const email = { sendWelcome: jest.fn(async () => {}) };
-    const audit = { log: jest.fn(async () => {}) };
+    const audit = { log: jest.fn(async () => {}), logForUserTenants: jest.fn(async () => {}) };
     const platformSettings = { getRawValue: jest.fn(async () => 'STANDARD') };
 
     const makeService = () => {
@@ -707,6 +730,7 @@ describe('AuthService.signup', () => {
         });
         email.sendWelcome.mockResolvedValue(undefined);
         audit.log.mockResolvedValue(undefined);
+        audit.logForUserTenants.mockResolvedValue(undefined);
         platformSettings.getRawValue.mockResolvedValue('STANDARD');
     });
 
