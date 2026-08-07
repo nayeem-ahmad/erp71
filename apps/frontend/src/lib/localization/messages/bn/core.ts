@@ -303,6 +303,7 @@ export const coreMessages = {
                 ledger: "লেজার",
                 postingExceptions: "পোস্টিং এক্সসেপশন",
                 products: "পণ্য",
+                demands: "চাহিদা",
                 transfers: "ট্রান্সফার",
                 shrinkage: "শ্রিংকেজ",
                 stockTakes: "স্টক টেক",
@@ -1656,6 +1657,7 @@ export const coreMessages = {
                 setup: "ইনভেন্টরি সেটআপ",
                 links: {
                     products: { title: "পণ্য", description: "ক্যাটালগ, মূল্য ও স্টক স্তর।" },
+                    demands: { title: "চাহিদা", description: "শাখায় যে পণ্য শেষ হয়েছে তার চাহিদা জানান।" },
                     transfers: { title: "স্থানান্তর", description: "শাখার মধ্যে স্টক সরান।" },
                     stockTakes: { title: "স্টক গণনা", description: "হাতে থাকা স্টক গণনা ও মিল করুন।" },
                     shrinkage: { title: "ক্ষতি/হ্রাস", description: "ক্ষতিগ্রস্ত বা হারানো স্টক রেকর্ড করুন।" },

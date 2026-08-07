@@ -48,6 +48,7 @@ import { InventoryModule } from './inventory/inventory.module';
 import { WarehouseTransfersModule } from './warehouse-transfers/warehouse-transfers.module';
 import { InventoryShrinkageModule } from './inventory-shrinkage/inventory-shrinkage.module';
 import { StockTakesModule } from './stock-takes/stock-takes.module';
+import { ProductDemandsModule } from './product-demands/product-demands.module';
 import { InventoryReportsModule } from './inventory-reports/inventory-reports.module';
 import { SalesReportsModule } from './sales-reports/sales-reports.module';
 import { PurchaseReportsModule } from './purchase-reports/purchase-reports.module';
@@ -165,6 +166,7 @@ import { ShortLinksModule } from './short-links/short-links.module';
         WarehouseTransfersModule,
         InventoryShrinkageModule,
         StockTakesModule,
+        ProductDemandsModule,
         InventoryReportsModule,
         SalesReportsModule,
         PurchaseReportsModule,

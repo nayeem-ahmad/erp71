@@ -304,6 +304,7 @@ export const coreMessages = {
             ledger: 'Ledger',
             postingExceptions: 'Posting Exceptions',
             products: 'Products',
+            demands: 'Demands',
             transfers: 'Transfers',
             shrinkage: 'Shrinkage',
             stockTakes: 'Stock Takes',
@@ -1656,6 +1657,7 @@ export const coreMessages = {
             setup: 'Inventory Setup',
             links: {
                 products: { title: 'Products', description: 'Browse catalog, pricing, stock levels, and product details.' },
+                demands: { title: 'Demands', description: 'Raise a request for stock a branch has run out of.' },
                 transfers: { title: 'Transfers', description: 'Move stock between branches or warehouses.' },
                 stockTakes: { title: 'Stock Takes', description: 'Count on-hand stock and reconcile variances.' },
                 shrinkage: { title: 'Shrinkage', description: 'Record damaged, lost, or written-off inventory.' },

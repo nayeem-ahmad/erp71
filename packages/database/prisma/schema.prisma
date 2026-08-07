@@ -97,6 +97,8 @@ enum StorePermission {
   CREATE_GOODS_TRANSFER
   APPROVE_GOODS_TRANSFER
   STOCK_TAKE
+  CREATE_PRODUCT_DEMAND
+  APPROVE_PRODUCT_DEMAND
 
   // Transactions
   CREATE_SALE
@@ -499,6 +501,7 @@ model Tenant {
   warehouseTransfers         WarehouseTransfer[]
   inventoryShrinkages        InventoryShrinkage[]
   stockTakeSessions          StockTakeSession[]
+  productDemands             ProductDemand[]
   sales                      Sale[]
   salesReturns               SalesReturn[]
   purchaseReturns            PurchaseReturn[]
@@ -929,6 +932,7 @@ model Store {
   investorProfitRuns       InvestorProfitRun[]
   externalSyncConnections  ExternalSyncConnection[]
   projects                 Project[]
+  productDemands           ProductDemand[]
 }
 
 model PosCounter {
@@ -968,6 +972,7 @@ model Warehouse {
   transferDestinationRows              WarehouseTransfer[]  @relation("TransferDestinationWarehouse")
   shrinkageRows                        InventoryShrinkage[]
   stockTakeSessions                    StockTakeSession[]
+  productDemands                       ProductDemand[]
   productWarehouseDefaults             InventorySettings[]  @relation("ProductWarehouseDefault")
   purchaseWarehouseDefaults            InventorySettings[]  @relation("PurchaseWarehouseDefault")
   salesWarehouseDefaults               InventorySettings[]  @relation("SalesWarehouseDefault")
@@ -1073,6 +1078,7 @@ model Product {
   transferItems          WarehouseTransferItem[]
   shrinkageItems         InventoryShrinkageItem[]
   stockTakeLines         StockTakeCountLine[]
+  demandItems            ProductDemandItem[]
   saleItems              SaleItem[]
   returnItems            SalesReturnItem[]
   purchaseReturnItems    PurchaseReturnItem[]
@@ -1327,6 +1333,78 @@ model StockTakeCountLine {
 
   @@unique([session_id, product_id])
   @@index([session_id, variance_quantity])
+}
+
+/// A branch asking for stock it does not have.
+///
+/// Every other inventory document in this schema records something that already
+/// happened — a transfer that moved, a count that was taken, shrinkage that was
+/// written off. This one records something that has *not* happened yet, which is
+/// why it carries an approval pair (`reviewed_by`/`reviewed_at`) and a separate
+/// `quantity_approved` per line: what the shop asked for and what head office
+/// agreed to are different numbers, and both are worth keeping.
+///
+/// Status: DRAFT → SUBMITTED → APPROVED | REJECTED → FULFILLED, with CANCELLED
+/// reachable from DRAFT or SUBMITTED. Nothing here touches stock; fulfilment is
+/// the transfer or purchase that follows, and this row only records that it was
+/// dealt with.
+model ProductDemand {
+  id            String    @id @default(uuid())
+  tenant_id     String
+  /// The branch the demand is raised for. Nullable because a single-store
+  /// workspace has no store context on the request.
+  store_id      String?
+  /// Where the goods are wanted.
+  warehouse_id  String
+  demand_number String
+  status        String    @default("DRAFT")
+  priority      String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  /// Date the branch needs the goods by. Advisory — nothing expires on it.
+  needed_by     DateTime?
+  notes         String?
+
+  /// User ids, not relations: the rest of this schema records actors the same
+  /// way (see `WarehouseTransfer.approved_by`) and a deleted user must not take
+  /// the demand history with them.
+  requested_by    String?
+  submitted_at    DateTime?
+  reviewed_by     String?
+  reviewed_at     DateTime?
+  review_note     String?
+  fulfilled_at    DateTime?
+  fulfilled_by    String?
+  /// How it was met — "TRF-00012", "PO raised with Rahim Traders", anything.
+  fulfilment_note String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant    Tenant              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store     Store?              @relation(fields: [store_id], references: [id])
+  warehouse Warehouse           @relation(fields: [warehouse_id], references: [id])
+  items     ProductDemandItem[]
+
+  @@unique([tenant_id, demand_number])
+  @@index([tenant_id, status, created_at])
+  @@index([tenant_id, warehouse_id])
+  @@index([tenant_id, requested_by])
+}
+
+model ProductDemandItem {
+  id                 String  @id @default(uuid())
+  demand_id          String
+  product_id         String
+  quantity_requested Int
+  /// Null until the demand is reviewed. Zero is a meaningful answer — the line
+  /// was declined while the rest of the demand went through — so this stays
+  /// nullable rather than defaulting to 0.
+  quantity_approved  Int?
+  note               String?
+
+  demand  ProductDemand @relation(fields: [demand_id], references: [id], onDelete: Cascade)
+  product Product       @relation(fields: [product_id], references: [id])
+
+  @@unique([demand_id, product_id])
 }
 
 model Supplier {
