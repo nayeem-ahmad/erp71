@@ -16,6 +16,9 @@ import {
     normalizeMobileToE164,
 } from '@erp71/shared-types';
 import PhoneNumberField from '@/components/PhoneNumberField';
+import GoogleSignInButton from '@/components/GoogleSignInButton';
+import { storeAuthResponse } from '@/lib/auth-session';
+import { routes } from '@/lib/routes';
 
 const PLAN_QUERY_TO_CODE: Record<string, Plan['code']> = {
     basic: 'BASIC',
@@ -71,6 +74,8 @@ function SignupPageContent() {
         referralCode: '',
     });
     const [isLoading, setIsLoading] = useState(false);
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+    const [googleAvailable, setGoogleAvailable] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [referralStatus, setReferralStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
     const [referralDiscount, setReferralDiscount] = useState<number | null>(null);
@@ -241,6 +246,47 @@ function SignupPageContent() {
         void submitSignup(e);
     };
 
+    /**
+     * Google's button is an iframe, so the form can't be validated before the
+     * click. Instead we send whatever the visitor has already filled in: with an
+     * organization name the workspace is provisioned immediately, and without one
+     * the backend says `requires_workspace` and the onboarding wizard collects it.
+     */
+    const handleGoogleCredential = async (credential: string) => {
+        setIsGoogleLoading(true);
+        setError(null);
+        try {
+            const authRes = await api.googleSignIn({
+                credential,
+                tenantName: form.tenantName.trim() || undefined,
+                planCode: form.planCode,
+                referralCode: form.referralCode.trim() || undefined,
+                mobile: form.mobile.trim() || undefined,
+                mobile_country_code: form.mobile_country_code,
+            });
+
+            if (authRes?.requires_2fa) {
+                // An existing account with 2FA clicked "sign up" — the code prompt
+                // lives on the login page.
+                router.push('/login');
+                return;
+            }
+
+            const { redirectTo } = await storeAuthResponse(authRes, true);
+            clearReferralCode();
+
+            if (authRes?.requires_workspace) {
+                router.push(routes.onboarding);
+                return;
+            }
+            router.push(authRes?.is_new_user ? postAuthPath : redirectTo);
+        } catch (err: any) {
+            setError(err.message || t.auth.signup.googleFailed);
+        } finally {
+            setIsGoogleLoading(false);
+        }
+    };
+
     return (
         <div className="min-h-screen flex items-center justify-center bg-canvas p-4 font-sans text-gray-900">
             <div className="w-full max-w-2xl">
@@ -357,11 +403,34 @@ function SignupPageContent() {
                         </p>
 
                         <div className="md:col-span-2">
-                            <button type="submit" disabled={isLoading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed group">
+                            <button type="submit" disabled={isLoading || isGoogleLoading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed group">
                                 {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><span>{t.auth.signup.submit}</span><ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></>}
                             </button>
                         </div>
                     </form>
+
+                    {/* The divider and hint only earn their space once the backend
+                        confirms a Google client id is configured. */}
+                    {googleAvailable && (
+                        <div className="mt-6 flex items-center gap-3">
+                            <div className="flex-1 h-px bg-gray-200" />
+                            <span className="text-xs text-gray-400 font-medium uppercase tracking-wider">{t.auth.signup.googleDivider}</span>
+                            <div className="flex-1 h-px bg-gray-200" />
+                        </div>
+                    )}
+                    <div className={googleAvailable ? 'mt-4' : ''}>
+                        <GoogleSignInButton
+                            onCredential={handleGoogleCredential}
+                            onError={setError}
+                            onAvailabilityChange={setGoogleAvailable}
+                            text="signup_with"
+                            busy={isGoogleLoading}
+                            disabled={isLoading}
+                        />
+                        {googleAvailable && (
+                            <p className="mt-2 text-center text-xs text-gray-400">{t.auth.signup.googleHint}</p>
+                        )}
+                    </div>
 
                     <div className="mt-8 text-center text-sm text-gray-500">
                         {t.auth.signup.alreadyHaveAccount} <Link href="/login" className="font-medium text-blue-600 hover:text-blue-700 transition-colors">{t.auth.signup.signIn}</Link>

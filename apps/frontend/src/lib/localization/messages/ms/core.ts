@@ -410,6 +410,7 @@ export const coreMessages = {
                 defaultError: "Log masuk gagal. Sila semak kelayakan anda.",
                 demoFailed: "Log masuk demo gagal. Sila cuba lagi.",
                 sessionExpired: "Sesi anda telah tamat. Sila log masuk semula.",
+                googleFailed: "Log masuk Google gagal. Sila cuba lagi.",
             },
             signup: {
                 title: "Cipta ruang kerja ERP71 anda",
@@ -427,6 +428,9 @@ export const coreMessages = {
                 privacyLink: "Dasar Privasi",
                 submit: "Cipta ruang kerja",
                 alreadyHaveAccount: "Sudah mempunyai akaun?",
+                googleDivider: "atau daftar dengan",
+                googleHint: "Nama dan e-mel Google anda akan digunakan. Isi nama organisasi di atas untuk menyiapkan semuanya sekali gus.",
+                googleFailed: "Pendaftaran Google gagal. Sila cuba lagi.",
                 signIn: "Log masuk",
                 defaultError: "Pendaftaran gagal. Sila cuba lagi.",
                 passwordTooShort: "Kata laluan mesti sekurang-kurangnya 8 aksara.",

@@ -459,8 +459,10 @@ export class StorefrontService {
         let user = await this.db.user.findUnique({ where: { email: dto.email } });
 
         if (user) {
-            // If user already exists but gave a password, verify it matches
-            const valid = await bcrypt.compare(dto.password, user.passwordHash);
+            // If user already exists but gave a password, verify it matches.
+            // A Google-only account has no hash to compare against, so it can
+            // never be claimed here — they sign in instead.
+            const valid = user.passwordHash ? await bcrypt.compare(dto.password, user.passwordHash) : false;
             if (!valid) {
                 throw new ConflictException('An account with this email already exists. Please sign in instead.');
             }

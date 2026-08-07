@@ -262,7 +262,12 @@ enum DepreciationMethod {
 model User {
   id                       String    @id @default(uuid())
   email                    String    @unique
-  passwordHash             String
+  // Null for accounts created through Google sign-in that never set a password.
+  // Those users sign in with Google, or claim a password via "forgot password".
+  passwordHash             String?
+  // Google's stable subject id, so a returning user is matched even after they
+  // rename the Gmail address the account was first created with.
+  google_id                String?   @unique
   name                     String?
   preferred_locale         String    @default("en")
   token_version            Int       @default(0)

@@ -8,6 +8,7 @@ import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { TotpService } from './totp.service';
+import { GoogleTokenService } from './google-token.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
@@ -99,6 +100,12 @@ describe('AuthService', () => {
         resolveActiveRefereeForUser: jest.fn().mockResolvedValue(null),
     };
 
+    const googleTokenService = {
+        isEnabled: jest.fn().mockReturnValue(true),
+        getPrimaryClientId: jest.fn().mockReturnValue('client-id.apps.googleusercontent.com'),
+        verifyIdToken: jest.fn(),
+    };
+
     const makeUserWithAccess = (storeId: string, tenantId: string) => ({
         id: 'user-1',
         email: 'owner@example.com',
@@ -182,6 +189,7 @@ describe('AuthService', () => {
                 { provide: AssetsService, useValue: { uploadFile: jest.fn() } },
                 { provide: PlatformSettingsService, useValue: platformSettings },
                 { provide: ReferralsService, useValue: referralsService },
+                { provide: GoogleTokenService, useValue: googleTokenService },
                 PlanEntitlementsService,
             ],
         }).compile();
@@ -672,7 +680,7 @@ describe('AuthService.getSignupDefaults', () => {
     const platformSettings = { getRawValue: jest.fn() };
     const service = new AuthService(
         {} as any, {} as any, {} as any, {} as any, {} as any,
-        {} as any, platformSettings as any, {} as any, {} as any,
+        {} as any, platformSettings as any, {} as any, {} as any, {} as any,
     );
 
     beforeEach(() => jest.clearAllMocks());
@@ -705,7 +713,7 @@ describe('AuthService.signup', () => {
     const makeService = () => {
         const svc = new AuthService(
             db as any, {} as any, email as any, audit as any, {} as any,
-            {} as any, platformSettings as any, {} as any, {} as any,
+            {} as any, platformSettings as any, {} as any, {} as any, {} as any,
         );
         // Isolate signup(): stub provisioning and post-signup side effects.
         jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({ tenant: { id: 't1' } });
@@ -752,5 +760,181 @@ describe('AuthService.signup', () => {
         await svc.signup({ email: 'a@b.com', password: 'password1', tenantName: 'Org', mobile: '01712345678' } as any);
         expect(createdUser.mobile).toBe('+8801712345678');
         expect(db.user.findFirst).not.toHaveBeenCalled();
+    });
+});
+
+describe('AuthService.googleSignIn', () => {
+    const profile = {
+        googleId: 'google-sub-1',
+        email: 'owner@shop.com',
+        name: 'Nayeem Ahmad',
+        picture: 'https://lh3.googleusercontent.com/a/photo',
+    };
+
+    let createdUser: any;
+
+    const tx = {
+        user: { create: jest.fn(async ({ data }: any) => { createdUser = { id: 'u1', ...data }; return createdUser; }) },
+    };
+    const db = {
+        user: { findUnique: jest.fn(), update: jest.fn(async () => ({})) },
+        $transaction: jest.fn(async (cb: any) => cb(tx)),
+    };
+    const email = { sendWelcome: jest.fn(async () => {}) };
+    const audit = { log: jest.fn(async () => {}), logForUserTenants: jest.fn(async () => {}) };
+    const totp = { isEnabled: jest.fn(() => false) };
+    const platformSettings = { getRawValue: jest.fn(async () => 'STANDARD') };
+    const google = { verifyIdToken: jest.fn(async () => profile) };
+
+    const makeService = () => {
+        const svc = new AuthService(
+            db as any, {} as any, email as any, audit as any, totp as any,
+            {} as any, platformSettings as any, {} as any, {} as any, google as any,
+        );
+        jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({ tenant: { id: 't1' } });
+        jest.spyOn(svc as any, 'generateAuthResponse').mockResolvedValue({ access_token: 'x', tenants: [] });
+        return svc;
+    };
+
+    const existingUser = (overrides: Record<string, any> = {}) => ({
+        id: 'u9',
+        email: profile.email,
+        name: 'Nayeem',
+        google_id: null,
+        avatar_url: null,
+        email_verified_at: null,
+        totp_secret: null,
+        ...overrides,
+    });
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        createdUser = undefined;
+        db.user.findUnique.mockResolvedValue(null);
+        db.user.update.mockResolvedValue({});
+        db.$transaction.mockImplementation(async (cb: any) => cb(tx));
+        tx.user.create.mockImplementation(async ({ data }: any) => {
+            createdUser = { id: 'u1', ...data };
+            return createdUser;
+        });
+        totp.isEnabled.mockReturnValue(false);
+        email.sendWelcome.mockResolvedValue(undefined);
+        audit.logForUserTenants.mockResolvedValue(undefined);
+        platformSettings.getRawValue.mockResolvedValue('STANDARD');
+        google.verifyIdToken.mockResolvedValue(profile);
+    });
+
+    it('creates a passwordless, pre-verified account for a first-time Google user', async () => {
+        const svc = makeService();
+        const res = await svc.googleSignIn({ credential: 'tok' } as any);
+
+        expect(createdUser).toMatchObject({
+            email: profile.email,
+            passwordHash: null,
+            google_id: profile.googleId,
+            name: 'Nayeem Ahmad',
+            avatar_url: profile.picture,
+        });
+        // Google already proved the address, so no verification email is owed.
+        expect(createdUser.email_verified_at).toBeInstanceOf(Date);
+        expect(res).toMatchObject({ is_new_user: true, requires_workspace: true });
+        expect((svc as any).provisionTenant).not.toHaveBeenCalled();
+    });
+
+    it('provisions the workspace when the signup form supplied an org name', async () => {
+        const svc = makeService();
+        const res = await svc.googleSignIn({
+            credential: 'tok',
+            tenantName: '  Dhaka Retail Co. ',
+            referralCode: 'PARTNER1',
+        } as any);
+
+        expect((svc as any).provisionTenant).toHaveBeenCalledWith(
+            expect.anything(), 'u1',
+            expect.objectContaining({
+                tenantName: 'Dhaka Retail Co.',
+                storeName: 'Main Store',
+                planCode: 'STANDARD',
+                referralCode: 'PARTNER1',
+            }),
+        );
+        expect(res).toMatchObject({ is_new_user: true, requires_workspace: false });
+    });
+
+    it('signs in a returning Google user matched on their Google subject id', async () => {
+        const svc = makeService();
+        db.user.findUnique.mockResolvedValueOnce(existingUser({
+            google_id: profile.googleId,
+            email_verified_at: new Date(),
+            avatar_url: profile.picture,
+        }));
+
+        const res = await svc.googleSignIn({ credential: 'tok' } as any);
+
+        expect(db.user.update).not.toHaveBeenCalled();
+        expect(res).toMatchObject({ is_new_user: false, access_token: 'x' });
+    });
+
+    it('links Google to an existing password account with the same address', async () => {
+        const svc = makeService();
+        db.user.findUnique
+            .mockResolvedValueOnce(null)             // by google_id
+            .mockResolvedValueOnce(existingUser());  // by email
+
+        await svc.googleSignIn({ credential: 'tok' } as any);
+
+        expect(db.user.update).toHaveBeenCalledWith({
+            where: { id: 'u9' },
+            data: expect.objectContaining({
+                google_id: profile.googleId,
+                email_verified_at: expect.any(Date),
+                avatar_url: profile.picture,
+            }),
+        });
+        // The account already had a name — Google's must not overwrite it.
+        expect(db.user.update).not.toHaveBeenCalledWith(
+            expect.objectContaining({ data: expect.objectContaining({ name: expect.anything() }) }),
+        );
+    });
+
+    it('refuses to move an account to a different Google identity', async () => {
+        const svc = makeService();
+        db.user.findUnique
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce(existingUser({ google_id: 'some-other-google-sub' }));
+
+        await expect(svc.googleSignIn({ credential: 'tok' } as any)).rejects.toBeInstanceOf(UnauthorizedException);
+        expect(db.user.update).not.toHaveBeenCalled();
+    });
+
+    it('still demands the second factor from a 2FA account', async () => {
+        const svc = makeService();
+        db.user.findUnique.mockResolvedValueOnce(
+            existingUser({ google_id: profile.googleId, totp_secret: 'SECRET' }),
+        );
+        totp.isEnabled.mockReturnValue(true);
+
+        await expect(svc.googleSignIn({ credential: 'tok' } as any)).resolves.toEqual({
+            requires_2fa: true,
+            user_id: 'u9',
+        });
+        expect((svc as any).generateAuthResponse).not.toHaveBeenCalled();
+    });
+
+    it('rejects an invalid mobile number before creating anything', async () => {
+        const svc = makeService();
+        await expect(
+            svc.googleSignIn({ credential: 'tok', mobile: 'not-a-number' } as any),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(db.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('never touches the database when the token fails verification', async () => {
+        const svc = makeService();
+        google.verifyIdToken.mockRejectedValue(new UnauthorizedException('bad token'));
+
+        await expect(svc.googleSignIn({ credential: 'tok' } as any)).rejects.toBeInstanceOf(UnauthorizedException);
+        expect(db.user.findUnique).not.toHaveBeenCalled();
+        expect(db.$transaction).not.toHaveBeenCalled();
     });
 });
