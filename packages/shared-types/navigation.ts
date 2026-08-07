@@ -200,6 +200,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'hr.operations.attendance': { id: 'hr.operations.attendance', kind: 'link', icon: 'Clock', labelKey: 'sidebar.items.attendance', href: '/hr/attendance' },
   'hr.operations.leaves': { id: 'hr.operations.leaves', kind: 'link', icon: 'CalendarOff', labelKey: 'sidebar.items.leaves', href: '/hr/leaves' },
   'hr.operations.salary-payments': { id: 'hr.operations.salary-payments', kind: 'link', icon: 'Banknote', labelKey: 'sidebar.items.salaryPayments', href: '/hr/salary-payments' },
+  'hr.operations.schedules': { id: 'hr.operations.schedules', kind: 'link', icon: 'CalendarDays', labelKey: 'sidebar.items.schedules', href: '/hr/schedules' },
 
   'account-settings': { id: 'account-settings', kind: 'module', icon: 'Cog', labelKey: 'sidebar.modules.accountSettings', moduleKey: 'account-settings' },
   'account-settings.overview': { id: 'account-settings.overview', kind: 'link', icon: 'Settings', labelKey: 'sidebar.items.settingsHub', href: '/settings', exact: true },
@@ -388,6 +389,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('hr.operations.attendance', 'hr', 4),
   layoutNode('hr.operations.leaves', 'hr', 5),
   layoutNode('hr.operations.salary-payments', 'hr', 6),
+  layoutNode('hr.operations.schedules', 'hr', 7),
 
   layoutNode('account-settings', null, 10),
   layoutNode('account-settings.overview', 'account-settings', 0),

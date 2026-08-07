@@ -10,6 +10,7 @@ import { SentryModule } from '@sentry/nestjs/setup';
 import { DatabaseModule } from './database/database.module';
 import { EmailModule } from './email/email.module';
 import { AuditModule } from './audit/audit.module';
+import { AuditInterceptor } from './audit/audit.interceptor';
 import { HealthModule } from './health/health.module';
 import { SystemHealthModule } from './system-health/system-health.module';
 import { JobsModule } from './system-health/jobs/jobs.module';
@@ -75,6 +76,12 @@ import { DiscountCodesModule } from './discount-codes/discount-codes.module';
 import { EmployeesModule } from './employees/employees.module';
 import { CountersModule } from './counters/counters.module';
 import { AttendanceModule } from './attendance/attendance.module';
+import { EmployeePortalModule } from './employee-portal/employee-portal.module';
+import { WorkSchedulesModule } from './work-schedules/work-schedules.module';
+import { PayrollModule } from './payroll/payroll.module';
+import { ExpenseClaimsModule } from './expense-claims/expense-claims.module';
+import { EmployeeRecordsModule } from './employee-records/employee-records.module';
+import { EmployeeLifecycleModule } from './employee-lifecycle/employee-lifecycle.module';
 import { BrandsModule } from './brands/brands.module';
 import { CrmInteractionsModule } from './crm-interactions/crm-interactions.module';
 import { CrmFollowUpsModule } from './crm-follow-ups/crm-follow-ups.module';
@@ -180,6 +187,12 @@ import { ShortLinksModule } from './short-links/short-links.module';
         EmployeesModule,
         CountersModule,
         AttendanceModule,
+        EmployeePortalModule,
+        WorkSchedulesModule,
+        PayrollModule,
+        ExpenseClaimsModule,
+        EmployeeRecordsModule,
+        EmployeeLifecycleModule,
         BrandsModule,
         CrmInteractionsModule,
         CrmFollowUpsModule,
@@ -211,6 +224,9 @@ import { ShortLinksModule } from './short-links/short-links.module';
     providers: [
         { provide: APP_GUARD, useClass: ThrottlerGuard },
         { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
+        // Must stay after TransformInterceptor: it needs to sit inside the
+        // response envelope so it can read the raw controller result.
+        { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
     ],
 })
 export class AppModule implements NestModule {

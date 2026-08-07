@@ -27,6 +27,7 @@ describe('extractTenantPlan', () => {
         id: 't2',
         dashboard_preference: 'ACCOUNTING',
         permissions: ['VIEW_LEDGER'],
+        role: 'MANAGER',
         subscription: { plan: { code: 'PREMIUM', features_json: { premiumCrm: true } } },
       },
     ],
@@ -37,17 +38,19 @@ describe('extractTenantPlan', () => {
       features: { premiumCrm: true },
       dashboardPreference: 'ACCOUNTING',
       permissions: ['VIEW_LEDGER'],
+      role: 'MANAGER',
     });
   });
   it('falls back to the first tenant when tenantId is null/unknown', () => {
     expect(extractTenantPlan(me, null).planCode).toBe('BASIC');
   });
-  it('defaults the dashboard preference and permissions when the tenant omits them', () => {
+  it('defaults the dashboard preference, permissions and role when the tenant omits them', () => {
     expect(extractTenantPlan(me, 't1')).toEqual({
       planCode: 'BASIC',
       features: { premiumCrm: false },
       dashboardPreference: 'AUTO',
       permissions: [],
+      role: null,
     });
   });
   it('returns empty features when me has no tenants', () => {
@@ -56,6 +59,7 @@ describe('extractTenantPlan', () => {
       features: {},
       dashboardPreference: 'AUTO',
       permissions: [],
+      role: null,
     });
   });
 });

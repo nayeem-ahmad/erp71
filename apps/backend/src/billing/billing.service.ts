@@ -312,7 +312,7 @@ export class BillingService {
         this.audit.log(
             'BILLING_REFUND',
             'BillingEvent',
-            { tenantId: ctx.tenantId },
+            { tenantId: ctx.tenantId, userId: ctx.userId },
             ctx.tenantId,
             { referenceId: dto.referenceId, amount, currency, reason: dto.reason ?? null },
         ).catch(() => {});

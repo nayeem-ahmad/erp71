@@ -16,5 +16,16 @@ export default function manifest(): MetadataRoute.Manifest {
             { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
             { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
         ],
+        // The employee self-service portal is the screen most people who
+        // install this on a phone are actually here for — a long-press shortcut
+        // saves them navigating a staff app they have no permissions for.
+        shortcuts: [
+            {
+                name: 'My workspace',
+                short_name: 'My workspace',
+                description: 'Check in, apply for leave, view payslips',
+                url: '/my',
+            },
+        ],
     };
 }

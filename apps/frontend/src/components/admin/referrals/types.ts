@@ -57,6 +57,18 @@ export type RefereePayment = {
     reference?: string | null;
     notes?: string | null;
     paid_at: string;
+    /** The commissions this payout settled. Absent on the admin endpoints. */
+    commissions?: ReferralCommission[];
+};
+
+/** One month of partner activity, as returned by the ledger endpoint. */
+export type ReferralActivityPoint = {
+    /** 'YYYY-MM' */
+    month: string;
+    clicks: number;
+    signups: number;
+    earned_amount: number;
+    paid_amount: number;
 };
 
 export type RefereeLedger = {
@@ -83,6 +95,8 @@ export type RefereeLedger = {
         /** Payments recorded beyond what was earned. Non-zero means the ledger drifted. */
         overpaid_amount: number;
     };
+    /** Twelve monthly buckets, oldest first, ending with the current month. */
+    activity: ReferralActivityPoint[];
     commissions: ReferralCommission[];
     payments: RefereePayment[];
 };

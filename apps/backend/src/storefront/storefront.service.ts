@@ -603,7 +603,26 @@ export class StorefrontService {
             where: { id: userId },
             data: { storefront_token_version: { increment: 1 } },
         });
-        this.audit.log('STOREFRONT_CUSTOMER_LOGOUT', 'User', { userId }, userId).catch(() => {});
+        // Scope the row to the shop(s) this person buys from, so it lands in the
+        // same audit view as the matching STOREFRONT_CUSTOMER_LOGIN.
+        const customers = await this.db.customer.findMany({
+            where: { user_id: userId, deleted_at: null },
+            select: { id: true, tenant_id: true },
+        });
+        if (!customers.length) {
+            this.audit.log('STOREFRONT_CUSTOMER_LOGOUT', 'Customer', { userId }, userId).catch(() => {});
+        } else {
+            for (const customer of customers) {
+                this.audit
+                    .log(
+                        'STOREFRONT_CUSTOMER_LOGOUT',
+                        'Customer',
+                        { userId, tenantId: customer.tenant_id },
+                        customer.id,
+                    )
+                    .catch(() => {});
+            }
+        }
         return { success: true };
     }
 

@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { BillingService } from './billing.service';
+import { NoAudit } from '../audit/no-audit.decorator';
 import {
     BillingCallbackDto,
     ConfirmCheckoutDto,
@@ -47,6 +48,7 @@ export class BillingController {
     }
 
     @Post('confirm')
+    @NoAudit()
     @UseGuards(JwtAuthGuard)
     @UseInterceptors(TenantInterceptor)
     confirmCheckout(
@@ -64,6 +66,7 @@ export class BillingController {
     }
 
     @Post('refund')
+    @NoAudit()
     @UseGuards(JwtAuthGuard)
     @UseInterceptors(TenantInterceptor)
     processRefund(

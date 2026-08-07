@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { SmsCreditService } from './sms-credit.service';
+import { NoAudit } from '../audit/no-audit.decorator';
 import { ConfirmSmsCreditsPurchaseDto, PurchaseSmsCreditsDto } from './sms-credit.dto';
 
 @Controller('sms-credits')
@@ -27,6 +28,7 @@ export class SmsCreditController {
     }
 
     @Post('confirm')
+    @NoAudit()
     confirmPurchase(
         @Tenant() tenant: TenantContext,
         @Body() dto: ConfirmSmsCreditsPurchaseDto,

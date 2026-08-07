@@ -25,6 +25,7 @@ interface Employee {
     department_id?: string | null;
     designation_id?: string | null;
     basic_salary?: string | number | null;
+    portal_access?: boolean;
     user_id?: string | null;
     status: string;
     created_at: string;
@@ -39,6 +40,8 @@ export default function EmployeeDetailPage() {
     const params = useParams();
     const id = params.id as string;
     const [employee, setEmployee] = useState<Employee | null>(null);
+    const [canSeeSalary, setCanSeeSalary] = useState(false);
+    const [portalLoading, setPortalLoading] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -62,6 +65,11 @@ export default function EmployeeDetailPage() {
             fetchTenantUsers(),
         ]).then(([emp, depts, desigs]) => {
             setEmployee(emp);
+            // The API omits `basic_salary` entirely for a viewer without
+            // VIEW_PAYROLL — absent means "not allowed to see", where null
+            // means "none recorded". Hide the field rather than render an empty
+            // box the user cannot meaningfully fill.
+            setCanSeeSalary('basic_salary' in (emp as Record<string, unknown>));
             setDepartments(depts as Department[]);
             setDesignations(desigs as Designation[]);
             setForm({
@@ -91,6 +99,27 @@ export default function EmployeeDetailPage() {
         }
     }
 
+    const handleTogglePortalAccess = async () => {
+        if (!employee) return;
+        setPortalLoading(true);
+        setError('');
+        try {
+            const updated = employee.portal_access
+                ? await api.revokeEmployeePortalAccess(id)
+                : await api.grantEmployeePortalAccess(id);
+            // The endpoint returns only the access fields, so merge rather than
+            // replace — replacing would blank the rest of the profile on screen.
+            setEmployee((prev) => (prev ? { ...prev, portal_access: updated.portal_access } : prev));
+            setSuccess(updated.portal_access
+                ? t.employeePortal.access.enabled
+                : t.employeePortal.access.disabled);
+        } catch (err: any) {
+            setError(err?.message || t.employeePortal.access.failed);
+        } finally {
+            setPortalLoading(false);
+        }
+    };
+
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         setSaving(true);
@@ -109,7 +138,12 @@ export default function EmployeeDetailPage() {
             else payload.department_id = null;
             if (form.designation_id) payload.designation_id = form.designation_id;
             else payload.designation_id = null;
-            payload.basic_salary = form.basic_salary !== '' ? Number(form.basic_salary) : null;
+            // Only send the salary if this user can see it. The server drops it
+            // from an unpermitted caller anyway; not sending it keeps the
+            // request honest rather than relying on that.
+            if (canSeeSalary) {
+                payload.basic_salary = form.basic_salary !== '' ? Number(form.basic_salary) : null;
+            }
 
             const updated = await api.updateEmployee(id, payload);
             setEmployee(updated);
@@ -281,12 +315,14 @@ export default function EmployeeDetailPage() {
                             </select>
                         </div>
 
+                        {canSeeSalary && (
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.employees.modal.basicSalary}</label>
                             <input type="number" min="0" step="0.01" value={form.basic_salary} onChange={set('basic_salary')}
                                 className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-bold text-gray-600 text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
                                 placeholder="0.00" />
                         </div>
+                        )}
 
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.common.status}</label>
@@ -345,6 +381,31 @@ export default function EmployeeDetailPage() {
                                 </button>
                             </div>
                             <p className="text-xs text-gray-400">{t.employees.detail.linkTip}</p>
+                        </div>
+                    )}
+
+                    {/*
+                      * Self-service portal access. Shown only once a login is
+                      * linked: the server refuses the grant without one, so
+                      * offering the toggle first would be a button that always
+                      * fails.
+                      */}
+                    {employee.user && (
+                        <div className="flex items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                            <div className="min-w-0">
+                                <p className="text-sm font-semibold text-gray-900">{t.employeePortal.access.label}</p>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                    {employee.portal_access ? t.employeePortal.access.on : t.employeePortal.access.off}
+                                </p>
+                            </div>
+                            <Button
+                                type="button"
+                                variant={employee.portal_access ? 'secondary' : 'primary'}
+                                loading={portalLoading}
+                                onClick={handleTogglePortalAccess}
+                            >
+                                {employee.portal_access ? t.employeePortal.access.revoke : t.employeePortal.access.grant}
+                            </Button>
                         </div>
                     )}
                 </div>

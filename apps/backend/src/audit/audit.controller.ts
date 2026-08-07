@@ -7,11 +7,13 @@ import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { DatabaseService } from '../database/database.service';
 import { AuditService } from './audit.service';
+import { NoAudit } from './no-audit.decorator';
 
 @ApiTags('audit-logs')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @UseInterceptors(TenantInterceptor)
+@NoAudit()
 @Controller('audit-logs')
 export class AuditController {
     constructor(

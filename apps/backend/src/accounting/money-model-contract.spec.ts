@@ -89,6 +89,9 @@ describe('money-model contract — known gaps are the ones we expect', () => {
     // look at the list. Update deliberately as gaps are wired.
     it('lists exactly the tracked gaps', () => {
         const gaps = MONEY_MODEL_CONTRACT.filter(isGap).map(modelOf).sort();
+        // PayrollLine and PayrollAdjustment were tracked here through Phase 6
+        // and closed by Phase 7, which made disbursement emit salary_accrual
+        // and salary_payment per line. Back to one.
         expect(gaps).toEqual(['OrderDeposit']);
     });
 });

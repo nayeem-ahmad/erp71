@@ -4,6 +4,8 @@ import { EncryptionService } from '../common/encryption.service';
 import { CreateEmployeeDto, UpdateEmployeeDto, CreateDepartmentDto, UpdateDepartmentDto, CreateDesignationDto, UpdateDesignationDto } from './employee.dto';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { runImport, ImportResult } from '../common/import.util';
+import { TenantContext } from '../database/tenant.decorator';
+import { canViewPayroll, stripPayrollFields } from '../common/payroll-visibility';
 
 @Injectable()
 export class EmployeesService {
@@ -24,6 +26,20 @@ export class EmployeesService {
 
     private decryptEmployee<T extends { nid?: string | null }>(emp: T): T {
         return { ...emp, nid: this.decryptNid(emp.nid) };
+    }
+
+    /**
+     * Whether `viewer` may see salary figures.
+     *
+     * `viewer` is optional so the existing `(tenantId, ...)` call shape still
+     * compiles, but **omitting it strips the salary** rather than exposing it.
+     * The fail-safe direction matters more than the ergonomics here: a call site
+     * that forgets to thread the viewer through loses a field visibly, where the
+     * opposite default would leak every salary in the tenant silently.
+     */
+    private canSeeSalary(viewer?: TenantContext): Promise<boolean> {
+        if (!viewer) return Promise.resolve(false);
+        return canViewPayroll(this.db, viewer);
     }
 
     private async generateEmployeeCode(tenantId: string): Promise<string> {
@@ -137,7 +153,7 @@ export class EmployeesService {
 
     // ── Employees ─────────────────────────────────────────────────────────────
 
-    async create(tenantId: string, dto: CreateEmployeeDto) {
+    async create(tenantId: string, dto: CreateEmployeeDto, viewer?: TenantContext) {
         const existing = await this.db.employee.findFirst({
             where: { tenant_id: tenantId, phone: dto.phone },
         });
@@ -153,23 +169,33 @@ export class EmployeesService {
         }
 
         const employee_code = await this.generateEmployeeCode(tenantId);
-        const { nid, ...rest } = dto;
+        const seesSalary = await this.canSeeSalary(viewer);
+        const { nid, basic_salary, ...rest } = dto as CreateEmployeeDto & { basic_salary?: unknown };
+
+        // Same rule as `update`: no VIEW_PAYROLL, no salary written. On create
+        // there is nothing to overwrite, so this only drops a figure the caller
+        // should not have been able to enter in the first place.
+        const salaryPatch = seesSalary && basic_salary !== undefined
+            ? { basic_salary: basic_salary as any }
+            : {};
 
         const record = await this.db.employee.create({
             data: {
                 tenant_id: tenantId,
                 employee_code,
                 ...rest,
+                ...salaryPatch,
                 ...(nid != null ? { nid: this.encryptNid(nid) } : {}),
             },
             include: { department: true, designation: true, user: { select: { id: true, email: true, name: true } } },
         });
-        return this.decryptEmployee(record);
+        return stripPayrollFields(this.decryptEmployee(record), seesSalary);
     }
 
     async findAll(
         tenantId: string,
         opts?: { page?: number; limit?: number; search?: string; status?: string; departmentId?: string },
+        viewer?: TenantContext,
     ): Promise<PaginatedResult<any>> {
         const page = opts?.page ?? 1;
         const limit = Math.min(opts?.limit ?? 20, 100);
@@ -186,7 +212,7 @@ export class EmployeesService {
             ];
         }
 
-        const [items, total] = await Promise.all([
+        const [items, total, seesSalary] = await Promise.all([
             this.db.employee.findMany({
                 where,
                 include: { department: true, designation: true, user: { select: { id: true, email: true, name: true } } },
@@ -195,21 +221,27 @@ export class EmployeesService {
                 take: limit,
             }),
             this.db.employee.count({ where }),
+            this.canSeeSalary(viewer),
         ]);
 
-        return paginate(items.map(e => this.decryptEmployee(e)), total, page, limit);
+        return paginate(
+            items.map(e => stripPayrollFields(this.decryptEmployee(e), seesSalary)),
+            total,
+            page,
+            limit,
+        );
     }
 
-    async findOne(tenantId: string, id: string) {
+    async findOne(tenantId: string, id: string, viewer?: TenantContext) {
         const employee = await this.db.employee.findFirst({
             where: { id, tenant_id: tenantId, deleted_at: null },
             include: { department: true, designation: true, user: { select: { id: true, email: true, name: true } } },
         });
         if (!employee) throw new NotFoundException('Employee not found');
-        return this.decryptEmployee(employee);
+        return stripPayrollFields(this.decryptEmployee(employee), await this.canSeeSalary(viewer));
     }
 
-    async update(tenantId: string, id: string, dto: UpdateEmployeeDto) {
+    async update(tenantId: string, id: string, dto: UpdateEmployeeDto, viewer?: TenantContext) {
         const employee = await this.db.employee.findFirst({
             where: { id, tenant_id: tenantId, deleted_at: null },
         });
@@ -231,16 +263,30 @@ export class EmployeesService {
             if (!desig) throw new BadRequestException('Designation not found.');
         }
 
-        const { nid, ...rest } = dto;
+        const seesSalary = await this.canSeeSalary(viewer);
+        const { nid, basic_salary, ...rest } = dto as UpdateEmployeeDto & { basic_salary?: unknown };
+
+        // A caller who cannot *read* the salary cannot write it either. This is
+        // not belt-and-braces: the employee edit form sends `basic_salary` on
+        // every save, so without this a VIEW_HR-only user renaming someone
+        // would post the stripped field back as `null` and silently wipe a real
+        // figure. Dropping it is the graceful outcome — refusing the whole
+        // request would make the form unusable for exactly the users who are
+        // allowed to use it.
+        const salaryPatch = seesSalary && basic_salary !== undefined
+            ? { basic_salary: basic_salary as any }
+            : {};
+
         const record = await this.db.employee.update({
             where: { id },
             data: {
                 ...rest,
+                ...salaryPatch,
                 ...(nid != null ? { nid: this.encryptNid(nid) } : {}),
             },
             include: { department: true, designation: true, user: { select: { id: true, email: true, name: true } } },
         });
-        return this.decryptEmployee(record);
+        return stripPayrollFields(this.decryptEmployee(record), seesSalary);
     }
 
     async remove(tenantId: string, id: string) {

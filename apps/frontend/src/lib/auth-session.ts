@@ -7,6 +7,7 @@ import { clearStoredSession } from './session-expiry';
  * A "login context" is one of the workspaces a signed-in identity can act as:
  *  - the Platform Admin console (only when the user is a platform admin), or
  *  - the Referral Partner portal (when the user is a linked referee), or
+ *  - the Employee self-service portal (when the user is a linked employee), or
  *  - a specific shop/tenant the user belongs to.
  *
  * When more than one context is available we ask the user to choose which one
@@ -15,8 +16,9 @@ import { clearStoredSession } from './session-expiry';
 export type LoginContexts = {
     isPlatformAdmin: boolean;
     isReferee: boolean;
+    isEmployee: boolean;
     tenants: any[];
-    /** Total selectable contexts (admin console + referee portal + each shop). */
+    /** Total selectable contexts (admin console + portals + each shop). */
     count: number;
 };
 
@@ -24,11 +26,13 @@ export function getLoginContexts(me: any): LoginContexts {
     const tenants = Array.isArray(me?.tenants) ? me.tenants : [];
     const isPlatformAdmin = Boolean(me?.is_platform_admin);
     const isReferee = Boolean(me?.referee?.is_active);
+    const isEmployee = Boolean(me?.employee?.id);
     return {
         isPlatformAdmin,
         isReferee,
+        isEmployee,
         tenants,
-        count: (isPlatformAdmin ? 1 : 0) + (isReferee ? 1 : 0) + tenants.length,
+        count: (isPlatformAdmin ? 1 : 0) + (isReferee ? 1 : 0) + (isEmployee ? 1 : 0) + tenants.length,
     };
 }
 
@@ -42,6 +46,23 @@ export function applyRefereeContext() {
     removeStorage('tenant_id');
     removeStorage('store_id');
     removeStorage('subscription_plan_code');
+}
+
+/**
+ * Activate the employee self-service portal.
+ *
+ * Unlike the referee and platform-admin contexts this **keeps** the tenant
+ * scope: an employee is a real member of their shop, and every portal endpoint
+ * resolves that tenant from their own employee row anyway. Clearing it would
+ * only break the app shell, which needs a tenant to render.
+ */
+export function applyEmployeeContext(employee: { tenant_id?: string | null }) {
+    setStorage('active_context', 'employee');
+    if (employee?.tenant_id) {
+        setStorage('tenant_id', employee.tenant_id);
+        setStorage('last_tenant_id', employee.tenant_id);
+    }
+    removeStorage('store_id');
 }
 
 /** Activate the Platform Admin console (no shop/tenant scope). */
@@ -165,7 +186,7 @@ export async function storeAuthResponse(res: any, rememberMe = false): Promise<S
     // Referee with no shop of their own → referral portal.
     if (isReferee) {
         applyRefereeContext();
-        return { redirectTo: routes.referralsPortal };
+        return { redirectTo: routes.referralsPortal.root };
     }
 
     // Platform admin with no shop of their own → straight to the admin console.
@@ -188,7 +209,7 @@ export function clearAuthSession() {
 /** True when the path belongs to a shop workspace (not the platform admin console). */
 export function isShopWorkspacePath(pathname: string) {
     if (pathname.startsWith(routes.admin.root)) return false;
-    if (pathname.startsWith(routes.referralsPortal)) return false;
+    if (pathname.startsWith(routes.referralsPortal.root)) return false;
     const shopPrefixes = [
         routes.home,
         routes.onboarding,

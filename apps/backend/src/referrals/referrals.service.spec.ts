@@ -32,7 +32,7 @@ describe('ReferralsService', () => {
             updateMany: jest.fn(),
         },
         refereePayment: { create: jest.fn(), findMany: jest.fn() },
-        referralClick: { create: jest.fn(), count: jest.fn(), groupBy: jest.fn() },
+        referralClick: { create: jest.fn(), count: jest.fn(), groupBy: jest.fn(), findMany: jest.fn() },
         user: { findUnique: jest.fn(), create: jest.fn() },
         $transaction: jest.fn(),
     } as any;
@@ -522,6 +522,12 @@ describe('ReferralsService', () => {
                 referral_code: 'RAHMA1B2C3',
                 deleted_at: null,
             });
+            // Defaults so tests that care only about the money arithmetic do not each
+            // have to mock the activity queries. Individual tests override as needed.
+            db.referralSignup.findMany.mockResolvedValue([]);
+            db.refereePayment.findMany.mockResolvedValue([]);
+            db.referralClick.count.mockResolvedValue(0);
+            db.referralClick.findMany.mockResolvedValue([]);
         });
 
         it('counts EARNED and PAID toward total earned, and nets payments off the balance', async () => {
@@ -641,6 +647,70 @@ describe('ReferralsService', () => {
 
             expect(ledger.summary.total_earned_amount).toBe(0.3);
             expect(ledger.summary.balance_due).toBe(0.3);
+        });
+
+        it('returns twelve monthly activity buckets alongside the ledger', async () => {
+            const ledger = await service.getLedger('referee-1');
+
+            expect(ledger.activity).toHaveLength(12);
+            expect(ledger.activity[11].month).toMatch(/^\d{4}-\d{2}$/);
+        });
+
+        it('bounds the click query for the buckets to the twelve-month window', async () => {
+            await service.getLedger('referee-1');
+
+            expect(db.referralClick.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        referee_id: 'referee-1',
+                        occurred_at: expect.objectContaining({ gte: expect.any(Date) }),
+                    }),
+                    select: { occurred_at: true },
+                }),
+            );
+        });
+
+        it('keeps summary.clicks as the all-time count, not the windowed one', async () => {
+            db.referralClick.count.mockResolvedValue(500);
+            db.referralClick.findMany.mockResolvedValue([{ occurred_at: new Date() }]);
+
+            const ledger = await service.getLedger('referee-1');
+
+            expect(ledger.summary.clicks).toBe(500);
+            expect(ledger.activity.reduce((sum, p) => sum + p.clicks, 0)).toBe(1);
+        });
+
+        it('returns each payment with the commissions it settled', async () => {
+            db.refereePayment.findMany.mockResolvedValue([{
+                id: 'payment-1',
+                referee_id: 'referee-1',
+                amount: 200,
+                method: 'bKash',
+                reference: 'TRX1',
+                notes: null,
+                paid_at: new Date('2026-07-05T00:00:00.000Z'),
+                created_by: null,
+                created_at: new Date('2026-07-05T00:00:00.000Z'),
+                commissions: [signup({ id: 'commission-3', status: 'PAID', commission_amount: 200 })],
+            }]);
+
+            const ledger = await service.getLedger('referee-1');
+
+            expect(ledger.payments[0].commissions).toHaveLength(1);
+            expect(ledger.payments[0].commissions[0].commission_amount).toBe(200);
+        });
+
+        it('gives a payment with no linked commissions an empty array, never undefined', async () => {
+            db.refereePayment.findMany.mockResolvedValue([{
+                id: 'payment-1',
+                referee_id: 'referee-1',
+                amount: 200,
+                paid_at: new Date('2026-07-05T00:00:00.000Z'),
+            }]);
+
+            const ledger = await service.getLedger('referee-1');
+
+            expect(ledger.payments[0].commissions).toEqual([]);
         });
     });
 
