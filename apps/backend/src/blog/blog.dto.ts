@@ -134,3 +134,19 @@ export class PublishBlogPostDto {
     @IsISO8601()
     published_at?: string;
 }
+
+/**
+ * The editors' AI Assistant request. Shared by the platform and tenant blogs —
+ * a shop writes in one language and sends its own locale, the platform editor
+ * sends whichever tab is open.
+ */
+export class BlogAiDraftDto {
+    @IsString()
+    @MinLength(1)
+    @MaxLength(2000)
+    prompt!: string;
+
+    @IsOptional()
+    @IsIn(BLOG_LOCALES as unknown as string[])
+    locale?: string;
+}
