@@ -37,7 +37,9 @@ export class BoardsService {
         const boards = await this.db.board.findMany({
             where: { tenant_id: tenantId, deleted_at: null },
             orderBy: { created_at: 'desc' },
-            include: { _count: { select: { cards: true } } },
+            // Scoped to non-deleted tasks: an unscoped count would advertise
+            // cards that findOne() then hides, e.g. "8 cards" rendering as 6.
+            include: { _count: { select: { cards: { where: { task: { deleted_at: null } } } } } },
         });
         return boards.map((board: any) => ({
             id: board.id,
@@ -137,11 +139,18 @@ export class BoardsService {
     async addTasks(tenantId: string, userId: string, boardId: string, taskIds: string[]) {
         await this.assertBoard(tenantId, boardId);
 
+        // Deduped before the existence check: a repeated id in the request is
+        // not a missing task, and without this an unlucky duplicate would also
+        // reach `createMany` twice in the same batch, which `skipDuplicates`
+        // does not protect against (it only guards against rows that already
+        // exist in the table, not two identical rows in one call).
+        const uniqueTaskIds = [...new Set(taskIds)];
+
         const found = await this.db.projectTask.findMany({
-            where: { id: { in: taskIds }, tenant_id: tenantId, deleted_at: null },
+            where: { id: { in: uniqueTaskIds }, tenant_id: tenantId, deleted_at: null },
             select: { id: true, project_id: true },
         });
-        if (found.length !== taskIds.length) {
+        if (found.length !== uniqueTaskIds.length) {
             throw new NotFoundException('One or more tasks were not found');
         }
 
@@ -216,13 +225,47 @@ export class BoardsService {
             );
         }
 
+        // The bound statuses of the *target* column: the set that defines
+        // which BoardTask rows render in it on the next findOne(). This is
+        // what the sibling renumber below is scoped to — the direct analogue
+        // of the (project_id, status_id) sibling scope in
+        // ProjectTasksService.move (project-tasks.service.ts:344-375).
+        const boardColumns = await this.columns.listColumns(tenantId, boardId);
+        const targetColumn = (boardColumns as any[]).find((column) => column.id === dto.columnId);
+        const boundStatusIds = (targetColumn?.bindings ?? []).map((b: any) => b.status_id);
+
         await this.tasks.move(tenantId, userId, taskId, {
             statusId,
             sortOrder: dto.sortOrder,
         });
-        await this.db.boardTask.update({
-            where: { id: membership.id },
-            data: { sort_order: dto.sortOrder },
+
+        // `BoardTask.sort_order` is a board-global counter on write (see
+        // addTasks) but `dto.sortOrder` from the client — and findOne()'s
+        // per-column read — is a within-column index. Without renumbering
+        // here, writing dto.sortOrder straight to the moved row collides with
+        // whatever unrelated card already held that number board-wide.
+        await this.db.$transaction(async (tx: any) => {
+            const siblings = await tx.boardTask.findMany({
+                where: {
+                    board_id: boardId,
+                    tenant_id: tenantId,
+                    id: { not: membership.id },
+                    task: { status_id: { in: boundStatusIds } },
+                },
+                orderBy: [{ sort_order: 'asc' }, { added_at: 'asc' }],
+                select: { id: true },
+            });
+
+            const index = Math.min(Math.max(dto.sortOrder, 0), siblings.length);
+            const ordered = [
+                ...siblings.slice(0, index),
+                { id: membership.id },
+                ...siblings.slice(index),
+            ];
+
+            for (let i = 0; i < ordered.length; i += 1) {
+                await tx.boardTask.update({ where: { id: ordered[i].id }, data: { sort_order: i } });
+            }
         });
 
         return this.findOne(tenantId, boardId);
