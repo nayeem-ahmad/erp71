@@ -18,6 +18,7 @@ import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BlogAiDraftDto } from '../blog/blog.dto';
 import { TenantBlogService } from './tenant-blog.service';
 import {
     PublishTenantBlogPostDto,
@@ -75,6 +76,12 @@ export class TenantBlogController {
     @RequireStorePermission(StorePermission.MANAGE_BLOG)
     removeCategory(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.service.removeCategory(tenant.tenantId, id);
+    }
+
+    @Post('ai-draft')
+    @RequireStorePermission(StorePermission.MANAGE_BLOG)
+    draftWithAi(@Tenant() tenant: TenantContext, @Body() dto: BlogAiDraftDto) {
+        return this.service.draftWithAi(tenant.tenantId, dto);
     }
 
     @Get('posts')

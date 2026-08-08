@@ -4892,6 +4892,8 @@ model Project {
   store_id        String?
   code            String
   name            String
+  /// Abbreviation for cramped surfaces — board cards, chips. Falls back to `code` when unset.
+  short_name      String?
   description     String?
   customer_id     String?
   lead_id         String?

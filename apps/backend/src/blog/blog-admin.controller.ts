@@ -16,7 +16,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../auth/platform-admin.guard';
 import { BlogService } from './blog.service';
-import { PublishBlogPostDto, UpsertBlogCategoryDto, UpsertBlogPostDto } from './blog.dto';
+import { BlogAiDraftDto, PublishBlogPostDto, UpsertBlogCategoryDto, UpsertBlogPostDto } from './blog.dto';
 
 /**
  * Authoring surface for the platform blog. Platform staff only — these posts
@@ -64,6 +64,11 @@ export class BlogAdminController {
     @Delete('categories/:id')
     removeCategory(@Param('id') id: string) {
         return this.service.removeCategory(id);
+    }
+
+    @Post('ai-draft')
+    draftWithAi(@Body() dto: BlogAiDraftDto) {
+        return this.service.draftWithAi(dto);
     }
 
     @Get('posts/:id')

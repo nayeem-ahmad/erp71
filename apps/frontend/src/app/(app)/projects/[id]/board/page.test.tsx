@@ -141,6 +141,30 @@ describe('Project board card', () => {
         await waitFor(() => expect(api.getProjectTask).toHaveBeenCalled());
     });
 
+    it('names the project on the card, preferring the short name', async () => {
+        getProjectBoard.mockResolvedValue(
+            board([
+                task({
+                    project: { id: 'p1', code: 'PRJ-0001', name: 'Gulshan fit-out', short_name: 'Gulshan' },
+                }),
+            ]),
+        );
+        render(<BoardPage />);
+
+        expect(within(await card()).getByText('Gulshan')).toBeInTheDocument();
+    });
+
+    it('falls back to the project code when no short name is set', async () => {
+        // Short name is optional and every existing project starts without one,
+        // so the card must still say which project it belongs to.
+        getProjectBoard.mockResolvedValue(
+            board([task({ project: { id: 'p1', code: 'PRJ-0001', name: 'Gulshan fit-out' } })]),
+        );
+        render(<BoardPage />);
+
+        expect(within(await card()).getByText('PRJ-0001')).toBeInTheDocument();
+    });
+
     it('shows checklist progress the board endpoint already returns', async () => {
         getProjectBoard.mockResolvedValue(
             board([

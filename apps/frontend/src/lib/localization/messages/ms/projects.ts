@@ -17,6 +17,8 @@ export const projectsMessages = {
     fields: {
         code: 'Kod',
         name: 'Nama',
+        shortName: 'Nama ringkas',
+        shortNameHint: 'Dipaparkan pada kad papan apabila nama penuh tidak muat.',
         description: 'Penerangan',
         customer: 'Pelanggan',
         type: 'Jenis',
@@ -134,6 +136,9 @@ export const projectsMessages = {
         updated: 'Tugasan dikemas kini',
         editTitle: 'Sunting tajuk',
         renameFailed: 'Tugasan tidak dapat dinamakan semula',
+        details: 'Butiran',
+        unassigned: 'Tiada penerima tugas',
+        saveFailed: 'Tugasan tidak dapat dikemas kini',
     },
 
     description: {
@@ -243,7 +248,6 @@ export const projectsMessages = {
 
     remaining: {
         history: 'Sejarah baki jam',
-        note: 'Mengapa ia berubah?',
         notePlaceholder: 'cth. pelanggan menambah dua bilik lagi',
         empty: 'Tiada perubahan direkodkan lagi.',
         by: 'oleh',
@@ -265,6 +269,7 @@ export const projectsMessages = {
         note: 'Nota',
         remainingAfter: 'Baki selepas ini',
         remainingHint: 'Lalai kepada baki selepas jam ini. Ubah jika kerja bertambah.',
+        logHint: 'Rekod jam, ubah baki kerja, atau kedua-duanya — satu borang, satu simpan.',
         empty: 'Tiada masa direkod lagi.',
         logged: 'Masa direkod',
         deleted: 'Entri masa dipadam',
@@ -301,6 +306,7 @@ export const projectsMessages = {
         card: {
             drag: 'Seret untuk alih',
             open: 'Buka tugasan',
+            project: 'Projek',
             overdue: 'Lewat tempoh',
             dueToday: 'Tamat hari ini',
             due: 'Tamat {date}',

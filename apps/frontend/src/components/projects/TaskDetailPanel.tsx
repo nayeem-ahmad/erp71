@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Eye, EyeOff, Paperclip, Pencil, Trash2 } from 'lucide-react';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import {
@@ -69,10 +69,62 @@ interface Task {
     project?: { id: string; code: string; name: string } | null;
     status?: { id: string; name: string; category: string };
     assignee?: { id: string; name?: string | null; email: string } | null;
+    // Phase 2 made an employee without a login assignable, so "who holds this"
+    // is two columns and anything that reads one has to read the other.
+    assigneeEmployee?: { id: string; name?: string | null } | null;
     labels?: { label: ProjectLabel }[];
     checklistItems?: ChecklistItem[];
     cover_color?: ProjectLabelColor | null;
     timeEntries?: TimeEntry[];
+}
+
+/** A row of the project roster, which is where the assignee options come from. */
+interface ProjectMemberRow {
+    id: string;
+    user?: { id: string; name?: string | null; email: string } | null;
+    employee?: { id: string; name: string } | null;
+}
+
+interface AssigneeOption {
+    value: string;
+    label: string;
+}
+
+/**
+ * One key space for both assignee columns, so the picker is a single select
+ * rather than two that can contradict each other.
+ */
+const assigneeValueOf = (task: Task): string => {
+    if (task.assignee) return `user:${task.assignee.id}`;
+    if (task.assigneeEmployee) return `employee:${task.assigneeEmployee.id}`;
+    return '';
+};
+
+function assigneeOptionsFor(members: ProjectMemberRow[], task: Task): AssigneeOption[] {
+    const options: AssigneeOption[] = [];
+    const seen = new Set<string>();
+    const push = (value: string, label: string) => {
+        if (seen.has(value)) return;
+        seen.add(value);
+        options.push({ value, label });
+    };
+
+    for (const member of members) {
+        if (member.user) push(`user:${member.user.id}`, member.user.name || member.user.email);
+        else if (member.employee) push(`employee:${member.employee.id}`, member.employee.name);
+    }
+
+    // Whoever holds the card is listed even if they have since left the project.
+    // Without this the select would fall back to its first option and the card
+    // would read as assigned to someone it is not.
+    if (task.assignee) {
+        push(`user:${task.assignee.id}`, task.assignee.name || task.assignee.email);
+    }
+    if (task.assigneeEmployee) {
+        push(`employee:${task.assigneeEmployee.id}`, task.assigneeEmployee.name ?? '—');
+    }
+
+    return options;
 }
 
 /**
@@ -108,9 +160,9 @@ export default function TaskDetailPanel({
     const [busy, setBusy] = useState(false);
 
     const [timeForm, setTimeForm] = useState({ hours: '', workDate: today(), note: '', remaining: '' });
-    const [reestimate, setReestimate] = useState({ hours: '', note: '' });
 
     const [allLabels, setAllLabels] = useState<ProjectLabel[]>([]);
+    const [members, setMembers] = useState<ProjectMemberRow[]>([]);
 
     const load = useCallback(async () => {
         const [detail, log, labels] = await Promise.all([
@@ -135,49 +187,70 @@ export default function TaskDetailPanel({
         load().catch(() => setTask(null));
     }, [load]);
 
+    const projectId = task?.project?.id ?? null;
+
+    // The roster loads on its own, after the task names its project. A project
+    // whose members cannot be read still opens — the picker simply falls back to
+    // whoever already holds the card.
+    useEffect(() => {
+        if (!projectId) return;
+        let live = true;
+        api.getProject(projectId)
+            .then((result: unknown) => {
+                const rows = (result as { members?: ProjectMemberRow[] } | null)?.members;
+                if (live) setMembers(Array.isArray(rows) ? rows : []);
+            })
+            .catch(() => {
+                if (live) setMembers([]);
+            });
+        return () => {
+            live = false;
+        };
+    }, [projectId]);
+
     const refresh = async () => {
         await load();
         onChanged?.();
     };
 
-    const logTime = async (e: React.FormEvent) => {
+    const hours = Number(timeForm.hours || 0);
+    const remaining = timeForm.remaining === '' ? undefined : Number(timeForm.remaining);
+    const canSaveWork = hours > 0 || remaining !== undefined;
+
+    /**
+     * Hours and the revised remaining figure are one form, not two. They are the
+     * same act — "here is where this task now stands" — and splitting them meant
+     * logging an afternoon and re-estimating it were two saves with two notes.
+     * With no hours to log, what is left is a plain re-estimate.
+     */
+    const saveWork = async (e: React.FormEvent) => {
         e.preventDefault();
-        const hours = Number(timeForm.hours);
-        if (!hours || hours <= 0) return;
+        if (!canSaveWork) return;
+        const note = timeForm.note.trim() || undefined;
         setBusy(true);
         try {
-            await api.logProjectTime({
-                taskId,
-                workDate: timeForm.workDate,
-                hours,
-                note: timeForm.note.trim() || undefined,
-                // Blank means "accept the suggestion" — the backend works out
-                // max(0, remaining - hours) rather than the form guessing.
-                remainingHours: timeForm.remaining === '' ? undefined : Number(timeForm.remaining),
-            });
-            toast.success(m.time.logged);
+            if (hours > 0) {
+                await api.logProjectTime({
+                    taskId,
+                    workDate: timeForm.workDate,
+                    hours,
+                    note,
+                    // Blank means "accept the suggestion" — the backend works out
+                    // max(0, remaining - hours) rather than the form guessing.
+                    remainingHours: remaining,
+                });
+                toast.success(m.time.logged);
+            } else {
+                await api.updateProjectTask(taskId, {
+                    remainingHours: remaining,
+                    remainingNote: note,
+                });
+                toast.success(m.task.updated);
+            }
             setTimeForm({ hours: '', workDate: today(), note: '', remaining: '' });
             await refresh();
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : 'Could not log the time');
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    const applyReestimate = async () => {
-        if (reestimate.hours === '') return;
-        setBusy(true);
-        try {
-            await api.updateProjectTask(taskId, {
-                remainingHours: Number(reestimate.hours),
-                remainingNote: reestimate.note.trim() || undefined,
-            });
-            toast.success(m.task.updated);
-            setReestimate({ hours: '', note: '' });
-            await refresh();
-        } catch (error) {
-            toast.error(error instanceof Error ? error.message : 'Could not update the task');
+            toast.error(error instanceof Error ? error.message : m.task.saveFailed);
         } finally {
             setBusy(false);
         }
@@ -189,7 +262,7 @@ export default function TaskDetailPanel({
             await api.updateProjectTask(taskId, { statusId });
             await refresh();
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : 'Could not update the task');
+            toast.error(error instanceof Error ? error.message : m.task.saveFailed);
         } finally {
             setBusy(false);
         }
@@ -209,7 +282,7 @@ export default function TaskDetailPanel({
     };
 
     return (
-        <ModalShell onBackdropClick={onClose} size="lg">
+        <ModalShell onBackdropClick={onClose} size="2xl">
             <ModalHeader
                 title={
                     task ? (
@@ -218,236 +291,248 @@ export default function TaskDetailPanel({
                         m.task.title
                     )
                 }
+                subtitle={task?.project ? `${task.project.code} · ${task.project.name}` : undefined}
                 onClose={onClose}
             />
 
-            <div className="max-h-[70vh] space-y-4 overflow-y-auto p-4">
+            <div className="max-h-[70vh] overflow-y-auto p-3 md:p-4">
                 {!task ? (
                     <p className="text-sm text-gray-500">{t.common.loading}</p>
                 ) : (
-                    <>
-                        {/* Directly under the title, and given room to breathe:
-                            it is the first thing you read when the card opens. */}
-                        <DescriptionSection
-                            description={task.description ?? ''}
-                            taskId={taskId}
-                            onChanged={refresh}
-                        />
+                    /* Trello's card, in two columns: the work itself in the wide
+                       one, everything that merely describes it beside it. Placed
+                       explicitly rather than by source order so the sidebar sits
+                       under the title on a phone — where status and assignee are
+                       the first things reached for — and on the right on desktop. */
+                    <div className="grid gap-4 md:grid-cols-3">
+                        <aside className="space-y-3 md:col-start-3 md:row-start-1">
+                            <section className="space-y-3 rounded-md border border-gray-200 p-3">
+                                <h3 className="text-sm font-medium">{m.task.details}</h3>
 
-                        <div className="grid grid-cols-3 gap-2">
-                            <Metric label={m.task.estimate} value={`${num(task.estimate_hours)}h`} />
-                            <Metric label={m.task.logged} value={`${num(task.logged_hours)}h`} />
-                            <Metric label={m.task.remaining} value={`${num(task.remaining_hours)}h`} highlight />
-                        </div>
+                                <Field label={m.fields.status} htmlFor="task-status">
+                                    <Select
+                                        id="task-status"
+                                        value={task.status?.id ?? ''}
+                                        onChange={(e) => changeStatus(e.target.value)}
+                                        disabled={busy}
+                                    >
+                                        {statuses.map((status) => (
+                                            <option key={status.id} value={status.id}>
+                                                {status.name}
+                                            </option>
+                                        ))}
+                                    </Select>
+                                </Field>
 
-                        <Field label={m.fields.status}>
-                            <Select
-                                value={task.status?.id ?? ''}
-                                onChange={(e) => changeStatus(e.target.value)}
-                                disabled={busy}
-                            >
-                                {statuses.map((status) => (
-                                    <option key={status.id} value={status.id}>
-                                        {status.name}
-                                    </option>
-                                ))}
-                            </Select>
-                        </Field>
+                                <AssigneeField
+                                    task={task}
+                                    taskId={taskId}
+                                    members={members}
+                                    onChanged={refresh}
+                                />
 
-                        <CoverSection task={task} taskId={taskId} onChanged={refresh} />
+                                <EstimateField task={task} taskId={taskId} onChanged={refresh} />
 
-                        <DatesSection task={task} taskId={taskId} onChanged={refresh} />
+                                {/* Read-only, unlike the estimate above them:
+                                    logged is the sum of the time entries and
+                                    remaining is set by the form in the main
+                                    column, which records why it moved. */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <Metric
+                                        label={m.task.logged}
+                                        value={`${num(task.logged_hours)}h`}
+                                    />
+                                    <Metric
+                                        label={m.task.remaining}
+                                        value={`${num(task.remaining_hours)}h`}
+                                        highlight
+                                    />
+                                </div>
+                            </section>
 
-                        {allLabels.length > 0 && (
-                            <LabelsSection
+                            <DatesSection task={task} taskId={taskId} onChanged={refresh} />
+
+                            {allLabels.length > 0 && (
+                                <LabelsSection
+                                    taskId={taskId}
+                                    all={allLabels}
+                                    selected={labelsOf(task)}
+                                    onChanged={refresh}
+                                />
+                            )}
+
+                            <CoverSection task={task} taskId={taskId} onChanged={refresh} />
+                        </aside>
+
+                        <div className="space-y-4 md:col-span-2 md:col-start-1 md:row-start-1">
+                            {/* Directly under the title, and given room to breathe:
+                                it is the first thing you read when the card opens. */}
+                            <DescriptionSection
+                                description={task.description ?? ''}
                                 taskId={taskId}
-                                all={allLabels}
-                                selected={labelsOf(task)}
                                 onChanged={refresh}
                             />
-                        )}
 
-                        <ChecklistSection
-                            taskId={taskId}
-                            items={task.checklistItems ?? []}
-                            onChanged={refresh}
-                        />
+                            <ChecklistSection
+                                taskId={taskId}
+                                items={task.checklistItems ?? []}
+                                onChanged={refresh}
+                            />
 
-                        <AttachmentsSection taskId={taskId} />
+                            <AttachmentsSection taskId={taskId} />
 
-                        <ActivitySection taskId={taskId} onChanged={onChanged} />
-
-                        <section className="rounded-md border border-gray-200 p-3">
-                            <h3 className="mb-2 text-sm font-medium">{m.time.log}</h3>
-                            <form onSubmit={logTime} className="space-y-2">
-                                <div className="grid gap-2 md:grid-cols-3">
-                                    <Field label={m.time.hours} required>
+                            <section className="rounded-md border border-gray-200 p-3">
+                                <h3 className="text-sm font-medium">{m.time.log}</h3>
+                                <p className="mb-2 mt-0.5 text-xs text-gray-500">{m.time.logHint}</p>
+                                <form onSubmit={saveWork} className="space-y-2">
+                                    <div className="grid gap-2 md:grid-cols-3">
+                                        <Field label={m.time.hours} htmlFor="task-log-hours">
+                                            <Input
+                                                id="task-log-hours"
+                                                type="number"
+                                                min="0.25"
+                                                step="0.25"
+                                                value={timeForm.hours}
+                                                onChange={(e) =>
+                                                    setTimeForm((p) => ({ ...p, hours: e.target.value }))
+                                                }
+                                            />
+                                        </Field>
+                                        <Field label={m.time.workDate} htmlFor="task-log-date">
+                                            <Input
+                                                id="task-log-date"
+                                                type="date"
+                                                value={timeForm.workDate}
+                                                onChange={(e) =>
+                                                    setTimeForm((p) => ({ ...p, workDate: e.target.value }))
+                                                }
+                                            />
+                                        </Field>
+                                        <Field
+                                            label={m.time.remainingAfter}
+                                            htmlFor="task-log-remaining"
+                                            hint={m.time.remainingHint}
+                                        >
+                                            <Input
+                                                id="task-log-remaining"
+                                                type="number"
+                                                min="0"
+                                                step="0.25"
+                                                placeholder={String(
+                                                    Math.max(num(task.remaining_hours) - hours, 0),
+                                                )}
+                                                value={timeForm.remaining}
+                                                onChange={(e) =>
+                                                    setTimeForm((p) => ({ ...p, remaining: e.target.value }))
+                                                }
+                                            />
+                                        </Field>
+                                    </div>
+                                    <Field label={m.time.note} htmlFor="task-log-note">
                                         <Input
-                                            type="number"
-                                            min="0.25"
-                                            step="0.25"
-                                            value={timeForm.hours}
-                                            onChange={(e) =>
-                                                setTimeForm((p) => ({ ...p, hours: e.target.value }))
-                                            }
-                                        />
-                                    </Field>
-                                    <Field label={m.time.workDate}>
-                                        <Input
-                                            type="date"
-                                            value={timeForm.workDate}
-                                            onChange={(e) =>
-                                                setTimeForm((p) => ({ ...p, workDate: e.target.value }))
-                                            }
-                                        />
-                                    </Field>
-                                    <Field label={m.time.remainingAfter} hint={m.time.remainingHint}>
-                                        <Input
-                                            type="number"
-                                            min="0"
-                                            step="0.25"
-                                            placeholder={String(
-                                                Math.max(
-                                                    num(task.remaining_hours) - Number(timeForm.hours || 0),
-                                                    0,
-                                                ),
-                                            )}
-                                            value={timeForm.remaining}
-                                            onChange={(e) =>
-                                                setTimeForm((p) => ({ ...p, remaining: e.target.value }))
-                                            }
-                                        />
-                                    </Field>
-                                </div>
-                                <Field label={m.time.note}>
-                                    <Input
-                                        value={timeForm.note}
-                                        onChange={(e) => setTimeForm((p) => ({ ...p, note: e.target.value }))}
-                                    />
-                                </Field>
-                                <Button type="submit" disabled={busy} className="min-h-touch">
-                                    {m.time.log}
-                                </Button>
-                            </form>
-                        </section>
-
-                        <section className="rounded-md border border-gray-200 p-3">
-                            <h3 className="text-sm font-medium">{m.task.remaining}</h3>
-                            <p className="mb-2 mt-1 text-xs text-gray-500">{m.remaining.hint}</p>
-                            <div className="grid gap-2 md:grid-cols-3">
-                                <Field label={m.task.remaining}>
-                                    <Input
-                                        type="number"
-                                        min="0"
-                                        step="0.25"
-                                        value={reestimate.hours}
-                                        onChange={(e) =>
-                                            setReestimate((p) => ({ ...p, hours: e.target.value }))
-                                        }
-                                    />
-                                </Field>
-                                <div className="md:col-span-2">
-                                    <Field label={m.remaining.note}>
-                                        <Input
+                                            id="task-log-note"
                                             placeholder={m.remaining.notePlaceholder}
-                                            value={reestimate.note}
+                                            value={timeForm.note}
                                             onChange={(e) =>
-                                                setReestimate((p) => ({ ...p, note: e.target.value }))
+                                                setTimeForm((p) => ({ ...p, note: e.target.value }))
                                             }
                                         />
                                     </Field>
-                                </div>
-                            </div>
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                className="mt-2 min-h-touch"
-                                disabled={busy || reestimate.hours === ''}
-                                onClick={applyReestimate}
-                            >
-                                {t.common.save}
-                            </Button>
-                        </section>
+                                    <Button
+                                        type="submit"
+                                        disabled={busy || !canSaveWork}
+                                        className="min-h-touch"
+                                    >
+                                        {t.common.save}
+                                    </Button>
+                                </form>
+                                <p className="mt-2 text-xs text-gray-500">{m.remaining.hint}</p>
+                            </section>
 
-                        <section>
-                            <h3 className="mb-2 text-sm font-medium">{m.tabs.time}</h3>
-                            {(task.timeEntries ?? []).length === 0 ? (
-                                <p className="text-sm text-gray-500">{m.time.empty}</p>
-                            ) : (
-                                <ul className="divide-y divide-gray-200 text-sm">
-                                    {(task.timeEntries ?? []).map((entry) => (
-                                        <li key={entry.id} className="flex items-center gap-2 py-1.5">
-                                            <span className="w-24 shrink-0 text-gray-500">
-                                                {new Date(entry.work_date).toLocaleDateString()}
-                                            </span>
-                                            <span className="w-14 shrink-0">{num(entry.hours)}h</span>
-                                            <span className="flex-1 truncate text-gray-600">
-                                                {entry.note ?? ''}
-                                            </span>
-                                            <button
-                                                type="button"
-                                                aria-label={t.common.delete}
-                                                className="min-h-touch px-2 text-red-600"
-                                                disabled={busy}
-                                                onClick={() => deleteEntry(entry.id)}
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </section>
-
-                        <section>
-                            <h3 className="mb-2 text-sm font-medium">{m.remaining.history}</h3>
-                            {history.length === 0 ? (
-                                <p className="text-sm text-gray-500">{m.remaining.empty}</p>
-                            ) : (
-                                <ul className="divide-y divide-gray-200 text-sm">
-                                    {history.map((row) => {
-                                        const delta = Number(row.delta);
-                                        const up = delta > 0;
-                                        return (
-                                            <li key={row.id} className="flex items-start gap-2 py-2">
-                                                <span
-                                                    className={`mt-0.5 shrink-0 ${up ? 'text-amber-600' : 'text-emerald-600'}`}
-                                                    aria-hidden
-                                                >
-                                                    {up ? (
-                                                        <ArrowUp className="h-4 w-4" />
-                                                    ) : (
-                                                        <ArrowDown className="h-4 w-4" />
-                                                    )}
+                            <section>
+                                <h3 className="mb-2 text-sm font-medium">{m.tabs.time}</h3>
+                                {(task.timeEntries ?? []).length === 0 ? (
+                                    <p className="text-sm text-gray-500">{m.time.empty}</p>
+                                ) : (
+                                    <ul className="divide-y divide-gray-200 text-sm">
+                                        {(task.timeEntries ?? []).map((entry) => (
+                                            <li key={entry.id} className="flex items-center gap-2 py-1.5">
+                                                <span className="w-24 shrink-0 text-gray-500">
+                                                    {new Date(entry.work_date).toLocaleDateString()}
                                                 </span>
-                                                <div className="min-w-0 flex-1">
-                                                    <p className="flex flex-wrap items-center gap-1.5">
-                                                        <StatusBadge tone={up ? 'warning' : 'success'}>
-                                                            {m.remaining.sources[
-                                                                row.source as keyof typeof m.remaining.sources
-                                                            ] ?? row.source}
-                                                        </StatusBadge>
-                                                        <span className="text-gray-600">
-                                                            {num(row.previous_hours)}h → {num(row.new_hours)}h
-                                                        </span>
-                                                    </p>
-                                                    {row.note && (
-                                                        <p className="mt-0.5 text-xs text-gray-500">{row.note}</p>
-                                                    )}
-                                                    <p className="mt-0.5 text-xs text-gray-400">
-                                                        {new Date(row.changed_at).toLocaleString()}
-                                                        {row.user
-                                                            ? ` · ${m.remaining.by} ${row.user.name ?? row.user.email}`
-                                                            : ''}
-                                                    </p>
-                                                </div>
+                                                <span className="w-14 shrink-0">{num(entry.hours)}h</span>
+                                                <span className="flex-1 truncate text-gray-600">
+                                                    {entry.note ?? ''}
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    aria-label={t.common.delete}
+                                                    className="min-h-touch px-2 text-red-600"
+                                                    disabled={busy}
+                                                    onClick={() => deleteEntry(entry.id)}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </button>
                                             </li>
-                                        );
-                                    })}
-                                </ul>
-                            )}
-                        </section>
-                    </>
+                                        ))}
+                                    </ul>
+                                )}
+                            </section>
+
+                            <section>
+                                <h3 className="mb-2 text-sm font-medium">{m.remaining.history}</h3>
+                                {history.length === 0 ? (
+                                    <p className="text-sm text-gray-500">{m.remaining.empty}</p>
+                                ) : (
+                                    <ul className="divide-y divide-gray-200 text-sm">
+                                        {history.map((row) => {
+                                            const delta = Number(row.delta);
+                                            const up = delta > 0;
+                                            return (
+                                                <li key={row.id} className="flex items-start gap-2 py-2">
+                                                    <span
+                                                        className={`mt-0.5 shrink-0 ${up ? 'text-amber-600' : 'text-emerald-600'}`}
+                                                        aria-hidden
+                                                    >
+                                                        {up ? (
+                                                            <ArrowUp className="h-4 w-4" />
+                                                        ) : (
+                                                            <ArrowDown className="h-4 w-4" />
+                                                        )}
+                                                    </span>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="flex flex-wrap items-center gap-1.5">
+                                                            <StatusBadge tone={up ? 'warning' : 'success'}>
+                                                                {m.remaining.sources[
+                                                                    row.source as keyof typeof m.remaining.sources
+                                                                ] ?? row.source}
+                                                            </StatusBadge>
+                                                            <span className="text-gray-600">
+                                                                {num(row.previous_hours)}h → {num(row.new_hours)}h
+                                                            </span>
+                                                        </p>
+                                                        {row.note && (
+                                                            <p className="mt-0.5 text-xs text-gray-500">
+                                                                {row.note}
+                                                            </p>
+                                                        )}
+                                                        <p className="mt-0.5 text-xs text-gray-400">
+                                                            {new Date(row.changed_at).toLocaleString()}
+                                                            {row.user
+                                                                ? ` · ${m.remaining.by} ${row.user.name ?? row.user.email}`
+                                                                : ''}
+                                                        </p>
+                                                    </div>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                )}
+                            </section>
+
+                            <ActivitySection taskId={taskId} onChanged={onChanged} />
+                        </div>
+                    </div>
                 )}
             </div>
 
@@ -457,6 +542,144 @@ export default function TaskDetailPanel({
                 </Button>
             </ModalFooter>
         </ModalShell>
+    );
+}
+
+/**
+ * Who the card is on. The options are the project's roster rather than every
+ * user in the workspace: a task can only sensibly land on someone who is on the
+ * job, and the roster carries the employees who have no login and would
+ * otherwise be unpickable.
+ *
+ * Both assignee columns are cleared on every change — sending only the one that
+ * gained a value would leave a card holding a user *and* an employee.
+ */
+function AssigneeField({
+    task,
+    taskId,
+    members,
+    onChanged,
+}: {
+    task: Task;
+    taskId: string;
+    members: ProjectMemberRow[];
+    onChanged: () => Promise<void>;
+}) {
+    const { t } = useI18n();
+    const m = t.projects;
+    const [saving, setSaving] = useState(false);
+
+    const options = useMemo(() => assigneeOptionsFor(members, task), [members, task]);
+
+    const change = async (value: string) => {
+        setSaving(true);
+        try {
+            // '' rather than undefined: PATCH reads undefined as "leave alone",
+            // so only the empty string can mean "nobody".
+            await api.updateProjectTask(taskId, {
+                assigneeId: value.startsWith('user:') ? value.slice('user:'.length) : '',
+                assigneeEmployeeId: value.startsWith('employee:')
+                    ? value.slice('employee:'.length)
+                    : '',
+            });
+            await onChanged();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.task.saveFailed);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Field label={m.task.assignee} htmlFor="task-assignee">
+            <Select
+                id="task-assignee"
+                value={assigneeValueOf(task)}
+                disabled={saving}
+                onChange={(e) => change(e.target.value)}
+            >
+                <option value="">{m.task.unassigned}</option>
+                {options.map((option) => (
+                    <option key={option.value} value={option.value}>
+                        {option.label}
+                    </option>
+                ))}
+            </Select>
+        </Field>
+    );
+}
+
+/**
+ * The estimate, saved on Enter or on leaving the field rather than on every
+ * keystroke — typing "12" through a save-on-change input would briefly commit an
+ * estimate of 1.
+ *
+ * Blank puts the stored figure back. The field has no way to say "no estimate"
+ * (the DTO takes a number), and silently reading an emptied box as zero would
+ * throw the burndown off without anyone asking for it.
+ */
+function EstimateField({
+    task,
+    taskId,
+    onChanged,
+}: {
+    task: Task;
+    taskId: string;
+    onChanged: () => Promise<void>;
+}) {
+    const { t } = useI18n();
+    const m = t.projects;
+
+    const current = task.estimate_hours == null ? '' : String(num(task.estimate_hours));
+    const [value, setValue] = useState(current);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => setValue(current), [current]);
+
+    const commit = async () => {
+        if (value === current) return;
+        const hours = Number(value);
+        if (value === '' || !Number.isFinite(hours) || hours < 0) {
+            setValue(current);
+            return;
+        }
+        setSaving(true);
+        try {
+            await api.updateProjectTask(taskId, { estimateHours: hours });
+            await onChanged();
+        } catch (error) {
+            setValue(current);
+            toast.error(error instanceof Error ? error.message : m.task.saveFailed);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Field label={m.task.estimate} htmlFor="task-estimate">
+            <Input
+                id="task-estimate"
+                type="number"
+                min="0"
+                step="0.25"
+                value={value}
+                disabled={saving}
+                onChange={(e) => setValue(e.target.value)}
+                onBlur={commit}
+                onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        commit();
+                    }
+                    if (event.key === 'Escape') {
+                        // Kept off the document, where ModalShell would read it
+                        // as "close the card" and take the edit with it.
+                        event.stopPropagation();
+                        setValue(current);
+                    }
+                }}
+            />
+        </Field>
     );
 }
 
@@ -1132,9 +1355,13 @@ function DatesSection({
     return (
         <section className="rounded-md border border-gray-200 p-3">
             <h3 className="mb-2 text-sm font-medium">{m.dates.title}</h3>
-            {/* `Field` only ties its label to the control when given htmlFor —
+            {/* Stacked, not side by side: this card lives in the sidebar now,
+                where two date inputs in a row are narrower than the dates they
+                have to show.
+
+                `Field` only ties its label to the control when given htmlFor —
                 without the matching id these inputs have no accessible name. */}
-            <div className="grid gap-2 md:grid-cols-2">
+            <div className="grid gap-2">
                 <Field label={m.dates.start} htmlFor="task-start-date">
                     <Input
                         id="task-start-date"
