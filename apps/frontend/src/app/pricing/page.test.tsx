@@ -24,7 +24,7 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 
-import PricingPage from './page';
+import PricingPage from './PricingClient';
 
 describe('PricingPage', () => {
     it('renders the main page heading', () => {

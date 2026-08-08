@@ -7,6 +7,8 @@ import { Lock, Mail, ArrowRight, Loader2, PlayCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { storeAuthResponse } from '@/lib/auth-session';
 import { useI18n } from '@/lib/i18n';
+import GoogleSignInButton from '@/components/GoogleSignInButton';
+import { routes } from '@/lib/routes';
 
 type FormSubmitEvent = Parameters<NonNullable<React.ComponentProps<'form'>['onSubmit']>>[0];
 
@@ -18,6 +20,8 @@ function LoginPageContent() {
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isDemoLoading, setIsDemoLoading] = useState(false);
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+    const [googleAvailable, setGoogleAvailable] = useState(false);
     const [twoFactorUserId, setTwoFactorUserId] = useState<string | null>(null);
     const [twoFactorCode, setTwoFactorCode] = useState('');
     const router = useRouter();
@@ -96,6 +100,27 @@ function LoginPageContent() {
 
     const handleTwoFactor: React.ComponentProps<'form'>['onSubmit'] = (e) => {
         void submitTwoFactor(e);
+    };
+
+    const handleGoogleCredential = async (credential: string) => {
+        setIsGoogleLoading(true);
+        setError(null);
+        try {
+            const authRes = await api.googleSignIn({ credential });
+            if (authRes?.requires_2fa && authRes?.user_id) {
+                // Google proved the identity; the authenticator app still has to.
+                setTwoFactorUserId(authRes.user_id);
+                return;
+            }
+            const { redirectTo } = await storeAuthResponse(authRes, rememberMe);
+            // A first-time Google account has no workspace yet — the wizard
+            // collects the organization details a password signup asks for upfront.
+            router.push(authRes?.requires_workspace ? routes.onboarding : resolveDestination(redirectTo));
+        } catch (err: any) {
+            setError(err.message || t.auth.login.googleFailed);
+        } finally {
+            setIsGoogleLoading(false);
+        }
     };
 
     const handleDemoLogin = async () => {
@@ -215,7 +240,7 @@ function LoginPageContent() {
 
                         <button
                             type="submit"
-                            disabled={isLoading || isDemoLoading}
+                            disabled={isLoading || isDemoLoading || isGoogleLoading}
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed group"
                         >
                             {isLoading ? (
@@ -237,11 +262,25 @@ function LoginPageContent() {
                         <div className="flex-1 h-px bg-gray-200" />
                     </div>
 
+                    {/* Renders nothing unless the backend has a Google client id configured. */}
+                    {!twoFactorUserId && (
+                        <div className={googleAvailable ? 'mb-3' : ''}>
+                            <GoogleSignInButton
+                                onCredential={handleGoogleCredential}
+                                onError={setError}
+                                onAvailabilityChange={setGoogleAvailable}
+                                text="signin_with"
+                                busy={isGoogleLoading}
+                                disabled={isLoading || isDemoLoading}
+                            />
+                        </div>
+                    )}
+
                     {/* Try Demo button */}
                     <button
                         type="button"
                         onClick={handleDemoLogin}
-                        disabled={isLoading || isDemoLoading}
+                        disabled={isLoading || isDemoLoading || isGoogleLoading}
                         className="w-full bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 rounded-xl border border-gray-200 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed"
                     >
                         {isDemoLoading ? (

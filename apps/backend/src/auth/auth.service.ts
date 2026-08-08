@@ -9,7 +9,8 @@ import { AssetsService } from '../assets/assets.service';
 import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate, seedDefaultLeadTaxonomy, seedDefaultPaymentMethods, seedDefaultTenantRoles } from '@erp71/database';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
-import { SignupDto, LoginDto, UpdateProfileDto, ChangePasswordDto } from './auth.dto';
+import { SignupDto, LoginDto, UpdateProfileDto, ChangePasswordDto, GoogleSignInDto } from './auth.dto';
+import { GoogleProfile, GoogleTokenService } from './google-token.service';
 import { isPlatformAdminEmail } from './platform-admin.util';
 import { AUTH_SCOPE_APP } from './token-scope';
 import { DEMO_ACCOUNT_EMAIL } from '@erp71/database';
@@ -50,6 +51,7 @@ export class AuthService {
         private readonly platformSettings: PlatformSettingsService,
         private readonly referrals: ReferralsService,
         private readonly planEntitlements: PlanEntitlementsService,
+        private readonly google: GoogleTokenService,
     ) { }
 
     async signup(dto: SignupDto, meta: AuditRequestMeta = {}) {
@@ -178,6 +180,134 @@ export class AuthService {
             .logForUserTenants('USER_LOGIN', 'User', { userId: user.id, ...meta }, user.id)
             .catch(() => {});
         return this.generateAuthResponse(user.id);
+    }
+
+    /**
+     * Sign in — or sign up — with a Google ID token from Google Identity Services.
+     *
+     * The three cases, in the order they are tried:
+     *  1. We already know this Google account (`google_id`) → sign in.
+     *  2. An ERP71 account exists under the same address → link Google to it, so
+     *     someone who signed up with a password can switch to the Google button
+     *     without ending up with a second, empty workspace. Safe only because
+     *     `verifyIdToken` rejects tokens whose email Google has not verified.
+     *  3. Nobody matches → create the account. It has no password: they either
+     *     keep using Google or claim one through "forgot password".
+     */
+    async googleSignIn(dto: GoogleSignInDto, meta: AuditRequestMeta = {}) {
+        const profile = await this.google.verifyIdToken(dto.credential);
+
+        const existing =
+            (await this.db.user.findUnique({ where: { google_id: profile.googleId } })) ??
+            (await this.db.user.findUnique({ where: { email: profile.email } }));
+
+        if (existing) {
+            return this.completeGoogleLoginForExistingUser(existing, profile, meta);
+        }
+
+        return this.createUserFromGoogle(profile, dto, meta);
+    }
+
+    private async completeGoogleLoginForExistingUser(
+        user: {
+            id: string;
+            email: string;
+            name: string | null;
+            google_id: string | null;
+            avatar_url: string | null;
+            email_verified_at: Date | null;
+            totp_secret: string | null;
+        },
+        profile: GoogleProfile,
+        meta: AuditRequestMeta,
+    ) {
+        if (user.google_id && user.google_id !== profile.googleId) {
+            // The address moved between Google accounts. Trusting the new one would
+            // hand this workspace to whoever now owns the address at Google.
+            throw new UnauthorizedException('This email is already linked to a different Google account.');
+        }
+
+        const patch: Record<string, unknown> = {};
+        if (!user.google_id) patch.google_id = profile.googleId;
+        // Google verified the address for us, so a pending verification is settled.
+        if (!user.email_verified_at) patch.email_verified_at = new Date();
+        if (!user.name && profile.name) patch.name = profile.name;
+        if (!user.avatar_url && profile.picture) patch.avatar_url = profile.picture;
+        if (Object.keys(patch).length > 0) {
+            await this.db.user.update({ where: { id: user.id }, data: patch });
+        }
+
+        if (this.totp.isEnabled(user.totp_secret)) {
+            // Google proves who they are, not that they hold the second factor.
+            return { requires_2fa: true, user_id: user.id };
+        }
+
+        this.audit
+            .logForUserTenants('USER_LOGIN', 'User', { userId: user.id, ...meta }, user.id, { provider: 'google' })
+            .catch(() => {});
+
+        return { ...(await this.generateAuthResponse(user.id)), is_new_user: false };
+    }
+
+    private async createUserFromGoogle(profile: GoogleProfile, dto: GoogleSignInDto, meta: AuditRequestMeta) {
+        let normalizedMobile: string | null = null;
+        let mobileCountryCode: string | null = null;
+        if (dto.mobile?.trim()) {
+            mobileCountryCode = dto.mobile_country_code?.trim() || DEFAULT_MOBILE_COUNTRY_CODE;
+            normalizedMobile = normalizeMobileToE164(mobileCountryCode, dto.mobile);
+            if (!normalizedMobile) {
+                throw new BadRequestException('Please enter a valid mobile number including country code.');
+            }
+        }
+
+        const wantsWorkspace = !!dto.tenantName?.trim();
+        const defaultPlan = dto.planCode ?? (await this.getSignupDefaults()).defaultPlanCode;
+
+        const user = await this.db.$transaction(async (tx) => {
+            const createdUser = await tx.user.create({
+                data: {
+                    email: profile.email,
+                    // No password: this identity lives in Google until they set one.
+                    passwordHash: null,
+                    google_id: profile.googleId,
+                    name: profile.name ?? profile.email.split('@')[0],
+                    avatar_url: profile.picture,
+                    email_verified_at: new Date(),
+                    mobile: normalizedMobile,
+                    mobile_country_code: mobileCountryCode ?? DEFAULT_MOBILE_COUNTRY_CODE,
+                },
+            });
+
+            if (wantsWorkspace) {
+                await this.provisionTenant(tx, createdUser.id, {
+                    tenantName: dto.tenantName!.trim(),
+                    storeName: dto.storeName?.trim() || 'Main Store',
+                    address: dto.address,
+                    planCode: defaultPlan,
+                    referralCode: dto.referralCode,
+                });
+            }
+
+            return createdUser;
+        });
+
+        this.email.sendWelcome(user.email, user.name ?? user.email).catch((err) => {
+            console.warn(`[AuthService] Welcome email failed for ${user.email}:`, err?.message);
+        });
+        this.audit
+            .logForUserTenants('USER_SIGNUP', 'User', { userId: user.id, ...meta }, user.id, {
+                email: user.email,
+                provider: 'google',
+            })
+            .catch(() => {});
+
+        return {
+            ...(await this.generateAuthResponse(user.id)),
+            is_new_user: true,
+            // Tells the login page to hand them to the onboarding wizard rather
+            // than a dashboard with no workspace behind it.
+            requires_workspace: !wantsWorkspace,
+        };
     }
 
     async logout(userId: string, meta: AuditRequestMeta = {}): Promise<void> {
@@ -410,6 +540,10 @@ export class AuthService {
             is_demo: this.isDemoAccount(user.email),
             email_verified: !!user.email_verified_at,
             two_factor_enabled: twoFactorEnabled,
+            // Lets the security page hide "change password" for a Google-only
+            // account, which has no current password to confirm.
+            has_password: !!user.passwordHash,
+            google_connected: !!(user as any).google_id,
             avatar_url: (user as any).avatar_url || null,
             platform_features: platformFeatures,
             referee: referee
@@ -484,6 +618,13 @@ export class AuthService {
         });
 
         if (!user) throw new UnauthorizedException('User not found');
+        if (!user.passwordHash) {
+            // A Google-only account has no current password to check against.
+            // "Forgot password" is the supported way to set the first one.
+            throw new BadRequestException(
+                'This account signs in with Google. Use "Forgot password" to set a password first.',
+            );
+        }
 
         const valid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
         if (!valid) throw new BadRequestException('Current password is incorrect');
@@ -524,12 +665,16 @@ export class AuthService {
     }
 
     async setupTenant(userId: string, dto: { tenantName: string; storeName: string; address?: string; planCode?: 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM'; businessType?: string }) {
+        // The onboarding wizard doesn't ask for a plan, so fall back to the same
+        // platform default the signup form uses rather than `provisionTenant`'s
+        // hard-coded BASIC.
+        const planCode = dto.planCode ?? (await this.getSignupDefaults()).defaultPlanCode;
         const result = await this.db.$transaction(async (tx) =>
             this.provisionTenant(tx, userId, {
                 tenantName: dto.tenantName,
                 storeName: dto.storeName,
                 address: dto.address,
-                planCode: dto.planCode,
+                planCode,
                 businessType: dto.businessType,
             }),
         );

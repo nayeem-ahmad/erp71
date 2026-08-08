@@ -1,4 +1,24 @@
 export const marketingMessages = {
+        blog: {
+            title: "ব্লগ",
+            description: "বাংলাদেশে দোকান চালানোর গাইড, পণ্যের হালনাগাদ ও নোট",
+            heading: "ERP71 ব্লগ",
+            subheading: "দোকান মালিকদের জন্য বাস্তব লেখা — স্টক, নগদ, কর্মী এবং এর মাঝের সফটওয়্যার।",
+            empty: "এখনও কোনো পোস্ট নেই। শীঘ্রই আবার দেখুন।",
+            readMore: "পড়ুন",
+            minRead: "{minutes} মিনিট পড়া",
+            allPosts: "সব পোস্ট",
+            backToBlog: "ব্লগে ফিরে যান",
+            publishedOn: "প্রকাশিত {date}",
+            updatedOn: "হালনাগাদ {date}",
+            by: "লিখেছেন {author}",
+            notFoundTitle: "এই পোস্টটি পাওয়া যাচ্ছে না",
+            notFoundBody: "এটি সরানো হয়ে থাকতে পারে বা লিঙ্কটি পুরনো হতে পারে।",
+            newer: "নতুন",
+            older: "পুরনো",
+            rss: "আরএসএস ফিড",
+        },
+
         home: {
             preview: {
                 url: "app.erp71.com/dashboard",

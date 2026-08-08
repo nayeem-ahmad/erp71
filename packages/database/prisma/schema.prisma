@@ -162,6 +162,11 @@ enum StorePermission {
 
   // Short Links
   MANAGE_SHORT_LINKS
+
+  // Storefront blog
+  VIEW_BLOG
+  MANAGE_BLOG
+  PUBLISH_BLOG
 }
 
 enum EmployeeStatus {
@@ -262,7 +267,12 @@ enum DepreciationMethod {
 model User {
   id                       String    @id @default(uuid())
   email                    String    @unique
-  passwordHash             String
+  // Null for accounts created through Google sign-in that never set a password.
+  // Those users sign in with Google, or claim a password via "forgot password".
+  passwordHash             String?
+  // Google's stable subject id, so a returning user is matched even after they
+  // rename the Gmail address the account was first created with.
+  google_id                String?   @unique
   name                     String?
   preferred_locale         String    @default("en")
   token_version            Int       @default(0)
@@ -271,6 +281,11 @@ model User {
   // customer sessions, and vice versa. A password change bumps both.
   storefront_token_version Int       @default(0)
   is_platform_admin        Boolean   @default(false)
+  /// Last time this person opened the in-app "What's new" feed. The unread dot
+  /// is a comparison against the newest published post, which is why there is
+  /// no per-user-per-post row: writing a Notification for every user of every
+  /// tenant on publish would be one row per platform user per post.
+  blog_last_seen_at        DateTime?
   mobile_country_code      String    @default("BD")
   mobile                   String?
   email_verified_at        DateTime?
@@ -324,6 +339,8 @@ model User {
   projectTaskActivities             ProjectTaskActivity[]       @relation("ProjectTaskActivityActor")
   projectTaskWatching               ProjectTaskWatcher[]        @relation("ProjectTaskWatcherUser")
   projectAttachments                ProjectAttachment[]         @relation("ProjectAttachmentCreator")
+  authoredBlogPosts                 BlogPost[]                  @relation("BlogPostAuthor")
+  authoredTenantBlogPosts           TenantBlogPost[]            @relation("TenantBlogPostAuthor")
 }
 
 model PasswordResetToken {
@@ -632,6 +649,9 @@ model Tenant {
   ChecklistTemplate          ChecklistTemplate[]
   EmployeeChecklistItem      EmployeeChecklistItem[]
   messagingIdentity          TenantMessagingIdentity?
+  blogPosts                  TenantBlogPost[]
+  blogCategories             TenantBlogCategory[]
+  blogSettings               TenantBlogSettings?
 
   @@index([deleted_at])
 }
@@ -5377,4 +5397,232 @@ model ShortLink {
 
   @@index([tenant_id, created_at])
   @@index([entity_type, entity_id])
+}
+
+// ---------------------------------------------------------------------------
+// Platform blog — written by platform staff, read on erp71.com/blog and in-app.
+//
+// No `tenant_id` anywhere: these are platform rows, like PlatformSetting. Reads
+// are guarded only by status/audience; writes only by PlatformAdminGuard.
+// ---------------------------------------------------------------------------
+
+model BlogPost {
+  id   String @id @default(uuid())
+  slug String @unique
+
+  /// DRAFT | SCHEDULED | PUBLISHED | ARCHIVED
+  status   String @default("DRAFT")
+  /// PUBLIC | IN_APP | BOTH — which surfaces are allowed to serve this post.
+  /// A release note is IN_APP; an SEO article is PUBLIC; most are BOTH.
+  audience String @default("BOTH")
+
+  category_id String?
+
+  cover_image_url   String?
+  /// Cloudinary's handle for the cover. A secure_url cannot be turned back into
+  /// one, so without this the image is billed forever after the post is deleted.
+  cover_storage_key String?
+  cover_alt         String?
+
+  author_user_id String?
+  /// Byline as readers see it, denormalised on purpose: an author may leave the
+  /// company, and the post should keep the name it was published under.
+  author_name    String?
+  author_title   String?
+
+  published_at  DateTime?
+  scheduled_for DateTime?
+  /// Set by hand for a meaningful revision. Kept separate from `updated_at` so
+  /// fixing a typo does not claim the article was rewritten.
+  edited_at     DateTime?
+
+  /// Computed on save from the English body — never recomputed on read.
+  reading_minutes Int @default(0)
+  view_count      Int @default(0)
+
+  /// Pins a post to the top of the index regardless of date.
+  featured Boolean @default(false)
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  category     BlogCategory?         @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  author       User?                 @relation("BlogPostAuthor", fields: [author_user_id], references: [id], onDelete: SetNull)
+  translations BlogPostTranslation[]
+  slugHistory  BlogPostSlug[]
+
+  @@index([status, published_at])
+  @@index([category_id, status, published_at])
+  @@index([deleted_at])
+  @@map("blog_posts")
+}
+
+/// Every locale's copy of a post, including `en`.
+///
+/// English is not kept on BlogPost itself: that would create two places a
+/// post's English title can live, and every read would have to decide which
+/// one wins. One row per locale means the answer to "what is this post's title
+/// in locale X" is always "its X row, else its en row".
+model BlogPostTranslation {
+  id      String @id @default(uuid())
+  post_id String
+  /// en | bn | ms — matches localeRegistry in the frontend.
+  locale  String
+
+  title   String
+  excerpt String?
+  body_md String
+
+  seo_title       String?
+  seo_description String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  post BlogPost @relation(fields: [post_id], references: [id], onDelete: Cascade)
+
+  @@unique([post_id, locale])
+  @@map("blog_post_translations")
+}
+
+model BlogCategory {
+  id         String  @id @default(uuid())
+  slug       String  @unique
+  name_en    String
+  name_bn    String?
+  name_ms    String?
+  sort_order Int     @default(0)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  posts BlogPost[]
+
+  @@map("blog_categories")
+}
+
+/// Every slug a post has ever carried, so a rename 301s instead of 404ing.
+/// A renamed article that drops its inbound links has lost the thing it was
+/// published for.
+model BlogPostSlug {
+  id         String   @id @default(uuid())
+  post_id    String
+  slug       String   @unique
+  created_at DateTime @default(now())
+
+  post BlogPost @relation(fields: [post_id], references: [id], onDelete: Cascade)
+
+  @@index([post_id])
+  @@map("blog_post_slugs")
+}
+
+// ---------------------------------------------------------------------------
+// Tenant blog — written by a shop's own staff, published on their storefront.
+//
+// A separate model set from the platform blog on purpose. Every row is
+// tenant-scoped and every query goes through the tenant guard; the two share a
+// shape but never a table, because a bug that crossed them would publish one
+// shop's drafts under another's name.
+// ---------------------------------------------------------------------------
+
+model TenantBlogPost {
+  id        String @id @default(uuid())
+  tenant_id String
+  slug      String
+
+  /// DRAFT | SCHEDULED | PUBLISHED | ARCHIVED
+  status String @default("DRAFT")
+
+  category_id String?
+
+  title   String
+  excerpt String?
+  body_md String
+
+  seo_title       String?
+  seo_description String?
+
+  cover_image_url   String?
+  cover_storage_key String?
+  cover_alt         String?
+
+  author_user_id String?
+  author_name    String?
+
+  published_at  DateTime?
+  scheduled_for DateTime?
+  edited_at     DateTime?
+
+  reading_minutes Int     @default(0)
+  view_count      Int     @default(0)
+  featured        Boolean @default(false)
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  tenant      Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  category    TenantBlogCategory?  @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  author      User?                @relation("TenantBlogPostAuthor", fields: [author_user_id], references: [id], onDelete: SetNull)
+  slugHistory TenantBlogPostSlug[]
+
+  /// Slugs are unique per shop, not globally — two shops may both write a post
+  /// called "eid-sale", and each owns the URL under its own storefront.
+  @@unique([tenant_id, slug])
+  @@index([tenant_id, status, published_at])
+  @@index([tenant_id, category_id, status])
+  @@index([deleted_at])
+  @@map("tenant_blog_posts")
+}
+
+model TenantBlogCategory {
+  id         String @id @default(uuid())
+  tenant_id  String
+  slug       String
+  name       String
+  sort_order Int    @default(0)
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  tenant Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  posts  TenantBlogPost[]
+
+  @@unique([tenant_id, slug])
+  @@map("tenant_blog_categories")
+}
+
+model TenantBlogPostSlug {
+  id         String   @id @default(uuid())
+  tenant_id  String
+  post_id    String
+  slug       String
+  created_at DateTime @default(now())
+
+  post TenantBlogPost @relation(fields: [post_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, slug])
+  @@index([post_id])
+  @@map("tenant_blog_post_slugs")
+}
+
+/// Per-shop switch and chrome for the storefront blog.
+///
+/// A row exists only once a shop has touched its blog settings; absent means
+/// "off with defaults", so enabling the feature costs no backfill.
+model TenantBlogSettings {
+  tenant_id String @id
+
+  enabled Boolean @default(false)
+  title   String?
+  tagline String?
+
+  updated_at DateTime @updatedAt
+  updated_by String?
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@map("tenant_blog_settings")
 }
