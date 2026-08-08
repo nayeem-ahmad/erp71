@@ -162,3 +162,92 @@ describe('BoardColumnsService', () => {
         await expect(service.listColumns('other', 'b1')).rejects.toBeInstanceOf(NotFoundException);
     });
 });
+
+describe('BoardColumnsService column CRUD', () => {
+    let service: BoardColumnsService;
+    let db: any;
+
+    const tenantId = 't1';
+
+    beforeEach(async () => {
+        db = {
+            board: { findFirst: jest.fn().mockResolvedValue({ id: 'b1', tenant_id: tenantId }) },
+            boardColumn: {
+                findMany: jest.fn().mockResolvedValue(COLUMNS.map((c) => ({ ...c, board_id: 'b1' }))),
+                findFirst: jest.fn().mockResolvedValue({ id: 'c2', board_id: 'b1', tenant_id: tenantId }),
+                create: jest.fn().mockResolvedValue({ id: 'c9' }),
+                update: jest.fn().mockResolvedValue({ id: 'c2' }),
+                delete: jest.fn().mockResolvedValue({ id: 'c2' }),
+                aggregate: jest.fn().mockResolvedValue({ _max: { sort_order: 3 } }),
+            },
+            boardColumnStatus: {
+                deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+                createMany: jest.fn().mockResolvedValue({ count: 2 }),
+            },
+            projectTaskStatus: {
+                findMany: jest.fn().mockResolvedValue([{ id: 's1' }, { id: 's2' }]),
+            },
+        };
+
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                BoardColumnsService,
+                { provide: DatabaseService, useValue: db },
+                { provide: ProjectSettingsService, useValue: { listTaskStatuses: jest.fn() } },
+            ],
+        }).compile();
+        service = module.get(BoardColumnsService);
+    });
+
+    it('appends a new column after the last one when no sortOrder is given', async () => {
+        await service.createColumn(tenantId, 'b1', { name: 'Blocked', category: 'TODO' });
+
+        expect(db.boardColumn.create).toHaveBeenCalledWith({
+            data: {
+                tenant_id: tenantId,
+                board_id: 'b1',
+                name: 'Blocked',
+                category: 'TODO',
+                sort_order: 4,
+                wip_limit: null,
+            },
+        });
+    });
+
+    it('replaces a column’s bindings wholesale', async () => {
+        await service.setBindings(tenantId, 'b1', 'c2', ['s1', 's2']);
+
+        expect(db.boardColumnStatus.deleteMany).toHaveBeenCalledWith({
+            where: { board_id: 'b1', tenant_id: tenantId, board_column_id: 'c2' },
+        });
+        expect(db.boardColumnStatus.createMany).toHaveBeenCalledWith({
+            data: [
+                { tenant_id: tenantId, board_id: 'b1', board_column_id: 'c2', status_id: 's1' },
+                { tenant_id: tenantId, board_id: 'b1', board_column_id: 'c2', status_id: 's2' },
+            ],
+            skipDuplicates: true,
+        });
+    });
+
+    it('steals a status from whichever other column on this board held it', async () => {
+        await service.setBindings(tenantId, 'b1', 'c2', ['s1']);
+
+        // A status may sit in only one column per board, so binding it here must
+        // clear it elsewhere or the (board_id, status_id) unique rejects the write.
+        expect(db.boardColumnStatus.deleteMany).toHaveBeenCalledWith({
+            where: { board_id: 'b1', tenant_id: tenantId, status_id: { in: ['s1'] } },
+        });
+    });
+
+    it('rejects a status id that is not a real status in this tenant', async () => {
+        db.projectTaskStatus.findMany.mockResolvedValue([{ id: 's1' }]);
+        await expect(service.setBindings(tenantId, 'b1', 'c2', ['s1', 'ghost'])).rejects.toBeInstanceOf(
+            NotFoundException,
+        );
+    });
+
+    it('refuses to touch a column belonging to a different board', async () => {
+        db.boardColumn.findFirst.mockResolvedValue(null);
+        await expect(service.deleteColumn(tenantId, 'b1', 'c2')).rejects.toBeInstanceOf(NotFoundException);
+    });
+});

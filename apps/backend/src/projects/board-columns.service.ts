@@ -1,6 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { ProjectSettingsService } from './project-settings.service';
+import {
+    CreateBoardColumnDto,
+    UpdateBoardColumnDto,
+} from './board.dto';
 
 export type BindableColumn = { id: string; name: string; category: string; sort_order: number };
 export type BindableStatus = { id: string; name: string; category: string };
@@ -141,6 +145,104 @@ export class BoardColumnsService {
                     },
                 },
             },
+        });
+    }
+
+    private async assertColumn(tenantId: string, boardId: string, columnId: string) {
+        const column = await this.db.boardColumn.findFirst({
+            where: { id: columnId, board_id: boardId, tenant_id: tenantId },
+        });
+        if (!column) throw new NotFoundException('Board column not found');
+        return column;
+    }
+
+    async createColumn(tenantId: string, boardId: string, dto: CreateBoardColumnDto) {
+        await this.assertBoard(tenantId, boardId);
+
+        let sortOrder = dto.sortOrder;
+        if (sortOrder === undefined) {
+            const last = await this.db.boardColumn.aggregate({
+                where: { board_id: boardId, tenant_id: tenantId },
+                _max: { sort_order: true },
+            });
+            sortOrder = (last._max.sort_order ?? -1) + 1;
+        }
+
+        return this.db.boardColumn.create({
+            data: {
+                tenant_id: tenantId,
+                board_id: boardId,
+                name: dto.name,
+                category: dto.category,
+                sort_order: sortOrder,
+                wip_limit: dto.wipLimit ?? null,
+            },
+        });
+    }
+
+    async updateColumn(
+        tenantId: string,
+        boardId: string,
+        columnId: string,
+        dto: UpdateBoardColumnDto,
+    ) {
+        await this.assertColumn(tenantId, boardId, columnId);
+        return this.db.boardColumn.update({
+            where: { id: columnId },
+            data: {
+                ...(dto.name !== undefined ? { name: dto.name } : {}),
+                ...(dto.category !== undefined ? { category: dto.category } : {}),
+                ...(dto.sortOrder !== undefined ? { sort_order: dto.sortOrder } : {}),
+                ...(dto.wipLimit !== undefined ? { wip_limit: dto.wipLimit } : {}),
+            },
+        });
+    }
+
+    /**
+     * Bindings cascade with the column. The cards that were in it fall to
+     * Unsorted on the next read rather than disappearing.
+     */
+    async deleteColumn(tenantId: string, boardId: string, columnId: string) {
+        await this.assertColumn(tenantId, boardId, columnId);
+        await this.db.boardColumn.delete({ where: { id: columnId } });
+    }
+
+    /** Replaces this column's bindings wholesale. An empty list unbinds it. */
+    async setBindings(tenantId: string, boardId: string, columnId: string, statusIds: string[]) {
+        await this.assertColumn(tenantId, boardId, columnId);
+
+        if (statusIds.length > 0) {
+            const found = await this.db.projectTaskStatus.findMany({
+                where: { id: { in: statusIds }, tenant_id: tenantId },
+                select: { id: true },
+            });
+            const foundIds = new Set(found.map((row: { id: string }) => row.id));
+            if (!statusIds.every((id) => foundIds.has(id))) {
+                throw new NotFoundException('One or more statuses were not found');
+            }
+
+            // A status sits in at most one column per board — enforced by the
+            // (board_id, status_id) unique — so binding it here has to take it
+            // off whichever column currently holds it.
+            await this.db.boardColumnStatus.deleteMany({
+                where: { board_id: boardId, tenant_id: tenantId, status_id: { in: statusIds } },
+            });
+        }
+
+        await this.db.boardColumnStatus.deleteMany({
+            where: { board_id: boardId, tenant_id: tenantId, board_column_id: columnId },
+        });
+
+        if (statusIds.length === 0) return;
+
+        await this.db.boardColumnStatus.createMany({
+            data: statusIds.map((statusId) => ({
+                tenant_id: tenantId,
+                board_id: boardId,
+                board_column_id: columnId,
+                status_id: statusId,
+            })),
+            skipDuplicates: true,
         });
     }
 }
