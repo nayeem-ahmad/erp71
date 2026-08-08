@@ -10,6 +10,12 @@ export interface AuditContext {
 
 export interface AuditQueryOptions {
     tenantId?: string;
+    /**
+     * Restrict to platform-scoped rows — the ones a platform admin wrote, which
+     * carry no tenant. Takes precedence over `tenantId`, since the two are
+     * mutually exclusive by construction.
+     */
+    platformOnly?: boolean;
     userId?: string;
     entity?: string;
     entityId?: string;
@@ -87,7 +93,8 @@ export class AuditService {
         const offset = options.offset ?? 0;
 
         const where: Record<string, any> = {};
-        if (options.tenantId) where.tenant_id = options.tenantId;
+        if (options.platformOnly) where.tenant_id = null;
+        else if (options.tenantId) where.tenant_id = options.tenantId;
         if (options.userId) where.user_id = options.userId;
         if (options.entity) where.entity = options.entity;
         if (options.entityId) where.entity_id = options.entityId;

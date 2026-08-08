@@ -3,7 +3,16 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { AlignLeft, CheckSquare, GitBranch, GripVertical, MessageSquare, Plus, X } from 'lucide-react';
+import {
+    AlignLeft,
+    CheckSquare,
+    FolderKanban,
+    GitBranch,
+    GripVertical,
+    MessageSquare,
+    Plus,
+    X,
+} from 'lucide-react';
 import { PageShell, PageHeader, Button, Input, Select, StatusBadge } from '@/components/ui';
 import type { StatusBadgeTone } from '@/components/ui';
 import BurndownChart, { type BurndownPoint } from '@/components/projects/BurndownChart';
@@ -29,6 +38,7 @@ import {
     labelClass,
     labelsOf,
     NO_FILTERS,
+    projectLabelOf,
     type BoardColumn,
     type BoardFilters,
     type BoardTask,
@@ -726,6 +736,7 @@ function TaskCard({
               : c.due.replace('{date}', formatDate(task.due_date, locale));
 
     const assigneeName = assigneeNameOf(task);
+    const projectLabel = projectLabelOf(task.project);
 
     return (
         <article
@@ -765,7 +776,25 @@ function TaskCard({
                 >
                     <GripVertical className="h-4 w-4" />
                 </button>
-                <p className="flex-1 pt-0.5 font-medium">{task.title}</p>
+                <div className="min-w-0 flex-1 pt-0.5">
+                    <p className="font-medium">{task.title}</p>
+                    {/* A card gets read away from its board — two boards open
+                        side by side, a screenshot pasted into a chat — so it
+                        names its own project. Short name first because the full
+                        one does not fit a 18rem column; that goes in the title
+                        attribute. Muted and under the heading so it never
+                        competes with the task itself. */}
+                    {projectLabel && (
+                        <p
+                            title={task.project?.name ?? undefined}
+                            className="mt-0.5 flex items-center gap-1 text-xs text-gray-500"
+                        >
+                            <FolderKanban className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                            <span className="sr-only">{c.project}: </span>
+                            <span className="truncate">{projectLabel}</span>
+                        </p>
+                    )}
+                </div>
             </div>
 
             {/* Above the badges, as on a Trello card: colour is what the eye

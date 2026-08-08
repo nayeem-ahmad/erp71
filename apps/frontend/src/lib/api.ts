@@ -1827,6 +1827,90 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
         }),
     revokeAdminShortLink: (id: string) => fetchWithAuth(`/admin/short-links/${id}`, { method: 'DELETE' }),
+
+    // ---- Platform blog (platform admin authoring, plus the in-app feed) ----
+    getAdminBlogPosts: (params: { status?: string; search?: string; page?: number; limit?: number } = {}) => {
+        const query = new URLSearchParams();
+        if (params.status) query.set('status', params.status);
+        if (params.search) query.set('search', params.search);
+        if (params.page) query.set('page', String(params.page));
+        if (params.limit) query.set('limit', String(params.limit));
+        return fetchWithAuth(`/admin/blog/posts${query.size ? `?${query}` : ''}`);
+    },
+    getAdminBlogPost: (id: string) => fetchWithAuth(`/admin/blog/posts/${id}`),
+    createAdminBlogPost: (data: any) =>
+        fetchWithAuth('/admin/blog/posts', { method: 'POST', body: JSON.stringify(data) }),
+    updateAdminBlogPost: (id: string, data: any) =>
+        fetchWithAuth(`/admin/blog/posts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    publishAdminBlogPost: (id: string) =>
+        fetchWithAuth(`/admin/blog/posts/${id}/publish`, { method: 'POST', body: JSON.stringify({}) }),
+    unpublishAdminBlogPost: (id: string) =>
+        fetchWithAuth(`/admin/blog/posts/${id}/unpublish`, { method: 'POST', body: JSON.stringify({}) }),
+    archiveAdminBlogPost: (id: string) =>
+        fetchWithAuth(`/admin/blog/posts/${id}/archive`, { method: 'POST', body: JSON.stringify({}) }),
+    deleteAdminBlogPost: (id: string) => fetchWithAuth(`/admin/blog/posts/${id}`, { method: 'DELETE' }),
+    /** FormData, so Content-Type is left to the browser to set with its boundary. */
+    uploadAdminBlogCover: (id: string, file: File) => {
+        const body = new FormData();
+        body.append('cover', file);
+        return fetchWithAuth(`/admin/blog/posts/${id}/cover`, { method: 'POST', body });
+    },
+    removeAdminBlogCover: (id: string) => fetchWithAuth(`/admin/blog/posts/${id}/cover`, { method: 'DELETE' }),
+    getAdminBlogCategories: () => fetchWithAuth('/admin/blog/categories'),
+    draftAdminBlogPost: (data: { prompt: string; locale?: string }) =>
+        fetchWithAuth('/admin/blog/ai-draft', { method: 'POST', body: JSON.stringify(data) }),
+    createAdminBlogCategory: (data: any) =>
+        fetchWithAuth('/admin/blog/categories', { method: 'POST', body: JSON.stringify(data) }),
+    updateAdminBlogCategory: (id: string, data: any) =>
+        fetchWithAuth(`/admin/blog/categories/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteAdminBlogCategory: (id: string) => fetchWithAuth(`/admin/blog/categories/${id}`, { method: 'DELETE' }),
+
+    getBlogUpdates: (params: { locale?: string; page?: number; limit?: number } = {}) => {
+        const query = new URLSearchParams();
+        if (params.locale) query.set('locale', params.locale);
+        if (params.page) query.set('page', String(params.page));
+        if (params.limit) query.set('limit', String(params.limit));
+        return fetchWithAuth(`/blog/updates${query.size ? `?${query}` : ''}`);
+    },
+    getBlogUnread: () => fetchWithAuth('/blog/updates/unread'),
+    markBlogSeen: () => fetchWithAuth('/blog/updates/seen', { method: 'POST', body: JSON.stringify({}) }),
+
+    // ---- Storefront blog (a shop's own posts) ----
+    getTenantBlogSettings: () => fetchWithAuth('/blog/manage/settings'),
+    updateTenantBlogSettings: (data: any) =>
+        fetchWithAuth('/blog/manage/settings', { method: 'PATCH', body: JSON.stringify(data) }),
+    getTenantBlogPosts: (params: { status?: string; search?: string; page?: number; limit?: number } = {}) => {
+        const query = new URLSearchParams();
+        if (params.status) query.set('status', params.status);
+        if (params.search) query.set('search', params.search);
+        if (params.page) query.set('page', String(params.page));
+        if (params.limit) query.set('limit', String(params.limit));
+        return fetchWithAuth(`/blog/manage/posts${query.size ? `?${query}` : ''}`);
+    },
+    getTenantBlogPost: (id: string) => fetchWithAuth(`/blog/manage/posts/${id}`),
+    createTenantBlogPost: (data: any) =>
+        fetchWithAuth('/blog/manage/posts', { method: 'POST', body: JSON.stringify(data) }),
+    updateTenantBlogPost: (id: string, data: any) =>
+        fetchWithAuth(`/blog/manage/posts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    publishTenantBlogPost: (id: string) =>
+        fetchWithAuth(`/blog/manage/posts/${id}/publish`, { method: 'POST', body: JSON.stringify({}) }),
+    setTenantBlogPostStatus: (id: string, status: string) =>
+        fetchWithAuth(`/blog/manage/posts/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+    deleteTenantBlogPost: (id: string) => fetchWithAuth(`/blog/manage/posts/${id}`, { method: 'DELETE' }),
+    uploadTenantBlogCover: (id: string, file: File) => {
+        const body = new FormData();
+        body.append('cover', file);
+        return fetchWithAuth(`/blog/manage/posts/${id}/cover`, { method: 'POST', body });
+    },
+    removeTenantBlogCover: (id: string) => fetchWithAuth(`/blog/manage/posts/${id}/cover`, { method: 'DELETE' }),
+    getTenantBlogCategories: () => fetchWithAuth('/blog/manage/categories'),
+    draftTenantBlogPost: (data: { prompt: string; locale?: string }) =>
+        fetchWithAuth('/blog/manage/ai-draft', { method: 'POST', body: JSON.stringify(data) }),
+    createTenantBlogCategory: (data: any) =>
+        fetchWithAuth('/blog/manage/categories', { method: 'POST', body: JSON.stringify(data) }),
+    updateTenantBlogCategory: (id: string, data: any) =>
+        fetchWithAuth(`/blog/manage/categories/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteTenantBlogCategory: (id: string) => fetchWithAuth(`/blog/manage/categories/${id}`, { method: 'DELETE' }),
     // Sales detail
     getSale: (id: string) => fetchWithAuth(`/sales/${id}`),
     getSaleInvoice: (id: string) => fetchWithAuth(`/sales/${id}/invoice`),
@@ -1911,6 +1995,26 @@ export const api = {
         if (!res.ok) throw new Error(body?.error?.message || body?.message || '2FA verification failed');
         return body && 'data' in body ? body.data : body;
     }),
+    // Runtime-configured rather than a NEXT_PUBLIC_ build arg, so turning Google
+    // sign-in on is a backend restart instead of a frontend rebuild.
+    getGoogleAuthConfig: () => fetch(`${API_BASE}/auth/google/config`).then(async res => {
+        const body = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(body?.message || 'Failed to load Google sign-in config');
+        return body && 'data' in body ? body.data : body;
+    }),
+    googleSignIn: (data: { credential: string; tenantName?: string; storeName?: string; planCode?: string; referralCode?: string; mobile?: string; mobile_country_code?: string }) =>
+        fetch(`${API_BASE}/auth/google`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }).then(async res => {
+            const body = await res.json().catch(() => null);
+            if (!res.ok) {
+                const raw = body?.error?.message ?? body?.message;
+                throw new Error(Array.isArray(raw) ? raw[0] : (raw || 'Google sign-in failed'));
+            }
+            return body && 'data' in body ? body.data : body;
+        }),
     resendVerificationEmail: () => fetchWithAuth('/auth/resend-verification', { method: 'POST' }),
     signup: (data: any) => fetch(`${API_BASE}/auth/signup`, {
         method: 'POST',

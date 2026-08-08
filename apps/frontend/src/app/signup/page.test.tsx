@@ -23,6 +23,9 @@ jest.mock('../../lib/api', () => ({
             access_token: 'token-1',
             tenants: [{ id: 'tenant-1', stores: [{ id: 'store-1' }], subscription: { plan: { code: 'BASIC' } } }],
         }),
+        // Google sign-up stays off in these tests; the button renders nothing.
+        getGoogleAuthConfig: jest.fn().mockResolvedValue({ enabled: false, client_id: null }),
+        googleSignIn: jest.fn(),
     },
 }));
 

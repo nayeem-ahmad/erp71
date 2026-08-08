@@ -17,6 +17,7 @@ import { CombinedAuthGuard } from './combined-auth.guard';
 import { PlatformAdminGuard } from './platform-admin.guard';
 import { SubscriptionAccessGuard } from './subscription-access.guard';
 import { TotpService } from './totp.service';
+import { GoogleTokenService } from './google-token.service';
 
 @Module({
     imports: [
@@ -42,6 +43,7 @@ import { TotpService } from './totp.service';
         PlatformAdminGuard,
         SubscriptionAccessGuard,
         TotpService,
+        GoogleTokenService,
     ],
     controllers: [AuthController],
     exports: [
@@ -55,6 +57,7 @@ import { TotpService } from './totp.service';
         PlatformAdminGuard,
         SubscriptionAccessGuard,
         TotpService,
+        GoogleTokenService,
     ],
 })
 export class AuthModule { }

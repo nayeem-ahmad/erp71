@@ -130,7 +130,8 @@ function StoreStep({
                 tenantName: form.tenantName.trim(),
                 name: form.storeName.trim(),
                 address: form.address.trim() || undefined,
-                planCode: 'FREE',
+                // No plan picker in this wizard, and FREE is rejected for new
+                // workspaces — let the backend apply the platform default.
                 businessType: businessType ?? undefined,
             });
             if (result?.tenant?.id) {

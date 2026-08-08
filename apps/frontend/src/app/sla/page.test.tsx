@@ -8,7 +8,7 @@ jest.mock('next/link', () => {
     return MockLink;
 });
 
-import SlaPage from './page';
+import SlaPage from './SlaClient';
 
 describe('SlaPage', () => {
     it('renders the main SLA heading', () => {

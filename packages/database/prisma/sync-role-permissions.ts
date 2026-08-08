@@ -121,6 +121,20 @@ export const PERMISSION_BACKFILL_GROUPS: PermissionGroup[] = [
         ],
     },
     {
+        // The storefront blog ships dark: `TenantBlogSettings.enabled` defaults
+        // to false, so this grant gives managers the module the moment an owner
+        // switches it on rather than a screen they cannot open. PUBLISH_BLOG is
+        // in the group but deliberately narrower in intent than MANAGE_BLOG —
+        // writing a draft and putting it on the shop's public page are
+        // different acts, and an owner may want them held by different people.
+        key: 'blog',
+        permissions: [
+            StorePermission.VIEW_BLOG,
+            StorePermission.MANAGE_BLOG,
+            StorePermission.PUBLISH_BLOG,
+        ],
+    },
+    {
         // Inventory > Demands. Both permissions in one group because they ship
         // together and no existing role holds either: `ROLE_DEFAULT_PERMISSIONS`
         // decides who actually gets what, which is Manager (both) and Cashier
