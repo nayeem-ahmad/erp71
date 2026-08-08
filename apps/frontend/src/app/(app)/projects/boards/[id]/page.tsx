@@ -38,6 +38,7 @@ import {
     isOverWip,
     labelClass,
     labelsOf,
+    matchesFilters,
     NO_FILTERS,
     projectLabelOf,
     type BoardColumn,
@@ -91,20 +92,22 @@ export default function BoardPage() {
     const [columns, setColumns] = useState<BoardColumn[]>([]);
     const [unsorted, setUnsorted] = useState<BoardTask[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
     const [filters, setFilters] = useState<BoardFilters>(NO_FILTERS);
+    const [labels, setLabels] = useState<ProjectLabel[]>([]);
     const [drag, setDrag] = useState<DragState | null>(null);
     const [adding, setAdding] = useState(false);
-    // No tenant-wide label source is wired into a cross-project board yet, so
-    // the label filter is always empty rather than fetched — same no-op state
-    // as a tenant with zero labels.
-    const labels: ProjectLabel[] = [];
 
     const visibleColumns = useMemo(() => applyFilters(columns, filters), [columns, filters]);
+    const visibleUnsorted = useMemo(
+        () => unsorted.filter((task) => matchesFilters(task, filters)),
+        [unsorted, filters],
+    );
     const assigneeOptions = useMemo(() => assigneeOptionsFrom(columns), [columns]);
     const filtered = hasActiveFilter(filters);
-    const shown = countTasks(visibleColumns);
-    const total = countTasks(columns);
+    const shown = countTasks(visibleColumns) + visibleUnsorted.length;
+    const total = countTasks(columns) + unsorted.length;
 
     const loadBoard = useCallback(async () => {
         setLoading(true);
@@ -119,17 +122,30 @@ export default function BoardPage() {
             setBoard({ id: res.id, name: res.name, description: res.description ?? null });
             setColumns(res.columns ?? []);
             setUnsorted(res.unsorted ?? []);
-        } catch {
-            setColumns([]);
-            setUnsorted([]);
+            setLoadError(false);
+        } catch (error) {
+            // Distinguished from "still loading" below, so a 403/404/network
+            // failure gets an exit rather than an indefinite spinner. A failure
+            // once the board is already on screen is reported the same way
+            // `removeCard` reports its own failures — a toast, not a state wipe.
+            setLoadError(true);
+            toast.error(error instanceof Error ? error.message : t.common.error);
         } finally {
             setLoading(false);
         }
-    }, [boardId]);
+    }, [boardId, t.common.error]);
 
     useEffect(() => {
         loadBoard();
     }, [loadBoard]);
+
+    // Tenant-wide, so it does not need re-fetching when the board changes. A
+    // failure only costs the label filter, not the board.
+    useEffect(() => {
+        api.getProjectLabels()
+            .then((list: unknown) => setLabels(Array.isArray(list) ? list : []))
+            .catch(() => setLabels([]));
+    }, []);
 
     const move = async (taskId: string, columnId: string, sortOrder: number) => {
         const task =
@@ -250,6 +266,29 @@ export default function BoardPage() {
     const cancelDrag = () => setDrag(null);
 
     if (!board) {
+        if (loadError) {
+            return (
+                <PageShell>
+                    <PageHeader
+                        title={m.title}
+                        breadcrumbs={modulePageBreadcrumbs(
+                            t.dashboardHome.breadcrumbHome,
+                            t.sidebar.modules.projects,
+                            m.title,
+                            'projects',
+                        )}
+                    />
+                    <div className="space-y-3 rounded-md border border-red-200 bg-red-50 p-3 md:p-4">
+                        <p className="text-sm text-red-700">{t.common.error}</p>
+                        <Link href={routes.projects.boards}>
+                            <Button variant="secondary" className="min-h-touch">
+                                {t.common.back}
+                            </Button>
+                        </Link>
+                    </div>
+                </PageShell>
+            );
+        }
         return (
             <PageShell>
                 <p className="text-sm text-gray-500">{t.common.loading}</p>
@@ -303,7 +342,12 @@ export default function BoardPage() {
                                 <p className="text-xs text-gray-500">{m.unsortedHint}</p>
                             </div>
                             <div className="flex flex-1 flex-col gap-2 p-2">
-                                {unsorted.map((task) => (
+                                {visibleUnsorted.length === 0 && (
+                                    <p className="px-1 py-4 text-center text-xs text-gray-400">
+                                        {bm.noMatches}
+                                    </p>
+                                )}
+                                {visibleUnsorted.map((task) => (
                                     <TaskCard
                                         key={task.id}
                                         task={task}
