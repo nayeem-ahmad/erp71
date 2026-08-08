@@ -284,17 +284,23 @@ export class UpdateTaskDto {
     @IsOptional() @IsEnum(ProjectPriorityDto)
     priority?: ProjectPriorityDto;
 
-    @IsOptional() @IsUUID()
+    /**
+     * `''` unassigns, for the same reason the dates below take one: PATCH reads
+     * undefined as "leave alone", so only the empty string can mean "nobody".
+     * The service already stores `dto.assigneeId || null` — without the
+     * `@ValidateIf` the empty string never gets past `@IsUUID()`.
+     */
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     assigneeId?: string;
 
     /** Alternative to assigneeId for a team member who has no login. */
-    @IsOptional() @IsUUID()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     assigneeEmployeeId?: string;
 
-    @IsOptional() @IsUUID()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     milestoneId?: string;
 
-    @IsOptional() @IsUUID()
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     sprintId?: string;
 
     /**
