@@ -1858,7 +1858,7 @@ export const api = {
     },
     removeTenantBlogCover: (id: string) => fetchWithAuth(`/blog/manage/posts/${id}/cover`, { method: 'DELETE' }),
     getTenantBlogCategories: () => fetchWithAuth('/blog/manage/categories'),
-    draftTenantBlogPost: (data: { prompt: string }) =>
+    draftTenantBlogPost: (data: { prompt: string; locale?: string }) =>
         fetchWithAuth('/blog/manage/ai-draft', { method: 'POST', body: JSON.stringify(data) }),
     createTenantBlogCategory: (data: any) =>
         fetchWithAuth('/blog/manage/categories', { method: 'POST', body: JSON.stringify(data) }),

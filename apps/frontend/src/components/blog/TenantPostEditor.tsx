@@ -4,12 +4,16 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Eye, Pencil, Sparkles, Trash2, Upload } from 'lucide-react';
+import { hasPlanEntitlement } from '@erp71/shared-types';
 import { Button, Checkbox, ConfirmDialog, Field, Input, Select, Textarea } from '@/components/ui';
 import ArticleMarkdown from '@/components/blog/ArticleMarkdown';
 import AiDraftModal from '@/components/blog/AiDraftModal';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
+import { usePlatformFeatures } from '@/contexts/PlatformFeaturesContext';
+import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
+import { resolveTenantPlanFeatures } from '@/lib/plan-entitlements';
 
 type Category = { id: string; name: string };
 
@@ -23,9 +27,17 @@ type Category = { id: string; name: string };
  * customer base at once.
  */
 export default function TenantPostEditor({ postId }: { postId?: string }) {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const m = t.storefront.blog;
     const router = useRouter();
+    const { aiChat: aiChatEnabled } = usePlatformFeatures();
+    const { planCode, features: rawPlanFeatures } = useTenantPlanFeatures();
+    // Same two gates as every other AI feature (see (app)/layout.tsx): the
+    // platform kill switch and the plan entitlement. The server already
+    // enforces the entitlement via enforceCredits, but showing the button to
+    // every non-premium shop means the failure only surfaces after the owner
+    // has typed a brief and pressed Generate.
+    const canUseAi = aiChatEnabled && hasPlanEntitlement(resolveTenantPlanFeatures(planCode, rawPlanFeatures), 'premiumAi');
 
     const [tab, setTab] = useState<'write' | 'preview'>('write');
     const [title, setTitle] = useState('');
@@ -144,7 +156,7 @@ export default function TenantPostEditor({ postId }: { postId?: string }) {
     async function generateDraft() {
         setAiLoading(true);
         try {
-            const draft = await api.draftTenantBlogPost({ prompt: aiPrompt });
+            const draft = await api.draftTenantBlogPost({ prompt: aiPrompt, locale });
             setAiOpen(false);
 
             if (title.trim() || excerpt.trim() || body.trim()) {
@@ -183,14 +195,16 @@ export default function TenantPostEditor({ postId }: { postId?: string }) {
                 </Link>
 
                 <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                        variant="secondary"
-                        icon={<Sparkles className="h-4 w-4" />}
-                        onClick={() => setAiOpen(true)}
-                        disabled={saving}
-                    >
-                        {m.ai.button}
-                    </Button>
+                    {canUseAi && (
+                        <Button
+                            variant="secondary"
+                            icon={<Sparkles className="h-4 w-4" />}
+                            onClick={() => setAiOpen(true)}
+                            disabled={saving}
+                        >
+                            {m.ai.button}
+                        </Button>
+                    )}
                     <Button variant="secondary" onClick={save} loading={saving} disabled={!title.trim() || !body.trim()}>
                         {m.save}
                     </Button>
