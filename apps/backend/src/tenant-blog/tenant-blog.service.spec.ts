@@ -43,7 +43,7 @@ describe('TenantBlogService', () => {
         db.tenantBlogCategory.findMany.mockResolvedValue([]);
         db.tenantBlogPostSlug.findMany.mockResolvedValue([]);
         db.$transaction.mockImplementation((arg: any) => (typeof arg === 'function' ? arg(db) : Promise.all(arg)));
-        service = new TenantBlogService(db, assets);
+        service = new TenantBlogService(db, assets, {} as any);
     });
 
     const enabledTenant = (overrides: Record<string, unknown> = {}) => ({
