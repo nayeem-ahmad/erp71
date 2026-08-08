@@ -10,6 +10,7 @@ import {
     resolveAiCreditsMonthly,
     SubscriptionPlanCode,
 } from '@erp71/shared-types';
+import { extractJson } from './extract-json';
 
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1';
 const DEFAULT_MODEL = 'anthropic/claude-haiku-4.5';
@@ -649,14 +650,7 @@ Rules:
     }
 
     private extractJson<T>(raw: string): T {
-        const trimmed = raw.trim();
-        const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
-        const candidate = (fenced?.[1] ?? trimmed).trim();
-        try {
-            return JSON.parse(candidate) as T;
-        } catch {
-            throw new InternalServerErrorException('AI returned an invalid response. Please try again.');
-        }
+        return extractJson<T>(raw);
     }
 
     private pickBestProductMatch(
