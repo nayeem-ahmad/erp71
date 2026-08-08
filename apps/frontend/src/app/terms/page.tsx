@@ -1,224 +1,30 @@
-'use client';
+import type { Metadata } from 'next';
+import TermsClient from './TermsClient';
 
-import Link from 'next/link';
-import MarketingFooter from '@/components/marketing/MarketingFooter';
-import MarketingNav from '@/components/marketing/MarketingNav';
-import { INFO_EMAIL } from '@/lib/brand';
-import { useI18n } from '@/lib/i18n';
+/**
+ * Server wrapper that exists solely to export `metadata`.
+ *
+ * The page itself is a client component — it uses `useI18n`, so its copy is
+ * chosen in the browser — and a client component cannot export metadata. That
+ * left every marketing page shipping the layout's default title and no
+ * description at all, which is what a search result and a shared link both
+ * read. The split costs one file and fixes it without touching the page.
+ *
+ * The metadata is English on purpose: it is emitted at request time, before
+ * any locale preference is known, and an English title is the right default
+ * for a crawler.
+ */
+export const metadata: Metadata = {
+    title: 'Terms of Service — ERP71',
+    description: 'Terms of Service governing use of the ERP71 platform.',
+    alternates: { canonical: `${process.env.NEXT_PUBLIC_SITE_URL ?? 'https://app.erp71.com'}/terms` },
+    openGraph: {
+        title: 'Terms of Service — ERP71',
+        description: 'Terms of Service governing use of the ERP71 platform.',
+        type: 'website',
+    },
+};
 
-export default function TermsPage() {
-    const { t } = useI18n();
-    const m = t.marketing.legal;
-    const p = m.terms;
-
-    return (
-        <div className="min-h-screen bg-white font-sans text-gray-900">
-
-            <MarketingNav />
-
-            {/* Content */}
-            <main className="pt-32 pb-24 px-6">
-                <div className="max-w-3xl mx-auto">
-
-                    <h1 className="text-4xl font-black tracking-tight text-gray-900 mb-2">{p.title}</h1>
-                    <p className="text-sm text-gray-400 mb-12">{m.lastUpdated}</p>
-
-                    <div className="space-y-10 text-gray-700 leading-relaxed">
-
-                        {/* 1 */}
-                        <section>
-                            <h2 className="text-xl font-bold text-gray-900 mb-3">1. Acceptance of Terms</h2>
-                            <p>
-                                By accessing or using the ERP71 platform (&ldquo;Service&rdquo;), you agree to be bound by
-                                these Terms of Service (&ldquo;Terms&rdquo;). If you are entering into these Terms on behalf of a
-                                business or organisation, you represent that you have the authority to bind that entity.
-                                If you do not agree to these Terms, do not use the Service.
-                            </p>
-                        </section>
-
-                        {/* 2 */}
-                        <section>
-                            <h2 className="text-xl font-bold text-gray-900 mb-3">2. Description of Service</h2>
-                            <p>
-                                ERP71 is a cloud-based retail management platform providing point-of-sale (POS),
-                                inventory management, sales analytics, customer relationship management, and integrated
-                                BDT payment processing for businesses operating in Bangladesh and internationally.
-                                The Service is provided on a subscription basis as further described in Section 4.
-                            </p>
-                        </section>
-
-                        {/* 3 */}
-                        <section>
-                            <h2 className="text-xl font-bold text-gray-900 mb-3">3. Account Registration</h2>
-                            <p className="mb-3">
-                                To use the Service you must create an account by providing accurate and complete
-                                information including your legal name, business name, and a valid email address. You are
-                                responsible for:
-                            </p>
-                            <ul className="list-disc pl-6 space-y-2 text-sm">
-                                <li>Maintaining the confidentiality of your account credentials.</li>
-                                <li>All activity that occurs under your account.</li>
-                                <li>Notifying us immediately at <a href={`mailto:${INFO_EMAIL}`} className="text-blue-600 hover:underline">{INFO_EMAIL}</a> of any unauthorised access.</li>
-                                <li>Ensuring that all staff accounts you create comply with these Terms.</li>
-                            </ul>
-                            <p className="mt-3">
-                                You must be at least 18 years old and legally capable of entering into binding contracts
-                                under the laws of Bangladesh to register for the Service.
-                            </p>
-                        </section>
-
-                        {/* 4 */}
-                        <section>
-                            <h2 className="text-xl font-bold text-gray-900 mb-3">4. Subscription &amp; Billing</h2>
-                            <p className="mb-3">
-                                ERP71 offers the following subscription tiers, priced in Bangladeshi Taka (BDT):
-                            </p>
-                            <div className="bg-gray-50 rounded-xl p-4 text-sm mb-4 space-y-1">
-                                <p><strong>Free</strong> — ৳ 0/month (single store, limited features)</p>
-                                <p><strong>Basic</strong> — ৳ 1,499/month</p>
-                                <p><strong>Standard</strong> — ৳ 2,999/month</p>
-                                <p><strong>Premium</strong> — ৳ 3,999/month (unlimited stores and staff)</p>
-                            </div>
-                            <ul className="list-disc pl-6 space-y-2 text-sm">
-                                <li>
-                                    <strong>Activation.</strong> New workspaces require a paid plan and successful checkout
-                                    before full access is granted. Free trials and the free tier are temporarily unavailable
-                                    while platform capacity is being scaled.
-                                </li>
-                                <li>
-                                    <strong>Auto-renewal.</strong> Subscriptions renew automatically each calendar month on
-                                    the anniversary of your start date. You authorise ERP71 to charge the applicable
-                                    BDT amount to your payment method on file on each renewal date.
-                                </li>
-                                <li>
-                                    <strong>Cancellation.</strong> You may cancel or downgrade your subscription at any time
-                                    from Account Settings. Cancellation takes effect at the end of the current billing period;
-                                    no partial-month refunds are issued unless required by applicable law.
-                                </li>
-                                <li>
-                                    <strong>Taxes.</strong> All prices are exclusive of VAT and any other taxes imposed by
-                                    the National Board of Revenue (NBR) of Bangladesh. You are responsible for remitting
-                                    applicable taxes.
-                                </li>
-                                <li>
-                                    <strong>Payment methods.</strong> We accept bKash, Nagad, SSL Wireless, and major
-                                    debit/credit cards. All transactions are processed in BDT.
-                                </li>
-                            </ul>
-                        </section>
-
-                        {/* 5 */}
-                        <section>
-                            <h2 className="text-xl font-bold text-gray-900 mb-3">5. Acceptable Use</h2>
-                            <p className="mb-3">You agree not to use the Service to:</p>
-                            <ul className="list-disc pl-6 space-y-2 text-sm">
-                                <li>Violate any applicable law or regulation, including those of Bangladesh.</li>
-                                <li>Process transactions for illegal goods or services.</li>
-                                <li>Reverse-engineer, decompile, or attempt to extract the source code of the platform.</li>
-                                <li>Introduce malicious code, conduct denial-of-service attacks, or scrape data at scale.</li>
-                                <li>Resell or sublicense access to the Service without our express written consent.</li>
-                                <li>Impersonate another person or entity.</li>
-                            </ul>
-                            <p className="mt-3">
-                                We reserve the right to suspend or terminate accounts found to be in violation of this
-                                section without prior notice.
-                            </p>
-                        </section>
-
-                        {/* 6 */}
-                        <section>
-                            <h2 className="text-xl font-bold text-gray-900 mb-3">6. Data &amp; Privacy</h2>
-                            <p>
-                                Your use of the Service is also governed by our{' '}
-                                <Link href="/privacy" className="text-blue-600 hover:underline">Privacy Policy</Link>,
-                                which is incorporated into these Terms by reference. By using the Service you consent
-                                to the collection and use of your data as described in that policy. All business and
-                                transaction data you enter remains your property; ERP71 acts as a data processor
-                                on your behalf.
-                            </p>
-                        </section>
-
-                        {/* 7 */}
-                        <section>
-                            <h2 className="text-xl font-bold text-gray-900 mb-3">7. Intellectual Property</h2>
-                            <p>
-                                The Service, including all software, designs, trademarks, and documentation, is owned
-                                by ERP71 Ltd. and protected by applicable intellectual property laws. These Terms
-                                grant you a limited, non-exclusive, non-transferable licence to access and use the
-                                Service for your internal business purposes. No other rights are granted.
-                            </p>
-                            <p className="mt-3">
-                                Your business data, logos, and content remain your intellectual property. You grant
-                                ERP71 a limited licence to store, display, and process that content solely for
-                                the purpose of providing the Service.
-                            </p>
-                        </section>
-
-                        {/* 8 */}
-                        <section>
-                            <h2 className="text-xl font-bold text-gray-900 mb-3">8. Limitation of Liability</h2>
-                            <p className="mb-3">
-                                To the maximum extent permitted by law:
-                            </p>
-                            <ul className="list-disc pl-6 space-y-2 text-sm">
-                                <li>
-                                    The Service is provided &ldquo;as is&rdquo; and &ldquo;as available&rdquo; without warranties of any kind,
-                                    express or implied, including fitness for a particular purpose or uninterrupted availability.
-                                </li>
-                                <li>
-                                    ERP71&apos;s total aggregate liability arising from or related to these Terms shall not
-                                    exceed the amount you paid for the Service in the three months preceding the claim.
-                                </li>
-                                <li>
-                                    ERP71 shall not be liable for any indirect, incidental, special, or consequential
-                                    damages, including lost profits or lost data, even if advised of the possibility.
-                                </li>
-                            </ul>
-                        </section>
-
-                        {/* 9 */}
-                        <section>
-                            <h2 className="text-xl font-bold text-gray-900 mb-3">9. Termination</h2>
-                            <p>
-                                Either party may terminate these Terms at any time. You may do so by cancelling your
-                                subscription and deleting your account. ERP71 may suspend or terminate your access
-                                immediately for breach of these Terms, non-payment, or if required by law. Upon
-                                termination, your right to use the Service ceases. You may export your data for 30 days
-                                following termination, after which it will be deleted in accordance with our{' '}
-                                <Link href="/privacy" className="text-blue-600 hover:underline">Privacy Policy</Link>.
-                            </p>
-                        </section>
-
-                        {/* 10 */}
-                        <section>
-                            <h2 className="text-xl font-bold text-gray-900 mb-3">10. Governing Law</h2>
-                            <p>
-                                These Terms are governed by and construed in accordance with the laws of the People&apos;s
-                                Republic of Bangladesh. Any dispute arising from or in connection with these Terms shall
-                                be subject to the exclusive jurisdiction of the courts of Dhaka, Bangladesh. Nothing in
-                                this section limits any statutory consumer rights you may have under applicable
-                                Bangladeshi law.
-                            </p>
-                        </section>
-
-                        {/* 11 */}
-                        <section>
-                            <h2 className="text-xl font-bold text-gray-900 mb-3">11. Contact</h2>
-                            <p>
-                                For questions about these Terms, please contact us:
-                            </p>
-                            <div className="mt-3 bg-gray-50 rounded-xl p-4 text-sm space-y-1">
-                                <p><strong>ERP71 Ltd.</strong></p>
-                                <p>Dhaka, Bangladesh</p>
-                                <p>Email: <a href={`mailto:${INFO_EMAIL}`} className="text-blue-600 hover:underline">{INFO_EMAIL}</a></p>
-                            </div>
-                        </section>
-
-                    </div>
-                </div>
-            </main>
-
-            <MarketingFooter />
-        </div>
-    );
+export default function Page() {
+    return <TermsClient />;
 }

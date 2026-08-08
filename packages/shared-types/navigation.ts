@@ -219,11 +219,13 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'account-settings.payment-methods': { id: 'account-settings.payment-methods', kind: 'link', icon: 'CreditCard', labelKey: 'sidebar.items.paymentMethods', href: '/settings/payment-methods' },
   'account-settings.discount-codes': { id: 'account-settings.discount-codes', kind: 'link', icon: 'Tag', labelKey: 'sidebar.items.discountCodes', href: '/settings/discount-codes' },
   'account-settings.url-shortener': { id: 'account-settings.url-shortener', kind: 'link', icon: 'Link2', labelKey: 'sidebar.items.urlShortener', href: '/settings/url-shortener' },
+  'account-settings.blog': { id: 'account-settings.blog', kind: 'link', icon: 'Newspaper', labelKey: 'sidebar.items.storefrontBlog', href: '/settings/blog' },
   'account-settings.data': { id: 'account-settings.data', kind: 'link', icon: 'Database', labelKey: 'sidebar.items.dataManagement', href: '/settings/data' },
   'account-settings.billing': { id: 'account-settings.billing', kind: 'link', icon: 'Wallet', labelKey: 'sidebar.modules.billing', href: '/billing', billingGated: true },
   'account-settings.sms-credits': { id: 'account-settings.sms-credits', kind: 'link', icon: 'MessageSquare', labelKey: 'sidebar.items.smsCredits', href: '/sms-credits' },
   'account-settings.ai-credits': { id: 'account-settings.ai-credits', kind: 'link', icon: 'Sparkles', labelKey: 'sidebar.items.aiCredits', href: '/ai-credits' },
 
+  'whats-new': { id: 'whats-new', kind: 'module', icon: 'Megaphone', labelKey: 'sidebar.items.whatsNew', href: '/whats-new' },
   support: { id: 'support', kind: 'module', icon: 'MessageSquare', labelKey: 'sidebar.items.support', href: '/support', moduleKey: 'support', platformFeature: 'support' },
   admin: { id: 'admin', kind: 'module', icon: 'ShieldCheck', labelKey: 'sidebar.modules.admin', moduleKey: 'admin' },
   'admin.overview': { id: 'admin.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/admin' },
@@ -234,6 +236,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'admin.users': { id: 'admin.users', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.users', href: '/admin/users' },
   'admin.referrals': { id: 'admin.referrals', kind: 'link', icon: 'Gift', labelKey: 'sidebar.items.referrals', href: '/admin/referrals' },
   'admin.url-shortener': { id: 'admin.url-shortener', kind: 'link', icon: 'Link2', labelKey: 'sidebar.items.urlShortener', href: '/admin/url-shortener' },
+  'admin.blog': { id: 'admin.blog', kind: 'link', icon: 'Newspaper', labelKey: 'sidebar.items.blog', href: '/admin/blog' },
   'admin.feedback': { id: 'admin.feedback', kind: 'link', icon: 'MessageSquare', labelKey: 'sidebar.items.feedback', href: '/admin/feedback' },
   'admin.support': { id: 'admin.support', kind: 'link', icon: 'Headset', labelKey: 'sidebar.items.adminSupport', href: '/admin/support' },
   'admin.system-health': { id: 'admin.system-health', kind: 'link', icon: 'Activity', labelKey: 'sidebar.items.systemHealth', href: '/admin/system-health' },
@@ -408,7 +411,9 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.feedback', 'admin', 3),
   layoutNode('admin.support', 'admin', 4),
   layoutNode('admin.url-shortener', 'admin', 5),
-  layoutNode('help', null, 13),
+  layoutNode('admin.blog', 'admin', 6),
+  layoutNode('whats-new', null, 13),
+  layoutNode('help', null, 14),
 ];
 
 /** Platform-admin console sidebar (admin module only). */
@@ -425,8 +430,10 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.status', 'admin', 5),
   layoutNode('admin.referrals', 'admin', 6),
   layoutNode('admin.url-shortener', 'admin', 7),
-  layoutNode('admin.platform-settings', 'admin', 8),
-  layoutNode('help', null, 1),
+  layoutNode('admin.blog', 'admin', 8),
+  layoutNode('admin.platform-settings', 'admin', 9),
+  layoutNode('whats-new', null, 1),
+  layoutNode('help', null, 2),
 ];
 
 export function getDefaultNavLayout(scope: NavScope): NavLayoutNode[] {

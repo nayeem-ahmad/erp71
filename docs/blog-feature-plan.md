@@ -1,6 +1,15 @@
 # Blog — implementation plan
 
-Status: **proposal, not yet built.** Written 2026-08-07.
+Status: **built, 2026-08-08.** Written as a proposal 2026-08-07; the plan below
+is kept as the record of the decisions, with the corrections marked inline where
+building it proved the plan wrong.
+
+**Both halves shipped.** The plan scoped itself to option A (platform-authored)
+and filed option B (tenant-authored storefront blog) as deliberately deferred;
+in the event both were built, as separate model sets and separate services
+exactly as §1 argued they would have to be. Sections below still read as
+proposals — that is deliberate, they record why each choice was made — but the
+scope decision in §1 no longer applies.
 
 Goal: platform staff write posts once, and the same post can reach two
 audiences — anonymous visitors on `erp71.com/blog` (SEO, launch announcements,
@@ -61,15 +70,21 @@ Three things that **do not** exist and are part of the work:
 1. **No `sitemap.ts`.** `apps/frontend/src/app/robots.ts` exists and allows `/`,
    but nothing emits a sitemap. A blog without one is the usual reason posts
    take weeks to get indexed.
-2. **No server-side data fetching on any public page.** `/pricing` is
-   `'use client'` and calls the API from the browser
-   (`apps/frontend/src/app/pricing/page.tsx:1-6`). That is fine for a pricing
-   table and wrong for a blog — a crawler must see the article in the initial
-   HTML. Blog pages are the first server components in the marketing tree.
-3. **Platform-admin mutations are not audited.** `AuditInterceptor` returns
-   early when there is no tenant (`apps/backend/src/audit/audit.interceptor.ts:63`,
-   `if (!tenantId || !userId) return`). Every `admin/*` route is therefore
-   invisible in `audit_log` today, short-links included. See §8.
+2. **No server-side data fetching on any public page.** ~~Blog pages are the
+   first server components in the marketing tree.~~ **Overstated — corrected
+   while building.** Server components on public routes already existed:
+   `/q/[token]` and `/store/[slug]/p/[productId]` are both server-rendered, and
+   `publicApiBase()` exists precisely for them. The real gap was narrower and
+   still real: every *marketing* page (`/`, `/pricing`, `/contact`, `/terms`,
+   `/privacy`, `/refund`, `/sla`) is `'use client'`, and a client component
+   cannot export `metadata` — so all seven shipped with the layout's default
+   title and no description at all, which is what a search result and a shared
+   link both read. Fixed by splitting each into a server `page.tsx` that exports
+   metadata and renders the existing client component unchanged.
+3. **Platform-admin mutations are not audited.** `AuditInterceptor` returned
+   early when there was no tenant, so every `admin/*` route was invisible in
+   `audit_log`, short-links included. **Fixed** — see §8 for what the fix turned
+   out to require beyond the obvious change.
 
 ---
 
@@ -396,14 +411,30 @@ would mean the preview only works in a logged-in browser, which defeats the
   `ArticleMarkdown.test.tsx`.
 - **Cover uploads** — validate mime type and size at the DTO, and store
   `storage_key` so deletes are possible.
-- **Audit gap.** `AuditInterceptor` skips requests with no tenant context, so
-  none of the `admin/blog/*` mutations will be recorded. Two options: (a)
-  explicit `AuditService` calls in the admin controller, or (b) fix the
-  interceptor to record platform-scoped actions with a null tenant, which also
-  retrofits short-links, tenant admin and platform settings. **(b) is the right
-  fix** and is worth doing as its own change rather than smuggling it in here —
-  but if it is not done first, this module should do (a), because "who
-  unpublished that post" is a question that will get asked.
+- **Audit gap — fixed, via option (b).** The interceptor now records
+  platform-scoped actions with a null tenant, which retrofits short-links,
+  tenant admin, platform settings and plan edits at the same time. Two things
+  the plan did not anticipate:
+
+  *What admits a request.* The gate is `request.isPlatformAdmin === true`, set
+  by `PlatformAdminGuard`, **not** the mere absence of a tenant. Storefront
+  customers and portal users are authenticated and tenant-less too, and their
+  order placements are not platform administration.
+
+  *The entity derivation had to change with it.* Leaving `admin` in the path
+  would have filed the blog, the tenant list and platform settings all under one
+  `admin` entity, making the entity filter useless for exactly the rows that
+  most need it. Stripping the prefix then exposed a latent trap: `OPAQUE_ID_RE`
+  matches any `[A-Za-z0-9_-]{16,}`, and `platform-settings` is 17 characters of
+  that — promoted to the entity segment it read as an opaque id, and
+  `resolveAuditTarget` bails out entirely on those, so `PUT
+  /admin/platform-settings/email` would have gone **unrecorded rather than
+  merely mislabelled**. Fixed by never treating an all-lowercase hyphenated word
+  as an id: uuid, cuid and nanoid all carry digits.
+
+  Rows are read back through `GET /admin/audit-logs` — writing them without
+  somewhere to read them would only have moved the gap, since `GET /audit-logs`
+  filters strictly on `tenant_id`.
 - Public list/detail endpoints are covered by the global throttler; the view
   counter should be throttled more tightly than the default.
 
@@ -440,10 +471,16 @@ publish → read at the end of Phase 2.
 
 ## 10. Deferred, with reasons
 
-- **Tenant-authored blogs on storefronts** (option B in §1). A different data
-  model, a new `MANAGE_BLOG` store permission in
-  `packages/shared-types/index.ts`, tenant-scoped queries, and a moderation
-  story for content we host but do not write. Worth doing; not this feature.
+- ~~**Tenant-authored blogs on storefronts** (option B in §1).~~ **Built.**
+  Separate models (`TenantBlogPost`, `TenantBlogCategory`, `TenantBlogPostSlug`,
+  `TenantBlogSettings`), a separate service, and three permissions rather than
+  the one the plan guessed at: `VIEW_BLOG` / `MANAGE_BLOG` / `PUBLISH_BLOG`.
+  Splitting publish out was not in the plan and is the better shape — drafting a
+  post is ordinary content work, putting it on the shop's public page is the
+  shop speaking in its own name, and an owner may want the second held by fewer
+  people. Taking a live post *down* is `PUBLISH_BLOG` too, for the same reason.
+  Slugs are unique per shop rather than globally: two shops may both write
+  "eid-sale", and each owns that URL under its own storefront.
 - **Comments** — recurring moderation cost, spam surface, and a GDPR-shaped
   data-retention question for a marketing blog that gets its discussion on
   social media anyway.

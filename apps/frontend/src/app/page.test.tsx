@@ -14,7 +14,7 @@ jest.mock('next/navigation', () => ({
     useSearchParams: () => new URLSearchParams(),
 }));
 
-import HomePage from './page';
+import HomePage from './HomeClient';
 
 describe('HomePage', () => {
     it('renders the brand name in the nav', () => {
