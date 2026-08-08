@@ -156,7 +156,7 @@ export class AiService {
         return dbKey ?? process.env.OPENROUTER_API_KEY ?? process.env.ANTHROPIC_API_KEY ?? '';
     }
 
-    private async getDefaultModel(): Promise<string> {
+    async getDefaultModel(): Promise<string> {
         const dbModel = await this.platformSettings.getRawValue('ai', 'default_model');
         const model = dbModel ?? process.env.OPENROUTER_DEFAULT_MODEL ?? DEFAULT_MODEL;
         return this.normalizeModel(model);
@@ -676,6 +676,31 @@ Rules:
         return contains ?? products[0];
     }
 
+    /**
+     * One model round-trip with no usage row written.
+     *
+     * Public because the platform blog needs it: those posts belong to no
+     * tenant, and `AiUsageLog.tenant_id` is a required FK, so there is no row
+     * that could be written and no balance that could be charged. The feedback
+     * agent runner takes the same path. Anything with a tenant should call the
+     * billed `complete` instead.
+     */
+    async completeUnbilled(
+        model: string,
+        systemPrompt: string,
+        userMessage: string,
+        maxTokens = 512,
+    ): Promise<{ text: string; usage: OpenRouterUsage; model: string }> {
+        const apiKey = await this.getApiKey();
+        if (!apiKey) {
+            throw new InternalServerErrorException('AI service is not configured. Set an OpenRouter API key.');
+        }
+
+        const normalizedModel = this.normalizeModel(model);
+        const { text, usage } = await this.callOpenRouter(apiKey, normalizedModel, systemPrompt, userMessage, maxTokens);
+        return { text, usage, model: normalizedModel };
+    }
+
     private async complete(
         tenantId: string,
         feature: string,
@@ -684,13 +709,12 @@ Rules:
         userMessage: string,
         maxTokens = 512,
     ): Promise<string> {
-        const apiKey = await this.getApiKey();
-        if (!apiKey) {
-            throw new InternalServerErrorException('AI service is not configured. Set an OpenRouter API key.');
-        }
-
-        const normalizedModel = this.normalizeModel(model);
-        const { text, usage } = await this.callOpenRouter(apiKey, normalizedModel, systemPrompt, userMessage, maxTokens);
+        const { text, usage, model: normalizedModel } = await this.completeUnbilled(
+            model,
+            systemPrompt,
+            userMessage,
+            maxTokens,
+        );
         await this.logUsage(tenantId, feature, normalizedModel, usage);
         return text;
     }
