@@ -261,6 +261,7 @@ export const coreMessages = {
                 dueAging: "Penuaan Hutang",
             crmFollowUps: "Susulan",
             projectsList: "Semua Projek",
+            projectsBoards: "Papan",
             projectsTasks: "Tugasan",
             projectsSprints: "Sprint",
             projectsSetup: "Tetapan Projek",

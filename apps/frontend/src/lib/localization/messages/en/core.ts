@@ -261,6 +261,7 @@ export const coreMessages = {
             dueAging: 'Due Aging',
             crmFollowUps: 'Follow-ups',
             projectsList: 'All Projects',
+            projectsBoards: 'Boards',
             projectsTasks: 'Tasks',
             projectsSprints: 'Sprints',
             projectsSetup: 'Project Setup',

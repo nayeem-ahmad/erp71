@@ -163,7 +163,13 @@ export const routes = {
         root: '/projects',
         new: '/projects/new' as const,
         detail: (id: string) => `/projects/${id}` as const,
+        // TODO(Task 10): `board` is retired by the cross-project Boards feature. Its
+        // last caller is the "Board" button in app/(app)/projects/[id]/page.tsx,
+        // which Task 10 removes along with the page; delete this entry then.
         board: (id: string) => `/projects/${id}/board` as const,
+        boards: '/projects/boards',
+        boardDetail: (id: string) => `/projects/boards/${id}` as const,
+        boardColumns: (id: string) => `/projects/boards/${id}/columns` as const,
         columns: (id: string) => `/projects/${id}/columns` as const,
         edit: (id: string) => `/projects/${id}/edit` as const,
         tasks: '/projects/tasks',

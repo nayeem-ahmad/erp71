@@ -261,6 +261,7 @@ export const coreMessages = {
                 dueAging: "বকেয়া বয়স",
                 crmFollowUps: "ফলো-আপ",
                 projectsList: "সব প্রকল্প",
+                projectsBoards: "বোর্ড",
                 projectsTasks: "কাজ",
                 projectsSprints: "স্প্রিন্ট",
                 projectsSetup: "প্রকল্প সেটআপ",
