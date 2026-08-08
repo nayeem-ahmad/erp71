@@ -96,6 +96,17 @@ describe('SalesReportsService', () => {
             user: {
                 findMany: jest.fn().mockResolvedValue([]),
             },
+            // Looked up for labels by the margin reports: product names,
+            // customers seen only on the return side, and whoever rang a sale up.
+            customer: {
+                findMany: jest.fn().mockResolvedValue([]),
+            },
+            posCounter: {
+                findMany: jest.fn().mockResolvedValue([]),
+            },
+            product: {
+                findMany: jest.fn().mockResolvedValue([]),
+            },
             $transaction: jest.fn().mockImplementation(async (cb: any) => cb(db)),
             $queryRaw: jest.fn(),
         };
@@ -117,15 +128,31 @@ describe('SalesReportsService', () => {
     describe('getSalesSummary', () => {
         const tenantId = 'tenant-1';
 
-        const makeSale = (date: string, amount: number) => ({
-            id: `sale-${date}`,
+        // `items` is always present on a real row — the loader selects it — so
+        // the fixtures carry it too. Empty by default: these cases assert the
+        // invoice-level figures, and the margin ones have their own fixtures.
+        let saleSeq = 0;
+        const makeSale = (date: string, amount: number, items: any[] = []) => ({
+            id: `sale-${date}-${(saleSeq += 1)}`,
+            serial_number: `SL-${saleSeq}`,
             total_amount: amount,
             sale_date: new Date(date),
+            store_id: 'store-1',
+            counter_id: null,
+            created_by: null,
+            customer_id: null,
+            customer: null,
+            items,
         });
 
-        const makeReturn = (date: string, refund: number) => ({
+        let returnSeq = 0;
+        const makeReturn = (date: string, refund: number, items: any[] = []) => ({
+            id: `ret-${date}-${(returnSeq += 1)}`,
             total_refund: refund,
             created_at: new Date(date),
+            store_id: 'store-1',
+            sale: null,
+            items,
         });
 
         it('returns zero summary when no sales or returns', async () => {
@@ -405,29 +432,86 @@ describe('SalesReportsService', () => {
     // ── getSalesByCategory ────────────────────────────────────────────────────
 
     describe('getSalesByCategory', () => {
-        it('aggregates revenue by product group with shares and an Other rollup', async () => {
-            const saleItems = [
-                { quantity: 2, price_at_sale: 100, product: { group_id: 'g1', group: { id: 'g1', name: 'Electronics' } } },
-                { quantity: 1, price_at_sale: 300, product: { group_id: 'g2', group: { id: 'g2', name: 'Lighting' } } },
-                { quantity: 1, price_at_sale: 100, product: { group_id: null, group: null } },
-            ];
-            db.saleItem.findMany.mockResolvedValue(saleItems);
+        const line = (productId: string, qty: number, price: number, cost: number | null) => ({
+            product_id: productId,
+            quantity: qty,
+            price_at_sale: price,
+            unit_cost_at_sale: cost,
+        });
+        const sale = (id: string, total: number, items: any[]) => ({
+            id,
+            serial_number: id,
+            total_amount: total,
+            sale_date: new Date('2026-01-01'),
+            store_id: 'store-1',
+            counter_id: null,
+            created_by: null,
+            customer_id: null,
+            customer: null,
+            items,
+        });
+
+        it('aggregates revenue and gross profit by product group, with an Other rollup', async () => {
+            db.sale.findMany.mockResolvedValue([
+                sale('s1', 600, [
+                    line('p1', 2, 100, 60),
+                    line('p2', 1, 300, 200),
+                    line('p3', 1, 100, 40),
+                ]),
+            ]);
+            db.salesReturn.findMany.mockResolvedValue([]);
+            db.product.findMany.mockResolvedValue([
+                { id: 'p1', group_id: 'g1', group: { id: 'g1', name: 'Electronics' } },
+                { id: 'p2', group_id: 'g2', group: { id: 'g2', name: 'Lighting' } },
+                { id: 'p3', group_id: null, group: null },
+            ]);
 
             const result = await service.getSalesByCategory('tenant-1', {});
 
             expect(result.summary.totalRevenue).toBe(600);
             expect(result.summary.categoryCount).toBe(3);
+
             const electronics = result.rows.find((r: any) => r.categoryName === 'Electronics');
-            expect(electronics).toMatchObject({ categoryId: 'g1', revenue: 200 });
+            expect(electronics).toMatchObject({ categoryId: 'g1', revenue: 200, cogs: 120, grossProfit: 80 });
             expect(electronics!.share).toBeCloseTo(33.333, 2);
+
+            // A product with no group is its own bucket, reported as such
+            // rather than dropped or folded into the first real group.
             const uncategorized = result.rows.find((r: any) => r.categoryName === 'Uncategorized');
-            expect(uncategorized).toMatchObject({ categoryId: null, revenue: 100 });
+            expect(uncategorized).toMatchObject({ categoryId: null, revenue: 100, grossProfit: 60 });
+        });
+
+        it('reports no margin for a category whose products have no cost basis', async () => {
+            // The bug this guards: folding an uncosted line in as cost 0 made
+            // this category read as 100% margin and pulled the total up with it.
+            db.sale.findMany.mockResolvedValue([
+                sale('s1', 200, [line('p1', 1, 100, 60), line('p2', 1, 100, null)]),
+            ]);
+            db.salesReturn.findMany.mockResolvedValue([]);
+            db.product.findMany.mockResolvedValue([
+                { id: 'p1', group_id: 'g1', group: { id: 'g1', name: 'Costed' } },
+                { id: 'p2', group_id: 'g2', group: { id: 'g2', name: 'Uncosted' } },
+            ]);
+
+            const result = await service.getSalesByCategory('tenant-1', {});
+
+            const uncosted = result.rows.find((r: any) => r.categoryName === 'Uncosted');
+            expect(uncosted!.grossProfit).toBeNull();
+            expect(uncosted!.revenue).toBe(100);
+            expect(result.summary.grossProfit).toBe(40);
+            expect(result.summary.coverage.costedRevenuePct).toBe(50);
         });
 
         it('returns empty rows and zero total when there are no sales', async () => {
-            db.saleItem.findMany.mockResolvedValue([]);
+            db.sale.findMany.mockResolvedValue([]);
+            db.salesReturn.findMany.mockResolvedValue([]);
+
             const result = await service.getSalesByCategory('tenant-1', {});
-            expect(result).toEqual({ summary: { totalRevenue: 0, categoryCount: 0 }, rows: [] });
+
+            expect(result.rows).toEqual([]);
+            expect(result.summary.totalRevenue).toBe(0);
+            expect(result.summary.categoryCount).toBe(0);
+            expect(result.summary.grossProfit).toBeNull();
         });
     });
 
@@ -563,6 +647,32 @@ describe('SalesReportsService', () => {
     describe('getSalesByCustomer', () => {
         const tenantId = 'tenant-1';
 
+        const line = (productId: string, qty: number, price: number, cost: number | null) => ({
+            product_id: productId,
+            quantity: qty,
+            price_at_sale: price,
+            unit_cost_at_sale: cost,
+        });
+        const sale = (id: string, total: number, customer: any, items: any[]) => ({
+            id,
+            serial_number: id,
+            total_amount: total,
+            sale_date: new Date('2026-01-01'),
+            store_id: 'store-1',
+            counter_id: null,
+            created_by: null,
+            customer_id: customer?.id ?? null,
+            customer,
+            items,
+        });
+        const alice = { id: 'cust-1', name: 'Alice', phone: '01700000001', customer_code: 'C001' };
+        const bob = { id: 'cust-2', name: 'Bob', phone: '01700000002', customer_code: 'C002' };
+
+        beforeEach(() => {
+            db.salesReturn.findMany.mockResolvedValue([]);
+            db.customer.findMany.mockResolvedValue([]);
+        });
+
         it('returns zero summary with no sales', async () => {
             db.sale.findMany.mockResolvedValue([]);
 
@@ -575,26 +685,11 @@ describe('SalesReportsService', () => {
             expect(result.rows).toHaveLength(0);
         });
 
-        it('aggregates orders and revenue by customer', async () => {
+        it('aggregates orders, revenue and gross profit by customer', async () => {
             db.sale.findMany.mockResolvedValue([
-                {
-                    id: 'sale-1',
-                    total_amount: 1000,
-                    customer_id: 'cust-1',
-                    customer: { id: 'cust-1', name: 'Alice', phone: '01700000001', customer_code: 'C001' },
-                },
-                {
-                    id: 'sale-2',
-                    total_amount: 500,
-                    customer_id: 'cust-1',
-                    customer: { id: 'cust-1', name: 'Alice', phone: '01700000001', customer_code: 'C001' },
-                },
-                {
-                    id: 'sale-3',
-                    total_amount: 2000,
-                    customer_id: 'cust-2',
-                    customer: { id: 'cust-2', name: 'Bob', phone: '01700000002', customer_code: 'C002' },
-                },
+                sale('sale-1', 1000, alice, [line('p1', 10, 100, 60)]),
+                sale('sale-2', 500, alice, [line('p1', 5, 100, 60)]),
+                sale('sale-3', 2000, bob, [line('p1', 20, 100, 60)]),
             ]);
 
             const result = await service.getSalesByCustomer(tenantId, {});
@@ -602,26 +697,63 @@ describe('SalesReportsService', () => {
             expect(result.summary.totalRevenue).toBe(3500);
             expect(result.summary.customerCount).toBe(2);
 
-            const alice = result.rows.find((r: any) => r.customer.id === 'cust-1');
-            expect(alice.orderCount).toBe(2);
-            expect(alice.revenue).toBe(1500);
-            expect(alice.avgOrderValue).toBe(750);
+            const row = result.rows.find((r: any) => r.customer.id === 'cust-1');
+            expect(row.orderCount).toBe(2);
+            expect(row.revenue).toBe(1500);
+            expect(row.avgOrderValue).toBe(750);
+            expect(row.cogs).toBe(900);
+            expect(row.grossProfit).toBe(600);
+            expect(row.grossMarginPct).toBe(40);
         });
 
-        it('groups walk-in sales under __walkin__ key', async () => {
+        it('exposes a large customer who is being sold to at a loss', async () => {
+            // The question this report exists to answer. Bob buys twice what
+            // Alice does and loses money on every unit; ranked by revenue he
+            // looks like the better account.
             db.sale.findMany.mockResolvedValue([
+                sale('sale-1', 1000, alice, [line('p1', 10, 100, 60)]),
+                sale('sale-2', 2000, bob, [line('p1', 40, 50, 60)]),
+            ]);
+
+            const result = await service.getSalesByCustomer(tenantId, {});
+
+            const bobRow = result.rows.find((r: any) => r.customer.id === 'cust-2');
+            expect(bobRow.revenue).toBe(2000);
+            expect(bobRow.grossProfit).toBe(-400);
+            // Sorted by gross profit, so the loss-making account is last
+            // however much revenue it carries.
+            expect(result.rows[result.rows.length - 1].customer.id).toBe('cust-2');
+        });
+
+        it('nets a refund against the customer who bought the goods', async () => {
+            db.sale.findMany.mockResolvedValue([sale('sale-1', 1000, alice, [line('p1', 10, 100, 60)])]);
+            db.salesReturn.findMany.mockResolvedValue([
                 {
-                    id: 'sale-1',
-                    total_amount: 500,
-                    customer_id: null,
-                    customer: null,
+                    id: 'ret-1',
+                    created_at: new Date('2026-01-02'),
+                    store_id: 'store-1',
+                    total_refund: 200,
+                    sale: { customer_id: 'cust-1', counter_id: null, created_by: null },
+                    items: [
+                        { product_id: 'p1', quantity: 2, refund_amount: 200, unit_cost_at_return: 60 },
+                    ],
                 },
-                {
-                    id: 'sale-2',
-                    total_amount: 300,
-                    customer_id: null,
-                    customer: null,
-                },
+            ]);
+
+            const result = await service.getSalesByCustomer(tenantId, {});
+
+            const row = result.rows.find((r: any) => r.customer?.id === 'cust-1');
+            // 1000 − 200 revenue, 600 − 120 cost. Before returns reversed COGS
+            // this reported 800 − 600 = 200 profit instead of 320.
+            expect(row.revenue).toBe(800);
+            expect(row.cogs).toBe(480);
+            expect(row.grossProfit).toBe(320);
+        });
+
+        it('groups walk-in sales under a single walk-in row', async () => {
+            db.sale.findMany.mockResolvedValue([
+                sale('sale-1', 500, null, [line('p1', 5, 100, 60)]),
+                sale('sale-2', 300, null, [line('p1', 3, 100, 60)]),
             ]);
 
             const result = await service.getSalesByCustomer(tenantId, {});
@@ -632,24 +764,17 @@ describe('SalesReportsService', () => {
             expect(result.rows[0].revenue).toBe(800);
         });
 
-        it('sorts rows by revenue descending', async () => {
-            db.sale.findMany.mockResolvedValue([
-                {
-                    id: 'sale-1',
-                    total_amount: 100,
-                    customer_id: 'cust-1',
-                    customer: { id: 'cust-1', name: 'Alice', phone: null, customer_code: null },
-                },
-                {
-                    id: 'sale-2',
-                    total_amount: 900,
-                    customer_id: 'cust-2',
-                    customer: { id: 'cust-2', name: 'Bob', phone: null, customer_code: null },
-                },
-            ]);
+        it('allocates an order-level discount before attributing revenue', async () => {
+            // List value 1000, customer paid 800. Attributing the list price
+            // would credit Alice with revenue she never handed over and show a
+            // margin the sale did not earn.
+            db.sale.findMany.mockResolvedValue([sale('sale-1', 800, alice, [line('p1', 10, 100, 60)])]);
 
             const result = await service.getSalesByCustomer(tenantId, {});
-            expect(result.rows[0].customer.id).toBe('cust-2');
+
+            expect(result.rows[0].revenue).toBe(800);
+            expect(result.rows[0].cogs).toBe(600);
+            expect(result.rows[0].grossProfit).toBe(200);
         });
 
         it('passes storeId filter to query', async () => {
@@ -997,9 +1122,19 @@ describe('SalesReportsService', () => {
         const tenantId = 'tenant-1';
 
         const sale = (date: string, amount: number) => ({
-            id: `sale-${date}`,
+            id: `sale-${date}-${amount}`,
+            serial_number: `SL-${date}-${amount}`,
             total_amount: amount,
             sale_date: new Date(date),
+            store_id: 'store-1',
+            counter_id: null,
+            created_by: null,
+            customer_id: null,
+            customer: null,
+            // No lines: these cases assert bucketing of invoice totals, and an
+            // uncosted basket is exactly the shape that used to report a 100%
+            // margin, so leaving it empty keeps that guarded.
+            items: [],
         });
 
         beforeEach(() => {
@@ -1293,7 +1428,10 @@ describe('SalesReportsService', () => {
                 },
             ]);
             db.sale.findMany.mockResolvedValue([
-                { id: 's1', total_amount: 1000, sale_date: new Date('2026-07-01') },
+                {
+                    id: 's1', total_amount: 1000, serial_number: 'SL-1', sale_date: new Date('2026-07-01'),
+                    store_id: 'st1', counter_id: null, created_by: null, customer_id: null, customer: null, items: [],
+                },
             ]);
             db.saleItem.findMany.mockResolvedValue([]);
 
@@ -1400,6 +1538,247 @@ describe('SalesReportsService', () => {
 
             expect(result.summary.lapsedCustomers).toBe(1);
             expect(result.lapsedCutoffDate).toBe('2026-05-02');
+        });
+    });
+
+    // ── Gross profit reports ──────────────────────────────────────────────────
+
+    describe('gross-profit reports', () => {
+        const tenantId = 'tenant-1';
+
+        const line = (productId: string, qty: number, price: number, cost: number | null) => ({
+            product_id: productId,
+            quantity: qty,
+            price_at_sale: price,
+            unit_cost_at_sale: cost,
+        });
+        const sale = (id: string, total: number, items: any[], over: any = {}) => ({
+            id,
+            serial_number: id,
+            total_amount: total,
+            sale_date: new Date('2026-02-10'),
+            store_id: 'store-1',
+            counter_id: null,
+            created_by: null,
+            customer_id: null,
+            customer: null,
+            items,
+            ...over,
+        });
+
+        beforeEach(() => {
+            db.salesReturn.findMany.mockResolvedValue([]);
+            db.product.findMany.mockResolvedValue([
+                { id: 'p1', name: 'Rice' },
+                { id: 'p2', name: 'Oil' },
+            ]);
+        });
+
+        describe('getGrossProfitByProduct', () => {
+            it('ranks products by gross profit, not revenue', async () => {
+                // Oil turns over more money and earns less. Ranked by revenue
+                // it leads; the point of this report is that it does not.
+                db.sale.findMany.mockResolvedValue([
+                    sale('s1', 1100, [line('p1', 10, 20, 5), line('p2', 10, 90, 85)]),
+                ]);
+
+                const result = await service.getGrossProfitByProduct(tenantId, {} as any);
+
+                expect(result.rows[0]).toMatchObject({ productId: 'p1', grossProfit: 150 });
+                expect(result.rows[1]).toMatchObject({ productId: 'p2', grossProfit: 50 });
+            });
+
+            it('excludes an uncosted product from the margin but keeps its revenue', async () => {
+                db.sale.findMany.mockResolvedValue([
+                    sale('s1', 300, [line('p1', 1, 100, 60), line('p2', 1, 200, null)]),
+                ]);
+
+                const result = await service.getGrossProfitByProduct(tenantId, {} as any);
+
+                expect(result.summary.grossProfit).toBe(40);
+                expect(result.summary.netRevenue).toBe(300);
+                expect(result.summary.coverage.uncostedRevenue).toBe(200);
+            });
+        });
+
+        describe('getMarginExceptions', () => {
+            it('reports only lines below the floor, worst first', async () => {
+                db.sale.findMany.mockResolvedValue([
+                    sale('s1', 300, [
+                        line('p1', 1, 100, 90), // 10% margin
+                        line('p2', 1, 100, 50), // 50% margin — above the floor
+                        line('p1', 1, 100, 120), // sold below cost
+                    ]),
+                ]);
+
+                const result = await service.getMarginExceptions(tenantId, { marginFloorPct: 20 } as any);
+
+                expect(result.rows).toHaveLength(2);
+                expect(result.rows[0]).toMatchObject({ grossMarginPct: -20, soldBelowCost: true });
+                expect(result.rows[1]).toMatchObject({ grossMarginPct: 10, soldBelowCost: false });
+                expect(result.summary.belowCostCount).toBe(1);
+            });
+
+            it('defaults the floor to zero, catching only goods sold at or under cost', async () => {
+                db.sale.findMany.mockResolvedValue([
+                    sale('s1', 200, [line('p1', 1, 100, 99), line('p2', 1, 100, 101)]),
+                ]);
+
+                const result = await service.getMarginExceptions(tenantId, {} as any);
+
+                expect(result.rows).toHaveLength(1);
+                expect(result.rows[0].productId).toBe('p2');
+            });
+
+            it('judges a line against the discounted price, not the list price', async () => {
+                // List 100, cost 80 — fine on paper. The invoice was discounted
+                // to 70, so it actually went out under cost, and judging on list
+                // price would clear exactly the case worth catching.
+                db.sale.findMany.mockResolvedValue([
+                    sale('s1', 70, [line('p1', 1, 100, 80)]),
+                ]);
+
+                const result = await service.getMarginExceptions(tenantId, {} as any);
+
+                expect(result.rows).toHaveLength(1);
+                expect(result.rows[0]).toMatchObject({ revenue: 70, cogs: 80, soldBelowCost: true });
+            });
+
+            it('counts uncosted lines separately rather than reporting them at 0%', async () => {
+                // Reporting them would bury the real exceptions under lines
+                // that are not evidence of anything.
+                db.sale.findMany.mockResolvedValue([
+                    sale('s1', 100, [line('p1', 1, 100, null)]),
+                ]);
+
+                const result = await service.getMarginExceptions(tenantId, {} as any);
+
+                expect(result.rows).toHaveLength(0);
+                expect(result.summary.uncostedLines).toBe(1);
+            });
+
+            it('attributes exceptions to whoever rang them up', async () => {
+                db.sale.findMany.mockResolvedValue([
+                    sale('s1', 100, [line('p1', 1, 100, 120)], { created_by: 'user-1' }),
+                ]);
+                db.user.findMany.mockResolvedValue([{ id: 'user-1', name: 'Karim' }]);
+
+                const result = await service.getMarginExceptions(tenantId, {} as any);
+
+                expect(result.byUser[0]).toMatchObject({ userId: 'user-1', userName: 'Karim', lines: 1 });
+            });
+        });
+
+        describe('getGrossProfitBySalesperson', () => {
+            it('groups margin by the user who made the sale', async () => {
+                db.sale.findMany.mockResolvedValue([
+                    sale('s1', 100, [line('p1', 1, 100, 60)], { created_by: 'user-1' }),
+                    sale('s2', 200, [line('p1', 2, 100, 60)], { created_by: 'user-2' }),
+                ]);
+                db.user.findMany.mockResolvedValue([
+                    { id: 'user-1', name: 'Karim' },
+                    { id: 'user-2', name: 'Rahim' },
+                ]);
+
+                const result = await service.getGrossProfitBySalesperson(tenantId, {} as any);
+
+                expect(result.rows[0]).toMatchObject({ name: 'Rahim', grossProfit: 80, orders: 1 });
+                expect(result.rows[1]).toMatchObject({ name: 'Karim', grossProfit: 40 });
+            });
+
+            it('labels sales with no recorded user as unattributed', async () => {
+                db.sale.findMany.mockResolvedValue([sale('s1', 100, [line('p1', 1, 100, 60)])]);
+
+                const result = await service.getGrossProfitBySalesperson(tenantId, {} as any);
+
+                expect(result.rows[0]).toMatchObject({ id: null, name: 'Unattributed' });
+            });
+
+            it('charges a refund back to whoever made the original sale', async () => {
+                db.sale.findMany.mockResolvedValue([
+                    sale('s1', 500, [line('p1', 5, 100, 60)], { created_by: 'user-1' }),
+                ]);
+                db.salesReturn.findMany.mockResolvedValue([
+                    {
+                        id: 'r1',
+                        created_at: new Date('2026-02-11'),
+                        store_id: 'store-1',
+                        total_refund: 200,
+                        sale: { customer_id: null, counter_id: null, created_by: 'user-1' },
+                        items: [{ product_id: 'p1', quantity: 2, refund_amount: 200, unit_cost_at_return: 60 }],
+                    },
+                ]);
+                db.user.findMany.mockResolvedValue([{ id: 'user-1', name: 'Karim' }]);
+
+                const result = await service.getGrossProfitBySalesperson(tenantId, {} as any);
+
+                // 500 − 200 revenue against 300 − 120 cost.
+                expect(result.rows[0]).toMatchObject({ revenue: 300, cogs: 180, grossProfit: 120 });
+            });
+        });
+
+        describe('getMarginBridge', () => {
+            it('splits a change into volume, price and cost effects', async () => {
+                db.sale.findMany
+                    // Current window: 20 units at 100, cost 70.
+                    .mockResolvedValueOnce([sale('s2', 2000, [line('p1', 20, 100, 70)])])
+                    // Comparison window: 10 units at 100, cost 60.
+                    .mockResolvedValueOnce([sale('s1', 1000, [line('p1', 10, 100, 60)])]);
+
+                const result = await service.getMarginBridge(tenantId, {
+                    from: '2026-02-01', to: '2026-02-28',
+                    compareFrom: '2026-01-01', compareTo: '2026-01-31',
+                } as any);
+
+                const bridge = result.summary.bridge;
+                expect(bridge.previousGrossProfit).toBe(400);
+                expect(bridge.currentGrossProfit).toBe(600);
+                expect(bridge.volumeEffect).toBe(400);
+                expect(bridge.costEffect).toBe(-200);
+                expect(bridge.priceEffect).toBe(0);
+            });
+
+            it('sums its effects to the total change', async () => {
+                db.sale.findMany
+                    .mockResolvedValueOnce([sale('s2', 1730, [line('p1', 17, 60, 41), line('p2', 71, 10, 6)])])
+                    .mockResolvedValueOnce([sale('s1', 940, [line('p1', 8, 80, 53), line('p2', 30, 10, 7)])]);
+
+                const result = await service.getMarginBridge(tenantId, {
+                    from: '2026-02-01', to: '2026-02-28',
+                    compareFrom: '2026-01-01', compareTo: '2026-01-31',
+                } as any);
+
+                const b = result.summary.bridge;
+                expect(b.volumeEffect + b.priceEffect + b.costEffect + b.mixEffect).toBeCloseTo(b.totalChange, 2);
+            });
+        });
+
+        describe('getCostCoverage', () => {
+            it('lists only products with lines missing a cost, worst revenue first', async () => {
+                db.sale.findMany.mockResolvedValue([
+                    sale('s1', 400, [line('p1', 1, 100, 60), line('p2', 1, 300, null)]),
+                ]);
+
+                const result = await service.getCostCoverage(tenantId, {} as any);
+
+                expect(result.rows).toHaveLength(1);
+                expect(result.rows[0]).toMatchObject({
+                    productId: 'p2',
+                    uncostedLines: 1,
+                    uncostedRevenue: 300,
+                });
+                expect(result.summary.costedRevenuePct).toBe(25);
+                expect(result.summary.productsMissingCost).toBe(1);
+            });
+
+            it('reports full coverage as an empty list', async () => {
+                db.sale.findMany.mockResolvedValue([sale('s1', 100, [line('p1', 1, 100, 60)])]);
+
+                const result = await service.getCostCoverage(tenantId, {} as any);
+
+                expect(result.rows).toEqual([]);
+                expect(result.summary.costedRevenuePct).toBe(100);
+            });
         });
     });
 });

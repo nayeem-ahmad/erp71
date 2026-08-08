@@ -526,6 +526,7 @@ model Tenant {
   productGroups              ProductGroup[]
   productSubgroups           ProductSubgroup[]
   productStocks              ProductStock[]
+  productCosts               ProductCost[]
   inventoryMovements         InventoryMovement[]
   inventoryReasons           InventoryReason[]
   inventorySettings          InventorySettings?
@@ -1108,6 +1109,7 @@ model Product {
   group                  ProductGroup?            @relation(fields: [group_id], references: [id])
   subgroup               ProductSubgroup?         @relation(fields: [subgroup_id], references: [id])
   stocks                 ProductStock[]
+  cost                   ProductCost?
   inventoryMovements     InventoryMovement[]
   transferItems          WarehouseTransferItem[]
   shrinkageItems         InventoryShrinkageItem[]
@@ -1151,6 +1153,46 @@ model ProductStock {
 
   @@unique([tenant_id, product_id, warehouse_id])
   @@index([tenant_id, warehouse_id])
+}
+
+/// The running weighted-average cost of a product, held tenant-wide rather than
+/// per warehouse. One pool per product means a warehouse transfer is a pure
+/// quantity move with no cost effect, and every report agrees on what a unit of
+/// this product cost — at the price of blurring genuinely different buying
+/// prices between branches.
+///
+/// Maintained by `applyCostMovement` inside `applyInventoryMovement`, so every
+/// stock movement in the system keeps it current. Nothing else may write it.
+model ProductCost {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  /// Unique on its own — a Product belongs to exactly one tenant, so one pool
+  /// per product is already one pool per tenant. The composite below is what
+  /// the code upserts against, so tenant scoping stays explicit at every call
+  /// site rather than relying on that argument holding.
+  product_id  String   @unique
+  /// Four decimal places, not two: an average divides, and rounding to paisa at
+  /// every receipt compounds into visible drift over a few hundred movements.
+  /// Callers round for display; the pool stays precise.
+  avg_cost    Decimal  @db.Decimal(12, 4)
+  /// The quantity the average is held against. Kept here rather than summed
+  /// from ProductStock so that the average and the basis it was computed over
+  /// move together in one atomic update — a sum taken separately can be read
+  /// mid-transaction and produce an average that never existed.
+  ///
+  /// Can go negative: `allowNegative` movements let an import book a sale for
+  /// stock that was never received, and the pool has to represent that
+  /// honestly rather than clamp and silently misstate the next receipt.
+  qty_on_hand Int      @default(0)
+  updated_at  DateTime @updatedAt
+
+  // Relations
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, product_id])
+  @@index([tenant_id])
+  @@map("product_costs")
 }
 
 model ProductSerial {
@@ -1226,6 +1268,12 @@ model InventorySettings {
   default_shrinkage_warehouse_id            String?
   default_transfer_source_warehouse_id      String?
   default_transfer_destination_warehouse_id String?
+  /// WEIGHTED_AVERAGE | LATEST_COST — which cost a sale snapshots into
+  /// SaleItem.unit_cost_at_sale, and therefore what every gross-profit report
+  /// is computed from. WEIGHTED_AVERAGE reads the running ProductCost pool;
+  /// LATEST_COST reads the newest ProductPrice.cost, which is what this system
+  /// did before the pool existed.
+  costing_method                            String   @default("WEIGHTED_AVERAGE")
   default_reorder_level                     Int      @default(10)
   default_safety_stock                      Int      @default(0)
   default_lead_time_days                    Int      @default(0)
@@ -2575,14 +2623,23 @@ model SalesReturn {
 }
 
 model SalesReturnItem {
-  id            String  @id @default(uuid())
-  return_id     String
+  id                  String   @id @default(uuid())
+  return_id           String
   /// Null when the return has no parent sale; `product_id` then identifies the
   /// goods and `refund_amount` carries the agreed value.
-  sale_item_id  String?
-  product_id    String
-  quantity      Int
-  refund_amount Decimal @db.Decimal(12, 2)
+  sale_item_id        String?
+  product_id          String
+  quantity            Int
+  refund_amount       Decimal  @db.Decimal(12, 2)
+  /// What the returned goods cost, snapshotted when the return is recorded —
+  /// the original sale line's `unit_cost_at_sale` where there is one, otherwise
+  /// the cost pool's average at the time of return.
+  ///
+  /// Without it a return reduced revenue while leaving COGS untouched, so every
+  /// refund overstated gross profit by the whole cost of the goods coming back.
+  /// Nullable because a return of stock nobody ever costed still has to be
+  /// recordable, and zero would claim the goods were free.
+  unit_cost_at_return Decimal? @db.Decimal(12, 2)
 
   // Relations
   return    SalesReturn @relation(fields: [return_id], references: [id], onDelete: Cascade)

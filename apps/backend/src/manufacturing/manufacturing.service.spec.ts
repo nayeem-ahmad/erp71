@@ -35,6 +35,14 @@ describe('ManufacturingService', () => {
     beforeEach(async () => {
         db = {
             bomRecipe: { findFirst: jest.fn() },
+            // Every stock movement maintains the weighted-average cost pool.
+            // findUnique resolving null is the no-basis-yet case, which is what
+            // a fresh product in a unit test actually looks like.
+            productCost: {
+                findUnique: jest.fn().mockResolvedValue(null),
+                findMany: jest.fn().mockResolvedValue([]),
+                upsert: jest.fn().mockResolvedValue({}),
+            },
             productStock: {
                 aggregate: jest.fn(),
                 updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -58,6 +66,7 @@ describe('ManufacturingService', () => {
                 findUnique: jest.fn().mockResolvedValue({ type: 'GOODS' }),
             },
             productPrice: { findMany: jest.fn().mockResolvedValue([]) },
+            inventorySettings: { findUnique: jest.fn().mockResolvedValue(null) },
             warehouse: { findFirst: jest.fn().mockResolvedValue({ id: 'wh-1' }) },
             inventoryMovement: { create: jest.fn().mockResolvedValue({}), findMany: jest.fn().mockResolvedValue([]) },
             $transaction: jest.fn().mockImplementation(async (cb: any) => cb(db)),
@@ -208,13 +217,24 @@ describe('ManufacturingService', () => {
             });
         });
 
-        it('stamps inventory movements with the current cost price', async () => {
+        /** Puts a weighted-average cost on each named product's pool. */
+        const withPools = (avgByProduct: Record<string, number>) => {
+            db.productCost.findMany.mockResolvedValue(
+                Object.entries(avgByProduct).map(([product_id, avg_cost]) => ({ product_id, avg_cost })),
+            );
+            db.productCost.findUnique.mockImplementation(({ where }: any) => {
+                const avg = avgByProduct[where.tenant_id_product_id.product_id];
+                return Promise.resolve(avg === undefined ? null : { avg_cost: avg, qty_on_hand: 1000 });
+            });
+        };
+
+        it('consumes raw materials at their weighted-average cost', async () => {
             db.productionJob.findFirst.mockResolvedValue(job);
             db.productionJob.update.mockResolvedValue({ ...job, status: 'COMPLETED' });
-            db.productPrice.findMany.mockResolvedValue([
-                { product_id: 'product-flour', cost: 2.5 },
-                { product_id: 'product-out', cost: 10 },
-            ]);
+            // The catalog says flour costs 9. What the flour on hand actually
+            // cost is 2.50, and that is what leaves the pool.
+            db.productPrice.findMany.mockResolvedValue([{ product_id: 'product-flour', cost: 9 }]);
+            withPools({ 'product-flour': 2.5, 'product-yeast': 1 });
 
             await service.completeJob('tenant-1', 'job-1');
 
@@ -223,9 +243,46 @@ describe('ManufacturingService', () => {
                     data: expect.objectContaining({ product_id: 'product-flour', unit_cost: 2.5 }),
                 }),
             );
+        });
+
+        it('values finished goods at what the job cost, not the output catalog price', async () => {
+            // 5 flour x 10 @ 2.50 + 1 yeast x 10 @ 1.00 = 135 over 20 units made
+            // = 6.75 each. The output product's own price-list cost of 10 is a
+            // number someone typed into the catalog and describes no part of
+            // this production run — booking the goods in at it would hand every
+            // manufactured item a margin it never earned.
+            db.productionJob.findFirst.mockResolvedValue(job);
+            db.productionJob.update.mockResolvedValue({ ...job, status: 'COMPLETED' });
+            db.productPrice.findMany.mockResolvedValue([{ product_id: 'product-out', cost: 10 }]);
+            withPools({ 'product-flour': 2.5, 'product-yeast': 1 });
+            db.productionJobCost.aggregate.mockResolvedValue({ _sum: { amount: 135 } });
+
+            await service.completeJob('tenant-1', 'job-1');
+
+            expect(db.productionJobCost.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ costType: 'RAW_MATERIAL', amount: 135 }),
+                }),
+            );
             expect(db.inventoryMovement.create).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    data: expect.objectContaining({ movement_type: 'MANUFACTURING_OUTPUT', unit_cost: 10 }),
+                    data: expect.objectContaining({ movement_type: 'MANUFACTURING_OUTPUT', unit_cost: 6.75 }),
+                }),
+            );
+        });
+
+        it('leaves the pool alone when a job has no cost lines to value output with', async () => {
+            // Nothing priced, so nothing to say. Booking the output in at zero
+            // would claim it was free to make.
+            db.productionJob.findFirst.mockResolvedValue(job);
+            db.productionJob.update.mockResolvedValue({ ...job, status: 'COMPLETED' });
+            db.productionJobCost.aggregate.mockResolvedValue({ _sum: { amount: 0 } });
+
+            await service.completeJob('tenant-1', 'job-1');
+
+            expect(db.inventoryMovement.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ movement_type: 'MANUFACTURING_OUTPUT', unit_cost: null }),
                 }),
             );
         });

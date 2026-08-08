@@ -1537,6 +1537,55 @@ export const api = {
         if (params?.to) query.set('to', params.to);
         return fetchWithAuth(`/sales-reports/by-customer${query.toString() ? `?${query.toString()}` : ''}`);
     },
+
+    // ── Gross profit ─────────────────────────────────────────────────────────
+
+    getGrossProfitByProduct: (params?: { storeId?: string; groupId?: string; subgroupId?: string; from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
+        if (params?.groupId) query.set('groupId', params.groupId);
+        if (params?.subgroupId) query.set('subgroupId', params.subgroupId);
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        return fetchWithAuth(`/sales-reports/gross-profit/by-product${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+
+    getGrossProfitBySalesperson: (params?: { storeId?: string; from?: string; to?: string; groupBy?: 'user' | 'counter' }) => {
+        const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        if (params?.groupBy) query.set('groupBy', params.groupBy);
+        return fetchWithAuth(`/sales-reports/gross-profit/by-salesperson${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+
+    getMarginExceptions: (params?: { storeId?: string; from?: string; to?: string; marginFloorPct?: number; limit?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        if (params?.marginFloorPct !== undefined) query.set('marginFloorPct', String(params.marginFloorPct));
+        if (params?.limit !== undefined) query.set('limit', String(params.limit));
+        return fetchWithAuth(`/sales-reports/gross-profit/exceptions${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+
+    getMarginBridge: (params: { storeId?: string; from: string; to: string; compareFrom: string; compareTo: string }) => {
+        const query = new URLSearchParams();
+        if (params.storeId) query.set('storeId', params.storeId);
+        query.set('from', params.from);
+        query.set('to', params.to);
+        query.set('compareFrom', params.compareFrom);
+        query.set('compareTo', params.compareTo);
+        return fetchWithAuth(`/sales-reports/gross-profit/bridge?${query.toString()}`);
+    },
+
+    getCostCoverage: (params?: { storeId?: string; from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        return fetchWithAuth(`/sales-reports/gross-profit/cost-coverage${query.toString() ? `?${query.toString()}` : ''}`);
+    },
     getMonthlySalesByCustomer: (params?: { from?: string; to?: string; customerId?: string }) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);

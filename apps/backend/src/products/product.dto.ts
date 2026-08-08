@@ -23,6 +23,17 @@ export class CreateProductDto {
     @Min(0)
     price: number;
 
+    /**
+     * What a unit costs to buy. Seeds the weighted-average pool when the
+     * product is created with opening stock. Optional — a product entered
+     * without one simply has no cost basis until its first purchase receipt,
+     * which is more honest than assuming the selling price.
+     */
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    cost?: number;
+
     @IsOptional()
     @IsNumber()
     @Min(0)

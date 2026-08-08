@@ -4,6 +4,7 @@ import { PaginatedResult } from '../common/pagination.dto';
 import { DatabaseService } from '../database/database.service';
 import { CreateSalesReturnDto, UpdateSalesReturnDto } from './sales-returns.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
+import { resolveProductCosts } from '../database/product-cost.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
 import { classifyPaymentMode } from '../sales/classify-payment-mode';
@@ -32,6 +33,15 @@ export class SalesReturnsService {
             let totalRefund = 0;
             const returnItemData = [];
             const warehouseId = await resolveWarehouseId(tx, tenantId, dto.storeId);
+
+            // Lines with no parent sale carry no cost of their own, so they fall
+            // back to the pool. Resolved in one query up front rather than per
+            // line inside the loop below.
+            const standaloneCosts = await resolveProductCosts(tx, {
+                tenantId,
+                storeId: dto.storeId,
+                productIds: dto.items.map((item) => item.productId).filter((id): id is string => Boolean(id)),
+            });
 
             // 2. Validate items and calculate total refund
             for (const returnItem of dto.items) {
@@ -62,6 +72,10 @@ export class SalesReturnsService {
                         product_id: product.id,
                         quantity: returnItem.quantity,
                         refund_amount: refundAmount,
+                        // No parent sale to take a cost from, so the pool's
+                        // current average is the best available answer for what
+                        // these goods cost.
+                        unit_cost_at_return: standaloneCosts.get(product.id) ?? null,
                     });
                     continue;
                 }
@@ -89,6 +103,10 @@ export class SalesReturnsService {
                     product_id: originalItem.product_id,
                     quantity: returnItem.quantity,
                     refund_amount: refundAmount,
+                    // Goods go back on the shelf at the cost they left at. Using
+                    // today's average instead would book a profit or loss on the
+                    // return itself, which is not what a refund is.
+                    unit_cost_at_return: originalItem.unit_cost_at_sale ?? null,
                 });
             }
 
@@ -296,6 +314,14 @@ export class SalesReturnsService {
                 let newTotalRefund = 0;
                 const newItemData = [];
 
+                // Only consulted for parentless lines; a line tied to a sale
+                // takes its cost from that sale, not from today's pool.
+                const editCosts = await resolveProductCosts(tx, {
+                    tenantId,
+                    storeId: existing.sale?.store_id ?? existing.store_id,
+                    productIds: dto.items.map((item) => item.productId).filter((pid): pid is string => Boolean(pid)),
+                });
+
                 for (const newItem of dto.items) {
                     if (newItem.quantity <= 0) continue;
 
@@ -317,6 +343,7 @@ export class SalesReturnsService {
                             product_id: newItem.productId,
                             quantity: newItem.quantity,
                             refund_amount: refundAmount,
+                            unit_cost_at_return: editCosts.get(newItem.productId) ?? null,
                         });
                         continue;
                     }
@@ -352,6 +379,9 @@ export class SalesReturnsService {
                         product_id: newItem.productId,
                         quantity: newItem.quantity,
                         refund_amount: refundAmount,
+                        // Same rule as the create path: the cost the goods left
+                        // the sale at, not today's average.
+                        unit_cost_at_return: originalSaleItem.unit_cost_at_sale ?? null,
                     });
 
                     await applyInventoryMovement(tx, {

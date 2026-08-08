@@ -1,4 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { applyCostMovement } from './product-cost.utils';
 
 type DbLike = any;
 
@@ -128,6 +129,14 @@ export async function applyInventoryMovement(
         movementType: string;
         referenceType?: string;
         referenceId?: string;
+        /**
+         * What the *document* says these goods cost — a bill line, a job's
+         * computed cost per unit. Only movement types classified REVALUE or
+         * REVERSE_RECEIPT in product-cost.utils.ts act on it; for everything
+         * else the weighted-average pool supplies the cost instead, and this is
+         * ignored. That is deliberate: several callers historically passed a
+         * selling price here.
+         */
         unitCost?: number;
         note?: string;
         /**
@@ -234,6 +243,18 @@ export async function applyInventoryMovement(
         balanceAfter = stock?.quantity ?? 0;
     }
 
+    // Update the weighted-average pool before writing the movement, because the
+    // pool decides what this movement cost. A receipt is stamped with the price
+    // on its own document; an issue is stamped with the average it left at, and
+    // that stamp is the COGS every gross-profit report reads.
+    const { movementUnitCost } = await applyCostMovement(tx, {
+        tenantId,
+        productId,
+        quantityDelta,
+        movementType,
+        unitCost,
+    });
+
     await tx.inventoryMovement.create({
         data: {
             tenant_id: tenantId,
@@ -244,7 +265,7 @@ export async function applyInventoryMovement(
             reference_id: referenceId,
             quantity_delta: quantityDelta,
             balance_after: balanceAfter,
-            unit_cost: unitCost,
+            unit_cost: movementUnitCost,
             note,
             ...(occurredAt ? { created_at: occurredAt } : {}),
         },
