@@ -2,9 +2,10 @@ import { Controller, Post, Patch, Body, UseGuards, Request, Get, Query, Param, H
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { SignupDto, LoginDto, CreateStoreDto, UpdateProfileDto, ChangePasswordDto, GoogleSignInDto } from './auth.dto';
+import { SignupDto, LoginDto, CreateStoreDto, UpdateProfileDto, ChangePasswordDto, GoogleSignInDto, MobileSignInDto } from './auth.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { GoogleTokenService } from './google-token.service';
+import { FirebaseTokenService } from './firebase-token.service';
 import { TotpService } from './totp.service';
 import { extractRequestMeta } from '../audit/audit-route.util';
 
@@ -14,6 +15,7 @@ export class AuthController {
         private authService: AuthService,
         private totpService: TotpService,
         private googleTokenService: GoogleTokenService,
+        private firebaseTokenService: FirebaseTokenService,
     ) { }
 
     @Throttle({ default: { ttl: 60_000, limit: 5 } })
@@ -45,6 +47,26 @@ export class AuthController {
     @Post('google')
     async googleSignIn(@Body() dto: GoogleSignInDto, @Request() req) {
         return this.authService.googleSignIn(dto, extractRequestMeta(req));
+    }
+
+    /**
+     * Firebase's web config, read at runtime for the same reason as Google's:
+     * `NEXT_PUBLIC_*` values are baked into the frontend image, so turning
+     * mobile sign-in on would otherwise mean a rebuild rather than a restart.
+     * Every value here is a public client identifier, not a secret.
+     */
+    @Get('firebase/config')
+    firebaseConfig() {
+        return {
+            enabled: this.firebaseTokenService.isEnabled(),
+            ...(this.firebaseTokenService.getWebConfig() ?? {}),
+        };
+    }
+
+    @Throttle({ default: { ttl: 60_000, limit: 10 } })
+    @Post('mobile')
+    async mobileSignIn(@Body() dto: MobileSignInDto, @Request() req) {
+        return this.authService.mobileSignIn(dto, extractRequestMeta(req));
     }
 
     @UseGuards(JwtAuthGuard)

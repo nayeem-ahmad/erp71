@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { storeAuthResponse } from '@/lib/auth-session';
 import { useI18n } from '@/lib/i18n';
 import GoogleSignInButton from '@/components/GoogleSignInButton';
+import MobileSignInPanel from '@/components/MobileSignInPanel';
 import { routes } from '@/lib/routes';
 
 type FormSubmitEvent = Parameters<NonNullable<React.ComponentProps<'form'>['onSubmit']>>[0];
@@ -22,6 +23,7 @@ function LoginPageContent() {
     const [isDemoLoading, setIsDemoLoading] = useState(false);
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [googleAvailable, setGoogleAvailable] = useState(false);
+    const [mobileAvailable, setMobileAvailable] = useState(false);
     const [twoFactorUserId, setTwoFactorUserId] = useState<string | null>(null);
     const [twoFactorCode, setTwoFactorCode] = useState('');
     const router = useRouter();
@@ -121,6 +123,19 @@ function LoginPageContent() {
         } finally {
             setIsGoogleLoading(false);
         }
+    };
+
+    /**
+     * The SMS code has already been verified by the time this runs — `authRes`
+     * is an ERP71 session (or a 2FA challenge), exactly like the Google path.
+     */
+    const handleMobileAuth = async (authRes: any) => {
+        if (authRes?.requires_2fa && authRes?.user_id) {
+            setTwoFactorUserId(authRes.user_id);
+            return;
+        }
+        const { redirectTo } = await storeAuthResponse(authRes, rememberMe);
+        router.push(authRes?.requires_workspace ? routes.onboarding : resolveDestination(redirectTo));
     };
 
     const handleDemoLogin = async () => {
@@ -262,7 +277,7 @@ function LoginPageContent() {
                         <div className="flex-1 h-px bg-gray-200" />
                     </div>
 
-                    {/* Renders nothing unless the backend has a Google client id configured. */}
+                    {/* Both render nothing unless the backend is configured for them. */}
                     {!twoFactorUserId && (
                         <div className={googleAvailable ? 'mb-3' : ''}>
                             <GoogleSignInButton
@@ -272,6 +287,17 @@ function LoginPageContent() {
                                 text="signin_with"
                                 busy={isGoogleLoading}
                                 disabled={isLoading || isDemoLoading}
+                            />
+                        </div>
+                    )}
+
+                    {!twoFactorUserId && (
+                        <div className={mobileAvailable ? 'mb-3' : ''}>
+                            <MobileSignInPanel
+                                onSuccess={handleMobileAuth}
+                                onError={setError}
+                                onAvailabilityChange={setMobileAvailable}
+                                disabled={isLoading || isDemoLoading || isGoogleLoading}
                             />
                         </div>
                     )}

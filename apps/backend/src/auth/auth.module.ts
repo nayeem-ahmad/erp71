@@ -18,6 +18,7 @@ import { PlatformAdminGuard } from './platform-admin.guard';
 import { SubscriptionAccessGuard } from './subscription-access.guard';
 import { TotpService } from './totp.service';
 import { GoogleTokenService } from './google-token.service';
+import { FirebaseTokenService } from './firebase-token.service';
 
 @Module({
     imports: [
@@ -44,6 +45,7 @@ import { GoogleTokenService } from './google-token.service';
         SubscriptionAccessGuard,
         TotpService,
         GoogleTokenService,
+        FirebaseTokenService,
     ],
     controllers: [AuthController],
     exports: [
@@ -58,6 +60,7 @@ import { GoogleTokenService } from './google-token.service';
         SubscriptionAccessGuard,
         TotpService,
         GoogleTokenService,
+        FirebaseTokenService,
     ],
 })
 export class AuthModule { }
